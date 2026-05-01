@@ -34,8 +34,12 @@ from backend.app.schemas.transactions import (
     TXEventSuggestRequestItem,
     TXEventSuggestResultItem,
     TXMixedBatch,
+    TXPromoteRequest,
+    TXPromoteResponse,
     TXQueryParams,
     TXReadItem,
+    TXSplitRequest,
+    TXSplitResponse,
     TXTransferPromoteRequest,
     TXTransferPromoteResponse,
     TXTypeMetadata,
@@ -263,6 +267,57 @@ async def suggest_events(
 
     service = TransactionService(session)
     return await service.suggest_events_bulk(requests)
+
+
+# =============================================================================
+# BULK SPLIT / PROMOTE (immediate, server-driven)
+# =============================================================================
+
+
+@tx_router.post("/split", response_model=TXSplitResponse)
+async def split_pairs(
+    req: TXSplitRequest,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> TXSplitResponse:
+    """
+    Split linked pairs into standalone rows (immediate, not deferred).
+
+    Each item.id is one half of a pair; the backend finds the partner via
+    related_transaction_id. Types are mutated per SPLIT_TYPE_MAP and the
+    link is removed.
+    """
+    user_id = current_user.id
+    logger.info("Split %d pair(s)", len(req.items), user_id=user_id)
+
+    service = TransactionService(session)
+    response = await service.split_pairs(req.items, user_id=user_id)
+    await session.commit()
+    logger.info("Split committed: %d pair(s)", len(response.results), user_id=user_id)
+    return response
+
+
+@tx_router.post("/promote", response_model=TXPromoteResponse)
+async def promote_pairs(
+    req: TXPromoteRequest,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> TXPromoteResponse:
+    """
+    Promote standalone rows into linked pairs (immediate, not deferred).
+
+    Each item contains (id_a, id_b). The backend finds matching promote
+    rules from TXTypeMetadata, validates field constraints, mutates types,
+    and creates bidirectional links.
+    """
+    user_id = current_user.id
+    logger.info("Promote %d pair(s)", len(req.items), user_id=user_id)
+
+    service = TransactionService(session)
+    response = await service.promote_pairs(req.items, user_id=user_id)
+    await session.commit()
+    logger.info("Promote committed: %d pair(s)", len(response.results), user_id=user_id)
+    return response
 
 
 # =============================================================================

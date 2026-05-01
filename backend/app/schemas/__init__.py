@@ -155,9 +155,13 @@ from backend.app.schemas.refresh import (
 from backend.app.schemas.transactions import (
     TX_TYPE_METADATA,
     FieldMode,
+    PairFieldConstraint,
+    PairFieldRelation,
     PairFormLayout,
+    PromoteRule,
     # Type aliases
     SignType,
+    SplitMeta,
     TXBatchResponse,
     TXBatchResultItem,
     TXCreateItem,
@@ -217,6 +221,10 @@ __all__ = [
     "SignType",
     "FieldMode",
     "PairFormLayout",
+    "PairFieldRelation",
+    "PairFieldConstraint",
+    "SplitMeta",
+    "PromoteRule",
     # Transaction utilities
     "validate_tags_list",
     "tags_to_csv",

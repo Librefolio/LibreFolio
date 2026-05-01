@@ -349,10 +349,10 @@
                         dualTo = {broker_id: partner.broker_id, cash: null};
                     }
                 } else if (layout === 'transfer_cash') {
-                    // Cash transfer: WITHDRAWAL is "From" (negative), DEPOSIT is "To" (positive)
-                    const isWithdrawal = row.type === 'WITHDRAWAL';
-                    const fromRow = isWithdrawal ? row : partner;
-                    const toRow = isWithdrawal ? partner : row;
+                    // Cash transfer: "From" has negative cash, "To" has positive cash
+                    const myAmount = Number(row.cash?.amount ?? 0);
+                    const fromRow = myAmount < 0 ? row : partner;
+                    const toRow = myAmount < 0 ? partner : row;
                     draft = fromTx(fromRow);
                     // Show positive amount for the user
                     if (draft.cash && Number(draft.cash.amount) < 0) {
@@ -531,21 +531,22 @@
                 const sentKey = lastDraftKey;
                 try {
                     const res = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post(payload as never)) as {committed?: boolean; issues?: ValidationIssue[]};
-                    issues = res?.issues ?? [];
+                    // W42: deduplicate issues by code (both halves produce the same error)
+                    issues = deduplicateIssues(res?.issues ?? []);
                     lastValidatedDraftKey = sentKey;
                     issuesDismissed = false;
                     return {issuesCount: issues.length};
                 } catch (e) {
                     const extracted = extractValidationIssues(e);
                     if (extracted.length > 0) {
-                        issues = extracted.map((iss) => ({
+                        issues = deduplicateIssues(extracted.map((iss) => ({
                             operation: (mode === 'edit' ? 'update' : 'create') as 'create' | 'update',
                             index: 0,
                             error: iss.msg,
                             code: iss.code,
                             params: iss.params,
                             loc: iss.loc,
-                        }));
+                        })));
                     } else {
                         const msg = extractErrorMessage(e, $t('transactions.form.saveFailed'));
                         issues = [{operation: mode === 'edit' ? 'update' : 'create', index: 0, error: msg}];
@@ -760,12 +761,12 @@
         }
 
         if (pairLayout === 'transfer_cash') {
-            // WITHDRAWAL (from, negative cash) + DEPOSIT (to, positive cash)
+            // CASH_TRANSFER pair: from (negative cash) + to (positive cash)
             const absAmount = draft.cash?.amount ? String(Math.abs(Number(draft.cash.amount))) : '0';
             const cashCode = draft.cash?.code ?? '';
             const fromItem: Record<string, unknown> = {
                 broker_id: draft.broker_id,
-                type: 'WITHDRAWAL',
+                type: 'CASH_TRANSFER',
                 date: draft.date,
                 quantity: '0',
                 cash: {code: cashCode, amount: String(-Math.abs(Number(absAmount)))},
@@ -773,7 +774,7 @@
             };
             const toItem: Record<string, unknown> = {
                 broker_id: dualTo.broker_id,
-                type: 'DEPOSIT',
+                type: 'CASH_TRANSFER',
                 date: draft.date,
                 quantity: '0',
                 cash: {code: cashCode, amount: absAmount},
@@ -817,13 +818,14 @@
                 items[1] = {...items[1], id: partnerRow.id};
             }
         } else if (pairLayout === 'transfer_cash') {
-            const isWithdrawal = initialRow.type === 'WITHDRAWAL';
-            if (isWithdrawal) {
-                items[0] = {...items[0], id: initialRow.id};
-                items[1] = {...items[1], id: partnerRow.id};
-            } else {
+            const myAmount = Number(initialRow.cash?.amount ?? 0);
+            if (myAmount >= 0) {
+                // initialRow was "To" (positive) — swap
                 items[0] = {...items[0], id: partnerRow.id};
                 items[1] = {...items[1], id: initialRow.id};
+            } else {
+                items[0] = {...items[0], id: initialRow.id};
+                items[1] = {...items[1], id: partnerRow.id};
             }
         }
         return items;
@@ -846,7 +848,14 @@
             // Always emit the create-shaped payload — it carries every field
             // needed to fully replace a draft row in the bulk grid (the parent
             // decides whether to add or replace based on its own state).
-            onPushDraft?.(collectCreate());
+            // B1-13: for dual forms, include partner data so the BulkModal
+            // can render the paired row with Da:/A: labels.
+            const payload = collectCreate();
+            if (pairLayout) {
+                payload._partnerBrokerId = dualTo.broker_id;
+                payload._partnerCash = dualTo.cash;
+            }
+            onPushDraft?.(payload);
             onClose();
             return;
         }
@@ -1070,6 +1079,18 @@
     // Validate-state chip text
     // =========================================================================
 
+    /** W42: Deduplicate validation issues by `code` — in dual mode both halves
+     *  can produce the same error code, showing it once is enough. */
+    function deduplicateIssues(raw: ValidationIssue[]): ValidationIssue[] {
+        const seen = new Set<string>();
+        return raw.filter((iss) => {
+            const key = iss.code ?? iss.error;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
     // Bugfix-4 §U16: validate chip removed in favor of the green/warning
     // banners (single source of truth). The footer now shows only an inline
     // "Validating…" indicator while a request is in flight (see template).
@@ -1187,13 +1208,17 @@
                             {/if}
                         </div>
 
-                        <!-- Type (always readonly in dual mode — shown as badge) -->
+                        <!-- Type: editable in create dual mode (W41), readonly in edit/view -->
                         <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
-                            <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-type-readonly">
-                                <img src={getTransactionTypeIconUrl(draft.type)} alt="" class="w-6 h-6 object-contain shrink-0" onerror={(e) => { const el = e.currentTarget; if (el instanceof HTMLImageElement) el.style.display = 'none'; }} />
-                                <span class="font-medium">{dualTitle}</span>
-                            </div>
+                            {#if typeImmutable}
+                                <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-type-readonly">
+                                    <img src={getTransactionTypeIconUrl(draft.type)} alt="" class="w-6 h-6 object-contain shrink-0" onerror={(e) => { const el = e.currentTarget; if (el instanceof HTMLImageElement) el.style.display = 'none'; }} />
+                                    <span class="font-medium">{dualTitle}</span>
+                                </div>
+                            {:else}
+                                <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} testid="tx-form-type" filterPairOnly={true} />
+                            {/if}
                         </div>
                     </div>
 
@@ -1456,10 +1481,7 @@
                                 <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
                             </div>
                         {:else}
-                            <BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} />
-                            {#if !draft.broker_id}
-                                <button type="button" class="text-[11px] text-libre-green hover:underline mt-0.5" onclick={() => (createBrokerOpen = true)} data-testid="tx-form-add-broker">+ {$t('brokers.create') || 'Add broker'}</button>
-                            {/if}
+                            <BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
                         {/if}
                     </div>
                 </fieldset>
@@ -1609,10 +1631,10 @@
 />
 
 <!-- W39: Inline broker creation modal. BrokerModal is Svelte 4 (event dispatcher). -->
-<BrokerModal isOpen={createBrokerOpen} mode="create" on:created={handleBrokerCreated} on:close={() => (createBrokerOpen = false)} />
+<BrokerModal isOpen={createBrokerOpen} mode="create" zIndex={zIndex + 10} on:created={handleBrokerCreated} on:close={() => (createBrokerOpen = false)} />
 
 <!-- W39: Inline asset creation modal. AssetModal is Svelte 5 (runes). -->
-<AssetModal bind:open={createAssetOpen} oncreated={handleAssetCreated} onclose={() => (createAssetOpen = false)} />
+<AssetModal bind:open={createAssetOpen} zIndex={zIndex + 10} oncreated={handleAssetCreated} onclose={() => (createAssetOpen = false)} />
 
 <style>
     /* Bugfix-5 walkthrough #6: numeric inputs (quantity, cost basis) — hide

@@ -111,6 +111,13 @@
         link_uuid: string | null;
         created_at?: string;
         updated_at?: string;
+        // B1-13: partner data for paired types (Da:/A: display)
+        partnerBrokerId?: number;
+        partnerCash?: {code: string; amount: string} | null;
+        /** DB id of the hidden partner row (for edit-many paired rendering). */
+        _partnerId?: number;
+        /** True for the "to" half of a merged pair — filtered out from DataTable display. */
+        _hidden?: boolean;
     }
 
     interface Props {
@@ -124,11 +131,9 @@
         availableTags?: string[];
         onClose: () => void;
         onCommitted?: (resp: unknown) => void;
-        /** Open the Promote wizard (passed by parent page; modal stays open). */
-        onOpenPromoteWizard?: () => void;
     }
 
-    let {open, mode, initialRows = [], availableTags = [], onClose, onCommitted, onOpenPromoteWizard}: Props = $props();
+    let {open, mode, initialRows = [], availableTags = [], onClose, onCommitted}: Props = $props();
 
     const AUTO_VALIDATE_THRESHOLD = 50;
 
@@ -229,6 +234,13 @@
             // Bugfix-2: in create-many with no initial rows, start with an
             // EMPTY grid — the user adds rows via the nested FormModal.
             const next: DraftRow[] = rows.length > 0 ? rows.map((r) => fromTx(r, m)) : [];
+
+            // B1-13: In edit-many, detect paired rows and merge them into
+            // a single visible row with partner data for Da:/A: rendering.
+            if (m === 'edit-many') {
+                mergePairedRows(next, rows);
+            }
+
             drafts = next;
             initialDraftsKey = serializeDrafts(next);
             // Auto-open the nested FormModal when the grid starts empty
@@ -367,6 +379,67 @@
         target.asset_event_id = (p.asset_event_id as number | null | undefined) ?? null;
         target.cost_basis_override = typeof p.cost_basis_override === 'string' ? p.cost_basis_override : '';
         if (typeof p.link_uuid === 'string') target.link_uuid = p.link_uuid;
+        // B1-13: partner data from dual FormModal push
+        if (typeof p._partnerBrokerId === 'number') target.partnerBrokerId = p._partnerBrokerId;
+        if (p._partnerCash !== undefined) target.partnerCash = (p._partnerCash as DraftRow['partnerCash']) ?? null;
+    }
+
+    // =========================================================================
+    // B1-13: Pair Merging (edit-many)
+    // =========================================================================
+
+    /** Detect paired rows in the initialRows and merge them: the "from" side
+     *  keeps partner display data, the "to" side is flagged `_hidden`. */
+    function mergePairedRows(draftArr: DraftRow[], sourceRows: TXReadItem[]) {
+        // Map DB id → draft index
+        const idToIdx = new Map<number, number>();
+        draftArr.forEach((d, i) => { if (d.id != null) idToIdx.set(d.id, i); });
+        // Map DB id → source TXReadItem for partner lookup
+        const idToSource = new Map<number, TXReadItem>();
+        sourceRows.forEach((r) => idToSource.set(r.id, r));
+
+        const processed = new Set<number>(); // indices already merged
+
+        for (let i = 0; i < draftArr.length; i++) {
+            if (processed.has(i)) continue;
+            const d = draftArr[i];
+            const rule = getTypeRule(d.type);
+            if (!rule.requiresPair) continue;
+
+            // Find partner via original.related_transaction_id
+            const partnerId = d.original?.related_transaction_id;
+            if (partnerId == null) continue;
+            const pIdx = idToIdx.get(partnerId);
+            if (pIdx == null || pIdx === i || processed.has(pIdx)) continue;
+
+            const partner = draftArr[pIdx];
+            // Determine from/to: "from" side has negative cash or negative qty
+            const cashAmt = Number(d.original?.cash?.amount ?? 0);
+            const partnerCashAmt = Number(partner.original?.cash?.amount ?? 0);
+            let fromIdx = i, toIdx = pIdx;
+            if (cashAmt > 0 && partnerCashAmt <= 0) {
+                fromIdx = pIdx;
+                toIdx = i;
+            } else if (cashAmt === 0 && partnerCashAmt === 0) {
+                // For TRANSFER: check quantity sign
+                const qtyAmt = Number(d.original?.quantity ?? 0);
+                if (qtyAmt > 0) {
+                    fromIdx = pIdx;
+                    toIdx = i;
+                }
+            }
+
+            const fromDraft = draftArr[fromIdx];
+            const toDraft = draftArr[toIdx];
+            // Set partner data on the visible "from" row
+            fromDraft.partnerBrokerId = toDraft.broker_id;
+            fromDraft.partnerCash = toDraft.cash;
+            fromDraft._partnerId = toDraft.id;
+            // Hide the "to" half
+            toDraft._hidden = true;
+            processed.add(fromIdx);
+            processed.add(toIdx);
+        }
     }
 
     function removeRow(tempId: string) {
@@ -789,18 +862,30 @@
                 width: 295,
                 sortable: false,
                 filterable: false,
-                cell: (row): CellContent => ({
-                    type: 'custom',
-                    component: CompactCashCell,
-                    props: {
-                        value: row.cash,
-                        signHint: getTypeRule(row.type).cashSign,
-                        disabled: getTypeRule(row.type).cashField === 'forbidden',
-                        defaultCode: (row.asset_id != null && getAssetInfo(row.asset_id)?.currency) || 'EUR',
-                        onChange: (v: {amount: string; code: string} | null) => patchDraft(row.tempId, {cash: v}),
-                        testid: `tx-bulk-cash-${row.tempId}`,
-                    },
-                }),
+                cell: (row): CellContent => {
+                    const rule = getTypeRule(row.type);
+                    // B1-13: paired row → show Da:/A: dual cash lines
+                    if (rule.requiresPair && row.partnerCash !== undefined && row.partnerBrokerId != null) {
+                        const fromCash = row.cash ? `${row.cash.amount} ${row.cash.code}` : '—';
+                        const toCash = row.partnerCash ? `${row.partnerCash.amount} ${row.partnerCash.code}` : '—';
+                        return {
+                            type: 'html',
+                            html: `<div class="flex flex-col gap-0.5 text-xs leading-tight min-h-[2.5rem] justify-center"><span><span class="text-gray-400 dark:text-gray-500 font-medium">Da:</span> ${fromCash}</span><hr class="border-gray-200 dark:border-gray-600 my-0.5"/><span><span class="text-gray-400 dark:text-gray-500 font-medium">A:</span> ${toCash}</span></div>`,
+                        };
+                    }
+                    return {
+                        type: 'custom',
+                        component: CompactCashCell,
+                        props: {
+                            value: row.cash,
+                            signHint: getTypeRule(row.type).cashSign,
+                            disabled: getTypeRule(row.type).cashField === 'forbidden',
+                            defaultCode: (row.asset_id != null && getAssetInfo(row.asset_id)?.currency) || 'EUR',
+                            onChange: (v: {amount: string; code: string} | null) => patchDraft(row.tempId, {cash: v}),
+                            testid: `tx-bulk-cash-${row.tempId}`,
+                        },
+                    };
+                },
             },
             {
                 id: 'broker',
@@ -811,6 +896,16 @@
                 filterable: false,
                 hiddenByDefault: false,
                 cell: (row): CellContent => {
+                    const rule = getTypeRule(row.type);
+                    // B1-13: paired row → show Da:/A: dual broker lines
+                    if (rule.requiresPair && row.partnerBrokerId != null) {
+                        const fromBroker = brokers.find((b) => b.id === row.broker_id)?.name ?? '—';
+                        const toBroker = brokers.find((b) => b.id === row.partnerBrokerId)?.name ?? '—';
+                        return {
+                            type: 'html',
+                            html: `<div class="flex flex-col gap-0.5 text-xs leading-tight min-h-[2.5rem] justify-center"><span><span class="text-gray-400 dark:text-gray-500 font-medium">Da:</span> ${fromBroker}</span><hr class="border-gray-200 dark:border-gray-600 my-0.5"/><span><span class="text-gray-400 dark:text-gray-500 font-medium">A:</span> ${toBroker}</span></div>`,
+                        };
+                    }
                     if (isEdit) {
                         const b = brokers.find((x) => x.id === row.broker_id);
                         return {type: 'html', html: b?.name ?? '—'};
@@ -971,10 +1066,12 @@
     // Bugfix-4 §U16: validate chip removed — banners are the single source
     // of truth. Footer keeps only an inline "Validating…" indicator.
 
+    // B1-13: filter out hidden partner rows for display
+    let visibleDrafts = $derived(drafts.filter((d) => !d._hidden));
 
-    let newCount = $derived(drafts.filter((d) => d.status === 'new').length);
-    let editedCount = $derived(drafts.filter((d) => d.status === 'edited').length);
-    let deleteCount = $derived(drafts.filter((d) => d.status === 'delete').length);
+    let newCount = $derived(visibleDrafts.filter((d) => d.status === 'new').length);
+    let editedCount = $derived(visibleDrafts.filter((d) => d.status === 'edited').length);
+    let deleteCount = $derived(visibleDrafts.filter((d) => d.status === 'delete').length);
     let actionCount = $derived(newCount + editedCount + deleteCount);
     let commitDisabled = $derived(committing || drafts.length === 0 || actionCount === 0);
     let commitLabel = $derived(committing ? $t('common.saving') : $t('transactions.bulk.commitAll'));
@@ -1032,6 +1129,8 @@
     /** R6-B.4: Red tint for rows marked for deletion. */
     function getRowClass(row: DraftRow): string {
         if (row.status === 'delete') return 'bg-red-50/60 dark:bg-red-950/20 line-through opacity-60';
+        // B1-13: visual indicator for paired rows
+        if (getTypeRule(row.type).requiresPair && row.partnerBrokerId != null) return 'border-l-2 border-l-indigo-400 dark:border-l-indigo-500';
         return '';
     }
 
@@ -1059,7 +1158,7 @@
         <!-- Header -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-bulk-title">
-                📋 {$t('transactions.bulk.title', {values: {total: drafts.length}})}
+                📋 {$t('transactions.bulk.title', {values: {total: visibleDrafts.length}})}
                 {#if actionCount > 0}
                     <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
                         ({#if newCount > 0}<span class="text-emerald-600 dark:text-emerald-400">{newCount} {$t('transactions.bulk.stateNew')}</span>{/if}{#if newCount > 0 && (editedCount > 0 || deleteCount > 0)} · {/if}{#if editedCount > 0}<span class="text-amber-600 dark:text-amber-400">{editedCount} {$t('transactions.bulk.stateEdit')}</span>{/if}{#if editedCount > 0 && deleteCount > 0} · {/if}{#if deleteCount > 0}<span class="text-red-600 dark:text-red-400">{deleteCount} {$t('transactions.bulk.stateDel')}</span>{/if})
@@ -1150,9 +1249,9 @@
                     {/if}
                 </InfoBanner>
             {/if}
-            {#if drafts.length > AUTO_VALIDATE_THRESHOLD}
+            {#if visibleDrafts.length > AUTO_VALIDATE_THRESHOLD}
                 <InfoBanner variant="info">
-                    <p data-testid="tx-bulk-auto-off">ⓘ {$t('transactions.validate.autoOff', {values: {n: drafts.length, threshold: AUTO_VALIDATE_THRESHOLD}})}</p>
+                    <p data-testid="tx-bulk-auto-off">ⓘ {$t('transactions.validate.autoOff', {values: {n: visibleDrafts.length, threshold: AUTO_VALIDATE_THRESHOLD}})}</p>
                 </InfoBanner>
             {/if}
         </div>
@@ -1172,11 +1271,6 @@
                     <button type="button" class="px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all">{$t('transactions.bulk.resetAll')}</button>
                 {/if}
                 <ColumnVisibilityToggle tableRef={tableRefForToggle} />
-                {#if onOpenPromoteWizard}
-                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" onclick={onOpenPromoteWizard} data-testid="tx-bulk-promote">
-                        ⚡ {$t('transactions.bulk.promotePair')}
-                    </button>
-                {/if}
             </div>
         </div>
 
@@ -1184,7 +1278,7 @@
         <div class="flex-1 min-h-0 overflow-y-auto px-3 py-2" data-testid="tx-bulk-body">
             <DataTable
                 bind:this={tableRef}
-                data={drafts}
+                data={visibleDrafts}
                 {columns}
                 getRowId={(d) => d.tempId}
                 storageKey="tx-bulk-modal"

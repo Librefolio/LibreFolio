@@ -166,8 +166,8 @@ class TXCreateItem(BaseModel):
         if self.asset_event_id is not None and self.asset_event_id <= 0:
             errors.append(PydanticCustomError("assetEventIdInvalid", "asset_event_id must be > 0 when provided", {"asset_event_id": self.asset_event_id}))
 
-        # Rule 1: TRANSFER and FX_CONVERSION require link_uuid
-        if self.type in (TransactionType.TRANSFER, TransactionType.FX_CONVERSION):
+        # Rule 1: TRANSFER, FX_CONVERSION, and CASH_TRANSFER require link_uuid
+        if self.type in (TransactionType.TRANSFER, TransactionType.FX_CONVERSION, TransactionType.CASH_TRANSFER):
             if not self.link_uuid:
                 errors.append(PydanticCustomError("linkUuidRequired", "{type} requires link_uuid for pairing", {"type": t}))
 
@@ -189,8 +189,17 @@ class TXCreateItem(BaseModel):
             if self.cash is None or self.cash.is_zero():
                 errors.append(PydanticCustomError("fxConversionCashRequired", "FX_CONVERSION requires cash with amount != 0", {"type": t}))
 
-        # Rule 4: DEPOSIT/WITHDRAWAL are pure cash - no asset allowed
-        if self.type in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL):
+        # Rule 3b: CASH_TRANSFER requires quantity = 0 and cash with amount != 0, no asset
+        if self.type == TransactionType.CASH_TRANSFER:
+            if self.asset_id is not None:
+                errors.append(PydanticCustomError("assetForbidden", "CASH_TRANSFER should not have asset_id", {"type": t}))
+            if self.quantity != Decimal("0"):
+                errors.append(PydanticCustomError("qtyZero", "CASH_TRANSFER should have quantity = 0", {"type": t}))
+            if self.cash is None or self.cash.is_zero():
+                errors.append(PydanticCustomError("cashRequired", "CASH_TRANSFER requires cash with amount != 0", {"type": t}))
+
+        # Rule 4: DEPOSIT/WITHDRAWAL/CASH_TRANSFER are pure cash - no asset allowed
+        if self.type in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL, TransactionType.CASH_TRANSFER):
             if self.asset_id is not None:
                 errors.append(PydanticCustomError("assetForbidden", "{type} should not have asset_id", {"type": t}))
 
@@ -218,6 +227,7 @@ class TXCreateItem(BaseModel):
             TransactionType.FEE,
             TransactionType.TAX,
             TransactionType.FX_CONVERSION,
+            TransactionType.CASH_TRANSFER,
         }
         if self.type in cash_required_types:
             if self.cash is None:
@@ -257,6 +267,7 @@ class TXCreateItem(BaseModel):
                 TransactionType.WITHDRAWAL,
                 TransactionType.FEE,
                 TransactionType.TAX,
+                TransactionType.CASH_TRANSFER,
             )
             and self.quantity != zero
         ):
@@ -708,6 +719,78 @@ class TXTransferPromoteResponse(BaseModel):
 
 
 # =============================================================================
+# BULK SPLIT / PROMOTE (server-driven, immediate)
+# =============================================================================
+
+
+class TXSplitItem(BaseModel):
+    """Single split request: one half of a pair to split."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int = Field(..., gt=0, description="ID of one half of the pair (backend finds partner)")
+
+
+class TXSplitRequest(BaseModel):
+    """Bulk split request: list of pairs to split."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: List[TXSplitItem] = Field(..., min_length=1, max_length=100)
+
+
+class TXSplitResultItem(BaseModel):
+    """Result for a single split operation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    from_tx: TXReadItem
+    to_tx: TXReadItem
+
+
+class TXSplitResponse(BaseModel):
+    """Bulk split response."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    results: List[TXSplitResultItem]
+
+
+class TXPromoteItem(BaseModel):
+    """Single promote request: two standalone rows to link."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id_a: int = Field(..., gt=0, description="First standalone transaction ID")
+    id_b: int = Field(..., gt=0, description="Second standalone transaction ID")
+
+
+class TXPromoteRequest(BaseModel):
+    """Bulk promote request: list of pairs to promote."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: List[TXPromoteItem] = Field(..., min_length=1, max_length=100)
+
+
+class TXPromoteResultItem(BaseModel):
+    """Result for a single promote operation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pair_a: TXReadItem
+    pair_b: TXReadItem
+
+
+class TXPromoteResponse(BaseModel):
+    """Bulk promote response."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    results: List[TXPromoteResultItem]
+
+
+# =============================================================================
 # TRANSACTION TYPE METADATA
 # =============================================================================
 
@@ -722,6 +805,37 @@ FieldMode = Literal["required", "optional", "forbidden"]
 # Pair form layout — controls the dual-transaction form layout in the frontend.
 # None = standard single form, otherwise specifies which dual form to show.
 PairFormLayout = Literal["fx", "transfer_asset", "transfer_cash"]
+
+# Field constraint relation — how a field relates between the two halves of a pair.
+PairFieldRelation = Literal["equal", "opposite", "different"]
+
+
+class PairFieldConstraint(BaseModel):
+    """How a field relates between the two halves of a pair."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: Literal["broker_id", "asset_id", "cash_currency", "cash_amount", "quantity"] = Field(..., description="Transaction field name")
+    relation: PairFieldRelation = Field(...,description="Constraint: equal (same value), opposite (negated), different (must differ)",)
+
+
+class SplitMeta(BaseModel):
+    """How a paired type splits into 2 standalone types."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    from_type: str = Field(..., description="Type for 'from' half (negative/source side)")
+    to_type: str = Field(..., description="Type for 'to' half (positive/destination side)")
+
+
+class PromoteRule(BaseModel):
+    """How 2 standalone types can be promoted to this paired type."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type_a: str = Field(..., description="First standalone type")
+    type_b: str = Field(..., description="Second standalone type")
+    field_constraints: list[PairFieldConstraint] = Field(..., description="Validation rules for the pair")
 
 
 class TXTypeMetadata(BaseModel):
@@ -763,6 +877,11 @@ class TXTypeMetadata(BaseModel):
         "'transfer_asset' (2 brokers, 1 asset), 'transfer_cash' (2 brokers, 1 currency). "
         "None = standard single form.",
     )
+
+    # Split/Promote server-driven metadata (only for paired types, None for standalone)
+    split_into: SplitMeta | None = Field(None,description="How this paired type splits into 2 standalone types. None for standalone types.",)
+    promote_from: list[PromoteRule] | None = Field(None,description="Rules for promoting 2 standalone types into this paired type. None for standalone types.",)
+    pair_field_constraints: list[PairFieldConstraint] | None = Field(None,description="Field equivalence constraints between the two halves of a pair. None for standalone types.",)
 
 
 # Precomputed metadata for all transaction types
@@ -836,7 +955,6 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         quantity_sign="zero",
         cash_sign="positive",
         event_compatible=False,
-        pair_form_layout="transfer_cash",
     ),
     TransactionType.WITHDRAWAL: TXTypeMetadata(
         code="WITHDRAWAL",
@@ -851,7 +969,6 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         quantity_sign="zero",
         cash_sign="negative",
         event_compatible=False,
-        pair_form_layout="transfer_cash",
     ),
     TransactionType.FEE: TXTypeMetadata(
         code="FEE",
@@ -895,6 +1012,23 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         cash_sign="zero",
         event_compatible=False,
         pair_form_layout="transfer_asset",
+        split_into=SplitMeta(from_type="ADJUSTMENT", to_type="ADJUSTMENT"),
+        promote_from=[
+            PromoteRule(
+                type_a="ADJUSTMENT",
+                type_b="ADJUSTMENT",
+                field_constraints=[
+                    PairFieldConstraint(field="asset_id", relation="equal"),
+                    PairFieldConstraint(field="broker_id", relation="different"),
+                    PairFieldConstraint(field="quantity", relation="opposite"),
+                ],
+            ),
+        ],
+        pair_field_constraints=[
+            PairFieldConstraint(field="asset_id", relation="equal"),
+            PairFieldConstraint(field="broker_id", relation="different"),
+            PairFieldConstraint(field="quantity", relation="opposite"),
+        ],
     ),
     TransactionType.FX_CONVERSION: TXTypeMetadata(
         code="FX_CONVERSION",
@@ -910,6 +1044,21 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         cash_sign="nonzero",
         event_compatible=False,
         pair_form_layout="fx",
+        split_into=SplitMeta(from_type="WITHDRAWAL", to_type="DEPOSIT"),
+        promote_from=[
+            PromoteRule(
+                type_a="WITHDRAWAL",
+                type_b="DEPOSIT",
+                field_constraints=[
+                    PairFieldConstraint(field="cash_currency", relation="different"),
+                    PairFieldConstraint(field="broker_id", relation="equal"),
+                ],
+            ),
+        ],
+        pair_field_constraints=[
+            PairFieldConstraint(field="cash_currency", relation="different"),
+            PairFieldConstraint(field="broker_id", relation="equal"),
+        ],
     ),
     TransactionType.ADJUSTMENT: TXTypeMetadata(
         code="ADJUSTMENT",
@@ -924,6 +1073,38 @@ TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
         quantity_sign="nonzero",
         cash_sign="zero",
         event_compatible=True,
+    ),
+    TransactionType.CASH_TRANSFER: TXTypeMetadata(
+        code="CASH_TRANSFER",
+        name="Cash Transfer",
+        description="Wire transfer / bonifico between brokers",
+        icon_slug="cash-transfer",
+        doc_slug="deposit-withdrawal",
+        asset_mode="forbidden",
+        cash_mode="required",
+        quantity_mode="forbidden",
+        requires_link=True,
+        quantity_sign="zero",
+        cash_sign="nonzero",
+        event_compatible=False,
+        pair_form_layout="transfer_cash",
+        split_into=SplitMeta(from_type="WITHDRAWAL", to_type="DEPOSIT"),
+        promote_from=[
+            PromoteRule(
+                type_a="WITHDRAWAL",
+                type_b="DEPOSIT",
+                field_constraints=[
+                    PairFieldConstraint(field="cash_currency", relation="equal"),
+                    PairFieldConstraint(field="broker_id", relation="different"),
+                    PairFieldConstraint(field="cash_amount", relation="opposite"),
+                ],
+            ),
+        ],
+        pair_field_constraints=[
+            PairFieldConstraint(field="cash_currency", relation="equal"),
+            PairFieldConstraint(field="broker_id", relation="different"),
+            PairFieldConstraint(field="cash_amount", relation="opposite"),
+        ],
     ),
 }
 

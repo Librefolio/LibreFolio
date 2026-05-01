@@ -4,7 +4,7 @@
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
-    import {Plus, Upload, Pencil, Copy, Trash2, Zap, RefreshCw} from 'lucide-svelte';
+    import {Plus, Upload, Pencil, Copy, Trash2, RefreshCw, Link2} from 'lucide-svelte';
 
     import {zodiosApi} from '$lib/api';
     import {ensureTxTypesLoaded} from '$lib/stores/txTypeStore';
@@ -12,6 +12,7 @@
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/brokerStore';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
+    import {findPromoteMatch} from '$lib/stores/transactionTypeStore';
     import type {BrokerLike} from '$lib/utils/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
     import TransactionsTable from '$lib/components/transactions/TransactionsTable.svelte';
@@ -20,7 +21,7 @@
     import TransactionFormModal from '$lib/components/transactions/TransactionFormModal.svelte';
     import TransactionBulkModal from '$lib/components/transactions/TransactionBulkModal.svelte';
     import BulkDeleteLinkedPairModal, {type ProblemPair} from '$lib/components/transactions/BulkDeleteLinkedPairModal.svelte';
-    import PromotePairWizardModal from '$lib/components/transactions/PromotePairWizardModal.svelte';
+    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
 
     // =========================================================================
     // Types (local, derived from generated.ts shapes)
@@ -381,12 +382,10 @@
     let bulkMode = $state<'create-many' | 'edit-many'>('create-many');
     let bulkInitial = $state<TXReadItem[]>([]);
 
-    // Promote pair wizard.
-    let wizardOpen = $state(false);
-    let wizardSeedFrom = $state<TXReadItem | null>(null);
-    let wizardSeedTo = $state<TXReadItem | null>(null);
-    /** When the wizard is opened FROM the bulk modal, this is the live drafts list. */
-    let wizardBulkContext = $state<TXReadItem[] | null>(null);
+    // B1-17: Selection-based promote (replaces PromotePairWizardModal).
+    let promoteConfirmOpen = $state(false);
+    let promoteTarget = $state<{targetType: string; targetLabel: string; idA: number; idB: number} | null>(null);
+    let promoting = $state(false);
 
     function handleSelectionChange(rows: TXReadItem[]) {
         selectedRows = rows;
@@ -501,56 +500,42 @@
      * rows; otherwise the wizard opens empty and the user picks from
      * "Saved transactions" / "Create new".
      */
-    let canSeedPromote = $derived.by(() => {
-        if (selectedRows.length !== 2) return false;
-        const types = new Set(selectedRows.map((r) => r.type));
-        if (!types.has('DEPOSIT') || !types.has('WITHDRAWAL')) return false;
-        return selectedRows.every((r) => r.related_transaction_id == null);
+    // B1-17: Selection-based promote — uses server-driven promote_from metadata.
+    let promoteMatch = $derived.by(() => {
+        if (selectedRows.length !== 2) return null;
+        const [a, b] = selectedRows;
+        // Both must be unpaired DB rows
+        if (a.related_transaction_id != null || b.related_transaction_id != null) return null;
+        return findPromoteMatch(a.type, b.type, $_);
     });
 
     function onPromotePair() {
-        // Always open the wizard. If selection is a compatible pair → seed it.
-        if (canSeedPromote) {
-            const withdrawal = selectedRows.find((r) => r.type === 'WITHDRAWAL') ?? null;
-            const deposit = selectedRows.find((r) => r.type === 'DEPOSIT') ?? null;
-            wizardSeedFrom = withdrawal;
-            wizardSeedTo = deposit;
-        } else {
-            wizardSeedFrom = null;
-            wizardSeedTo = null;
+        if (selectedRows.length !== 2 || !promoteMatch) return;
+        promoteTarget = {
+            targetType: promoteMatch.targetType,
+            targetLabel: promoteMatch.targetLabel,
+            idA: selectedRows[0].id,
+            idB: selectedRows[1].id,
+        };
+        promoteConfirmOpen = true;
+    }
+
+    async function confirmPromote() {
+        if (!promoteTarget) return;
+        promoting = true;
+        try {
+            await zodiosApi.promote_pairs_api_v1_transactions_promote_post({
+                items: [{id_a: promoteTarget.idA, id_b: promoteTarget.idB}],
+            } as never);
+            promoteConfirmOpen = false;
+            promoteTarget = null;
+            selectedRows = [];
+            await reload();
+        } catch (e) {
+            console.error('[promote]', e);
+        } finally {
+            promoting = false;
         }
-        wizardBulkContext = null;
-        wizardOpen = true;
-    }
-
-    /** Triggered from inside the bulk modal toolbar. */
-    function onOpenPromoteFromBulk() {
-        wizardSeedFrom = null;
-        wizardSeedTo = null;
-        // Snapshot the current bulk drafts as TX-shaped items. The bulk modal
-        // exposes its drafts via a callback (TODO: wire when available); for
-        // now we pass mainRows-derived candidates as fallback.
-        wizardBulkContext = [...bulkInitial];
-        wizardOpen = true;
-    }
-
-    function handlePromoteCommitted(resp: {new_from_tx_id?: number | null; new_to_tx_id?: number | null}) {
-        wizardOpen = false;
-        selectedRows = [];
-        const hi = resp.new_from_tx_id ?? resp.new_to_tx_id;
-        void reload().then(() => {
-            // Pulse the new pair after data is loaded and rendered.
-            if (hi != null) {
-                queueMicrotask(() => {
-                    const el = document.querySelector<HTMLElement>(`[data-row-id="tx-${hi}"]`);
-                    if (el) {
-                        el.classList.add('tx-row-highlight');
-                        el.scrollIntoView({behavior: 'smooth', block: 'center'});
-                        setTimeout(() => el.classList.remove('tx-row-highlight'), 1600);
-                    }
-                });
-            }
-        });
     }
 
     let highlightClearTimer: ReturnType<typeof setTimeout> | null = null;
@@ -663,7 +648,7 @@
                     bulkActions={[
                         {id: 'edit', icon: Pencil, label: () => $_('transactions.actions.edit') || 'Edit', onClick: () => onEditBulk()},
                         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone') || 'Clone', onClick: () => onCloneBulk()},
-                        {id: 'promote', icon: Zap, label: () => $_('transactions.actions.promotePair') || 'Promote pair', onClick: () => onPromotePair()},
+                        ...(promoteMatch ? [{id: 'promote', icon: Link2, label: () => `🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`, onClick: () => onPromotePair()}] : []),
                         {id: 'delete', icon: Trash2, label: () => $_('transactions.actions.delete') || 'Delete', variant: 'danger', onClick: () => onBulkDelete()},
                     ]}
                     onClearSelection={() => {
@@ -737,14 +722,14 @@
 </div>
 
 <TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} {availableTags} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} />
-<TransactionBulkModal open={bulkOpen} mode={bulkMode} initialRows={bulkInitial} {availableTags} onClose={() => (bulkOpen = false)} onCommitted={handleBulkCommitted} onOpenPromoteWizard={onOpenPromoteFromBulk} />
+<TransactionBulkModal open={bulkOpen} mode={bulkMode} initialRows={bulkInitial} {availableTags} onClose={() => (bulkOpen = false)} onCommitted={handleBulkCommitted} />
 <BulkDeleteLinkedPairModal open={bulkDeleteOpen} cleanRows={bulkDeleteClean} problemRows={bulkDeleteProblems} onClose={() => (bulkDeleteOpen = false)} onCommitted={handleBulkDeleteCommitted} />
-<PromotePairWizardModal
-    open={wizardOpen}
-    savedTransactions={mainRows}
-    bulkContext={wizardBulkContext}
-    seedFrom={wizardSeedFrom}
-    seedTo={wizardSeedTo}
-    onClose={() => (wizardOpen = false)}
-    onCommitted={handlePromoteCommitted}
+<ConfirmModal
+    open={promoteConfirmOpen}
+    title={`🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`}
+    message={promoteTarget ? `${selectedRows[0]?.type ?? ''} + ${selectedRows[1]?.type ?? ''} → ${promoteTarget.targetLabel}` : ''}
+    confirmText={promoting ? ($_('common.saving') || 'Saving...') : (`🔗 ${$_('transactions.actions.promotePair') || 'Link'}`)}
+    cancelText={$_('common.cancel')}
+    onConfirm={confirmPromote}
+    onCancel={() => { promoteConfirmOpen = false; promoteTarget = null; }}
 />

@@ -722,7 +722,7 @@ class TestAssetEventLink:
 
         true_in_meta = {t for t, m in TX_TYPE_METADATA.items() if m.event_compatible}
         assert true_in_meta == expected_true
-        assert len(TX_TYPE_METADATA) == 11
+        assert len(TX_TYPE_METADATA) == 12
 
 
 # ============================================================================

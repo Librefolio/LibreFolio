@@ -244,3 +244,45 @@ export function buildTransactionTypeOptions(t: (key: string) => string): Array<{
 	}));
 }
 
+// =============================================================================
+//  Promote matching — B1-17: server-driven promote rules
+// =============================================================================
+
+export interface PromoteMatch {
+	/** Target paired type code (e.g. CASH_TRANSFER, TRANSFER, FX_CONVERSION). */
+	targetType: string;
+	/** Translated name of the target type. */
+	targetLabel: string;
+}
+
+/**
+ * Given 2 selected transaction rows, check if any paired type's `promote_from` rules
+ * match their types. Returns the first match or null.
+ *
+ * The matching considers both orderings (rowA is type_a + rowB is type_b, or vice versa).
+ */
+export function findPromoteMatch(
+	typeA: string,
+	typeB: string,
+	t: (key: string) => string,
+): PromoteMatch | null {
+	if (!_cache) return null;
+	for (const st of _cache.transaction_types) {
+		const promoteRules = st.promote_from;
+		if (!promoteRules || !Array.isArray(promoteRules)) continue;
+		for (const rule of promoteRules) {
+			if (!rule || typeof rule !== 'object' || Array.isArray(rule)) continue;
+			const r = rule as {type_a: string; type_b: string};
+			const matchForward = typeA === r.type_a && typeB === r.type_b;
+			const matchReverse = typeA === r.type_b && typeB === r.type_a;
+			if (matchForward || matchReverse) {
+				return {
+					targetType: st.code,
+					targetLabel: t(`transactions.types.${st.code}`) || st.code,
+				};
+			}
+		}
+	}
+	return null;
+}
+

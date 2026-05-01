@@ -22,6 +22,8 @@
     export let isOpen = false;
     export let mode: 'create' | 'edit' = 'create';
     export let brokerId: number | null = null;
+    /** Z-index override for stacked modal contexts (e.g. opened from FormModal). */
+    export let zIndex: number = 50;
     export let initialData: {
         name?: string;
         description?: string | null;
@@ -156,7 +158,7 @@
     }
 </script>
 
-<ModalBase closeOnBackdropClick={!loading} closeOnEscape={!loading} maxWidth="lg" onRequestClose={handleClose} open={isOpen} testId="broker-modal" zIndex={50}>
+<ModalBase closeOnBackdropClick={!loading} closeOnEscape={!loading} maxWidth="lg" onRequestClose={handleClose} open={isOpen} testId="broker-modal" zIndex={zIndex}>
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div class="flex flex-col max-h-[85vh]" on:input={handleFormChange}>
         <!-- Header (sticky top) -->
@@ -182,7 +184,7 @@
 </ModalBase>
 
 <!-- Discard Changes Confirmation Modal -->
-<ModalBase maxWidth="sm" onRequestClose={cancelDiscard} open={showDiscardConfirm} zIndex={60}>
+<ModalBase maxWidth="sm" onRequestClose={cancelDiscard} open={showDiscardConfirm} zIndex={zIndex + 10}>
     <div class="p-6">
         <div class="flex items-center gap-3 mb-3">
             <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full">

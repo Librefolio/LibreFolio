@@ -1,7 +1,7 @@
 # Plan — Phase 7 · Part 4 · Round 5 · Bugfix 1 — Dual Form & Unified BulkModal Fixes
 
 **Date**: 2026-04-30
-**Status**: ⏳ IN PROGRESS
+**Status**: ✅ DONE
 **Priority**: P1 (blocking bugs + architectural)
 **Estimated effort**: ~12 h
 
@@ -715,14 +715,14 @@ Response (excerpt for CASH_TRANSFER):
 - [x] B1-7 (W39): Add broker/asset quicklinks (→ superseded by B1-11)
 
 ### Batch 2
-- [ ] B1-8 (W40): Backend `CASH_TRANSFER` type + metadata + migration
-- [ ] B1-8b: Frontend `collectDualCreates` → CASH_TRANSFER+CASH_TRANSFER
-- [ ] B1-9 (W41): Type editable in create dual mode
-- [ ] B1-10 (W42): Deduplicate errors + fix qty propagation
-- [ ] B1-11 (W43/W44): "Create new" dropdown footer in SearchSelect
-- [ ] B1-12 (W45): z-index stacked modals
-- [ ] B1-13 (W46): BulkModal paired row rendering (Da:/A: double-height)
-- [ ] B1-14 (W47-W50): i18n + cost basis tooltip + doc link + createNew key
-- [ ] B1-15 (W51): Split/Promote server-driven metadata (schemas + api sync)
-- [ ] B1-16 (W52): Bulk Split/Promote endpoints + service logic
-- [ ] B1-17 (W53): Remove PromotePairWizardModal → selection-based promote
+- [x] B1-8 (W40): Backend `CASH_TRANSFER` type + metadata + migration
+- [x] B1-8b: Frontend `collectDualCreates` → CASH_TRANSFER+CASH_TRANSFER
+- [x] B1-9 (W41): Type editable in create dual mode
+- [x] B1-10 (W42): Deduplicate errors + fix qty propagation
+- [x] B1-11 (W43/W44): "Create new" dropdown footer in SearchSelect
+- [x] B1-12 (W45): z-index stacked modals
+- [x] B1-13 (W46): BulkModal paired row rendering (Da:/A: double-height)
+- [x] B1-14 (W47-W50): i18n + cost basis tooltip + doc link + createNew key
+- [x] B1-15 (W51): Split/Promote server-driven metadata (schemas + api sync)
+- [x] B1-16 (W52): Bulk Split/Promote endpoints + service logic
+- [x] B1-17 (W53): Remove PromotePairWizardModal → selection-based promote
