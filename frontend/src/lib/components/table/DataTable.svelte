@@ -22,7 +22,6 @@
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {BulkAction, CellContent, ColumnDef, ColumnWidthsState, EnumOption, FilterValue, PaginationState, RowAction, SelectionState, SortState, VisibilityState} from './types';
-    import {string} from "zod";
 
     interface Props {
         data: T[];

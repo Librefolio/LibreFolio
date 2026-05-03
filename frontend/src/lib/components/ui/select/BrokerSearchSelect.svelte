@@ -52,8 +52,10 @@
     // Convert numeric value to string for SearchSelect
     let stringValue = $derived(value != null ? String(value) : '');
 
-    // Get selected broker for display
-    let selectedBroker = $derived(value != null ? brokers.find((b) => b.id === value) : null);
+    /** Helper to safely cast option.data to BrokerSelectItem. */
+    function asBroker(data: unknown): BrokerSelectItem {
+        return data as BrokerSelectItem;
+    }
 
     function handleChange(newValue: string) {
         const numericValue = newValue ? parseInt(newValue, 10) : null;
@@ -64,14 +66,14 @@
 
 <SearchSelect {disabled} {dropdownPosition} inlineSearch={true} {maxVisibleItems} onchange={handleChange} options={brokerOptions} placeholder={placeholder || $_('uploads.selectBroker')} value={stringValue} {createLabel} {onCreateNew}>
     {#snippet item(option)}
-        {@const broker = option.data as BrokerSelectItem}
+        {@const broker = asBroker(option.data)}
         <div class="flex items-center gap-2">
             <BrokerIcon iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
             <span class="truncate">{broker.name}</span>
         </div>
     {/snippet}
     {#snippet selectedItem(option)}
-        {@const broker = option.data as BrokerSelectItem}
+        {@const broker = asBroker(option.data)}
         <div class="flex items-center gap-2">
             <BrokerIcon iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
             <span class="truncate">{broker.name}</span>
