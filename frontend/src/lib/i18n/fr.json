@@ -270,6 +270,7 @@
   },
   "assets": {
     "title": "Actifs",
+    "create": "Nouvel actif",
     "subtitle": "Visualisez et gérez vos investissements",
     "searchPlaceholder": "Rechercher des actifs...",
     "allTypes": "Tous les types",
@@ -491,7 +492,7 @@
       "INTEREST": "Intérêts",
       "SELL": "Vente",
       "TAX": "Impôt",
-      "TRANSFER": "Transfert",
+      "TRANSFER": "Transfert de Titres",
       "WITHDRAWAL": "Retrait",
       "CASH_TRANSFER": "Virement"
     },
@@ -551,7 +552,8 @@
       "sameCurrencyError": "Les devises doivent être différentes",
       "sameBrokerError": "Les courtiers doivent être différents",
       "loadingPartner": "Chargement de la transaction liée…",
-      "swapSides": "Inverser les côtés"
+      "swapSides": "Inverser les côtés",
+      "apply": "Appliquer"
     },
     "bulk": {
       "titleCreate": "Nouvelles transactions",
@@ -610,6 +612,27 @@
       "failed": "Échec de la promotion",
       "rolledBack": "Promote annulé — rien n'a été modifié.",
       "rolledBackTitle": "Annulé"
+    },
+    "bulkDelete": {
+      "title": "Supprimer des transactions",
+      "intro": "Les transactions liées (transferts, conversions de devises) doivent être supprimées ensemble.",
+      "confirmSimple": "Supprimer {n} transaction(s) ?",
+      "confirmSimpleDesc": "Cette action est irréversible.",
+      "applyToAll": "Appliquer à toutes les lignes liées",
+      "removeAll": "Retirer de la sélection",
+      "extendAll": "Supprimer aussi le partenaire",
+      "colSelected": "Sélectionnée",
+      "colType": "Type",
+      "colPartner": "Partenaire",
+      "colAction": "Action",
+      "removeRow": "Retirer #{id}",
+      "extendRow": "Supprimer aussi #{id}",
+      "noConflict": "Les {n} autre(s) ligne(s) n'ont pas de partenaire lié — elles seront supprimées normalement.",
+      "summary": "Lot final : {total} à supprimer (nettes : {clean} · étendues : {extended} + {partners} partenaires · retirées : {removed})",
+      "cancel": "Annuler",
+      "confirm": "Supprimer {n}",
+      "deleting": "Suppression…",
+      "rolledBack": "Suppression annulée — aucune modification effectuée."
     },
     "validate": {
       "now": "Valider maintenant",

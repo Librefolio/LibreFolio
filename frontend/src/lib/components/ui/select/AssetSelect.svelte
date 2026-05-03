@@ -34,11 +34,15 @@
         testid?: string;
         /** Compact trigger padding (matches standard inputs). */
         compact?: boolean;
+        /** Label for the "Create new" footer button (e.g. "+ New asset"). */
+        createLabel?: string;
+        /** Callback when user clicks the "Create new" footer. */
+        onCreateNew?: () => void;
         /** Change callback (number | null). */
         onchange?: (value: number | null) => void;
     }
 
-    let {value = $bindable(null), disabled = false, filter, placeholder, testid = 'asset-select', compact = false, onchange}: Props = $props();
+    let {value = $bindable(null), disabled = false, filter, placeholder, testid = 'asset-select', compact = false, createLabel, onCreateNew, onchange}: Props = $props();
 
     let loading = $state(true);
 
@@ -80,12 +84,17 @@
         const img = e.currentTarget as HTMLImageElement | null;
         if (img) img.style.display = 'none';
     }
+
+    /** Safe cast helper — avoids `as` in Svelte 5 templates. */
+    function asAsset(data: unknown): AssetInfo | undefined {
+        return data as AssetInfo | undefined;
+    }
 </script>
 
 <div data-testid={testid}>
-    <SearchSelect value={stringValue} {options} {disabled} {loading} placeholder={placeholder ?? $t('common.select')} {compact} inlineSearch={true} onchange={handleChange}>
+    <SearchSelect value={stringValue} {options} {disabled} {loading} placeholder={placeholder ?? $t('common.select')} {compact} inlineSearch={true} {createLabel} {onCreateNew} onchange={handleChange}>
         {#snippet selectedItem(option)}
-            {@const a = option.data as AssetInfo | undefined}
+            {@const a = asAsset(option.data)}
             <div class="flex items-center gap-2 min-w-0">
                 {#if option.icon}
                     <span class="shrink-0 w-7 h-7 flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded overflow-hidden">
@@ -99,7 +108,7 @@
             </div>
         {/snippet}
         {#snippet item(option)}
-            {@const a = option.data as AssetInfo | undefined}
+            {@const a = asAsset(option.data)}
             <div class="flex items-center gap-2 min-w-0">
                 {#if option.icon}
                     <img src={option.icon} alt="" class="w-4 h-4 rounded-sm object-contain shrink-0" onerror={hideOnError} />

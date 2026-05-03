@@ -40,11 +40,6 @@
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
-    import BrokerSearchSelect from '$lib/components/ui/select/BrokerSearchSelect.svelte';
-    import CompactCashCell from '$lib/components/ui/CompactCashCell.svelte';
-    import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
-    import TransactionTypeSearchSelect from './TransactionTypeSearchSelect.svelte';
 
     import type {ColumnDef, CellContent} from '$lib/components/table/types';
     import {zodiosApi} from '$lib/api';
@@ -114,6 +109,7 @@
         // B1-13: partner data for paired types (Da:/A: display)
         partnerBrokerId?: number;
         partnerCash?: {code: string; amount: string} | null;
+        partnerDate?: string;
         /** DB id of the hidden partner row (for edit-many paired rendering). */
         _partnerId?: number;
         /** True for the "to" half of a merged pair — filtered out from DataTable display. */
@@ -129,11 +125,15 @@
          *  appears in its in-flight drafts (so newly-typed tags are
          *  immediately available across rows). */
         availableTags?: string[];
+        /** When set, auto-opens the FormModal on mount:
+         *  'edit' → opens the first draft for editing
+         *  'create' → opens a new row form */
+        autoOpenForm?: 'create' | 'edit' | null;
         onClose: () => void;
         onCommitted?: (resp: unknown) => void;
     }
 
-    let {open, mode, initialRows = [], availableTags = [], onClose, onCommitted}: Props = $props();
+    let {open, mode, initialRows = [], availableTags = [], autoOpenForm = null, onClose, onCommitted}: Props = $props();
 
     const AUTO_VALIDATE_THRESHOLD = 50;
 
@@ -243,9 +243,17 @@
 
             drafts = next;
             initialDraftsKey = serializeDrafts(next);
-            // Auto-open the nested FormModal when the grid starts empty
-            // so the user can immediately start filling in the first row.
-            if (m === 'create-many' && rows.length === 0) {
+
+            // Determine whether to auto-open the FormModal
+            const autoForm = autoOpenForm;
+            if (autoForm === 'edit' && next.length > 0) {
+                // Auto-open FormModal on the first row (edit single / clone single)
+                queueMicrotask(() => openEditRowForm(next[0]));
+            } else if (autoForm === 'create' && next.length > 0) {
+                // Clone: row is 'new' so openEditRowForm uses create mode
+                queueMicrotask(() => openEditRowForm(next[0]));
+            } else if (m === 'create-many' && rows.length === 0) {
+                // Auto-open for brand-new empty grid
                 queueMicrotask(() => {
                     formOpen = true;
                     formMode = 'create';
@@ -382,6 +390,7 @@
         // B1-13: partner data from dual FormModal push
         if (typeof p._partnerBrokerId === 'number') target.partnerBrokerId = p._partnerBrokerId;
         if (p._partnerCash !== undefined) target.partnerCash = (p._partnerCash as DraftRow['partnerCash']) ?? null;
+        if (typeof p._partnerDate === 'string') target.partnerDate = p._partnerDate;
     }
 
     // =========================================================================
@@ -434,6 +443,7 @@
             // Set partner data on the visible "from" row
             fromDraft.partnerBrokerId = toDraft.broker_id;
             fromDraft.partnerCash = toDraft.cash;
+            fromDraft.partnerDate = toDraft.date;
             fromDraft._partnerId = toDraft.id;
             // Hide the "to" half
             toDraft._hidden = true;
@@ -732,15 +742,45 @@
     // TYPE_OPTIONS removed in Bugfix-2 §C6 — type column now uses
     // TransactionTypeSearchSelect (PNG icons + i18n labels).
 
-    // Bugfix-3 §C10: BrokerSearchSelect expects `{id, name, icon_url, ...}`
-    // items. The brokerStore's BrokerInfo is structurally compatible but TS
-    // can't widen via the prop attribute, so we cast in script (parser-friendly).
-    let brokersForCellSelect = $derived(brokers as unknown as Array<{id: number; name: string; icon_url?: string | null; portal_url?: string | null; default_import_plugin?: string | null}>);
-
     const editMode = $derived(mode === 'edit-many');
 
+    // =========================================================================
+    // DRY helpers for readonly cell rendering
+    // =========================================================================
+
+    /** Render a Da:/A: dual-line cell for paired rows. */
+    function renderDualHtml(fromText: string, toText: string): string {
+        return `<div class="flex flex-col gap-0.5 text-xs leading-tight min-h-[2.5rem] justify-center"><span><span class="text-gray-400 dark:text-gray-500 font-medium">${$t('transactions.form.from')}:</span> ${fromText}</span><hr class="border-gray-200 dark:border-gray-600 my-0.5"/><span><span class="text-gray-400 dark:text-gray-500 font-medium">${$t('transactions.form.to')}:</span> ${toText}</span></div>`;
+    }
+
+    /** Readonly type badge with icon. */
+    function renderTypeHtml(type: string): string {
+        const label = $t(`transactions.types.${type}`) || type;
+        const slug = type.toLowerCase().replace(/_/g, '-');
+        const isPair = getTypeRule(type).requiresPair;
+        const prefix = isPair ? '↔ ' : '';
+        return `<span class="inline-flex items-center gap-1 text-xs"><img src="/icons/transactions/${slug}.png" alt="" class="w-4 h-4 object-contain shrink-0" onerror="this.style.display='none'"/>${prefix}${label}</span>`;
+    }
+
+    /** Format a cash value as "±amount CODE". */
+    function formatCashText(cash: {code: string; amount: string} | null | undefined): string {
+        if (!cash) return '—';
+        return `${cash.amount} ${cash.code}`;
+    }
+
+    /** Broker name lookup. */
+    function brokerName(brokerId: number): string {
+        return brokers.find((b) => b.id === brokerId)?.name ?? '—';
+    }
+
+    /** Asset display name lookup. */
+    function assetName(assetId: number | null | undefined): string {
+        if (assetId == null) return '—';
+        const info = getAssetInfo(assetId);
+        return info?.display_name ?? `#${assetId}`;
+    }
+
     let columns = $derived.by<ColumnDef<DraftRow>[]>(() => {
-        const isEdit = editMode;
         return [
             {
                 id: 'status',
@@ -764,165 +804,97 @@
                 width: 70,
                 sortable: false,
                 filterable: false,
-                hiddenByDefault: !isEdit,
+                hiddenByDefault: !editMode,
                 cell: (row): CellContent => ({type: 'html', html: row.id != null ? `#${row.id}` : '—'}),
             },
             {
                 id: 'date',
                 header: () => $t('transactions.table.date'),
-                type: 'custom',
+                type: 'text',
                 width: 140,
                 sortable: false,
                 filterable: false,
-                cell: (row): CellContent => ({
-                    type: 'custom',
-                    component: SingleDatePicker,
-                    props: {
-                        value: row.date,
-                        label: '',
-                        // Bugfix-3 §U13: render the date trigger as an input-style
-                        // control matching SearchSelect height (px-3 py-2 text-sm).
-                        inputStyle: true,
-                        onchange: (d: string) => patchDraft(row.tempId, {date: d}),
-                    },
-                }),
+                cell: (row): CellContent => {
+                    const rule = getTypeRule(row.type);
+                    // Paired rows with different dates → Da:/A:
+                    if (rule.requiresPair && row.partnerDate && row.partnerDate !== row.date) {
+                        return {type: 'html', html: renderDualHtml(row.date, row.partnerDate)};
+                    }
+                    return {type: 'html', html: `<span class="font-mono text-sm text-gray-700 dark:text-gray-200">${row.date}</span>`};
+                },
             },
             {
                 id: 'type',
                 header: () => $t('transactions.table.type'),
-                type: 'custom',
+                type: 'text',
                 width: 140,
                 sortable: false,
                 filterable: false,
-                cell: (row): CellContent => {
-                    if (isEdit) {
-                        // Edit-many: type is immutable per business rule. Render the badge readonly.
-                        const label = $t(`transactions.types.${row.type}`) || row.type;
-                        return {type: 'html', html: `<span class="inline-flex items-center gap-1 text-xs"><img src="/icons/transactions/${row.type.toLowerCase().replace('_', '-')}.png" alt="" class="w-4 h-4 object-contain shrink-0" onerror="this.style.display='none'"/>${label}</span>`};
-                    }
-                    return {
-                        type: 'custom',
-                        component: TransactionTypeSearchSelect,
-                        props: {
-                            value: row.type,
-                            compact: true,
-                            onchange: (v: TransactionTypeCode) => patchDraft(row.tempId, {type: v}),
-                            testid: `tx-bulk-type-${row.tempId}`,
-                        },
-                    };
-                },
+                cell: (row): CellContent => ({type: 'html', html: renderTypeHtml(row.type)}),
             },
             {
                 id: 'asset',
                 header: () => $t('transactions.table.asset'),
-                type: 'custom',
+                type: 'text',
                 width: 180,
                 sortable: false,
                 filterable: false,
-                cell: (row): CellContent => ({
-                    type: 'custom',
-                    component: AssetSelect,
-                    props: {
-                        value: row.asset_id,
-                        compact: true,
-                        disabled: getTypeRule(row.type).assetField === 'forbidden',
-                        onchange: (v: number | null) => patchDraft(row.tempId, {asset_id: v}),
-                        testid: `tx-bulk-asset-${row.tempId}`,
-                    },
-                }),
+                cell: (row): CellContent => {
+                    if (getTypeRule(row.type).assetField === 'forbidden') {
+                        return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
+                    }
+                    return {type: 'html', html: `<span class="text-sm truncate">${assetName(row.asset_id)}</span>`};
+                },
             },
             {
                 id: 'quantity',
                 header: () => $t('transactions.table.quantity'),
-                type: 'number',
+                type: 'text',
                 width: 85,
                 sortable: false,
                 filterable: false,
                 cell: (row): CellContent => {
-                    // Type-rule gating (Bugfix-1 §C3 + Bugfix-2 §U10): when
-                    // quantity must be 0 (DEPOSIT/WITHDRAWAL/DIVIDEND/INTEREST
-                    // /FEE/TAX/ADJUSTMENT…), render a readonly `n/a` italic
-                    // placeholder so the user can clearly see the field is
-                    // not applicable to the current type.
                     if (getTypeRule(row.type).quantityMode === 'forbidden') {
-                        return {type: 'html', html: '<span class="text-gray-400 italic" title="Not applicable: quantity must be 0 for this transaction type">n/a</span>'};
+                        return {type: 'html', html: '<span class="text-gray-400 italic">n/a</span>'};
                     }
-                    return {
-                        type: 'editable-number',
-                        value: row.quantity === '' || row.quantity == null ? null : Number(row.quantity),
-                        step: 'any',
-                        onchange: (v) => patchDraft(row.tempId, {quantity: v == null ? '' : String(v)}),
-                    };
+                    const qty = row.quantity ?? '0';
+                    return {type: 'html', html: `<span class="font-mono text-sm text-right block">${qty}</span>`};
                 },
             },
             {
                 id: 'cash',
                 header: () => $t('transactions.table.cash'),
-                type: 'custom',
-                width: 295,
+                type: 'text',
+                width: 160,
                 sortable: false,
                 filterable: false,
                 cell: (row): CellContent => {
                     const rule = getTypeRule(row.type);
-                    // B1-13: paired row → show Da:/A: dual cash lines
-                    if (rule.requiresPair && row.partnerCash !== undefined && row.partnerBrokerId != null) {
-                        const fromCash = row.cash ? `${row.cash.amount} ${row.cash.code}` : '—';
-                        const toCash = row.partnerCash ? `${row.partnerCash.amount} ${row.partnerCash.code}` : '—';
-                        return {
-                            type: 'html',
-                            html: `<div class="flex flex-col gap-0.5 text-xs leading-tight min-h-[2.5rem] justify-center"><span><span class="text-gray-400 dark:text-gray-500 font-medium">Da:</span> ${fromCash}</span><hr class="border-gray-200 dark:border-gray-600 my-0.5"/><span><span class="text-gray-400 dark:text-gray-500 font-medium">A:</span> ${toCash}</span></div>`,
-                        };
+                    if (rule.cashField === 'forbidden') {
+                        return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
                     }
-                    return {
-                        type: 'custom',
-                        component: CompactCashCell,
-                        props: {
-                            value: row.cash,
-                            signHint: getTypeRule(row.type).cashSign,
-                            disabled: getTypeRule(row.type).cashField === 'forbidden',
-                            defaultCode: (row.asset_id != null && getAssetInfo(row.asset_id)?.currency) || 'EUR',
-                            onChange: (v: {amount: string; code: string} | null) => patchDraft(row.tempId, {cash: v}),
-                            testid: `tx-bulk-cash-${row.tempId}`,
-                        },
-                    };
+                    // Paired row → show Da:/A: dual cash lines
+                    if (rule.requiresPair && row.partnerCash !== undefined && row.partnerBrokerId != null) {
+                        return {type: 'html', html: renderDualHtml(formatCashText(row.cash), formatCashText(row.partnerCash))};
+                    }
+                    return {type: 'html', html: `<span class="text-sm">${formatCashText(row.cash)}</span>`};
                 },
             },
             {
                 id: 'broker',
                 header: () => $t('transactions.table.broker'),
-                type: 'custom',
+                type: 'text',
                 width: 140,
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: false,
                 cell: (row): CellContent => {
                     const rule = getTypeRule(row.type);
-                    // B1-13: paired row → show Da:/A: dual broker lines
-                    if (rule.requiresPair && row.partnerBrokerId != null) {
-                        const fromBroker = brokers.find((b) => b.id === row.broker_id)?.name ?? '—';
-                        const toBroker = brokers.find((b) => b.id === row.partnerBrokerId)?.name ?? '—';
-                        return {
-                            type: 'html',
-                            html: `<div class="flex flex-col gap-0.5 text-xs leading-tight min-h-[2.5rem] justify-center"><span><span class="text-gray-400 dark:text-gray-500 font-medium">Da:</span> ${fromBroker}</span><hr class="border-gray-200 dark:border-gray-600 my-0.5"/><span><span class="text-gray-400 dark:text-gray-500 font-medium">A:</span> ${toBroker}</span></div>`,
-                        };
+                    // Paired row with different brokers → Da:/A:
+                    if (rule.requiresPair && row.partnerBrokerId != null && row.partnerBrokerId !== row.broker_id) {
+                        return {type: 'html', html: renderDualHtml(brokerName(row.broker_id), brokerName(row.partnerBrokerId))};
                     }
-                    if (isEdit) {
-                        const b = brokers.find((x) => x.id === row.broker_id);
-                        return {type: 'html', html: b?.name ?? '—'};
-                    }
-                    // Bugfix-3 §C10: BrokerSearchSelect (search + logo) instead
-                    // of a plain editable-select to stay consistent with the
-                    // rest of the app (FormModal, wizard, BRIM editor).
-                    return {
-                        type: 'custom',
-                        component: BrokerSearchSelect,
-                        props: {
-                            brokers: brokersForCellSelect,
-                            value: row.broker_id || null,
-                            placeholder: $t('uploads.selectBroker'),
-                            onchange: (id: number | null) => patchDraft(row.tempId, {broker_id: id ?? 0}),
-                        },
-                    };
+                    return {type: 'html', html: `<span class="text-sm">${brokerName(row.broker_id)}</span>`};
                 },
             },
             {
@@ -933,12 +905,7 @@
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: true,
-                cell: (row): CellContent => ({
-                    type: 'editable-text',
-                    value: row.description,
-                    maxLength: 500,
-                    onchange: (v) => patchDraft(row.tempId, {description: v}),
-                }),
+                cell: (row): CellContent => ({type: 'html', html: row.description ? `<span class="text-xs text-gray-600 dark:text-gray-300 truncate block">${row.description}</span>` : '<span class="text-gray-400">—</span>'}),
             },
             {
                 id: 'cost_basis_override',
@@ -948,27 +915,17 @@
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: true,
-                cell: (row): CellContent => ({
-                    type: 'editable-text',
-                    value: row.cost_basis_override,
-                    placeholder: 'auto',
-                    onchange: (v) => patchDraft(row.tempId, {cost_basis_override: v}),
-                }),
+                cell: (row): CellContent => ({type: 'html', html: row.cost_basis_override ? `<span class="font-mono text-xs">${row.cost_basis_override}</span>` : '<span class="text-gray-400 italic">auto</span>'}),
             },
             {
                 id: 'asset_event_id',
                 header: () => $t('transactions.form.assetEvent'),
-                type: 'number',
+                type: 'text',
                 width: 110,
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: true,
-                cell: (row): CellContent => ({
-                    type: 'editable-number',
-                    value: row.asset_event_id,
-                    placeholder: 'event id',
-                    onchange: (v) => patchDraft(row.tempId, {asset_event_id: v}),
-                }),
+                cell: (row): CellContent => ({type: 'html', html: row.asset_event_id != null ? `<span class="font-mono text-xs">#${row.asset_event_id}</span>` : '<span class="text-gray-400">—</span>'}),
             },
             {
                 id: 'link_uuid',
@@ -1105,19 +1062,99 @@
         formOpen = true;
     }
     function openEditRowForm(row: DraftRow) {
-        formMode = 'edit';
+        // When editing a 'new' draft, open in create mode so type stays editable;
+        // formEditingTempId is still set so handleFormPushed patches (not adds).
+        formMode = row.status === 'new' ? 'create' : 'edit';
         formInitial = draftToTxLike(row);
         formEditingTempId = row.tempId;
         formOpen = true;
     }
     function handleFormPushed(payload: Record<string, unknown>) {
+        const isDual = payload._dual === true;
         if (formEditingTempId != null) {
-            patchRowFromForm(formEditingTempId, payload);
+            // Patching an existing draft row
+            if (isDual) {
+                patchDualRowFromForm(formEditingTempId, payload);
+            } else {
+                patchRowFromForm(formEditingTempId, payload);
+            }
         } else {
-            addRowFromForm(payload);
+            // Adding a new draft row
+            if (isDual) {
+                addDualRowFromForm(payload);
+            } else {
+                addRowFromForm(payload);
+            }
         }
         formOpen = false;
         formEditingTempId = null;
+    }
+
+    /** Add a paired draft row: visible "from" draft + hidden "to" draft. */
+    function addDualRowFromForm(payload: Record<string, unknown>) {
+        const items = payload._items as Record<string, unknown>[];
+        if (!items || items.length < 2) { addRowFromForm(payload); return; }
+        const linkUuid = (items[0].link_uuid as string) ?? generateUUID();
+
+        // "From" side — visible row
+        const fromDraft = emptyDraft();
+        applyFormPayload(fromDraft, items[0]);
+        fromDraft.link_uuid = linkUuid;
+        fromDraft.partnerBrokerId = (items[1].broker_id as number) ?? 0;
+        fromDraft.partnerCash = (items[1].cash as DraftRow['partnerCash']) ?? null;
+        fromDraft.partnerDate = (items[1].date as string) ?? fromDraft.date;
+
+        // "To" side — hidden partner
+        const toDraft = emptyDraft();
+        applyFormPayload(toDraft, items[1]);
+        toDraft.link_uuid = linkUuid;
+        toDraft._hidden = true;
+
+        drafts = [...drafts, fromDraft, toDraft];
+    }
+
+    /** Patch a paired draft row: update both visible and hidden partner. */
+    function patchDualRowFromForm(tempId: string, payload: Record<string, unknown>) {
+        const items = payload._items as Record<string, unknown>[];
+        if (!items || items.length < 2) { patchRowFromForm(tempId, payload); return; }
+        const linkUuid = (items[0].link_uuid as string) ?? generateUUID();
+
+        drafts = drafts.map((d) => {
+            if (d.tempId === tempId) {
+                // Update the visible "from" row
+                const merged = {...d};
+                applyFormPayload(merged, items[0]);
+                merged.link_uuid = linkUuid;
+                merged.partnerBrokerId = (items[1].broker_id as number) ?? 0;
+                merged.partnerCash = (items[1].cash as DraftRow['partnerCash']) ?? null;
+                merged.partnerDate = (items[1].date as string) ?? merged.date;
+                if (merged.status === 'original') merged.status = 'edited';
+                return merged;
+            }
+            return d;
+        });
+
+        // Find or create the hidden partner draft
+        const existingPartner = drafts.find(
+            (d) => d._hidden && d.link_uuid === linkUuid && d.tempId !== tempId
+        );
+        if (existingPartner) {
+            drafts = drafts.map((d) => {
+                if (d.tempId !== existingPartner.tempId) return d;
+                const merged = {...d};
+                applyFormPayload(merged, items[1]);
+                merged.link_uuid = linkUuid;
+                if (merged.status === 'original') merged.status = 'edited';
+                return merged;
+            });
+        } else {
+            // Create a new hidden partner draft
+            const toDraft = emptyDraft();
+            applyFormPayload(toDraft, items[1]);
+            toDraft.link_uuid = linkUuid;
+            toDraft._hidden = true;
+            drafts = [...drafts, toDraft];
+        }
     }
 
     // Cast to `never` is required because DataTable<T> is generic and Svelte 5
@@ -1292,6 +1329,7 @@
                 bulkActions={bulkActionsForTable}
                 stickyActions={false}
                 {getRowClass}
+                onRowDoubleClick={(row) => openEditRowForm(row)}
             />
         </div>
 

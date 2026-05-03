@@ -140,6 +140,11 @@ export async function ensureTypesLoaded(): Promise<void> {
 	return _loading;
 }
 
+/** Whether the type cache has been populated. Use in $derived to defer rendering. */
+export function isTypesLoaded(): boolean {
+	return _cache != null;
+}
+
 /** Safe lookup — returns FALLBACK_RULE only for truly unknown codes. */
 export function getTypeRule(type: string | null | undefined): TypeRule {
 	const code = (type ?? '').toUpperCase();

@@ -270,6 +270,7 @@
   },
   "assets": {
     "title": "Activos",
+    "create": "Nuevo activo",
     "subtitle": "Visualiza y gestiona tus inversiones",
     "searchPlaceholder": "Buscar activos...",
     "allTypes": "Todos los tipos",
@@ -491,7 +492,7 @@
       "INTEREST": "Interés",
       "SELL": "Venta",
       "TAX": "Impuesto",
-      "TRANSFER": "Transferencia",
+      "TRANSFER": "Transferencia de Activos",
       "WITHDRAWAL": "Retiro",
       "CASH_TRANSFER": "Transferencia bancaria"
     },
@@ -551,7 +552,8 @@
       "sameCurrencyError": "Las divisas deben ser diferentes",
       "sameBrokerError": "Los brokers deben ser diferentes",
       "loadingPartner": "Cargando transacción vinculada…",
-      "swapSides": "Invertir lados"
+      "swapSides": "Invertir lados",
+      "apply": "Aplicar"
     },
     "bulk": {
       "titleCreate": "Nuevas transacciones",
@@ -610,6 +612,27 @@
       "failed": "Fallo en la promoción",
       "rolledBack": "Promote revertido — no se modificó nada.",
       "rolledBackTitle": "Revertido"
+    },
+    "bulkDelete": {
+      "title": "Eliminar transacciones",
+      "intro": "Las transacciones vinculadas (transferencias, conversiones de divisa) deben eliminarse juntas.",
+      "confirmSimple": "¿Eliminar {n} transacción(es)?",
+      "confirmSimpleDesc": "Esta acción no se puede deshacer.",
+      "applyToAll": "Aplicar a todas las filas vinculadas",
+      "removeAll": "Eliminar de la selección",
+      "extendAll": "Eliminar también el partner",
+      "colSelected": "Seleccionada",
+      "colType": "Tipo",
+      "colPartner": "Partner",
+      "colAction": "Acción",
+      "removeRow": "Quitar #{id}",
+      "extendRow": "Eliminar también #{id}",
+      "noConflict": "Las otras {n} fila(s) no tienen partner vinculado — se eliminarán normalmente.",
+      "summary": "Lote final: {total} a eliminar (limpias: {clean} · extendidas: {extended} + {partners} partners · eliminadas: {removed})",
+      "cancel": "Cancelar",
+      "confirm": "Eliminar {n}",
+      "deleting": "Eliminando…",
+      "rolledBack": "Eliminación cancelada — no se realizaron cambios."
     },
     "validate": {
       "now": "Validar ahora",
