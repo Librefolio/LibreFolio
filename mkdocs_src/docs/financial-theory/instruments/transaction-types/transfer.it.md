@@ -59,3 +59,9 @@ Il tipo di transazione `ADJUSTMENT` è una categoria generica per le correzioni 
 - 🛒 **[Acquisto e Vendita](buy-sell.md)** — Transazioni standard di asset
 - 💵 **[Deposito e Prelievo](deposit-withdrawal.md)** — Movimenti di cassa
 - 💰 **[Tassi di cambio](../../../user/fx/index.md)** — Gestione dei tassi di cambio
+
+# 🔄 Trasferimento Titoli
+
+!!! warning "Traduzione in attesa"
+
+    Questa pagina non è stata ancora tradotta. Consulta la [versione inglese](transfer.en.md).

@@ -15,7 +15,7 @@
     import {_ as t} from '$lib/i18n';
     import SearchSelect from '$lib/components/ui/select/SearchSelect.svelte';
     import type {SelectOption} from '$lib/components/ui/select/types';
-    import {TX_TYPES, getTransactionTypeIconUrl, getTypeRule, type TransactionTypeCode} from '$lib/stores/transactionTypeStore';
+    import {TX_TYPES, getTransactionTypeIconUrl, getTypeRule, isTypesLoaded, type TransactionTypeCode} from '$lib/stores/transactionTypeStore';
 
     interface Props {
         /** Currently selected type. */
@@ -41,6 +41,9 @@
     let {value = $bindable('BUY' as TransactionTypeCode), disabled = false, types, filterPairOnly = false, placeholder, compact = false, testid = 'tx-type-select', onchange}: Props = $props();
 
     let optionTypes = $derived<ReadonlyArray<TransactionTypeCode>>(
+        // Wait for server-driven type rules before rendering options
+        // so the ↔ prefix (requiresPair) is correct from the first render.
+        !isTypesLoaded() ? [] :
         filterPairOnly
             ? TX_TYPES.filter((tt) => getTypeRule(tt).requiresPair)
             : (types ?? [...TX_TYPES])

@@ -35,7 +35,7 @@
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {X, ArrowRight, ArrowDown} from 'lucide-svelte';
+    import {X, ArrowRight, ArrowDown, Check} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
@@ -151,6 +151,8 @@
         broker_id: number;
         /** For fx: the "To" cash (different currency). */
         cash: {code: string; amount: string} | null;
+        /** "To" side date — may differ from "From" side (e.g. wire transfer arrival). */
+        date: string;
     }
 
     function todayIso(): string {
@@ -179,7 +181,7 @@
     }
 
     function emptyDualTo(): DualDraftTo {
-        return {broker_id: 0, cash: null};
+        return {broker_id: 0, cash: null, date: todayIso()};
     }
 
     function fromTx(tx: TXReadItem, opts: {regenerateLink?: boolean; resetDate?: boolean} = {}): FormDraft {
@@ -328,6 +330,7 @@
                         dualTo = {
                             broker_id: partner.broker_id,
                             cash: row.cash ? {code: row.cash.code, amount: String(Math.abs(Number(row.cash.amount)))} : null,
+                            date: row.date,
                         };
                     } else {
                         // Current row is "From" — dualTo is the partner
@@ -335,6 +338,7 @@
                         dualTo = {
                             broker_id: partner.broker_id,
                             cash: partner.cash ? {code: partner.cash.code, amount: String(Math.abs(Number(partner.cash.amount)))} : null,
+                            date: partner.date,
                         };
                     }
                 } else if (layout === 'transfer_asset') {
@@ -343,10 +347,10 @@
                     if (myQty > 0) {
                         // Current row is receiver ("To") → swap
                         draft = fromTx(partner);
-                        dualTo = {broker_id: row.broker_id, cash: null};
+                        dualTo = {broker_id: row.broker_id, cash: null, date: row.date};
                         qtyDisplay = formatDecimalForDisplay(draft.quantity);
                     } else {
-                        dualTo = {broker_id: partner.broker_id, cash: null};
+                        dualTo = {broker_id: partner.broker_id, cash: null, date: partner.date};
                     }
                 } else if (layout === 'transfer_cash') {
                     // Cash transfer: "From" has negative cash, "To" has positive cash
@@ -358,7 +362,7 @@
                     if (draft.cash && Number(draft.cash.amount) < 0) {
                         draft = {...draft, cash: {code: draft.cash.code, amount: String(Math.abs(Number(draft.cash.amount)))}};
                     }
-                    dualTo = {broker_id: toRow.broker_id, cash: null};
+                    dualTo = {broker_id: toRow.broker_id, cash: null, date: toRow.date};
                     qtyDisplay = formatDecimalForDisplay(draft.quantity);
                 }
                 initialDraftKey = JSON.stringify(draft) + JSON.stringify(dualTo);
@@ -726,7 +730,7 @@
             const toItem: Record<string, unknown> = {
                 broker_id: draft.broker_id,
                 type: 'FX_CONVERSION',
-                date: draft.date,
+                date: dualTo.date || draft.date,
                 quantity: '0',
                 cash: {code: dualTo.cash?.code ?? '', amount: toCashAmt},
                 link_uuid: linkUuid,
@@ -749,7 +753,7 @@
             const toItem: Record<string, unknown> = {
                 broker_id: dualTo.broker_id,
                 type: 'TRANSFER',
-                date: draft.date,
+                date: dualTo.date || draft.date,
                 quantity: absQty,
                 link_uuid: linkUuid,
             };
@@ -775,7 +779,7 @@
             const toItem: Record<string, unknown> = {
                 broker_id: dualTo.broker_id,
                 type: 'CASH_TRANSFER',
-                date: draft.date,
+                date: dualTo.date || draft.date,
                 quantity: '0',
                 cash: {code: cashCode, amount: absAmount},
                 link_uuid: linkUuid,
@@ -842,20 +846,27 @@
             formError = dualValidationError;
             return;
         }
-        // Bugfix-5 §A4: when wired from the BulkModal, "Save" pushes the draft
+        // Bugfix-5 §A4: when wired from the BulkModal, "Apply" pushes the draft
         // back to the parent grid instead of committing to the backend.
         if (!commitOnSave) {
-            // Always emit the create-shaped payload — it carries every field
-            // needed to fully replace a draft row in the bulk grid (the parent
-            // decides whether to add or replace based on its own state).
-            // B1-13: for dual forms, include partner data so the BulkModal
-            // can render the paired row with Da:/A: labels.
-            const payload = collectCreate();
             if (pairLayout) {
-                payload._partnerBrokerId = dualTo.broker_id;
-                payload._partnerCash = dualTo.cash;
+                // Dual mode: emit full pair payload so BulkModal can create
+                // both the visible draft and the hidden partner draft.
+                const items = collectDualCreates();
+                const payload: Record<string, unknown> = {
+                    _dual: true,
+                    _items: items,
+                    _partnerBrokerId: dualTo.broker_id,
+                    _partnerCash: dualTo.cash,
+                    _partnerDate: dualTo.date,
+                };
+                // Also carry the "from" side fields for applyFormPayload
+                Object.assign(payload, items[0]);
+                onPushDraft?.(payload);
+            } else {
+                const payload = collectCreate();
+                onPushDraft?.(payload);
             }
-            onPushDraft?.(payload);
             onClose();
             return;
         }
@@ -965,16 +976,18 @@
     /** W36: Swap Da↔A sides in dual form. */
     function swapDualSides() {
         if (!pairLayout) return;
+        // Always swap dates
+        const tmpDate = draft.date;
         if (pairLayout === 'fx') {
             // Swap cash (currencies)
             const tmpCash = draft.cash;
-            draft = {...draft, cash: dualTo.cash};
-            dualTo = {...dualTo, cash: tmpCash};
+            draft = {...draft, cash: dualTo.cash, date: dualTo.date};
+            dualTo = {...dualTo, cash: tmpCash, date: tmpDate};
         } else {
             // transfer_asset / transfer_cash: swap brokers
             const tmpBroker = draft.broker_id;
-            draft = {...draft, broker_id: dualTo.broker_id};
-            dualTo = {...dualTo, broker_id: tmpBroker};
+            draft = {...draft, broker_id: dualTo.broker_id, date: dualTo.date};
+            dualTo = {...dualTo, broker_id: tmpBroker, date: tmpDate};
         }
     }
     function addTag(raw: string) {
@@ -1157,10 +1170,6 @@
                 <InfoBanner variant="warning">
                     <p data-testid="tx-form-dual-error">⚠ {dualValidationError}</p>
                 </InfoBanner>
-            {:else if isFreshlyValid}
-                <InfoBanner variant="success">
-                    <p data-testid="tx-form-valid">✓ {$t('transactions.validate.ok')}</p>
-                </InfoBanner>
             {:else if showIssuesBanner}
                 <InfoBanner variant="warning" dismissible ondismiss={() => (issuesDismissed = true)}>
                     {#if fieldIssues.length > 0}
@@ -1196,18 +1205,8 @@
                 <fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required">
                     <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-1">{$t('transactions.form.sectionRequired')}</legend>
 
-                    <!-- Date + Type (readonly in dual mode — type is implicit from pairLayout) -->
-                    <div class="grid grid-cols-2 gap-3 text-sm">
-                        <!-- Date -->
-                        <div class="flex flex-col gap-1" data-testid="tx-form-date-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
-                            {#if isReadonly}
-                                <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-date-readonly">{draft.date || '—'}</div>
-                            {:else}
-                                <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} />
-                            {/if}
-                        </div>
-
+                    <!-- Type (date is now inside Da/A panels) -->
+                    <div class="text-sm">
                         <!-- Type: editable in create dual mode (W41), readonly in edit/view -->
                         <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
@@ -1217,7 +1216,7 @@
                                     <span class="font-medium">{dualTitle}</span>
                                 </div>
                             {:else}
-                                <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} testid="tx-form-type" filterPairOnly={true} />
+                                <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} testid="tx-form-type" />
                             {/if}
                         </div>
                     </div>
@@ -1242,7 +1241,7 @@
                     {#if pairLayout === 'transfer_asset'}
                         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')} *</span>
-                            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" />
+                            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly ? undefined : ($t('assets.create') || 'New asset')} onCreateNew={isReadonly ? undefined : (() => (createAssetOpen = true))} />
                         </div>
                         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">
@@ -1278,10 +1277,19 @@
                     <!-- ============================================================= -->
                     <!-- Da / A split section -->
                     <!-- ============================================================= -->
-                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-start" data-testid="tx-form-dual-split">
+                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-start overflow-hidden" data-testid="tx-form-dual-split">
                         <!-- DA (From) -->
-                        <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3" data-testid="tx-form-dual-from">
+                        <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3 min-w-0" data-testid="tx-form-dual-from">
                             <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('transactions.form.from')}</div>
+                            <!-- Date (from side) -->
+                            <div class="flex flex-col gap-1 mb-2">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
+                                {#if isReadonly}
+                                    <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{draft.date || '—'}</div>
+                                {:else}
+                                    <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} />
+                                {/if}
+                            </div>
                             {#if pairLayout === 'fx'}
                                 <CompactCashCell value={draft.cash} onChange={setCash} signHint="positive" disabled={isReadonly} testid="tx-form-cash-from" defaultCode="EUR" />
                             {:else}
@@ -1302,8 +1310,17 @@
                         </button>
 
                         <!-- A (To) -->
-                        <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3" data-testid="tx-form-dual-to">
+                        <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3 min-w-0" data-testid="tx-form-dual-to">
                             <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('transactions.form.to')}</div>
+                            <!-- Date (to side) -->
+                            <div class="flex flex-col gap-1 mb-2">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
+                                {#if isReadonly}
+                                    <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{dualTo.date || '—'}</div>
+                                {:else}
+                                    <SingleDatePicker bind:value={dualTo.date} label="" inputStyle={true} onchange={(d) => { dualTo = {...dualTo, date: d}; }} />
+                                {/if}
+                            </div>
                             {#if pairLayout === 'fx'}
                                 <CompactCashCell value={dualTo.cash} onChange={setCashTo} signHint="positive" disabled={isReadonly} testid="tx-form-cash-to" defaultCode="USD" />
                             {:else}
@@ -1462,10 +1479,7 @@
                     {#if rule.assetField !== 'forbidden'}
                         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}{rule.assetField === 'required' ? ' *' : ''}</span>
-                            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" />
-                            {#if !isReadonly && draft.asset_id == null}
-                                <button type="button" class="text-[11px] text-libre-green hover:underline mt-0.5" onclick={() => (createAssetOpen = true)} data-testid="tx-form-add-asset">+ {$t('assets.create') || 'Add asset'}</button>
-                            {/if}
+                            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly ? undefined : ($t('assets.create') || 'New asset')} onCreateNew={isReadonly ? undefined : (() => (createAssetOpen = true))} />
                         </div>
                     {/if}
 
@@ -1603,13 +1617,23 @@
                 {/if}
                 {#if scheduler.state.isValidating}
                     <span class="text-[11px] text-gray-500 dark:text-gray-400">{$t('transactions.validate.validating')}</span>
+                {:else if isFreshlyValid}
+                    <span class="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1" data-testid="tx-form-valid-inline">
+                        <Check size={14} /> {$t('transactions.validate.ok')}
+                    </span>
                 {/if}
             </div>
             <div class="flex items-center gap-2">
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={requestClose} data-testid="tx-form-cancel">{isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}</button>
                 {#if !isReadonly}
-                    <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50" disabled={committing || loadingPartner || !!dualValidationError} onclick={commit} data-testid="tx-form-save">
-                        {committing ? $t('common.saving') : $t('common.save')}
+                    <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1" disabled={committing || loadingPartner || !!dualValidationError} onclick={commit} data-testid="tx-form-save">
+                        {#if committing}
+                            {$t('common.saving')}
+                        {:else if !commitOnSave}
+                            <Check size={16} /> {$t('transactions.form.apply')}
+                        {:else}
+                            {$t('common.save')}
+                        {/if}
                     </button>
                 {/if}
             </div>

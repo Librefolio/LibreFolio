@@ -729,4 +729,58 @@ di emissione prezzo, che nel modello disaccoppiato non vale più.
   `_generate_schedule_values` Step 2/4 reorder — emette valore
   pre-reset.
 
+---
 
+## 🏷️ Transaction Form — Conteggio Asset/Cash per Broker
+
+**Data aggiunta**: 1 Maggio 2026  
+**Status**: 📋 PIANIFICATO  
+**Priorità**: Bassa
+
+### Contesto
+
+Nel form di creazione/modifica transazione, quando l'utente seleziona un broker e un tipo di operazione (BUY, SELL, DIVIDEND, ecc.), sarebbe utile mostrare **accanto al nome del broker** un badge con il conteggio degli asset o del cash già presenti per quel broker, filtrati per il tipo di strumento selezionato.
+
+Esempio: se l'utente sta facendo un SELL di un ETF, accanto al broker "Directa" mostrare `3 ETF` per indicare che quel broker ha già 3 ETF in portafoglio. Per operazioni cash (CASH_IN/CASH_OUT), mostrare il saldo cash disponibile nella valuta selezionata.
+
+### Benefici
+
+- **Contesto immediato**: l'utente capisce subito se il broker scelto ha già posizioni dello stesso tipo
+- **Prevenzione errori**: riduce la probabilità di selezionare il broker sbagliato
+- **Guida al SELL**: per le vendite, sapere quanti lotti sono disponibili aiuta a non creare over-sell
+
+### Implementazione
+
+1. **Backend**: endpoint o estensione di uno esistente che restituisca per ogni broker il conteggio asset raggruppato per `asset_type` e il saldo cash per valuta
+2. **Frontend**: nel selettore broker del transaction form, mostrare un badge inline (es. `Directa (3 ETF)` o `Directa (€ 1.250,00)`) usando i dati caricati al cambio di asset type / valuta
+3. Il conteggio deve aggiornarsi reattivamente al cambio di operazione o tipo strumento
+
+### Note
+
+- Il dato è derivato dalle transazioni già importate → richiede Phase 7 completata
+- Valutare se il conteggio deve considerare solo posizioni aperte (qty > 0) o tutte le storiche
+- Per SELL: potrebbe mostrare anche la quantità totale disponibile (somma qty dei lotti aperti)
+- Già la summary del broker potrebbe bastare, da vedere
+---
+
+## 📸 Gallery Screenshots per Tipo Transazione
+
+**Data aggiunta**: 3 Maggio 2026
+**Status**: ⏳ DA FARE
+**Priorità**: Media
+
+### Descrizione
+
+Quando si scrivono le prossime sezioni della gallery script, creare **1 screenshot per ogni tipo di transazione × ogni lingua** (EN/IT/FR/ES).
+Gli screenshot vanno poi inseriti nelle pagine della documentazione mkdocs (`financial-theory/transaction-types/`) accanto alla descrizione di ciascun tipo.
+
+### Dettagli
+
+- Tipi: BUY, SELL, DEPOSIT, WITHDRAWAL, DIVIDEND, FEE, TAX, INTEREST, ADJUSTMENT, CASH_TRANSFER, ASSET_TRANSFER, FX_CONVERSION
+- Lingue: EN, IT, FR, ES
+- File gallery: `frontend/e2e/gallery.spec.ts`
+- Pagine docs: `mkdocs_src/docs/*/financial-theory/transaction-types/`
+
+---
+
+##

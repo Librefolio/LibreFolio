@@ -125,7 +125,10 @@ plugins:
             "Buy & Sell": "Acquisto & Vendita"
             "Deposit & Withdrawal": "Deposito & Prelievo"
             "Fee & Tax": "Commissioni & Tasse"
-            "Transfer & FX": "Trasferimento & FX"
+            Asset Transfer: Trasferimento Titoli
+            Cash Transfer: Bonifico
+            FX Conversion: Cambio Valuta
+            Adjustment: Rettifica
             Technical Analysis: Analisi Tecnica
             Indicators: Indicatori
             EMA: EMA
@@ -215,7 +218,10 @@ plugins:
             "Buy & Sell": "Achat & Vente"
             "Deposit & Withdrawal": "Dépôt & Retrait"
             "Fee & Tax": "Frais & Taxes"
-            "Transfer & FX": "Transfert & FX"
+            Asset Transfer: Transfert de Titres
+            Cash Transfer: Virement
+            FX Conversion: Conversion de Devises
+            Adjustment: Ajustement
             Technical Analysis: Analyse Technique
             Indicators: Indicateurs
             EMA: EMA
@@ -305,7 +311,10 @@ plugins:
             "Buy & Sell": "Compra & Venta"
             "Deposit & Withdrawal": "Depósito & Retiro"
             "Fee & Tax": "Comisiones & Impuestos"
-            "Transfer & FX": "Transferencia & FX"
+            Asset Transfer: Transferencia de Títulos
+            Cash Transfer: Transferencia Bancaria
+            FX Conversion: Conversión de Divisas
+            Adjustment: Ajuste
             Technical Analysis: Análisis Técnico
             Indicators: Indicadores
             EMA: EMA
@@ -413,7 +422,10 @@ nav:
               - Dividend: financial-theory/instruments/transaction-types/dividend.md
               - Fee & Tax: financial-theory/instruments/transaction-types/fee.md
               - Interest: financial-theory/instruments/transaction-types/interest.md
-              - Transfer & FX: financial-theory/instruments/transaction-types/transfer.md
+              - Asset Transfer: financial-theory/instruments/transaction-types/transfer.md
+              - Cash Transfer: financial-theory/instruments/transaction-types/cash-transfer.md
+              - FX Conversion: financial-theory/instruments/transaction-types/fx-conversion.md
+              - Adjustment: financial-theory/instruments/transaction-types/adjustment.md
           - Asset Types:
               - Overview: financial-theory/instruments/asset-types/index.md
               - Stocks: financial-theory/instruments/asset-types/stocks.md

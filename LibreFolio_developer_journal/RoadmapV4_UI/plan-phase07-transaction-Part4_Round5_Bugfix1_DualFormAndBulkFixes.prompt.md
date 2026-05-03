@@ -7,6 +7,8 @@
 
 **Parent**: [`plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md`](./plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md) §R6-B implementation
 
+**Child**: [`plan-phase07-transaction-Part4_Round5_Bugfix2_PostTestWalkOverhaul.prompt.md`](./plan-phase07-transaction-Part4_Round5_Bugfix2_PostTestWalkOverhaul.prompt.md) — post-testwalk fixes (readonly BulkModal, dual dates, i18n, docs)
+
 ---
 
 ## 🎯 Obiettivo
@@ -726,3 +728,39 @@ Response (excerpt for CASH_TRANSFER):
 - [x] B1-15 (W51): Split/Promote server-driven metadata (schemas + api sync)
 - [x] B1-16 (W52): Bulk Split/Promote endpoints + service logic
 - [x] B1-17 (W53): Remove PromotePairWizardModal → selection-based promote
+
+---
+
+## 🔍 Review Fixes (Post-Batch 2)
+
+**Date**: 2026-05-01
+**Trigger**: Manual testing by user after Batch 2 commit
+
+### R1 — Dual type dropdown locks out normal types
+**Symptom**: After selecting a paired type (TRANSFER, FX_CONVERSION, CASH_TRANSFER), user cannot switch back to a normal type (BUY, SELL, etc.) because the dropdown only shows pair types.
+**Root cause**: `filterPairOnly={true}` hardcoded on `TransactionTypeSearchSelect` in dual template (L1220).
+**Fix**: Removed `filterPairOnly={true}`. All types visible. Selecting a non-pair type auto-exits dual mode via existing `setType()` → `pairLayout` recalculation.
+**File**: `TransactionFormModal.svelte`
+
+### R2 — CASH_TRANSFER missing icon
+**Symptom**: No icon displayed for Cash Transfer type in dropdowns and table.
+**Root cause**: `icon_slug="cash-transfer"` in backend metadata, but `cash-transfer.png` didn't exist in `frontend/static/icons/transactions/`.
+**Fix**: Copied `transfer.png` → `cash-transfer.png` as placeholder. TODO: create dedicated icon.
+**File**: `frontend/static/icons/transactions/cash-transfer.png`
+
+### R3 — "Transfer" name ambiguous (asset vs cash)
+**Symptom**: With CASH_TRANSFER added, "Transfer" alone is confusing — which kind?
+**Fix**: Renamed to "Asset Transfer" in backend metadata (`name="Asset Transfer"`) and all 4 i18n locales (`transactions.types.TRANSFER`).
+**Files**: `backend/app/schemas/transactions.py`, `frontend/src/lib/i18n/{en,it,fr,es}.json`
+
+### R4 — FX_CONVERSION shows Da:/A: on broker column (wrong)
+**Symptom**: FX_CONVERSION paired row in BulkModal shows `Da: IBKR / A: IBKR` in broker column — same broker twice with Da:/A: labels, confusing.
+**Root cause**: Broker cell condition was `rule.requiresPair && row.partnerBrokerId != null` — true for FX too. But for FX, `pair_field_constraints` has `broker_id: equal`, so both brokers are the same.
+**Fix**: Added `&& row.partnerBrokerId !== row.broker_id` — Da:/A: only when brokers differ (TRANSFER, CASH_TRANSFER). FX falls through to normal single-broker display.
+**File**: `TransactionBulkModal.svelte`
+
+### R5 — "Add asset" button outside dropdown
+**Symptom**: `+ Add asset` link appears below the AssetSelect, not inside the dropdown like BrokerSearchSelect's `+ New broker` footer.
+**Fix**: Added `createLabel` and `onCreateNew` props to `AssetSelect.svelte` (passthrough to `SearchSelect`). Updated `TransactionFormModal.svelte` to use these props (both standard and dual templates), removed old inline `<button>`.
+**Files**: `AssetSelect.svelte`, `TransactionFormModal.svelte`
+

@@ -1,23 +1,27 @@
-# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Transfer & FX Conversion
+# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Asset Transfer
 
-**Transfers** move assets between portfolios without a sale, while **FX Conversions** exchange one currency for another within a portfolio.
+**Asset transfers** move securities between broker accounts **without a sale**. In LibreFolio, this is a **paired transaction** — each transfer creates two linked rows: a "from" side (negative quantity) and a "to" side (positive quantity).
 
 ---
 
 ## 🔑 Key Properties
 
-| Property | Transfer In | Transfer Out | FX Conversion |
-|----------|------------|-------------|---------------|
-| **Code** | `TRANSFER_IN` | `TRANSFER_OUT` | `FX_CONVERSION` |
-| **Cash effect** | — | — | ⬆️⬇️ (swap) |
-| **Asset effect** | ⬆️ Increases | ⬇️ Decreases | — |
-| **Tax event** | Varies by jurisdiction | Varies | Varies |
+| Property | From (source) | To (destination) |
+|----------|---------------|-------------------|
+| **Code** | `TRANSFER` | `TRANSFER` |
+| **Cash effect** | — | — |
+| **Asset effect** | ⬇️ Decreases | ⬆️ Increases |
+| **Broker** | Source broker | Destination broker |
+| **Paired** | ✅ Yes (linked via `link_uuid`) | ✅ Yes |
+| **Tax event** | Varies by jurisdiction | Varies |
 
 ---
 
-## 🔄 Transfer In / Out
+## 📊 How It Works
 
-Transfers model the movement of assets between broker accounts or portfolios **without a sale**. Common scenarios:
+Both halves reference the **same asset** and share a `link_uuid`. The quantity is mirrored: one side is negative (outgoing), the other is positive (incoming).
+
+Common scenarios:
 
 - Moving shares from one broker to another
 - Inheriting assets
@@ -25,37 +29,24 @@ Transfers model the movement of assets between broker accounts or portfolios **w
 
 !!! info "Cost Basis Preservation"
 
-    When transferring assets, the **original cost basis** should be preserved. The transfer itself is not a taxable event in most jurisdictions (though rules vary).
+    When transferring assets, the **original cost basis** should be preserved. The transfer itself is not a taxable event in most jurisdictions (though rules vary). LibreFolio allows an optional **cost basis override** on the receiving side.
 
 ---
 
-## 💱 FX Conversion
+## 🔀 Split & Promote
 
-Currency exchanges within a portfolio:
+| Operation | Result |
+|-----------|--------|
+| **Split** (unlink pair) | Both halves become `ADJUSTMENT` |
+| **Promote** (link 2 adjustments) | Two `ADJUSTMENT` rows → `TRANSFER` pair |
 
-$$
-\text{Amount}_{target} = \text{Amount}_{source} \times \text{FX Rate} - \text{Fees}
-$$
-
-FX conversions may be:
-
-- **Explicit**: User deliberately converts currencies (e.g., EUR → USD)
-- **Implicit**: Broker auto-converts when buying a foreign-denominated asset
-
----
-
-## 📊 Adjustment
-
-The `ADJUSTMENT` transaction type is a catch-all for manual corrections to either cash or asset balances. Use cases:
-
-- Correcting import errors
-- Recording corporate actions not covered by standard types
-- Initial balance setup
+**Promote constraints**: same asset, different brokers, opposite quantities.
 
 ---
 
 ## 🔗 Related
 
+- 🏦 **[Cash Transfer](cash-transfer.md)** — Wire transfers (cash, not assets)
+- 💱 **[FX Conversion](fx-conversion.md)** — Currency exchange
+- 📊 **[Adjustment](adjustment.md)** — Manual corrections
 - 🛒 **[Buy & Sell](buy-sell.md)** — Standard asset transactions
-- 💵 **[Deposit & Withdrawal](deposit-withdrawal.md)** — Cash movements
-- 💰 **[FX Rates](../../../user/fx/index.md)** — Exchange rate management

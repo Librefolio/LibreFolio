@@ -145,7 +145,7 @@
 <ModalBase {open} maxWidth="3xl" onRequestClose={onClose} testId="tx-bulk-delete-modal">
     <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-bulk-delete-title">
-            🗑 {$t('transactions.bulkDelete.title') || 'Confirm delete'} — {cleanRows.length + problemRows.length} selected, {problemRows.length} with linked partners
+            🗑 {$t('transactions.bulkDelete.title')} — {cleanRows.length + problemRows.length} {$t('common.selected') || 'selected'}
         </h2>
         <button class="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" onclick={onClose} data-testid="tx-bulk-delete-close" aria-label="Close">
             <X size={18} />
@@ -153,68 +153,81 @@
     </div>
 
     <div class="p-4 space-y-4 overflow-y-auto">
-        <p class="text-xs text-gray-600 dark:text-gray-300">
-            {$t('transactions.bulkDelete.intro') || 'Linked transactions (TRANSFER, FX_CONVERSION) must be deleted together.'}
-        </p>
+        {#if problemRows.length === 0}
+            <!-- Simple confirm: no linked-pair conflicts -->
+            <p class="text-sm text-gray-700 dark:text-gray-200" data-testid="tx-bulk-delete-simple">
+                {$t('transactions.bulkDelete.confirmSimple', {values: {n: cleanRows.length}})}
+            </p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+                {$t('transactions.bulkDelete.confirmSimpleDesc')}
+            </p>
+        {:else}
+            <!-- Full conflict-resolution UI -->
+            <p class="text-xs text-gray-600 dark:text-gray-300">
+                {$t('transactions.bulkDelete.intro')}
+            </p>
 
-        <div class="flex items-center gap-3 text-xs">
-            <span class="text-gray-700 dark:text-gray-200">{$t('transactions.bulkDelete.applyToAll') || 'Apply to all problematic rows'}:</span>
-            <label class="inline-flex items-center gap-1 cursor-pointer">
-                <input type="radio" name="tx-bulk-global" checked={globalChoice === 'remove'} onchange={() => setGlobal('remove')} data-testid="tx-bulk-global-remove" />
-                <span>{$t('transactions.bulkDelete.removeAll') || 'Remove from selection'}</span>
-            </label>
-            <label class="inline-flex items-center gap-1 cursor-pointer">
-                <input type="radio" name="tx-bulk-global" checked={globalChoice === 'extend'} onchange={() => setGlobal('extend')} data-testid="tx-bulk-global-extend" />
-                <span>{$t('transactions.bulkDelete.extendAll') || 'Extend selection'}</span>
-            </label>
-        </div>
+            <div class="flex items-center gap-3 text-xs">
+                <span class="text-gray-700 dark:text-gray-200">{$t('transactions.bulkDelete.applyToAll')}:</span>
+                <label class="inline-flex items-center gap-1 cursor-pointer">
+                    <input type="radio" name="tx-bulk-global" checked={globalChoice === 'remove'} onchange={() => setGlobal('remove')} data-testid="tx-bulk-global-remove" />
+                    <span>{$t('transactions.bulkDelete.removeAll')}</span>
+                </label>
+                <label class="inline-flex items-center gap-1 cursor-pointer">
+                    <input type="radio" name="tx-bulk-global" checked={globalChoice === 'extend'} onchange={() => setGlobal('extend')} data-testid="tx-bulk-global-extend" />
+                    <span>{$t('transactions.bulkDelete.extendAll')}</span>
+                </label>
+            </div>
 
-        <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-            <table class="w-full text-xs">
-                <thead class="bg-gray-50 dark:bg-gray-800 text-[10px] uppercase text-gray-500 dark:text-gray-400">
-                    <tr>
-                        <th class="text-left px-2 py-1.5">Selected</th>
-                        <th class="text-left px-2 py-1.5">Type</th>
-                        <th class="text-left px-2 py-1.5">Partner</th>
-                        <th class="text-left px-2 py-1.5">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {#each problemRows as p}
-                        {@const choice = perRow.get(p.selected.id) ?? globalChoice}
-                        <tr data-testid={`tx-bulk-row-${p.selected.id}`}>
-                            <td class="px-2 py-1.5 font-mono">#{p.selected.id}</td>
-                            <td class="px-2 py-1.5">{p.selected.type}</td>
-                            <td class="px-2 py-1.5">#{p.partner.id} <span class="text-gray-400">↩</span></td>
-                            <td class="px-2 py-1.5">
-                                <label class="inline-flex items-center gap-1 cursor-pointer mr-3">
-                                    <input type="radio" name={`tx-bulk-row-${p.selected.id}`} checked={choice === 'remove'} onchange={() => setRow(p.selected.id, 'remove')} data-testid={`tx-bulk-row-${p.selected.id}-remove`} />
-                                    <span>Remove #{p.selected.id}</span>
-                                </label>
-                                <label class="inline-flex items-center gap-1 cursor-pointer">
-                                    <input type="radio" name={`tx-bulk-row-${p.selected.id}`} checked={choice === 'extend'} onchange={() => setRow(p.selected.id, 'extend')} data-testid={`tx-bulk-row-${p.selected.id}-extend`} />
-                                    <span>Extend → also #{p.partner.id}</span>
-                                </label>
-                            </td>
+            <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <table class="w-full text-xs">
+                    <thead class="bg-gray-50 dark:bg-gray-800 text-[10px] uppercase text-gray-500 dark:text-gray-400">
+                        <tr>
+                            <th class="text-left px-2 py-1.5">{$t('transactions.bulkDelete.colSelected')}</th>
+                            <th class="text-left px-2 py-1.5">{$t('transactions.bulkDelete.colType')}</th>
+                            <th class="text-left px-2 py-1.5">{$t('transactions.bulkDelete.colPartner')}</th>
+                            <th class="text-left px-2 py-1.5">{$t('transactions.bulkDelete.colAction')}</th>
                         </tr>
-                    {/each}
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                        {#each problemRows as p}
+                            {@const choice = perRow.get(p.selected.id) ?? globalChoice}
+                            <tr data-testid={`tx-bulk-row-${p.selected.id}`}>
+                                <td class="px-2 py-1.5 font-mono">#{p.selected.id}</td>
+                                <td class="px-2 py-1.5">{$t(`transactions.types.${p.selected.type}`) || p.selected.type}</td>
+                                <td class="px-2 py-1.5">#{p.partner.id} <span class="text-gray-400">↩</span></td>
+                                <td class="px-2 py-1.5">
+                                    <label class="inline-flex items-center gap-1 cursor-pointer mr-3">
+                                        <input type="radio" name={`tx-bulk-row-${p.selected.id}`} checked={choice === 'remove'} onchange={() => setRow(p.selected.id, 'remove')} data-testid={`tx-bulk-row-${p.selected.id}-remove`} />
+                                        <span>{$t('transactions.bulkDelete.removeAll')}</span>
+                                    </label>
+                                    <label class="inline-flex items-center gap-1 cursor-pointer">
+                                        <input type="radio" name={`tx-bulk-row-${p.selected.id}`} checked={choice === 'extend'} onchange={() => setRow(p.selected.id, 'extend')} data-testid={`tx-bulk-row-${p.selected.id}-extend`} />
+                                        <span>{$t('transactions.bulkDelete.extendRow', {values: {id: p.partner.id}})}</span>
+                                    </label>
+                                </td>
+                            </tr>
+                        {/each}
+                    </tbody>
+                </table>
+            </div>
 
-        {#if cleanRows.length > 0}
-            <p class="text-xs text-gray-500 dark:text-gray-400">Other {cleanRows.length} selected row{cleanRows.length === 1 ? '' : 's'} have no linked partner — will be deleted as-is.</p>
+            {#if cleanRows.length > 0}
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                    {$t('transactions.bulkDelete.noConflict', {values: {n: cleanRows.length}})}
+                </p>
+            {/if}
+
+            <div class="text-xs text-gray-700 dark:text-gray-200 font-medium" data-testid="tx-bulk-summary">
+                {$t('transactions.bulkDelete.summary', {values: {total: finalIds.length, clean: cleanRows.length, extended: extendedCount, partners: partnersCount, removed: removedCount}})}
+            </div>
         {/if}
-
-        <div class="text-xs text-gray-700 dark:text-gray-200 font-medium" data-testid="tx-bulk-summary">
-            Final batch: {finalIds.length} transaction{finalIds.length === 1 ? '' : 's'} to delete (clean: {cleanRows.length} · extended: {extendedCount} + {partnersCount} partners · removed: {removedCount})
-        </div>
 
         {#if rolledBack}
             <div class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs text-red-800 dark:text-red-200" data-testid="tx-bulk-rollback">
                 <div class="flex items-start gap-2 mb-1">
                     <AlertTriangle size={14} class="shrink-0 mt-0.5" />
-                    <strong>Delete rolled back — nothing was changed.</strong>
+                    <strong>{$t('transactions.bulkDelete.rolledBack')}</strong>
                 </div>
                 <ul class="ml-5 list-disc">
                     {#each rolledBack.errors as err}
@@ -226,9 +239,11 @@
     </div>
 
     <div class="flex items-center justify-end gap-2 p-3 border-t border-gray-200 dark:border-gray-700">
-        <button class="px-4 py-1.5 text-xs rounded text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onclick={onClose} data-testid="tx-bulk-cancel">Cancel</button>
+        <button class="px-4 py-1.5 text-xs rounded text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onclick={onClose} data-testid="tx-bulk-cancel">
+            {$t('transactions.bulkDelete.cancel')}
+        </button>
         <button class="px-4 py-1.5 text-xs rounded text-white bg-red-600 hover:bg-red-700 disabled:opacity-50" disabled={committing || finalIds.length === 0} onclick={commit} data-testid="tx-bulk-confirm">
-            {committing ? '…deleting' : `Delete ${finalIds.length}`}
+            {committing ? $t('transactions.bulkDelete.deleting') : $t('transactions.bulkDelete.confirm', {values: {n: finalIds.length}})}
         </button>
     </div>
 </ModalBase>

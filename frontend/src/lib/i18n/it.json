@@ -270,6 +270,7 @@
   },
   "assets": {
     "title": "Asset",
+    "create": "Nuovo asset",
     "subtitle": "Visualizza e gestisci i tuoi investimenti",
     "searchPlaceholder": "Cerca asset...",
     "allTypes": "Tutti i tipi",
@@ -491,7 +492,7 @@
       "INTEREST": "Interesse",
       "SELL": "Vendita",
       "TAX": "Tassa",
-      "TRANSFER": "Trasferimento",
+      "TRANSFER": "Trasferimento Titoli",
       "WITHDRAWAL": "Prelievo",
       "CASH_TRANSFER": "Bonifico"
     },
@@ -551,7 +552,8 @@
       "sameCurrencyError": "Le valute devono essere diverse",
       "sameBrokerError": "I broker devono essere diversi",
       "loadingPartner": "Caricamento transazione collegata…",
-      "swapSides": "Inverti lati"
+      "swapSides": "Inverti lati",
+      "apply": "Applica"
     },
     "bulk": {
       "titleCreate": "Nuove transazioni",
@@ -610,6 +612,27 @@
       "failed": "Promote fallito",
       "rolledBack": "Promote annullato — nulla è stato modificato.",
       "rolledBackTitle": "Annullato"
+    },
+    "bulkDelete": {
+      "title": "Elimina transazioni",
+      "intro": "Le transazioni collegate (trasferimenti, cambi valuta) devono essere eliminate insieme.",
+      "confirmSimple": "Eliminare {n} transazione/i?",
+      "confirmSimpleDesc": "Questa azione non può essere annullata.",
+      "applyToAll": "Applica a tutte le righe collegate",
+      "removeAll": "Rimuovi dalla selezione",
+      "extendAll": "Elimina anche il partner",
+      "colSelected": "Selezionata",
+      "colType": "Tipo",
+      "colPartner": "Partner",
+      "colAction": "Azione",
+      "removeRow": "Rimuovi #{id}",
+      "extendRow": "Elimina anche #{id}",
+      "noConflict": "Le altre {n} riga/e non hanno partner collegati — saranno eliminate normalmente.",
+      "summary": "Batch finale: {total} da eliminare (pulite: {clean} · estese: {extended} + {partners} partner · rimosse: {removed})",
+      "cancel": "Annulla",
+      "confirm": "Elimina {n}",
+      "deleting": "Eliminazione…",
+      "rolledBack": "Eliminazione annullata — nessuna modifica effettuata."
     },
     "validate": {
       "now": "Verifica ora",

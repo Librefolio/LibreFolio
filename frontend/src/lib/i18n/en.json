@@ -270,6 +270,7 @@
   },
   "assets": {
     "title": "Assets",
+    "create": "New asset",
     "subtitle": "View and manage your investment assets",
     "searchPlaceholder": "Search assets...",
     "allTypes": "All types",
@@ -490,7 +491,7 @@
       "WITHDRAWAL": "Withdrawal",
       "FEE": "Fee",
       "TAX": "Tax",
-      "TRANSFER": "Transfer",
+      "TRANSFER": "Asset Transfer",
       "FX_CONVERSION": "Currency Exchange",
       "ADJUSTMENT": "Adjustment",
       "CASH_TRANSFER": "Cash Transfer"
@@ -551,7 +552,8 @@
       "sameCurrencyError": "Currencies must be different",
       "sameBrokerError": "Brokers must be different",
       "loadingPartner": "Loading paired transaction…",
-      "swapSides": "Swap sides"
+      "swapSides": "Swap sides",
+      "apply": "Apply"
     },
     "bulk": {
       "titleCreate": "New transactions",
@@ -610,6 +612,27 @@
       "failed": "Promote failed",
       "rolledBack": "Promote was rolled back — nothing was changed.",
       "rolledBackTitle": "Rolled back"
+    },
+    "bulkDelete": {
+      "title": "Delete transactions",
+      "intro": "Linked transactions (transfers, FX conversions) must be deleted together.",
+      "confirmSimple": "Delete {n} transaction(s)?",
+      "confirmSimpleDesc": "This action cannot be undone.",
+      "applyToAll": "Apply to all linked rows",
+      "removeAll": "Remove from selection",
+      "extendAll": "Also delete partner",
+      "colSelected": "Selected",
+      "colType": "Type",
+      "colPartner": "Partner",
+      "colAction": "Action",
+      "removeRow": "Remove #{id}",
+      "extendRow": "Also delete #{id}",
+      "noConflict": "Other {n} row(s) have no linked partner — will be deleted as-is.",
+      "summary": "Final batch: {total} to delete (clean: {clean} · extended: {extended} + {partners} partners · removed: {removed})",
+      "cancel": "Cancel",
+      "confirm": "Delete {n}",
+      "deleting": "Deleting…",
+      "rolledBack": "Delete rolled back — nothing was changed."
     },
     "validate": {
       "now": "Validate now",

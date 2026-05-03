@@ -381,6 +381,8 @@
     let bulkOpen = $state(false);
     let bulkMode = $state<'create-many' | 'edit-many'>('create-many');
     let bulkInitial = $state<TXReadItem[]>([]);
+    /** When set, BulkModal auto-opens FormModal on the first row after mounting. */
+    let bulkAutoOpenForm = $state<'create' | 'edit' | null>(null);
 
     // B1-17: Selection-based promote (replaces PromotePairWizardModal).
     let promoteConfirmOpen = $state(false);
@@ -581,15 +583,18 @@
     }
 
     function handleEditRow(row: TXReadItem) {
-        formMode = 'edit';
-        formInitial = row;
-        formOpen = true;
+        bulkMode = 'edit-many';
+        bulkInitial = [row];
+        bulkAutoOpenForm = 'edit';
+        bulkOpen = true;
     }
 
     function handleCloneRow(row: TXReadItem) {
-        formMode = 'duplicate';
-        formInitial = row;
-        formOpen = true;
+        const today = new Date().toISOString().slice(0, 10);
+        bulkMode = 'create-many';
+        bulkInitial = [{...row, id: 0, date: today, related_transaction_id: null}];
+        bulkAutoOpenForm = 'create';
+        bulkOpen = true;
     }
 
     function handleViewRow(row: TXReadItem) {
@@ -722,7 +727,7 @@
 </div>
 
 <TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} {availableTags} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} />
-<TransactionBulkModal open={bulkOpen} mode={bulkMode} initialRows={bulkInitial} {availableTags} onClose={() => (bulkOpen = false)} onCommitted={handleBulkCommitted} />
+<TransactionBulkModal open={bulkOpen} mode={bulkMode} initialRows={bulkInitial} {availableTags} autoOpenForm={bulkAutoOpenForm} onClose={() => { bulkOpen = false; bulkAutoOpenForm = null; }} onCommitted={handleBulkCommitted} />
 <BulkDeleteLinkedPairModal open={bulkDeleteOpen} cleanRows={bulkDeleteClean} problemRows={bulkDeleteProblems} onClose={() => (bulkDeleteOpen = false)} onCommitted={handleBulkDeleteCommitted} />
 <ConfirmModal
     open={promoteConfirmOpen}
