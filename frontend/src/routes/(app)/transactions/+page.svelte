@@ -401,6 +401,17 @@
         if (selectedRows.length === 0) return;
         bulkMode = 'edit-many';
         bulkInitial = [...selectedRows];
+        // C2-fix: when editing a single row via toolbar, auto-open FormModal
+        // so the user immediately gets the structured single-row edit UX.
+        if (selectedRows.length === 1) {
+            const row = selectedRows[0];
+            if (row.related_transaction_id != null) {
+                const partner = partnerRows.find((r) => r.id === row.related_transaction_id)
+                    ?? mainRows.find((r) => r.id === row.related_transaction_id);
+                if (partner) bulkInitial = [row, partner];
+            }
+            bulkAutoOpenForm = 'edit';
+        }
         bulkOpen = true;
     }
     function onCloneBulk() {

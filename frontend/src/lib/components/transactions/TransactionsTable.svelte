@@ -812,6 +812,7 @@
         {initialFilters}
         onSelectionChange={handleSelectionChange}
         getRowDisplayName={(d) => `#${d.tx.id} ${d.tx.type}`}
+        onRowDoubleClick={(d) => onViewRow?.(d.tx)}
     />
 
     {#if isGrouped && externalPaginatorTotal > 0}

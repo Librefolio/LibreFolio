@@ -23,7 +23,7 @@ related: [entities/api-router]
 | `db` | inline | `./dev.py db create-clean`, `./dev.py db upgrade`, `./dev.py db check` |
 | `front` | inline | `./dev.py front build`, `./dev.py front dev` |
 | `api` | inline | `./dev.py api sync` (regenerate Zodios TS client from OpenAPI) |
-| `test` | `scripts/test_runner.py` | `./dev.py test api all`, `./dev.py test all`, `./dev.py test --coverage api all` |
+| `test` | `scripts/test_runner/` | `./dev.py test api all`, `./dev.py test all`, `./dev.py test --coverage api all` |
 | `user` | `scripts/user_cli.py` | user CRUD for CLI use |
 | `mkdocs` | `mkdocs_src/aphra-pipeline/translate_docs.py` | `./dev.py mkdocs build`, `./dev.py mkdocs gallery`, `./dev.py mkdocs translate` |
 | `i18n` | `frontend/scripts/i18n-audit.py` | `./dev.py i18n audit`, `./dev.py i18n add`, `./dev.py i18n remove` |
@@ -44,7 +44,7 @@ related: [entities/api-router]
 
 ### Architecture
 Sub-commands imported from external modules via `register_subparser()`:
-- `scripts/test_runner.py` → `test *`
+- `scripts/test_runner/` (18-module package) → `test *`
 - `scripts/user_cli.py` → `user *`
 - `scripts/coverage_analysis.py` → `test coverage-report`
 - `mkdocs_src/aphra-pipeline/translate_docs.py` → `mkdocs translate*`
@@ -70,13 +70,14 @@ Sub-commands imported from external modules via `register_subparser()`:
 ## History
 - Introduced in V4 rewrite to replace scattered shell scripts
 - Sub-module architecture allows skills and agents to extend it without touching the core
+- 2026-05-26: `scripts/test_runner.py` (4841-line monolith) refactored into 18-module package at `scripts/test_runner/`. See [[decisions/test-runner-package-split]].
 
 ## Source files
 
 | Role | Path |
 |------|------|
 | Main CLI | `dev.py` |
-| Test runner | `scripts/test_runner.py` |
+| Test runner (package) | `scripts/test_runner/` |
 | User CLI | `scripts/user_cli.py` |
 | Coverage analysis | `scripts/coverage_analysis.py` |
 | i18n audit | `frontend/scripts/i18n-audit.py` |
