@@ -410,6 +410,7 @@
                             onclick={() => selectOption(option)}
                             onmouseenter={() => (highlightedIndex = index)}
                             disabled={option.disabled}
+                            data-testid="search-select-option-{option.value}"
                             class="w-full flex items-center space-x-3 px-4 py-2.5 text-left transition-colors
                                    {option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
                                    {index === highlightedIndex ? 'bg-libre-green/30 dark:bg-libre-green dark:text-white highlighted' : 'hover:bg-gray-100 dark:hover:bg-slate-600'}"

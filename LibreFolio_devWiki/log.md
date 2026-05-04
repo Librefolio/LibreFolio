@@ -671,3 +671,11 @@ Batch ingest of 5 Phase 7 Part 4 plan files covering the transaction modal syste
 **Key problems surfaced**:
 - [[problems/pydantic-422-preemption]] — new (resolved by unified pipeline)
 - [[problems/browser-autofill-numeric-fields]] — already existed
+
+## [2026-05-26] file | test-runner-package-split
+Filed decision: monolithic `scripts/test_runner.py` (4841 lines) refactored into 18-module package at `scripts/test_runner/`.
+Created: [[decisions/test-runner-package-split]].
+Updated: [[entities/devpy-cli]] — path references updated from single file to package.
+Key pattern: distributed registry (`populate_registry()` per module + assembler in `_registry.py`).
+New category added: `front-transaction`. Total: 12 categories, ~115 test actions.
+

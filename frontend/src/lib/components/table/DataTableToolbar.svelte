@@ -40,7 +40,7 @@
             </button>
             <div class="bulk-actions">
                 {#each bulkActions as action}
-                    <button type="button" class="bulk-btn" class:danger={action.variant === 'danger'} onclick={action.onClick} title={getActionLabel(action)} disabled={action.disabled}>
+                    <button type="button" class="bulk-btn" class:danger={action.variant === 'danger'} onclick={action.onClick} title={getActionLabel(action)} disabled={action.disabled} data-testid="toolbar-action-{action.id}">
                         <action.icon size={16} class={action.iconClass || ''} />
                     </button>
                 {/each}

@@ -53,7 +53,7 @@
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets, refreshAllAssets} from '$lib/stores/assetStore';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, refreshAllBrokers, type BrokerInfo} from '$lib/stores/brokerStore';
-    import {type TransactionTypeCode, type PairFormLayout, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, getSwapGroup} from '$lib/stores/transactionTypeStore';
+    import {type TransactionTypeCode, type PairFormLayout, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, getSwapGroup, typesVersion} from '$lib/stores/transactionTypeStore';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
     import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
@@ -470,7 +470,10 @@
     // Type rule + derived UI state
     // =========================================================================
 
-    let rule = $derived(getTypeRule(draft.type));
+    let rule = $derived.by(() => {
+        void $typesVersion; // re-derive when server type rules load
+        return getTypeRule(draft.type);
+    });
     /** Dual-form layout — null for standard single form.
      *  W32 fix: dual mode ONLY when the type requires a link (TRANSFER,
      *  FX_CONVERSION) OR when editing an existing linked pair. Types like
@@ -511,7 +514,10 @@
 
     /** H4-fix: true when all required fields for the current type are filled.
      *  Gates the auto-validate scheduler and the Apply/Save button. */
-    let isFormComplete = $derived(isDraftReadyForValidation(draft));
+    let isFormComplete = $derived.by(() => {
+        void $typesVersion; // re-derive when server type rules load
+        return isDraftReadyForValidation(draft);
+    });
 
     // cost_basis_override is meaningful only for the receiver of a TRANSFER pair.
     // Single-form mode rarely creates TRANSFER (uses wizard), so we expose the

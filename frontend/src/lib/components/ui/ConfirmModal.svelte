@@ -124,14 +124,14 @@
     <!-- Footer -->
     <div class="modal-footer">
         {#if hasResults}
-            <button type="button" class="btn btn-primary" onclick={onCancel}>
+            <button type="button" class="btn btn-primary" onclick={onCancel} data-testid="confirm-modal-close">
                 {$t('common.close')}
             </button>
         {:else}
-            <button type="button" class="btn btn-secondary" onclick={onCancel}>
+            <button type="button" class="btn btn-secondary" onclick={onCancel} data-testid="confirm-modal-cancel">
                 {cancelText}
             </button>
-            <button type="button" class="btn {danger ? 'btn-danger' : warning ? 'btn-warning' : 'btn-primary'}" onclick={onConfirm}>
+            <button type="button" class="btn {danger ? 'btn-danger' : warning ? 'btn-warning' : 'btn-primary'}" onclick={onConfirm} data-testid="confirm-modal-confirm">
                 {confirmText}
             </button>
         {/if}

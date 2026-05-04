@@ -10,7 +10,16 @@ def front_transactions(verbose: bool = False, ui: bool = False, headed: bool = F
     if not _ensure_frontend_build(): return False
     if not _ensure_db_populated(): return False
     if not _ensure_test_users(): return False
-    return _run_playwright("transactions/transactions.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+    return _run_playwright("transactions/transactions-modals.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_transactions_table(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run TransactionsTable (main read-view) E2E tests."""
+    print_section("Frontend TransactionsTable Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("transactions/transactions-table.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -19,6 +28,7 @@ def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool 
         suite_name="All Transaction Tests (E2E)",
         tests=[
             ("Transactions", lambda: front_transactions(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TransactionsTable", lambda: front_transactions_table(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
         ],
         verbose=verbose,
         header_msg="All Transaction Tests (E2E)",
@@ -31,8 +41,9 @@ def populate_registry(registry: dict) -> None:
     """Register all frontend transaction test entries."""
     from ._common import make_category, add_test
     cat = make_category(
-        help_text="Frontend Transaction E2E tests (bulk modal, form, paired, type swap)",
+        help_text="Frontend Transaction E2E tests (bulk modal, form, paired, type swap, table read-view)",
         description="""Frontend Transaction Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "transactions", front_transactions, name="Transaction Tests", desc="Transaction list, bulk modal, form modal, paired rows", tests="transactions/transactions.spec.ts")
+    add_test(cat, "transactions", front_transactions, name="Transaction Modal Tests", desc="BulkModal, FormModal, paired rows, type swap, i18n, CRUD", tests="transactions/transactions-modals.spec.ts")
+    add_test(cat, "transactions-table", front_transactions_table, name="TransactionsTable Tests", desc="Main read-view table: pairs, ghost rows, GoTo, actions, selection", tests="transactions/transactions-table.spec.ts")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat
