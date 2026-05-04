@@ -1,8 +1,9 @@
 # Plan — Phase 07 · Part 4 · Round 5 · Bugfix 3 — Test Walk Fixes
 
-**Data**: 2026-05-03
+**Data**: 2026-05-03 (aggiornato 2026-05-04 — Round 6 feedback)
 **Origine**: `libreFolio_testwalk_phase07_r5b2.md` (test walk 2026-05-02)
 **Precedente**: `plan-phase07-transaction-Part4_Round5_Bugfix2_PostTestWalkOverhaul.prompt.md`
+**Successore**: Round 6 feedback inline (§ Bugfix 4 — 2026-05-04 Test Walk)
 
 ---
 
@@ -15,6 +16,8 @@
 | C1 | T1.2/T2.1/T4.4 | **Doppio-click su riga bulk apre FormModal sbiancato** — la riga viene editata correttamente al salvataggio, ma il form parte vuoto invece che pre-popolato | BulkModal passa `editRow` ma FormModal non legge i dati iniziali dalla riga |
 | C2 | T4.4 | **Edit coppia dalla main table: dati parziali** — apre solo metà della coppia, broker partner sbiancato, ammontare con segno raw | Edit singola riga linked non ricostruisce la coppia duale; manca fetch del partner |
 | C3 | [inline] | **Delete riga paired new: elimina solo 1 metà** — rimane errore orfano per la riga partner, UI bloccata | `deleteRow` nel buffer non rimuove il partner `__pairKey` delle righe `new` |
+| C4 | T6.edit | **Update payload invia campi immutabili** (`type`, `broker_id`, `link_uuid`, `asset_id`) → backend `TXUpdateItem` ha `extra="forbid"` → "Extra inputs are not permitted" | FE `buildUpdatePayload()` non filtra campi readonly. Backend accetta SOLO: `id`, `date`, `quantity`, `cash`, `tags`, `description`, `cost_basis_override`, `asset_event_id`. Strippare i campi immutabili prima di PATCH. |
+| C5 | T2.swap | **Type swap (BUY↔SELL) fallisce al commit** — il PATCH invia `type` nel payload, rifiutato dal backend | `type` non è un campo patchable. Opzione 1 (preferita): aggiungere `type` a `TXUpdateItem` backend con validazione swap group server-side. Opzione 2: delete+create nel FE. |
 
 ### 🟠 HIGH (funzionalità degradata ma non bloccante)
 
@@ -26,6 +29,9 @@
 | H4 | T4.3 | **Auto-validate scatta con campi incompleti** — validate non dovrebbe partire finché tutti i campi obbligatori non sono popolati |
 | H5 | T8.2 | **Campo asset opzionale non mostra "(opzionale)"** — label mancante per tipi dove asset non è required |
 | H6 | T2.2 | **Tipo editabile per righe DB** — il vincolo di tipo readonly per DB rows va rivalutato (vedi analisi sotto) |
+| H7 | **Bulk table manca colonna Tags** — i tag delle righe non sono visibili nella tabella bulk | Aggiungere colonna `tags` alla BulkModal con badge colorati (stesso rendering di TransactionsTable) |
+| H8 | **Tag selector UX pessima** — il campo tag nel FormModal non è usabile. Serve: digitare parola → Enter/Space → crea badge/chip. Freccia apre SearchSelect con tag esistenti come autocomplete | Implementare `TagInput.svelte` (chip input + autocomplete dropdown da `availableTags`) |
+| H9 | **View mode per coppie composite: titolo senza ID** — nel FormModal view di TRANSFER/FX_CONVERSION, il titolo mostra il tipo ma non gli ID di entrambe le transazioni, a differenza delle standalone | Aggiungere `#ID_A ↔ #ID_B` nel titolo FormModal per righe paired |
 
 ### 🟡 MEDIUM (polish UX)
 
@@ -278,4 +284,7 @@ Dopo aver completato gli step, ri-testare:
 - T8.2 → label "(opzionale)"
 - T6.1–T6.4 → edit/clone/view dalla main table (skippati in questa sessione)
 - T15.1–T15.5 → regressioni generali (skippati)
+
+
+
 
