@@ -172,77 +172,69 @@ Toggle `[⇄]` espanso:
 
 ## Piano Implementativo
 
-### Step 1 — C1: Fix doppio-click pre-popola FormModal
+### Step 1 — C1: Fix doppio-click pre-popola FormModal ✅
 **File**: `TransactionBulkModal.svelte`, `TransactionFormModal.svelte`
-**Azione**:
-- Quando BulkModal apre FormModal per edit di una riga esistente (doppio-click o ✎), passare i dati della riga come `initialData`
-- FormModal deve leggere `initialData` e popolare il draft all'apertura
-- Per righe paired, ricostruire anche `partnerDraft` dalla coppia
-- **Verifiche**: doppio-click su riga new → form pre-popolato; doppio-click su riga paired → form duale pre-popolato
+**Azione completata**:
+- `draftToTxLike` ora espone `related_transaction_id` (= `_partnerId` o sentinel `-1` per new paired)
+- Aggiunto `findPartnerDraft()` per trovare il partner hidden nella drafts array
+- `openEditRowForm` trova il partner e lo passa come `formPartnerRow`
+- FormModal: aggiunto prop `injectedPartnerRow` + `applyPartnerToDualTo()` (refactored da `fetchPartner`)
+- Doppio-click su riga paired → form pre-popolato con dati Da/A
 
-### Step 2 — C2: Fix edit coppia da main table
-**File**: `TransactionsPage.svelte` (o dove si gestisce il trigger edit dalla main table), `TransactionFormModal.svelte`
-**Azione**:
-- Quando edit di una riga linked dalla main table, fare fetch del partner via `link_uuid`
-- Caricare entrambe le metà nel BulkModal
-- Aprire FormModal in modalità duale con entrambi i lati pre-compilati
-- Se annulla → non tornare a BulkModal vuoto
+### Step 2 — C2: Fix edit coppia da main table ✅
+**File**: `+page.svelte`
+**Azione completata**:
+- `handleEditRow` ora cerca il partner in `partnerRows` / `mainRows` via `related_transaction_id`
+- Passa entrambe le righe come `bulkInitial` → BulkModal le merge in pair + FormModal apre duale
 
-### Step 3 — C3: Fix delete paired new row
-**File**: `TransactionBulkModal.svelte` (buffer management)
-**Azione**:
-- Quando si elimina una riga `new` paired, eliminare anche il partner (stessa `__pairKey`)
-- Pulire anche eventuali errori/validazioni orfane associate al partner rimosso
-- Test: crea coppia new → elimina una metà → entrambe devono sparire + nessun errore orfano
+### Step 3 — C3: Fix delete paired new row ✅
+**File**: `TransactionBulkModal.svelte`
+**Azione completata**:
+- `removeRow` ora per righe `new` con `link_uuid`, rimuove anche il partner hidden con stesso `link_uuid`
 
-### Step 4 — H1/H2: Icone e rendering duale in bulk table
-**File**: `TransactionBulkModal.svelte` (definizione colonne bulk grid)
-**Azione**:
-- **Icone asset/broker**: usare gli stessi helper di rendering della main table (con fallback chain)
-- **Qty duale**: per righe paired, renderizzare come `Da: 10 / A: 10` (valori assoluti) analogamente a cash, non mostrare segno negativo raw
-- **Allineamento qty**: text-align left come le altre colonne
+### Step 4 — H1/H2: Icone e rendering duale in bulk table ✅
+**File**: `TransactionBulkModal.svelte`
+**Azione completata**:
+- Aggiunti `renderAssetHtml()` e `renderBrokerHtml()` con icone inline (favicon/icon_url)
+- Quantity per paired: dual rendering `Da: N / A: N` con valori assoluti
+- Allineamento text-align left
 
-### Step 5 — H3: Fallback icona broker
-**File**: helper rendering broker icon (cercare dove si determina l'URL icona broker)
-**Azione**:
-- Se broker ha `portal_url` → favicon
-- Se broker non ha `portal_url` ma ha plugin → icona plugin
-- Se nessuno dei due → icona generica broker
-- Verificare che helper esistenti siano usati ovunque (main table, bulk table, form)
+### Step 5 — H3: Fallback icona broker ✅
+**File**: `BrokerIcon.svelte` (già corretto), `TransactionBulkModal.svelte`
+**Azione completata**:
+- `renderBrokerHtml()` usa icon_url → portal_url favicon come fallback
+- `BrokerIcon.svelte` ha già la chain completa (icon_url → favicon → plugin → Briefcase)
 
-### Step 6 — H4: Disabilitare auto-validate e Applica finché campi incompleti
+### Step 6 — H4: Disabilitare auto-validate e Applica finché campi incompleti ✅
 **File**: `TransactionFormModal.svelte`
-**Azione**:
-- Calcolare `isComplete` basato sui campi obbligatori del tipo corrente (via `typeRules`)
-- Disabilitare pulsante "Applica" se `!isComplete`
-- Non lanciare validate automatica finché `!isComplete`
-- Pulsante "Verifica ora" resta attivo (per forzare validate manuale e vedere cosa manca)
+**Azione completata**:
+- Aggiunto `isFormComplete` derivato da `isDraftReadyForValidation(draft)`
+- Pulsante Applica disabilitato quando `!commitOnSave && !isFormComplete`
+- Pulsante "Verifica ora" resta sempre attivo
 
-### Step 7 — H5: Label "(opzionale)" su campo asset
-**File**: `TransactionFormModal.svelte`
-**Azione**:
-- Se `rule.assetField === 'optional'` → aggiungere ` (${$t('common.optional')})` alla label del campo asset
-- Aggiungere chiave i18n `common.optional` in EN/IT/FR/ES: "optional"/"opzionale"/"optionnel"/"opcional"
+### Step 7 — H5: Label "(opzionale)" su campo asset ✅
+**File**: `TransactionFormModal.svelte`, i18n EN/IT/FR/ES
+**Azione completata**:
+- Asset label mostra `(opzionale)` quando `rule.assetField === 'optional'`
+- Chiave `common.optional` aggiunta in 4 lingue
 
-### Step 8 — M1/M2: Banner validazione inline + dismissable
+### Step 8 — M1/M2: Banner validazione inline + dismissable ✅
 **File**: `TransactionBulkModal.svelte`, `TransactionFormModal.svelte`
-**Azione**:
-- **Bulk table**: sostituire banner success verde top con indicatore inline (come già fatto nel form)
-- **Entrambi (form/bulk)**: aggiungere pulsante X per chiudere i banner errore/warning
-- Pattern: `{#if showBanner} <div>... <button onclick={() => showBanner = false}>✕</button></div> {/if}`
+**Azione completata**:
+- Banners errore (formError + commitFailed) ora hanno `dismissible ondismiss`
+- Warning banner già aveva dismissible
+- Success banner auto-scompare (non serve dismiss)
 
-### Step 9 — M3: Allineamento date Da/A
-**File**: dove si renderizza la colonna data paired nella bulk/main table
-**Azione**:
-- Usare label a larghezza fissa: `<span class="inline-block w-8">Da:</span>` e `<span class="inline-block w-8">A:</span>`
-- Le date così partono dalla stessa posizione indipendentemente dalla lunghezza della label
+### Step 9 — M3: Allineamento date Da/A ✅
+**File**: `TransactionBulkModal.svelte`
+**Azione completata**:
+- Labels Da:/A: in `renderDualHtml` usano `inline-block w-6` per larghezza fissa
 
-### Step 10 — M4/M5: Visibilità colonne default + ordine
-**File**: definizione colonne transazioni (bulk e/o main table)
-**Azione**:
-- Nascondere di default: `link_uuid`, `created_at`, `updated_at`
-- Allargare `minWidth` di "Override costo medio"
-- Spostare "Override costo medio" dopo "Evento Asset" nell'ordine colonne
+### Step 10 — M4/M5: Visibilità colonne default + ordine ✅
+**File**: `TransactionBulkModal.svelte`
+**Azione completata**:
+- `cost_basis_override` spostato dopo `asset_event_id`, width aumentata a 160
+- `link_uuid`, `created_at`, `updated_at` già hidden di default
 
 ### Step 11 — Quick fixes già applicati
 - ✅ `DataTable.svelte`: rimossa import `string` da zod (unused)
@@ -266,13 +258,13 @@ Toggle `[⇄]` espanso:
 ## Priorità di Esecuzione
 
 ```
-Step 1 (C1) → Step 2 (C2) → Step 3 (C3)     # Critical — sblocca test 6/15
-    → Step 4 (H1/H2) → Step 5 (H3)            # High — visual polish paired
-    → Step 6 (H4) → Step 7 (H5)               # High — form UX
-    → Step 8 (M1/M2) → Step 9 (M3)            # Medium — banner + alignment
-    → Step 10 (M4/M5)                          # Medium — column defaults
-    → Step 11 (già fatto)                       # ✅ Done
-    → Step 12 (M6) → Step 13 (L4)             # Low — docs
+Step 1 (C1) ✅ → Step 2 (C2) ✅ → Step 3 (C3) ✅    # Critical — sblocca test 6/15
+    → Step 4 (H1/H2) ✅ → Step 5 (H3) ✅              # High — visual polish paired
+    → Step 6 (H4) ✅ → Step 7 (H5) ✅                  # High — form UX
+    → Step 8 (M1/M2) ✅ → Step 9 (M3) ✅               # Medium — banner + alignment
+    → Step 10 (M4/M5) ✅                               # Medium — column defaults
+    → Step 11 (già fatto) ✅                            # ✅ Done
+    → Step 12 (M6) ⏳ → Step 13 (L4) ⏳               # Low — docs (deferred)
 ```
 
 ---

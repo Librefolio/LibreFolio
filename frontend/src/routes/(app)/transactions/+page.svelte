@@ -10,6 +10,7 @@
     import {ensureTxTypesLoaded} from '$lib/stores/txTypeStore';
     import {ensureAssetsLoaded} from '$lib/stores/assetStore';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/brokerStore';
+    import {ensurePluginIconsLoaded} from '$lib/utils/brokerHelpers';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
     import {findPromoteMatch} from '$lib/stores/transactionTypeStore';
@@ -266,6 +267,9 @@
         // a no-op after the first successful load (until invalidated); the
         // local `brokers` is a $derived snapshot reactive on $brokerStoreVersion.
         await ensureBrokersLoaded();
+        // Pre-load plugin icon cache so getBrokerIconUrl can resolve
+        // brokers that only have default_import_plugin (no icon_url/portal_url).
+        await ensurePluginIconsLoaded();
     }
 
     async function loadEventTooltipMap(rows: TXReadItem[]): Promise<void> {
@@ -584,7 +588,15 @@
 
     function handleEditRow(row: TXReadItem) {
         bulkMode = 'edit-many';
-        bulkInitial = [row];
+        // C2-fix: if the row has a linked partner, include both halves so
+        // the BulkModal can merge them and the FormModal opens pre-populated.
+        if (row.related_transaction_id != null) {
+            const partner = partnerRows.find((r) => r.id === row.related_transaction_id)
+                ?? mainRows.find((r) => r.id === row.related_transaction_id);
+            bulkInitial = partner ? [row, partner] : [row];
+        } else {
+            bulkInitial = [row];
+        }
         bulkAutoOpenForm = 'edit';
         bulkOpen = true;
     }

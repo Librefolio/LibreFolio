@@ -365,6 +365,11 @@ class BrokerService:
             # Get cost basis
             total_cost_amount = await self.tx_service.get_cost_basis(broker_id, asset_id)
             average_cost = total_cost_amount / quantity if quantity != Decimal("0") else Decimal("0")
+            # Normalize to avoid scientific notation (e.g. "0E+6") which breaks
+            # frontend Zod regex validation for decimal strings.
+            average_cost = average_cost.normalize()
+            if average_cost == 0:
+                average_cost = Decimal("0")
 
             # Get current price (from latest price_history)
             current_price = await self._get_latest_price(asset_id)
