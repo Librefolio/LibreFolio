@@ -33,7 +33,7 @@
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {X, Plus, Pencil, Copy, Trash2} from 'lucide-svelte';
+    import {X, Plus, Pencil, Copy, Trash2, Check} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
@@ -51,6 +51,7 @@
     import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/uuid';
+    import {formatCurrencyAmountHtml} from '$lib/utils/currencyFormat';
     import TransactionFormModal from './TransactionFormModal.svelte';
 
     // =========================================================================
@@ -258,6 +259,7 @@
                     formOpen = true;
                     formMode = 'create';
                     formInitial = null;
+                    formPartnerRow = null;
                     formEditingTempId = null;
                 });
             }
@@ -347,7 +349,10 @@
             date: d.date,
             quantity: d.quantity,
             cash: d.cash,
-            related_transaction_id: null,
+            // C1-fix: if this is a paired row, expose the partner id so FormModal
+            // opens in dual mode. For 'new' drafts _partnerId is undefined, so we
+            // use a sentinel -1 to signal "pair present, fetch locally".
+            related_transaction_id: (d._partnerId ?? (d.partnerBrokerId != null ? -1 : null)),
             tags: d.tags,
             description: d.description,
             cost_basis_override: d.cost_basis_override || null,
@@ -355,6 +360,12 @@
             created_at: d.created_at,
             updated_at: d.updated_at,
         };
+    }
+
+    /** C1-fix: find the hidden partner draft for a visible paired draft row. */
+    function findPartnerDraft(d: DraftRow): DraftRow | undefined {
+        if (!d.link_uuid) return undefined;
+        return drafts.find((p) => p._hidden && p.link_uuid === d.link_uuid && p.tempId !== d.tempId);
     }
 
     /** Apply the form-collected payload to a brand-new draft row. */
@@ -453,7 +464,18 @@
     }
 
     function removeRow(tempId: string) {
-        drafts = drafts.filter((d) => d.tempId !== tempId);
+        // C3-fix: for paired 'new' rows, also remove the hidden partner.
+        const target = drafts.find((d) => d.tempId === tempId);
+        if (target && target.link_uuid && target.status === 'new') {
+            drafts = drafts.filter((d) => {
+                if (d.tempId === tempId) return false;
+                // Remove hidden partner with same link_uuid
+                if (d._hidden && d.link_uuid === target.link_uuid) return false;
+                return true;
+            });
+        } else {
+            drafts = drafts.filter((d) => d.tempId !== tempId);
+        }
     }
 
     /** R6-B.4: Mark an existing row for deletion (toggle). */
@@ -500,21 +522,59 @@
     // Sanitizers
     // =========================================================================
 
-    function collectCreate(d: DraftRow): Record<string, unknown> {
-        const rule = getTypeRule(d.type);
+    // -----------------------------------------------------------------
+    // Shared helpers for collectCreate / collectUpdate
+    // -----------------------------------------------------------------
+
+    interface SignResult {
+        signedQty: string;
+        buildCash: (c: {code: string; amount: string} | null | undefined) => {code: string; amount: string} | null;
+    }
+
+    /** Apply sign-flip rules for quantity and cash based on the type rule. */
+    function applySignRules(d: DraftRow, rule: ReturnType<typeof getTypeRule>): SignResult {
         const negQty = rule.quantityRule === 'negative';
         const negCash = rule.cashSign === 'negative';
+        const signedQty = negQty ? String(-Math.abs(Number(d.quantity))) : d.quantity;
+        const buildCash = (c: {code: string; amount: string} | null | undefined) => {
+            if (!c) return null;
+            if (negCash) return {code: c.code, amount: String(-Math.abs(Number(c.amount)))};
+            return {code: c.code, amount: c.amount};
+        };
+        return {signedQty, buildCash};
+    }
+
+    type FieldDef = [
+        key: string,
+        currentValue: unknown,
+        originalValue: unknown,
+        comparator?: (a: unknown, b: unknown) => boolean,
+        outputTransform?: (v: unknown) => unknown,
+    ];
+
+    /** Compare each field pair and collect changed keys into a partial record. */
+    function diffFields(fields: FieldDef[]): Record<string, unknown> {
+        const changes: Record<string, unknown> = {};
+        for (const [key, cur, orig, comparator, transform] of fields) {
+            const equal = comparator ? comparator(cur, orig) : cur === orig;
+            if (!equal) {
+                changes[key] = transform ? transform(cur) : cur;
+            }
+        }
+        return changes;
+    }
+
+    function collectCreate(d: DraftRow): Record<string, unknown> {
+        const rule = getTypeRule(d.type);
+        const {signedQty, buildCash} = applySignRules(d, rule);
         const out: Record<string, unknown> = {
             broker_id: d.broker_id,
             type: d.type,
             date: d.date,
-            quantity: negQty ? String(-Math.abs(Number(d.quantity))) : d.quantity,
+            quantity: signedQty,
         };
         if (d.asset_id != null && rule.assetField !== 'forbidden') out.asset_id = d.asset_id;
-        if (d.cash && rule.cashField !== 'forbidden') {
-            const amt = negCash ? String(-Math.abs(Number(d.cash.amount))) : d.cash.amount;
-            out.cash = {code: d.cash.code, amount: amt};
-        }
+        if (d.cash && rule.cashField !== 'forbidden') out.cash = buildCash(d.cash);
         if (d.tags.length > 0) out.tags = d.tags;
         if (d.description.trim()) out.description = d.description.trim();
         if (d.asset_event_id != null && rule.eventLinkable) out.asset_event_id = d.asset_event_id;
@@ -526,26 +586,30 @@
     function collectUpdate(d: DraftRow): Record<string, unknown> | null {
         if (!d.original || d.id == null) return null;
         const rule = getTypeRule(d.type);
-        const negQty = rule.quantityRule === 'negative';
-        const negCash = rule.cashSign === 'negative';
-        const out: Record<string, unknown> = {id: d.id};
+        const {signedQty, buildCash} = applySignRules(d, rule);
         const orig = d.original;
-        if (d.date !== orig.date) out.date = d.date;
-        const qty = negQty ? String(-Math.abs(Number(d.quantity))) : d.quantity;
-        const origQty = negQty ? String(-Math.abs(Number(orig.quantity))) : orig.quantity;
-        if (qty !== origQty) out.quantity = qty;
-        const buildCash = (c: {code: string; amount: string} | null | undefined) => {
-            if (!c) return null;
-            if (negCash) return {code: c.code, amount: String(-Math.abs(Number(c.amount)))};
-            return {code: c.code, amount: c.amount};
-        };
-        if (JSON.stringify(buildCash(d.cash)) !== JSON.stringify(buildCash(orig.cash))) out.cash = buildCash(d.cash);
-        if (JSON.stringify(d.tags) !== JSON.stringify(orig.tags ?? [])) out.tags = d.tags;
-        if ((d.description || null) !== (orig.description ?? null)) out.description = d.description || null;
-        if ((d.cost_basis_override || null) !== (orig.cost_basis_override ?? null)) out.cost_basis_override = d.cost_basis_override || null;
-        const origEvent = orig.asset_event_id ?? null;
-        if (origEvent !== d.asset_event_id) out.asset_event_id = d.asset_event_id ?? 0;
-        return out;
+        const {signedQty: origSignedQty, buildCash: origBuildCash} = applySignRules(fromTx(orig, 'edit-many'), rule);
+        void origBuildCash; // unused — buildCash is used for both sides
+
+        const jsonEq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+        const nullishEq = (a: unknown, b: unknown) => (a || null) === (b || null);
+
+        const fields: FieldDef[] = [
+            // H6 sign-flip: type can change via swap groups
+            ['type', d.type, orig.type],
+            ['date', d.date, orig.date],
+            ['broker_id', d.broker_id, orig.broker_id],
+            ['asset_id', d.asset_id ?? null, orig.asset_id ?? null],
+            ['quantity', signedQty, origSignedQty],
+            ['cash', buildCash(d.cash), buildCash(orig.cash), jsonEq],
+            ['tags', d.tags, orig.tags ?? [], jsonEq],
+            ['description', d.description || null, orig.description ?? null, nullishEq],
+            ['cost_basis_override', d.cost_basis_override || null, orig.cost_basis_override ?? null, nullishEq],
+            ['asset_event_id', d.asset_event_id, orig.asset_event_id ?? null, undefined, (v) => (v as number | null) ?? 0],
+        ];
+
+        const changes = diffFields(fields);
+        return {id: d.id, ...changes};
     }
 
     // =========================================================================
@@ -750,7 +814,7 @@
 
     /** Render a Da:/A: dual-line cell for paired rows. */
     function renderDualHtml(fromText: string, toText: string): string {
-        return `<div class="flex flex-col gap-0.5 text-xs leading-tight min-h-[2.5rem] justify-center"><span><span class="text-gray-400 dark:text-gray-500 font-medium">${$t('transactions.form.from')}:</span> ${fromText}</span><hr class="border-gray-200 dark:border-gray-600 my-0.5"/><span><span class="text-gray-400 dark:text-gray-500 font-medium">${$t('transactions.form.to')}:</span> ${toText}</span></div>`;
+        return `<div class="flex flex-col gap-0.5 text-xs leading-tight min-h-[2.5rem] justify-center"><span><span class="inline-block w-12 text-gray-400 dark:text-gray-500 font-medium">${$t('transactions.form.from')}:</span> ${fromText}</span><hr class="border-gray-200 dark:border-gray-600 my-0.5"/><span><span class="inline-block w-12 text-gray-400 dark:text-gray-500 font-medium">${$t('transactions.form.to')}:</span> ${toText}</span></div>`;
     }
 
     /** Readonly type badge with icon. */
@@ -765,7 +829,9 @@
     /** Format a cash value as "±amount CODE". */
     function formatCashText(cash: {code: string; amount: string} | null | undefined): string {
         if (!cash) return '—';
-        return `${cash.amount} ${cash.code}`;
+        const amt = Number(cash.amount);
+        if (isNaN(amt)) return `${cash.amount} ${cash.code}`;
+        return formatCurrencyAmountHtml(amt, cash.code, {showSign: true});
     }
 
     /** Broker name lookup. */
@@ -780,6 +846,34 @@
         return info?.display_name ?? `#${assetId}`;
     }
 
+    /** H1-fix: Asset name with icon for readonly cells. */
+    function renderAssetHtml(assetId: number | null | undefined): string {
+        if (assetId == null) return '<span class="text-gray-400 italic">—</span>';
+        const info = getAssetInfo(assetId);
+        const name = info?.display_name ?? `#${assetId}`;
+        const iconUrl = info?.icon_url;
+        const iconHtml = iconUrl
+            ? `<img src="${iconUrl}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`
+            : '';
+        return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${name}</span>`;
+    }
+
+    /** H1-fix: Broker name with favicon icon for readonly cells. */
+    function renderBrokerHtml(brokerId: number): string {
+        const b = brokers.find((br) => br.id === brokerId);
+        const name = b?.name ?? '—';
+        let iconSrc = '';
+        if (b?.icon_url) {
+            iconSrc = b.icon_url;
+        } else if (b?.portal_url) {
+            try { iconSrc = new URL(b.portal_url).origin + '/favicon.ico'; } catch {}
+        }
+        const iconHtml = iconSrc
+            ? `<img src="${iconSrc}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`
+            : '';
+        return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${name}</span>`;
+    }
+
     let columns = $derived.by<ColumnDef<DraftRow>[]>(() => {
         return [
             {
@@ -791,7 +885,7 @@
                 filterable: false,
                 // Bugfix-3 §U14: hidden by default — operations are atomic and
                 // independent so the new/edit badge is rarely actionable.
-                hiddenByDefault: true,
+                hiddenByDefault: false,
                 cell: (row): CellContent => ({
                     type: 'html',
                     html: row.status === 'new' ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">new</span>' : row.status === 'edited' ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">edit</span>' : row.status === 'delete' ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">🔴 del</span>' : '<span class="text-gray-300 dark:text-gray-600">·</span>',
@@ -804,7 +898,7 @@
                 width: 70,
                 sortable: false,
                 filterable: false,
-                hiddenByDefault: !editMode,
+                hiddenByDefault: false,
                 cell: (row): CellContent => ({type: 'html', html: row.id != null ? `#${row.id}` : '—'}),
             },
             {
@@ -843,7 +937,7 @@
                     if (getTypeRule(row.type).assetField === 'forbidden') {
                         return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
                     }
-                    return {type: 'html', html: `<span class="text-sm truncate">${assetName(row.asset_id)}</span>`};
+                    return {type: 'html', html: renderAssetHtml(row.asset_id)};
                 },
             },
             {
@@ -858,7 +952,13 @@
                         return {type: 'html', html: '<span class="text-gray-400 italic">n/a</span>'};
                     }
                     const qty = row.quantity ?? '0';
-                    return {type: 'html', html: `<span class="font-mono text-sm text-right block">${qty}</span>`};
+                    // H2-fix: paired rows with non-zero qty → show Da:/A: with absolute values
+                    const rule = getTypeRule(row.type);
+                    if (rule.requiresPair && row.partnerBrokerId != null && Number(qty) !== 0) {
+                        const absQty = String(Math.abs(Number(qty)));
+                        return {type: 'html', html: renderDualHtml(absQty, absQty)};
+                    }
+                    return {type: 'html', html: `<span class="font-mono text-sm">${qty}</span>`};
                 },
             },
             {
@@ -892,9 +992,9 @@
                     const rule = getTypeRule(row.type);
                     // Paired row with different brokers → Da:/A:
                     if (rule.requiresPair && row.partnerBrokerId != null && row.partnerBrokerId !== row.broker_id) {
-                        return {type: 'html', html: renderDualHtml(brokerName(row.broker_id), brokerName(row.partnerBrokerId))};
+                        return {type: 'html', html: renderDualHtml(renderBrokerHtml(row.broker_id), renderBrokerHtml(row.partnerBrokerId))};
                     }
-                    return {type: 'html', html: `<span class="text-sm">${brokerName(row.broker_id)}</span>`};
+                    return {type: 'html', html: renderBrokerHtml(row.broker_id)};
                 },
             },
             {
@@ -904,14 +1004,14 @@
                 width: 200,
                 sortable: false,
                 filterable: false,
-                hiddenByDefault: true,
+                hiddenByDefault: false,
                 cell: (row): CellContent => ({type: 'html', html: row.description ? `<span class="text-xs text-gray-600 dark:text-gray-300 truncate block">${row.description}</span>` : '<span class="text-gray-400">—</span>'}),
             },
             {
                 id: 'cost_basis_override',
                 header: () => $t('transactions.form.costBasis'),
                 type: 'text',
-                width: 130,
+                width: 160,
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: true,
@@ -1039,6 +1139,8 @@
     let formOpen = $state(false);
     let formMode = $state<'create' | 'edit'>('create');
     let formInitial = $state<TXReadItem | null>(null);
+    /** C1-fix: injected partner row for paired drafts (avoids API fetch). */
+    let formPartnerRow = $state<TXReadItem | null>(null);
     /** Set to a tempId when the FormModal is editing an existing draft row.
      *  When null, a successful Save = push as a brand-new row. */
     let formEditingTempId = $state<string | null>(null);
@@ -1058,6 +1160,7 @@
     function openAddRowForm() {
         formMode = 'create';
         formInitial = null;
+        formPartnerRow = null;
         formEditingTempId = null;
         formOpen = true;
     }
@@ -1067,6 +1170,10 @@
         formMode = row.status === 'new' ? 'create' : 'edit';
         formInitial = draftToTxLike(row);
         formEditingTempId = row.tempId;
+        // C1-fix: for paired drafts, inject partner data so FormModal can
+        // populate the dual form without fetching from the API.
+        const partner = findPartnerDraft(row);
+        formPartnerRow = partner ? draftToTxLike(partner) : null;
         formOpen = true;
     }
     function handleFormPushed(payload: Record<string, unknown>) {
@@ -1210,12 +1317,12 @@
         <!-- Banners -->
         <div class="px-5 pt-3 space-y-2 shrink-0">
             {#if formError}
-                <InfoBanner variant="error">
+                <InfoBanner variant="error" dismissible ondismiss={() => (formError = null)}>
                     <p class="font-semibold mb-1" data-testid="tx-bulk-error">⛔ {$t('transactions.bulk.rolledBackTitle')}</p>
                     <p>{formError}</p>
                 </InfoBanner>
             {:else if commitFailed && issues.length > 0}
-                <InfoBanner variant="error">
+                <InfoBanner variant="error" dismissible ondismiss={() => (commitFailed = false)}>
                     <p class="font-semibold mb-1" data-testid="tx-bulk-error">⛔ {$t('transactions.bulk.rolledBackTitle')}</p>
                     {#if fieldIssues.length > 0}
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.issuesHeader')}</p>
@@ -1246,11 +1353,6 @@
                             {/each}
                         </ul>
                     {/if}
-                </InfoBanner>
-            {/if}
-            {#if isFreshlyValid && !formError && !commitFailed}
-                <InfoBanner variant="success">
-                    <p data-testid="tx-bulk-valid">✓ {$t('transactions.validate.ok')}</p>
                 </InfoBanner>
             {/if}
             {#if showIssuesBanner && !formError && !commitFailed}
@@ -1343,6 +1445,10 @@
                 </button>
                 {#if scheduler.state.isValidating}
                     <span class="text-[11px] text-gray-500 dark:text-gray-400" data-testid="tx-bulk-validating">{$t('transactions.validate.validating')}</span>
+                {:else if isFreshlyValid && !formError && !commitFailed}
+                    <span class="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1" data-testid="tx-bulk-valid">
+                        <Check size={14} /> {$t('transactions.validate.ok')}
+                    </span>
                 {/if}
             </div>
             <div class="flex items-center gap-2">
@@ -1376,6 +1482,7 @@
     open={formOpen}
     mode={formMode}
     initialRow={formInitial}
+    injectedPartnerRow={formPartnerRow}
     commitOnSave={false}
     unlockImmutable={formMode === 'edit'}
     availableTags={aggregatedTags}
@@ -1383,6 +1490,7 @@
     onClose={() => {
         formOpen = false;
         formEditingTempId = null;
+        formPartnerRow = null;
     }}
     onPushDraft={handleFormPushed}
 />

@@ -15,6 +15,7 @@
 
 import {zodiosApi} from '$lib/api';
 import {schemas} from '$lib/api/generated';
+import {writable} from 'svelte/store';
 import type {z} from 'zod';
 
 // =============================================================================
@@ -74,6 +75,10 @@ let _loading: Promise<void> | null = null;
 /** Derived TypeRule map — populated when _cache is set. */
 let _ruleMap: Record<string, TypeRule> = {};
 
+/** Reactive version counter — bumped when types are loaded, so $derived
+ *  expressions that read `$typesVersion` re-evaluate. */
+export const typesVersion = writable(0);
+
 // =============================================================================
 //  Server → TypeRule (no mapping — values are already lowercase)
 // =============================================================================
@@ -130,6 +135,7 @@ export async function ensureTypesLoaded(): Promise<void> {
 			const resp = (await zodiosApi.get_transaction_types_api_v1_transactions_types_get()) as unknown as ServerTypesResponse;
 			_cache = resp;
 			_ruleMap = rebuildRuleMap(resp.transaction_types);
+			typesVersion.update((v) => v + 1);
 		} catch (e) {
 			console.error('[transactionTypeStore] Failed to fetch /transactions/types', e);
 			throw e; // let caller handle — frontend cannot work without type rules
@@ -196,6 +202,30 @@ export function getEventTypeEmoji(type: string | null | undefined): string {
 /** Types NOT requiring the pair-wizard — selectable in bulk modal / form. */
 export function getStandaloneTypes(): TransactionTypeCode[] {
 	return TX_TYPES.filter((t) => !getTypeRule(t).requiresPair);
+}
+
+// =============================================================================
+//  H6: Sign-flip swap groups
+// =============================================================================
+
+/** Swap groups for "sign flip" — types that share identical field structure
+ *  and can be swapped freely. Paired types are locked (no swap). */
+const SWAP_GROUPS: ReadonlyArray<ReadonlyArray<TransactionTypeCode>> = [
+	['BUY', 'SELL'],
+	['DEPOSIT', 'WITHDRAWAL'],
+	['DIVIDEND', 'INTEREST'],
+	['TAX', 'FEE'],
+	// ADJUSTMENT is a singleton — no swap partner
+	// Paired types (CASH_TRANSFER, TRANSFER, FX_CONVERSION) — locked
+];
+
+/** Given a type code, return the set of types it can be "flipped" to
+ *  (including itself). Returns [type] for singletons/paired (no flip). */
+export function getSwapGroup(type: TransactionTypeCode): TransactionTypeCode[] {
+	for (const group of SWAP_GROUPS) {
+		if (group.includes(type)) return [...group];
+	}
+	return [type]; // singleton or paired → only itself
 }
 
 /** Pair-only types — created via promote wizard. */

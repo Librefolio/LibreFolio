@@ -2139,6 +2139,36 @@ def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = Fals
     )
 
 
+# =============================================================================
+# Frontend Transaction Tests (Playwright E2E)
+# =============================================================================
+
+def front_transactions(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Transaction E2E tests."""
+    print_section("Frontend Transaction Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/transactions.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run all Transaction E2E tests."""
+    return _run_test_suite(
+        suite_name="All Transaction Tests (E2E)",
+        tests=[
+            ("Transactions", lambda: front_transactions(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+        ],
+        verbose=verbose,
+        header_msg="All Transaction Tests (E2E)",
+        summary_title="Transaction Test Summary",
+        success_msg="All Transaction tests passed! 🎉",
+    )
+
+
 def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, coverage: bool = False) -> bool:
     """Run all frontend utility/component E2E tests."""
     print_header("Frontend Utility Tests (Playwright)")
@@ -2401,7 +2431,7 @@ def _list_pytest_tests(category: str, action: str = None) -> bool:
 # ============================================================================
 
 _BACKEND_CATEGORIES = ("external", "db", "services", "utils", "schemas", "api", "e2e")
-_FRONTEND_CATEGORIES = ("front-utility", "front-user", "front-fx", "front-asset")
+_FRONTEND_CATEGORIES = ("front-utility", "front-user", "front-fx", "front-asset", "front-transaction")
 
 
 def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
@@ -2539,7 +2569,7 @@ def run_all_backend_tests(verbose: bool = False,
 
 
 def run_all_frontend_tests(verbose: bool = False) -> bool:
-    """Run all frontend tests (front-utility, front-user, front-fx, front-asset)."""
+    """Run all frontend tests (front-utility, front-user, front-fx, front-asset, front-transaction)."""
     tests = []
     for category in _FRONTEND_CATEGORIES:
         if category not in TEST_REGISTRY:
@@ -3640,6 +3670,35 @@ Options: --ui, --headed, --debug
             "desc": "Run all Asset E2E tests",
             },
         },
+    "front-transaction": {
+        "_meta": {
+            "help": "Frontend Transaction E2E tests (bulk modal, form, paired, type swap)",
+            "description": """
+Frontend Transaction Tests
+
+Browser-based tests for the Transaction Management subsystem:
+  • Transaction list page (table, filters)
+  • Bulk modal (add, edit, delete, paired rows)
+  • Form modal (create, edit, type swap)
+
+Options: --ui, --headed, --debug
+""",
+            },
+        "transactions": {
+            "func": front_transactions,
+            "test_names": True,
+            "name": "Transaction Tests",
+            "desc": "Transaction list, bulk modal, form modal, paired rows",
+            "prereq": "Login working, DB populated",
+            "tests": "transactions/transactions.spec.ts",
+            },
+        "all": {
+            "func": front_transaction_all,
+            "test_names": False,
+            "name": "All Transaction Tests",
+            "desc": "Run all Transaction E2E tests",
+            },
+        },
     }
 
 
@@ -3724,7 +3783,7 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False,
     # Handle --list for any category
     list_tests = kwargs.get("list_tests", False)
     if list_tests:
-        if category in ("front-utility", "front-user", "front-fx", "front-asset"):
+        if category in ("front-utility", "front-user", "front-fx", "front-asset", "front-transaction"):
             return _list_front_tests(category, action)
         elif category in BACKEND_TEST_PATHS:
             return _list_pytest_tests(category, action)
@@ -3733,7 +3792,7 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False,
             return True
 
     # Special case for front category (has ui, headed, debug flags + test_names)
-    if category in ("front-utility", "front-user", "front-fx", "front-asset"):
+    if category in ("front-utility", "front-user", "front-fx", "front-asset", "front-transaction"):
 
         ui = kwargs.get("ui", False)
         headed = kwargs.get("headed", False)
@@ -4025,7 +4084,7 @@ def create_parser() -> argparse.ArgumentParser:
                 ))
         elif category == "external":
             extra_args.extend(_get_external_extra_args())
-        elif category in ("front-utility", "front-user", "front-fx", "front-asset"):
+        elif category in ("front-utility", "front-user", "front-fx", "front-asset", "front-transaction"):
             extra_args.extend([
                 (
                     "--ui", {
@@ -4098,7 +4157,7 @@ Runs all backend test categories:
     # "all-frontend" category
     subparsers.add_parser(
         "all-frontend",
-        help="Run all frontend tests (front-utility, front-user, front-fx, front-asset)",
+        help="Run all frontend tests (front-utility, front-user, front-fx, front-asset, front-transaction)",
         description="""
 Frontend Test Suite
 
@@ -4130,7 +4189,7 @@ def register_subparser(parent_subparsers):
     # Create the "test" subparser under dev.py
     test_parser = parent_subparsers.add_parser(
         "test",
-        help="Run tests (api, db, external, schemas, services, utils, e2e, front-utility, front-user, front-fx, all, all-backend, all-frontend)",
+        help="Run tests (api, db, external, schemas, services, utils, e2e, front-utility, front-user, front-fx, front-transaction, all, all-backend, all-frontend)",
         description="LibreFolio Test Runner"
         )
 
@@ -4215,7 +4274,7 @@ def register_subparser(parent_subparsers):
                 ))
         elif category == "external":
             extra_args.extend(_get_external_extra_args())
-        elif category in ("front-utility", "front-user", "front-fx", "front-asset"):
+        elif category in ("front-utility", "front-user", "front-fx", "front-asset", "front-transaction"):
             extra_args.extend([
                 (
                     "--ui", {
@@ -4260,7 +4319,7 @@ def register_subparser(parent_subparsers):
     # "all-frontend" category
     test_subparsers.add_parser(
         "all-frontend",
-        help="Run all frontend tests (front-utility, front-user, front-fx, front-asset)"
+        help="Run all frontend tests (front-utility, front-user, front-fx, front-asset, front-transaction)"
         )
 
     # Coverage analysis command
@@ -4676,7 +4735,7 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
             elif category == "external":
                 kwargs['providers'] = getattr(args, 'providers', None)
                 kwargs['exclude_providers'] = getattr(args, 'exclude_providers', None)
-            elif category in ("front-utility", "front-user", "front-fx", "front-asset"):
+            elif category in ("front-utility", "front-user", "front-fx", "front-asset", "front-transaction"):
                 kwargs['ui'] = getattr(args, 'ui', False)
                 kwargs['headed'] = getattr(args, 'headed', False)
                 kwargs['debug'] = getattr(args, 'debug', False)
