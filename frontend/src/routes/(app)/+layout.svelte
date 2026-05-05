@@ -25,7 +25,8 @@
 
     // Track SPA navigation depth for smart back-navigation
     afterNavigate((nav) => {
-        trackNavigation(nav.type, nav.to?.url.pathname);
+        const url = nav.to?.url;
+        trackNavigation(nav.type, url ? url.pathname + url.search : undefined);
     });
 
     onMount(async () => {

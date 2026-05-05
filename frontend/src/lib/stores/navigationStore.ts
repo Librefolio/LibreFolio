@@ -29,10 +29,10 @@ let stack: string[] = [];
  * Track a navigation event from afterNavigate().
  *
  * @param navigationType - `nav.type` from SvelteKit ('enter', 'link', 'goto', 'form', 'popstate')
- * @param pathname - `nav.to?.url.pathname` from SvelteKit (path only, no query)
+ * @param fullUrl - `nav.to?.url.pathname + nav.to?.url.search` from SvelteKit (path + query)
  */
-export function trackNavigation(navigationType: string | undefined, pathname: string | undefined) {
-    if (!pathname) return;
+export function trackNavigation(navigationType: string | undefined, fullUrl: string | undefined) {
+    if (!fullUrl) return;
 
     if (navigationType === 'popstate') {
         // User pressed back/forward. Pop the top entry if it matches where
@@ -40,16 +40,24 @@ export function trackNavigation(navigationType: string | undefined, pathname: st
         stack.pop();
         // Edge case: if pop emptied the stack but we're actually at a known
         // location, seed it so subsequent goBack() has a floor.
-        if (stack.length === 0) stack = [pathname];
+        if (stack.length === 0) stack = [fullUrl];
     } else if (navigationType === 'enter') {
         // First navigation (page load / refresh) — stack starts fresh.
-        stack = [pathname];
+        stack = [fullUrl];
     } else {
         // link / goto / form — push (avoid duplicate consecutive entries,
         // which would happen when goto replaces URL query params via
         // replaceState of the same pathname).
-        if (stack[stack.length - 1] !== pathname) {
-            stack.push(pathname);
+        // Compare pathnames only to avoid duplicate pushes from replaceState
+        // query param updates on the same page.
+        const currentPathname = stack.length > 0 ? stack[stack.length - 1].split('?')[0] : '';
+        const newPathname = fullUrl.split('?')[0];
+        if (currentPathname === newPathname) {
+            // Same page, different query params (e.g. filter change via replaceState)
+            // → update in place instead of pushing.
+            stack[stack.length - 1] = fullUrl;
+        } else {
+            stack.push(fullUrl);
         }
     }
 }
