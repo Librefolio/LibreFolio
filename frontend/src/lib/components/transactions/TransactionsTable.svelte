@@ -21,6 +21,7 @@
 -->
 <script lang="ts">
     import {_ as t, locale} from '$lib/i18n';
+    import {goto} from '$app/navigation';
     import {Eye, Pencil, Copy, Trash2} from 'lucide-svelte';
 
     import DataTable from '$lib/components/table/DataTable.svelte';
@@ -102,7 +103,6 @@
         pageSize?: number;
         onSelectionChange?: (rows: TXReadItem[]) => void;
         onLinkedPairClick?: (row: TXReadItem) => void;
-        onEventBadgeClick?: (row: TXReadItem) => void;
         onEditRow?: (row: TXReadItem) => void;
         onCloneRow?: (row: TXReadItem) => void;
         onDeleteRow?: (row: TXReadItem) => void;
@@ -116,7 +116,7 @@
         initialFilters?: Record<string, FilterValue>;
     }
 
-    let {mainRows = [], partnerRows = [], brokers = [], eventTooltipMap = new Map(), currentPage = 1, pageSize = 50, onSelectionChange, onLinkedPairClick, onEventBadgeClick, onEditRow, onCloneRow, onDeleteRow, onViewRow, onPageChange, onPageSizeChange, onFiltersChange, initialFilters}: Props = $props();
+    let {mainRows = [], partnerRows = [], brokers = [], eventTooltipMap = new Map(), currentPage = 1, pageSize = 50, onSelectionChange, onLinkedPairClick, onEditRow, onCloneRow, onDeleteRow, onViewRow, onPageChange, onPageSizeChange, onFiltersChange, initialFilters}: Props = $props();
 
     /** Exposed DataTable ref for ColumnVisibilityToggle / external selection control. */
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
@@ -332,6 +332,11 @@
                         if (!cv) return false;
                         if (!fv.items.some((it) => it.code === cv.code && (it.min === undefined || cv.amount >= it.min) && (it.max === undefined || cv.amount <= it.max))) return false;
                     }
+                } else if (fv.type === 'number') {
+                    const num = Number(rawValue);
+                    if (!Number.isFinite(num)) return false;
+                    if (fv.min != null && num < fv.min) return false;
+                    if (fv.max != null && num > fv.max) return false;
                 }
             }
             return true;
@@ -557,6 +562,8 @@
             header: () => $t('transactions.table.quantity'),
             type: 'number',
             width: 110,
+            urlKey: 'qty',
+            filterable: true,
             getValue: (d) => Number(d.tx.quantity),
             cell: (d) => formatQty(d.tx.quantity),
         },
@@ -653,13 +660,10 @@
                 void $assetStoreVersion;
                 if (!d.tx.asset_id) return '—';
                 const info = getAssetInfo(d.tx.asset_id);
-                const name = info?.display_name ?? `#${d.tx.asset_id}`;
-                // Fallback chain: icon_url → asset-type PNG → plain text
+                const name = escapeHtml(info?.display_name ?? `#${d.tx.asset_id}`);
                 const iconSrc = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
-                if (iconSrc) {
-                    return {type: 'image', src: iconSrc, alt: name, text: name, size: 20, circle: false};
-                }
-                return name;
+                const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" width="20" height="20" loading="lazy" class="inline-block mr-1 align-middle" onerror="this.style.display='none'" />` : '';
+                return {type: 'html', html: `<span role="link" tabindex="0" data-asset-navigate="${d.tx.asset_id}" class="inline-flex items-center gap-1 cursor-pointer group" data-testid="tx-asset-link-${d.tx.asset_id}">${iconHtml}<span>${name}</span><span class="opacity-0 group-hover:opacity-60 transition-opacity text-gray-400 dark:text-gray-500 text-[10px] ml-0.5">↗</span></span>`};
             },
         },
         {
@@ -714,11 +718,14 @@
         {
             id: 'id',
             header: 'ID',
-            type: 'text',
+            type: 'number',
             width: 60,
-            sortable: false,
-            filterable: false,
+            urlKey: 'id',
+            sortable: true,
+            filterable: true,
             hiddenByDefault: false,
+            getValue: (d) => d.tx.id,
+            // TODO: filtro composito multi-range per ID (come currency-stack con range multipli)
             cell: (d) => ({type: 'html', html: `<span class="font-mono text-xs text-gray-400 dark:text-gray-500" data-testid="tx-id-${d.tx.id}">#${d.tx.id}</span>`}),
         },
     ]);
@@ -761,13 +768,20 @@
     function handleTableClick(ev: MouseEvent) {
         const target = ev.target as HTMLElement | null;
         if (!target) return;
+        // Asset name click → SPA navigate to /assets/:id
+        const assetLink = target.closest('[data-asset-navigate]') as HTMLElement | null;
+        if (assetLink) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const assetId = assetLink.getAttribute('data-asset-navigate');
+            if (assetId) void goto(`/assets/${assetId}`);
+            return;
+        }
         const eventBtn = target.closest('[data-tx-event]') as HTMLElement | null;
         if (eventBtn) {
             ev.preventDefault();
             ev.stopPropagation();
-            const id = Number(eventBtn.getAttribute('data-tx-event'));
-            const tx = displayRows.find((d) => d.tx.id === id)?.tx;
-            if (tx) onEventBadgeClick?.(tx);
+            // Event badge is a visual indicator only — no navigation action
             return;
         }
         const linkBtn = target.closest('[data-tx-link]') as HTMLElement | null;

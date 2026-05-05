@@ -618,11 +618,15 @@ BulkModal:
 - [ ] Step 1: ContextMenu.svelte + DataTable integration (default ON, all tables)
 - [ ] Step 2: R7-C1 fix — edit paired preserves partner id/status/original
 - [ ] Step 3: R7-H1 fix — type swap qty propagation in pipeline
-- [ ] Step 4a: TagInput keyboard navigation (ArrowDown/Up + Enter on highlight)
-- [ ] Step 4b: TagInput colored chips via getStringColor()
-- [ ] Step 4c: TagInput anti-bounce (mousedown flag replaces setTimeout)
-- [ ] Step 5: Colonna ID filterable (NumberFilter min/max)
-- [ ] Step 6: Asset cliccabile + remove onEventBadgeClick
+- [x] Step 4a: TagInput keyboard navigation (ArrowDown/Up + Enter on highlight)
+- [x] Step 4b: TagInput colored chips via getStringColor()
+- [x] Step 4c: TagInput anti-bounce (relatedTarget check replaces setTimeout)
+- [x] Step 4d: TagInput ←→ chip navigation + Delete/Backspace on selected chip (ring-2 highlight)
+- [x] Step 4e: TagInput chip colors use getStringBadgeStyle() with CSS variables (dark mode + content-based hash)
+- [x] Step 5: Colonna ID filterable (NumberFilter min/max, sortable, urlKey sync)
+- [x] Step 6: Asset cliccabile (↗ icon on hover, span+data-asset-navigate, goto SPA) + remove onEventBadgeClick
+- [x] Step 6b: Full URL filter sync (id, qty, broker multi, asset multi) + race condition fix (skip init emissions)
+- [x] Step 6c: navigationStore tracks full URL (pathname+search) — back button preserves filters
 - [ ] Step 7: TransactionDeleteModal (standalone + paired layout + slider toggle)
 - [x] Step 8a: Update plan-phase07-transaction-Part4.prompt.md con round timeline
 - [x] Step 8b: Update plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md con recap + Round 6 link
@@ -665,4 +669,69 @@ BulkModal:
 **Bugfix 1**: [`plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md`](./plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md)
 **Bugfix 2**: [`plan-phase07-transaction-Part4_Round5_Bugfix2_PostTestWalkOverhaul.prompt.md`](./plan-phase07-transaction-Part4_Round5_Bugfix2_PostTestWalkOverhaul.prompt.md)
 **Bugfix 3**: [`plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md`](./plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md)
+
+---
+
+## 📊 Step Classification — One-Shot vs Detailed Plan
+
+| Step | Descrizione | Tipo | Stima | Stato | Link piano dettaglio |
+|------|-------------|------|-------|-------|---------------------|
+| 1 | ContextMenu riusabile nella DataTable | 🗺️ Piano | ~2h | ⏳ | |
+| 2 | R7-C1: Fix edit paired creates→updates | 🗺️ Piano | ~1h | ⏳ | |
+| 3 | R7-H1: Type swap qty non aggiorna | 🗺️ Piano | ~45min | ⏳ | |
+| 4a | TagInput keyboard navigation | 🎯 One-shot | ~20min | ✅ | — |
+| 4b | TagInput colored chips | 🎯 One-shot | ~15min | ✅ | — |
+| 4c | TagInput anti-bounce | 🎯 One-shot | ~10min | ✅ | — |
+| 4d | TagInput ←→ chip nav + Del/Back | 🎯 One-shot | ~20min | ✅ | — |
+| 4e | TagInput chip colors dark mode fix | 🎯 One-shot | ~10min | ✅ | — |
+| 5 | Colonna ID filterable (NumberFilter) + URL sync | 🎯 One-shot | ~20min | ✅ | — |
+| 6 | Asset cliccabile (↗ icon) + remove onEventBadgeClick | 🎯 One-shot | ~30min | ✅ | — |
+| 6b | Full URL filter sync + race condition fix | 🎯 One-shot | ~30min | ✅ | — |
+| 6c | navigationStore full URL → back preserves filters | 🎯 One-shot | ~15min | ✅ | — |
+| 7 | TransactionDeleteModal (standalone + paired) | 🗺️ Piano | ~2.5h | ⏳ | |
+| 8a | Update plan Part4 con round timeline | 📝 Doc | ~30min | ✅ | — |
+| 8b | Update plan Round5 con recap + forward link | 📝 Doc | ~30min | ✅ | — |
+| 9 | TransactionPickerModal (R6-B.5) | 🗺️ Piano | ~2h | ⏳ | |
+| 10 | Backend Split & Promote endpoints (R6-B.6) | 🗺️ Piano | ~2h | ⏳ | |
+| 11 | Promote & Split UI in BulkModal (R6-B.6 FE) | 🗺️ Piano | ~1.5h | ⏳ | |
+| 12 | Main Table Promote/Split + Entry Points (R6-B.7/B.8) | 🗺️ Piano | ~1h | ⏳ | |
+
+**Legenda**: 🎯 = implementabile direttamente senza sotto-piano · 🗺️ = richiede investigazione/piano dettagliato · 📝 = solo documentazione
+
+**Note sui piani dettagliati**:
+- **Step 1 (ContextMenu)**: nuovo componente + integrazione DataTable + viewport clamping + mobile long-press → serve piano
+- **Step 2 (R7-C1)**: debug del flusso `patchDualRowFromForm` → `collectUpdate` → serve indagine del codice BulkModal
+- **Step 3 (R7-H1)**: debug pipeline type-swap qty → backend sign-flip vs frontend diff → serve indagine
+- **Step 7 (DeleteModal)**: nuovo componente con 2 layout (standalone/paired) + toggle + i18n 4 lingue → serve piano
+- **Step 9 (PickerModal)**: nuovo componente + integrazione BulkModal + auto-fetch partner → serve piano
+- **Step 10-12 (Split/Promote)**: 2 endpoint backend + 2 UI flow (BulkModal + MainTable) + entry point wiring → serve piano unico
+
+
+---
+
+Raggruppamento e ordine di dipendenza
+
+Analizzando le dipendenze tra gli step rimanenti:
+
+Step 1 (ContextMenu)          ← indipendente, nessuna dipendenza
+Step 2 (R7-C1 fix paired)     ← indipendente
+Step 3 (R7-H1 fix qty swap)   ← indipendente
+
+Step 7 (DeleteModal)           ← indipendente (ma beneficia del ContextMenu per l'entry point)
+
+Step 9 (PickerModal)           ← indipendente
+Step 10 (Backend split/promote) ← indipendente
+Step 11 (Split/Promote UI Bulk) ← DIPENDE da Step 10
+Step 12 (Split/Promote Main)    ← DIPENDE da Step 10 + Step 11
+
+Piani suggeriti (3 anziché 7)
+Piano | Steps | Motivazione | Stima
+Piano A — ContextMenu + bugfix | 1 + 2 + 3 | Step 1 crea il ContextMenu, Step 2-3 sono bugfix indipendenti. Raggrupparli evita 3 cicli plan/execute separati. Nessuna dipendenza incrociata.| ~3.5h |
+Piano B — Delete + Picker modals | 7 + 9 | Due nuovi componenti modali, entrambi standalone. Simile pattern (nuova modale → integrazione +page.svelte). Parallelizzabili ma condividono i18n e pattern. | ~4.5h |
+Piano C — Split/Promote full stack | 10 → 11 → 12 | Chain stretta: backend endpoints → UI BulkModal → UI Main Table + wiring. Un unico piano sequenziale. | ~4.5h |
+
+Ordine di esecuzione consigliato
+1. Piano A (ContextMenu + bugfix 2,3)   — sblocca UX base, fix bug critici
+2. Piano B (DeleteModal + PickerModal)   — nuove modali, user-facing
+3. Piano C (Split/Promote full stack)    — feature più complessa, ultima
 

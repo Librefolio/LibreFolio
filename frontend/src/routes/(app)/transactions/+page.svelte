@@ -58,7 +58,9 @@
 
     type FilterMap = {
         broker_id?: number;
+        broker_ids?: number[];
         asset_id?: number;
+        asset_ids?: number[];
         types?: string[];
         date_start?: string;
         date_end?: string;
@@ -66,6 +68,12 @@
         currency?: string;
         /** Currency-stack filter encoded as `code:min:max` items (CSV). */
         cash?: Array<{code: string; min?: number; max?: number}>;
+        /** ID range filter — min/max for the #N column. */
+        id_min?: number;
+        id_max?: number;
+        /** Quantity range filter — min/max. */
+        qty_min?: number;
+        qty_max?: number;
         page?: number;
         page_size?: number;
     };
@@ -110,11 +118,20 @@
 
         out.broker_id = num('broker_id');
         out.asset_id = num('asset_id');
+        // Multi-select: comma-separated IDs
+        const brokerIdsRaw = csv('broker_ids');
+        if (brokerIdsRaw) out.broker_ids = brokerIdsRaw.map(Number).filter(Number.isFinite);
+        const assetIdsRaw = csv('asset_ids');
+        if (assetIdsRaw) out.asset_ids = assetIdsRaw.map(Number).filter(Number.isFinite);
         out.types = csv('types');
         out.date_start = searchParams.get('date_start') || undefined;
         out.date_end = searchParams.get('date_end') || undefined;
         out.tags = csv('tags');
         out.currency = searchParams.get('currency') || undefined;
+        out.id_min = num('id_min');
+        out.id_max = num('id_max');
+        out.qty_min = num('qty_min');
+        out.qty_max = num('qty_max');
         // Currency-stack: `cash=USD:0:1000,EUR::500` (min/max optional → empty token).
         const cashRaw = searchParams.get('cash');
         if (cashRaw) {
@@ -142,12 +159,18 @@
     function buildFiltersUrl(f: FilterMap): string {
         const params = new URLSearchParams();
         if (f.broker_id != null) params.set('broker_id', String(f.broker_id));
+        if (f.broker_ids?.length) params.set('broker_ids', f.broker_ids.join(','));
         if (f.asset_id != null) params.set('asset_id', String(f.asset_id));
+        if (f.asset_ids?.length) params.set('asset_ids', f.asset_ids.join(','));
         if (f.types?.length) params.set('types', f.types.join(','));
         if (f.date_start) params.set('date_start', f.date_start);
         if (f.date_end) params.set('date_end', f.date_end);
         if (f.tags?.length) params.set('tags', f.tags.join(','));
         if (f.currency) params.set('currency', f.currency);
+        if (f.id_min != null) params.set('id_min', String(f.id_min));
+        if (f.id_max != null) params.set('id_max', String(f.id_max));
+        if (f.qty_min != null) params.set('qty_min', String(f.qty_min));
+        if (f.qty_max != null) params.set('qty_max', String(f.qty_max));
         if (f.cash?.length) {
             params.set('cash', f.cash.map((it) => `${it.code}:${it.min ?? ''}:${it.max ?? ''}`).join(','));
         }
@@ -176,9 +199,13 @@
         if (f.types?.length) out.types = {type: 'enum', selected: f.types};
         if (f.tags?.length) out.tags = {type: 'multi-enum', selected: f.tags};
         if (f.broker_id != null) out.broker_id = {type: 'enum', selected: [String(f.broker_id)]};
+        else if (f.broker_ids?.length) out.broker_id = {type: 'enum', selected: f.broker_ids.map(String)};
         if (f.asset_id != null) out.asset_id = {type: 'enum', selected: [String(f.asset_id)]};
+        else if (f.asset_ids?.length) out.asset_id = {type: 'enum', selected: f.asset_ids.map(String)};
         if (f.date_start || f.date_end) out.date = {type: 'date', from: f.date_start, to: f.date_end};
         if (f.cash?.length) out.cash = {type: 'currency-stack', items: f.cash.map((i) => ({...i}))};
+        if (f.id_min != null || f.id_max != null) out.id = {type: 'number', min: f.id_min, max: f.id_max};
+        if (f.qty_min != null || f.qty_max != null) out.qty = {type: 'number', min: f.qty_min, max: f.qty_max};
         return out;
     }
 
@@ -194,36 +221,61 @@
      * no-op emits to avoid an infinite reload loop.
      */
     function handleColumnFiltersChange(record: Record<string, FilterValue>) {
+        // Skip filter resets during initialization — DataTable emits an empty
+        // record on first render before `initialFilters` is applied.
+        if (!urlInitialized) return;
         const next: FilterMap = {...filters};
         // Reset the keys that are header-controlled so removing a filter clears it.
         next.types = undefined;
         next.tags = undefined;
         next.broker_id = undefined;
+        next.broker_ids = undefined;
         next.asset_id = undefined;
+        next.asset_ids = undefined;
         next.date_start = undefined;
         next.date_end = undefined;
         next.cash = undefined;
+        next.id_min = undefined;
+        next.id_max = undefined;
+        next.qty_min = undefined;
+        next.qty_max = undefined;
         for (const [k, v] of Object.entries(record)) {
             if (!v) continue;
             if (k === 'types' && v.type === 'enum') next.types = v.selected.length > 0 ? v.selected : undefined;
             else if (k === 'tags' && v.type === 'multi-enum') next.tags = v.selected.length > 0 ? v.selected : undefined;
-            else if (k === 'broker_id' && v.type === 'enum' && v.selected.length === 1) next.broker_id = Number(v.selected[0]);
-            else if (k === 'asset_id' && v.type === 'enum') next.asset_id = v.selected.length === 1 ? Number(v.selected[0]) : undefined;
+            else if (k === 'broker_id' && v.type === 'enum') {
+                if (v.selected.length === 1) { next.broker_id = Number(v.selected[0]); next.broker_ids = undefined; }
+                else if (v.selected.length > 1) { next.broker_id = undefined; next.broker_ids = v.selected.map(Number); }
+            }
+            else if (k === 'asset_id' && v.type === 'enum') {
+                if (v.selected.length === 1) { next.asset_id = Number(v.selected[0]); next.asset_ids = undefined; }
+                else if (v.selected.length > 1) { next.asset_id = undefined; next.asset_ids = v.selected.map(Number); }
+            }
             else if (k === 'date' && v.type === 'date') {
                 next.date_start = v.from || undefined;
                 next.date_end = v.to || undefined;
             } else if (k === 'cash' && v.type === 'currency-stack') next.cash = v.items.length > 0 ? v.items.map((i) => ({...i})) : undefined;
+            else if (k === 'id' && v.type === 'number') {
+                next.id_min = v.min;
+                next.id_max = v.max;
+            }
+            else if (k === 'qty' && v.type === 'number') {
+                next.qty_min = v.min;
+                next.qty_max = v.max;
+            }
         }
         // Bail-out: if nothing relevant changed, skip the state update.
         // This breaks the DataTable re-emit loop triggered by upstream
         // $derived columns prop changes.
         const sameTypes = JSON.stringify(filters.types ?? null) === JSON.stringify(next.types ?? null);
         const sameTags = JSON.stringify(filters.tags ?? null) === JSON.stringify(next.tags ?? null);
-        const sameBroker = (filters.broker_id ?? null) === (next.broker_id ?? null);
-        const sameAsset = (filters.asset_id ?? null) === (next.asset_id ?? null);
+        const sameBroker = (filters.broker_id ?? null) === (next.broker_id ?? null) && JSON.stringify(filters.broker_ids ?? null) === JSON.stringify(next.broker_ids ?? null);
+        const sameAsset = (filters.asset_id ?? null) === (next.asset_id ?? null) && JSON.stringify(filters.asset_ids ?? null) === JSON.stringify(next.asset_ids ?? null);
         const sameDate = (filters.date_start ?? null) === (next.date_start ?? null) && (filters.date_end ?? null) === (next.date_end ?? null);
         const sameCash = JSON.stringify(filters.cash ?? null) === JSON.stringify(next.cash ?? null);
-        if (sameTypes && sameTags && sameBroker && sameAsset && sameDate && sameCash) return;
+        const sameId = (filters.id_min ?? null) === (next.id_min ?? null) && (filters.id_max ?? null) === (next.id_max ?? null);
+        const sameQty = (filters.qty_min ?? null) === (next.qty_min ?? null) && (filters.qty_max ?? null) === (next.qty_max ?? null);
+        if (sameTypes && sameTags && sameBroker && sameAsset && sameDate && sameCash && sameId && sameQty) return;
         // Reset to first page on filter change.
         next.page = 1;
         filters = next;
@@ -343,13 +395,19 @@
     $effect(() => {
         // Touch tracked fields so Svelte runs this effect on any filter change.
         void filters.broker_id;
+        void filters.broker_ids;
         void filters.asset_id;
+        void filters.asset_ids;
         void filters.types;
         void filters.date_start;
         void filters.date_end;
         void filters.tags;
         void filters.currency;
         void filters.cash;
+        void filters.id_min;
+        void filters.id_max;
+        void filters.qty_min;
+        void filters.qty_max;
         void filters.page;
         void filters.page_size;
         syncUrl();
@@ -622,12 +680,6 @@
         }
     }
 
-    function handleEventBadgeClick(row: TXReadItem) {
-        // Navigate to asset detail page
-        if (row.asset_id != null) {
-            void goto(`/assets/${row.asset_id}`);
-        }
-    }
 
     function handleEditRow(row: TXReadItem) {
         bulkMode = 'edit-many';
@@ -769,7 +821,6 @@
             initialFilters={filtersToColumnFilters(filters)}
             onSelectionChange={handleSelectionChange}
             onLinkedPairClick={handleLinkedPairClick}
-            onEventBadgeClick={handleEventBadgeClick}
             onEditRow={handleEditRow}
             onCloneRow={handleCloneRow}
             onDeleteRow={handleDeleteRow}
