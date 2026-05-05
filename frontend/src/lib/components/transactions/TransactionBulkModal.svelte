@@ -49,6 +49,12 @@
     import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded} from '$lib/stores/transactionTypeStore';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
     import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
+    import {
+        buildCreatePayload,
+        buildUpdateDiff,
+        type TxFields,
+        type TxOriginal,
+    } from '$lib/utils/txPayloadHelpers';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/uuid';
     import {formatCurrencyAmountHtml} from '$lib/utils/currencyFormat';
@@ -527,101 +533,33 @@
     // Shared helpers for collectCreate / collectUpdate
     // -----------------------------------------------------------------
 
-    interface SignResult {
-        signedQty: string;
-        buildCash: (c: {code: string; amount: string} | null | undefined) => {code: string; amount: string} | null;
-    }
-
-    /** Apply sign-flip rules for quantity and cash based on the type rule. */
-    function applySignRules(d: DraftRow, rule: ReturnType<typeof getTypeRule>): SignResult {
-        const negQty = rule.quantityRule === 'negative';
-        const negCash = rule.cashSign === 'negative';
-        const signedQty = negQty ? String(-Math.abs(Number(d.quantity))) : d.quantity;
-        const buildCash = (c: {code: string; amount: string} | null | undefined) => {
-            if (!c) return null;
-            if (negCash) return {code: c.code, amount: String(-Math.abs(Number(c.amount)))};
-            return {code: c.code, amount: c.amount};
-        };
-        return {signedQty, buildCash};
-    }
-
-    type FieldDef = [
-        key: string,
-        currentValue: unknown,
-        originalValue: unknown,
-        comparator?: (a: unknown, b: unknown) => boolean,
-        outputTransform?: (v: unknown) => unknown,
-    ];
-
-    /** Compare each field pair and collect changed keys into a partial record. */
-    function diffFields(fields: FieldDef[]): Record<string, unknown> {
-        const changes: Record<string, unknown> = {};
-        for (const [key, cur, orig, comparator, transform] of fields) {
-            const equal = comparator ? comparator(cur, orig) : cur === orig;
-            if (!equal) {
-                changes[key] = transform ? transform(cur) : cur;
-            }
-        }
-        return changes;
-    }
-
     function collectCreate(d: DraftRow): Record<string, unknown> {
         const rule = getTypeRule(d.type);
-        const {signedQty, buildCash} = applySignRules(d, rule);
-        const out: Record<string, unknown> = {
-            broker_id: d.broker_id,
-            type: d.type,
-            date: d.date,
-            quantity: signedQty,
-        };
-        if (d.asset_id != null && rule.assetField !== 'forbidden') out.asset_id = d.asset_id;
-        if (d.cash && rule.cashField !== 'forbidden') out.cash = buildCash(d.cash);
-        if (d.tags.length > 0) out.tags = d.tags;
-        if (d.description.trim()) out.description = d.description.trim();
-        if (d.asset_event_id != null && rule.eventLinkable) out.asset_event_id = d.asset_event_id;
-        if (d.cost_basis_override.trim()) out.cost_basis_override = d.cost_basis_override.trim();
-        if (d.link_uuid && rule.requiresPair) out.link_uuid = d.link_uuid;
-        return out;
+        return buildCreatePayload(draftToTxFields(d), rule);
     }
-
-    /** Allowlist of fields accepted by TXUpdateItem backend schema.
-     *  Everything else (type, broker_id, asset_id, link_uuid, related_transaction_id,
-     *  created_at, updated_at) is immutable and MUST NOT be sent. */
-    const PATCHABLE_FIELDS = new Set([
-        'type', 'date', 'quantity', 'cash', 'tags', 'description',
-        'cost_basis_override', 'asset_event_id',
-    ]);
 
     function collectUpdate(d: DraftRow): Record<string, unknown> | null {
         if (!d.original || d.id == null) return null;
         const rule = getTypeRule(d.type);
-        const {signedQty, buildCash} = applySignRules(d, rule);
-        const orig = d.original;
-        const {signedQty: origSignedQty, buildCash: origBuildCash} = applySignRules(fromTx(orig, 'edit-many'), rule);
-        void origBuildCash; // unused — buildCash is used for both sides
+        const origRule = getTypeRule(d.original.type as TransactionTypeCode);
+        return buildUpdateDiff(draftToTxFields(d), d.original as unknown as TxOriginal, rule, origRule);
+    }
 
-        const jsonEq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-        const nullishEq = (a: unknown, b: unknown) => (a || null) === (b || null);
-
-        const fields: FieldDef[] = [
-            // H6 sign-flip: type can change via swap groups
-            ['type', d.type, orig.type],
-            ['date', d.date, orig.date],
-            ['quantity', signedQty, origSignedQty],
-            ['cash', buildCash(d.cash), buildCash(orig.cash), jsonEq],
-            ['tags', d.tags, orig.tags ?? [], jsonEq],
-            ['description', d.description || null, orig.description ?? null, nullishEq],
-            ['cost_basis_override', d.cost_basis_override || null, orig.cost_basis_override ?? null, nullishEq],
-            ['asset_event_id', d.asset_event_id, orig.asset_event_id ?? null, undefined, (v) => (v as number | null) ?? 0],
-        ];
-
-        const allChanges = diffFields(fields);
-        // Step 14 (C4): strip immutable fields — only send PATCHABLE_FIELDS
-        const changes: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(allChanges)) {
-            if (PATCHABLE_FIELDS.has(k)) changes[k] = v;
-        }
-        return {id: d.id, ...changes};
+    /** Convert a DraftRow to the shared TxFields interface. */
+    function draftToTxFields(d: DraftRow): TxFields {
+        return {
+            type: d.type,
+            broker_id: d.broker_id,
+            date: d.date,
+            quantity: d.quantity,
+            asset_id: d.asset_id,
+            cash: d.cash,
+            tags: d.tags,
+            description: d.description,
+            cost_basis_override: d.cost_basis_override,
+            asset_event_id: d.asset_event_id,
+            link_uuid: d.link_uuid,
+        };
     }
 
     // =========================================================================
@@ -732,7 +670,16 @@
     /** Context for resolving validation issue codes into translated messages. */
     let resolverCtx: ResolverContext = $derived({
         brokers: brokers as unknown as Array<{id: number; name: string}>,
-        assets: getAllAssets() as unknown as Array<{id: number; display_name: string}>,
+        assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
+        getBrokerIconUrl: (brokerId: number) => {
+            const b = brokers.find((br) => br.id === brokerId);
+            if (!b) return null;
+            if (b.icon_url?.trim()) return b.icon_url;
+            if (b.portal_url?.trim()) {
+                try { return new URL(b.portal_url).origin + '/favicon.ico'; } catch { /* skip */ }
+            }
+            return null;
+        },
     });
 
     $effect(() => {
@@ -836,9 +783,17 @@
     // DRY helpers for readonly cell rendering
     // =========================================================================
 
-    /** Render a Da:/A: dual-line cell for paired rows. */
+    /** Render a Da:/A: dual-line cell for paired rows.
+     *  Uses ch-based min-width so the shorter label (e.g. "A:") is padded
+     *  to match the longer one (e.g. "From:"), keeping content aligned. */
     function renderDualHtml(fromText: string, toText: string): string {
-        return `<div class="flex flex-col gap-0.5 text-xs leading-tight min-h-[2.5rem] justify-center"><span><span class="inline-block w-12 text-gray-400 dark:text-gray-500 font-medium">${$t('transactions.form.from')}:</span> ${fromText}</span><hr class="border-gray-200 dark:border-gray-600 my-0.5"/><span><span class="inline-block w-12 text-gray-400 dark:text-gray-500 font-medium">${$t('transactions.form.to')}:</span> ${toText}</span></div>`;
+        const fromLabel = $t('transactions.form.from');
+        const toLabel = $t('transactions.form.to');
+        // Pad to the longer label + colon + 1ch spacing
+        const maxCh = Math.max(fromLabel.length, toLabel.length) + 2;
+        const labelCls = `inline-block text-gray-400 dark:text-gray-500 font-medium`;
+        const labelStyle = `min-width:${maxCh}ch`;
+        return `<div class="flex flex-col gap-0.5 text-xs leading-tight min-h-[2.5rem] justify-center"><span><span class="${labelCls}" style="${labelStyle}">${fromLabel}:</span> ${fromText}</span><hr class="border-gray-200 dark:border-gray-600 my-0.5"/><span><span class="${labelCls}" style="${labelStyle}">${toLabel}:</span> ${toText}</span></div>`;
     }
 
     /** Readonly type badge with icon. */
@@ -846,8 +801,8 @@
         const label = $t(`transactions.types.${type}`) || type;
         const slug = type.toLowerCase().replace(/_/g, '-');
         const isPair = getTypeRule(type).requiresPair;
-        const prefix = isPair ? '↔ ' : '';
-        return `<span class="inline-flex items-center gap-1 text-xs"><img src="/icons/transactions/${slug}.png" alt="" class="w-4 h-4 object-contain shrink-0" onerror="this.style.display='none'"/>${prefix}${label}</span>`;
+        const arrow = isPair ? '<span class="shrink-0">↔</span>' : '';
+        return `<span class="inline-flex items-center gap-1.5 text-xs leading-snug" style="white-space:normal"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.75rem;height:1.75rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>${arrow}<span>${label}</span></span>`;
     }
 
     /** Format a cash value as "±amount CODE". */
@@ -919,11 +874,18 @@
                 id: 'id',
                 header: 'ID',
                 type: 'text',
-                width: 70,
+                width: 90,
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: false,
-                cell: (row): CellContent => ({type: 'html', html: row.id != null ? `#${row.id}` : '—'}),
+                cell: (row): CellContent => {
+                    if (row.id == null) return {type: 'html', html: '—'};
+                    const rule = getTypeRule(row.type);
+                    if (rule.requiresPair && row._partnerId != null) {
+                        return {type: 'html', html: renderDualHtml(`#${row.id}`, `#${row._partnerId}`)};
+                    }
+                    return {type: 'html', html: `#${row.id}`};
+                },
             },
             {
                 id: 'date',
@@ -945,7 +907,7 @@
                 id: 'type',
                 header: () => $t('transactions.table.type'),
                 type: 'text',
-                width: 140,
+                width: 155,
                 sortable: false,
                 filterable: false,
                 cell: (row): CellContent => ({type: 'html', html: renderTypeHtml(row.type)}),
@@ -968,7 +930,7 @@
                 id: 'quantity',
                 header: () => $t('transactions.table.quantity'),
                 type: 'text',
-                width: 85,
+                width: 110,
                 sortable: false,
                 filterable: false,
                 cell: (row): CellContent => {
@@ -976,11 +938,13 @@
                         return {type: 'html', html: '<span class="text-gray-400 italic">n/a</span>'};
                     }
                     const qty = row.quantity ?? '0';
-                    // H2-fix: paired rows with non-zero qty → show Da:/A: with absolute values
+                    // H2-fix: paired rows with non-zero qty → show Da:/A: with signed values + emoji
                     const rule = getTypeRule(row.type);
                     if (rule.requiresPair && row.partnerBrokerId != null && Number(qty) !== 0) {
-                        const absQty = String(Math.abs(Number(qty)));
-                        return {type: 'html', html: renderDualHtml(absQty, absQty)};
+                        const absVal = Math.abs(Number(qty));
+                        const fromQty = `-${absVal} 📉`;
+                        const toQty = `+${absVal} 📈`;
+                        return {type: 'html', html: renderDualHtml(fromQty, toQty)};
                     }
                     return {type: 'html', html: `<span class="font-mono text-sm">${qty}</span>`};
                 },
@@ -1008,7 +972,7 @@
                 id: 'broker',
                 header: () => $t('transactions.table.broker'),
                 type: 'text',
-                width: 140,
+                width: 190,
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: false,
@@ -1297,8 +1261,27 @@
                 return merged;
             });
         } else {
-            // Create a new hidden partner draft
-            const toDraft = emptyDraft();
+            // Create a new hidden partner draft.
+            // R7-C1 fix: if the visible row has a _partnerId (DB row), preserve
+            // the partner's id/status/original so collectUpdate() picks it up
+            // instead of collectCreate().
+            const visibleDraft = drafts.find((d) => d.tempId === tempId);
+            const partnerId = visibleDraft?._partnerId;
+            let toDraft: DraftRow;
+            if (partnerId != null) {
+                // Find the original source TX for the partner
+                const partnerSource = initialRows?.find((r) => r.id === partnerId);
+                if (partnerSource) {
+                    toDraft = fromTx(partnerSource, 'edit-many');
+                    toDraft.status = 'edited';
+                } else {
+                    toDraft = emptyDraft();
+                    toDraft.id = partnerId;
+                    toDraft.status = 'edited';
+                }
+            } else {
+                toDraft = emptyDraft();
+            }
             applyFormPayload(toDraft, items[1]);
             toDraft.link_uuid = linkUuid;
             toDraft._hidden = true;
@@ -1536,4 +1519,3 @@
     }}
     onPushDraft={handleFormPushed}
 />
-

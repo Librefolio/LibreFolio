@@ -573,6 +573,16 @@ transactions.split.description = "The 2 transactions will become independent row
 
 **Stima**: 1.5h
 
+**⚠️ Caso limite — Conflitto campi nella Promote (scoperto 2026-05-05)**:
+Quando si promuovono 2 standalone a coppia, i campi condivisi (description, tags, date, cost_basis_override) possono essere diversi tra le due transazioni. Esempio: tx#22 ha `description="Transfer AAPL"`, tx#23 ha `description=null`.
+
+**Soluzione proposta**: Per ogni campo divergente, mostrare nel ConfirmModal un **selettore a 3 vie stile diff-tool**:
+- **1ª** = usa il valore della prima transazione
+- **2ª** = usa il valore della seconda
+- **Custom** = campo editabile (l'utente digita un valore nuovo)
+
+Se i valori sono uguali (o entrambi null/vuoti), il campo non viene mostrato nel diff. Solo i campi divergenti richiedono la scelta. Questo pattern è analogo ai merge-conflict resolver dei VCS.
+
 ---
 
 ### Step 12 — Promote & Split in Main Table + Entry Points (R6-B.7/B.8) (~1h)
@@ -615,9 +625,9 @@ BulkModal:
 
 ## ✅ Checklist
 
-- [ ] Step 1: ContextMenu.svelte + DataTable integration (default ON, all tables)
-- [ ] Step 2: R7-C1 fix — edit paired preserves partner id/status/original
-- [ ] Step 3: R7-H1 fix — type swap qty propagation in pipeline
+- [x] Step 1: ContextMenu.svelte + DataTable integration (default ON, all tables)
+- [x] Step 2: R7-C1 fix — edit paired preserves partner id/status/original
+- [x] Step 3: R7-H1 fix — type swap qty propagation (origRule for original values)
 - [x] Step 4a: TagInput keyboard navigation (ArrowDown/Up + Enter on highlight)
 - [x] Step 4b: TagInput colored chips via getStringColor()
 - [x] Step 4c: TagInput anti-bounce (relatedTarget check replaces setTimeout)
@@ -647,6 +657,7 @@ BulkModal:
 | — | Multi-range composite ID filter | Advanced filter UX |
 | — | Import ▾ menu (BrokerImportFilesModal from /transactions) | Part 5 BRIM |
 | — | AssetMatchingWizard (Phase 6 Step 5) | Fake asset ID resolution for BRIM import |
+| — | Riorganizzazione `ui/` folder | Raggruppare: `modals/` (ModalBase, ConfirmModal, SyncModalBase, PageSyncModal), `date/` (SingleDatePicker, DateRangePicker, CalendarMonth), `feedback/` (InfoBanner, ToastContainer, LoadingSpinner, Tooltip), `display/` (BrokerBadge, CompactCashCell). ~100+ import da aggiornare → commit isolato |
 
 ---
 
@@ -676,9 +687,9 @@ BulkModal:
 
 | Step | Descrizione | Tipo | Stima | Stato | Link piano dettaglio |
 |------|-------------|------|-------|-------|---------------------|
-| 1 | ContextMenu riusabile nella DataTable | 🗺️ Piano | ~2h | ⏳ | |
-| 2 | R7-C1: Fix edit paired creates→updates | 🗺️ Piano | ~1h | ⏳ | |
-| 3 | R7-H1: Type swap qty non aggiorna | 🗺️ Piano | ~45min | ⏳ | |
+| 1 | ContextMenu riusabile nella DataTable | 🗺️ Piano | ~2h | ✅ | [Plan A](./plan-phase07-transaction-Part4_Round6_PlanA_ContextMenuBugfix.prompt.md) |
+| 2 | R7-C1: Fix edit paired creates→updates | 🗺️ Piano | ~1h | ✅ | [Plan A](./plan-phase07-transaction-Part4_Round6_PlanA_ContextMenuBugfix.prompt.md) |
+| 3 | R7-H1: Type swap qty non aggiorna | 🗺️ Piano | ~45min | ✅ | [Plan A](./plan-phase07-transaction-Part4_Round6_PlanA_ContextMenuBugfix.prompt.md) |
 | 4a | TagInput keyboard navigation | 🎯 One-shot | ~20min | ✅ | — |
 | 4b | TagInput colored chips | 🎯 One-shot | ~15min | ✅ | — |
 | 4c | TagInput anti-bounce | 🎯 One-shot | ~10min | ✅ | — |
@@ -709,29 +720,30 @@ BulkModal:
 
 ---
 
-Raggruppamento e ordine di dipendenza
+## 📦 Raggruppamento e ordine di dipendenza
 
-Analizzando le dipendenze tra gli step rimanenti:
-
-Step 1 (ContextMenu)          ← indipendente, nessuna dipendenza
+```
+Step 1 (ContextMenu)           ← indipendente
 Step 2 (R7-C1 fix paired)     ← indipendente
 Step 3 (R7-H1 fix qty swap)   ← indipendente
-
-Step 7 (DeleteModal)           ← indipendente (ma beneficia del ContextMenu per l'entry point)
-
+Step 7 (DeleteModal)           ← indipendente (beneficia di Step 1 per entry point)
 Step 9 (PickerModal)           ← indipendente
 Step 10 (Backend split/promote) ← indipendente
 Step 11 (Split/Promote UI Bulk) ← DIPENDE da Step 10
 Step 12 (Split/Promote Main)    ← DIPENDE da Step 10 + Step 11
+```
 
-Piani suggeriti (3 anziché 7)
-Piano | Steps | Motivazione | Stima
-Piano A — ContextMenu + bugfix | 1 + 2 + 3 | Step 1 crea il ContextMenu, Step 2-3 sono bugfix indipendenti. Raggrupparli evita 3 cicli plan/execute separati. Nessuna dipendenza incrociata.| ~3.5h |
-Piano B — Delete + Picker modals | 7 + 9 | Due nuovi componenti modali, entrambi standalone. Simile pattern (nuova modale → integrazione +page.svelte). Parallelizzabili ma condividono i18n e pattern. | ~4.5h |
-Piano C — Split/Promote full stack | 10 → 11 → 12 | Chain stretta: backend endpoints → UI BulkModal → UI Main Table + wiring. Un unico piano sequenziale. | ~4.5h |
+### Piani di dettaglio (3 anziché 7)
 
-Ordine di esecuzione consigliato
-1. Piano A (ContextMenu + bugfix 2,3)   — sblocca UX base, fix bug critici
-2. Piano B (DeleteModal + PickerModal)   — nuove modali, user-facing
-3. Piano C (Split/Promote full stack)    — feature più complessa, ultima
+| Piano | Steps | Motivazione | Stima | Link |
+|-------|-------|-------------|-------|------|
+| **Piano A** — ContextMenu + bugfix | 1 + 2 + 3 | Nuovo componente + 2 bugfix indipendenti | ~3.5h | [`PlanA_ContextMenuBugfix`](./plan-phase07-transaction-Part4_Round6_PlanA_ContextMenuBugfix.prompt.md) ✅ |
+| **Piano B** — Delete + Picker modals | 7 + 9 | Due nuove modali, pattern simile | ~4.5h | |
+| **Piano C** — Split/Promote full stack | 10 → 11 → 12 | Backend → BulkModal UI → Main Table + wiring | ~4.5h | |
+
+### Ordine di esecuzione
+
+1. **Piano A** (ContextMenu + bugfix 2,3) — ✅ DONE — sblocca UX base, fix bug critici
+2. **Piano B** (DeleteModal + PickerModal) — nuove modali, user-facing
+3. **Piano C** (Split/Promote full stack) — feature più complessa, ultima
 
