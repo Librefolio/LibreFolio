@@ -356,8 +356,8 @@
         }
     }
 
-    async function reload(): Promise<void> {
-        loading = true;
+    async function reload(opts?: {soft?: boolean}): Promise<void> {
+        if (!opts?.soft) loading = true;
         error = null;
         try {
             // Stage 1: main filtered rows.
@@ -486,11 +486,11 @@
     }
     function handleFormCommitted() {
         formOpen = false;
-        void reload();
+        void reload({soft: true});
     }
     function handleBulkCommitted() {
         bulkOpen = false;
-        void reload();
+        void reload({soft: true});
     }
 
     // =========================================================================
@@ -571,7 +571,7 @@
     function handleBulkDeleteCommitted() {
         bulkDeleteOpen = false;
         selectedRows = [];
-        void reload();
+        void reload({soft: true});
     }
 
     /** Step 22 (F5): simple delete for standalone rows — direct commit. */
@@ -585,7 +585,7 @@
                 simpleDeleteOpen = false;
                 simpleDeleteRows = [];
                 selectedRows = [];
-                void reload();
+                void reload({soft: true});
             }
         } catch (e) {
             console.error('[SimpleDelete] failed:', e);
@@ -832,7 +832,7 @@
     {/if}
 </div>
 
-<TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} {availableTags} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} />
+<TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} {availableTags} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} onSwitchToEdit={() => { formOpen = false; if (formInitial) handleEditRow(formInitial); }} />
 <TransactionBulkModal open={bulkOpen} mode={bulkMode} initialRows={bulkInitial} {availableTags} autoOpenForm={bulkAutoOpenForm} onClose={() => { bulkOpen = false; bulkAutoOpenForm = null; }} onCommitted={handleBulkCommitted} />
 <BulkDeleteLinkedPairModal open={bulkDeleteOpen} cleanRows={bulkDeleteClean} problemRows={bulkDeleteProblems} onClose={() => (bulkDeleteOpen = false)} onCommitted={handleBulkDeleteCommitted} />
 <!-- Step 22 (F5): lightweight ConfirmModal for standalone deletes -->
