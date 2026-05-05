@@ -163,7 +163,7 @@ class BrokerService:
                                     "broker_id": broker.id,
                                     "type": "DEPOSIT",
                                     "date": today_date().isoformat(),
-                                    "cash": {"code": currency_obj.code, "amount": str(currency_obj.amount)},
+                                    "cash": {"code": currency_obj.code, "amount": format(currency_obj.amount, 'f')},
                                 }
                             )
 
@@ -365,9 +365,8 @@ class BrokerService:
             # Get cost basis
             total_cost_amount = await self.tx_service.get_cost_basis(broker_id, asset_id)
             average_cost = total_cost_amount / quantity if quantity != Decimal("0") else Decimal("0")
-            # Normalize to avoid scientific notation (e.g. "0E+6") which breaks
-            # frontend Zod regex validation for decimal strings.
-            average_cost = average_cost.normalize()
+            # SafeDecimal in BRAssetHolding guarantees fixed-point JSON
+            # serialization — no scientific notation reaches the frontend.
             if average_cost == 0:
                 average_cost = Decimal("0")
 

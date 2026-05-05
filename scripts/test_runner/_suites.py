@@ -20,7 +20,7 @@ from ._registry import TEST_REGISTRY
 
 
 _BACKEND_CATEGORIES = ("external", "db", "services", "utils", "schemas", "api", "e2e")
-_FRONTEND_CATEGORIES = ("front-utility", "front-user", "front-fx", "front-asset", "front-transaction")
+_FRONTEND_CATEGORIES = ("front-utility", "front-broker", "front-user", "front-fx", "front-asset", "front-transaction")
 
 # Mapping of backend test categories to their test directories/files
 BACKEND_TEST_PATHS = {
@@ -152,7 +152,7 @@ def run_all_backend_tests(verbose: bool = False,
 
 
 def run_all_frontend_tests(verbose: bool = False) -> bool:
-    """Run all frontend tests (front-utility, front-user, front-fx, front-asset, front-transaction)."""
+    """Run all frontend tests (front-utility, front-broker, front-user, front-fx, front-asset, front-transaction)."""
     tests = []
     for category in _FRONTEND_CATEGORIES:
         if category not in TEST_REGISTRY:

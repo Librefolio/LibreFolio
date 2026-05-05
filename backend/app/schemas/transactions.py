@@ -29,6 +29,7 @@ from backend.app.schemas.common import (
     BaseDeleteResult,
     Currency,
     DateRangeModel,
+    SafeDecimal,
 )
 from backend.app.utils.datetime_utils import UTCDateTime
 
@@ -115,7 +116,7 @@ class TXCreateItem(BaseModel):
     type: TransactionType = Field(..., description="Transaction type")
     date: date_type = Field(..., description="Settlement date")
 
-    quantity: Decimal = Field(default=Decimal("0"), description="Asset quantity delta (+ in, - out)")
+    quantity: SafeDecimal = Field(default=Decimal("0"), description="Asset quantity delta (+ in, - out)")
 
     # Cash movement using Currency class from common.py
     cash: Optional[Currency] = Field(default=None, description="Cash movement (code + amount). Required for cash operations.")
@@ -131,7 +132,7 @@ class TXCreateItem(BaseModel):
     description: Optional[str] = Field(default=None, max_length=500, description="Transaction notes")
 
     # Frozen cost basis for TRANSFER_IN - snapshot of PMC at transfer time
-    cost_basis_override: Optional[Decimal] = Field(
+    cost_basis_override: Optional[SafeDecimal] = Field(
         default=None,
         description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",
     )
@@ -349,7 +350,7 @@ class TXReadItem(BaseModel):
     type: TransactionType
     date: date_type
 
-    quantity: Decimal
+    quantity: SafeDecimal
 
     # Cash as Currency object (None if amount is 0)
     cash: Optional[Currency] = None
@@ -362,7 +363,7 @@ class TXReadItem(BaseModel):
     description: Optional[str] = None
 
     # Frozen cost basis for TRANSFER_IN (None for normal transactions)
-    cost_basis_override: Optional[Decimal] = None
+    cost_basis_override: Optional[SafeDecimal] = None
 
     # Link to the AssetEvent realized by this transaction (None = stand-alone)
     asset_event_id: Optional[int] = None
@@ -416,6 +417,31 @@ class TXReadItem(BaseModel):
 # TRANSACTION UPDATE
 # =============================================================================
 
+# Sign-flip swap groups: types with identical field structure that can be
+# swapped.  Types not listed here are singletons (swap group = [self]).
+# Paired types are currently singletons but this may evolve.
+SWAP_GROUPS: list[frozenset[TransactionType]] = [
+    frozenset({TransactionType.BUY, TransactionType.SELL}),
+    frozenset({TransactionType.DEPOSIT, TransactionType.WITHDRAWAL}),
+    frozenset({TransactionType.DIVIDEND, TransactionType.INTEREST}),
+    frozenset({TransactionType.TAX, TransactionType.FEE}),
+]
+
+
+def get_swap_group(tx_type: TransactionType) -> frozenset[TransactionType]:
+    """Return the swap group containing *tx_type*, or a singleton frozenset."""
+    for group in SWAP_GROUPS:
+        if tx_type in group:
+            return group
+    return frozenset({tx_type})
+
+
+def _swap_group_codes(tx_type: TransactionType) -> list[str]:
+    """Return swap partners as a sorted list of code strings (EXCLUDING self).
+    Empty list = no swap possible (singleton or paired type)."""
+    group = get_swap_group(tx_type)
+    return sorted(t.value for t in group if t != tx_type)
+
 
 class TXUpdateItem(BaseModel):
     """
@@ -424,7 +450,8 @@ class TXUpdateItem(BaseModel):
     All fields are optional except id.
     Only provided fields will be updated.
 
-    Note: Changing type is not allowed. Create a new transaction instead.
+    Type change is limited to "sign-flip" swaps within the same swap group
+    (e.g. BUY↔SELL, DEPOSIT↔WITHDRAWAL).  Paired types cannot be swapped.
 
     Note on related_transaction_id:
     This field cannot be updated directly via this DTO.
@@ -440,8 +467,11 @@ class TXUpdateItem(BaseModel):
     # Pydantic doesn't short-circuit and the full error set is returned.
     id: int = Field(..., description="Transaction ID to update")
 
+    # Sign-flip: only within the same swap group (BUY↔SELL, DEPOSIT↔WITHDRAWAL, etc.)
+    type: Optional[TransactionType] = Field(default=None, description="New type (sign-flip swap only)")
+
     date: Optional[date_type] = Field(default=None, description="New settlement date")
-    quantity: Optional[Decimal] = Field(default=None, description="New quantity")
+    quantity: Optional[SafeDecimal] = Field(default=None, description="New quantity")
 
     # Cash update using Currency class
     cash: Optional[Currency] = Field(default=None, description="New cash (code + amount)")
@@ -450,7 +480,7 @@ class TXUpdateItem(BaseModel):
     description: Optional[str] = Field(default=None, max_length=500, description="New description")
 
     # Frozen cost basis override (for TRANSFER_IN)
-    cost_basis_override: Optional[Decimal] = Field(
+    cost_basis_override: Optional[SafeDecimal] = Field(
         default=None,
         description="Frozen cost basis for TRANSFER_IN. Set to override calculated cost basis.",
     )
@@ -513,8 +543,8 @@ class TXQueryParams(BaseModel):
 
     # H.3: transfer-match helpers. Composable with the other filters. When `ids`
     # is set, these filters (including exclude_ids) are ignored.
-    amount_abs_min: Optional[Decimal] = Field(default=None, description="ABS(amount) >= N")
-    amount_abs_max: Optional[Decimal] = Field(default=None, description="ABS(amount) <= N")
+    amount_abs_min: Optional[SafeDecimal] = Field(default=None, description="ABS(amount) >= N")
+    amount_abs_max: Optional[SafeDecimal] = Field(default=None, description="ABS(amount) <= N")
     only_unlinked: bool = Field(default=False, description="related_transaction_id IS NULL")
     exclude_ids: Optional[List[int]] = Field(default=None, description="Transaction.id NOT IN (...)")
 
@@ -658,7 +688,7 @@ class TXEventSuggestCandidate(BaseModel):
     asset_id: int
     date: date_type
     type: str
-    value: Decimal
+    value: SafeDecimal
     currency: str
     is_auto: bool
     distance_days: int = Field(..., ge=0, description="abs(event.date - request.date)")
@@ -701,10 +731,10 @@ class TXTransferPromoteRequest(BaseModel):
     )
     # Required when new_type == TRANSFER (cash -> asset transfer).
     asset_id: Optional[int] = Field(default=None, gt=0)
-    quantity: Optional[Decimal] = Field(default=None, description="Asset quantity for TRANSFER")
+    quantity: Optional[SafeDecimal] = Field(default=None, description="Asset quantity for TRANSFER")
     # Optional override for cost_basis_override propagated on the TRANSFER
     # destination item; if None the service will not set it.
-    cost_basis_override: Optional[Decimal] = None
+    cost_basis_override: Optional[SafeDecimal] = None
 
 
 class TXTransferPromoteResponse(BaseModel):
@@ -883,230 +913,246 @@ class TXTypeMetadata(BaseModel):
     promote_from: list[PromoteRule] | None = Field(None,description="Rules for promoting 2 standalone types into this paired type. None for standalone types.",)
     pair_field_constraints: list[PairFieldConstraint] | None = Field(None,description="Field equivalence constraints between the two halves of a pair. None for standalone types.",)
 
+    # Swap group — types this type can be "flipped" to (including itself).
+    # Singleton = [self] (no swap partners). Frontend uses this directly.
+    swap_group: list[str] = Field(default_factory=list, description="Other type codes this type can be swapped with (sign-flip). Empty = no swap.")
 
-# Precomputed metadata for all transaction types
-TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = {
-    TransactionType.BUY: TXTypeMetadata(
-        code="BUY",
-        name="Buy",
-        description="Purchase asset with cash",
-        icon_slug="buy",
-        doc_slug="buy-sell",
-        asset_mode="required",
-        cash_mode="required",
-        quantity_mode="required",
-        requires_link=False,
-        quantity_sign="positive",
-        cash_sign="negative",
-        event_compatible=False,
-    ),
-    TransactionType.SELL: TXTypeMetadata(
-        code="SELL",
-        name="Sell",
-        description="Sell asset for cash",
-        icon_slug="sell",
-        doc_slug="buy-sell",
-        asset_mode="required",
-        cash_mode="required",
-        quantity_mode="required",
-        requires_link=False,
-        quantity_sign="negative",
-        cash_sign="positive",
-        event_compatible=False,
-    ),
-    TransactionType.DIVIDEND: TXTypeMetadata(
-        code="DIVIDEND",
-        name="Dividend",
-        description="Dividend payment received",
-        icon_slug="dividend",
-        doc_slug="dividend",
-        asset_mode="required",
-        cash_mode="required",
-        quantity_mode="forbidden",
-        requires_link=False,
-        quantity_sign="zero",
-        cash_sign="positive",
-        event_compatible=True,
-    ),
-    TransactionType.INTEREST: TXTypeMetadata(
-        code="INTEREST",
-        name="Interest",
-        description="Interest payment (bond or deposit)",
-        icon_slug="interest",
-        doc_slug="interest",
-        asset_mode="optional",
-        cash_mode="required",
-        quantity_mode="forbidden",
-        requires_link=False,
-        quantity_sign="zero",
-        cash_sign="positive",
-        event_compatible=True,
-    ),
-    TransactionType.DEPOSIT: TXTypeMetadata(
-        code="DEPOSIT",
-        name="Deposit",
-        description="Add cash to broker account",
-        icon_slug="deposit",
-        doc_slug="deposit-withdrawal",
-        asset_mode="forbidden",
-        cash_mode="required",
-        quantity_mode="forbidden",
-        requires_link=False,
-        quantity_sign="zero",
-        cash_sign="positive",
-        event_compatible=False,
-    ),
-    TransactionType.WITHDRAWAL: TXTypeMetadata(
-        code="WITHDRAWAL",
-        name="Withdrawal",
-        description="Remove cash from broker account",
-        icon_slug="withdrawal",
-        doc_slug="deposit-withdrawal",
-        asset_mode="forbidden",
-        cash_mode="required",
-        quantity_mode="forbidden",
-        requires_link=False,
-        quantity_sign="zero",
-        cash_sign="negative",
-        event_compatible=False,
-    ),
-    TransactionType.FEE: TXTypeMetadata(
-        code="FEE",
-        name="Fee",
-        description="Fee or commission (trading or account)",
-        icon_slug="fee",
-        doc_slug="fee",
-        asset_mode="optional",
-        cash_mode="required",
-        quantity_mode="forbidden",
-        requires_link=False,
-        quantity_sign="zero",
-        cash_sign="negative",
-        event_compatible=False,
-    ),
-    TransactionType.TAX: TXTypeMetadata(
-        code="TAX",
-        name="Tax",
-        description="Tax payment (capital gain or stamp duty)",
-        icon_slug="tax",
-        doc_slug="fee",
-        asset_mode="optional",
-        cash_mode="required",
-        quantity_mode="forbidden",
-        requires_link=False,
-        quantity_sign="zero",
-        cash_sign="negative",
-        event_compatible=False,
-    ),
-    TransactionType.TRANSFER: TXTypeMetadata(
-        code="TRANSFER",
-        name="Asset Transfer",
-        description="Asset transfer between brokers",
-        icon_slug="transfer",
-        doc_slug="transfer",
-        asset_mode="required",
-        cash_mode="forbidden",
-        quantity_mode="required",
-        requires_link=True,
-        quantity_sign="nonzero",
-        cash_sign="zero",
-        event_compatible=False,
-        pair_form_layout="transfer_asset",
-        split_into=SplitMeta(from_type="ADJUSTMENT", to_type="ADJUSTMENT"),
-        promote_from=[
-            PromoteRule(
-                type_a="ADJUSTMENT",
-                type_b="ADJUSTMENT",
-                field_constraints=[
-                    PairFieldConstraint(field="asset_id", relation="equal"),
-                    PairFieldConstraint(field="broker_id", relation="different"),
-                    PairFieldConstraint(field="quantity", relation="opposite"),
-                ],
-            ),
-        ],
-        pair_field_constraints=[
-            PairFieldConstraint(field="asset_id", relation="equal"),
-            PairFieldConstraint(field="broker_id", relation="different"),
-            PairFieldConstraint(field="quantity", relation="opposite"),
-        ],
-    ),
-    TransactionType.FX_CONVERSION: TXTypeMetadata(
-        code="FX_CONVERSION",
-        name="FX Conversion",
-        description="Currency exchange",
-        icon_slug="fx-conversion",
-        doc_slug="fx-conversion",
-        asset_mode="forbidden",
-        cash_mode="required",
-        quantity_mode="forbidden",
-        requires_link=True,
-        quantity_sign="zero",
-        cash_sign="nonzero",
-        event_compatible=False,
-        pair_form_layout="fx",
-        split_into=SplitMeta(from_type="WITHDRAWAL", to_type="DEPOSIT"),
-        promote_from=[
-            PromoteRule(
-                type_a="WITHDRAWAL",
-                type_b="DEPOSIT",
-                field_constraints=[
-                    PairFieldConstraint(field="cash_currency", relation="different"),
-                    PairFieldConstraint(field="broker_id", relation="equal"),
-                ],
-            ),
-        ],
-        pair_field_constraints=[
-            PairFieldConstraint(field="cash_currency", relation="different"),
-            PairFieldConstraint(field="broker_id", relation="equal"),
-        ],
-    ),
-    TransactionType.ADJUSTMENT: TXTypeMetadata(
-        code="ADJUSTMENT",
-        name="Adjustment",
-        description="Manual quantity correction (splits, gifts)",
-        icon_slug="adjustment",
-        doc_slug="adjustment",
-        asset_mode="required",
-        cash_mode="forbidden",
-        quantity_mode="required",
-        requires_link=False,
-        quantity_sign="nonzero",
-        cash_sign="zero",
-        event_compatible=True,
-    ),
-    TransactionType.CASH_TRANSFER: TXTypeMetadata(
-        code="CASH_TRANSFER",
-        name="Cash Transfer",
-        description="Wire transfer / bonifico between brokers",
-        icon_slug="cash-transfer",
-        doc_slug="cash-transfer",
-        asset_mode="forbidden",
-        cash_mode="required",
-        quantity_mode="forbidden",
-        requires_link=True,
-        quantity_sign="zero",
-        cash_sign="nonzero",
-        event_compatible=False,
-        pair_form_layout="transfer_cash",
-        split_into=SplitMeta(from_type="WITHDRAWAL", to_type="DEPOSIT"),
-        promote_from=[
-            PromoteRule(
-                type_a="WITHDRAWAL",
-                type_b="DEPOSIT",
-                field_constraints=[
-                    PairFieldConstraint(field="cash_currency", relation="equal"),
-                    PairFieldConstraint(field="broker_id", relation="different"),
-                    PairFieldConstraint(field="cash_amount", relation="opposite"),
-                ],
-            ),
-        ],
-        pair_field_constraints=[
-            PairFieldConstraint(field="cash_currency", relation="equal"),
-            PairFieldConstraint(field="broker_id", relation="different"),
-            PairFieldConstraint(field="cash_amount", relation="opposite"),
-        ],
-    ),
-}
+
+# Precomputed metadata for all transaction types.
+# swap_group is auto-populated from SWAP_GROUPS via _swap_group_codes().
+def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
+    """Build metadata dict with auto-populated swap_group field."""
+    raw: dict[TransactionType, dict] = {
+        TransactionType.BUY: dict(
+            code="BUY",
+            name="Buy",
+            description="Purchase asset with cash",
+            icon_slug="buy",
+            doc_slug="buy-sell",
+            asset_mode="required",
+            cash_mode="required",
+            quantity_mode="required",
+            requires_link=False,
+            quantity_sign="positive",
+            cash_sign="negative",
+            event_compatible=False,
+        ),
+        TransactionType.SELL: dict(
+            code="SELL",
+            name="Sell",
+            description="Sell asset for cash",
+            icon_slug="sell",
+            doc_slug="buy-sell",
+            asset_mode="required",
+            cash_mode="required",
+            quantity_mode="required",
+            requires_link=False,
+            quantity_sign="negative",
+            cash_sign="positive",
+            event_compatible=False,
+        ),
+        TransactionType.DIVIDEND: dict(
+            code="DIVIDEND",
+            name="Dividend",
+            description="Dividend payment received",
+            icon_slug="dividend",
+            doc_slug="dividend",
+            asset_mode="required",
+            cash_mode="required",
+            quantity_mode="forbidden",
+            requires_link=False,
+            quantity_sign="zero",
+            cash_sign="positive",
+            event_compatible=True,
+        ),
+        TransactionType.INTEREST: dict(
+            code="INTEREST",
+            name="Interest",
+            description="Interest payment (bond or deposit)",
+            icon_slug="interest",
+            doc_slug="interest",
+            asset_mode="optional",
+            cash_mode="required",
+            quantity_mode="forbidden",
+            requires_link=False,
+            quantity_sign="zero",
+            cash_sign="positive",
+            event_compatible=True,
+        ),
+        TransactionType.DEPOSIT: dict(
+            code="DEPOSIT",
+            name="Deposit",
+            description="Add cash to broker account",
+            icon_slug="deposit",
+            doc_slug="deposit-withdrawal",
+            asset_mode="forbidden",
+            cash_mode="required",
+            quantity_mode="forbidden",
+            requires_link=False,
+            quantity_sign="zero",
+            cash_sign="positive",
+            event_compatible=False,
+        ),
+        TransactionType.WITHDRAWAL: dict(
+            code="WITHDRAWAL",
+            name="Withdrawal",
+            description="Remove cash from broker account",
+            icon_slug="withdrawal",
+            doc_slug="deposit-withdrawal",
+            asset_mode="forbidden",
+            cash_mode="required",
+            quantity_mode="forbidden",
+            requires_link=False,
+            quantity_sign="zero",
+            cash_sign="negative",
+            event_compatible=False,
+        ),
+        TransactionType.FEE: dict(
+            code="FEE",
+            name="Fee",
+            description="Fee or commission (trading or account)",
+            icon_slug="fee",
+            doc_slug="fee",
+            asset_mode="optional",
+            cash_mode="required",
+            quantity_mode="forbidden",
+            requires_link=False,
+            quantity_sign="zero",
+            cash_sign="negative",
+            event_compatible=False,
+        ),
+        TransactionType.TAX: dict(
+            code="TAX",
+            name="Tax",
+            description="Tax payment (capital gain or stamp duty)",
+            icon_slug="tax",
+            doc_slug="fee",
+            asset_mode="optional",
+            cash_mode="required",
+            quantity_mode="forbidden",
+            requires_link=False,
+            quantity_sign="zero",
+            cash_sign="negative",
+            event_compatible=False,
+        ),
+        TransactionType.TRANSFER: dict(
+            code="TRANSFER",
+            name="Asset Transfer",
+            description="Asset transfer between brokers",
+            icon_slug="transfer",
+            doc_slug="transfer",
+            asset_mode="required",
+            cash_mode="forbidden",
+            quantity_mode="required",
+            requires_link=True,
+            quantity_sign="nonzero",
+            cash_sign="zero",
+            event_compatible=False,
+            pair_form_layout="transfer_asset",
+            split_into=SplitMeta(from_type="ADJUSTMENT", to_type="ADJUSTMENT"),
+            promote_from=[
+                PromoteRule(
+                    type_a="ADJUSTMENT",
+                    type_b="ADJUSTMENT",
+                    field_constraints=[
+                        PairFieldConstraint(field="asset_id", relation="equal"),
+                        PairFieldConstraint(field="broker_id", relation="different"),
+                        PairFieldConstraint(field="quantity", relation="opposite"),
+                    ],
+                ),
+            ],
+            pair_field_constraints=[
+                PairFieldConstraint(field="asset_id", relation="equal"),
+                PairFieldConstraint(field="broker_id", relation="different"),
+                PairFieldConstraint(field="quantity", relation="opposite"),
+            ],
+        ),
+        TransactionType.FX_CONVERSION: dict(
+            code="FX_CONVERSION",
+            name="FX Conversion",
+            description="Currency exchange",
+            icon_slug="fx-conversion",
+            doc_slug="fx-conversion",
+            asset_mode="forbidden",
+            cash_mode="required",
+            quantity_mode="forbidden",
+            requires_link=True,
+            quantity_sign="zero",
+            cash_sign="nonzero",
+            event_compatible=False,
+            pair_form_layout="fx",
+            split_into=SplitMeta(from_type="WITHDRAWAL", to_type="DEPOSIT"),
+            promote_from=[
+                PromoteRule(
+                    type_a="WITHDRAWAL",
+                    type_b="DEPOSIT",
+                    field_constraints=[
+                        PairFieldConstraint(field="cash_currency", relation="different"),
+                        PairFieldConstraint(field="broker_id", relation="equal"),
+                    ],
+                ),
+            ],
+            pair_field_constraints=[
+                PairFieldConstraint(field="cash_currency", relation="different"),
+                PairFieldConstraint(field="broker_id", relation="equal"),
+            ],
+        ),
+        TransactionType.ADJUSTMENT: dict(
+            code="ADJUSTMENT",
+            name="Adjustment",
+            description="Manual quantity correction (splits, gifts)",
+            icon_slug="adjustment",
+            doc_slug="adjustment",
+            asset_mode="required",
+            cash_mode="forbidden",
+            quantity_mode="required",
+            requires_link=False,
+            quantity_sign="nonzero",
+            cash_sign="zero",
+            event_compatible=True,
+        ),
+        TransactionType.CASH_TRANSFER: dict(
+            code="CASH_TRANSFER",
+            name="Cash Transfer",
+            description="Wire transfer / bonifico between brokers",
+            icon_slug="cash-transfer",
+            doc_slug="cash-transfer",
+            asset_mode="forbidden",
+            cash_mode="required",
+            quantity_mode="forbidden",
+            requires_link=True,
+            quantity_sign="zero",
+            cash_sign="nonzero",
+            event_compatible=False,
+            pair_form_layout="transfer_cash",
+            split_into=SplitMeta(from_type="WITHDRAWAL", to_type="DEPOSIT"),
+            promote_from=[
+                PromoteRule(
+                    type_a="WITHDRAWAL",
+                    type_b="DEPOSIT",
+                    field_constraints=[
+                        PairFieldConstraint(field="cash_currency", relation="equal"),
+                        PairFieldConstraint(field="broker_id", relation="different"),
+                        PairFieldConstraint(field="cash_amount", relation="opposite"),
+                    ],
+                ),
+            ],
+            pair_field_constraints=[
+                PairFieldConstraint(field="cash_currency", relation="equal"),
+                PairFieldConstraint(field="broker_id", relation="different"),
+                PairFieldConstraint(field="cash_amount", relation="opposite"),
+            ],
+        ),
+    }
+    # Auto-populate swap_group for every type
+    result: dict[TransactionType, TXTypeMetadata] = {}
+    for tx_type, kwargs in raw.items():
+        kwargs["swap_group"] = _swap_group_codes(tx_type)
+        result[tx_type] = TXTypeMetadata(**kwargs)
+    return result
+
+
+TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = _build_tx_type_metadata()
 
 
 class EventTypeMetadata(BaseModel):

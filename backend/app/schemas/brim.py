@@ -31,6 +31,7 @@ from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.db.models import TransactionType
+from backend.app.schemas.common import SafeDecimal
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.utils.datetime_utils import UTCDateTime
 
@@ -281,8 +282,8 @@ class BRIMDuplicateMatch(BaseModel):
     existing_tx_id: int = Field(..., description="ID of existing transaction in DB")
     tx_date: date = Field(..., description="Transaction date")
     tx_type: TransactionType = Field(..., description="Transaction type")
-    tx_quantity: Decimal = Field(..., description="Transaction quantity")
-    tx_cash_amount: Optional[Decimal] = Field(None, description="Cash amount if applicable")
+    tx_quantity: SafeDecimal = Field(..., description="Transaction quantity")
+    tx_cash_amount: Optional[SafeDecimal] = Field(None, description="Cash amount if applicable")
     tx_cash_currency: Optional[str] = Field(None, description="Cash currency if applicable")
     tx_description: Optional[str] = Field(None, description="Transaction description")
     match_level: BRIMDuplicateLevel = Field(..., description="Duplicate confidence level")

@@ -51,6 +51,7 @@ from backend.app.schemas.transactions import (
     TXTransferPromoteResponse,
     TXUpdateItem,
     TXValidationIssue,
+    get_swap_group,
     tags_to_csv,
 )
 from backend.app.utils.datetime_utils import utcnow
@@ -598,7 +599,7 @@ class TransactionService:
                 "asset_id": req.asset_id,
                 "type": TransactionType.TRANSFER.value,
                 "date": from_date.isoformat(),
-                "quantity": str(-abs(qty)),
+                "quantity": format(-abs(qty), 'f'),
                 "link_uuid": link_uuid,
                 "tags": from_tags,
                 "description": from_description,
@@ -608,11 +609,11 @@ class TransactionService:
                 "asset_id": req.asset_id,
                 "type": TransactionType.TRANSFER.value,
                 "date": to_date.isoformat(),
-                "quantity": str(abs(qty)),
+                "quantity": format(abs(qty), 'f'),
                 "link_uuid": link_uuid,
                 "tags": to_tags,
                 "description": to_description,
-                "cost_basis_override": str(req.cost_basis_override) if req.cost_basis_override is not None else None,
+                "cost_basis_override": format(req.cost_basis_override, 'f') if req.cost_basis_override is not None else None,
             }
         else:  # FX_CONVERSION
             if from_currency is None or to_currency is None:
@@ -621,7 +622,7 @@ class TransactionService:
                 "broker_id": from_broker_id,
                 "type": TransactionType.FX_CONVERSION.value,
                 "date": from_date.isoformat(),
-                "cash": {"code": from_currency, "amount": str(from_amount)},
+                "cash": {"code": from_currency, "amount": format(from_amount, 'f')},
                 "link_uuid": link_uuid,
                 "tags": from_tags,
                 "description": from_description,
@@ -630,7 +631,7 @@ class TransactionService:
                 "broker_id": to_broker_id,
                 "type": TransactionType.FX_CONVERSION.value,
                 "date": to_date.isoformat(),
-                "cash": {"code": to_currency, "amount": str(to_amount)},
+                "cash": {"code": to_currency, "amount": format(to_amount, 'f')},
                 "link_uuid": link_uuid,
                 "tags": to_tags,
                 "description": to_description,
@@ -1016,6 +1017,15 @@ class TransactionService:
                 continue
             try:
                 check_date = tx.date
+                # Step 15 (C5): type swap within swap group
+                if item.type is not None and item.type != tx.type:
+                    allowed = get_swap_group(tx.type)
+                    if item.type not in allowed:
+                        raise ValueError(
+                            f"Cannot change type from {tx.type.value} to {item.type.value} "
+                            f"(allowed swaps: {', '.join(t.value for t in allowed)})"
+                        )
+                    tx.type = item.type
                 if item.date is not None:
                     check_date = min(check_date, item.date)
                     tx.date = item.date

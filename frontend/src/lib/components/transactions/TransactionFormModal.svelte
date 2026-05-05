@@ -42,6 +42,7 @@
     import BrokerSearchSelect from '$lib/components/ui/select/BrokerSearchSelect.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
+    import TagInput from '$lib/components/ui/TagInput.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import CompactCashCell from '$lib/components/ui/CompactCashCell.svelte';
@@ -1046,11 +1047,6 @@
         if (draft.tags.includes(v)) return;
         draft = {...draft, tags: [...draft.tags, v]};
     }
-    function removeTag(idx: number) {
-        const next = [...draft.tags];
-        next.splice(idx, 1);
-        draft = {...draft, tags: next};
-    }
     function unlinkEvent() {
         draft = {...draft, asset_event_id: null};
     }
@@ -1071,24 +1067,6 @@
         draft = {...draft, cost_basis_override: (e.currentTarget as HTMLInputElement).value};
     }
 
-    // Tag input local buffer.
-    let tagInputBuffer = $state('');
-    function handleTagKey(e: KeyboardEvent) {
-        if (e.key === 'Enter' || e.key === ',') {
-            e.preventDefault();
-            addTag(tagInputBuffer);
-            tagInputBuffer = '';
-        }
-    }
-
-    /** Bugfix-5 §U20: filter the parent-supplied tag list against the
-     *  current input buffer and exclude tags already attached to the draft.
-     *  Pure client-side aggregation — no backend endpoint required. */
-    let tagSuggestions = $derived.by<string[]>(() => {
-        const q = tagInputBuffer.trim().toLowerCase();
-        const used = new Set(draft.tags);
-        return availableTags.filter((tg) => !used.has(tg) && (q === '' || tg.toLowerCase().includes(q))).slice(0, 20);
-    });
 
     // =========================================================================
     // Quantity / cash sign hints
@@ -1169,7 +1147,23 @@
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-form-title">
                 {#if pairLayout}
                     {#if pairLayout === 'fx'}💱{:else if pairLayout === 'transfer_asset'}📦{:else}🏦{/if}
-                    {#if mode === 'edit'}✎ {dualTitle} #{initialRow?.id}{:else}{dualTitle}{/if}
+                    {#if mode === 'edit'}
+                        ✎ {dualTitle}
+                        {#if initialRow?.id != null && initialRow?.related_transaction_id != null && initialRow.related_transaction_id > 0}
+                            #{initialRow.id} ↔ #{initialRow.related_transaction_id}
+                        {:else if initialRow?.id != null}
+                            #{initialRow.id}
+                        {:else}
+                            (new pair)
+                        {/if}
+                    {:else if mode === 'view'}
+                        👁 {dualTitle}
+                        {#if initialRow?.id != null && initialRow?.related_transaction_id != null && initialRow.related_transaction_id > 0}
+                            #{initialRow.id} ↔ #{initialRow.related_transaction_id}
+                        {:else if initialRow?.id != null}
+                            #{initialRow.id}
+                        {/if}
+                    {:else}{dualTitle}{/if}
                 {:else if mode === 'create'}
                     ➕ {$t('transactions.form.titleCreate')}
                 {:else if mode === 'duplicate'}
@@ -1559,35 +1553,13 @@
                         <!-- Tags -->
                         <div class="flex flex-col gap-1">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.tags')}</span>
-                            <div class="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg min-h-[38px]" data-testid="tx-form-tags">
-                                {#each draft.tags as tag, i}
-                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded bg-gray-100 dark:bg-slate-700">
-                                        {tag}
-                                        {#if !isReadonly}
-                                            <button type="button" class="text-gray-400 hover:text-red-500" aria-label="remove tag" onclick={() => removeTag(i)} data-testid={`tx-form-tag-remove-${i}`}>×</button>
-                                        {/if}
-                                    </span>
-                                {/each}
-                                {#if !isReadonly}
-                                    <input
-                                        type="text"
-                                        autocomplete="off"
-                                        list="tx-form-tag-suggestions-{autocompleteNonce}"
-                                        class="flex-1 min-w-[5rem] bg-transparent text-xs outline-none"
-                                        placeholder={$t('transactions.form.tagsPlaceholder')}
-                                        bind:value={tagInputBuffer}
-                                        onkeydown={handleTagKey}
-                                        data-testid="tx-form-tag-input"
-                                    />
-                                    <!-- Bugfix-5 §U20: client-side tag suggestions sourced from
-                                         the parent's loaded transactions (no extra endpoint). -->
-                                    <datalist id="tx-form-tag-suggestions-{autocompleteNonce}">
-                                        {#each tagSuggestions as suggestion}
-                                            <option value={suggestion}></option>
-                                        {/each}
-                                    </datalist>
-                                {/if}
-                            </div>
+                            <TagInput
+                                value={draft.tags}
+                                availableTags={availableTags}
+                                placeholder={$t('transactions.form.tagsPlaceholder')}
+                                disabled={isReadonly}
+                                onchange={(v) => { draft = {...draft, tags: v}; }}
+                            />
                         </div>
 
                         <!-- Description -->

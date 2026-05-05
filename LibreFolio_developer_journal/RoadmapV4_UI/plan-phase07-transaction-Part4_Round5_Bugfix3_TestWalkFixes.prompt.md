@@ -261,7 +261,7 @@ Toggle `[⇄]` espanso:
 
 ---
 
-## Priorità di Esecuzione
+## Priorità di Esecuzione (Step 1–13 — Round 3)
 
 ```
 Step 1 (C1) ✅ → Step 2 (C2) ✅ → Step 3 (C3) ✅    # Critical — sblocca test 6/15
@@ -270,21 +270,272 @@ Step 1 (C1) ✅ → Step 2 (C2) ✅ → Step 3 (C3) ✅    # Critical — sblocc
     → Step 8 (M1/M2) ✅ → Step 9 (M3) ✅               # Medium — banner + alignment
     → Step 10 (M4/M5) ✅                               # Medium — column defaults
     → Step 11 (già fatto) ✅                            # ✅ Done
-    → Step 12 (M6) ⏳ → Step 13 (L4) ⏳               # Low — docs (deferred)
+    → Step 12 (M6) ⏳ → Step 13 (L4) ⏳               # Low — docs (deferred to Part 5)
 ```
 
 ---
 
-## Test Walk da ripetere dopo i fix
+## 🆕 Bugfix 4 — Piano Implementativo (2026-05-04)
 
-Dopo aver completato gli step, ri-testare:
-- T1.2, T1.3, T2.1, T4.4 → doppio-click pre-popola
-- T4.2 → icone + qty duale in bulk
-- T4.3 → no auto-validate prematura
-- T8.2 → label "(opzionale)"
-- T6.1–T6.4 → edit/clone/view dalla main table (skippati in questa sessione)
-- T15.1–T15.5 → regressioni generali (skippati)
+### Stato attuale dopo Round 3
+
+| Cosa funziona | Cosa è rotto |
+|---------------|-------------|
+| ✅ Tabella principale: rendering coppie, ghost rows, GoTo pulse, double-click view, selection toolbar, refresh | ❌ Qualsiasi edit/update fallisce: payload manda campi extra → backend rifiuta |
+| ✅ FormModal: create, dual form, type rules, asset label, validate manuale | ❌ Type swap BUY↔SELL: cambia in UI ma fallisce al commit |
+| ✅ BulkModal: create-many, doppio-click re-edit, paired delete new | ❌ Tag: colonna nascosta in bulk, UX selector inutilizzabile |
+| ✅ 22/22 test `transactions-table.spec.ts`, 14/14 `transactions-modals.spec.ts` | ⚠️ Alcuni test verificano solo composizione modale, non azione effettiva |
+
+### Ordine di esecuzione
+
+```
+═══════════════════════════════════════════════════════════════
+ BLOCCO 1 — CRITICAL: Fix update pipeline           (~1h)
+═══════════════════════════════════════════════════════════════
+ Step 14 (C4) → Step 15 (C5) → Step 16 (M9) → Step 17 (M10)
+
+═══════════════════════════════════════════════════════════════
+ BLOCCO 2 — HIGH: Feature UX mancanti               (~2.5h)
+═══════════════════════════════════════════════════════════════
+ Step 18 (H7) → Step 19 (H8) → Step 20 (H9)
+ → Step 21 (M8) → Step 22 (F5) → Step 23 (F3)
+
+═══════════════════════════════════════════════════════════════
+ BLOCCO 3 — TEST: Fix + rinforzo suite E2E           (~30min)
+═══════════════════════════════════════════════════════════════
+ Step 24 → Step 25 → Step 26 (F1)
+
+═══════════════════════════════════════════════════════════════
+ VERIFICA FINALE — Test Walk completo
+═══════════════════════════════════════════════════════════════
+```
+
+---
+
+### Step 14 — C4: Strippare campi immutabili dal payload update ⏳
+**Ref**: C4
+**File**: `TransactionBulkModal.svelte` (`buildUpdatePayload()` o equivalente)
+**Azione**:
+- Il DTO `TXUpdateItem` del backend accetta SOLO: `id`, `date`, `quantity`, `cash`, `tags`, `description`, `cost_basis_override`, `asset_event_id`
+- `buildUpdatePayload()` deve rimuovere dal payload: `type`, `broker_id`, `link_uuid`, `asset_id`, `related_transaction_id`, `created_at`, `updated_at`
+- Pattern: allowlist dei campi patchabili, non blocklist
+**Effort**: 15 min
+**Test**: edit qualsiasi riga dalla tabella → save → successo (o warning semantico, non "extra fields")
+
+### Step 15 — C5: Abilitare type swap nel backend ⏳
+**Ref**: C5
+**File**: `backend/app/schemas/transactions.py` (`TXUpdateItem`), `backend/app/services/transaction_service.py`
+**Azione**:
+- Aggiungere `type: Optional[str] = None` a `TXUpdateItem`
+- Nella service layer (update handler): validare che il nuovo type appartenga allo stesso swap group del type corrente (usando la mappa swap group già definita in `transactionTypeStore`)
+- Se il type cambia → applicare sign-flip su quantity/cash dove applicabile
+- Rifiutare swaps per tipi paired (`TRANSFER`, `FX_CONVERSION`, `CASH_TRANSFER`)
+- Dopo modifica: `./dev.py api sync` per rigenerare il client TypeScript
+**Effort**: 30 min
+**Test**: edit BUY → SELL → save → quantità negata, tipo aggiornato
+
+### Step 16 — M9: Banner EN "Commit rolled back" → linguaggio user-friendly ⏳
+**Ref**: M9
+**File**: `frontend/src/lib/i18n/en.json`
+**Azione**:
+- Allineare all'approccio IT/FR/ES che non espone jargon tecnico:
+  - `transactions.bulk.rolledBackTitle`: `"Commit rolled back"` → `"Save cancelled"`
+  - `transactions.bulk.rolledBack`: `"Commit rolled back — nothing was saved."` → `"Save was cancelled — no changes were made."`
+  - `transactions.form.rolledBackTitle`: `"Save rolled back"` → `"Save cancelled"`
+  - `transactions.form.rolledBack`: `"Save was rolled back. No changes were persisted."` → `"Save was cancelled. No changes were made."`
+  - `transactions.promote.rolledBack`: `"Promote was rolled back — nothing was changed."` → `"Link was cancelled — no changes were made."`
+  - `transactions.delete.rolledBack`: `"Delete rolled back — nothing was changed."` → `"Delete was cancelled — no changes were made."`
+**Effort**: 10 min
+
+### Step 17 — M10: Nascondere errori `extra_forbidden` all'utente ⏳
+**Ref**: M10
+**File**: `TransactionBulkModal.svelte` (rendering errori commit)
+**Azione**:
+- Errori con `code === "extra_forbidden"` sono bug del FE, non dell'utente
+- Filtrarli dal banner user-facing → loggarli solo in `console.error`
+- Se dopo il filtro non restano errori user-facing, mostrare messaggio generico: "An internal error occurred. Please try again."
+**Effort**: 15 min
+**Nota**: Questo step diventa superfluo dopo Step 14 (i campi extra non verranno più inviati), ma è una safety net per futuri bug simili
+
+---
+
+### Step 18 — H7: Colonna Tags nella BulkModal ⏳
+**Ref**: H7
+**File**: `TransactionBulkModal.svelte` (array `columns`)
+**Azione**:
+- Aggiungere colonna `tags` dopo `description`
+- Rendering: badge colorati con stessa palette di `TransactionsTable` (riusare `getStringBadgeStyle`)
+- Hidden di default (ma visibile se l'utente ha tag nei dati)
+**Effort**: 20 min
+
+### Step 19 — H8: TagInput.svelte (chip input + autocomplete) ⏳
+**Ref**: H8
+**File**: NUOVO `frontend/src/lib/components/ui/TagInput.svelte`, `TransactionFormModal.svelte`
+**Azione**:
+- Nuovo componente `TagInput`:
+  - Mostra tag attuali come badge/chip con X per rimuovere
+  - Input inline: digitare testo → Enter o Spazio → crea nuovo chip
+  - Freccia/chevron a destra: apre dropdown `SearchSelect` pre-popolato con `availableTags` (tag già usati nelle transazioni)
+  - Click su opzione dal dropdown → aggiunge chip (se non già presente)
+  - Props: `value: string[]` (bindable), `availableTags: string[]`, `placeholder`
+- Sostituire il campo tag attuale nel FormModal con `<TagInput>`
+**Effort**: 1.5h
+**Design**:
+```
+┌──────────────────────────────────────────────────┐
+│ [rebalance ×] [core ×]  | tipo qui...      [▾] │
+└──────────────────────────────────────────────────┘
+  click ▾ → dropdown con: rebalance, core, long-term, giroconto, fees, review
+```
+
+### Step 20 — H9: Titolo FormModal paired con entrambi gli ID ⏳
+**Ref**: H9
+**File**: `TransactionFormModal.svelte` (sezione titolo)
+**Azione**:
+- Per righe paired (con `related_transaction_id`), mostrare: `👁 TRANSFER #22 ↔ #23` o `✏️ TRANSFER #22 ↔ #23`
+- Attualmente mostra solo il tipo senza gli ID per le composite
+- Per righe new (senza ID), mostrare: `➕ TRANSFER (new pair)`
+**Effort**: 15 min
+
+### Step 21 — M8: Colonna ID nella tabella principale ⏳
+**Ref**: M8
+**File**: `TransactionsTable.svelte` (array `columns`)
+**Azione**:
+- Aggiungere colonna `id` alla fine dell'array columns (dopo `tags`)
+- Header: `ID`, rendering: `#N` (monospace, grigio, allineamento destra)
+- Width: 60px, non sortable di default, visibile di default
+- Filterable: no (l'ID è univoco, non serve filtrare)
+**Effort**: 15 min
+
+### Step 22 — F5: ConfirmModal snello per delete standalone ⏳
+**Ref**: F5
+**File**: `+page.svelte`, eventualmente nuovo componente
+**Azione**:
+- Quando l'utente clicca Delete su una riga standalone (senza partner), usare un semplice `ConfirmModal` con testo chiaro (`Delete transaction #N?`) invece del pesante `BulkDeleteLinkedPairModal`
+- Il `BulkDeleteLinkedPairModal` resta per righe paired e delete multiple
+- Decisione nel `onBulkDelete()`: se `clean.length > 0 && problems.length === 0` → ConfirmModal leggero
+**Effort**: 20 min
+
+### Step 23 — F3: Popover click su badge ●evt ⏳
+**Ref**: F3
+**File**: `+page.svelte` (`handleEventBadgeClick`), eventualmente nuovo `EventPopover.svelte`
+**Azione**:
+- Attualmente `handleEventBadgeClick` è un TODO (`console.warn`)
+- Implementare: click su ●evt → popover con dettagli evento (tipo, data, valore, note)
+- Link → `/assets/{asset_id}#events` per navigazione diretta
+- Tooltip già contiene i dati (pre-fetched in `eventTooltipMap`), il popover li mostra in formato strutturato
+**Effort**: 30 min
+
+---
+
+### Step 24 — Test: rimuovere/riscrivere test falso positivo ⏳
+**File**: `transactions-modals.spec.ts`
+**Azione**:
+- Test `cost_basis_override appears after asset_event_id when both visible` → è un falso positivo (verifica solo che il BulkModal si apra). **Riscrivere**: verificare l'ordine effettivo delle colonne visibili, oppure rimuovere
+**Effort**: 10 min
+
+### Step 25 — Test: rafforzare test delete paired ⏳
+**File**: `transactions-modals.spec.ts`
+**Azione**:
+- Test `delete new paired row removes both halves (C3)` → aggiungere asserzione che verifichi che le righe rimanenti NON contengano il partner (non solo `count < before`)
+**Effort**: 10 min
+
+### Step 26 — F1: Test `asset-event-delete.spec.ts` (4 scenari) ⏳
+**Ref**: F1
+**File**: NUOVO `frontend/e2e/assets/asset-event-delete.spec.ts`
+**Azione**:
+- 4 scenari deferti dalla Part 1:
+  1. Delete evento senza transazioni collegate → successo
+  2. Delete evento con transazione collegata → conferma "unlink first?"
+  3. Delete asset con eventi → cascade/block
+  4. Badge ●evt sparisce dopo unlink
+- Richiede: dati mock con `asset_event_id` popolato (già presente in `populate_mock_data.py`)
+**Effort**: 30 min
+
+---
+
+## Feature Rimandate (Part 5 o oltre)
+
+| # | Feature | Quando |
+|---|---------|--------|
+| F2 | Import ▾ menu (BrokerImportFilesModal) | Part 5 |
+| F4 | Gallery screenshots TX × lingua | Part 5 docs |
+| F6 | SelectionBar componente riusabile | Part 5 refactor |
+| F7 | Settings toggle always-pair-adjacent | Part 5 settings |
+| F8 | Docs: icone mkdocs TX | Part 5 docs |
+| M6 | Fix icone documentazione mkdocs | Part 5 docs |
+| L1–L4 | Delete modal riepilogo, context menu, gallery | Part 5+ |
+
+---
+
+## Test Walk Finale (dopo Blocco 1+2+3)
+
+Dopo aver completato tutti gli step 14–26, ri-testare:
+
+| Area | Cosa verificare |
+|------|----------------|
+| **Edit standalone** | Select BUY row → Edit → save → successo (no "extra fields") |
+| **Type swap** | Edit BUY → change to SELL → save → tipo aggiornato, qty negata |
+| **Edit paired** | Select TRANSFER riga → Edit → save coppia → successo |
+| **Tags** | Creare TX con 2-3 tag via chip input → visibili in BulkModal colonna tags |
+| **ID colonna** | Tabella principale mostra `#N` alla fine di ogni riga |
+| **Delete standalone** | Delete riga senza partner → ConfirmModal snello (non BulkDeleteLinkedPairModal) |
+| **●evt popover** | Click su ●evt dot → popover con dettagli + link asset |
+| **Banner EN** | Provocare rollback → banner dice "Save cancelled" non "Commit rolled back" |
+| **Titolo paired** | Aprire view TRANSFER → titolo mostra `#22 ↔ #23` |
+| **E2E** | `./dev.py test front-transaction all` → 36/36 pass (14 modals + 22 table) |
 
 
+---
 
+## 🆕 Bugfix 5 — Round 7 Test Walk (2026-05-04)
 
+### Test Walk Results
+
+| # | Area | Risultato | Note |
+|---|------|-----------|------|
+| 1 | Edit standalone → save | ✅ | Funziona, no "extra fields" error |
+| 2 | Type swap BUY→SELL | ⚠️ | Il tipo cambia e si salva, ma la quantità nella tabella principale resta positiva. Validate e commit passano senza errori. **Da investigare**: verifica se il backend salva effettivamente qty negata o se è un problema di refresh/cache frontend |
+| 3 | Edit paired (TRANSFER) | 🔴 | **BUG CRITICO**: il payload contiene `creates` con `broker_id:0` per le righe partner hidden. Dovrebbero essere `updates` con l'id esistente. Il form duale sembra creare nuove righe partner invece di aggiornare quelle esistenti. Errori: "Seleziona un broker", "link_uuid ha 1 create (previsti 2)", "balance negativo" |
+| 4 | Tag input UX | ⚠️ | Funziona ma serve anti-bounce: il dropdown si chiude immediatamente dopo click |
+| 5 | Tags in BulkModal | 🔴→✅ | **FIXATO**: badge colorati ora usano `getStringColor()` con inline `background`/`color` invece di CSS custom properties non consumate |
+| 6 | Titolo paired | ✅ | Mostra `#ID_A ↔ #ID_B` |
+| 7 | Colonna ID | ✅ | Monospace grigio `#N`. TODO futuro: filtro numerico avanzato (range, multi-range) |
+| 8 | Delete standalone | ⚠️ | ConfirmModal si apre ma **manca riepilogo dettagli** della transazione (campi tipo, data, asset, importo, broker). Solo testo generico "Delete N transaction(s)?" |
+| 9 | Delete paired | 🔴 | **NON IMPLEMENTATO**: BulkDeleteLinkedPairModal si apre come da sempre — il design L1/L2 (riepilogo tabellare, toggle per-riga partner, slider singola/entrambe) non è stato costruito |
+| 10 | ●evt click | ✅→✅ | **FIXATO**: ora naviga a `/assets/{id}` (pagina dettaglio asset) invece che al tab eventi |
+| 11 | Banner EN | ✅ | "Save cancelled" confermato |
+| 12 | swap_group dal server | ✅→✅ | **FIXATO struttura**: `swap_group` ora contiene solo i partner (non self). `BUY.swap_group=["SELL"]`, `TRANSFER.swap_group=[]` |
+
+### Broker E2E Tests — 7 fallimenti
+
+I 7 test falliti (`broker-name`, `broker-cash-balances`, `broker-holdings`, `broker-edit-button`, ecc.) sono **PREESISTENTI** — nessun file broker è stato modificato nel batch corrente. Causa probabile: timing/load del test server (timeout 3000ms troppo breve per broker detail page load).
+
+### Nuovi Bug Identificati
+
+| # | Severità | Descrizione | Root Cause |
+|---|----------|-------------|------------|
+| R7-C1 | 🔴 CRITICAL | **Edit paired: creates invece di updates** — le righe partner hidden vengono trattate come `new` (status='new', broker_id=0) invece di `edited` con id originale. Il payload invia creates per partner rows che dovrebbero essere updates | `mergePairIntoFromTo()` o `patchDualRowFromForm()` in BulkModal non preserva id/status/original della riga partner hidden quando il form duale applica le modifiche |
+| R7-H1 | 🟠 HIGH | **Type swap qty non si aggiorna nella tabella** — il commit passa ma la tabella principale mostra ancora la qty originale (positiva per BUY→SELL). Da verificare: (a) il backend salva effettivamente qty negata? (b) il reload della tabella funziona? (c) il frontend `collectUpdate` invia la qty flippata? | Possibili cause: frontend non invia qty nel diff perché il display value non cambia; o il reload non re-fetcha | 
+| R7-H2 | 🟠 HIGH | **TagInput dropdown anti-bounce** — il dropdown autocomplete si chiude immediatamente dopo aver cliccato un suggerimento, perché il blur del input scatta prima del mousedown del dropdown | Timeout 200ms nel `handleBlur` potrebbe non bastare; servire `onmousedown` con `preventDefault` (già fatto) ma il timing potrebbe variare |
+| R7-M1 | 🟡 MEDIUM | **Delete standalone: manca riepilogo** — il ConfirmModal mostra solo "Delete N transaction(s)?" senza dettagli (tipo, data, asset, importo, broker) come da design L1 | Il ConfirmModal semplice non riceve i dati della transazione da mostrare |
+| R7-M2 | 🟡 MEDIUM | **Delete paired: design L1/L2 non implementato** — il BulkDeleteLinkedPairModal è rimasto invariato, manca il design con riepilogo tabellare, toggle per-riga partner, slider singola/entrambe | Feature non ancora costruita — era classificata come LOW nel piano originale |
+| R7-M3 | 🟡 MEDIUM | **Filtro numerico avanzato per colonna ID** — attualmente solo min/max, servirebbe ricerca multi-range | Feature future TODO |
+
+### Hotfix Applicati in questo Round
+
+| Fix | File | Descrizione |
+|-----|------|-------------|
+| Tag badge CSS | `TransactionBulkModal.svelte` | `getStringBadgeStyle()` → `getStringColor()` con inline `background`/`color` |
+| Event badge click | `+page.svelte` | Navigazione a `/assets/{id}` (non `/assets/{id}?tab=events`) |
+| swap_group semplificato | `transactions.py`, `transactionTypeStore.ts` | `swap_group` ora contiene solo partner (non self). Empty = no swap. Frontend prepende self. |
+
+### Priorità Next Round (Bugfix 6)
+
+```
+R7-C1 (edit paired creates)  ← MUST FIX prima di qualsiasi test walk
+R7-H1 (type swap qty refresh) ← indagare root cause
+R7-H2 (TagInput anti-bounce)  ← UX fix rapido
+R7-M1 (delete riepilogo)      ← polish
+R7-M2 (delete paired design)  ← deferred to Part 5
+```

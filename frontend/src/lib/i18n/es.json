@@ -542,8 +542,8 @@
       "qtySignPositive": "Cantidad (+)",
       "qtySignNegative": "Cantidad (−)",
       "qtySignFree": "Cantidad (±)",
-      "rolledBack": "Se revirtió el guardado. No se guardó ningún cambio.",
-      "rolledBackTitle": "Guardado revertido",
+      "rolledBack": "Guardado cancelado. No se guardaron cambios.",
+      "rolledBackTitle": "Guardado cancelado",
       "saveFailed": "No se pudo guardar la transacción",
       "from": "De",
       "to": "A",
@@ -570,8 +570,8 @@
       "promotePair": "Promocionar par",
       "rowN": "Fila {n}",
       "status": "Estado",
-      "rolledBack": "Guardado revertido — no se guardó nada.",
-      "rolledBackTitle": "Guardado revertido",
+      "rolledBack": "Guardado cancelado — no se realizaron cambios.",
+      "rolledBackTitle": "Guardado cancelado",
       "saveFailed": "Falló el guardado masivo",
       "title": "Transacciones · {total} filas",
       "titleSummary": "{newCount} nuevas · {editCount} editar · {deleteCount} eliminar",
@@ -611,8 +611,8 @@
       "atomicWarning": "Esto ELIMINARÁ ambas filas origen y CREARÁ 2 filas enlazadas atómicamente. Si hay rollback, nada cambia.",
       "commit": "Promocionar",
       "failed": "Fallo en la promoción",
-      "rolledBack": "Promote revertido — no se modificó nada.",
-      "rolledBackTitle": "Revertido"
+      "rolledBack": "Enlace cancelado — no se realizaron cambios.",
+      "rolledBackTitle": "Cancelado"
     },
     "bulkDelete": {
       "title": "Eliminar transacciones",

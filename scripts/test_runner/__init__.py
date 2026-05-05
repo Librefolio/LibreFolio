@@ -21,7 +21,8 @@ This package is split into submodules for maintainability:
   _backend_api.py         - API endpoint + E2E tests
   _frontend_common.py     - Playwright runner, build/user helpers
   _frontend_utility.py    - Auth, settings, files, select, image-crop
-  _frontend_user.py       - Brokers, multi-user, sharing
+  _frontend_broker.py     - Broker list, CRUD, detail page
+  _frontend_user.py       - Multi-user isolation, broker sharing
   _frontend_fx.py         - FX E2E + unit tests
   _frontend_asset.py      - Asset E2E tests
   _frontend_transaction.py- Transaction E2E tests

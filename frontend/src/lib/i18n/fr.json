@@ -542,8 +542,8 @@
       "qtySignPositive": "Quantité (+)",
       "qtySignNegative": "Quantité (−)",
       "qtySignFree": "Quantité (±)",
-      "rolledBack": "L'enregistrement a été annulé. Aucune modification n'a été persistée.",
-      "rolledBackTitle": "Enregistrement annulé",
+      "rolledBack": "Sauvegarde annulée. Aucune modification enregistrée.",
+      "rolledBackTitle": "Sauvegarde annulée",
       "saveFailed": "Échec de l'enregistrement de la transaction",
       "from": "De",
       "to": "À",
@@ -570,7 +570,7 @@
       "promotePair": "Promouvoir une paire",
       "rowN": "Ligne {n}",
       "status": "Statut",
-      "rolledBack": "Sauvegarde annulée — rien n'a été enregistré.",
+      "rolledBack": "Sauvegarde annulée — aucune modification enregistrée.",
       "rolledBackTitle": "Sauvegarde annulée",
       "saveFailed": "Échec de la sauvegarde en masse",
       "title": "Transactions · {total} lignes",
@@ -611,7 +611,7 @@
       "atomicWarning": "Ceci SUPPRIMERA les deux lignes sources et CRÉERA 2 lignes liées atomiquement. En cas de rollback, rien ne change.",
       "commit": "Promouvoir",
       "failed": "Échec de la promotion",
-      "rolledBack": "Promote annulé — rien n'a été modifié.",
+      "rolledBack": "Liaison annulée — aucune modification effectuée.",
       "rolledBackTitle": "Annulé"
     },
     "bulkDelete": {

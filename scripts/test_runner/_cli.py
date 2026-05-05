@@ -277,7 +277,7 @@ def register_subparser(parent_subparsers):
     """Register test commands as a subparser of dev.py."""
     test_parser = parent_subparsers.add_parser(
         "test",
-        help="Run tests (api, db, external, schemas, services, utils, e2e, front-utility, front-user, front-fx, front-transaction, all, all-backend, all-frontend)",
+        help="Run tests (api, db, external, schemas, services, utils, e2e, front-utility, front-broker, front-user, front-fx, front-transaction, all, all-backend, all-frontend)",
         description="LibreFolio Test Runner"
         )
 

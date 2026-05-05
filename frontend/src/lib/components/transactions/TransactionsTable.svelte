@@ -711,6 +711,16 @@
                 return {type: 'html', html: `<span class="tx-tag-list" data-testid="tx-tag-list-${d.tx.id}">${html}</span>`};
             },
         },
+        {
+            id: 'id',
+            header: 'ID',
+            type: 'text',
+            width: 60,
+            sortable: false,
+            filterable: false,
+            hiddenByDefault: false,
+            cell: (d) => ({type: 'html', html: `<span class="font-mono text-xs text-gray-400 dark:text-gray-500" data-testid="tx-id-${d.tx.id}">#${d.tx.id}</span>`}),
+        },
     ]);
 
     let rowActions = $derived<RowAction<DisplayRow>[]>([
@@ -812,7 +822,7 @@
         {initialFilters}
         onSelectionChange={handleSelectionChange}
         getRowDisplayName={(d) => `#${d.tx.id} ${d.tx.type}`}
-        onRowDoubleClick={(d) => onViewRow?.(d.tx)}
+         onRowDoubleClick={(d) => onViewRow?.(d.tx)}
     />
 
     {#if isGrouped && externalPaginatorTotal > 0}

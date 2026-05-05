@@ -90,6 +90,7 @@
 | [[decisions/unified-batch-pipeline]] | 4 TX mutation endpoints → 2 (validate + commit) with TXMixedBatch + lenient per-row parse | 2026-04-29 | backend, transactions, api, architecture, pipeline |
 | [[decisions/server-driven-type-rules]] | Replace 3 hardcoded frontend type-rule files with server-fetched `transactionTypeStore` | 2026-04-30 | backend, frontend, transactions, type-rules, auto-sign |
 | [[decisions/test-runner-package-split]] | Monolithic test_runner.py (4841 lines) → 18-module package with distributed registry pattern | 2026-05-26 | testing, infrastructure, cli, refactoring, test_runner |
+| [[decisions/static-metadata-export]] | Static JSON export of constant metadata at compile-time — deferred to Phase 8+ | 2026-05-26 | backend, frontend, architecture, api-sync, metadata, performance |
 
 ## Concepts
 
@@ -114,6 +115,7 @@
 | [[concepts/opportunistic-cache-merge]] | Any code with fresh entity data calls `merge()` to deposit into shared store — universal ingress pattern | frontend, stores, cache, assets |
 | [[concepts/validate-scheduler-pattern]] | Debounce 1s + idle 60s + manual validate with anti-bounce 10s; auto-disable above 50 rows | frontend, transactions, validation, scheduling |
 | [[concepts/resolve-validation-message-pattern]] | Frontend i18n error resolution: code→i18n key, ID→name via stores, amount→formatted | frontend, transactions, i18n, error-handling |
+| [[concepts/safe-decimal-pattern]] | SafeDecimal type prevents scientific notation in JSON responses; use instead of Decimal in response schemas | backend, serialization, pydantic, decimal, json |
 
 ## Problems
 

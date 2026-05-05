@@ -542,8 +542,8 @@
       "qtySignPositive": "Quantity (+)",
       "qtySignNegative": "Quantity (−)",
       "qtySignFree": "Quantity (±)",
-      "rolledBack": "Save was rolled back. No changes were persisted.",
-      "rolledBackTitle": "Save rolled back",
+      "rolledBack": "Save was cancelled. No changes were made.",
+      "rolledBackTitle": "Save cancelled",
       "saveFailed": "Failed to save transaction",
       "from": "From",
       "to": "To",
@@ -570,8 +570,8 @@
       "promotePair": "Promote pair",
       "rowN": "Row {n}",
       "status": "Status",
-      "rolledBack": "Commit rolled back — nothing was saved.",
-      "rolledBackTitle": "Commit rolled back",
+      "rolledBack": "Save was cancelled — no changes were made.",
+      "rolledBackTitle": "Save cancelled",
       "saveFailed": "Bulk commit failed",
       "title": "Transactions · {total} rows",
       "titleSummary": "{newCount} new · {editCount} edit · {deleteCount} delete",
@@ -611,8 +611,8 @@
       "atomicWarning": "This will DELETE both source rows and CREATE 2 linked rows atomically. On rollback nothing changes.",
       "commit": "Promote",
       "failed": "Promote failed",
-      "rolledBack": "Promote was rolled back — nothing was changed.",
-      "rolledBackTitle": "Rolled back"
+      "rolledBack": "Link was cancelled — no changes were made.",
+      "rolledBackTitle": "Cancelled"
     },
     "bulkDelete": {
       "title": "Delete transactions",
@@ -633,7 +633,7 @@
       "cancel": "Cancel",
       "confirm": "Delete {n}",
       "deleting": "Deleting…",
-      "rolledBack": "Delete rolled back — nothing was changed."
+      "rolledBack": "Delete was cancelled — no changes were made."
     },
     "validate": {
       "now": "Validate now",
