@@ -658,6 +658,8 @@ BulkModal:
 | — | Import ▾ menu (BrokerImportFilesModal from /transactions) | Part 5 BRIM |
 | — | AssetMatchingWizard (Phase 6 Step 5) | Fake asset ID resolution for BRIM import |
 | — | Riorganizzazione `ui/` folder | Raggruppare: `modals/` (ModalBase, ConfirmModal, SyncModalBase, PageSyncModal), `date/` (SingleDatePicker, DateRangePicker, CalendarMonth), `feedback/` (InfoBanner, ToastContainer, LoadingSpinner, Tooltip), `display/` (BrokerBadge, CompactCashCell). ~100+ import da aggiornare → commit isolato |
+| — | Pagina Brokers: lista broker inaccessibili + sharing view-only | Prerequisito: `GET /brokers` ritorna TUTTI i broker (Plan B Step 3d cambia il JOIN→LEFT JOIN). **Sezione "Altri broker"** in fondo alla pagina `/brokers`: card minimali (icona, nome, nessun saldo/dettaglio) per i broker con `user_role === null`. **Bottone "Condividi" su TUTTI i broker** (propri e non): apre `BrokerSharingModal` in **view-only** (`readOnly` prop). L'utente vede la lista utenti con accesso (owner/editor/viewer) e le relative percentuali, così può contattare un owner per chiedere di essere aggiunto. Stessa modale attuale, stesse card, nessun pulsante di modifica in view-only. Nessun summary né saldo esposto — solo il sharing. |
+| — | Broker badge: migrare `title` nativo a `Tooltip.svelte` | I badge nella pagina brokers (`BrokerCard.svelte` riga ~91) usano `title` HTML nativo come tooltip per le icone ruolo (Crown/Pencil/Eye). Migrare a `Tooltip.svelte` per consistenza visiva con il resto dell'app (dark mode, animazione, posizionamento smart). Coinvolge anche i badge altrove (asset cards, etc.) dove `title` è usato al posto di `Tooltip`. |
 
 ---
 
@@ -738,7 +740,7 @@ Step 12 (Split/Promote Main)    ← DIPENDE da Step 10 + Step 11
 | Piano | Steps | Motivazione | Stima | Link |
 |-------|-------|-------------|-------|------|
 | **Piano A** — ContextMenu + bugfix | 1 + 2 + 3 | Nuovo componente + 2 bugfix indipendenti | ~3.5h | [`PlanA_ContextMenuBugfix`](./plan-phase07-transaction-Part4_Round6_PlanA_ContextMenuBugfix.prompt.md) ✅ |
-| **Piano B** — Delete + Picker modals | 7 + 9 | Due nuove modali, pattern simile | ~4.5h | |
+| **Piano B** — Delete + Picker modals + Broker Access | 7 + 9 + Access | Due nuove modali + visibilità accesso broker | ~8-10h | [`PlanB_DeletePickerAccess`](./plan-phase07-transaction-Part4_Round6_PlanB_DeletePickerAccess.prompt.md) |
 | **Piano C** — Split/Promote full stack | 10 → 11 → 12 | Backend → BulkModal UI → Main Table + wiring | ~4.5h | |
 
 ### Ordine di esecuzione
