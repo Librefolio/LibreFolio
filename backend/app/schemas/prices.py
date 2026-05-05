@@ -41,6 +41,7 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     FxBackwardFillInfo,
+    SafeDecimal,
 )
 
 # ============================================================================
@@ -97,11 +98,11 @@ class FAPricePoint(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     date: date_type = Field(..., description="Price date")
-    open: Optional[Decimal] = Field(None, description="Opening price (upsert: None=no-op, -1=SET NULL, >=0=write)")
-    high: Optional[Decimal] = Field(None, description="High price (upsert: None=no-op, -1=SET NULL, >=0=write)")
-    low: Optional[Decimal] = Field(None, description="Low price (upsert: None=no-op, -1=SET NULL, >=0=write)")
-    close: Decimal = Field(..., description="Closing price (required; not affected by -1 sentinel)")
-    volume: Optional[Decimal] = Field(None, description="Trading volume (upsert: None=no-op, -1=SET NULL, >=0=write)")
+    open: Optional[SafeDecimal] = Field(None, description="Opening price (upsert: None=no-op, -1=SET NULL, >=0=write)")
+    high: Optional[SafeDecimal] = Field(None, description="High price (upsert: None=no-op, -1=SET NULL, >=0=write)")
+    low: Optional[SafeDecimal] = Field(None, description="Low price (upsert: None=no-op, -1=SET NULL, >=0=write)")
+    close: SafeDecimal = Field(..., description="Closing price (required; not affected by -1 sentinel)")
+    volume: Optional[SafeDecimal] = Field(None, description="Trading volume (upsert: None=no-op, -1=SET NULL, >=0=write)")
     currency: Optional[str] = Field(
         None,
         description=(
@@ -113,10 +114,10 @@ class FAPricePoint(BaseModel):
         ),
     )
     original_currency: Optional[str] = Field(None, description="Original currency before FX conversion (None = no conversion)")
-    original_close: Optional[Decimal] = Field(None, description="Close price in original currency before FX conversion")
-    original_open: Optional[Decimal] = Field(None, description="Open price in original currency before FX conversion")
-    original_high: Optional[Decimal] = Field(None, description="High price in original currency before FX conversion")
-    original_low: Optional[Decimal] = Field(None, description="Low price in original currency before FX conversion")
+    original_close: Optional[SafeDecimal] = Field(None, description="Close price in original currency before FX conversion")
+    original_open: Optional[SafeDecimal] = Field(None, description="Open price in original currency before FX conversion")
+    original_high: Optional[SafeDecimal] = Field(None, description="High price in original currency before FX conversion")
+    original_low: Optional[SafeDecimal] = Field(None, description="Low price in original currency before FX conversion")
     backward_fill_info: Optional[AssetBackwardFillInfo] = Field(None, description="Backward-fill + FX staleness info (only in query results)")
 
     @field_validator("currency")
@@ -239,7 +240,7 @@ class FACurrentValue(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    value: Decimal
+    value: SafeDecimal
     currency: str
     as_of_date: date_type
     source: Optional[str] = None
@@ -515,7 +516,7 @@ class FACurrentPriceItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
-    value: Optional[Decimal] = Field(None, description="Current price value")
+    value: Optional[SafeDecimal] = Field(None, description="Current price value")
     currency: Optional[str] = Field(None, description="Currency code (ISO 4217)")
     as_of_date: Optional[date_type] = Field(None, description="Date/time the price refers to")
     source: Optional[str] = Field(None, description="Price source (e.g. 'provider:justetf', 'db:last_known')")

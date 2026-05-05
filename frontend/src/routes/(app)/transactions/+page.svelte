@@ -442,6 +442,10 @@
     let bulkDeleteOpen = $state(false);
     let bulkDeleteClean = $state<TXReadItem[]>([]);
     let bulkDeleteProblems = $state<ProblemPair[]>([]);
+    /** Step 22 (F5): lightweight delete confirm for standalone rows. */
+    let simpleDeleteOpen = $state(false);
+    let simpleDeleteRows = $state<TXReadItem[]>([]);
+    let simpleDeleting = $state(false);
 
     async function onBulkDelete() {
         if (selectedRows.length === 0) return;
@@ -495,9 +499,14 @@
         bulkDeleteClean = clean;
         bulkDeleteProblems = problems;
 
-        // No conflicts → skip the extender modal and confirm inline (a plain
-        // ConfirmModal would be ideal, but for the MVP we open the same modal
-        // with empty `problemRows` which renders a clean confirm summary).
+        // Step 22 (F5): if all rows are standalone (no partner conflicts),
+        // use a lightweight ConfirmModal instead of BulkDeleteLinkedPairModal.
+        if (problems.length === 0 && clean.length > 0) {
+            simpleDeleteRows = clean;
+            simpleDeleteOpen = true;
+            return;
+        }
+
         bulkDeleteOpen = true;
     }
 
@@ -505,6 +514,26 @@
         bulkDeleteOpen = false;
         selectedRows = [];
         void reload();
+    }
+
+    /** Step 22 (F5): simple delete for standalone rows — direct commit. */
+    async function confirmSimpleDelete() {
+        if (simpleDeleting || simpleDeleteRows.length === 0) return;
+        simpleDeleting = true;
+        try {
+            const ids = simpleDeleteRows.map((r) => r.id);
+            const resp = await zodiosApi.commit_transactions_api_v1_transactions_commit_post({deletes: ids} as never) as {committed?: boolean};
+            if (resp?.committed) {
+                simpleDeleteOpen = false;
+                simpleDeleteRows = [];
+                selectedRows = [];
+                void reload();
+            }
+        } catch (e) {
+            console.error('[SimpleDelete] failed:', e);
+        } finally {
+            simpleDeleting = false;
+        }
     }
 
     // =========================================================================
@@ -593,8 +622,11 @@
         }
     }
 
-    function handleEventBadgeClick(_row: TXReadItem) {
-        // TODO Step 6: open popover with link to /assets/{asset_id}#events
+    function handleEventBadgeClick(row: TXReadItem) {
+        // Navigate to asset detail page
+        if (row.asset_id != null) {
+            void goto(`/assets/${row.asset_id}`);
+        }
     }
 
     function handleEditRow(row: TXReadItem) {
@@ -752,6 +784,17 @@
 <TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} {availableTags} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} />
 <TransactionBulkModal open={bulkOpen} mode={bulkMode} initialRows={bulkInitial} {availableTags} autoOpenForm={bulkAutoOpenForm} onClose={() => { bulkOpen = false; bulkAutoOpenForm = null; }} onCommitted={handleBulkCommitted} />
 <BulkDeleteLinkedPairModal open={bulkDeleteOpen} cleanRows={bulkDeleteClean} problemRows={bulkDeleteProblems} onClose={() => (bulkDeleteOpen = false)} onCommitted={handleBulkDeleteCommitted} />
+<!-- Step 22 (F5): lightweight ConfirmModal for standalone deletes -->
+<ConfirmModal
+    open={simpleDeleteOpen}
+    title={`🗑️ ${$_('transactions.actions.delete') || 'Delete'}`}
+    message={$_('transactions.bulkDelete.confirmSimple', {values: {n: simpleDeleteRows.length}}) || `Delete ${simpleDeleteRows.length} transaction(s)?`}
+    confirmText={simpleDeleting ? ($_('common.deleting') || 'Deleting...') : (`🗑️ ${$_('common.delete') || 'Delete'}`)}
+    cancelText={$_('common.cancel')}
+    onConfirm={confirmSimpleDelete}
+    onCancel={() => { simpleDeleteOpen = false; simpleDeleteRows = []; }}
+    danger={true}
+/>
 <ConfirmModal
     open={promoteConfirmOpen}
     title={`🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`}

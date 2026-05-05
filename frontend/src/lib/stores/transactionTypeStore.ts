@@ -205,27 +205,22 @@ export function getStandaloneTypes(): TransactionTypeCode[] {
 }
 
 // =============================================================================
-//  H6: Sign-flip swap groups
+//  H6: Sign-flip swap groups (server-driven)
 // =============================================================================
 
-/** Swap groups for "sign flip" — types that share identical field structure
- *  and can be swapped freely. Paired types are locked (no swap). */
-const SWAP_GROUPS: ReadonlyArray<ReadonlyArray<TransactionTypeCode>> = [
-	['BUY', 'SELL'],
-	['DEPOSIT', 'WITHDRAWAL'],
-	['DIVIDEND', 'INTEREST'],
-	['TAX', 'FEE'],
-	// ADJUSTMENT is a singleton — no swap partner
-	// Paired types (CASH_TRANSFER, TRANSFER, FX_CONVERSION) — locked
-];
-
 /** Given a type code, return the set of types it can be "flipped" to
- *  (including itself). Returns [type] for singletons/paired (no flip). */
+ *  (including itself). Reads swap_group from server metadata.
+ *  Server sends only swap *partners* (not self), so we prepend self.
+ *  Returns [type] for unknown types or when cache is not loaded. */
 export function getSwapGroup(type: TransactionTypeCode): TransactionTypeCode[] {
-	for (const group of SWAP_GROUPS) {
-		if (group.includes(type)) return [...group];
+	if (_cache) {
+		const st = _cache.transaction_types.find((t) => t.code === type);
+		if (st) {
+			const partners = (st.swap_group ?? []) as TransactionTypeCode[];
+			return [type, ...partners];
+		}
 	}
-	return [type]; // singleton or paired → only itself
+	return [type]; // fallback: singleton
 }
 
 /** Pair-only types — created via promote wizard. */

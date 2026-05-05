@@ -52,6 +52,7 @@
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/uuid';
     import {formatCurrencyAmountHtml} from '$lib/utils/currencyFormat';
+    import {getStringColor} from '$lib/utils/colors';
     import TransactionFormModal from './TransactionFormModal.svelte';
 
     // =========================================================================
@@ -583,6 +584,14 @@
         return out;
     }
 
+    /** Allowlist of fields accepted by TXUpdateItem backend schema.
+     *  Everything else (type, broker_id, asset_id, link_uuid, related_transaction_id,
+     *  created_at, updated_at) is immutable and MUST NOT be sent. */
+    const PATCHABLE_FIELDS = new Set([
+        'type', 'date', 'quantity', 'cash', 'tags', 'description',
+        'cost_basis_override', 'asset_event_id',
+    ]);
+
     function collectUpdate(d: DraftRow): Record<string, unknown> | null {
         if (!d.original || d.id == null) return null;
         const rule = getTypeRule(d.type);
@@ -598,8 +607,6 @@
             // H6 sign-flip: type can change via swap groups
             ['type', d.type, orig.type],
             ['date', d.date, orig.date],
-            ['broker_id', d.broker_id, orig.broker_id],
-            ['asset_id', d.asset_id ?? null, orig.asset_id ?? null],
             ['quantity', signedQty, origSignedQty],
             ['cash', buildCash(d.cash), buildCash(orig.cash), jsonEq],
             ['tags', d.tags, orig.tags ?? [], jsonEq],
@@ -608,7 +615,12 @@
             ['asset_event_id', d.asset_event_id, orig.asset_event_id ?? null, undefined, (v) => (v as number | null) ?? 0],
         ];
 
-        const changes = diffFields(fields);
+        const allChanges = diffFields(fields);
+        // Step 14 (C4): strip immutable fields — only send PATCHABLE_FIELDS
+        const changes: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(allChanges)) {
+            if (PATCHABLE_FIELDS.has(k)) changes[k] = v;
+        }
         return {id: d.id, ...changes};
     }
 
@@ -785,7 +797,19 @@
             }
             const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]};
             if (!resp.committed) {
-                issues = resp.issues ?? [];
+                const rawIssues = resp.issues ?? [];
+                // Step 17 (M10): extra_forbidden errors are FE bugs — log and hide from user
+                const internalErrors = rawIssues.filter((i) => i.code === 'extra_forbidden');
+                if (internalErrors.length > 0) {
+                    console.error('[BulkModal] Internal extra_forbidden errors (FE bug):', internalErrors);
+                }
+                const userIssues = rawIssues.filter((i) => i.code !== 'extra_forbidden');
+                if (userIssues.length === 0 && internalErrors.length > 0) {
+                    // All errors were internal — show generic message
+                    issues = [{operation: 'update', index: 0, error: 'An internal error occurred. Please try again.'}];
+                } else {
+                    issues = userIssues;
+                }
                 issuesDismissed = false;
                 commitFailed = true;
                 return;
@@ -1006,6 +1030,24 @@
                 filterable: false,
                 hiddenByDefault: false,
                 cell: (row): CellContent => ({type: 'html', html: row.description ? `<span class="text-xs text-gray-600 dark:text-gray-300 truncate block">${row.description}</span>` : '<span class="text-gray-400">—</span>'}),
+            },
+            {
+                id: 'tags',
+                header: () => $t('transactions.table.tags'),
+                type: 'text',
+                width: 180,
+                sortable: false,
+                filterable: false,
+                hiddenByDefault: true,
+                cell: (row): CellContent => {
+                    if (row.tags.length === 0) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                    const html = row.tags.map((tag) => {
+                        const escaped = tag.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        const c = getStringColor(tag);
+                        return `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded mr-0.5 mb-0.5" style="background:${c.bg};color:${c.text}">${escaped}</span>`;
+                    }).join('');
+                    return {type: 'html', html: `<span class="flex flex-wrap gap-0.5" data-testid="tx-bulk-tags">${html}</span>`};
+                },
             },
             {
                 id: 'cost_basis_override',

@@ -30,6 +30,7 @@ from backend.app.schemas.common import (
     BaseDeleteResult,
     BaseListResponse,
     Currency,
+    SafeDecimal,
 )
 from backend.app.utils.datetime_utils import UTCDateTime
 
@@ -139,19 +140,19 @@ class BRAssetHolding(BaseModel):
     asset_id: int = Field(..., description="Asset ID")
     asset_name: str = Field(..., description="Asset display name")
 
-    quantity: Decimal = Field(..., description="Current quantity held")
+    quantity: SafeDecimal = Field(..., description="Current quantity held")
 
     # Cost basis (total spent to acquire)
     total_cost: Currency = Field(..., description="Total amount spent to acquire (FIFO)")
-    average_cost_per_unit: Decimal = Field(..., description="Average cost per unit")
+    average_cost_per_unit: SafeDecimal = Field(..., description="Average cost per unit")
 
     # Current valuation (if price available)
-    current_price: Optional[Decimal] = Field(default=None, description="Latest price per unit")
+    current_price: Optional[SafeDecimal] = Field(default=None, description="Latest price per unit")
     current_value: Optional[Currency] = Field(default=None, description="Current market value")
 
     # Unrealized P&L
     unrealized_pnl: Optional[Currency] = Field(default=None, description="Unrealized profit/loss")
-    unrealized_pnl_percent: Optional[Decimal] = Field(default=None, description="Unrealized P&L %")
+    unrealized_pnl_percent: Optional[SafeDecimal] = Field(default=None, description="Unrealized P&L %")
 
 
 class BRSummary(BRReadItem):
@@ -167,7 +168,7 @@ class BRSummary(BRReadItem):
 
     # Current user's access info
     user_role: Optional[str] = Field(default=None, description="Current user's role on this broker (OWNER/EDITOR/VIEWER)")
-    user_share_percentage: Optional[Decimal] = Field(default=None, description="Current user's ownership percentage")
+    user_share_percentage: Optional[SafeDecimal] = Field(default=None, description="Current user's ownership percentage")
 
     # Cash balances as list of Currency objects
     cash_balances: List[Currency] = Field(default_factory=list, description="Current cash balance per currency")
@@ -353,7 +354,7 @@ class BRAccessItem(BaseModel):
     username: str = Field(..., description="Username")
     email: str = Field(..., description="User email")
     role: UserRole = Field(..., description="Access role")
-    share_percentage: Decimal = Field(..., description="Ownership fraction (0.0-1.0) for portfolio aggregation")
+    share_percentage: SafeDecimal = Field(..., description="Ownership fraction (0.0-1.0) for portfolio aggregation")
     avatar_url: Optional[str] = Field(None, description="User avatar URL")
     created_at: UTCDateTime = Field(..., description="When access was granted")
 
@@ -377,7 +378,7 @@ class BRAccessBulkItem(BaseModel):
 
     user_id: int = Field(..., gt=0, description="User ID")
     role: UserRole = Field(..., description="Access role (OWNER/EDITOR/VIEWER)")
-    share_percentage: Decimal = Field(
+    share_percentage: SafeDecimal = Field(
         default=Decimal("0"),
         ge=0,
         le=1,

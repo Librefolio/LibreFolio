@@ -22,12 +22,48 @@ from __future__ import annotations
 from datetime import date as date_type
 from decimal import Decimal
 from functools import lru_cache
-from typing import Any, List, Optional
+from typing import Annotated, Any, List, Optional
 
 import pycountry
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic.functional_serializers import PlainSerializer
 
 from backend.app.utils.datetime_utils import parse_ISO_date
+
+
+# =============================================================================
+# SAFE DECIMAL — no scientific notation in JSON output
+# =============================================================================
+
+def _decimal_fixed_point(v: Decimal) -> str:
+    """Serialize Decimal to fixed-point string (never scientific notation).
+
+    Python's ``str(Decimal)`` may emit ``"1.29E+5"`` or ``"0E+6"`` which
+    frontend Zod regex validators reject.  ``format(v, 'f')`` always
+    produces plain decimal notation: ``"129000"`` / ``"0"``.
+    """
+    if not isinstance(v, Decimal):
+        return str(v)
+    return format(v, 'f')
+
+
+SafeDecimal = Annotated[
+    Decimal,
+    PlainSerializer(_decimal_fixed_point, return_type=str, when_used='json'),
+]
+"""Use instead of ``Decimal`` in **response** schemas to guarantee
+no scientific notation reaches the frontend.
+
+Import::
+
+    from backend.app.schemas.common import SafeDecimal
+
+Usage::
+
+    class MyResponse(BaseModel):
+        amount: SafeDecimal
+        quantity: Optional[SafeDecimal] = None
+"""
 
 # =============================================================================
 # CRYPTOCURRENCY SUPPORT
@@ -131,7 +167,7 @@ class Currency(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     code: str = Field(..., description="ISO 4217 currency code or crypto symbol")
-    amount: Decimal = Field(..., description="Amount (can be negative)")
+    amount: SafeDecimal = Field(..., description="Amount (can be negative)")
 
     @staticmethod
     def validate_code(v: Any) -> str:
@@ -261,7 +297,7 @@ class Currency(BaseModel):
 
     def to_dict(self) -> dict:
         """Serialize to dict for JSON responses."""
-        return {"currency": self.code, "amount": str(self.amount)}  # Decimal → string for JSON
+        return {"currency": self.code, "amount": format(self.amount, 'f')}  # Decimal → fixed-point string
 
     @classmethod
     def zero(cls, code: str) -> Currency:

@@ -4,6 +4,21 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-05-26] file | SafeDecimal — Preventing Scientific Notation in JSON Responses
+Filed [[concepts/safe-decimal-pattern]]. `SafeDecimal` is an `Annotated[Decimal, PlainSerializer]`
+type that forces `format(v, 'f')` during JSON serialization, preventing Python's `str(Decimal)`
+from emitting scientific notation (`"1.29E+5"`) which breaks frontend Zod validators.
+3-layer approach: type definition in `common.py`, `Currency.amount` adoption, per-schema migration.
+Incrementally adopted in brokers.py + transactions.py; prices.py/fx.py/brim.py still pending.
+Updated: index.md.
+
+## [2026-05-26] file | Static export of constant metadata at compile-time (deferred)
+Filed [[decisions/static-metadata-export]]. Deferred to Phase 8+: extracting constant
+metadata (TX_TYPE_METADATA, asset types, currency codes) as static JSON at `dev.py api sync`
+time instead of serving via runtime endpoints. Current cost is 1 req/session — not worth
+the sync-pipeline + store refactor effort until more constant-data endpoints accumulate.
+Related: [[decisions/server-driven-type-rules]].
+
 ## [2026-04-25] lint | wiki-lint pass #5 — post Phase 7 Parts 1+2+3 ingest reconciliation
 
 **Scope**: full health-check after Phase 7 Part 3 closure (backend coverage 87.06%,
@@ -672,10 +687,4 @@ Batch ingest of 5 Phase 7 Part 4 plan files covering the transaction modal syste
 - [[problems/pydantic-422-preemption]] — new (resolved by unified pipeline)
 - [[problems/browser-autofill-numeric-fields]] — already existed
 
-## [2026-05-26] file | test-runner-package-split
-Filed decision: monolithic `scripts/test_runner.py` (4841 lines) refactored into 18-module package at `scripts/test_runner/`.
-Created: [[decisions/test-runner-package-split]].
-Updated: [[entities/devpy-cli]] — path references updated from single file to package.
-Key pattern: distributed registry (`populate_registry()` per module + assembler in `_registry.py`).
-New category added: `front-transaction`. Total: 12 categories, ~115 test actions.
 

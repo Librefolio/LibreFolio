@@ -69,7 +69,7 @@ def _ensure_test_users() -> bool:
 
 
 def _run_playwright(
-    spec_file: str = None,
+    spec_file: str | list[str] | None = None,
     ui: bool = False,
     headed: bool = False,
     debug: bool = False,
@@ -90,8 +90,10 @@ def _run_playwright(
         cmd.append("test:e2e")
 
     extra_args = []
-    if spec_file:
-        extra_args.append(spec_file)
+    # Accept a single spec file string or a list of spec files
+    spec_files = spec_file if isinstance(spec_file, list) else ([spec_file] if spec_file else [])
+    for sf in spec_files:
+        extra_args.append(sf)
     if project and not ui:
         extra_args.extend(["--project", project])
 
@@ -102,7 +104,8 @@ def _run_playwright(
     if extra_args:
         cmd.extend(["--"] + extra_args)
 
-    print(f"\n{Colors.BLUE}Running: Playwright {spec_file or 'all tests'}{Colors.NC}")
+    spec_label = ', '.join(spec_files) if spec_files else 'all tests'
+    print(f"\n{Colors.BLUE}Running: Playwright {spec_label}{Colors.NC}")
     if test_names:
         print(f"{Colors.YELLOW}Filter: {' | '.join(test_names)}{Colors.NC}")
     if coverage:

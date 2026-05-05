@@ -50,6 +50,7 @@ from backend.app.schemas.common import (
     BaseDeleteResult,
     Currency,
     OldNew,
+    SafeDecimal,
 )
 from backend.app.schemas.prices import FAAssetEventPoint, FACurrentValue, FAHistoricalData, FAPricePoint
 from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
@@ -165,7 +166,7 @@ class FAInterestRatePeriod(BaseModel):
 
     start_date: date
     end_date: date
-    annual_rate: Decimal
+    annual_rate: SafeDecimal
     maturation_frequency: MaturationFrequency = MaturationFrequency.DAILY
     generate_interest: bool = Field(default=False, description="Auto-generate INTEREST events at each maturation date. " "Event value = asset_value - initial_value (resets price to initial_value). " "Only generated if positive (no negative coupons).")
 
@@ -204,7 +205,7 @@ class FALateInterestConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    annual_rate: Decimal
+    annual_rate: SafeDecimal
     grace_period_days: int = 0
     interest_type: InterestType = Field(default=InterestType.COMPOUND, description="Interest type for late interest: SIMPLE (on principal) or COMPOUND (on accumulated value, default)")
     maturation_frequency: MaturationFrequency = Field(default=MaturationFrequency.DAILY, description="Maturation frequency for late interest period")
@@ -353,7 +354,7 @@ class BaseDistribution(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    distribution: dict[str, Decimal] = Field(..., description="Distribution weights (must sum to 1.0)")
+    distribution: dict[str, SafeDecimal] = Field(..., description="Distribution weights (must sum to 1.0)")
 
     @classmethod
     def _validate_and_normalize_weights(cls, weights: dict[str, Decimal], allow_empty: bool = False) -> dict[str, Decimal]:

@@ -611,7 +611,7 @@
       "atomicWarning": "Eliminerà entrambe le righe sorgente e CREERÀ 2 righe collegate atomicamente. In caso di rollback nulla cambia.",
       "commit": "Promuovi",
       "failed": "Promote fallito",
-      "rolledBack": "Promote annullato — nulla è stato modificato.",
+      "rolledBack": "Collegamento annullato — nulla è stato modificato.",
       "rolledBackTitle": "Annullato"
     },
     "bulkDelete": {

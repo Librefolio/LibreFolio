@@ -33,7 +33,7 @@ from typing import Any, List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.app.db.models import IdentifierType, ProviderInputType
-from backend.app.schemas.common import BaseBulkResponse, BaseDeleteResult, OldNew
+from backend.app.schemas.common import BaseBulkResponse, BaseDeleteResult, OldNew, SafeDecimal
 
 # Note: AssetProviderRegistry is imported inside validators to avoid circular imports
 
@@ -350,7 +350,7 @@ class BaseProbeOperationResult(BaseModel):
 class ProbeCurrentPriceResult(BaseProbeOperationResult):
     """Result of current_price probe operation."""
 
-    value: Optional[Decimal] = Field(None, description="Current price value")
+    value: Optional[SafeDecimal] = Field(None, description="Current price value")
     currency: Optional[str] = Field(None, description="Price currency")
     as_of_date: Optional[str] = Field(None, description="Date of the price (ISO format)")
 
