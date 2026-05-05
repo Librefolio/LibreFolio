@@ -4,6 +4,10 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-05-27] query | AssetMatchingWizard / asset search / Phase 6 Step 5 status
+Synthesized answer from: F-028, F-049, F-012, domains/assets, workflows/brim-import-flow, workflows/asset-onboarding-flow, connections/assets-connections, sources/phase06-step3-rounds, phase-06-assets.md plan.
+**Key finding**: AssetMatchingWizard.svelte was never built — Phase 6 Step 5 is still ⏳. The component exists only in plans and wiki references but has zero source files in the codebase. AssetSearchAutocomplete.svelte (F-028) exists and works for asset creation, but the 3-step matching wizard (DB search → provider search → manual create) for BRIM import was interrupted before Phase 07 Part 4 bugfix rounds.
+
 ## [2026-05-26] file | SafeDecimal — Preventing Scientific Notation in JSON Responses
 Filed [[concepts/safe-decimal-pattern]]. `SafeDecimal` is an `Annotated[Decimal, PlainSerializer]`
 type that forces `format(v, 'f')` during JSON serialization, preventing Python's `str(Decimal)`
@@ -686,5 +690,3 @@ Batch ingest of 5 Phase 7 Part 4 plan files covering the transaction modal syste
 **Key problems surfaced**:
 - [[problems/pydantic-422-preemption]] — new (resolved by unified pipeline)
 - [[problems/browser-autofill-numeric-fields]] — already existed
-
-
