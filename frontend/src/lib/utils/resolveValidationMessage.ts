@@ -61,12 +61,16 @@ interface BrokerLike {
 interface AssetLike {
     id: number;
     display_name: string;
+    icon_url?: string | null;
+    asset_type?: string | null;
 }
 
 /** Context stores for resolving IDs → display names. */
 export interface ResolverContext {
     brokers?: BrokerLike[];
     assets?: AssetLike[];
+    /** Optional function to resolve broker icon URL by ID. */
+    getBrokerIconUrl?: (brokerId: number) => string | null;
 }
 
 /** Shape of a validation issue (from TXValidationIssue or extractValidationIssues). */
@@ -152,18 +156,28 @@ export function resolveIssueMessage(
         }
     }
 
-    // Resolve brokerId → brokerName
+    // Resolve brokerId → brokerName (with icon)
     if (rawParams.brokerId != null && ctx?.brokers) {
         const broker = ctx.brokers.find((b) => b.id === rawParams.brokerId);
-        enriched.brokerName = broker?.name ?? `Broker #${rawParams.brokerId}`;
+        const iconUrl = ctx.getBrokerIconUrl?.(rawParams.brokerId);
+        const brokerIcon = iconUrl
+            ? `<img src="${iconUrl}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`
+            : '';
+        enriched.brokerName = broker ? `${brokerIcon}${broker.name}` : `Broker #${rawParams.brokerId}`;
     } else if (rawParams.brokerId != null) {
         enriched.brokerName = `Broker #${rawParams.brokerId}`;
     }
 
-    // Resolve assetId → assetName
+    // Resolve assetId → assetName (with icon)
     if (rawParams.assetId != null && ctx?.assets) {
         const asset = ctx.assets.find((a) => a.id === rawParams.assetId);
-        enriched.assetName = asset?.display_name ?? `Asset #${rawParams.assetId}`;
+        if (asset) {
+            const iconSrc = asset.icon_url ?? (asset.asset_type ? `/icons/asset-types/${asset.asset_type.toLowerCase()}.png` : '/icons/asset-types/other.png');
+            const assetIcon = `<img src="${iconSrc}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`;
+            enriched.assetName = `${assetIcon}${asset.display_name}`;
+        } else {
+            enriched.assetName = `Asset #${rawParams.assetId}`;
+        }
     } else if (rawParams.assetId != null) {
         enriched.assetName = `Asset #${rawParams.assetId}`;
     }
@@ -177,7 +191,13 @@ export function resolveIssueMessage(
         );
     } else if (rawParams.balance != null) {
         const num = parseFloat(rawParams.balance);
-        enriched.balance = num.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        // Asset balances: no forced decimals (show "5" not "5.00"), emoji 📈/📉 after number
+        const emoji = num >= 0 ? '📈' : '📉';
+        const formatted = num.toLocaleString(undefined, {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 6,
+        });
+        enriched.balance = `${formatted} ${emoji}`;
     }
 
     // Extract and translate field name for prefixing

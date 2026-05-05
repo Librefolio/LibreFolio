@@ -35,7 +35,7 @@
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {X, ArrowRight, ArrowDown, Check} from 'lucide-svelte';
+    import {X, ArrowRight, ArrowDown, Check, Pencil} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
@@ -60,6 +60,13 @@
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/uuid';
     import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
+    import {
+        buildCreatePayload,
+        buildUpdateDiff,
+        diffDualItem,
+        type TxFields,
+        type TxOriginal,
+    } from '$lib/utils/txPayloadHelpers';
 
     // =========================================================================
     // Types (mirror schemas/transactions.py — kept local to avoid pulling Zod)
@@ -127,9 +134,11 @@
          *  the same payload shape as `collectCreate()` (which is also valid
          *  as an update payload because all fields are present). */
         onPushDraft?: (payload: Record<string, unknown>) => void;
+        /** Called when the user clicks "Edit" in view mode to switch to edit. */
+        onSwitchToEdit?: () => void;
     }
 
-    let {open, mode, initialRow = null, forcedBroker = null, commitOnSave = true, unlockImmutable = false, availableTags = [], zIndex = 50, injectedPartnerRow = null, onClose, onCommitted, onPushDraft}: Props = $props();
+    let {open, mode, initialRow = null, forcedBroker = null, commitOnSave = true, unlockImmutable = false, availableTags = [], zIndex = 50, injectedPartnerRow = null, onClose, onCommitted, onPushDraft, onSwitchToEdit}: Props = $props();
 
     // =========================================================================
     // Form state
@@ -578,11 +587,9 @@
             if (isReadonly) return {issuesCount: 0};
             if (pairLayout) {
                 // Dual mode: validate both sides
-                const items = collectDualCreates();
-                const payload = mode === 'edit' ? {updates: items.map((item, i) => {
-                    const rowId = i === 0 ? initialRow?.id : partnerRow?.id;
-                    return {...item, id: rowId};
-                })} : {creates: items};
+                const payload = mode === 'edit'
+                    ? {updates: collectDualUpdates()}
+                    : {creates: collectDualCreates()};
                 const sentKey = lastDraftKey;
                 try {
                     const res = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post(payload as never)) as {committed?: boolean; issues?: ValidationIssue[]};
@@ -657,7 +664,16 @@
     /** Context for resolving validation issue codes into translated messages. */
     let resolverCtx: ResolverContext = $derived({
         brokers: brokers as unknown as Array<{id: number; name: string}>,
-        assets: getAllAssets() as unknown as Array<{id: number; display_name: string}>,
+        assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
+        getBrokerIconUrl: (brokerId: number) => {
+            const b = brokers.find((br) => br.id === brokerId);
+            if (!b) return null;
+            if (b.icon_url?.trim()) return b.icon_url;
+            if (b.portal_url?.trim()) {
+                try { return new URL(b.portal_url).origin + '/favicon.ico'; } catch { /* skip */ }
+            }
+            return null;
+        },
     });
     $effect(() => {
         if (!open || isReadonly) return;
@@ -700,57 +716,30 @@
     // =========================================================================
 
     function collectCreate(): Record<string, unknown> {
-        // Auto-sign: negate values the user entered as positive
-        const qty = autoNegateQty ? String(-Math.abs(Number(draft.quantity))) : draft.quantity;
-        const out: Record<string, unknown> = {
-            broker_id: draft.broker_id,
-            type: draft.type,
-            date: draft.date,
-            quantity: qty,
-        };
-        if (draft.asset_id != null && rule.assetField !== 'forbidden') out.asset_id = draft.asset_id;
-        if (draft.cash && rule.cashField !== 'forbidden') {
-            const cashAmount = autoNegateCash ? String(-Math.abs(Number(draft.cash.amount))) : draft.cash.amount;
-            out.cash = {code: draft.cash.code, amount: cashAmount};
-        }
-        if (draft.tags.length > 0) out.tags = draft.tags;
-        if (draft.description.trim()) out.description = draft.description.trim();
-        if (draft.asset_event_id != null && rule.eventLinkable) out.asset_event_id = draft.asset_event_id;
-        if (draft.cost_basis_override.trim() && showCostBasisField) out.cost_basis_override = draft.cost_basis_override.trim();
-        if (draft.link_uuid && rule.requiresPair) out.link_uuid = draft.link_uuid;
-        return out;
+        return buildCreatePayload(draftToTxFields(), rule);
     }
 
     function collectUpdate(): Record<string, unknown> {
-        const out: Record<string, unknown> = {id: initialRow?.id};
-        if (!initialRow) return out;
-        // Auto-sign: re-negate user-facing positive values back for backend
-        const qty = autoNegateQty ? String(-Math.abs(Number(draft.quantity))) : draft.quantity;
-        const origQty = autoNegateQty ? String(-Math.abs(Number(initialRow.quantity))) : initialRow.quantity;
-        if (qty !== origQty) out.quantity = qty;
-        if (draft.date !== initialRow.date) out.date = draft.date;
-        const buildCash = (c: {code: string; amount: string} | null | undefined) => {
-            if (!c) return null;
-            if (autoNegateCash) return {code: c.code, amount: String(-Math.abs(Number(c.amount)))};
-            return {code: c.code, amount: c.amount};
+        if (!initialRow) return {};
+        const origRule = getTypeRule(initialRow.type as TransactionTypeCode);
+        return buildUpdateDiff(draftToTxFields(), initialRow as unknown as TxOriginal, rule, origRule);
+    }
+
+    /** Convert the form draft to the shared TxFields interface. */
+    function draftToTxFields(): TxFields {
+        return {
+            type: draft.type,
+            broker_id: draft.broker_id,
+            date: draft.date,
+            quantity: draft.quantity,
+            asset_id: draft.asset_id,
+            cash: draft.cash,
+            tags: draft.tags,
+            description: draft.description,
+            cost_basis_override: draft.cost_basis_override,
+            asset_event_id: draft.asset_event_id,
+            link_uuid: draft.link_uuid,
         };
-        const origCash = JSON.stringify(buildCash(initialRow.cash));
-        const newCash = JSON.stringify(buildCash(draft.cash));
-        if (origCash !== newCash) out.cash = buildCash(draft.cash);
-        const origTags = JSON.stringify(initialRow.tags ?? []);
-        const newTags = JSON.stringify(draft.tags);
-        if (origTags !== newTags) out.tags = draft.tags;
-        if ((initialRow.description ?? '') !== draft.description) out.description = draft.description || null;
-        if ((initialRow.cost_basis_override ?? '') !== draft.cost_basis_override) {
-            out.cost_basis_override = draft.cost_basis_override || null;
-        }
-        // asset_event_id sentinel: 0 = unlink
-        const origEvent = initialRow.asset_event_id ?? null;
-        const newEvent = draft.asset_event_id;
-        if (origEvent !== newEvent) {
-            out.asset_event_id = newEvent ?? 0;
-        }
-        return out;
     }
 
     // =========================================================================
@@ -846,44 +835,35 @@
 
     /**
      * Build 2 TXUpdateItem payloads for dual-form edit mode.
+     * Only include PATCHABLE fields that actually changed vs the original.
      */
     function collectDualUpdates(): Record<string, unknown>[] {
         if (!initialRow || !partnerRow) return [];
         const items = collectDualCreates();
-        // Attach IDs — item[0] is "From", item[1] is "To".
-        // We must figure out which initialRow/partnerRow is From vs To.
+
+        // Determine which original row maps to which item (From=items[0], To=items[1])
+        let fromOrig: TXReadItem = initialRow;
+        let toOrig: TXReadItem = partnerRow;
         if (pairLayout === 'fx') {
-            const myAmount = Number(initialRow.cash?.amount ?? 0);
-            if (myAmount > 0) {
-                // initialRow was "To", partnerRow was "From" — we swapped during fetch
-                items[0] = {...items[0], id: partnerRow.id};
-                items[1] = {...items[1], id: initialRow.id};
-            } else {
-                items[0] = {...items[0], id: initialRow.id};
-                items[1] = {...items[1], id: partnerRow.id};
+            if (Number(initialRow.cash?.amount ?? 0) > 0) {
+                fromOrig = partnerRow; toOrig = initialRow;
             }
         } else if (pairLayout === 'transfer_asset') {
-            const myQty = Number(initialRow.quantity);
-            if (myQty > 0) {
-                // initialRow was "To" — swapped
-                items[0] = {...items[0], id: partnerRow.id};
-                items[1] = {...items[1], id: initialRow.id};
-            } else {
-                items[0] = {...items[0], id: initialRow.id};
-                items[1] = {...items[1], id: partnerRow.id};
+            if (Number(initialRow.quantity) > 0) {
+                fromOrig = partnerRow; toOrig = initialRow;
             }
         } else if (pairLayout === 'transfer_cash') {
-            const myAmount = Number(initialRow.cash?.amount ?? 0);
-            if (myAmount >= 0) {
-                // initialRow was "To" (positive) — swap
-                items[0] = {...items[0], id: partnerRow.id};
-                items[1] = {...items[1], id: initialRow.id};
-            } else {
-                items[0] = {...items[0], id: initialRow.id};
-                items[1] = {...items[1], id: partnerRow.id};
+            if (Number(initialRow.cash?.amount ?? 0) >= 0) {
+                fromOrig = partnerRow; toOrig = initialRow;
             }
         }
-        return items;
+
+        const allItems = [
+            diffDualItem(items[0], fromOrig as unknown as TxOriginal),
+            diffDualItem(items[1], toOrig as unknown as TxOriginal),
+        ];
+        // Only include items that have actual changes (more than just `id`)
+        return allItems.filter((item) => Object.keys(item).length > 1);
     }
 
     // =========================================================================
@@ -1174,9 +1154,16 @@
                     👁 {$t('transactions.form.titleView')} #{initialRow?.id}
                 {/if}
             </h2>
-            <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={requestClose} data-testid="tx-form-close" aria-label="Close">
-                <X size={20} />
-            </button>
+            <div class="flex items-center gap-1">
+                {#if isReadonly && onSwitchToEdit}
+                    <button class="p-2 text-gray-400 hover:text-libre-green hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={onSwitchToEdit} data-testid="tx-form-switch-edit" aria-label="Edit" title={$t('transactions.form.titleEdit') || 'Edit'}>
+                        <Pencil size={18} />
+                    </button>
+                {/if}
+                <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={requestClose} data-testid="tx-form-close" aria-label="Close">
+                    <X size={20} />
+                </button>
+            </div>
         </div>
 
         <!-- ============================================================= -->

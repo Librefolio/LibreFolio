@@ -20,6 +20,8 @@
     import DataTablePagination from './DataTablePagination.svelte';
     import DataTableColumnFilter from './DataTableColumnFilter.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
+    import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
+    import type {ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {BulkAction, CellContent, ColumnDef, ColumnWidthsState, EnumOption, FilterValue, PaginationState, RowAction, SelectionState, SortState, VisibilityState} from './types';
 
@@ -63,6 +65,8 @@
         isRowSelectable?: (row: T) => boolean;
         /** Whether the actions column is sticky (default: true) */
         stickyActions?: boolean;
+        /** Enable right-click/long-press context menu on rows (default: true) */
+        enableContextMenu?: boolean;
         /**
          * Called whenever the sort state changes (column click on a sortable
          * header, or sort cleared). Consumers can use this to synchronize
@@ -118,6 +122,7 @@
         tableLayout = 'fixed',
         isRowSelectable,
         stickyActions = true,
+        enableContextMenu = true,
         onSortChange,
         onShowSelectedOnlyChange,
         fullData,
@@ -138,6 +143,10 @@
 
     // Sorting
     let sortState = $state<SortState | null>(null);
+
+    // Context menu
+    let contextMenuRow = $state<T | null>(null);
+    let contextMenuPos = $state<{x: number; y: number} | null>(null);
 
     // Pagination
     let pagination = $state<PaginationState>({
@@ -1131,6 +1140,12 @@
                                 if (isRowSelectable && !isRowSelectable(row)) return;
                                 handleRowDoubleClick(row);
                             }}
+                            oncontextmenu={(e) => {
+                                if (!enableContextMenu || rowActions.length === 0) return;
+                                e.preventDefault();
+                                contextMenuRow = row;
+                                contextMenuPos = {x: e.clientX, y: e.clientY};
+                            }}
                         >
                             <!-- Selection cell (multi mode only - shows checkboxes) -->
                             {#if effectiveSelectionMode === 'multi'}
@@ -1336,6 +1351,34 @@
         <DataTablePagination pageIndex={pagination.pageIndex} pageSize={pagination.pageSize} totalItems={filteredData.length} {pageSizeOptions} onPageChange={handlePageChange} onPageSizeChange={handlePageSizeChange} />
     {/if}
 </div>
+
+<!-- Context menu for right-click / long-press -->
+{#if contextMenuRow != null && contextMenuPos != null}
+    {@const cmRow = contextMenuRow}
+    <ContextMenu
+        x={contextMenuPos.x}
+        y={contextMenuPos.y}
+        items={rowActions
+            .filter((a) => !a.visible || a.visible(cmRow))
+            .map((a) => ({
+                id: a.id,
+                label: typeof a.label === 'function' ? a.label(cmRow) : a.label,
+                icon: a.icon,
+                variant: a.variant,
+                disabled: a.disabled?.(cmRow) ?? false,
+            } satisfies ContextMenuItem))}
+        onAction={(id) => {
+            const action = rowActions.find((a) => a.id === id);
+            if (action) handleRowAction(action, cmRow);
+            contextMenuRow = null;
+            contextMenuPos = null;
+        }}
+        onClose={() => {
+            contextMenuRow = null;
+            contextMenuPos = null;
+        }}
+    />
+{/if}
 
 <!-- Confirm modal for bulk actions -->
 <ConfirmModal
