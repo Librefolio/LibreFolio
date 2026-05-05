@@ -773,10 +773,65 @@ without opening the bulk modal:
 - [x] R6-B.4d: Unified BulkModal — red tint styling for `delete` rows (line-through + opacity)
 - [x] R6-B.4e: Unified BulkModal — header with status counts (N new · M edit · K del), unified "💾 Save all"
 - [x] R6-B.4f: i18n keys for unified BulkModal (11 keys × 4 locales)
-- [ ] R6-B.4g: Paired row rendering (2 internal lines per pair in DataTable — Da:/A: labels)
-- [ ] R6-B.4h: Date sorting (asc/desc) + column filters (type, broker, asset)
-- [ ] R6-B.Bugfix1: → [`plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md`](./plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md) — W32-W39 fixes
-- [ ] R6-B.5: TransactionPickerModal — reuse TransactionsTable with pickerMode
-- [ ] R6-B.6: Promote & Split within BulkModal
-- [ ] R6-B.7: Main Table — Promote & Split quick actions
-- [ ] R6-B.8: Entry point wiring + flow integration
+- [x] R6-B.4g: Paired row rendering (2 internal lines per pair in DataTable — Da:/A: labels) — ✅ done in Bugfix 1
+- [x] R6-B.4h: Date sorting (asc/desc) + column filters (type, broker, asset) — ✅ done in Bugfix 2 (BulkModal readonly, sort via DataTable)
+- [x] R6-B.Bugfix1: → [`plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md`](./plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md) — CASH_TRANSFER + split/promote metadata schemas ✅ (⚠️ Note: B1-15 metadata done, but B1-16 backend endpoints `POST /split` and `POST /promote` were **never implemented** — moved to Round 6 Step 10)
+- [x] R6-B.Bugfix2: → [`plan-phase07-transaction-Part4_Round5_Bugfix2_PostTestWalkOverhaul.prompt.md`](./plan-phase07-transaction-Part4_Round5_Bugfix2_PostTestWalkOverhaul.prompt.md) — BulkModal readonly + FormModal "✓ Applica" + dual dates (14 steps ✅)
+- [x] R6-B.Bugfix3: → [`plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md`](./plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md) — PATCHABLE_FIELDS + type swap + TagInput + SafeDecimal (25 steps, 3 bugs → Round 6)
+- [ ] R6-B.5: TransactionPickerModal — reuse TransactionsTable with pickerMode → **Round 6 Step 9**
+- [ ] R6-B.6: Promote & Split within BulkModal → **Round 6 Steps 10–11** (includes backend endpoints that were erroneously marked done in Bugfix 1)
+- [ ] R6-B.7: Main Table — Promote & Split quick actions → **Round 6 Step 12**
+- [ ] R6-B.8: Entry point wiring + flow integration → **Round 6 Step 12**
+
+---
+
+## 📜 Recap Bugfix Rounds (1–3)
+
+### Bugfix 1 — Dual Form & Unified BulkModal Fixes (2026-04-30) ✅
+
+**File**: [`plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md`](./plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md)
+
+- Added `CASH_TRANSFER` as first-class backend enum value
+- Approved **Opzione C**: TRANSFER + FX_CONVERSION + CASH_TRANSFER as same-type pairs
+- Split/Promote architecture: immediate dedicated endpoints (`POST /tx/split`, `POST /tx/promote`), not deferred in batch
+- Removed PromotePairWizardModal → selection-based promote flow
+- Split/Promote type maps + metadata in TXTypeMetadata
+- Paired row rendering in BulkModal with Da:/A: labels
+- 15 steps all ✅
+
+### Bugfix 2 — Post-TestWalk Overhaul (2026-05-02) ✅
+
+**File**: [`plan-phase07-transaction-Part4_Round5_Bugfix2_PostTestWalkOverhaul.prompt.md`](./plan-phase07-transaction-Part4_Round5_Bugfix2_PostTestWalkOverhaul.prompt.md)
+
+- BulkModal → fully readonly grid; FormModal is the only editing point
+- FormModal button "✓ Applica" when embedded (not "Save")
+- Dual dates in paired form (each half can have its own date)
+- Edit/Clone from main table routed through BulkModal→FormModal
+- BulkDeleteLinkedPairModal i18n + simplified UX for clean-only
+- Fix `↔` prefix not visible at first render
+- Fix FX dual form layout overflow
+- Validation banner → inline footer
+- MkDocs documentation (EN only)
+- 14 steps all ✅
+
+### Bugfix 3 — TestWalk Fixes (2026-05-03, updated 2026-05-04) ✅ (22/25 + 3 bugs → Round 6)
+
+**File**: [`plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md`](./plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md)
+
+- **PATCHABLE_FIELDS allowlist** — strip immutable fields from update payload
+- **Type swap in backend** — swap_group + sign-flip on quantity
+- **TagInput.svelte** — chip input + autocomplete dropdown
+- Tag badges with inline colors in BulkModal
+- Column ID `#N` in main table
+- Paired title `#ID_A ↔ #ID_B` in FormModal
+- **SafeDecimal** — systemic fix for Decimal scientific notation in all Pydantic schemas
+- **Test split brokers** — front-broker runner + brokers-detail.spec.ts
+- Fix i18n Save/Import button (`{n}` vs `{count}`)
+- Event badge ●evt → navigates to `/assets/{id}`
+- 22 steps ✅, 3 bugs open (R7-C1, R7-H1, R7-H2) → resolved in Round 6
+
+---
+
+## 🔮 Round 6 — Context Menu, Delete, Bug Fix & Polish
+
+→ [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](./plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md)

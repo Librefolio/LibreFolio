@@ -1,9 +1,9 @@
 # Plan — Phase 7 Part 4: `/transactions` page + Manual Staging + Promote
 
 **Date**: 2026-04-25
-**Status**: 🔨 IN CORSO (Steps 1–9 ✅, Step 6 e Step 10 con follow-up minori — vedi note inline)
+**Status**: ✅ COMPLETATO (Steps 1–10 ✅ + 6 rounds di bugfix/polish — vedi §Post-Implementation Rounds)
 **Priority**: P0 (MVP)
-**Estimated effort**: ~2 days
+**Estimated effort**: ~2 days (actual: ~3 weeks with rounds)
 **Predecessors**:
 - ✅ Part 1 (DB & Schema realignment) — `phases/phase-07-subplan/Parte1/`
 - ✅ Part 2 (BRIM Revisione 2) — `phases/phase-07-subplan/Parte2/`
@@ -11,7 +11,8 @@
 
 **Successors**:
 - ⏳ Part 4b (File Preview System) — autonomous, scheduled in parallel
-- ⏳ Part 5 (Staging Modal — BRIM mode + asset resolver + event-suggest) — extends `TransactionStagingModal` introduced here
+- ⏳ Part 5 (Staging Modal — BRIM mode + asset resolver + event-suggest + TransactionPickerModal + Promote/Split within BulkModal) — extends `TransactionBulkModal`/`TransactionFormModal` introduced here
+- ⏳ Round 6 (Context Menu + Delete riepilogo + Bug Fix + Polish) — [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](./plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md)
 
 **Macro plan parent**: [`phases/phase-07-transactions.md`](./phases/phase-07-transactions.md) §"Parte 4"
 
@@ -85,6 +86,8 @@ Costruire la pagina `/transactions` come **DataTable read-view** con filtri head
 
 ### Step 1 — Utility centralizzate (icone + colori) ✅ DONE
 
+> **Evolved in**: [Round 5](./plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md) — `transactionTypes.ts` eliminated, replaced by `transactionTypeStore.ts` (server-driven via `GET /transactions/types`). Icon URLs now derived from `icon_slug` field in backend metadata.
+
 **Files**:
 - `frontend/src/lib/utils/transactionTypes.ts` (nuovo)
 - `frontend/src/lib/utils/brokerColors.ts` (nuovo)
@@ -113,6 +116,8 @@ Costruire la pagina `/transactions` come **DataTable read-view** con filtri head
 ---
 
 ### Step 2 — Stores ✅ DONE
+
+> **Evolved in**: [Round 2](./plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md) — `createEntityStore<T>()` generic pattern extracted, used for both `assetStore` and new `brokerStore`. [Round 5](./plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md) — `txTypeStore` renamed to `transactionTypeStore`, now fetches `TXTypesResponse` (types + event types) instead of `List[TXTypeMetadata]`.
 
 **Files**:
 - `frontend/src/lib/stores/txTypeStore.ts` (nuovo)
@@ -163,6 +168,8 @@ Costruire la pagina `/transactions` come **DataTable read-view** con filtri head
 
 ### Step 4 — Page load + URL filters ✅ DONE
 
+> **Evolved in**: [Round 1](./plan-phase07-transaction-Part4_Round1-tableRefactorBugfix.prompt.md) — infinite loop fix on modal open. [Round 2](./plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md) — linked-pair conditional grouping (pair-grouping OFF when sort/filters active).
+
 > **Nota implementativa**: niente `+page.ts` separato — pattern del progetto (vedi `/files`) è caricare in `onMount` del `+page.svelte`. Filtri scalari (`broker_id`, `asset_id`, ecc.) gestiti con parser/builder locali; i filtri richi delle header-cell (text/enum/size/date) si appoggeranno a `$lib/utils/urlFilters.ts` in Step 5.
 
 **Files**:
@@ -188,6 +195,8 @@ Costruire la pagina `/transactions` come **DataTable read-view** con filtri head
 ---
 
 ### Step 5 — `TransactionsTable.svelte` con always-pair-adjacent ✅ DONE
+
+> **Evolved in**: [Round 1](./plan-phase07-transaction-Part4_Round1-tableRefactorBugfix.prompt.md) — `currency-stack` filter + `tags` multi-enum filter added. [Round 2](./plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md) — currency tooltip fix, currency-stack per-valuta. [Round 5](./plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md) §R6-A — dark mode vibrancy fix (broker row tints, tag colors, CSS class names). [Bugfix 3](./plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md) — colonna ID `#N`, event badge ●evt click → `/assets/{id}`, SafeDecimal fix.
 
 > **Note implementative**:
 > - Algoritmo always-pair-adjacent + pair-never-split paginator implementati.
@@ -230,7 +239,9 @@ Costruire la pagina `/transactions` come **DataTable read-view** con filtri head
 
 ---
 
-### Step 6 — GoTo locale + `●evt` tooltip + spec deferita 🔨 PARZIALE
+### Step 6 — GoTo locale + `●evt` tooltip + spec deferita ✅ DONE
+
+> **Evolved in**: [Bugfix 3](./plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md) — event badge click now navigates to `/assets/{id}`, `asset-event-delete.spec.ts` 4 scenari implementati. [Round 6](./plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md) Step 6 — asset name made clickable (replacing ●evt click), `onEventBadgeClick` removed.
 
 > **Done in Step 5+6**:
 > - GoTo locale: click su 🔗 setta `highlight_id`, scroll smooth sulla partner row, pulse animation, auto-clear dopo 1.6s.
@@ -261,6 +272,8 @@ Costruire la pagina `/transactions` come **DataTable read-view** con filtri head
 ---
 
 ### Step 7 — `TransactionStagingModal.svelte` (manual-only) ✅ DONE
+
+> **Replaced by**: [Round 3](./plan-phase07-transaction-Part4_Round3-stagingModalRewrite.prompt.md) — greenfield rewrite → `TransactionFormModal` (single edit) + `TransactionBulkModal` (readonly grid). [Round 3 Bugfix 1](./plan-phase07-transaction-Part4_Round3_Bugfix1-formModalRedesign.prompt.md) — FormModal redesign + 422 error display. [Round 3 Bugfix 2](./plan-phase07-transaction-Part4_Round3_Bugfix2-i18nValidationErrors.prompt.md) — structured error codes + i18n. [Round 4](./plan-phase07-transaction-Part4_Round4_UnifiedBatchPipeline.prompt.md) — unified batch pipeline (POST/PATCH/DELETE → 2 unified endpoints). [Round 5](./plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md) — server-driven type rules + auto-sign + dual-transaction form. [Bugfix 1](./plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md) — CASH_TRANSFER + split/promote. [Bugfix 2](./plan-phase07-transaction-Part4_Round5_Bugfix2_PostTestWalkOverhaul.prompt.md) — BulkModal readonly + "✓ Applica". [Bugfix 3](./plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md) — PATCHABLE_FIELDS + type swap + TagInput.
 
 > **Note implementative**:
 > - ModalBase usata come shell. Tabella inline con input/select nativi + AssetSelect per asset_id.
@@ -340,6 +353,8 @@ Costruire la pagina `/transactions` come **DataTable read-view** con filtri head
 
 ### Step 8 — Bulk delete con linked-pair extender modal ✅ DONE
 
+> **Evolved in**: [Bugfix 2](./plan-phase07-transaction-Part4_Round5_Bugfix2_PostTestWalkOverhaul.prompt.md) Step 7 — i18n fix + simplified UX when no problematic rows. [Round 6](./plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md) Step 7 — new `TransactionDeleteModal` with rich summary for single standalone/paired delete.
+
 > **Note implementative**:
 > - Pre-scan in `+page.svelte::onBulkDelete`: per ogni riga selezionata con `related_transaction_id != null`, controlla se il partner è già selezionato (no-op), in memoria (push problem), o da fetchare (`GET /transactions?ids=[missing]`).
 > - Toggle globale + per-riga (`extend` / `remove`).
@@ -387,7 +402,11 @@ Costruire la pagina `/transactions` come **DataTable read-view** con filtri head
 
 ---
 
-### Step 9 — `TransferPromoteModal.svelte` ✅ DONE
+### Step 9 — `TransferPromoteModal.svelte` ⚠️ PARTIALLY DONE (component removed, replacement not built)
+
+> **Replaced by**: [Bugfix 1](./plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md) — `PromotePairWizardModal` removed, replaced by selection-based promote flow with dedicated `POST /tx/promote` and `POST /tx/split` endpoints.
+>
+> ⚠️ **Status correction (2026-05-05)**: The old `TransferPromoteModal`/`PromotePairWizardModal` was deleted (B1-17 ✅), and the metadata schemas (`SplitMeta`, `PromoteRule`, `PairFieldConstraint`) were added to backend (B1-15 ✅). However, **the backend API endpoints** `POST /transactions/split` and `POST /transactions/promote` **were never implemented** (B1-16 was erroneously marked ✅). The selection-based promote/split UI in BulkModal and Main Table was also never built (R6-B.5–B.8). All of this is now in scope in [Round 6 Steps 9–12](./plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md).
 
 > **Note implementative**:
 > - Trigger: button condizionale `⚡ Promote pair` mostrato in SelectionBar SOLO quando 2 righe sono selezionate, una `DEPOSIT` + una `WITHDRAWAL`, entrambe con `related_transaction_id == null`.
@@ -476,7 +495,7 @@ Costruire la pagina `/transactions` come **DataTable read-view** con filtri head
 
 ---
 
-### Step 10 — Bulk actions wiring + Import menu + i18n + final QA 🔨 PARZIALE
+### Step 10 — Bulk actions wiring + Import menu + i18n + final QA ✅ DONE
 
 > **Done**:
 > - Header buttons: `+ Add transaction` apre StagingModal `create-many` vuota.
@@ -515,6 +534,50 @@ Costruire la pagina `/transactions` come **DataTable read-view** con filtri head
 - svelte-check + lint:format-frontend (skill `lint-format-frontend`).
 
 **Stima**: 2h
+
+---
+
+## 🔧 Post-Implementation Rounds
+
+Steps 1–10 provided the foundation. Six rounds of bugfix, refactor, and polish followed:
+
+| Round | Date | Plan File | Focus | Status |
+|-------|------|-----------|-------|--------|
+| 1 | 2026-04-27 | [`Round1-tableRefactorBugfix`](./plan-phase07-transaction-Part4_Round1-tableRefactorBugfix.prompt.md) | Table refactor (infinite loop fix), `currency-stack` filter, `tags` multi-enum filter, mock data tags | ✅ |
+| 2 | 2026-04-27 | [`Round2-tableRefactorBugfix`](./plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md) | `createEntityStore<T>()` pattern (asset+broker), currency tooltip, currency-stack per-valuta, linked-pair conditional grouping | ✅ |
+| 3 | 2026-04-28 | [`Round3-stagingModalRewrite`](./plan-phase07-transaction-Part4_Round3-stagingModalRewrite.prompt.md) | Staging modal greenfield → FormModal + BulkModal + PromotePairWizard | ✅ |
+| 3.B1 | 2026-04-28 | [`Round3_Bugfix1-formModalRedesign`](./plan-phase07-transaction-Part4_Round3_Bugfix1-formModalRedesign.prompt.md) | FormModal redesign, 422 error display, type-change field reset | ✅ |
+| 3.B2 | 2026-04-29 | [`Round3_Bugfix2-i18nValidationErrors`](./plan-phase07-transaction-Part4_Round3_Bugfix2-i18nValidationErrors.prompt.md) | Structured error codes + i18n, frontend resolution via stores | ✅ |
+| 4 | 2026-04-29 | [`Round4_UnifiedBatchPipeline`](./plan-phase07-transaction-Part4_Round4_UnifiedBatchPipeline.prompt.md) | Merge 4 mutation endpoints → 2 (`POST /commit` + `DELETE`), `TXMixedBatch`, lenient parse | ✅ |
+| 5 | 2026-04-30 | [`Round5_ServerDrivenTypeRules`](./plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md) | Server-driven type rules, auto-sign negation, dark mode vibrancy, dual-transaction form (FX/Transfer/Cash Transfer) | ✅ |
+| 5.B1 | 2026-04-30 | [`Round5_Bugfix1_DualFormAndBulkFixes`](./plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md) | CASH_TRANSFER type, split/promote architecture, paired rendering (15 steps) | ✅ |
+| 5.B2 | 2026-05-02 | [`Round5_Bugfix2_PostTestWalkOverhaul`](./plan-phase07-transaction-Part4_Round5_Bugfix2_PostTestWalkOverhaul.prompt.md) | BulkModal readonly, "✓ Applica", dual dates, edit/clone routing (14 steps) | ✅ |
+| 5.B3 | 2026-05-03 | [`Round5_Bugfix3_TestWalkFixes`](./plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md) | PATCHABLE_FIELDS, type swap, TagInput, SafeDecimal, test split (25 steps) | ✅ |
+| 6 | 2026-05-05 | [`Round6_ContextMenuDeletePolish`](./plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md) | ContextMenu riusabile, TransactionDeleteModal, R7-C1/H1/H2 fix, TagInput polish | ⏳ |
+
+### Key Architectural Changes Across Rounds
+
+| What | Original Plan | Final State |
+|------|--------------|-------------|
+| **Mutation endpoints** | 3 separate (POST/PATCH/DELETE bulk) | 2 unified (`POST /commit` mixed + `DELETE`) — Round 4 |
+| **Type rules** | Hardcoded 3 files (typeRules, types, events) | Server-driven `GET /types` → single `transactionTypeStore` — Round 5 |
+| **Staging Modal** | Single `TransactionStagingModal` (editable grid) | Split: readonly `TransactionBulkModal` + `TransactionFormModal` (single editing point) — Round 3 + 5.B2 |
+| **Paired types** | TRANSFER + FX_CONVERSION | + CASH_TRANSFER first-class — Round 5.B1 |
+| **Promote/Split** | PromotePairWizardModal | Selection-based + immediate endpoints (⚠️ schemas done, backend API + frontend UI in Round 6) — Round 5.B1 |
+| **Decimal serialization** | `str()` (scientific notation risk) | `SafeDecimal` Pydantic type across all schemas — Round 5.B3 |
+
+### Open Questions Resolution
+
+| # | Question | Resolution |
+|---|----------|-----------|
+| 1 | Mixed validate vs split validate | **Resolved Round 4**: unified `POST /commit` accepts mixed `creates+updates+deletes` |
+| 2 | Pagination & pair-adjacent | **Accepted**: ±1 variability in page_size, preserved adjacency |
+| 3 | Sort by-amount + pair-adjacent | **Accepted**: pair anchored to giver position |
+| 4 | Ghost rows selectable? | **Yes** — uniform with normal rows |
+| 5 | Pair-adjacent as user toggle | **Still deferred** — default ON, toggle in future settings |
+| 6 | Cross-client cache staleness | **Documented** — session+version+invalidate pattern, no WebSocket |
+| 7 | Promote scope strict | **Confirmed** — only 1 DEP + 1 WD, smart auto-detection future |
+| 8 | Asset/event invalidation | **Centralized** in `assetStore.invalidateAfterMutation()` |
 
 ---
 
@@ -566,7 +629,8 @@ Costruire la pagina `/transactions` come **DataTable read-view** con filtri head
 
 **Successori**:
 - Parte 4b — File Preview System (autonoma, parallelizzabile)
-- Parte 5 — Staging Modal full (estende `TransactionStagingModal` introdotto qui con `mode='create-brim'` + asset resolver + duplicates + event-suggest tolerance slider)
+- Parte 5 — Staging Modal full (estende `TransactionBulkModal`/`TransactionFormModal` con `mode='create-brim'` + asset resolver + duplicates + event-suggest tolerance slider + TransactionPickerModal + Promote/Split within BulkModal)
+- Round 6 — [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](./plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md) — ContextMenu, TransactionDeleteModal, R7-C1/H1/H2 fix, TagInput polish
 
 **devWiki rilevante**:
 - `decisions/multi-broker-atomic-tx` — endpoint bulk multi-broker, atomicità cross-broker

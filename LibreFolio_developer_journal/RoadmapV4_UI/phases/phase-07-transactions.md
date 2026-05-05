@@ -1,6 +1,6 @@
 # Phase 7: Transactions System — Macro Plan
 
-**Status**: 🔄 In corso (Part 1 ✅, Part 2 ✅ Revisione 2, **Part 3 ✅ DONE 2026-04-25** — feature work + Blocco G test coverage backend 87.06% — Part 4/4b/5 TODO)
+**Status**: 🔄 In corso (Part 1 ✅, Part 2 ✅ Revisione 2, **Part 3 ✅ DONE 2026-04-25** — backend coverage 87.06%, **Part 4 ✅ DONE 2026-05-05** — 10 steps + 11 rounds of bugfix/polish — Part 4b/5 TODO)
 **Sub-plans archiviati**: [`phase-07-subplan/README.md`](./phase-07-subplan/README.md)
 **Durata stimata**: ~11 giorni (multi-sprint, Parti 1+2+3+4+4b+5 = 1+2+2+2+1+3)
 **Priorità**: P0 (MVP)
@@ -98,7 +98,7 @@ auto-linking massivo degli eventi retroattivi.
 | **1** | Backend DB & Schema Realignment | models, schemas, migration | Link `Transaction ↔ AssetEvent`, access control uniforme | 1g | ✅ Completato |
 | **2** | BRIM come parser puro (Revisione 2) | `BRIMProvider` base + refactor 11 plugin | Plugin emettono solo TX + preview metadata; `plugin_version` per cache | 2g v1 + 0.5g revisione | ✅ Completato |
 | **3** | API Consolidation — bulk atomic per-broker | endpoints, service, pytest | `POST/PATCH/DELETE /brokers/{id}/transactions/bulk` atomic, `validate` dry-run, `events/suggest`, test ≥85% | 2g | **Dettagliato** |
-| **4** | Frontend — Pagina `/transactions` | route, DataTable, filtri colonna | Lista utente con filtri header, GoTo linked pair, bulk actions | 2g | **Alto livello** |
+| **4** | Frontend — Pagina `/transactions` | route, DataTable, filtri colonna | Lista utente con filtri header, GoTo linked pair, bulk actions | 2g | **✅ COMPLETATO** → [`plan-phase07-transaction-Part4.prompt.md`](../plan-phase07-transaction-Part4.prompt.md) (10 steps + 11 rounds: R1–R6) |
 | **4b** | Frontend — File Preview System | backend service + modale multi-tipo | Preview inline (image/text/table/markdown/code) su Files page + BRIM files | 1g | **Alto livello** |
 | **5** | Frontend — Staging Modal | modale unificata, asset resolver | Manual + BRIM + Clone, grouping colorato, tolerance slider 0-7, commit via /brokers/{id}/tx/bulk atomic | 3g | **Alto livello** |
 
@@ -212,9 +212,10 @@ Tracciamento dei sub-plan che servono ma non sono ancora stati redatti:
 |---|---|---|---|
 | Parte 1 | `plan-phase07-transaction-Part1.md` | ✅ scritto ed eseguito | — |
 | Parte 2 | `plan-phase07-transaction-Part2.prompt.md` (Revisione 2) | ✅ completato | Parte 1 |
-| Parte 3 (include 3b) | `plan-phase07-transaction-Part3.md` (API consolidation atomic per-broker + events/suggest + deferred da Part 1 §8/§9) | 📋 **scritto, pronto per esecuzione** | Parte 1, Parte 2 |
-| Parte 4 | (TBD — eventuale UX transactions page) | ⏳ da decidere | Parte 3 |
-| Parte 5 | `plan-phase07-transaction-Part5-staging-modal.md` (Staging Modal frontend: resolve fake_id, event matching, `parse_is_stale` banner, commit via endpoint standard) | ⏳ **da scrivere** | Parte 2, Parte 3 |
+| Parte 3 (include 3b) | `plan-phase07-transaction-Part3.md` (API consolidation atomic per-broker + events/suggest + deferred da Part 1 §8/§9) | ✅ completato | Parte 1, Parte 2 |
+| Parte 4 | [`plan-phase07-transaction-Part4.prompt.md`](../plan-phase07-transaction-Part4.prompt.md) (10 steps + 11 rounds) | ✅ completato (Round 6 ⏳ in corso) | Parte 3 |
+| Parte 4b | (TBD — File Preview System) | ⏳ da scrivere | autonomo |
+| Parte 5 | `plan-phase07-transaction-Part5-staging-modal.md` (Staging Modal frontend: BRIM mode, resolve fake_id, event matching, TransactionPickerModal, Promote/Split in BulkModal) | ⏳ **da scrivere** | Parte 2, Parte 3, Parte 4 |
 
 ---
 
@@ -385,6 +386,40 @@ API bulk coerenti, niente endpoint singolari, suite test green, endpoint di supp
 ### Deliverable
 Pagina funzionante con visualizzazione + filtri + delete/edit/clone via Staging Modal.
 
+### ✅ Parte 4 — Implementation Summary (2026-04-25 → 2026-05-05)
+
+Parte 4 è completata con 10 step originali + 11 round di bugfix/polish. Il piano di dettaglio e tutti i round sono in [`plan-phase07-transaction-Part4.prompt.md`](../plan-phase07-transaction-Part4.prompt.md).
+
+**Componenti prodotti** (stato finale):
+| Componente | Ruolo |
+|------------|-------|
+| `TransactionsTable.svelte` | DataTable wrapper con always-pair-adjacent, ghost rows, color band, pair-never-split paginator |
+| `TransactionFormModal.svelte` | Single editing point: create/edit/view standalone + dual form (FX, Transfer, Cash Transfer) |
+| `TransactionBulkModal.svelte` | Readonly grid, mixed-batch commit (creates+updates+deletes), doppio-click → FormModal |
+| `TransactionDeleteModal.svelte` | Single delete with rich summary (standalone + paired layout + slider toggle) — **Round 6** |
+| `BulkDeleteLinkedPairModal.svelte` | Multi-select delete with linked-pair extend/remove toggle |
+| `transactionTypeStore.ts` | Server-driven type rules from `GET /transactions/types` (replaces 3 hardcoded files) |
+| `TagInput.svelte` | Chip input + autocomplete dropdown for tags |
+| `ContextMenu.svelte` | Right-click / long-press context menu for DataTable — **Round 6** |
+
+**Key architectural changes from original plan**:
+| Area | Original | Final |
+|------|----------|-------|
+| Mutation endpoints | 3 separate (POST/PATCH/DELETE) | 2 unified (`POST /commit` + `DELETE`) |
+| Type rules | 3 hardcoded frontend files | Server-driven `GET /types` → `transactionTypeStore` |
+| Staging modal | Single `TransactionStagingModal` with editable grid | Split: readonly `TransactionBulkModal` + `TransactionFormModal` |
+| Transaction types | 10 types | 12 types (+CASH_TRANSFER, with split/promote rules) |
+| Decimal serialization | `str()` with scientific notation risk | `SafeDecimal` Pydantic type across all schemas |
+
+**Round timeline**: see [`plan-phase07-transaction-Part4.prompt.md` §Post-Implementation Rounds](../plan-phase07-transaction-Part4.prompt.md).
+
+**Still open (Round 6 ⏳)**:
+- ContextMenu, TransactionDeleteModal, R7-C1/H1/H2 bug fix, TagInput polish
+- **TransactionPickerModal** (search & add existing TX to BulkModal)
+- **Backend `POST /split` + `POST /promote` endpoints** (schemas exist but API never implemented — erroneously marked done in Bugfix 1 B1-16)
+- **Promote/Split UI** in BulkModal and Main Table (depends on above endpoints)
+→ [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](../plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md)
+
 ---
 
 ## 🔷 Parte 4b — Frontend: File Preview System (Alto Livello)
@@ -490,6 +525,16 @@ Sistema preview funzionante in 3 punti di accesso (Files Static, Files BRIM, Bro
 ---
 
 ## 🔷 Parte 5 — Frontend: Staging Modal (Alto Livello)
+
+> **📌 Nota post-Part 4**: Il piano originale prevedeva un singolo `TransactionStagingModal`. Part 4 l'ha suddiviso in `TransactionBulkModal` (readonly grid) + `TransactionFormModal` (single editing). Part 5 estende questi componenti esistenti — NON crea un nuovo modale.
+>
+> **Features deferred from Part 4 → Part 5**:
+> - TransactionPickerModal (search & add existing TX to batch) — R6-B.5
+> - Promote & Split within BulkModal — R6-B.6
+> - Main Table promote/split quick actions — R6-B.7
+> - Entry point wiring + flow integration — R6-B.8
+> - Import ▾ menu with broker picker from `/transactions`
+> - See [`plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md`](../plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md) §R6-B checklist
 
 ### Flusso BRIM completo (post-Revisione 2)
 
@@ -686,20 +731,20 @@ Modale unificata che copre i 4 ingressi, riusa `AssetModal` / `AssetMatchingWiza
 ## ✅ Verifica Completamento
 
 ### Test manuali end-to-end
-- [ ] Lista transazioni visibile con filtri colonna funzionanti
-- [ ] GoTo linked pair: click 🔗 → scroll + pulse su riga related
-- [ ] Badge ●evt visibile su transazioni con `asset_event_id`
-- [ ] `+ New` apre Staging vuota → add rows → validate → commit OK
-- [ ] Clone bulk: 3 righe selezionate → `📋 Clone to staging` → Staging pre-popolata
-- [ ] Edit bulk: 3 righe selezionate → `✎ Edit bulk` → Staging in mode edit → PATCH OK
-- [ ] Delete bulk con conferma
-- [ ] Import → upload file → parse → Staging auto-apre con BRIM data + eventi
-- [ ] Asset grouping: cambio asset via `SearchSelect` globale → tutte le righe del colore aggiornate
-- [ ] Split asset: 🎨 su una riga → nuovo gruppo-colore creato
-- [ ] Event tolerance slider 0/7/14 → comportamento corretto
-- [ ] Auto-pair TRANSFER: selezione `type=TRANSFER` su una riga → auto-crea riga coppia
-- [ ] VIEWER su broker → no bottoni edit/delete/create
-- [ ] Duplicati BRIM: banner + checklist funziona
+- [x] Lista transazioni visibile con filtri colonna funzionanti ← Part 4
+- [x] GoTo linked pair: click 🔗 → scroll + pulse su riga related ← Part 4
+- [x] Badge ●evt visibile su transazioni con `asset_event_id` ← Part 4
+- [x] `+ New` apre Staging vuota → add rows → validate → commit OK ← Part 4
+- [x] Clone bulk: 3 righe selezionate → `📋 Clone to staging` → Staging pre-popolata ← Part 4
+- [x] Edit bulk: 3 righe selezionate → `✎ Edit bulk` → Staging in mode edit → PATCH OK ← Part 4
+- [x] Delete bulk con conferma ← Part 4
+- [ ] Import → upload file → parse → Staging auto-apre con BRIM data + eventi ← Part 5
+- [ ] Asset grouping: cambio asset via `SearchSelect` globale → tutte le righe del colore aggiornate ← Part 5
+- [ ] Split asset: 🎨 su una riga → nuovo gruppo-colore creato ← Part 5
+- [ ] Event tolerance slider 0/7/14 → comportamento corretto ← Part 5
+- [x] Auto-pair TRANSFER: selezione `type=TRANSFER` su una riga → auto-crea riga coppia ← Part 4 Round 5
+- [x] VIEWER su broker → no bottoni edit/delete/create ← Part 3+4
+- [ ] Duplicati BRIM: banner + checklist funziona ← Part 5
 - [ ] **Parte 4b**: Bottone 👁 visibile solo su file supportati
 - [ ] **Parte 4b**: Preview CSV BRIM mostra `DataTable` con row-range
 - [ ] **Parte 4b**: Preview immagine con quality slider funzionante
@@ -738,15 +783,25 @@ phases/phase-07-subplan/
 ├── README.md
 ├── plan-phase07-transaction-Part1.md                       (Parte 1 — ✅ completata)
 ├── plan-phase07-transaction-Part2.prompt.md                (Parte 2 — ✅ completata, Revisione 2)
-├── plan-phase07-transaction-Part3.md                       (Parte 3 — 📋 pianificata, include 3b + deferred §8/§9)
-├── plan-phase07-transaction-Part4.md                       (Parte 4 — ⏳ da scrivere)
+├── plan-phase07-transaction-Part3.md                       (Parte 3 — ✅ completata)
+├── plan-phase07-transaction-Part4.prompt.md                (Parte 4 — ✅ completata, 10 steps + 11 rounds)
+│   ├── Round1-tableRefactorBugfix.prompt.md
+│   ├── Round2-tableRefactorBugfix.prompt.md
+│   ├── Round3-stagingModalRewrite.prompt.md
+│   ├── Round3_Bugfix1-formModalRedesign.prompt.md
+│   ├── Round3_Bugfix2-i18nValidationErrors.prompt.md
+│   ├── Round4_UnifiedBatchPipeline.prompt.md
+│   ├── Round5_ServerDrivenTypeRules.prompt.md
+│   ├── Round5_Bugfix1_DualFormAndBulkFixes.prompt.md
+│   ├── Round5_Bugfix2_PostTestWalkOverhaul.prompt.md
+│   ├── Round5_Bugfix3_TestWalkFixes.prompt.md
+│   └── Round6_ContextMenuDeletePolish.prompt.md            (⏳ in corso)
 ├── plan-phase07-transaction-Part4b-filePreview.md          (Parte 4b — ⏳ da scrivere)
 └── plan-phase07-transaction-Part5-staging-modal.md         (Parte 5 — ⏳ da scrivere)
 ```
 
 ---
 
-**Prossimo passo**: eseguire la **Parte 3** — API Consolidation atomic per-broker + `events/suggest` + deferred da Parte 1 (vedi
-[`plan-phase07-transaction-Part3.md`](../plan-phase07-transaction-Part3.md)).
-Parte 1 (DB schema realignment) e Parte 2 (BRIM parser puro, Revisione 2) sono completate.
-Parte 3 è pianificata in un unico file (assorbe 3b events/suggest + deferred §8 price currency + §9 OHLC sentinel) e pronta per l'implementazione.
+**Prossimo passo**: completare **Round 6** di Parte 4 (ContextMenu, TransactionDeleteModal, bug fix R7-C1/H1/H2, TagInput polish) → vedi [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](../plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md).
+Poi passare a **Parte 5** — Staging Modal full (BRIM import, TransactionPickerModal, Promote/Split in BulkModal) o **Parte 4b** (File Preview) in parallelo.
+Parti 1–4 completate.

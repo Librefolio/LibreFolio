@@ -726,8 +726,8 @@ Response (excerpt for CASH_TRANSFER):
 - [x] B1-13 (W46): BulkModal paired row rendering (Da:/A: double-height)
 - [x] B1-14 (W47-W50): i18n + cost basis tooltip + doc link + createNew key
 - [x] B1-15 (W51): Split/Promote server-driven metadata (schemas + api sync)
-- [x] B1-16 (W52): Bulk Split/Promote endpoints + service logic
-- [x] B1-17 (W53): Remove PromotePairWizardModal → selection-based promote
+- [ ] B1-16 (W52): Bulk Split/Promote endpoints + service logic — ⚠️ **NOT DONE** (schemas `SplitMeta`/`PromoteRule`/`PairFieldConstraint` exist in TXTypeMetadata but `POST /split` and `POST /promote` API endpoints + service layer were **never implemented**). → **Moved to Round 6 Step 10**
+- [x] B1-17 (W53): Remove PromotePairWizardModal — ✅ component removed, but replacement (selection-based promote flow with ConfirmModal → POST /promote) **not implemented** because B1-16 was never done. → **Selection-based flow moved to Round 6 Steps 11–12**
 
 ---
 
