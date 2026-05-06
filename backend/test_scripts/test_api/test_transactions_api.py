@@ -916,3 +916,112 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
         assert any("pair" in issue.get("error", "").lower() for issue in data["issues"])
 
         print_success("✓ Got error when trying to delete only one of linked pair")
+
+
+# ============================================================================
+# 5.9 TRANSACTION API - partner_broker_id
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_get_transactions_partner_broker_id(test_server):
+    """TX-A-PBR: GET /transactions returns partner_broker_id for linked pairs."""
+    print_section("Test TX-A-PBR: partner_broker_id on paired transactions")
+
+    async with httpx.AsyncClient() as client:
+        await create_test_user(client)
+
+        # Create two brokers
+        br1_name = f"PBR Source Broker {uuid.uuid4().hex[:8]}"
+        br2_name = f"PBR Target Broker {uuid.uuid4().hex[:8]}"
+        br1_resp = await client.post(
+            f"{API_BASE}/brokers",
+            json=[
+                {"name": br1_name, "allow_cash_overdraft": True},
+                {"name": br2_name, "allow_cash_overdraft": True},
+            ],
+            timeout=TIMEOUT,
+        )
+        assert br1_resp.status_code == 200
+        results = br1_resp.json()["results"]
+        broker1_id = results[0]["broker_id"]
+        broker2_id = results[1]["broker_id"]
+
+        # Create asset
+        asset_payload = [{
+            "display_name": f"PBR Test Stock {uuid.uuid4().hex[:6]}",
+            "asset_type": "STOCK",
+            "currency": "EUR",
+        }]
+        asset_resp = await client.post(f"{API_BASE}/assets", json=asset_payload, timeout=TIMEOUT)
+        assert asset_resp.status_code in (200, 201), f"Asset creation failed: {asset_resp.status_code} {asset_resp.text}"
+        asset_id = asset_resp.json()["results"][0]["asset_id"]
+
+        # Seed balance: BUY on broker1
+        seed_payload = [
+            {"broker_id": broker1_id, "type": "DEPOSIT", "date": date.today().isoformat(),
+             "cash": {"code": "EUR", "amount": "5000"}},
+            {"broker_id": broker1_id, "asset_id": asset_id, "type": "BUY",
+             "date": date.today().isoformat(), "quantity": "20",
+             "cash": {"code": "EUR", "amount": "-2000"}},
+        ]
+        seed_resp = await client.post(
+            f"{API_BASE}/transactions/commit",
+            json={"creates": seed_payload},
+            timeout=TIMEOUT,
+        )
+        assert seed_resp.status_code == 200
+        assert seed_resp.json()["committed"] is True
+
+        # Create TRANSFER pair: broker1 → broker2
+        link_uuid = str(uuid.uuid4())
+        transfer_payload = [
+            {
+                "broker_id": broker1_id,
+                "asset_id": asset_id,
+                "type": "TRANSFER",
+                "date": date.today().isoformat(),
+                "quantity": "-5",
+                "link_uuid": link_uuid,
+            },
+            {
+                "broker_id": broker2_id,
+                "asset_id": asset_id,
+                "type": "TRANSFER",
+                "date": date.today().isoformat(),
+                "quantity": "5",
+                "link_uuid": link_uuid,
+            },
+        ]
+        create_resp = await client.post(
+            f"{API_BASE}/transactions/commit",
+            json={"creates": transfer_payload},
+            timeout=TIMEOUT,
+        )
+        assert create_resp.status_code == 200
+        assert create_resp.json()["committed"] is True
+        tx_ids = [r["id"] for r in create_resp.json()["results"]]
+        assert len(tx_ids) == 2
+
+        # GET /transactions with ids filter
+        get_resp = await client.get(
+            f"{API_BASE}/transactions",
+            params={"ids": tx_ids},
+            timeout=TIMEOUT,
+        )
+        assert get_resp.status_code == 200
+        txs = get_resp.json()
+
+        # Both transactions should have partner_broker_id
+        for tx in txs:
+            assert "partner_broker_id" in tx, f"TX #{tx['id']} missing partner_broker_id"
+            assert tx["partner_broker_id"] is not None, f"TX #{tx['id']} partner_broker_id is null"
+
+        # Verify cross-reference: tx on broker1 → partner_broker_id = broker2
+        tx_on_b1 = [t for t in txs if t["broker_id"] == broker1_id][0]
+        tx_on_b2 = [t for t in txs if t["broker_id"] == broker2_id][0]
+        assert tx_on_b1["partner_broker_id"] == broker2_id
+        assert tx_on_b2["partner_broker_id"] == broker1_id
+
+        print_success("✓ partner_broker_id correctly populated for linked pair")
+

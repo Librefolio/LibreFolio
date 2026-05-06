@@ -21,8 +21,11 @@
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import TransactionFormModal from '$lib/components/transactions/TransactionFormModal.svelte';
     import TransactionBulkModal from '$lib/components/transactions/TransactionBulkModal.svelte';
+    import TransactionDeleteModal from '$lib/components/transactions/TransactionDeleteModal.svelte';
     import BulkDeleteLinkedPairModal, {type ProblemPair} from '$lib/components/transactions/BulkDeleteLinkedPairModal.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
+    import {getBrokerInfo, getPairedAccessLevel, canEditBroker, canEditPaired} from '$lib/stores/brokerStore';
+    import {getTypeRule} from '$lib/stores/transactionTypeStore';
 
     // =========================================================================
     // Types (local, derived from generated.ts shapes)
@@ -37,6 +40,7 @@
         quantity: string;
         cash?: {code: string; amount: string} | null;
         related_transaction_id?: number | null;
+        partner_broker_id?: number | null;
         tags?: string[] | null;
         description?: string | null;
         cost_basis_override?: string | null;
@@ -704,7 +708,11 @@
     function handleCloneRow(row: TXReadItem) {
         const today = new Date().toISOString().slice(0, 10);
         bulkMode = 'create-many';
-        bulkInitial = [{...row, id: 0, date: today, related_transaction_id: null}];
+        const clone: TXReadItem = {...row, id: 0, date: today, related_transaction_id: null};
+        // Bug6-fix: reset quantity when the type requires qty=0 (e.g. INTEREST)
+        const rule = getTypeRule(row.type);
+        if (rule.quantityRule === 'zero') clone.quantity = '0';
+        bulkInitial = [clone];
         bulkAutoOpenForm = 'create';
         bulkOpen = true;
     }
@@ -715,12 +723,88 @@
         formOpen = true;
     }
 
+    /** Bug3-fix: determine if the view→edit switch should be allowed. */
+    let formCanEdit = $derived.by(() => {
+        const row = formInitial;
+        if (!row) return true;
+        if (row.related_transaction_id == null) return canEditBroker(row.broker_id);
+        // Paired — check both brokers
+        const partnerBid = row.partner_broker_id;
+        if (partnerBid == null) return false; // partner unknown → can't edit
+        return canEditPaired(row.broker_id, partnerBid);
+    });
+
+    // =========================================================================
+    // Single-row delete (TransactionDeleteModal)
+    // =========================================================================
+
+    let deleteModalOpen = $state(false);
+    let deleteModalTx = $state<TXReadItem | null>(null);
+    let deleteModalPartner = $state<TXReadItem | null>(null);
+    let deleteModalPartnerInaccessible = $state(false);
+    let deleteModalPartnerBrokerName = $state('');
+
     function handleDeleteRow(row: TXReadItem) {
-        // Reuse the bulk-delete pipeline with a single-row selection. This
-        // automatically handles the linked-pair extender modal when the row
-        // has a partner.
-        selectedRows = [row];
-        void onBulkDelete();
+        const partnerId = row.related_transaction_id;
+        if (partnerId == null) {
+            // Standalone → Layout A
+            deleteModalTx = row;
+            deleteModalPartner = null;
+            deleteModalPartnerInaccessible = false;
+            deleteModalPartnerBrokerName = '';
+            deleteModalOpen = true;
+            return;
+        }
+        // Paired — try to find partner
+        const partner = partnerRows.find((r) => r.id === partnerId) ?? mainRows.find((r) => r.id === partnerId) ?? null;
+        if (!partner) {
+            // Partner not found → Layout C (inaccessible)
+            deleteModalTx = row;
+            deleteModalPartner = null;
+            deleteModalPartnerInaccessible = true;
+            // Try to get broker name from link info (we can't know the broker_id)
+            deleteModalPartnerBrokerName = '?';
+            deleteModalOpen = true;
+            return;
+        }
+        // Check paired access level
+        const level = getPairedAccessLevel(row.broker_id, partner.broker_id);
+        if (level === 'full') {
+            // Layout B — paired full access
+            deleteModalTx = row;
+            deleteModalPartner = partner;
+            deleteModalPartnerInaccessible = false;
+            deleteModalPartnerBrokerName = '';
+            deleteModalOpen = true;
+        } else {
+            // Layout C — blocked
+            deleteModalTx = row;
+            deleteModalPartner = partner;
+            deleteModalPartnerInaccessible = true;
+            const bi = getBrokerInfo(partner.broker_id);
+            deleteModalPartnerBrokerName = bi?.name ?? `#${partner.broker_id}`;
+            deleteModalOpen = true;
+        }
+    }
+
+    async function confirmDeleteModal() {
+        if (!deleteModalTx) return;
+        try {
+            const ids = [deleteModalTx.id];
+            if (deleteModalPartner && !deleteModalPartnerInaccessible) {
+                ids.push(deleteModalPartner.id);
+            }
+            const resp = (await zodiosApi.commit_transactions_api_v1_transactions_commit_post({deletes: ids} as never)) as {committed?: boolean};
+            if (resp?.committed) {
+                deleteModalOpen = false;
+                deleteModalTx = null;
+                deleteModalPartner = null;
+                selectedRows = [];
+                void reload({soft: true});
+            }
+        } catch (e) {
+            console.error('[DeleteModal] failed:', e);
+        }
     }
 
     function handlePageChange(page: number) {
@@ -837,8 +921,17 @@
     {/if}
 </div>
 
-<TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} {availableTags} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} onSwitchToEdit={() => { formOpen = false; if (formInitial) handleEditRow(formInitial); }} />
-<TransactionBulkModal open={bulkOpen} mode={bulkMode} initialRows={bulkInitial} {availableTags} autoOpenForm={bulkAutoOpenForm} onClose={() => { bulkOpen = false; bulkAutoOpenForm = null; }} onCommitted={handleBulkCommitted} />
+<TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} {availableTags} canEdit={formCanEdit} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} onSwitchToEdit={() => { formOpen = false; if (formInitial) handleEditRow(formInitial); }} />
+<TransactionBulkModal open={bulkOpen} mode={bulkMode} initialRows={bulkInitial} {availableTags} autoOpenForm={bulkAutoOpenForm} allMainRows={mainRows} allPartnerRows={partnerRows} onClose={() => { bulkOpen = false; bulkAutoOpenForm = null; }} onCommitted={handleBulkCommitted} />
+<TransactionDeleteModal
+    open={deleteModalOpen}
+    transaction={deleteModalTx}
+    partner={deleteModalPartner}
+    partnerInaccessible={deleteModalPartnerInaccessible}
+    partnerBrokerName={deleteModalPartnerBrokerName}
+    onConfirm={confirmDeleteModal}
+    onCancel={() => { deleteModalOpen = false; deleteModalTx = null; deleteModalPartner = null; }}
+/>
 <BulkDeleteLinkedPairModal open={bulkDeleteOpen} cleanRows={bulkDeleteClean} problemRows={bulkDeleteProblems} onClose={() => (bulkDeleteOpen = false)} onCommitted={handleBulkDeleteCommitted} />
 <!-- Step 22 (F5): lightweight ConfirmModal for standalone deletes -->
 <ConfirmModal

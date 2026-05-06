@@ -7,6 +7,7 @@
 <script lang="ts">
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import {getRoleIcon, getRoleIconColor} from '$lib/utils/brokerRoleHelpers';
     import {_} from '$lib/i18n';
 
     /**
@@ -18,6 +19,7 @@
         icon_url?: string | null;
         portal_url?: string | null;
         default_import_plugin?: string | null;
+        user_role?: string | null;
     }
 
     interface Props {
@@ -67,16 +69,24 @@
 <SearchSelect {disabled} {dropdownPosition} inlineSearch={true} {maxVisibleItems} onchange={handleChange} options={brokerOptions} placeholder={placeholder || $_('uploads.selectBroker')} value={stringValue} {createLabel} {onCreateNew}>
     {#snippet item(option)}
         {@const broker = asBroker(option.data)}
+        {@const RoleIcon = broker.user_role ? getRoleIcon(broker.user_role) : null}
         <div class="flex items-center gap-2">
             <BrokerIcon iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
             <span class="truncate">{broker.name}</span>
+            {#if RoleIcon}
+                <RoleIcon size={14} class={getRoleIconColor(broker.user_role)} />
+            {/if}
         </div>
     {/snippet}
     {#snippet selectedItem(option)}
         {@const broker = asBroker(option.data)}
+        {@const RoleIcon = broker.user_role ? getRoleIcon(broker.user_role) : null}
         <div class="flex items-center gap-2">
             <BrokerIcon iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
             <span class="truncate">{broker.name}</span>
+            {#if RoleIcon}
+                <RoleIcon size={14} class={getRoleIconColor(broker.user_role)} />
+            {/if}
         </div>
     {/snippet}
 </SearchSelect>

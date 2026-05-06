@@ -1221,6 +1221,88 @@ def populate_transactions(session: Session):
     session.commit()
     print(f"  🔗 CASH TRANSFER pair: €2000 DEGIRO→IB (#{tx_cash_out.id} ↔ #{tx_cash_in.id})")
 
+    # ── 4 Asymmetric TRANSFER pairs for broker-access visibility testing ──
+    # Mapping for e2e_test_user roles:
+    #   i=0  IB        → OWNER (30%)
+    #   i=1  DEGIRO     → VIEWER
+    #   i=2  Directa    → EDITOR
+    #   i=3  eToro      → VIEWER
+    #   i=4  Coinbase   → EDITOR
+    #   i=5  Recrowd    → VIEWER
+    #   --   Hidden Admin Broker → no access
+    # NOTE: Asym-d (IB↔Hidden) handled later in link_transactions_to_events
+
+    # (a) IB (OWNER) ↔ Directa (EDITOR) → full access (min=EDITOR)
+    tx_asym_a_out = Transaction(
+        broker_id=ib.id, asset_id=apple.id, type=TransactionType.TRANSFER,
+        date=today - timedelta(days=5), quantity=Decimal("-3"),
+        amount=Decimal("0"), currency="USD",
+        description="[Asym-a] AAPL IB→Directa (OWNER↔EDITOR=full)",
+        tags="access-test",
+    )
+    tx_asym_a_in = Transaction(
+        broker_id=directa.id, asset_id=apple.id, type=TransactionType.TRANSFER,
+        date=today - timedelta(days=5), quantity=Decimal("3"),
+        amount=Decimal("0"), currency="USD",
+        description="[Asym-a] AAPL Directa←IB (EDITOR↔OWNER=full)",
+        tags="access-test",
+    )
+    session.add(tx_asym_a_out)
+    session.add(tx_asym_a_in)
+    session.flush()
+    tx_asym_a_out.related_transaction_id = tx_asym_a_in.id
+    tx_asym_a_in.related_transaction_id = tx_asym_a_out.id
+    session.commit()
+    print(f"  🔗 [Asym-a] TRANSFER AAPL IB(OWNER)→Directa(EDITOR) = FULL (#{tx_asym_a_out.id} ↔ #{tx_asym_a_in.id})")
+
+    # (b) IB (OWNER) ↔ Coinbase (EDITOR) → full access (min=EDITOR)
+    tx_asym_b_out = Transaction(
+        broker_id=ib.id, asset_id=btc.id, type=TransactionType.TRANSFER,
+        date=today - timedelta(days=4), quantity=Decimal("-0.05"),
+        amount=Decimal("0"), currency="USD",
+        description="[Asym-b] BTC IB→Coinbase (OWNER↔EDITOR=full)",
+        tags="access-test",
+    )
+    tx_asym_b_in = Transaction(
+        broker_id=coinbase.id, asset_id=btc.id, type=TransactionType.TRANSFER,
+        date=today - timedelta(days=4), quantity=Decimal("0.05"),
+        amount=Decimal("0"), currency="USD",
+        description="[Asym-b] BTC Coinbase←IB (EDITOR↔OWNER=full)",
+        tags="access-test",
+    )
+    session.add(tx_asym_b_out)
+    session.add(tx_asym_b_in)
+    session.flush()
+    tx_asym_b_out.related_transaction_id = tx_asym_b_in.id
+    tx_asym_b_in.related_transaction_id = tx_asym_b_out.id
+    session.commit()
+    print(f"  🔗 [Asym-b] TRANSFER BTC IB(OWNER)→Coinbase(EDITOR) = FULL (#{tx_asym_b_out.id} ↔ #{tx_asym_b_in.id})")
+
+    # (c) IB (OWNER) ↔ DEGIRO (VIEWER) → viewer only (min=VIEWER)
+    tx_asym_c_out = Transaction(
+        broker_id=ib.id, asset_id=msft.id, type=TransactionType.TRANSFER,
+        date=today - timedelta(days=3), quantity=Decimal("-2"),
+        amount=Decimal("0"), currency="USD",
+        description="[Asym-c] MSFT IB→DEGIRO (OWNER↔VIEWER=view-only)",
+        tags="access-test",
+    )
+    tx_asym_c_in = Transaction(
+        broker_id=degiro.id, asset_id=msft.id, type=TransactionType.TRANSFER,
+        date=today - timedelta(days=3), quantity=Decimal("2"),
+        amount=Decimal("0"), currency="USD",
+        description="[Asym-c] MSFT DEGIRO←IB (VIEWER↔OWNER=view-only)",
+        tags="access-test",
+    )
+    session.add(tx_asym_c_out)
+    session.add(tx_asym_c_in)
+    session.flush()
+    tx_asym_c_out.related_transaction_id = tx_asym_c_in.id
+    tx_asym_c_in.related_transaction_id = tx_asym_c_out.id
+    session.commit()
+    print(f"  🔗 [Asym-c] TRANSFER MSFT IB(OWNER)→DEGIRO(VIEWER) = VIEW-ONLY (#{tx_asym_c_out.id} ↔ #{tx_asym_c_in.id})")
+
+    # (d) Asym-d: IB↔Hidden — handled in link_transactions_to_events (hidden broker created later)
+
 
 def populate_price_history(session: Session):
     """Create price history for market-priced assets."""
@@ -1540,6 +1622,32 @@ def link_transactions_to_events(session: Session):
     print(f"     → linked to AssetEvent #{target_event.id} (Apple DIVIDEND, {target_event.date})")
     print("     🧪 Deleting that event while logged in as e2e_test_user must")
     print("        report `hidden_transactions_count >= 1`.")
+
+    # ── Asym-d: IB (OWNER) ↔ Hidden Admin Broker (no access) → partner invisible ──
+    ib = session.exec(select(Broker).where(Broker.name == "Interactive Brokers")).first()
+    apple_for_asym = session.exec(select(Asset).where(Asset.display_name == "Apple Inc.")).first()
+    if ib and apple_for_asym:
+        tx_asym_d_out = Transaction(
+            broker_id=ib.id, asset_id=apple_for_asym.id, type=TransactionType.TRANSFER,
+            date=today - timedelta(days=2), quantity=Decimal("-1"),
+            amount=Decimal("0"), currency="USD",
+            description="[Asym-d] AAPL IB→HiddenBroker (OWNER↔none=locked)",
+            tags="access-test",
+        )
+        tx_asym_d_in = Transaction(
+            broker_id=hidden_broker.id, asset_id=apple_for_asym.id, type=TransactionType.TRANSFER,
+            date=today - timedelta(days=2), quantity=Decimal("1"),
+            amount=Decimal("0"), currency="USD",
+            description="[Asym-d] AAPL HiddenBroker←IB (none↔OWNER=locked)",
+            tags="access-test",
+        )
+        session.add(tx_asym_d_out)
+        session.add(tx_asym_d_in)
+        session.flush()
+        tx_asym_d_out.related_transaction_id = tx_asym_d_in.id
+        tx_asym_d_in.related_transaction_id = tx_asym_d_out.id
+        session.commit()
+        print(f"  🔗 [Asym-d] TRANSFER AAPL IB(OWNER)→Hidden(none) = LOCKED (#{tx_asym_d_out.id} ↔ #{tx_asym_d_in.id})")
 
 
 def populate_fx_rates(session: Session):
