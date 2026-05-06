@@ -59,7 +59,9 @@
     import {generateUUID} from '$lib/utils/uuid';
     import {formatCurrencyAmountHtml} from '$lib/utils/currencyFormat';
     import {getStringColor} from '$lib/utils/colors';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import TransactionFormModal from './TransactionFormModal.svelte';
+    import TransactionPickerModal from './TransactionPickerModal.svelte';
 
     // =========================================================================
     // Types
@@ -137,11 +139,15 @@
          *  'edit' → opens the first draft for editing
          *  'create' → opens a new row form */
         autoOpenForm?: 'create' | 'edit' | null;
+        /** All main rows from parent page — for PickerModal (zero extra fetch) */
+        allMainRows?: TXReadItem[];
+        /** All partner rows from parent page — for PickerModal */
+        allPartnerRows?: TXReadItem[];
         onClose: () => void;
         onCommitted?: (resp: unknown) => void;
     }
 
-    let {open, mode, initialRows = [], availableTags = [], autoOpenForm = null, onClose, onCommitted}: Props = $props();
+    let {open, mode, initialRows = [], availableTags = [], autoOpenForm = null, allMainRows = [], allPartnerRows = [], onClose, onCommitted}: Props = $props();
 
     const AUTO_VALIDATE_THRESHOLD = 50;
 
@@ -458,6 +464,12 @@
 
             const fromDraft = draftArr[fromIdx];
             const toDraft = draftArr[toIdx];
+            // Bug2-fix: generate a shared link_uuid so findPartnerDraft() can
+            // locate the hidden partner and inject it into the FormModal for
+            // dual-form editing.
+            const sharedUuid = generateUUID();
+            fromDraft.link_uuid = sharedUuid;
+            toDraft.link_uuid = sharedUuid;
             // Set partner data on the visible "from" row
             fromDraft.partnerBrokerId = toDraft.broker_id;
             fromDraft.partnerCash = toDraft.cash;
@@ -830,7 +842,8 @@
         if (assetId == null) return '<span class="text-gray-400 italic">—</span>';
         const info = getAssetInfo(assetId);
         const name = info?.display_name ?? `#${assetId}`;
-        const iconUrl = info?.icon_url;
+        // Bug11-fix: use asset type icon as fallback when icon_url is null
+        const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
         const iconHtml = iconUrl
             ? `<img src="${iconUrl}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`
             : '';
@@ -993,7 +1006,15 @@
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: false,
-                cell: (row): CellContent => ({type: 'html', html: row.description ? `<span class="text-xs text-gray-600 dark:text-gray-300 truncate block">${row.description}</span>` : '<span class="text-gray-400">—</span>'}),
+                cell: (row): CellContent => {
+                    if (!row.description) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                    const escaped = row.description.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    return {
+                        type: 'html',
+                        html: `<span class="text-xs text-gray-600 dark:text-gray-300 truncate block leading-tight">${escaped}</span>`,
+                        tooltip: {text: row.description, position: 'top', maxWidth: '400px'},
+                    };
+                },
             },
             {
                 id: 'tags',
@@ -1151,6 +1172,52 @@
      *  When null, a successful Save = push as a brand-new row. */
     let formEditingTempId = $state<string | null>(null);
 
+    // PickerModal (Plan B Step 9): "Search & add" existing DB transactions.
+    let pickerOpen = $state(false);
+    let pickerExcludeIds = $derived(new Set(drafts.filter((d) => d.id != null).map((d) => d.id!)));
+    let pickerBrokers = $derived(getAllBrokers() as import('$lib/utils/brokerColors').BrokerLike[]);
+
+    function openPicker() {
+        pickerOpen = true;
+    }
+    function handlePickerAdd(rows: TXReadItem[]) {
+        const existing = new Set(drafts.filter((d) => d.id != null).map((d) => d.id!));
+        for (const r of rows) {
+            if (existing.has(r.id)) continue; // dedup
+            existing.add(r.id);
+            const d = emptyDraft();
+            d.id = r.id;
+            d.status = 'original';
+            d.original = r;
+            d.broker_id = r.broker_id;
+            d.asset_id = r.asset_id ?? null;
+            d.type = r.type as TransactionTypeCode;
+            d.date = r.date;
+            d.quantity = r.quantity;
+            d.cash = r.cash ?? null;
+            d.tags = r.tags ?? [];
+            d.description = r.description ?? '';
+            d.asset_event_id = r.asset_event_id ?? null;
+            d.cost_basis_override = r.cost_basis_override ?? '';
+            d.created_at = r.created_at;
+            d.updated_at = r.updated_at;
+            // If paired, populate partner display info
+            if (r.related_transaction_id != null) {
+                const partner = rows.find((p) => p.id === r.related_transaction_id) ??
+                    allMainRows.find((p) => p.id === r.related_transaction_id) ??
+                    allPartnerRows.find((p) => p.id === r.related_transaction_id);
+                if (partner) {
+                    d.partnerBrokerId = partner.broker_id;
+                    d.partnerCash = partner.cash ?? null;
+                    d.partnerDate = partner.date;
+                    d._partnerId = partner.id;
+                }
+            }
+            drafts = [...drafts, d];
+        }
+        pickerOpen = false;
+    }
+
     /** Aggregated tag suggestions: union of tags currently in any draft +
      *  any tag in the initialRows snapshot + the parent-supplied
      *  `availableTags` (sourced from the loaded transactions table). Drives
@@ -1248,8 +1315,14 @@
         });
 
         // Find or create the hidden partner draft
+        // Bug14-fix: also match by _partnerId (visible draft's partner DB id)
+        // in case the link_uuid was regenerated by the FormModal.
+        const visibleDraft = drafts.find((d) => d.tempId === tempId);
         const existingPartner = drafts.find(
-            (d) => d._hidden && d.link_uuid === linkUuid && d.tempId !== tempId
+            (d) => d._hidden && d.tempId !== tempId && (
+                (d.link_uuid && d.link_uuid === linkUuid) ||
+                (visibleDraft?._partnerId != null && d.id === visibleDraft._partnerId)
+            )
         );
         if (existingPartner) {
             drafts = drafts.map((d) => {
@@ -1265,7 +1338,6 @@
             // R7-C1 fix: if the visible row has a _partnerId (DB row), preserve
             // the partner's id/status/original so collectUpdate() picks it up
             // instead of collectCreate().
-            const visibleDraft = drafts.find((d) => d.tempId === tempId);
             const partnerId = visibleDraft?._partnerId;
             let toDraft: DraftRow;
             if (partnerId != null) {
@@ -1431,6 +1503,11 @@
                 <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row">
                     <Plus size={12} /> {$t('transactions.bulk.addRow') || 'Add row'}
                 </button>
+                {#if mode === 'edit-many' && allMainRows.length > 0}
+                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={openPicker} data-testid="tx-bulk-picker">
+                        🔍 {$t('transactions.picker.searchAdd') || 'Search & add'}
+                    </button>
+                {/if}
                 {#if mode === 'edit-many'}
                     <button type="button" class="px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all">{$t('transactions.bulk.resetAll')}</button>
                 {/if}
@@ -1519,3 +1596,15 @@
     }}
     onPushDraft={handleFormPushed}
 />
+
+<!-- Plan B Step 9: PickerModal for adding existing DB transactions -->
+<TransactionPickerModal
+    open={pickerOpen}
+    mainRows={allMainRows as any[]}
+    partnerRows={allPartnerRows as any[]}
+    brokers={pickerBrokers}
+    excludeIds={pickerExcludeIds}
+    onAdd={handlePickerAdd}
+    onClose={() => (pickerOpen = false)}
+/>
+

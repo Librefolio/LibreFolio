@@ -359,6 +359,11 @@ class TXReadItem(BaseModel):
     # Both transactions in a pair point to each other
     related_transaction_id: Optional[int] = None
 
+    # Broker of the partner transaction (populated by service layer).
+    # Allows the frontend to show the partner broker name/icon even when
+    # the user has no access to the partner transaction itself.
+    partner_broker_id: Optional[int] = None
+
     tags: Optional[List[str]] = None
     description: Optional[str] = None
 

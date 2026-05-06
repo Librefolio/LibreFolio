@@ -354,7 +354,7 @@ interface Props {
 - Two-option toggle (not a native range input): two buttons styled as a segmented control
 - Default: "Entrambe" (safer choice)
 - When "Solo questa" selected: warning `⚠️ La transazione partner rimarrà orfana.` appears
-- `onConfirm(deletePartner)` receives the choice
+- `onConfirm(deletePartner)` riceve la scelta
 
 **+page.svelte** routing:
 - In `onBulkDelete` handler: if exactly 1 row selected:
@@ -452,16 +452,16 @@ interface Props {
   - Rows with `id ∈ excludeIds` → filtered out before rendering
 - Linked pairs: selecting one side auto-selects the partner (if partner not in excludeIds)
 - Footer: `[Annulla]  [✓ Aggiungi N selezionate]`
-- On add: `onAdd(selectedRows)` → BulkModal receives rows → creates `edit` state drafts
+- On add: `onAdd(selectedRows)` → BulkModal riceve righe → crea draft con stato `edit`
 
-**BulkModal integration**:
-- Toolbar: add `[🔍 Cerca e aggiungi]` button next to `[+ Nuova riga]`
+**Integrazione BulkModal**:
+- Toolbar: aggiungi pulsante `[🔍 Cerca e aggiungi]` accanto a `[+ Nuova riga]`
 - State: `pickerOpen: $state(false)`
-- `handlePickerAdd(rows)`: for each row:
-  - Create draft with `status: 'edited'`, `id: row.id`, `original: {...row}`
-  - If row has `related_transaction_id` and partner in `rows` → create paired draft
-  - If partner NOT in `rows` but exists → auto-fetch and add as paired
-- Dedup: skip if `row.id` already in drafts
+- `handlePickerAdd(rows)`: per ogni riga:
+  - Crea draft con `status: 'edited'`, `id: row.id`, `original: {...row}`
+  - Se la riga ha `related_transaction_id` e il partner è in `rows` → crea draft accoppiato
+  - Se il partner NON è in `rows` ma esiste → auto-fetch e aggiungi come accoppiato
+- Dedup: salta se `row.id` è già presente nei draft
 
 **i18n keys** (4 locales):
 ```
@@ -495,7 +495,7 @@ class TXSplitResultItem(BaseModel):
     to_tx: TXReadItem     # the partner half (type mutated)
 
 class TXSplitResponse(BaseModel):
-    results: List[TXSplitResultItem]
+    results: List<TXSplitResultItem>
     errors: List[str]
 ```
 
@@ -522,7 +522,7 @@ class TXPromoteResultItem(BaseModel):
     pair_b: TXReadItem
 
 class TXPromoteResponse(BaseModel):
-    results: List[TXPromoteResultItem]
+    results: List<TXPromoteResultItem>
     errors: List[str]
 ```
 
@@ -749,3 +749,28 @@ Step 12 (Split/Promote Main)    ← DIPENDE da Step 10 + Step 11
 2. **Piano B** (DeleteModal + PickerModal) — nuove modali, user-facing
 3. **Piano C** (Split/Promote full stack) — feature più complessa, ultima
 
+---
+
+## Note aggiuntive (2026-05-06)
+
+### Broker access: bloccare edit su broker VIEWER / no-role
+
+In `/brokers/` bisogna impedire l'edit (matita / form modifica) per i broker dove l'utente ha solo ruolo VIEWER o nessun ruolo (null). Attualmente il pulsante edit è visibile per tutti i broker nella lista. Solo OWNER e EDITOR dovrebbero poter modificare il broker.
+
+**File coinvolti**: pagina brokers (`routes/(app)/brokers/`), `BrokerModal` o equivalente.
+**Status**: ⏳ DA IMPLEMENTARE
+
+### Form view dual — hidden broker: tipo non caricato → pre-populate saltato
+
+**Sintomo persistente (Round 4)**: TX #37 (IB→Hidden) in view mode mostra `—` nel lato "To" broker e data visibile, nonostante fix sincrono.
+**Causa root (Round 4)**: `getPairFormLayout(row.type)` nel `$effect` usa `getTypeRule` che dipende dai types server. Se i types non sono ancora caricati (async), torna `FALLBACK_RULE` con `pairFormLayout: null` → il blocco `if (layout)` è falso → il pre-populate sincrono di `dualTo` + `inaccessiblePartnerBrokerId` veniva saltato.
+**Fix (Round 4)**:
+1. Il pre-populate sincrono di `dualTo` e `inaccessiblePartnerBrokerId` da `row.partner_broker_id` ora **non è gated da `layout`** — si esegue sempre se `pBid != null`
+2. Se `layout` è null (types non caricati): `ensureTypesLoaded().then(fetchPartner)` — defer la fetch a quando i types arrivano
+3. `fetchPartner` on success resetta `inaccessiblePartnerBrokerId = null` (caso VIEWER)
+**Status**: ✅ APPLICATO
+
+### Filtri enum: default deselezionato
+
+I filtri enum nella DataTable (type, asset, broker, tags) partivano con tutte le opzioni selezionate. Cambiato il default a nessuna opzione selezionata (= nessun filtro attivo, mostra tutto). Più intuitivo: l'utente seleziona cosa vuole FILTRARE, non cosa vuole ESCLUDERE. Applicato globalmente in `DataTableColumnFilter.svelte`.
+**Status**: ✅ APPLICATO

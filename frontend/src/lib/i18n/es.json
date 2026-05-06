@@ -708,6 +708,32 @@
       "assetRequired": "Selecciona un activo",
       "quantityInvalid": "La cantidad debe ser un número válido",
       "cashRequired": "El importe y la divisa son obligatorios"
+    },
+    "deleteModal": {
+      "titleStandalone": "Eliminar transacción",
+      "titleLinked": "Eliminar transacción vinculada",
+      "pairedIntro": "Ambas transacciones del par serán eliminadas.",
+      "from": "De",
+      "to": "A",
+      "splitHint": "Para eliminar solo un lado, primero usa Dividir para desvincular el par.",
+      "linkedInfo": "Esta transacción es parte de un par vinculado.",
+      "brokerLabel": "Broker",
+      "notAccessible": "no accesible",
+      "blockedMessage": "No se puede eliminar: necesitas acceso de Editor en ambos brokers para eliminar un par vinculado.",
+      "contactOwner": "Contacta al propietario de",
+      "forAccess": "para acceso.",
+      "deleteBoth": "Eliminar ambas"
+    },
+    "picker": {
+      "title": "Seleccionar transacciones para agregar",
+      "pairedNote": "Al seleccionar una transacción vinculada se agrega automáticamente su par.",
+      "addN": "Agregar {n} seleccionadas",
+      "searchAdd": "Buscar y agregar"
+    },
+    "access": {
+      "viewOnly": "Solo lectura",
+      "editBlocked": "Edición bloqueada: acceso de visor en el broker asociado.",
+      "partnerNotAccessible": "La transacción vinculada está en un broker al cual el usuario no tiene acceso."
     }
   },
   "fx": {

@@ -94,7 +94,7 @@
     }
 
     function getInitialEnums(): Set<string> {
-        return new Set(initialValue?.type === 'enum' ? initialValue.selected : enumOptions.map((o) => o.value));
+        return new Set(initialValue?.type === 'enum' ? initialValue.selected : []);
     }
 
     function getInitialSizeMin(): number {
@@ -431,7 +431,7 @@
         numSliderMaxPos = 100;
         dateFrom = '';
         dateTo = '';
-        selectedEnums = new Set(enumOptions.map((o) => o.value));
+        selectedEnums = new Set();
         multiEnums = new Set();
         multiEnumSearch = '';
         currencyStack = [];

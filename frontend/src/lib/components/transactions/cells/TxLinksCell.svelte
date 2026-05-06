@@ -32,7 +32,7 @@
         </Tooltip>
     {/if}
     {#if linkHtml}
-        <Tooltip text={linkTooltip} position="top">
+        <Tooltip html={linkTooltip} position="top">
             <span class="tx-links-slot">{@html linkHtml}</span>
         </Tooltip>
     {/if}

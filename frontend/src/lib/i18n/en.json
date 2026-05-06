@@ -708,6 +708,32 @@
       "assetRequired": "Please select an asset",
       "quantityInvalid": "Quantity must be a valid number",
       "cashRequired": "Cash amount and currency are required"
+    },
+    "deleteModal": {
+      "titleStandalone": "Delete transaction",
+      "titleLinked": "Delete linked transaction",
+      "pairedIntro": "Both transactions in this pair will be deleted.",
+      "from": "From",
+      "to": "To",
+      "splitHint": "To delete only one side, first use Split to unlink the pair.",
+      "linkedInfo": "This transaction is part of a linked pair.",
+      "brokerLabel": "Broker",
+      "notAccessible": "not accessible",
+      "blockedMessage": "Cannot delete: you need Editor access on both brokers to delete a linked pair.",
+      "contactOwner": "Contact the owner of",
+      "forAccess": "for access.",
+      "deleteBoth": "Delete both"
+    },
+    "picker": {
+      "title": "Select transactions to add",
+      "pairedNote": "Selecting a paired transaction auto-adds its partner.",
+      "addN": "Add {n} selected",
+      "searchAdd": "Search & add"
+    },
+    "access": {
+      "viewOnly": "View only",
+      "editBlocked": "Edit blocked: viewer access on partner broker.",
+      "partnerNotAccessible": "The linked transaction is on a broker the user cannot access."
     }
   },
   "fx": {

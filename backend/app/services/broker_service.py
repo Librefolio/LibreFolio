@@ -278,8 +278,19 @@ class BrokerService:
             brokers = result.scalars().all()
             return [BRReadItem.model_validate(b) for b in brokers]
         else:
-            # Join with BrokerUserAccess to filter by user and get role
-            stmt = select(Broker, BrokerUserAccess.role).join(BrokerUserAccess, Broker.id == BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == filter_user_id).order_by(Broker.name)
+            # LEFT JOIN with BrokerUserAccess: returns ALL brokers; user_role is
+            # set when the user has access, null otherwise. This allows the
+            # frontend to know broker names even when the user has no access
+            # (for paired-tx placeholder rendering), while still distinguishing
+            # accessible (OWNER/EDITOR/VIEWER) from inaccessible (null).
+            stmt = (
+                select(Broker, BrokerUserAccess.role)
+                .outerjoin(
+                    BrokerUserAccess,
+                    and_(Broker.id == BrokerUserAccess.broker_id, BrokerUserAccess.user_id == filter_user_id),
+                )
+                .order_by(Broker.name)
+            )
 
         result = await self.session.execute(stmt)
         rows = result.all()

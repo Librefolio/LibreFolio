@@ -36,6 +36,8 @@
     import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currencyFormat';
     import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES, getEventTypeEmoji} from '$lib/stores/transactionTypeStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {getRoleSvgHtml} from '$lib/utils/brokerRoleHelpers';
+    import {getBrokerRole, canEditBroker, getPairedAccessLevel, getBrokerInfo, brokerStoreVersion} from '$lib/stores/brokerStore';
     import TxTooltipCell from './cells/TxTooltipCell.svelte';
     import TxLinksCell from './cells/TxLinksCell.svelte';
     import TxTypeIconCell from './cells/TxTypeIconCell.svelte';
@@ -60,6 +62,7 @@
         quantity: string;
         cash?: {code: string; amount: string} | null;
         related_transaction_id?: number | null;
+        partner_broker_id?: number | null;
         tags?: string[] | null;
         description?: string | null;
         cost_basis_override?: string | null;
@@ -90,6 +93,9 @@
         isReceiver: boolean;
         /** Pair anchor id (giver tx id). null when not part of a pair. */
         pairAnchorId: number | null;
+        /** Bug7-fix: stable sort index for flat mode — preserves date-desc order
+         *  while keeping paired rows adjacent (giver then receiver). */
+        sortIndex: number;
     }
 
     interface Props {
@@ -236,22 +242,51 @@
      * partner, so direction is recognizable even out of context — the
      * tooltip resolves any ambiguity at distance.
      */
-    let displayRows = $derived.by<DisplayRow[]>(() => {
+    let displayRows = $derived.by(() => {
         if (!isGrouped) {
-            // Flat mode: keep `isReceiver` so the ⬆/⬇ arrow still renders
-            // for linked rows (computed from quantity sign / role helper).
+            // Bug7-fix: build flat rows with sortIndex that keeps paired rows
+            // adjacent (giver then receiver) while maintaining date-desc order.
+            const mainIdSet = new Set(mainRows.map((r) => r.id));
+            const processed = new Set<number>();
             const out: DisplayRow[] = [];
+            let idx = 0;
+
             for (const r of mainRows) {
+                if (processed.has(r.id)) continue;
                 const hasPartner = r.related_transaction_id != null;
-                out.push({
-                    tx: r,
-                    isGhost: false,
-                    isReceiver: hasPartner ? !isGiver(r) : false,
-                    // Use the partner-id as anchor so the arrow renders; the
-                    // pair-never-split paginator is bypassed in flat mode.
-                    pairAnchorId: hasPartner ? (r.related_transaction_id ?? null) : null,
-                });
+                const partnerId = r.related_transaction_id;
+                const partnerInMain = partnerId != null && mainIdSet.has(partnerId) && !processed.has(partnerId);
+
+                if (hasPartner && partnerInMain) {
+                    // Paired: emit giver then receiver with consecutive sortIndex
+                    const partner = mainRows.find((p) => p.id === partnerId)!;
+                    const rIsGiverFlag = isGiver(r);
+                    const giver = rIsGiverFlag ? r : partner;
+                    const receiver = rIsGiverFlag ? partner : r;
+                    out.push({
+                        tx: giver, isGhost: false, isReceiver: false,
+                        pairAnchorId: giver.related_transaction_id ?? null, sortIndex: idx,
+                    });
+                    out.push({
+                        tx: receiver, isGhost: false, isReceiver: true,
+                        pairAnchorId: receiver.related_transaction_id ?? null, sortIndex: idx + 0.5,
+                    });
+                    processed.add(giver.id);
+                    processed.add(receiver.id);
+                    idx += 1;
+                } else {
+                    out.push({
+                        tx: r, isGhost: false,
+                        isReceiver: hasPartner ? !isGiver(r) : false,
+                        pairAnchorId: hasPartner ? (partnerId ?? null) : null,
+                        sortIndex: idx,
+                    });
+                    processed.add(r.id);
+                    idx += 1;
+                }
             }
+            // Sort by sortIndex to ensure paired adjacency
+            out.sort((a, b) => a.sortIndex - b.sortIndex);
             return out;
         }
 
@@ -259,13 +294,14 @@
         const mainIds = new Set(mainRows.map((r) => r.id));
         const rendered = new Set<number>();
         const out: DisplayRow[] = [];
+        let gIdx = 0;
 
         for (const r of mainRows) {
             if (rendered.has(r.id)) continue;
             const partnerId = r.related_transaction_id ?? null;
             if (partnerId == null || !partnerLookup.has(partnerId)) {
                 // Stand-alone row.
-                out.push({tx: r, isGhost: false, isReceiver: false, pairAnchorId: null});
+                out.push({tx: r, isGhost: false, isReceiver: false, pairAnchorId: null, sortIndex: gIdx++});
                 rendered.add(r.id);
                 continue;
             }
@@ -282,8 +318,9 @@
             const giverIsGhost = !mainIds.has(giver.id);
             const receiverIsGhost = !mainIds.has(receiver.id);
 
-            out.push({tx: giver, isGhost: giverIsGhost, isReceiver: false, pairAnchorId: giver.id});
-            out.push({tx: receiver, isGhost: receiverIsGhost, isReceiver: true, pairAnchorId: giver.id});
+            out.push({tx: giver, isGhost: giverIsGhost, isReceiver: false, pairAnchorId: giver.id, sortIndex: gIdx});
+            out.push({tx: receiver, isGhost: receiverIsGhost, isReceiver: true, pairAnchorId: giver.id, sortIndex: gIdx + 0.5});
+            gIdx += 1;
             rendered.add(giver.id);
             rendered.add(receiver.id);
 
@@ -441,13 +478,29 @@
     }
 
     /**
-     * Build a context-specific tooltip for the 🔗 link icon based on TX type
-     * and role (giver/receiver). Explains what this linked pair means.
+     * Build a small HTML string with broker icon (favicon) + name + role SVG icon.
+     * Used inside the rich Tooltip (html mode).
      */
+    function brokerLabelHtml(brokerId: number | null): string {
+        if (brokerId == null) return '?';
+        const info = getBrokerInfo(brokerId);
+        const name = escapeHtml(info?.name ?? brokerName(brokerId));
+        const role = getBrokerRole(brokerId);
+        const roleSvg = getRoleSvgHtml(role);
+        // Resolve icon via the full fallback chain (icon_url → portal_url → plugin)
+        const iconUrl = getBrokerIconUrlById(brokerId, brokers);
+        const iconTag = iconUrl
+            ? `<img src="${escapeHtml(iconUrl)}" alt="" width="16" height="16" style="display:inline-block;vertical-align:middle;margin-right:3px;border-radius:2px" onerror="this.style.display='none'" />`
+            : '';
+        return `${iconTag}<strong>${name}</strong> ${roleSvg}`;
+    }
+
     function linkedPairTooltip(d: DisplayRow): string {
         const type = d.tx.type;
         const partner = d.tx.related_transaction_id != null ? partnerLookup.get(d.tx.related_transaction_id) : null;
-        const partnerBroker = partner ? brokerName(partner.broker_id) : '?';
+        // Bug5-fix: use partner_broker_id when partner row is inaccessible
+        const partnerBrokerId = partner?.broker_id ?? d.tx.partner_broker_id ?? null;
+        const partnerBrokerLabel = brokerLabelHtml(partnerBrokerId);
         const thisBroker = brokerName(d.tx.broker_id);
         const currency = d.tx.cash?.code ?? '?';
 
@@ -460,9 +513,9 @@
 
         if (type === 'TRANSFER') {
             if (d.isReceiver) {
-                return `📥 ${$t('transactions.linkTooltip.transferIn') || `Received from ${partnerBroker}`}`.replace('{broker}', partnerBroker);
+                return `📥 ${$t('transactions.linkTooltip.transferIn') || `Received from ${partnerBrokerLabel}`}`.replace('{broker}', partnerBrokerLabel);
             }
-            return `📤 ${$t('transactions.linkTooltip.transferOut') || `Sent to ${partnerBroker}`}`.replace('{broker}', partnerBroker);
+            return `📤 ${$t('transactions.linkTooltip.transferOut') || `Sent to ${partnerBrokerLabel}`}`.replace('{broker}', partnerBrokerLabel);
         }
         if (type === 'FX_CONVERSION') {
             const thisAmount = fmtCash(currency, d.tx.cash?.amount);
@@ -476,13 +529,13 @@
         }
         // Cash transfers between brokers (DEPOSIT↔WITHDRAWAL, or same-type linked)
         if (type === 'DEPOSIT' && partner) {
-            return `🏦 ${$t('transactions.linkTooltip.depositFrom') || `Cash in from ${partnerBroker}`}`.replace('{broker}', partnerBroker).replace('{currency}', currency);
+            return `🏦 ${$t('transactions.linkTooltip.depositFrom') || `Cash in from ${partnerBrokerLabel}`}`.replace('{broker}', partnerBrokerLabel).replace('{currency}', currency);
         }
         if (type === 'WITHDRAWAL' && partner) {
-            return `🏦 ${$t('transactions.linkTooltip.withdrawalTo') || `Cash out to ${partnerBroker}`}`.replace('{broker}', partnerBroker).replace('{currency}', currency);
+            return `🏦 ${$t('transactions.linkTooltip.withdrawalTo') || `Cash out to ${partnerBrokerLabel}`}`.replace('{broker}', partnerBrokerLabel).replace('{currency}', currency);
         }
         // Generic fallback — cash transfer / linked pair
-        return `🏦 ${$t('transactions.linkTooltip.generic') || 'Cash transfer'} — ${thisBroker} ↔ ${partnerBroker}`;
+        return `🏦 ${$t('transactions.linkTooltip.generic') || 'Cash transfer'} — ${thisBroker} ↔ ${partnerBrokerLabel}`;
     }
 
     // =========================================================================
@@ -601,6 +654,7 @@
                 // (eventTooltipText/linkedPairTooltip read currency info).
                 void $currencyStoreVersion;
                 void $assetStoreVersion;
+                void $brokerStoreVersion;
                 const hasEvent = d.tx.asset_event_id != null;
                 const hasLink = d.tx.related_transaction_id != null;
                 if (!hasEvent && !hasLink) return '';
@@ -682,12 +736,14 @@
                 const name = brokerName(d.tx.broker_id);
                 const iconSrc = getBrokerIconUrlById(d.tx.broker_id, brokers);
                 const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" class="tx-broker-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'" /><span class="tx-broker-dot" style="display:none"></span>` : `<span class="tx-broker-dot"></span>`;
+                const role = getBrokerRole(d.tx.broker_id);
+                const roleSvg = role ? getRoleSvgHtml(role) : '';
                 // CustomCell — broker name shown via real Tooltip (no native HTML title).
                 return {
                     type: 'custom',
                     component: TxTooltipCell,
                     props: {
-                        html: `<span class="tx-broker-cell" data-testid="tx-broker-cell-${d.tx.broker_id}">${iconHtml}<span class="tx-broker-name">${escapeHtml(name)}</span></span>`,
+                        html: `<span class="tx-broker-cell" data-testid="tx-broker-cell-${d.tx.broker_id}">${iconHtml}<span class="tx-broker-name">${escapeHtml(name)}</span>${roleSvg}</span>`,
                         tooltip: name,
                     },
                 };
@@ -730,6 +786,22 @@
         },
     ]);
 
+    /** Get the partner's broker_id for a given display row (null if standalone/not found). */
+    function getPartnerBrokerId(d: DisplayRow): number | null | undefined {
+        const partnerId = d.tx.related_transaction_id;
+        if (partnerId == null) return null;
+        const partner = partnerLookup.get(partnerId);
+        return partner?.broker_id ?? undefined; // undefined = partner not accessible
+    }
+
+    /** Check paired access level for a display row. */
+    function rowAccessLevel(d: DisplayRow): 'full' | 'viewer' | 'none' {
+        const partnerBid = getPartnerBrokerId(d);
+        // undefined → partner not found → 'none'
+        if (partnerBid === undefined) return d.tx.related_transaction_id != null ? 'none' : getPairedAccessLevel(d.tx.broker_id, null);
+        return getPairedAccessLevel(d.tx.broker_id, partnerBid);
+    }
+
     let rowActions = $derived<RowAction<DisplayRow>[]>([
         {
             id: 'view',
@@ -742,12 +814,20 @@
             icon: Pencil,
             label: () => $t('transactions.actions.edit') || 'Edit',
             onClick: (d) => onEditRow?.(d.tx),
+            visible: (d) => rowAccessLevel(d) === 'full',
         },
         {
             id: 'clone',
             icon: Copy,
             label: () => $t('transactions.actions.clone') || 'Clone',
             onClick: (d) => onCloneRow?.(d.tx),
+            visible: (d) => {
+                const level = rowAccessLevel(d);
+                // Standalone: clone allowed if user can edit the broker
+                if (d.tx.related_transaction_id == null) return canEditBroker(d.tx.broker_id);
+                // Paired: clone only if full access on both brokers
+                return level === 'full';
+            },
         },
         {
             id: 'delete',
@@ -755,6 +835,7 @@
             label: () => $t('transactions.actions.delete') || 'Delete',
             variant: 'danger',
             onClick: (d) => onDeleteRow?.(d.tx),
+            visible: (d) => rowAccessLevel(d) === 'full',
         },
     ]);
 

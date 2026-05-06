@@ -18,6 +18,7 @@
     import {Check, ChevronDown, Crown, Eye, Loader2, Pencil, Plus, RotateCcw, Save, Search, Trash2, Users, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import {ConfirmModal} from '$lib/components/table';
+    import {getRoleIcon as _getRoleIcon, getRoleIconColor as _getRoleIconColor, getRoleShortLabel as _getRoleShortLabel} from '$lib/utils/brokerRoleHelpers';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import SemiDonutChart from '$lib/components/charts/SemiDonutChart.svelte';
@@ -355,42 +356,15 @@
     // Helpers
     // =========================================================================
     function getRoleIcon(role: string) {
-        switch (role) {
-            case 'OWNER':
-                return Crown;
-            case 'EDITOR':
-                return Pencil;
-            case 'VIEWER':
-                return Eye;
-            default:
-                return Users;
-        }
+        return _getRoleIcon(role);
     }
 
     function getRoleShortLabel(role: string): string {
-        switch (role) {
-            case 'OWNER':
-                return $_('brokers.sharing.roleOwnerShort');
-            case 'EDITOR':
-                return $_('brokers.sharing.roleEditorShort');
-            case 'VIEWER':
-                return $_('brokers.sharing.roleViewerShort');
-            default:
-                return role;
-        }
+        return _getRoleShortLabel(role, $_);
     }
 
     function getRoleIconColor(role: string): string {
-        switch (role) {
-            case 'OWNER':
-                return 'text-amber-500';
-            case 'EDITOR':
-                return 'text-blue-500';
-            case 'VIEWER':
-                return 'text-gray-400';
-            default:
-                return 'text-gray-400';
-        }
+        return _getRoleIconColor(role);
     }
 
     function getAvatarInitial(username: string): string {

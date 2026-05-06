@@ -21,6 +21,7 @@
 import {zodiosApi} from '$lib/api';
 import {createEntityStore} from './entityStore';
 import {derived} from 'svelte/store';
+import {canEditWithRole, getRoleRank, type PairedAccessLevel} from '$lib/utils/brokerRoleHelpers';
 
 // ============================================================================
 // TYPES
@@ -128,3 +129,55 @@ export const mergeBrokers = store.merge;
  * `ensureBrokersLoaded()` re-fetches.
  */
 export const invalidateBroker = store.invalidate;
+
+// ============================================================================
+// ROLE / ACCESS HELPERS
+// ============================================================================
+
+/** Get the user's role on a specific broker. Returns null if not cached. */
+export function getBrokerRole(brokerId: number): string | null {
+    const info = store.get(brokerId);
+    return info?.user_role ?? null;
+}
+
+/** True if the user has OWNER or EDITOR role on the broker. */
+export function canEditBroker(brokerId: number): boolean {
+    return canEditWithRole(getBrokerRole(brokerId));
+}
+
+/** True if the user has EDITOR+ on BOTH brokers of a paired transaction. */
+export function canEditPaired(brokerIdA: number, brokerIdB: number): boolean {
+    return canEditBroker(brokerIdA) && canEditBroker(brokerIdB);
+}
+
+/** All brokers the user has some access to (user_role != null). */
+export function getAccessibleBrokers(): BrokerInfo[] {
+    return store.getAll().filter((b) => b.user_role != null);
+}
+
+/** Only brokers where user is OWNER or EDITOR. */
+export function getEditableBrokers(): BrokerInfo[] {
+    return store.getAll().filter((b) => canEditWithRole(b.user_role));
+}
+
+/**
+ * Paired access level: min(roleA, roleB).
+ * - `full`: both EDITOR+ → edit/delete/clone allowed
+ * - `viewer`: at least one is VIEWER → view only
+ * - `none`: partner broker not accessible → view only (locked)
+ */
+export function getPairedAccessLevel(
+    brokerIdA: number,
+    partnerBrokerId: number | null | undefined,
+): PairedAccessLevel {
+    const rankA = getRoleRank(getBrokerRole(brokerIdA));
+    if (partnerBrokerId == null) {
+        // Standalone
+        return rankA >= 2 ? 'full' : rankA >= 1 ? 'viewer' : 'none';
+    }
+    const rankB = getRoleRank(getBrokerRole(partnerBrokerId));
+    const minRank = Math.min(rankA, rankB);
+    if (minRank >= 2) return 'full';
+    if (minRank >= 1) return 'viewer';
+    return 'none';
+}

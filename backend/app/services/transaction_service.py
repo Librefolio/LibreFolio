@@ -197,6 +197,23 @@ class TransactionService:
         for broker_id in broker_ids:
             await self._check_broker_access_or_raise(broker_id, user_id, min_role=min_role)
 
+    async def _check_paired_access(self, tx: "Transaction", user_id: int) -> Optional[str]:
+        """Check if user has EDITOR access on both sides of a paired tx.
+
+        Returns None if OK (standalone or full access), or an error string
+        like ``"paired_access_denied:<broker_id>"`` when the partner's broker
+        is not editable by the user.
+        """
+        if tx.related_transaction_id is None:
+            return None
+        partner = await self.session.get(Transaction, tx.related_transaction_id)
+        if partner is None:
+            return None  # orphan — nothing to restrict
+        role = await self._check_broker_access(partner.broker_id, user_id, min_role=UserRole.EDITOR)
+        if role is None:
+            return f"paired_access_denied:{partner.broker_id}"
+        return None
+
     # =========================================================================
     # CROSS-RECORD VALIDATION HELPERS
     # =========================================================================
@@ -268,7 +285,8 @@ class TransactionService:
             result = await self.session.execute(stmt)
             by_id = {tx.id: tx for tx in result.scalars().all()}
             ordered = [by_id[i] for i in params.ids if i in by_id]
-            return [TXReadItem.from_db_model(tx) for tx in ordered]
+            items = [TXReadItem.from_db_model(tx) for tx in ordered]
+            return await self._enrich_partner_broker_ids(items)
 
         stmt = select(Transaction)
 
@@ -305,7 +323,21 @@ class TransactionService:
         stmt = stmt.offset(params.offset).limit(params.limit)
 
         result = await self.session.execute(stmt)
-        return [TXReadItem.from_db_model(tx) for tx in result.scalars().all()]
+        items = [TXReadItem.from_db_model(tx) for tx in result.scalars().all()]
+        return await self._enrich_partner_broker_ids(items)
+
+    async def _enrich_partner_broker_ids(self, items: List[TXReadItem]) -> List[TXReadItem]:
+        """Batch-populate partner_broker_id for all items with related_transaction_id."""
+        partner_ids = {item.related_transaction_id for item in items if item.related_transaction_id}
+        if not partner_ids:
+            return items
+        stmt = select(Transaction.id, Transaction.broker_id).where(Transaction.id.in_(partner_ids))
+        result = await self.session.execute(stmt)
+        partner_map = {row.id: row.broker_id for row in result}
+        for item in items:
+            if item.related_transaction_id:
+                item.partner_broker_id = partner_map.get(item.related_transaction_id)
+        return items
 
     async def get_by_ids(self, tx_ids: List[int]) -> List[Transaction]:
         """Get multiple transactions by IDs (DB models, no access check)."""

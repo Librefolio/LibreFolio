@@ -241,7 +241,7 @@
 
 {#if visible}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div bind:this={tooltipElement} class="tooltip-fixed" style="max-width: {maxWidth}; top: {fixedTop}px; left: {fixedLeft}px;" role="tooltip">
+    <div bind:this={tooltipElement} class="tooltip-fixed" style="max-width: {maxWidth}; top: {fixedTop}px; left: {fixedLeft}px;" role="tooltip" data-testid="tooltip-content">
         {#if math || html}
             {@html renderedContent}
         {:else}

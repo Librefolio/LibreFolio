@@ -16,6 +16,7 @@
 <script lang="ts">
     import {getBrokerColor, type BrokerLike} from '$lib/utils/brokerColors';
     import {getBrokerIconUrl} from '$lib/utils/brokerHelpers';
+    import {getRoleIcon, getRoleIconColor} from '$lib/utils/brokerRoleHelpers';
 
     interface Props {
         /** The broker to display */
@@ -26,9 +27,13 @@
         size?: number;
         /** Show broker name text (default: true) */
         showName?: boolean;
+        /** Show role icon after broker name (default: false) */
+        showRole?: boolean;
+        /** Broker role — used when showRole is true */
+        role?: string | null;
     }
 
-    let {broker, brokers, size = 16, showName = true}: Props = $props();
+    let {broker, brokers, size = 16, showName = true, showRole = false, role = null}: Props = $props();
 
     let iconUrl = $derived(getBrokerIconUrl(broker));
 
@@ -46,6 +51,10 @@
     {/if}
     {#if showName}
         <span class="broker-badge-name">{name}</span>
+    {/if}
+    {#if showRole && role}
+        {@const RoleIcon = getRoleIcon(role)}
+        <RoleIcon size={Math.round(size * 0.75)} class={getRoleIconColor(role)} />
     {/if}
 </span>
 
