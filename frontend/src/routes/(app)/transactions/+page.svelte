@@ -297,6 +297,11 @@
         return res ?? [];
     }
 
+    // NOTE: On /transactions, loadMainRows() returns ALL user-visible transactions
+    // (no server-side filtering), so partners are almost always already in mainRows.
+    // This function exists for reuse on pages that DO filter server-side (e.g. broker
+    // detail page showing only that broker's transactions) — there, a paired partner
+    // on a different broker would be missing from the main set and needs fetching.
     async function loadPartnerRows(main: TXReadItem[]): Promise<TXReadItem[]> {
         const mainIds = new Set(main.map((r) => r.id));
         const missing = new Set<number>();
