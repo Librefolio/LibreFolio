@@ -22,6 +22,33 @@ def front_transactions_table(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("transactions/transactions-table.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_broker_access(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Transaction Broker Access E2E tests (Bug 1,3,10,13 + enum filters)."""
+    print_section("Frontend TX Broker Access Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("transactions/tx-broker-access.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_paired_edit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Transaction Paired Edit E2E tests (Bug 2,6,7,14)."""
+    print_section("Frontend TX Paired Edit Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("transactions/tx-paired-edit.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_tooltips(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Transaction Tooltip E2E tests (Bug 8 + Enhancement)."""
+    print_section("Frontend TX Tooltip Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("transactions/tx-tooltips.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Transaction E2E tests."""
     return _run_test_suite(
@@ -29,6 +56,9 @@ def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool 
         tests=[
             ("Transactions", lambda: front_transactions_modals(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TransactionsTable", lambda: front_transactions_table(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX Broker Access", lambda: front_tx_broker_access(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX Paired Edit", lambda: front_tx_paired_edit(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX Tooltips", lambda: front_tx_tooltips(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
         ],
         verbose=verbose,
         header_msg="All Transaction Tests (E2E)",
@@ -41,9 +71,12 @@ def populate_registry(registry: dict) -> None:
     """Register all frontend transaction test entries."""
     from ._common import make_category, add_test
     cat = make_category(
-        help_text="Frontend Transaction E2E tests (bulk modal, form, paired, type swap, table read-view)",
+        help_text="Frontend Transaction E2E tests (bulk modal, form, paired, type swap, table read-view, broker access, tooltips)",
         description="""Frontend Transaction Tests\n\nOptions: --ui, --headed, --debug""")
     add_test(cat, "transactions-modals", front_transactions_modals, name="Transaction Modal Tests", desc="BulkModal, FormModal, paired rows, type swap, i18n, CRUD", tests="transactions/transactions-modals.spec.ts")
     add_test(cat, "transactions-table", front_transactions_table, name="TransactionsTable Tests", desc="Main read-view table: pairs, ghost rows, GoTo, actions, selection", tests="transactions/transactions-table.spec.ts")
+    add_test(cat, "tx-broker-access", front_tx_broker_access, name="TX Broker Access Tests", desc="Broker dropdown filtering, hidden broker lock, edit button visibility, enum filters", tests="transactions/tx-broker-access.spec.ts")
+    add_test(cat, "tx-paired-edit", front_tx_paired_edit, name="TX Paired Edit Tests", desc="Clone INTEREST qty=0, paired edit payload, flat mode adjacency", tests="transactions/tx-paired-edit.spec.ts")
+    add_test(cat, "tx-tooltips", front_tx_tooltips, name="TX Tooltip Tests", desc="Linked pair tooltip: favicon, bold name, SVG role icon, hidden broker", tests="transactions/tx-tooltips.spec.ts")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

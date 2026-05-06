@@ -708,6 +708,32 @@
       "assetRequired": "Veuillez sélectionner un actif",
       "quantityInvalid": "La quantité doit être un nombre valide",
       "cashRequired": "Le montant et la devise sont obligatoires"
+    },
+    "deleteModal": {
+      "titleStandalone": "Supprimer la transaction",
+      "titleLinked": "Supprimer la transaction liée",
+      "pairedIntro": "Les deux transactions de cette paire seront supprimées.",
+      "from": "De",
+      "to": "À",
+      "splitHint": "Pour supprimer un seul côté, utilisez d'abord Scinder pour dissocier la paire.",
+      "linkedInfo": "Cette transaction fait partie d'une paire liée.",
+      "brokerLabel": "Courtier",
+      "notAccessible": "non accessible",
+      "blockedMessage": "Suppression impossible : accès Éditeur requis sur les deux courtiers pour supprimer une paire liée.",
+      "contactOwner": "Contactez le propriétaire de",
+      "forAccess": "pour l'accès.",
+      "deleteBoth": "Supprimer les deux"
+    },
+    "picker": {
+      "title": "Sélectionner des transactions à ajouter",
+      "pairedNote": "La sélection d'une transaction liée ajoute automatiquement son partenaire.",
+      "addN": "Ajouter {n} sélectionnée(s)",
+      "searchAdd": "Chercher et ajouter"
+    },
+    "access": {
+      "viewOnly": "Lecture seule",
+      "editBlocked": "Modification bloquée : accès lecteur sur le courtier partenaire.",
+      "partnerNotAccessible": "La transaction liée est sur un courtier auquel l'utilisateur n'a pas accès."
     }
   },
   "fx": {

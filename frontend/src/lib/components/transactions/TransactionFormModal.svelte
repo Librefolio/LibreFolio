@@ -36,6 +36,7 @@
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
     import {X, ArrowRight, ArrowDown, Check, Pencil} from 'lucide-svelte';
+    import {getRoleIcon, getRoleIconColor} from '$lib/utils/brokerRoleHelpers';
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
@@ -53,7 +54,7 @@
     import {zodiosApi} from '$lib/api';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets, refreshAllAssets} from '$lib/stores/assetStore';
-    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, refreshAllBrokers, type BrokerInfo} from '$lib/stores/brokerStore';
+    import {ensureBrokersLoaded, getAllBrokers, getEditableBrokers, brokerStoreVersion, refreshAllBrokers, getBrokerInfo, getBrokerRole, type BrokerInfo} from '$lib/stores/brokerStore';
     import {type TransactionTypeCode, type PairFormLayout, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, getSwapGroup, typesVersion} from '$lib/stores/transactionTypeStore';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
     import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
@@ -81,6 +82,7 @@
         quantity: string;
         cash?: {code: string; amount: string} | null;
         related_transaction_id?: number | null;
+        partner_broker_id?: number | null;
         tags?: string[] | null;
         description?: string | null;
         cost_basis_override?: string | null;
@@ -136,9 +138,12 @@
         onPushDraft?: (payload: Record<string, unknown>) => void;
         /** Called when the user clicks "Edit" in view mode to switch to edit. */
         onSwitchToEdit?: () => void;
+        /** Bug3-fix: when false, the edit pencil button is hidden in view mode
+         *  (user lacks EDITOR access on the broker). Default true. */
+        canEdit?: boolean;
     }
 
-    let {open, mode, initialRow = null, forcedBroker = null, commitOnSave = true, unlockImmutable = false, availableTags = [], zIndex = 50, injectedPartnerRow = null, onClose, onCommitted, onPushDraft, onSwitchToEdit}: Props = $props();
+    let {open, mode, initialRow = null, forcedBroker = null, commitOnSave = true, unlockImmutable = false, availableTags = [], zIndex = 50, injectedPartnerRow = null, onClose, onCommitted, onPushDraft, onSwitchToEdit, canEdit = true}: Props = $props();
 
     // =========================================================================
     // Form state
@@ -173,7 +178,7 @@
     }
 
     function emptyDraft(): FormDraft {
-        const brokers = getAllBrokers();
+        const brokers = getEditableBrokers();
         // Bugfix-2 §C9: only auto-pick a broker if exactly one is available;
         // otherwise leave the field empty (0 = unset sentinel) so the user
         // is forced to choose consciously.
@@ -245,6 +250,9 @@
      *  changes (Bugfix-3 §C11). */
     let initialDraftKey = $state('');
     let confirmCloseOpen = $state(false);
+    /** Bug5-fix: broker_id of partner that the user cannot access.
+     *  When set, the "To" side shows a locked placeholder instead of empty. */
+    let inaccessiblePartnerBrokerId = $state<number | null>(null);
     /** User-facing display string for `draft.quantity`. Decoupled from the
      *  authoritative payload so the user can type freely (e.g. "0.0000")
      *  without us reformatting mid-keystroke (Bugfix-4 §U18). The display
@@ -266,6 +274,7 @@
             optionalOpen = false;
             advancedOpen = false;
             confirmCloseOpen = false;
+            inaccessiblePartnerBrokerId = null;
             partnerRow = null;
             loadingPartner = false;
             dualTo = emptyDualTo();
@@ -303,9 +312,33 @@
                     // If the row has a linked partner and its type has a pairFormLayout,
                     // fetch the partner for dual-form editing.
                     const layout = getPairFormLayout(row.type);
+
+                    // Bug13-fix: pre-populate dualTo synchronously from partner_broker_id
+                    // so the template shows the correct state immediately (lock/name),
+                    // BEFORE fetchPartner resolves. Don't gate on `layout` because
+                    // getPairFormLayout may return null if types haven't loaded yet.
+                    const pBid = row.partner_broker_id;
+                    if (pBid != null) {
+                        dualTo = {broker_id: pBid, cash: null, date: ''};
+                        // If the user has no role on the partner broker, mark it inaccessible now
+                        if (getBrokerRole(pBid) == null) {
+                            inaccessiblePartnerBrokerId = pBid;
+                        }
+                    }
+
                     if (layout) {
                         loadingPartner = true;
                         fetchPartner(row);
+                    } else {
+                        // Types not loaded yet — defer fetchPartner to when types arrive.
+                        // The $derived pairLayout will re-trigger via $typesVersion,
+                        // but we need to also trigger fetchPartner. Schedule it.
+                        loadingPartner = true;
+                        void ensureTypesLoaded().then(() => {
+                            const l = getPairFormLayout(row.type);
+                            if (l) fetchPartner(row);
+                            else loadingPartner = false;
+                        });
                     }
                 } else if (row.related_transaction_id === -1) {
                     // C1-fix: sentinel -1 means "paired but new/no DB id" —
@@ -357,9 +390,22 @@
             if (results.length > 0) {
                 const partner = results[0];
                 partnerRow = partner;
+                // Bug13-fix: clear pre-set inaccessible flag — partner IS accessible
+                inaccessiblePartnerBrokerId = null;
                 const layout = getPairFormLayout(row.type);
                 if (layout) {
                     applyPartnerToDualTo(row, partner, layout);
+                }
+            } else {
+                // Bug5-fix: partner not accessible — use partner_broker_id to
+                // show a placeholder in the dual form "To" side.
+                const pBid = row.partner_broker_id;
+                if (pBid != null) {
+                    const layout = getPairFormLayout(row.type);
+                    if (layout && layout !== 'fx') {
+                        dualTo = {broker_id: pBid, cash: null, date: row.date};
+                    }
+                    inaccessiblePartnerBrokerId = pBid;
                 }
             }
         } catch (e) {
@@ -473,7 +519,7 @@
 
     let brokers = $derived.by<BrokerInfo[]>(() => {
         void $brokerStoreVersion;
-        return getAllBrokers();
+        return getEditableBrokers();
     });
 
     // =========================================================================
@@ -490,6 +536,7 @@
      *  DEPOSIT/WITHDRAWAL have pair_form_layout set but requires_link=false
      *  → they stay in single form by default. */
     let pairLayout = $derived.by<PairFormLayout | null>(() => {
+        void $typesVersion; // Bug9-fix: re-derive when server type rules load
         const r = getTypeRule(draft.type);
         // Types that ALWAYS require a pair → auto dual
         if (r.requiresPair) return r.pairFormLayout;
@@ -751,7 +798,9 @@
      * Shared link_uuid connects them as a pair.
      */
     function collectDualCreates(): Record<string, unknown>[] {
-        const linkUuid = generateUUID();
+        // Bug14-fix: reuse existing link_uuid in edit mode so BulkModal can
+        // match the hidden partner draft; only generate a new UUID for create.
+        const linkUuid = draft.link_uuid || generateUUID();
         const sharedTags = draft.tags.length > 0 ? draft.tags : undefined;
         const sharedDesc = draft.description.trim() || undefined;
 
@@ -1155,7 +1204,7 @@
                 {/if}
             </h2>
             <div class="flex items-center gap-1">
-                {#if isReadonly && onSwitchToEdit}
+                {#if isReadonly && onSwitchToEdit && canEdit}
                     <button class="p-2 text-gray-400 hover:text-libre-green hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={onSwitchToEdit} data-testid="tx-form-switch-edit" aria-label="Edit" title={$t('transactions.form.titleEdit') || 'Edit'}>
                         <Pencil size={18} />
                     </button>
@@ -1343,7 +1392,10 @@
                         <!-- A (To) -->
                         <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3 min-w-0" data-testid="tx-form-dual-to">
                             <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('transactions.form.to')}</div>
-                            <!-- Date (to side) -->
+                            <!-- Date (to side) — hidden when partner is inaccessible (role=null or not in store) -->
+                            {#if inaccessiblePartnerBrokerId != null || (isReadonly && !partnerRow && dualTo.broker_id > 0 && getBrokerRole(dualTo.broker_id) == null)}
+                                <!-- partner inaccessible — hide date -->
+                            {:else}
                             <div class="flex flex-col gap-1 mb-2">
                                 <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
                                 {#if isReadonly}
@@ -1352,13 +1404,60 @@
                                     <SingleDatePicker bind:value={dualTo.date} label="" inputStyle={true} onchange={(d) => { dualTo = {...dualTo, date: d}; }} />
                                 {/if}
                             </div>
+                            {/if}
                             {#if pairLayout === 'fx'}
                                 <CompactCashCell value={dualTo.cash} onChange={setCashTo} signHint="positive" disabled={isReadonly} testid="tx-form-cash-to" defaultCode="USD" />
                             {:else}
                                 <!-- transfer_asset / transfer_cash: broker to -->
                                 <div class="flex flex-col gap-1">
                                     <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</span>
-                                    <BrokerSearchSelect brokers={brokersForTo} value={brokerToIdValue} onchange={(id) => setBrokerTo(id ?? 0)} disabled={isReadonly} />
+                                    {#if inaccessiblePartnerBrokerId != null}
+                                        {@const pInfo = getBrokerInfo(inaccessiblePartnerBrokerId)}
+                                        {@const RoleIconC = getRoleIcon(null)}
+                                        <div class="flex flex-col gap-1.5 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400" data-testid="tx-form-partner-locked">
+                                            <div class="flex items-center gap-1.5">
+                                                {#if pInfo?.icon_url || pInfo?.portal_url || pInfo?.default_import_plugin}
+                                                    <BrokerIcon iconUrl={pInfo.icon_url} portalUrl={pInfo.portal_url} pluginCode={pInfo.default_import_plugin} altText={pInfo.name ?? ''} size="sm" />
+                                                {/if}
+                                                <strong>{pInfo?.name ?? `#${inaccessiblePartnerBrokerId}`}</strong>
+                                                <RoleIconC size={14} class="{getRoleIconColor(null)} shrink-0" />
+                                            </div>
+                                            <span class="text-xs leading-relaxed">{$t('transactions.access.partnerNotAccessible')}</span>
+                                        </div>
+                                    {:else if isReadonly}
+                                        <!-- Bug10/13-fix: in view mode show static broker info -->
+                                        {@const toInfo = getBrokerInfo(dualTo.broker_id)}
+                                        {@const toRole = toInfo ? getBrokerRole(dualTo.broker_id) : null}
+                                        <div class="flex {toRole == null && toInfo ? 'flex-col gap-1.5' : 'items-center gap-2'} px-3 py-2 {toRole == null && toInfo ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400' : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200'} border rounded-lg text-sm" data-testid="tx-form-broker-to-readonly">
+                                            {#if toInfo && toRole != null}
+                                                <!-- Accessible broker (OWNER/EDITOR/VIEWER) -->
+                                                <BrokerIcon iconUrl={toInfo.icon_url} portalUrl={toInfo.portal_url} pluginCode={toInfo.default_import_plugin} altText={toInfo.name} size="sm" />
+                                                <span class="font-medium">{toInfo.name}</span>
+                                            {:else if toInfo && toRole == null}
+                                                <!-- Broker in store but role=null (hidden/admin) — show lock -->
+                                                {@const LockIcon = getRoleIcon(null)}
+                                                {@const lockColor = getRoleIconColor(null)}
+                                                <div class="flex items-center gap-1.5">
+                                                    {#if toInfo.icon_url || toInfo.portal_url || toInfo.default_import_plugin}
+                                                        <BrokerIcon iconUrl={toInfo.icon_url} portalUrl={toInfo.portal_url} pluginCode={toInfo.default_import_plugin} altText={toInfo.name ?? ''} size="sm" />
+                                                    {/if}
+                                                    <strong>{toInfo.name}</strong>
+                                                    <LockIcon size={14} class="{lockColor} shrink-0" />
+                                                </div>
+                                                <span class="text-xs leading-relaxed">{$t('transactions.access.partnerNotAccessible')}</span>
+                                            {:else if dualTo.broker_id > 0}
+                                                <!-- Broker not in store at all -->
+                                                {@const LockIcon2 = getRoleIcon(null)}
+                                                {@const lockColor2 = getRoleIconColor(null)}
+                                                <LockIcon2 size={14} class="{lockColor2} shrink-0" />
+                                                <span class="text-gray-500 dark:text-gray-400">#{dualTo.broker_id} — {$t('transactions.access.partnerNotAccessible')}</span>
+                                            {:else}
+                                                <span class="text-gray-400">—</span>
+                                            {/if}
+                                        </div>
+                                    {:else}
+                                        <BrokerSearchSelect brokers={brokersForTo} value={brokerToIdValue} onchange={(id) => setBrokerTo(id ?? 0)} disabled={isReadonly} />
+                                    {/if}
                                 </div>
                             {/if}
                         </div>

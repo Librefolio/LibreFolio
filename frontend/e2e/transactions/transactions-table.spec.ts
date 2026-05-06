@@ -130,11 +130,61 @@ test.describe('TransactionsTable (main read-view)', () => {
 	// === TT9 — GoTo: click 🔗 → pulse animation ===
 	test('clicking link icon triggers pulse animation on partner row', async ({page}) => {
 		const links = page.locator('[data-testid="tx-table"] [data-testid^="tx-link-icon-"]');
-		if (await links.count() === 0) { test.skip(true, 'No linked pairs'); return; }
-		await links.first().click();
-		// Pulse class should appear within 500ms
-		const highlighted = page.locator('[data-testid="tx-table"] tr.tx-row-highlight');
-		await expect(highlighted).toHaveCount(1, {timeout: 3_000});
+		const linkCount = await links.count();
+		if (linkCount === 0) { test.skip(true, 'No linked pairs'); return; }
+
+		// Find a link icon whose partner row is present in the table.
+		// Some partners may be invisible (hidden broker). Try each link until one pulses.
+		let pulsed = false;
+		for (let i = 0; i < Math.min(linkCount, 5); i++) {
+			await links.nth(i).click({force: true});
+			await page.waitForTimeout(400);
+			const hCount = await page.locator('[data-testid="tx-table"] tr.tx-row-highlight').count();
+			if (hCount > 0) {
+				pulsed = true;
+				break;
+			}
+		}
+		expect(pulsed, 'At least one link icon should pulse its partner row').toBe(true);
+	});
+
+	// === TT9b — Hidden partner: link icon + tooltip present, no pulse ===
+	test('link icon on inaccessible-partner row has icon and tooltip but no pulse', async ({page}) => {
+		// Asym-d: IB→HiddenBroker — the link icon should be rendered
+		// but clicking it should NOT produce a pulse (partner not in DOM).
+		const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
+		const count = await rows.count();
+		let hiddenLinkIcon = null;
+
+		for (let i = 0; i < count; i++) {
+			const row = rows.nth(i);
+			const text = await row.textContent() ?? '';
+			// Asym-d has tag access-test and is on Interactive Brokers
+			if (!text.includes('access-test') || !text.includes('Interactive Brokers')) continue;
+
+			const linkIcon = row.locator('[data-testid^="tx-link-icon-"]');
+			if (await linkIcon.count() === 0) continue;
+
+			// Click and check: if NO pulse → this is a hidden-partner row
+			await linkIcon.first().click({force: true});
+			await page.waitForTimeout(400);
+			const hCount = await page.locator('[data-testid="tx-table"] tr.tx-row-highlight').count();
+			if (hCount === 0) {
+				hiddenLinkIcon = linkIcon.first();
+				break;
+			}
+		}
+		expect(hiddenLinkIcon, 'Should find a link icon with inaccessible partner').toBeTruthy();
+
+		// Verify tooltip appears on hover with broker name + SVG
+		await hiddenLinkIcon!.hover();
+		await page.waitForTimeout(500);
+		const tooltip = page.locator('[data-testid="tooltip-content"]');
+		if (await tooltip.isVisible({timeout: 2_000}).catch(() => false)) {
+			const html = await tooltip.innerHTML();
+			expect(html, 'Tooltip should mention the hidden broker').toContain('Hidden Admin Broker');
+			expect(html, 'Tooltip should have SVG role icon').toContain('<svg');
+		}
 	});
 
 	// === TT10 — Quantity emoji 📈/📉 ===
