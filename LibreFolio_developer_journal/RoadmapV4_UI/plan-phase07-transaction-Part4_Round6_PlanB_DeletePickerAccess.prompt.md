@@ -12,7 +12,7 @@
 Tre macro-aree, **ordinate per dipendenza** (Broker Access → DeleteModal → PickerModal):
 
 1. **Broker Access Visibility** — icone ruolo (Crown/Pencil/Eye/Lock lucide, stesse della pagina Brokers) nei dropdown broker, nelle righe tabella/bulk, nei form. Gestione "partner inaccessibile". Backend enforce dual-broker access su paired mutations. Test data con 4 scenari asimmetrici.
-2. **`TransactionDeleteModal`** — riepilogo ricco con dettagli transazione per singola e paired. Toggle "solo questa / entrambe". Tiene conto dell'accesso broker (Layout C per partner inaccessibile).
+2. **`TransactionDeleteModal`** — riepilogo ricco con dettagli transazione per singola e paired. Paired = sempre delete entrambe (per eliminare solo una metà, prima Split). Tiene conto dell'accesso broker (Layout C per partner inaccessibile/viewer = delete bloccata).
 3. **`TransactionPickerModal`** — cerca e aggiungi TX DB esistenti alla BulkModal. Riusa `mainRows` dal parent (zero fetch aggiuntivo).
 
 ---
@@ -25,8 +25,8 @@ La pagina Brokers usa **componenti lucide** (Crown, Pencil, Eye da `lucide-svelt
 ### I2 — `BrokerBadge.svelte` esiste ma non mostra il ruolo
 C'è già un componente centralizzato `BrokerBadge` in `frontend/src/lib/components/ui/BrokerBadge.svelte` (icona + nome). Va esteso con prop opzionale `showRole?: boolean` + `role?: string` per mostrare l'icona ruolo inline. Questo è il punto di intervento centralizzato — **non** duplicare nei vari componenti.
 
-### I3 — Backend rifiuta delete singola di paired (`pairDeleteIncomplete`)
-Il backend `commit()` riga 992-1003 emette issue `pairDeleteIncomplete` se si tenta di eliminare una sola metà di una coppia. Questo blocca l'opzione **"Solo questa"** del toggle nel DeleteModal. **Serve modificare il backend**: quando si elimina una sola metà, il partner sopravvissuto deve essere "scollegato" (nullificare `link_uuid` e `related_transaction_id`), non rifiutato. L'issue `pairDeleteIncomplete` va sostituito con una logica di auto-cleanup.
+### I3 — Backend rifiuta delete singola di paired (`pairDeleteIncomplete`) — CORRETTO
+Il backend `commit()` riga 992-1003 emette issue `pairDeleteIncomplete` se si tenta di eliminare una sola metà di una coppia. Questo comportamento è **corretto e va mantenuto**: la delete di una paired elimina sempre entrambe le metà. Se l'utente vuole eliminare solo una metà, deve prima usare **Split** (Piano C) per scollegare la coppia, poi eliminare la transazione standalone risultante. Nessuna modifica backend necessaria per questo aspetto.
 
 ### I4 — `BrokerSearchSelect.BrokerSelectItem` non ha `user_role`
 L'interfaccia `BrokerSelectItem` nel dropdown non include `user_role`. Va aggiunto per mostrare l'icona ruolo nelle opzioni. Alternativa: il `BrokerSearchSelect` riceve i broker dal `brokerStore` che ha già `user_role` — basta esporre il campo nell'interfaccia.
@@ -111,16 +111,16 @@ export function canEditPaired(brokerIdA: number, brokerIdB: number): boolean { .
 - Nei snippet `item` e `selectedItem`: aggiungere icona ruolo dopo il nome usando il componente lucide appropriato (da `getRoleIcon`)
 
 **2b — `TransactionsTable` colonna broker**:
-- Nella cella HTML della colonna broker, aggiungere icona ruolo (piccola, 11px, dopo il nome, colore per ruolo). Dato che le celle broker usano HTML inline (non componenti Svelte), usare un span con classe CSS per il colore + testo Unicode fallback, oppure un mini SVG inline. **Alternativa più pulita**: convertire la cella broker in un componente custom cell (`type: 'custom'`, `component: BrokerBadge`).
+- Convertire la cella broker da HTML inline a **`cellComponent: BrokerBadge`** con `showRole=true`. La DataTable già supporta `cellComponent` per custom rendering. Questo garantisce coerenza con BrokerCard (stessi componenti lucide Crown/Pencil/Eye, stessi colori).
 
 **2c — `TransactionBulkModal` `renderBrokerHtml()`**:
-- Aggiungere icona ruolo al broker name. Stessa logica di 2b: HTML inline con indicatore testuale del ruolo (es. `<span class="text-amber-500 text-[10px]" title="Owner">♛</span>`) — dato che le celle bulk usano HTML string e non componenti Svelte, il lucide component non è direttamente utilizzabile. Usare un piccolo SVG inline o un carattere Unicode (♛/✎/◉) con il colore appropriato.
+- Stessa logica di 2b: convertire da HTML string a uso di `BrokerBadge` con `showRole=true`. Se il rendering nella BulkModal usa stringhe HTML per le celle custom, valutare se la `DataTable` interna della BulkModal supporta `cellComponent`. Se sì, usare `BrokerBadge`. Se no (celle generate via `innerHTML`), usare gli stessi SVG inline dei componenti lucide (Crown/Pencil/Eye) con le stesse classi colore (`text-amber-500`, `text-blue-500`, `text-gray-400`, `text-red-400`).
 
 ---
 
-### Step 3 — Backend: enforce dual-broker access + soft delete orfano (~1.5h)
+### Step 3 — Backend: enforce dual-broker access + GET /brokers completo (~1.5h)
 
-**Files**: [`backend/app/services/transaction_service.py`](backend/app/services/transaction_service.py)
+**Files**: [`backend/app/services/transaction_service.py`](backend/app/services/transaction_service.py), [`backend/app/services/broker_service.py`](backend/app/services/broker_service.py)
 
 **3a — Enforce dual-broker access per paired mutations**:
 - Aggiungere helper `_check_paired_access(tx: Transaction, user_id: int) -> Optional[str]`:
@@ -129,25 +129,20 @@ export function canEditPaired(brokerIdA: number, brokerIdB: number): boolean { .
   - Se partner non trovato → return None (orfano)
   - `_check_broker_access(partner.broker_id, user_id, min_role=EDITOR)`
   - Se accesso negato → return `"paired_access_denied:{partner.broker_id}"`
-- Applicare in `_update_single` e nei futuri `split`/`promote`.
+- Applicare in `_update_single`, `_delete_single` e nei futuri `split`/`promote`.
+- **Delete paired**: il backend già richiede entrambe le metà nel batch (`pairDeleteIncomplete`). Aggiungere anche il check che l'utente abbia EDITOR su entrambi i broker. Se non ha accesso al partner → issue `paired_access_denied` (il frontend non dovrebbe mai arrivarci perché nasconde il bottone delete, ma serve come guardia).
 
-**3b — Soft delete: permettere delete singola di paired con auto-cleanup**:
-- Modificare la logica riga 992-1003: **rimuovere** l'issue `pairDeleteIncomplete`
-- Al suo posto: se `tx.related_transaction_id` e il partner non è nel batch `deletes`:
-  - Fetch il partner
-  - Nullificare `partner.link_uuid` e `partner.related_transaction_id` (scollega)
-  - Mutare il tipo del partner da paired a standalone (es. CASH_TRANSFER→DEPOSIT, TRANSFER→ADJUSTMENT), usando la stessa mappa di tipo che Split userebbe
-  - Il partner sopravvive come transazione standalone
-- Se invece il partner è nel batch `deletes`: eliminare entrambi come oggi
-
-**3c — Enforce paired access anche sulla delete**:
-- Nella delete: se la riga è paired, verificare che l'utente abbia EDITOR su entrambi i broker **solo se** sta eliminando entrambe le metà. Se elimina "solo questa", basta EDITOR sul proprio broker (il partner viene scollegato, non modificato in modo sostanziale).
-
-**3d — `GET /brokers` ritorna TUTTI i broker con ruolo o null**:
+**3b — `GET /brokers` ritorna TUTTI i broker con ruolo o null**:
 - Modificare `BrokerService.get_all()`: attualmente fa JOIN con `BrokerUserAccess` e ritorna solo i broker accessibili. Cambiare in LEFT JOIN → ritorna tutti i broker, con `user_role = role.value` se l'utente ha accesso, oppure `user_role = null` se non ha alcun accesso.
 - Il frontend `brokerStore` riceve così la lista completa — può mostrare il nome del broker nei placeholder "🔒 Broker «Scalable» non accessibile" e nella futura sezione "broker non accessibili" della pagina broker.
 - Nessun cambio allo schema `BRReadItem` (il campo `user_role: Optional[str]` già supporta `null`).
 - `./dev.py api sync` probabilmente non necessario (schema invariato), ma verificare.
+
+**Impatto sui consumer esistenti**:
+- **`brokerStore`**: aggiungere helper `getAccessibleBrokers()` (filtra `user_role != null`) e `getEditableBrokers()` (filtra OWNER/EDITOR). I consumer che usano la lista per operazioni (creare transazioni, assegnare broker) devono usare questi filtri.
+- **Pagina `/brokers`**: mostra solo `getAccessibleBrokers()` nella sezione principale. I broker con `user_role === null` saranno mostrati in una sezione "Altri broker" separata (deferred al parent plan).
+- **`BrokerSearchSelect`** (dropdown form): mostra solo `getEditableBrokers()` — l'utente può creare/modificare transazioni solo su broker dove ha OWNER o EDITOR.
+- **Nessun breaking change** per chi oggi itera su `$brokerStore` — il set di broker con ruolo non-null è identico al set attuale.
 
 ---
 
@@ -173,13 +168,14 @@ Caso (d) — partner inaccessibile:
 ```
 
 **4b — Azioni condizionate all'accesso**:
-- Row actions (`edit`, `delete`, `clone`): `visible` gated da `canEditBroker` / `canEditPaired`
-  - Standalone: `canEditBroker(row.tx.broker_id)` per edit/delete; clone sempre visibile
-  - Paired con full/editor access: edit/delete/clone visibili
-  - Paired con viewer su partner: solo `view` (clone parziale non ha senso)
-  - Paired con partner inaccessibile: solo `view`
+- Row actions (`edit`, `delete`, `clone`): `visible` gated da `getPairedAccessLevel`
+  - Standalone: `canEditBroker(row.tx.broker_id)` per edit/delete/clone
+  - Paired con `full`: edit/delete/clone visibili
+  - Paired con `viewer`: solo `view` (edit/delete/clone nascosti)
+  - Paired con `none`: solo `view`
   - `view`: **sempre visibile**
-- `+page.svelte` bottone ✏️ view→edit (`onSwitchToEdit`): passare `null` se non `canEditPaired` → la FormModal non mostra il bottone
+- **Clone**: visibile solo se l'utente può inserire transazioni su TUTTI i broker coinvolti (standalone: 1 broker, paired: 2 broker). Clone parziale (solo una metà) non ha senso.
+- `+page.svelte` bottone ✏️ view→edit (`onSwitchToEdit`): passare `null` se non `full` → la FormModal non mostra il bottone
 - ContextMenu: stessi predicati `visible` (già wired dal DataTable)
 
 ---
@@ -290,20 +286,44 @@ Ogni riga della BulkModal con rendering Da:/A: mostra diversamente in base all'a
 
 **4e — Implementazione tecnica**:
 
-Helper per determinare il livello di accesso paired:
+Helper per determinare il livello di accesso paired.
+Logica: **min(ruolo su broker A, ruolo su broker B)** — il livello della coppia è il minimo tra i due lati.
+
+Gerarchia: `OWNER > EDITOR > VIEWER > null(none)`
+
 ```ts
-type PairedAccessLevel = 'full' | 'editor' | 'viewer' | 'none';
+type PairedAccessLevel = 'full' | 'viewer' | 'none';
+
+const ROLE_RANK: Record<string, number> = {OWNER: 3, EDITOR: 2, VIEWER: 1};
+
+function getRoleRank(role: string | null | undefined): number {
+    return role ? (ROLE_RANK[role] ?? 0) : 0;
+}
 
 function getPairedAccessLevel(tx: TXReadItem, partnerRows: TXReadItem[]): PairedAccessLevel {
-    if (tx.related_transaction_id == null) return 'full'; // standalone
+    if (tx.related_transaction_id == null) {
+        // Standalone: derive from own broker role
+        return canEditBroker(tx.broker_id) ? 'full' : 'viewer';
+    }
     const partner = partnerRows.find(p => p.id === tx.related_transaction_id);
-    if (!partner) return 'none'; // partner inaccessibile
-    const partnerRole = getBrokerRole(partner.broker_id);
-    if (canEditWithRole(partnerRole)) return canEditWithRole(getBrokerRole(tx.broker_id)) ? 'full' : 'viewer';
-    if (partnerRole === 'VIEWER') return 'viewer';
-    return 'none';
+    if (!partner) return 'none'; // partner inaccessibile (broker senza accesso)
+    // Min of the two roles
+    const minRank = Math.min(getRoleRank(getBrokerRole(tx.broker_id)),
+                              getRoleRank(getBrokerRole(partner.broker_id)));
+    if (minRank >= 2) return 'full';   // both EDITOR+
+    if (minRank >= 1) return 'viewer'; // at least one is VIEWER
+    return 'none';                     // shouldn't happen (would not be visible)
 }
 ```
+
+**Azioni per livello**:
+| Level | edit | delete | clone | view | double-click |
+|-------|------|--------|-------|------|-------------|
+| `full` | ✅ | ✅ | ✅ | ✅ | → edit |
+| `viewer` | ❌ | ❌ | ❌ | ✅ | → view |
+| `none` | ❌ | ❌ | ❌ | ✅ | → view (locked partner) |
+
+**Standalone**: stessa logica ma con un solo broker. `canEditBroker(tx.broker_id)` → full; else → viewer. Clone sempre visibile per standalone (l'utente può cambiare broker nel form).
 
 ---
 
@@ -311,18 +331,30 @@ function getPairedAccessLevel(tx: TXReadItem, partnerRows: TXReadItem[]): Paired
 
 **File**: [`backend/test_scripts/test_db/populate_mock_data.py`](backend/test_scripts/test_db/populate_mock_data.py)
 
-Creare 4 TRANSFER paired per `e2e_test_user`, tutte visibili ad admin (owner su tutti i broker):
+Mapping esplicito dei broker esistenti e ruoli `e2e_test_user`:
 
-| # | Broker A (from) | Ruolo user su A | Broker B (to) | Ruolo user su B | Scenario |
-|---|-----------------|-----------------|---------------|-----------------|----------|
-| a | Broker esistente (owner) | **owner** | Broker esistente (owner) | **owner** | ✅ Full access — caso attuale |
-| b | Broker esistente (owner) | **owner** | Broker esistente (editor) | **editor** | ✅ Edit consentito |
-| c | Broker esistente (owner) | **owner** | Broker esistente (viewer) | **viewer** | ⚠️ View only partner — edit bloccato |
-| d | Broker esistente (owner) | **owner** | Broker senza accesso user (es. «Scalable») | **nessuno** | 🔒 Partner invisibile |
+| Index | Broker | user role (da logica `i==0` owner, `i%2==0` editor, `i%2!=0` viewer) |
+|-------|--------|------|
+| 0 | Interactive Brokers | **OWNER** (30%) |
+| 1 | DEGIRO | **VIEWER** |
+| 2 | Directa SIM | **EDITOR** |
+| 3 | eToro | **VIEWER** |
+| 4 | Coinbase | **EDITOR** |
+| 5 | Recrowd | **VIEWER** |
+| — | Hidden Admin Broker | **nessun accesso** (solo admin è OWNER) |
 
-Per il caso (d): verificare se esiste già un broker a cui `e2e_test_user` non ha accesso ma `e2e_test_admin` sì. Se non esiste, crearne uno dedicato.
+4 TRANSFER paired per `e2e_test_user`:
 
-**Nota**: l'assegnazione dei ruoli per broker di `e2e_test_user` è già mista (riga 266-286 del populate): broker `i=0` owner, `i pari` editor, `i dispari` viewer. Riusare questa distribuzione.
+| # | Broker A (from) | Ruolo user | Broker B (to) | Ruolo user | Scenario |
+|---|-----------------|------------|---------------|------------|----------|
+| a | Interactive Brokers (i=0) | **OWNER** | Directa SIM (i=2) | **EDITOR** | ✅ Full access (min=EDITOR) |
+| b | Interactive Brokers (i=0) | **OWNER** | Coinbase (i=4) | **EDITOR** | ✅ Full access (min=EDITOR) |
+| c | Interactive Brokers (i=0) | **OWNER** | DEGIRO (i=1) | **VIEWER** | ⚠️ View only (min=VIEWER) |
+| d | Interactive Brokers (i=0) | **OWNER** | Hidden Admin Broker | **nessuno** | 🔒 Partner invisibile |
+
+**Nota caso (a) vs (b)**: entrambi sono "full" ma con broker diversi, utile per verificare che il clone funzioni su entrambi. Se serve un caso OWNER+OWNER esplicito, aggiungere un 5° test: IB (OWNER) ↔ IB (OWNER) come transazione intra-broker (non ha molto senso per TRANSFER, skip).
+
+Per admin: accesso OWNER su tutti → tutti e 4 i casi sono fully editable.
 
 **Dopo**: `./dev.py db create-clean`
 
@@ -340,8 +372,9 @@ interface Props {
     open: boolean;
     transaction: TXReadItem;
     partner?: TXReadItem | null;
-    partnerInaccessible?: boolean;
-    onConfirm: (deletePartner: boolean) => void;
+    partnerInaccessible?: boolean;  // true → Layout C (delete bloccata)
+    partnerBrokerName?: string;     // nome broker inaccessibile (da brokerStore)
+    onConfirm: () => void;          // sempre "delete entrambe" (per paired) o "delete questa" (standalone)
     onCancel: () => void;
 }
 ```
@@ -366,11 +399,12 @@ interface Props {
 ```
 
 **Layout B — Paired** (partner accessibile, entrambi i broker con EDITOR+):
+Elimina **sempre entrambe** le metà. Nessun toggle. Se l'utente vuole eliminare solo una metà, deve prima usare Split.
 ```
 ┌────────────────────────────────────────────────────┐
 │  🗑️  Delete linked transaction                [X] │
 │                                                    │
-│  This transaction is part of a linked pair.        │
+│  Both transactions in this pair will be deleted.   │
 │                                                    │
 │  ┌────────────────────────────────────────────────┐│
 │  │           │ From:               │ To:          ││
@@ -382,19 +416,15 @@ interface Props {
 │  │ Amount    │ —                  │ —             ││
 │  └────────────────────────────────────────────────┘│
 │                                                    │
-│  ┌────── What to delete? ──────────────────────┐   │
-│  │                                              │   │
-│  │  [ Only this ]  ●━━━━━━━━━━━━●  [  Both  ]  │   │
-│  │                                              │   │
-│  │  ⚠️ The partner transaction will remain       │   │
-│  │     orphaned (converted to standalone).       │   │
-│  └──────────────────────────────────────────────┘   │
+│  ⓘ To delete only one side, first use Split        │
+│    to unlink the pair.                             │
 │                                                    │
-│            [Cancel]  [🗑️ Delete]                    │
+│            [Cancel]  [🗑️ Delete both]              │
 └────────────────────────────────────────────────────┘
 ```
 
-**Layout C — Paired con partner inaccessibile** (`related_transaction_id != null` ma partner non nelle `partnerRows`, oppure broker VIEWER-only):
+**Layout C — Paired con partner inaccessibile o viewer** (`related_transaction_id != null` ma accesso insufficiente):
+Delete **bloccata** — l'utente non ha accesso EDITOR su entrambi i broker, quindi non può eliminare la coppia. Non può nemmeno fare Split (richiede accesso a entrambi). Mostra solo informazioni.
 ```
 ┌────────────────────────────────────────────────────┐
 │  🗑️  Delete linked transaction                [X] │
@@ -406,27 +436,21 @@ interface Props {
 │  │───────────│─────────────────────│──────────────││
 │  │ Date      │ 2025-03-15         │              ││
 │  │ Asset     │ [ico] VWCE.DE      │  🔒 Broker   ││
-│  │ Quantity  │ -10 📉             │  not         ││
-│  │ Broker    │ [ico] Directa [👑] │  accessible  ││
+│  │ Quantity  │ -10 📉             │  «Scalable»  ││
+│  │ Broker    │ [ico] Directa [👑] │  not access. ││
 │  └────────────────────────────────────────────────┘│
 │                                                    │
-│  ┌────── What to delete? ──────────────────────┐   │
-│  │                                              │   │
-│  │  [ Only this ●]  ━━━━━━━━━━━━○  [  Both  ]  │   │
-│  │                        ↑ forced / disabled   │   │
-│  └──────────────────────────────────────────────┘   │
+│  ⚠️ Cannot delete: you need Editor access on both  │
+│     brokers to delete a linked pair.               │
+│     Contact the owner of «Scalable» for access.    │
 │                                                    │
-│            [Cancel]  [🗑️ Delete]                    │
+│                                          [Close]   │
 └────────────────────────────────────────────────────┘
 ```
+- Nessun bottone "Delete" — solo "Close"
+- Warning spiega perché è bloccata e suggerisce di contattare l'owner
 
-**Toggle segmented**: due bottoni styled come segmented control.
-- Layout B default: "Both" (scelta più sicura)
-- Layout C: **forzato** "Only this" (l'utente non controlla il partner)
-- Quando "Only this" selezionato in Layout B: warning ⚠️ orfano appare
-- `onConfirm(deletePartner)` → `true` = elimina entrambe, `false` = solo questa
-
-Icone ruolo broker nelle celle riepilogo (via `BrokerBadge` con `showRole`).
+**Nota**: In pratica il frontend non dovrebbe mai mostrare il Layout C perché il bottone delete è già nascosto (Step 4b). Il Layout C è una guardia aggiuntiva nel caso il DeleteModal venga aperto in modo imprevisto.
 
 ---
 
@@ -436,7 +460,10 @@ Icone ruolo broker nelle celle riepilogo (via `BrokerBadge` con `showRole`).
 
 - `handleDeleteRow(row)` → 1 riga → `TransactionDeleteModal` (Layout A/B/C)
 - Multi-selezione → `BulkDeleteLinkedPairModal` invariato
-- `onConfirm(deletePartner)` → `POST /transactions/commit {deletes}` → `reload({soft:true})`
+- `onConfirm()`:
+  - Layout A (standalone): `POST /transactions/commit {deletes: [tx.id]}` → `reload({soft:true})`
+  - Layout B (paired): `POST /transactions/commit {deletes: [tx.id, partner.id]}` → `reload({soft:true})`
+  - Layout C: non raggiungibile (nessun bottone Delete)
 - Rimuovere `ConfirmModal` "simpleDelete" ridondante
 - BulkModal delete: invariato (toggle già esistente, confermato da I5)
 
@@ -506,9 +533,9 @@ Verifica manuale post `db create-clean`:
 
 1. **BulkModal undo delete**: ✅ **GIÀ ESISTE** — l'azione `mark-delete` fa toggle (label "Restore" quando `status === 'delete'`). Nessuna modifica necessaria.
 
-2. **Icone ruolo: lucide, non emoji**: ✅ **CONFERMATO** — `BrokerCard.svelte` riga 91 usa `Crown/Pencil/Eye` lucide con `size={11}`. `BrokerSharingModal` riga 357 il `getRoleIcon()` ritorna componenti lucide. Il piano usa gli stessi. Per le celle HTML inline (BulkModal `renderBrokerHtml`, TransactionsTable HTML cells) dove i componenti Svelte non sono utilizzabili, usare SVG inline o Unicode con classe colore.
+2. **Icone ruolo: componenti Svelte, non HTML inline**: ✅ **DECISIONE** — usare `BrokerBadge` con `showRole=true` ovunque possibile (TransactionsTable, DeleteModal). Dove il rendering è HTML string (BulkModal `renderBrokerHtml`), usare gli stessi SVG inline dei componenti lucide con le stesse classi colore. Coerenza garantita con BrokerCard.
 
-3. **Soft delete orfano — backend change significativo** (I3): il backend attualmente **rifiuta** la delete singola di una paired (`pairDeleteIncomplete`). Per supportare "Solo questa" nel DeleteModal, va cambiata la logica: il partner sopravvissuto viene scollegato (nullifica `link_uuid`/`related_transaction_id`) e il tipo mutato (TRANSFER→ADJUSTMENT, etc.) — esattamente come farebbe Split. Questo rende Step 3b un prerequisito bloccante per il DeleteModal toggle.
+3. **Delete paired = sempre entrambe** (I3 risolta): il backend `pairDeleteIncomplete` resta invariato — è il comportamento corretto. La delete di una coppia elimina sempre entrambe le metà. Per eliminare solo una metà → prima Split (Piano C), poi delete della standalone risultante. Il DeleteModal Layout B non ha toggle: mostra solo riepilogo + conferma "Delete both". Layout C (accesso insufficiente) mostra solo info + "Close" senza bottone Delete.
 
 4. **`mainRows` al PickerModal**: il `+page.svelte` carica TUTTE le transazioni accessibili in `mainRows` (il filtraggio è solo client-side nella DataTable). Quindi passare `mainRows` al PickerModal via BulkModal → zero fetch aggiuntivi, dati già completi.
 
@@ -516,5 +543,9 @@ Verifica manuale post `db create-clean`:
 
 6. **Nome broker inaccessibile — backend change richiesto**: il `GET /brokers` attualmente ritorna **solo** i broker a cui l'utente ha accesso (JOIN su `BrokerUserAccess`). Questo significa che il frontend non ha il nome dei broker senza accesso. **Fix necessario**: modificare `BrokerService.get_all()` per ritornare TUTTI i broker del sistema, con `user_role` impostato al ruolo effettivo (`OWNER`/`EDITOR`/`VIEWER`) oppure `null` quando l'utente non ha alcun accesso. Il frontend usa già `user_role` in `brokerStore` — basta aggiungere il supporto per `null` come "nessun accesso". Questo abilita: (a) mostrare il nome broker nei placeholder inaccessibili, (b) la futura sezione "broker non accessibili" nella pagina broker. Aggiungere questo al **Step 3** del piano come Step 3d.
 
-7. **Clone paired con viewer/no access**: clone nascosto per paired quando l'utente non ha EDITOR+ su entrambi i broker — un clone parziale (senza la metà partner) non ha senso funzionale.
+7. **Clone paired con viewer/no access**: ✅ **DECISIONE** — clone nascosto per paired quando l'utente non ha EDITOR+ su **entrambi** i broker. Un clone parziale (senza la metà partner) non ha senso. Per standalone, clone visibile solo se `canEditBroker(tx.broker_id)`.
+
+8. **`GET /brokers` impatto sui consumer**: ✅ **DECISIONE** — `brokerStore` espone `getAccessibleBrokers()` e `getEditableBrokers()`. Pagina `/brokers` usa `getAccessibleBrokers()` (broker con `user_role === null` nella futura sezione "Altri broker", deferred). `BrokerSearchSelect` usa `getEditableBrokers()`. Nessun breaking change per i consumer attuali.
+
+9. **`getPairedAccessLevel` — logica min()**: ✅ **DECISIONE** — il livello di accesso di una coppia è il **minimo** tra i ruoli sui due broker. `min(OWNER, EDITOR) = full`, `min(OWNER, VIEWER) = viewer`, `min(OWNER, null) = none`. Semplifica i predicati `visible` nelle row actions a un singolo check: `level === 'full'` per edit/delete/clone.
 
