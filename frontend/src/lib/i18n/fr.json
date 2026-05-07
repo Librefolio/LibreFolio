@@ -481,7 +481,8 @@
       "tags": "Étiquettes",
       "type": "Type",
       "event": "Événement",
-      "links": "Liens"
+      "links": "Liens",
+      "description": "Description"
     },
     "types": {
       "ADJUSTMENT": "Ajustement",

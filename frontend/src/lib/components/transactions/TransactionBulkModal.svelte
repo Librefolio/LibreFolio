@@ -261,11 +261,14 @@
             // Determine whether to auto-open the FormModal
             const autoForm = autoOpenForm;
             if (autoForm === 'edit' && next.length > 0) {
-                // Auto-open FormModal on the first row (edit single / clone single)
-                queueMicrotask(() => openEditRowForm(next[0]));
+                // Bug15-fix: after mergePairedRows the first draft may be hidden
+                // (the receiver side). Always open the first VISIBLE draft.
+                const firstVisible = next.find((d) => !d._hidden) ?? next[0];
+                queueMicrotask(() => openEditRowForm(firstVisible));
             } else if (autoForm === 'create' && next.length > 0) {
                 // Clone: row is 'new' so openEditRowForm uses create mode
-                queueMicrotask(() => openEditRowForm(next[0]));
+                const firstVisible = next.find((d) => !d._hidden) ?? next[0];
+                queueMicrotask(() => openEditRowForm(firstVisible));
             } else if (m === 'create-many' && rows.length === 0) {
                 // Auto-open for brand-new empty grid
                 queueMicrotask(() => {
@@ -1171,6 +1174,9 @@
     /** Set to a tempId when the FormModal is editing an existing draft row.
      *  When null, a successful Save = push as a brand-new row. */
     let formEditingTempId = $state<string | null>(null);
+    /** Bug15-fix: monotonic counter incremented on every open to guarantee
+     *  the FormModal's $effect re-fires even when `open` stays `true`. */
+    let formKey = $state(0);
 
     // PickerModal (Plan B Step 9): "Search & add" existing DB transactions.
     let pickerOpen = $state(false);
@@ -1235,6 +1241,7 @@
         formInitial = null;
         formPartnerRow = null;
         formEditingTempId = null;
+        formKey++;
         formOpen = true;
     }
     function openEditRowForm(row: DraftRow) {
@@ -1247,6 +1254,7 @@
         // populate the dual form without fetching from the API.
         const partner = findPartnerDraft(row);
         formPartnerRow = partner ? draftToTxLike(partner) : null;
+        formKey++;
         formOpen = true;
     }
     function handleFormPushed(payload: Record<string, unknown>) {
@@ -1589,6 +1597,7 @@
     unlockImmutable={formMode === 'edit'}
     availableTags={aggregatedTags}
     zIndex={70}
+    openKey={formKey}
     onClose={() => {
         formOpen = false;
         formEditingTempId = null;
