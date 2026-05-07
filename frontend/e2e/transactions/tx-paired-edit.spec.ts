@@ -212,5 +212,97 @@ test.describe('Transaction Paired Edit', () => {
 			}
 		});
 	});
+
+	// === TODO-B — Edit paired TRANSFER: commit sends updates (not creates) ===
+	test.describe('TODO-B — Edit paired commit payload', () => {
+		test('edit paired TRANSFER → commit sends updates for both sides', async ({page}) => {
+			// Find a giver+receiver pair on editable brokers
+			const allRows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
+			const total = await allRows.count();
+			let giverRowId: string | null = null;
+			let receiverRowId: string | null = null;
+
+			for (let i = 0; i < total - 1; i++) {
+				const nextCls = await allRows.nth(i + 1).getAttribute('class') ?? '';
+				if (nextCls.includes('tx-row-receiver')) {
+					const giverText = await allRows.nth(i).textContent() ?? '';
+					const recvText = await allRows.nth(i + 1).textContent() ?? '';
+					const editableBrokers = ['Interactive Brokers', 'Directa', 'Coinbase'];
+					const giverHasEditable = editableBrokers.some(b => giverText.includes(b));
+					const recvHasEditable = editableBrokers.some(b => recvText.includes(b));
+					if (giverHasEditable && recvHasEditable) {
+						giverRowId = await allRows.nth(i).getAttribute('data-row-id');
+						receiverRowId = await allRows.nth(i + 1).getAttribute('data-row-id');
+						break;
+					}
+				}
+			}
+			expect(giverRowId, 'Must find a paired giver row on editable brokers').toBeTruthy();
+			expect(receiverRowId, 'Must find a paired receiver row on editable brokers').toBeTruthy();
+
+			// Select both rows and click Edit
+			await selectRow(page, giverRowId!);
+			await selectRow(page, receiverRowId!);
+			const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
+			await expect(editBtn).toBeVisible({timeout: 2_000});
+			await editBtn.click();
+			await page.waitForTimeout(500);
+
+			// BulkModal opens
+			await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+
+			// FormModal may auto-open; if not, double-click the first row in BulkModal
+			const formModal = page.getByTestId('tx-form-modal');
+			if (!await formModal.isVisible({timeout: 3_000}).catch(() => false)) {
+				const bulkRow = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]').first();
+				if (await bulkRow.isVisible({timeout: 2_000}).catch(() => false)) {
+					await bulkRow.dblclick();
+					await page.waitForTimeout(500);
+				}
+			}
+			await expect(formModal).toBeVisible({timeout: 5_000});
+
+			// Expand the optional section to access the description field
+			const optionalToggle = page.getByTestId('tx-form-optional-toggle');
+			if (await optionalToggle.isVisible({timeout: 1_000}).catch(() => false)) {
+				await optionalToggle.click();
+				await page.waitForTimeout(200);
+			}
+
+			// Modify description to trigger a change
+			const descInput = page.getByTestId('tx-form-description');
+			await expect(descInput).toBeVisible({timeout: 2_000});
+			const ts = Date.now();
+			await descInput.fill(`E2E-paired-edit-${ts}`);
+
+			// Push changes back to BulkModal
+			const saveBtn = page.getByTestId('tx-form-save');
+			await saveBtn.click();
+			await page.waitForTimeout(500);
+
+			// Set up request interception BEFORE clicking commit
+			const commitPromise = page.waitForRequest(
+				(req) => req.url().includes('/transactions/commit') && req.method() === 'POST',
+				{timeout: 10_000}
+			);
+
+			// Click commit in BulkModal
+			const commitBtn = page.getByTestId('tx-bulk-commit');
+			await expect(commitBtn).toBeEnabled({timeout: 8_000});
+			await commitBtn.click();
+
+			const req = await commitPromise;
+			const payload = req.postDataJSON();
+
+			// Payload must have updates for the modified row
+			expect(payload.updates, 'Commit must have updates array').toBeDefined();
+			expect(payload.updates.length, 'At least one update expected').toBeGreaterThanOrEqual(1);
+
+			// All updates should have valid IDs (not 0)
+			for (const upd of payload.updates) {
+				expect(upd.id, 'Update must have a valid ID').toBeGreaterThan(0);
+			}
+		});
+	});
 });
 

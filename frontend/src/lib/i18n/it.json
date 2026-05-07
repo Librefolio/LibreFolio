@@ -481,7 +481,8 @@
       "tags": "Tag",
       "type": "Tipo",
       "event": "Evento",
-      "links": "Link"
+      "links": "Link",
+      "description": "Descrizione"
     },
     "types": {
       "ADJUSTMENT": "Aggiustamento",

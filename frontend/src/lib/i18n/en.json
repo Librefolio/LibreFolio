@@ -474,7 +474,8 @@
       "broker": "Broker",
       "tags": "Tags",
       "event": "Event",
-      "links": "Links"
+      "links": "Links",
+      "description": "Description"
     },
     "actions": {
       "edit": "Edit",
