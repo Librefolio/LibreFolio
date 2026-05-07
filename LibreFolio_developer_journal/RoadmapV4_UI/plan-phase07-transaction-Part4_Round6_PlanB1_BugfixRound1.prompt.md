@@ -1,4 +1,4 @@
-# Plan B — Bugfix Round 1 (Test Walk T1-T8)
+# Plan B1 — Bugfix Round 1 (Test Walk T1-T8, Fase 1)
 
 **Date**: 2026-05-06
 **Status**: ✅ COMPLETATO (test automatici + verifica manuale pendente)

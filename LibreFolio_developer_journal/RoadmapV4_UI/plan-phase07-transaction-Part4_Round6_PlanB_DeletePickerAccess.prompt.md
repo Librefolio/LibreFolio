@@ -43,7 +43,7 @@ Queste funzioni sono definite inline in `BrokerSharingModal.svelte`. Vanno estra
 
 ### FASE 1 — Broker Access Visibility (Steps 1–4)
 
-> **Bugfix**: 7 bug + 1 enhancement trovati nel test walk T1-T8. Vedi [`plan-phase07-transaction-Part4_Round6_PlanB_BugfixRound1.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanB_BugfixRound1.prompt.md)
+> **Bugfix**: 7 bug + 1 enhancement trovati nel test walk T1-T8. Vedi [`plan-phase07-transaction-Part4_Round6_PlanB1_BugfixRound1.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanB1_BugfixRound1.prompt.md)
 
 ### Step 1 — Estrarre utility ruolo + estendere `BrokerBadge` (~1h)
 
@@ -364,7 +364,7 @@ Per admin: accesso OWNER su tutti → tutti e 4 i casi sono fully editable.
 
 ### FASE 2 — DeleteModal (Steps 6–7)
 
-> ⏸️ **Test walk sospeso** — in attesa di risoluzione dei bug Fase 1 (vedi [BugfixRound1](./plan-phase07-transaction-Part4_Round6_PlanB_BugfixRound1.prompt.md))### Step 6 — Creare `TransactionDeleteModal.svelte` (~2h)
+> ⏸️ **Test walk sospeso** — in attesa di risoluzione dei bug Fase 1 (vedi [BugfixRound1](./plan-phase07-transaction-Part4_Round6_PlanB1_BugfixRound1.prompt.md))### Step 6 — Creare `TransactionDeleteModal.svelte` (~2h)
 
 **New file**: [`frontend/src/lib/components/transactions/TransactionDeleteModal.svelte`](frontend/src/lib/components/transactions/TransactionDeleteModal.svelte)
 
@@ -473,7 +473,7 @@ Delete **bloccata** — l'utente non ha accesso EDITOR su entrambi i broker, qui
 
 ### FASE 3 — PickerModal (Steps 8–9)
 
-> ⏸️ **Test walk sospeso** — in attesa di risoluzione dei bug Fase 1 (vedi [BugfixRound1](./plan-phase07-transaction-Part4_Round6_PlanB_BugfixRound1.prompt.md))
+> ⏸️ **Test walk sospeso** — in attesa di risoluzione dei bug Fase 1 (vedi [BugfixRound1](./plan-phase07-transaction-Part4_Round6_PlanB1_BugfixRound1.prompt.md))
 
 ### Step 8 — Creare `TransactionPickerModal.svelte` (~1.5h)
 

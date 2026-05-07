@@ -741,7 +741,11 @@ Step 12 (Split/Promote Main)    ← DIPENDE da Step 10 + Step 11
 |-------|-------|-------------|-------|------|
 | **Piano A** — ContextMenu + bugfix | 1 + 2 + 3 | Nuovo componente + 2 bugfix indipendenti | ~3.5h | [`PlanA_ContextMenuBugfix`](./plan-phase07-transaction-Part4_Round6_PlanA_ContextMenuBugfix.prompt.md) ✅ |
 | **Piano B** — Delete + Picker modals + Broker Access | 7 + 9 + Access | Due nuove modali + visibilità accesso broker | ~8-10h | [`PlanB_DeletePickerAccess`](./plan-phase07-transaction-Part4_Round6_PlanB_DeletePickerAccess.prompt.md) |
+|       | ↳ B1 — Bugfix Round 1 (Fase 1) |  | Fix 7 bug + 1 enhancement test walk | ✅ | [`PlanB1_BugfixRound1`](./plan-phase07-transaction-Part4_Round6_PlanB1_BugfixRound1.prompt.md) |
+|       | ↳ B23 — Bulk Delete via BulkModal + DeleteModal Polish |  | Elimina BulkDeleteModal, riusa BulkModal | ~11-12h | [`PlanB23_BulkDeleteViaBulkModal`](./plan-phase07-transaction-Part4_Round6_PlanB23_BulkDeleteViaBulkModal.prompt.md) |
 | **Piano C** — Split/Promote full stack | 10 → 11 → 12 | Backend → BulkModal UI → Main Table + wiring | ~4.5h | |
+
+> **Nota Piano C**: Quando si implementa Split, aggiungere nella `TransactionBulkModal` un'azione riga "✂ Split" visibile solo su righe paired. L'azione chiama `POST /transactions/split` e aggiorna il batch in-place (le due metà diventano standalone). Questo completa il flusso "elimina solo un lato" suggerito dall'InfoBanner split hint aggiunto in Piano B23 Step 3e.
 
 ### Ordine di esecuzione
 
