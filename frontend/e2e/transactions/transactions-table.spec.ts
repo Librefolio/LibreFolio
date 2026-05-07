@@ -306,5 +306,22 @@ test.describe('TransactionsTable (main read-view)', () => {
 		const id = await ghosts.first().getAttribute('data-row-id');
 		expect(id).toMatch(/^ghost-/);
 	});
+
+	// === TT23 — Enum filter default: no checkboxes selected (no filter active) ===
+	test('type filter starts with all options deselected', async ({page}) => {
+		// Click the filter trigger for the "typeIcon" column (type filter)
+		const filterTrigger = page.getByTestId('col-filter-trigger-typeIcon');
+		await expect(filterTrigger).toBeVisible({timeout: 3_000});
+		await filterTrigger.click();
+		await page.waitForTimeout(300);
+
+		// The filter popover should appear with enum options
+		const checkedBoxes = page.locator('.filter-popover .enum-checkbox.checked');
+		const checkedCount = await checkedBoxes.count();
+		expect(checkedCount, 'All Type filter options should be deselected by default').toBe(0);
+
+		// Close by clicking outside
+		await page.keyboard.press('Escape');
+	});
 });
 

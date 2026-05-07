@@ -26,7 +26,7 @@
 
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTablePagination from '$lib/components/table/DataTablePagination.svelte';
-    import type {ColumnDef, FilterValue, RowAction, SortState} from '$lib/components/table/types';
+    import type {ColumnDef, CellContent, FilterValue, RowAction, SortState} from '$lib/components/table/types';
 
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/assetStore';
     import {ensureCurrenciesLoaded, currencyStoreVersion} from '$lib/stores/currencyStore';
@@ -783,6 +783,31 @@
             getValue: (d) => d.tx.id,
             // TODO: filtro composito multi-range per ID (come currency-stack con range multipli)
             cell: (d) => ({type: 'html', html: `<span class="font-mono text-xs text-gray-400 dark:text-gray-500" data-testid="tx-id-${d.tx.id}">#${d.tx.id}</span>`}),
+        },
+        {
+            id: 'description',
+            header: $t('transactions.table.description') || 'Description',
+            type: 'text',
+            width: 180,
+            urlKey: 'description',
+            sortable: true,
+            filterable: true,
+            hiddenByDefault: false,
+            getValue: (d) => d.tx.description ?? '',
+            cell: (d) => {
+                const desc = d.tx.description ?? '';
+                if (!desc) return {type: 'html', html: ''};
+                const escaped = escapeHtml(desc);
+                const cell: CellContent = {
+                    type: 'html',
+                    html: `<span class="block truncate w-full text-xs text-gray-600 dark:text-gray-300" data-testid="tx-desc-${d.tx.id}">${escaped}</span>`,
+                };
+                // Show tooltip only if text is long enough to potentially truncate
+                if (desc.length > 20) {
+                    cell.tooltip = {text: desc, position: 'top', maxWidth: '300px'};
+                }
+                return cell;
+            },
         },
     ]);
 

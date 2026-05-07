@@ -1066,7 +1066,7 @@
 
                                 <!-- Filter button -->
                                 {#if column.filterable !== false && enableColumnFilters}
-                                    <button bind:this={filterBtnRefs[column.id]} type="button" class="filter-btn" class:active={hasFilter} onclick={() => (openFilterColumnId = openFilterColumnId === column.id ? null : column.id)}>
+                                    <button bind:this={filterBtnRefs[column.id]} type="button" class="filter-btn" class:active={hasFilter} onclick={() => (openFilterColumnId = openFilterColumnId === column.id ? null : column.id)} data-testid={`col-filter-trigger-${column.id}`}>
                                         <Filter size={12} />
                                     </button>
                                 {/if}

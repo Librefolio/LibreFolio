@@ -141,9 +141,12 @@
         /** Bug3-fix: when false, the edit pencil button is hidden in view mode
          *  (user lacks EDITOR access on the broker). Default true. */
         canEdit?: boolean;
+        /** Bug15-fix: monotonic key that forces re-init when the modal is
+         *  re-opened without `open` transitioning through `false`. */
+        openKey?: number;
     }
 
-    let {open, mode, initialRow = null, forcedBroker = null, commitOnSave = true, unlockImmutable = false, availableTags = [], zIndex = 50, injectedPartnerRow = null, onClose, onCommitted, onPushDraft, onSwitchToEdit, canEdit = true}: Props = $props();
+    let {open, mode, initialRow = null, forcedBroker = null, commitOnSave = true, unlockImmutable = false, availableTags = [], zIndex = 50, injectedPartnerRow = null, onClose, onCommitted, onPushDraft, onSwitchToEdit, canEdit = true, openKey = 0}: Props = $props();
 
     // =========================================================================
     // Form state
@@ -263,6 +266,8 @@
     // Reset draft on open; broker store must be loaded first.
     $effect(() => {
         if (!open) return;
+        // Bug15-fix: track openKey to force re-init even when `open` doesn't toggle.
+        void openKey;
         // Read props inside `untrack` — we only want to recompute when `open` flips,
         // not on every initialRow/mode mutation that may be irrelevant.
         const m = mode;
@@ -1410,7 +1415,9 @@
                             {:else}
                                 <!-- transfer_asset / transfer_cash: broker to -->
                                 <div class="flex flex-col gap-1">
-                                    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</span>
+                                    {#if inaccessiblePartnerBrokerId == null}
+                                        <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</span>
+                                    {/if}
                                     {#if inaccessiblePartnerBrokerId != null}
                                         {@const pInfo = getBrokerInfo(inaccessiblePartnerBrokerId)}
                                         {@const RoleIconC = getRoleIcon(null)}
@@ -1431,8 +1438,10 @@
                                         <div class="flex {toRole == null && toInfo ? 'flex-col gap-1.5' : 'items-center gap-2'} px-3 py-2 {toRole == null && toInfo ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400' : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200'} border rounded-lg text-sm" data-testid="tx-form-broker-to-readonly">
                                             {#if toInfo && toRole != null}
                                                 <!-- Accessible broker (OWNER/EDITOR/VIEWER) -->
+                                                {@const RoleIcon = getRoleIcon(toRole)}
                                                 <BrokerIcon iconUrl={toInfo.icon_url} portalUrl={toInfo.portal_url} pluginCode={toInfo.default_import_plugin} altText={toInfo.name} size="sm" />
                                                 <span class="font-medium">{toInfo.name}</span>
+                                                <RoleIcon size={14} class="{getRoleIconColor(toRole)} shrink-0" />
                                             {:else if toInfo && toRole == null}
                                                 <!-- Broker in store but role=null (hidden/admin) — show lock -->
                                                 {@const LockIcon = getRoleIcon(null)}
