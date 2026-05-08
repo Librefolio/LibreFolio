@@ -166,9 +166,11 @@ test.describe('Transaction Paired Edit', () => {
 			// If FormModal opens, verify broker is populated (not empty).
 			const formModal = page.getByTestId('tx-form-modal');
 			if (await formModal.isVisible({timeout: 3_000}).catch(() => false)) {
-				// Broker "From" should be populated
-				const brokerFrom = page.getByTestId('tx-form-broker-wrap');
-				await expect(brokerFrom).toBeVisible({timeout: 2_000});
+				// Broker "From" should be populated (dual layout uses tx-form-dual-from for transfer_asset)
+				const dualFrom = page.getByTestId('tx-form-dual-from');
+				const brokerWrap = page.getByTestId('tx-form-broker-wrap');
+				const target = await dualFrom.isVisible({timeout: 1_000}).catch(() => false) ? dualFrom : brokerWrap;
+				await expect(target).toBeVisible({timeout: 2_000});
 			}
 
 			// Close everything

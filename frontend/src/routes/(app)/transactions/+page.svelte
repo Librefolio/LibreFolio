@@ -24,7 +24,6 @@
     import TransactionDeleteModal from '$lib/components/transactions/TransactionDeleteModal.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import {getBrokerInfo, getPairedAccessLevel, canEditBroker, canEditPaired} from '$lib/stores/brokerStore';
-    import {getTypeRule} from '$lib/stores/transactionTypeStore';
     import {getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
@@ -407,9 +406,7 @@
     });
 
     function onAddTransaction() {
-        // BulkModal with empty initialRows → auto-opens nested FormModal for
-        // single-row create UX within the batch commit workflow.
-        bulkInitial = [];
+        bulkIntent = {action: 'create'};
         bulkOpen = true;
     }
     function onImportFromBroker() {
@@ -430,9 +427,8 @@
 
     // Bulk modal (unified batch editor on DataTable).
     let bulkOpen = $state(false);
-    let bulkInitial = $state<TXReadItem[]>([]);
-    /** When set, BulkModal auto-opens FormModal on the first row after mounting. */
-    let bulkAutoOpenForm = $state<'create' | 'edit' | null>(null);
+    /** Declarative intent for BulkModal — replaces bulkInitial/autoOpenForm/initialStatus. */
+    let bulkIntent = $state<import('$lib/components/transactions/TransactionBulkModal.svelte').WorkspaceIntent | undefined>(undefined);
 
     // B1-17: Selection-based promote (replaces PromotePairWizardModal).
     let promoteConfirmOpen = $state(false);
@@ -470,30 +466,12 @@
         if (selectedRows.length === 0) return;
         const rows = guardViewerOnly(selectedRows);
         if (!rows) return;
-        bulkInitialStatus = undefined;
-        bulkInitial = [...rows];
-        // C2-fix: when editing a single row via toolbar, auto-open FormModal
-        // so the user immediately gets the structured single-row edit UX.
-        if (rows.length === 1) {
-            const row = rows[0];
-            if (row.related_transaction_id != null) {
-                const partner = txStoreGet(row.related_transaction_id);
-                if (partner) bulkInitial = [row, partner];
-            }
-            bulkAutoOpenForm = 'edit';
-        }
+        bulkIntent = {action: 'edit', txIds: rows.map((r) => r.id)};
         bulkOpen = true;
     }
     function onCloneBulk() {
         if (selectedRows.length === 0) return;
-        bulkInitialStatus = undefined;
-        const today = new Date().toISOString().slice(0, 10);
-        bulkInitial = selectedRows.map((r) => ({
-            ...r,
-            id: 0, // ignored on create-many path (id stripped before commit)
-            date: today,
-            related_transaction_id: null,
-        }));
+        bulkIntent = {action: 'clone', txIds: selectedRows.map((r) => r.id)};
         bulkOpen = true;
     }
     function handleFormCommitted() {
@@ -509,45 +487,11 @@
     // Bulk delete → reuse BulkModal with initialStatus: 'delete' (B23 Step 1-2)
     // =========================================================================
 
-    let bulkInitialStatus = $state<'delete' | undefined>(undefined);
-
     async function onBulkDelete() {
         if (selectedRows.length === 0) return;
         const editableRows = guardViewerOnly(selectedRows);
         if (!editableRows) return;
-        const selectedIds = new Set(editableRows.map((r) => r.id));
-        const allRows: TXReadItem[] = [...editableRows];
-
-        // Auto-include partners of paired rows not in selection.
-        const missingPartnerIds = new Set<number>();
-        for (const r of editableRows) {
-            const pid = r.related_transaction_id;
-            if (pid == null || selectedIds.has(pid)) continue;
-            const cached = txStoreGet(pid);
-            if (cached) {
-                allRows.push(cached);
-                selectedIds.add(pid);
-            } else {
-                missingPartnerIds.add(pid);
-            }
-        }
-
-        if (missingPartnerIds.size > 0) {
-            try {
-                const fetched = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {ids: [...missingPartnerIds]}} as never)) as TXReadItem[];
-                for (const r of fetched) {
-                    if (!selectedIds.has(r.id)) {
-                        allRows.push(r);
-                        selectedIds.add(r.id);
-                    }
-                }
-            } catch (e) {
-                console.warn('Failed to resolve partner IDs for bulk delete:', e);
-            }
-        }
-
-        bulkInitial = allRows;
-        bulkInitialStatus = 'delete';
+        bulkIntent = {action: 'delete', txIds: editableRows.map((r) => r.id)};
         bulkOpen = true;
     }
 
@@ -639,26 +583,12 @@
 
 
     function handleEditRow(row: TXReadItem) {
-        // C2-fix: if the row has a linked partner, include both halves so
-        // the BulkModal can merge them and the FormModal opens pre-populated.
-        if (row.related_transaction_id != null) {
-            const partner = txStoreGet(row.related_transaction_id);
-            bulkInitial = partner ? [row, partner] : [row];
-        } else {
-            bulkInitial = [row];
-        }
-        bulkAutoOpenForm = 'edit';
+        bulkIntent = {action: 'edit', txIds: [row.id]};
         bulkOpen = true;
     }
 
     function handleCloneRow(row: TXReadItem) {
-        const today = new Date().toISOString().slice(0, 10);
-        const clone: TXReadItem = {...row, id: 0, date: today, related_transaction_id: null};
-        // Bug6-fix: reset quantity when the type requires qty=0 (e.g. INTEREST)
-        const rule = getTypeRule(row.type);
-        if (rule.quantityRule === 'zero') clone.quantity = '0';
-        bulkInitial = [clone];
-        bulkAutoOpenForm = 'create';
+        bulkIntent = {action: 'clone', txIds: [row.id]};
         bulkOpen = true;
     }
 
@@ -967,7 +897,7 @@
 </div>
 
 <TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} {availableTags} canEdit={formCanEdit} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} onSwitchToEdit={() => { formOpen = false; if (formInitial) handleEditRow(formInitial); }} />
-<TransactionBulkModal open={bulkOpen} initialRows={bulkInitial} initialStatus={bulkInitialStatus} {availableTags} autoOpenForm={bulkAutoOpenForm} onClose={() => { bulkOpen = false; bulkAutoOpenForm = null; bulkInitialStatus = undefined; }} onCommitted={handleBulkCommitted} />
+<TransactionBulkModal open={bulkOpen} intent={bulkIntent} {availableTags} onClose={() => { bulkOpen = false; bulkIntent = undefined; }} onCommitted={handleBulkCommitted} />
 <TransactionDeleteModal
     open={deleteModalOpen}
     transaction={deleteModalTx}
