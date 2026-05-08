@@ -67,6 +67,24 @@ def front_tx_picker_pagination(verbose: bool = False, ui: bool = False, headed: 
     return _run_playwright("transactions/tx-picker-pagination.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_clone(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Transaction Clone E2E tests (standalone, paired, qty=0, commit, viewer guard)."""
+    print_section("Frontend TX Clone Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("transactions/tx-clone.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_bulk_operations(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Transaction Bulk Operations E2E tests (mixed commit, reset, picker guard, validation)."""
+    print_section("Frontend TX Bulk Operations Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("transactions/tx-bulk-operations.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Transaction E2E tests."""
     return _run_test_suite(
@@ -79,6 +97,8 @@ def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool 
             ("TX Tooltips", lambda: front_tx_tooltips(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Delete", lambda: front_tx_delete(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Picker Pagination", lambda: front_tx_picker_pagination(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX Clone", lambda: front_tx_clone(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX Bulk Operations", lambda: front_tx_bulk_operations(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
         ],
         verbose=verbose,
         header_msg="All Transaction Tests (E2E)",
@@ -100,5 +120,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-tooltips", front_tx_tooltips, name="TX Tooltip Tests", desc="Linked pair tooltip: favicon, bold name, SVG role icon, hidden broker", tests="transactions/tx-tooltips.spec.ts")
     add_test(cat, "tx-delete", front_tx_delete, name="TX Delete Tests", desc="DeleteModal layouts, bulk delete, committed:false error, PickerModal guard", tests="transactions/tx-delete.spec.ts")
     add_test(cat, "tx-picker-pagination", front_tx_picker_pagination, name="TX Picker Pagination Tests", desc="PickerModal pagination, reset on reopen, tooltip richness, validation banners", tests="transactions/tx-picker-pagination.spec.ts")
+    add_test(cat, "tx-clone", front_tx_clone, name="TX Clone Tests", desc="Clone standalone, paired, qty=0, commit pair, viewer guard", tests="transactions/tx-clone.spec.ts")
+    add_test(cat, "tx-bulk-operations", front_tx_bulk_operations, name="TX Bulk Operations Tests", desc="Mixed commit, reset, picker guard, pair validation, mark delete", tests="transactions/tx-bulk-operations.spec.ts")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat
