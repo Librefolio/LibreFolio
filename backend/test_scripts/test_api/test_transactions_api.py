@@ -1055,7 +1055,7 @@ class TestPairDescriptionTagsValidation:
         asset_resp = await client.post(f"{API_BASE}/assets", json=[
             {"display_name": f"PairValAsset-{uuid.uuid4().hex[:6]}", "asset_type": "STOCK", "currency": "USD"},
         ], timeout=TIMEOUT)
-        assert asset_resp.status_code == 200
+        assert asset_resp.status_code in (200, 201), f"Asset creation failed: {asset_resp.status_code} {asset_resp.text}"
         asset_id = asset_resp.json()["results"][0]["asset_id"]
         return b1, b2, asset_id
 
