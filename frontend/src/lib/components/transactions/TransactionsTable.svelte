@@ -120,9 +120,17 @@
          *  to URL query params and passes them back via `initialFilters`. */
         onFiltersChange?: (filters: Record<string, FilterValue>) => void;
         initialFilters?: Record<string, FilterValue>;
+        /** IDs of rows that cannot be selected (shown as ⊘ with tooltip). */
+        disabledIds?: Set<number>;
+        /** Tooltip function for disabled rows. Receives broker_id. */
+        disabledRowTooltipFn?: (brokerId: number) => string;
+        /** Override double-click handler (default: view row). */
+        onRowDoubleClickOverride?: (row: TXReadItem) => void;
+        /** Enable long-press touch to toggle selection (mobile picker). */
+        enableTouchSelection?: boolean;
     }
 
-    let {mainRows = [], partnerRows = [], brokers = [], eventTooltipMap = new Map(), currentPage = 1, pageSize = 50, onSelectionChange, onLinkedPairClick, onEditRow, onCloneRow, onDeleteRow, onViewRow, onPageChange, onPageSizeChange, onFiltersChange, initialFilters}: Props = $props();
+    let {mainRows = [], partnerRows = [], brokers = [], eventTooltipMap = new Map(), currentPage = 1, pageSize = 50, onSelectionChange, onLinkedPairClick, onEditRow, onCloneRow, onDeleteRow, onViewRow, onPageChange, onPageSizeChange, onFiltersChange, initialFilters, disabledIds, disabledRowTooltipFn, onRowDoubleClickOverride, enableTouchSelection = false}: Props = $props();
 
     /** Exposed DataTable ref for ColumnVisibilityToggle / external selection control. */
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
@@ -560,8 +568,16 @@
     }
 
     function isRowSelectable(d: DisplayRow): boolean {
+        // Disabled rows (e.g. non-editable broker in picker mode) are not selectable.
+        if (disabledIds && disabledIds.has(d.tx.id)) return false;
         // Ghost rows are selectable (legitimate operations on the partner).
         return !!d;
+    }
+
+    /** Tooltip for non-selectable rows (⊘ icon). */
+    function disabledRowTooltip(d: DisplayRow): string | null {
+        if (!disabledIds || !disabledIds.has(d.tx.id)) return null;
+        return disabledRowTooltipFn?.(d.tx.broker_id) ?? null;
     }
 
     function handleSelectionChange(ids: string[]) {
@@ -936,13 +952,15 @@
         {getRowClass}
         {getRowStyle}
         {isRowSelectable}
+        disabledRowTooltip={disabledRowTooltip}
+        {enableTouchSelection}
         onFiltersChange={handleFiltersChangeInternal}
         onSortChange={(s) => (activeSort = s)}
         onShowSelectedOnlyChange={(v) => (showSelectedOnlyActive = v)}
         {initialFilters}
         onSelectionChange={handleSelectionChange}
         getRowDisplayName={(d) => `#${d.tx.id} ${d.tx.type}`}
-         onRowDoubleClick={(d) => onViewRow?.(d.tx)}
+         onRowDoubleClick={(d) => onRowDoubleClickOverride ? onRowDoubleClickOverride(d.tx) : onViewRow?.(d.tx)}
     />
 
     {#if isGrouped && externalPaginatorTotal > 0}

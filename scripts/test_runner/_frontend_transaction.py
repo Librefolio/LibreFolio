@@ -49,6 +49,24 @@ def front_tx_tooltips(verbose: bool = False, ui: bool = False, headed: bool = Fa
     return _run_playwright("transactions/tx-tooltips.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_delete(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Transaction Delete E2E tests (DeleteModal, BulkDelete, PickerModal guard)."""
+    print_section("Frontend TX Delete Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("transactions/tx-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_picker_pagination(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run PickerModal Pagination E2E tests (pagination, reset, tooltip, validation banners)."""
+    print_section("Frontend TX Picker Pagination Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("transactions/tx-picker-pagination.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Transaction E2E tests."""
     return _run_test_suite(
@@ -59,6 +77,8 @@ def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool 
             ("TX Broker Access", lambda: front_tx_broker_access(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Paired Edit", lambda: front_tx_paired_edit(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Tooltips", lambda: front_tx_tooltips(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX Delete", lambda: front_tx_delete(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX Picker Pagination", lambda: front_tx_picker_pagination(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
         ],
         verbose=verbose,
         header_msg="All Transaction Tests (E2E)",
@@ -78,5 +98,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-broker-access", front_tx_broker_access, name="TX Broker Access Tests", desc="Broker dropdown filtering, hidden broker lock, edit button visibility, enum filters", tests="transactions/tx-broker-access.spec.ts")
     add_test(cat, "tx-paired-edit", front_tx_paired_edit, name="TX Paired Edit Tests", desc="Clone INTEREST qty=0, paired edit payload, flat mode adjacency", tests="transactions/tx-paired-edit.spec.ts")
     add_test(cat, "tx-tooltips", front_tx_tooltips, name="TX Tooltip Tests", desc="Linked pair tooltip: favicon, bold name, SVG role icon, hidden broker", tests="transactions/tx-tooltips.spec.ts")
+    add_test(cat, "tx-delete", front_tx_delete, name="TX Delete Tests", desc="DeleteModal layouts, bulk delete, committed:false error, PickerModal guard", tests="transactions/tx-delete.spec.ts")
+    add_test(cat, "tx-picker-pagination", front_tx_picker_pagination, name="TX Picker Pagination Tests", desc="PickerModal pagination, reset on reopen, tooltip richness, validation banners", tests="transactions/tx-picker-pagination.spec.ts")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

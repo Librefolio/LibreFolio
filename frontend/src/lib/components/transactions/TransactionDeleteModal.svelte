@@ -5,13 +5,16 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {Trash2, X, Info, AlertTriangle, Lock} from 'lucide-svelte';
+    import {Trash2, X, Info, AlertTriangle, Lock, Check} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import BrokerBadge from '$lib/components/ui/BrokerBadge.svelte';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {getBrokerInfo, getAllBrokers, getBrokerRole} from '$lib/stores/brokerStore';
     import {getAssetInfo} from '$lib/stores/assetStore';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {formatCurrencyAmountPlain} from '$lib/utils/currencyFormat';
+    import {getStringBadgeStyle} from '$lib/utils/colors';
     import type {BrokerLike} from '$lib/utils/brokerColors';
 
     interface TXReadItem {
@@ -33,7 +36,16 @@
         partner?: TXReadItem | null;
         partnerInaccessible?: boolean;
         partnerBrokerName?: string;
+        /** B23: resolved error messages from committed:false response. */
+        errors?: string[];
+        /** 'warning' = validate issues (yellow), 'error' = commit failed (red). */
+        errorVariant?: 'warning' | 'error';
+        /** True while a validate/commit is in progress. */
+        validating?: boolean;
+        /** True when last validation succeeded (no errors). */
+        validated?: boolean;
         onConfirm: () => void;
+        onValidate?: () => void;
         onCancel: () => void;
     }
 
@@ -43,7 +55,12 @@
         partner = null,
         partnerInaccessible = false,
         partnerBrokerName = '',
+        errors = [],
+        errorVariant = 'error',
+        validating = false,
+        validated = false,
         onConfirm,
+        onValidate,
         onCancel,
     }: Props = $props();
 
@@ -55,6 +72,12 @@
     function aName(id: number | null | undefined): string {
         if (!id) return '\u2014';
         return getAssetInfo(id)?.display_name ?? `#${id}`;
+    }
+
+    function aIconUrl(id: number | null | undefined): string | null {
+        if (!id) return null;
+        const info = getAssetInfo(id);
+        return info?.icon_url ?? getAssetTypeIconUrl(info?.asset_type) ?? null;
     }
 
     function bLike(brokerId: number): BrokerLike {
@@ -104,13 +127,48 @@
             </button>
         </div>
 
+        {#if errors.length > 0}
+            {#if errorVariant === 'error'}
+                <div class="flex flex-col gap-1 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded p-3" data-testid="tx-delete-modal-errors">
+                    <div class="flex items-center gap-2 font-semibold">
+                        <AlertTriangle size={16} class="flex-shrink-0" />
+                        <span>⛔ {$t('transactions.deleteModal.deleteAbortedTitle') || 'Deletion cancelled'}</span>
+                    </div>
+                    <p class="text-xs opacity-80 ml-6">{$t('transactions.deleteModal.deleteAbortedDetail') || 'The operation was rolled back because it would violate balance rules:'}</p>
+                    <div class="ml-6">
+                        {#each errors as err}
+                            <p>{@html err}</p>
+                        {/each}
+                    </div>
+                </div>
+            {:else}
+                <div class="flex flex-col gap-1 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded p-3" data-testid="tx-delete-modal-errors">
+                    <div class="flex items-center gap-2 font-semibold">
+                        <AlertTriangle size={16} class="flex-shrink-0" />
+                        <span>⚠️ {$t('transactions.deleteModal.validateWarningTitle') || 'Validation issues'}</span>
+                    </div>
+                    <div class="ml-6">
+                        {#each errors as err}
+                            <p>{@html err}</p>
+                        {/each}
+                    </div>
+                </div>
+            {/if}
+        {:else if validated}
+            <div class="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded p-3" data-testid="tx-delete-modal-valid">
+                <Check size={16} class="flex-shrink-0" />
+                <span>{$t('transactions.deleteModal.canBeDeleted') || 'This transaction can be deleted safely.'}</span>
+            </div>
+        {/if}
+
         {#if transaction}
             {#if layout === 'A'}
                 <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden" data-testid="tx-delete-details">
                     <table class="w-full text-sm">
                         <tbody>
+                            <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400 w-28">{$t('transactions.table.date')}</td><td class="px-3 py-2">{transaction.date}</td></tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700">
-                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400 w-28">{$t('transactions.table.type')}</td>
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</td>
                                 <td class="px-3 py-2 flex items-center gap-2">
                                     {#if getTransactionTypeIconUrl(transaction.type)}
                                         <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5" />
@@ -118,16 +176,33 @@
                                     {$t(`transactions.types.${transaction.type}`) || transaction.type}
                                 </td>
                             </tr>
-                            <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</td><td class="px-3 py-2">{transaction.date}</td></tr>
-                            <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}</td><td class="px-3 py-2">{aName(transaction.asset_id)}</td></tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.quantity')}</td><td class="px-3 py-2">{fQ(transaction.quantity)}</td></tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}</td><td class="px-3 py-2">{fC(transaction.cash)}</td></tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}</td>
+                                <td class="px-3 py-2 flex items-center gap-2">
+                                    {#if aIconUrl(transaction.asset_id)}
+                                        <img src={aIconUrl(transaction.asset_id)} alt="" class="w-5 h-5 object-contain" onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                                    {/if}
+                                    {aName(transaction.asset_id)}
+                                </td>
+                            </tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</td><td class="px-3 py-2"><BrokerBadge broker={bLike(transaction.broker_id)} brokers={brkrs} showRole role={getBrokerRole(transaction.broker_id)} /></td></tr>
                             {#if transaction.tags?.length}
-                                <tr>
+                                <tr class="border-b border-gray-100 dark:border-gray-700">
                                     <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.tags')}</td>
                                     <td class="px-3 py-2 flex gap-1 flex-wrap">
-                                        {#each transaction.tags as tag}<span class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-xs rounded">{tag}</span>{/each}
+                                        {#each transaction.tags as tag}<span class="px-1.5 py-0.5 text-xs rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}
+                                    </td>
+                                </tr>
+                            {/if}
+                            {#if transaction.description}
+                                <tr>
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.description')}</td>
+                                    <td class="px-3 py-2">
+                                        <Tooltip text={transaction.description} position="top" maxWidth="360px">
+                                            <span class="truncate block max-w-[250px]">{transaction.description}</span>
+                                        </Tooltip>
                                     </td>
                                 </tr>
                             {/if}
@@ -149,7 +224,7 @@
                             </thead>
                             <tbody>
                                 <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</td><td class="px-3 py-2">{giver.date}</td><td class="px-3 py-2">{receiver.date}</td></tr>
-                                <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}</td><td class="px-3 py-2">{aName(giver.asset_id)}</td><td class="px-3 py-2">{aName(receiver.asset_id)}</td></tr>
+                                <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}</td><td class="px-3 py-2"><span class="inline-flex items-center gap-1.5">{#if aIconUrl(giver.asset_id)}<img src={aIconUrl(giver.asset_id)} alt="" class="w-4 h-4 object-contain" onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />{/if}{aName(giver.asset_id)}</span></td><td class="px-3 py-2"><span class="inline-flex items-center gap-1.5">{#if aIconUrl(receiver.asset_id)}<img src={aIconUrl(receiver.asset_id)} alt="" class="w-4 h-4 object-contain" onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />{/if}{aName(receiver.asset_id)}</span></td></tr>
                                 <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.quantity')}</td><td class="px-3 py-2">{fQ(giver.quantity)}</td><td class="px-3 py-2">{fQ(receiver.quantity)}</td></tr>
                                 <tr class="border-b border-gray-100 dark:border-gray-700">
                                     <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</td>
@@ -218,7 +293,19 @@
             {/if}
         {/if}
 
-        <div class="flex justify-end gap-3 pt-2">
+        <div class="flex justify-between items-center gap-3 pt-2">
+            <div>
+                {#if layout !== 'C' && onValidate}
+                    {#if validating}
+                        <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.validate.validating') || 'Validating...'}</span>
+                    {:else}
+                        <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={onValidate} data-testid="tx-delete-validate-now">
+                            ⚡ {$t('transactions.validate.now') || 'Validate now'}
+                        </button>
+                    {/if}
+                {/if}
+            </div>
+            <div class="flex gap-3">
             <button class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" onclick={handleClose} data-testid="tx-delete-modal-cancel">
                 {#if layout === 'C'}
                     {$t('common.close') || 'Close'}
@@ -236,6 +323,7 @@
                     {/if}
                 </button>
             {/if}
+            </div>
         </div>
     </div>
 </ModalBase>
