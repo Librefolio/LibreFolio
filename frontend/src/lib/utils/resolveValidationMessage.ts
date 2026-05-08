@@ -12,7 +12,7 @@
  * @module utils/resolveValidationMessage
  */
 
-import {formatCurrencyAmountPlain} from './currencyFormat';
+import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from './currencyFormat';
 
 /**
  * Mapping of Pydantic built-in error types to i18n keys.
@@ -198,6 +198,11 @@ export function resolveIssueMessage(
             maximumFractionDigits: 6,
         });
         enriched.balance = `${formatted} ${emoji}`;
+    }
+
+    // Resolve currency code → rich HTML with symbol + flag (e.g. "$ 🇺🇸 USD")
+    if (rawParams.currency && typeof rawParams.currency === 'string') {
+        enriched.currency = formatCurrencyCodeHtml(rawParams.currency);
     }
 
     // Extract and translate field name for prefixing

@@ -35,7 +35,7 @@
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {X, ArrowRight, ArrowDown, Check, Pencil} from 'lucide-svelte';
+    import {X, ArrowRight, ArrowDown, Check, Pencil, Save} from 'lucide-svelte';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/brokerRoleHelpers';
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
@@ -208,8 +208,10 @@
     function fromTx(tx: TXReadItem, opts: {regenerateLink?: boolean; resetDate?: boolean} = {}): FormDraft {
         const txRule = getTypeRule(tx.type);
         // Auto-sign: show positive values for auto-negated types
+        // Also normalize paired types (transfer_asset, transfer_cash) — the dual
+        // form always displays absolute values; sign is determined by From/To sides.
         let qty = tx.quantity;
-        if (txRule.quantityRule === 'negative' && Number(qty) < 0) {
+        if (Number(qty) < 0 && (txRule.quantityRule === 'negative' || txRule.pairFormLayout != null)) {
             qty = String(Math.abs(Number(qty)));
         }
         let cash = tx.cash ? {code: tx.cash.code, amount: tx.cash.amount} : null;
@@ -445,10 +447,14 @@
             if (myQty > 0) {
                 draft = fromTx(partner);
                 dualTo = {broker_id: row.broker_id, cash: null, date: row.date};
-                qtyDisplay = formatDecimalForDisplay(draft.quantity);
             } else {
                 dualTo = {broker_id: partner.broker_id, cash: null, date: partner.date};
             }
+            // Dual form always shows absolute qty — sign is determined by From/To sides
+            if (Number(draft.quantity) < 0) {
+                draft = {...draft, quantity: String(Math.abs(Number(draft.quantity)))};
+            }
+            qtyDisplay = formatDecimalForDisplay(draft.quantity);
         } else if (layout === 'transfer_cash') {
             const myAmount = Number(row.cash?.amount ?? 0);
             const fromRow = myAmount < 0 ? row : partner;
@@ -1728,8 +1734,8 @@
         <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0 text-xs">
             <div class="flex items-center gap-2 flex-wrap">
                 {#if !isReadonly}
-                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={() => scheduler.trigger('manual')} data-testid="tx-form-validate-now">
-                        ⚡ {$t('transactions.validate.now')}
+                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={() => scheduler.trigger('manual')} data-testid="tx-form-validate-now" title={$t('transactions.validate.now')}>
+                        ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now')}</span>
                     </button>
                 {/if}
                 {#if scheduler.state.isValidating}
@@ -1741,15 +1747,15 @@
                 {/if}
             </div>
             <div class="flex items-center gap-2">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={requestClose} data-testid="tx-form-cancel">{isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}</button>
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 inline-flex items-center gap-1.5" onclick={requestClose} data-testid="tx-form-cancel" title={isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}><X size={15} /> <span class="hidden sm:inline">{isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}</span></button>
                 {#if !isReadonly}
-                    <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1" disabled={committing || loadingPartner || !!dualValidationError || (!commitOnSave && !isFormComplete)} onclick={commit} data-testid="tx-form-save">
+                    <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5" disabled={committing || loadingPartner || !!dualValidationError || (!commitOnSave && !isFormComplete)} onclick={commit} data-testid="tx-form-save" title={committing ? ($t('common.saving')) : (!commitOnSave ? ($t('transactions.form.apply')) : ($t('common.save')))}>
                         {#if committing}
-                            {$t('common.saving')}
+                            <span class="hidden sm:inline">{$t('common.saving')}</span>
                         {:else if !commitOnSave}
-                            <Check size={16} /> {$t('transactions.form.apply')}
+                            <Check size={16} /> <span class="hidden sm:inline">{$t('transactions.form.apply')}</span>
                         {:else}
-                            {$t('common.save')}
+                            <Save size={15} /> <span class="hidden sm:inline">{$t('common.save')}</span>
                         {/if}
                     </button>
                 {/if}

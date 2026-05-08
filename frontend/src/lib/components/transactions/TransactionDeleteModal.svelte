@@ -5,8 +5,9 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {Trash2, X, Info, AlertTriangle, Lock, Check} from 'lucide-svelte';
+    import {Trash2, X, Info, Lock, AlertTriangle, Check} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import TransactionResultBanner from './TransactionResultBanner.svelte';
     import BrokerBadge from '$lib/components/ui/BrokerBadge.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {getBrokerInfo, getAllBrokers, getBrokerRole} from '$lib/stores/brokerStore';
@@ -111,7 +112,7 @@
     );
 </script>
 
-<ModalBase {open} maxWidth="lg" onRequestClose={handleClose} testId="tx-delete-modal">
+<ModalBase {open} maxWidth={layout === 'B' ? 'xl' : 'lg'} onRequestClose={handleClose} testId="tx-delete-modal">
     <div class="p-6 space-y-4" data-testid="tx-delete-modal-content">
         <div class="flex items-center justify-between">
             <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
@@ -128,37 +129,15 @@
         </div>
 
         {#if errors.length > 0}
-            {#if errorVariant === 'error'}
-                <div class="flex flex-col gap-1 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded p-3" data-testid="tx-delete-modal-errors">
-                    <div class="flex items-center gap-2 font-semibold">
-                        <AlertTriangle size={16} class="flex-shrink-0" />
-                        <span>⛔ {$t('transactions.deleteModal.deleteAbortedTitle') || 'Deletion cancelled'}</span>
-                    </div>
-                    <p class="text-xs opacity-80 ml-6">{$t('transactions.deleteModal.deleteAbortedDetail') || 'The operation was rolled back because it would violate balance rules:'}</p>
-                    <div class="ml-6">
-                        {#each errors as err}
-                            <p>{@html err}</p>
-                        {/each}
-                    </div>
-                </div>
-            {:else}
-                <div class="flex flex-col gap-1 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded p-3" data-testid="tx-delete-modal-errors">
-                    <div class="flex items-center gap-2 font-semibold">
-                        <AlertTriangle size={16} class="flex-shrink-0" />
-                        <span>⚠️ {$t('transactions.deleteModal.validateWarningTitle') || 'Validation issues'}</span>
-                    </div>
-                    <div class="ml-6">
-                        {#each errors as err}
-                            <p>{@html err}</p>
-                        {/each}
-                    </div>
-                </div>
-            {/if}
-        {:else if validated}
-            <div class="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded p-3" data-testid="tx-delete-modal-valid">
-                <Check size={16} class="flex-shrink-0" />
-                <span>{$t('transactions.deleteModal.canBeDeleted') || 'This transaction can be deleted safely.'}</span>
-            </div>
+            <TransactionResultBanner
+                variant={errorVariant}
+                title={errorVariant === 'error'
+                    ? `⛔ ${$t('transactions.deleteModal.deleteAbortedTitle') || 'Deletion cancelled'}`
+                    : `⚠️ ${$t('transactions.deleteModal.validateWarningTitle') || 'Validation issues'}`}
+                subtitle={errorVariant === 'error' ? ($t('transactions.deleteModal.deleteAbortedDetail') || '') : ''}
+                messages={errors}
+                testId="tx-delete-modal-errors"
+            />
         {/if}
 
         {#if transaction}
@@ -294,32 +273,38 @@
         {/if}
 
         <div class="flex justify-between items-center gap-3 pt-2">
-            <div>
+            <div class="flex items-center gap-2">
                 {#if layout !== 'C' && onValidate}
                     {#if validating}
                         <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.validate.validating') || 'Validating...'}</span>
                     {:else}
-                        <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={onValidate} data-testid="tx-delete-validate-now">
-                            ⚡ {$t('transactions.validate.now') || 'Validate now'}
+                        <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={onValidate} data-testid="tx-delete-validate-now" title={$t('transactions.validate.now') || 'Validate now'}>
+                            ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now') || 'Validate now'}</span>
                         </button>
+                    {/if}
+                    {#if validated && errors.length === 0}
+                        <span class="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1" data-testid="tx-delete-valid-inline">
+                            <Check size={14} /> {$t('transactions.validate.deleteOk') || 'Removal allowed'}
+                        </span>
                     {/if}
                 {/if}
             </div>
             <div class="flex gap-3">
-            <button class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" onclick={handleClose} data-testid="tx-delete-modal-cancel">
+            <button class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition inline-flex items-center gap-1.5" onclick={handleClose} data-testid="tx-delete-modal-cancel" title={layout === 'C' ? ($t('common.close') || 'Close') : ($t('common.cancel') || 'Cancel')}>
+                <X size={15} />
                 {#if layout === 'C'}
-                    {$t('common.close') || 'Close'}
+                    <span class="hidden sm:inline">{$t('common.close') || 'Close'}</span>
                 {:else}
-                    {$t('common.cancel') || 'Cancel'}
+                    <span class="hidden sm:inline">{$t('common.cancel') || 'Cancel'}</span>
                 {/if}
             </button>
             {#if layout !== 'C'}
-                <button class="px-4 py-2 text-sm text-white bg-red-600 rounded-lg hover:bg-red-700 transition flex items-center gap-1.5" onclick={onConfirm} data-testid="tx-delete-modal-confirm">
+                <button class="px-4 py-2 text-sm text-white bg-red-600 rounded-lg hover:bg-red-700 transition flex items-center gap-1.5" onclick={onConfirm} data-testid="tx-delete-modal-confirm" title={layout === 'B' ? ($t('transactions.deleteModal.deleteBoth') || 'Delete both') : ($t('common.delete') || 'Delete')}>
                     <Trash2 size={15} />
                     {#if layout === 'B'}
-                        {$t('transactions.deleteModal.deleteBoth') || 'Delete both'}
+                        <span class="hidden sm:inline">{$t('transactions.deleteModal.deleteBoth') || 'Delete both'}</span>
                     {:else}
-                        {$t('common.delete') || 'Delete'}
+                        <span class="hidden sm:inline">{$t('common.delete') || 'Delete'}</span>
                     {/if}
                 </button>
             {/if}

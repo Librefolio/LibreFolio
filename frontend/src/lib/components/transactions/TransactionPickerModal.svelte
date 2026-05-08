@@ -101,7 +101,7 @@
             : '';
         const currentRoleSvg = getRoleSvgHtml(currentRole);
         const requiredRoleSvg = getRoleSvgHtml('EDITOR');
-        return `${brokerIconHtml}<strong>${bName}</strong> ${currentRoleSvg} ${roleLabelCurrent} — ${$t('transactions.picker.requiredRole') || 'required'} ${requiredRoleSvg} Editor`;
+        return `${brokerIconHtml}<strong>${bName}</strong> ${currentRoleSvg} ${roleLabelCurrent}<br>${$t('transactions.picker.requiredRole') || 'required'} ${requiredRoleSvg} Editor`;
     }
 
     /** TableRef for dblclick toggle selection. */
@@ -194,20 +194,23 @@
             </p>
             <div class="flex gap-3">
                 <button
-                    class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                    class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition inline-flex items-center gap-1.5"
                     onclick={handleClose}
                     data-testid="tx-picker-cancel"
+                    title={$t('common.cancel') || 'Cancel'}
                 >
-                    {$t('common.cancel') || 'Cancel'}
+                    <X size={15} />
+                    <span class="hidden sm:inline">{$t('common.cancel') || 'Cancel'}</span>
                 </button>
                 <button
                     class="px-4 py-2 text-sm text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition flex items-center gap-1.5 disabled:opacity-50"
                     disabled={selectedRows.length === 0}
                     onclick={handleAdd}
                     data-testid="tx-picker-add"
+                    title={$t('transactions.picker.addN', {values: {n: selectedRows.length}}) || `Add ${selectedRows.length} selected`}
                 >
                     <Plus size={15} />
-                    {$t('transactions.picker.addN', {values: {n: selectedRows.length}}) || `Add ${selectedRows.length} selected`}
+                    <span class="hidden sm:inline">{$t('transactions.picker.addN', {values: {n: selectedRows.length}}) || `Add ${selectedRows.length} selected`}</span>
                 </button>
             </div>
         </div>
