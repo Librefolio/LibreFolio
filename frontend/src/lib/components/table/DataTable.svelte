@@ -15,7 +15,7 @@
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/upload';
     import {getUserStorageKey} from '$lib/utils/storage';
-    import {Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon, Info} from 'lucide-svelte';
+    import {Ban, Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon, Info} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DataTablePagination from './DataTablePagination.svelte';
     import DataTableColumnFilter from './DataTableColumnFilter.svelte';
@@ -63,6 +63,10 @@
         tableLayout?: 'fixed' | 'auto';
         /** Optional predicate: if returns false, row checkbox is hidden and row is excluded from bulk select */
         isRowSelectable?: (row: T) => boolean;
+        /** Tooltip text for non-selectable rows (⊘ icon shown instead of checkbox). */
+        disabledRowTooltip?: (row: T) => string | null;
+        /** Enable touch long-press (500ms) to toggle row selection (mobile). */
+        enableTouchSelection?: boolean;
         /** Whether the actions column is sticky (default: true) */
         stickyActions?: boolean;
         /** Enable right-click/long-press context menu on rows (default: true) */
@@ -121,6 +125,8 @@
         getRowStyle,
         tableLayout = 'fixed',
         isRowSelectable,
+        disabledRowTooltip,
+        enableTouchSelection = false,
         stickyActions = true,
         enableContextMenu = true,
         onSortChange,
@@ -188,6 +194,32 @@
 
     // Highlighted row (set by navigateToRowId, cleared on user interaction)
     let highlightedRowId = $state<string | null>(null);
+
+    // Long-press touch state for mobile selection toggle
+    let touchTimerId = $state<ReturnType<typeof setTimeout> | null>(null);
+
+    function handleTouchStart(row: T, e: TouchEvent) {
+        if (!enableTouchSelection) return;
+        if (isRowSelectable && !isRowSelectable(row)) return;
+        touchTimerId = setTimeout(() => {
+            touchTimerId = null;
+            toggleRowSelection(getRowId(row));
+        }, 500);
+    }
+
+    function handleTouchEnd() {
+        if (touchTimerId != null) {
+            clearTimeout(touchTimerId);
+            touchTimerId = null;
+        }
+    }
+
+    function handleTouchMove() {
+        if (touchTimerId != null) {
+            clearTimeout(touchTimerId);
+            touchTimerId = null;
+        }
+    }
 
     /** Bound on the root `.datatable-container` so `navigateToRowId` can scope
      *  its DOM lookup to this instance only (Bugfix-4 §C15). */
@@ -1146,6 +1178,9 @@
                                 contextMenuRow = row;
                                 contextMenuPos = {x: e.clientX, y: e.clientY};
                             }}
+                            ontouchstart={(e) => handleTouchStart(row, e)}
+                            ontouchend={handleTouchEnd}
+                            ontouchmove={handleTouchMove}
                         >
                             <!-- Selection cell (multi mode only - shows checkboxes) -->
                             {#if effectiveSelectionMode === 'multi'}
@@ -1167,7 +1202,14 @@
                                                 {/if}
                                             </button>
                                         {:else}
-                                            <div style="width:28px"></div>
+                                            {@const dTooltip = disabledRowTooltip?.(row) ?? null}
+                                            {#if dTooltip}
+                                                <Tooltip html={dTooltip} position="right" maxWidth="280px">
+                                                    <span class="disabled-select-icon"><Ban size={16} /></span>
+                                                </Tooltip>
+                                            {:else}
+                                                <div style="width:28px"></div>
+                                            {/if}
                                         {/if}
                                         <!-- Invisible spacer matching filter button width for alignment -->
                                         <div class="invisible" style="width:20px" aria-hidden="true"></div>
@@ -1829,6 +1871,22 @@
     }
 
     /* Checkbox */
+    .disabled-select-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        margin: 0 auto;
+        color: #ef4444;
+        opacity: 0.7;
+    }
+
+    :global(.dark) .disabled-select-icon {
+        color: #f87171;
+        opacity: 0.6;
+    }
+
     .checkbox-btn {
         display: flex;
         align-items: center;

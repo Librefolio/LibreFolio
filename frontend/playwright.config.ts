@@ -15,6 +15,7 @@ const TEST_PORT = process.env.TEST_PORT || '8001';
 const BASE_URL = `http://localhost:${TEST_PORT}`;
 
 export default defineConfig({
+    globalSetup: './e2e/global-setup.ts',
     testDir: './e2e',
     fullyParallel: false,           // Test sequenziali (stato condiviso)
     forbidOnly: !!process.env.CI,

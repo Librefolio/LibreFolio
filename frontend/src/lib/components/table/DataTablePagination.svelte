@@ -90,7 +90,7 @@
     }
 </script>
 
-<div class="pagination-container">
+<div class="pagination-container" data-testid="data-table-pagination">
     <div class="pagination-balloon">
         <!-- Row 1: Page size + label + total (groups together on mobile) -->
         <div class="pagination-row-top">
@@ -116,7 +116,7 @@
 
         <!-- Row 2: Page navigation -->
         <div class="pagination-row-bottom">
-            <button class="nav-btn" disabled={!canPrevPage} onclick={() => goToPage(currentPage - 1)} type="button">
+            <button class="nav-btn" data-testid="pagination-prev" disabled={!canPrevPage} onclick={() => goToPage(currentPage - 1)} type="button">
                 <ChevronLeft size={16} />
             </button>
             <div class="page-numbers">
@@ -140,7 +140,7 @@
                     {/if}
                 {/each}
             </div>
-            <button class="nav-btn" disabled={!canNextPage} onclick={() => goToPage(currentPage + 1)} type="button">
+            <button class="nav-btn" data-testid="pagination-next" disabled={!canNextPage} onclick={() => goToPage(currentPage + 1)} type="button">
                 <ChevronRight size={16} />
             </button>
         </div>

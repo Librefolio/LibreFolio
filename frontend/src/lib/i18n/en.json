@@ -582,6 +582,9 @@
       "deleteSelected": "Delete selected",
       "searchAdd": "Search & add",
       "cloneRow": "Clone row",
+      "confirmEditDelete": "Transaction marked for deletion",
+      "confirmEditDeleteMessage": "This transaction is marked for deletion. Do you want to restore it and edit it instead?",
+      "restoreAndEdit": "Restore & Edit",
       "stateNew": "new",
       "stateEdit": "edit",
       "stateDel": "del"
@@ -666,8 +669,8 @@
       "fxConversionQtyZero": "FX Conversion must have quantity = 0",
       "eventRequiresAsset": "Event link requires an asset to be selected",
       "eventTypeIncompatible": "{type} cannot be linked to an asset event (only {allowed})",
-      "balanceCashNegative": "Cash balance for <strong>{currency}</strong> goes negative (<strong>{formattedBalance}</strong>) on {date} at <strong>{brokerName}</strong>",
-      "balanceAssetNegative": "<strong>{assetName}</strong> holdings go negative (<strong>{balance}</strong>) on {date} at <strong>{brokerName}</strong>",
+      "balanceCashNegative": "Saving would cause <strong>{currency}</strong> cash to go negative (<strong>{formattedBalance}</strong>) on {date} at <strong>{brokerName}</strong>",
+      "balanceAssetNegative": "Saving would cause <strong>{assetName}</strong> holdings to go negative (<strong>{balance}</strong>) on {date} at <strong>{brokerName}</strong>",
       "accessDenied": "Access denied: EDITOR role required for {brokerName}",
       "txNotFound": "Transaction {id} not found",
       "indexAssetForbidden": "Cannot create transactions for INDEX assets",
@@ -723,12 +726,22 @@
       "blockedMessage": "Cannot delete: you need Editor access on both brokers to delete a linked pair.",
       "contactOwner": "Contact the owner of",
       "forAccess": "for access.",
-      "deleteBoth": "Delete both"
+      "deleteBoth": "Delete both",
+      "toastSuccess": "Deleted: {type} {asset} on {broker}",
+      "toastPairedSuccess": "Deleted paired: {type} {asset} {brokerFrom} → {brokerTo}",
+      "toastError": "Delete failed",
+      "validateNow": "Validate now",
+      "canBeDeleted": "This transaction can be deleted safely.",
+      "validateWarningTitle": "Validation issues",
+      "deleteAbortedTitle": "Deletion cancelled",
+      "deleteAbortedDetail": "The operation was rolled back because it would violate balance rules:"
     },
     "picker": {
       "title": "Select transactions to add",
       "pairedNote": "Selecting a paired transaction auto-adds its partner.",
-      "addN": "Add {n} selected",
+      "disabledTooltip": "Editor access required on broker {broker}",
+      "requiredRole": "required",
+      "addN": "Add {n}",
       "searchAdd": "Search & add"
     },
     "access": {

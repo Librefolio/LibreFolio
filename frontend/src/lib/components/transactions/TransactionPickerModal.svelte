@@ -13,6 +13,9 @@
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import TransactionsTable from './TransactionsTable.svelte';
     import type {BrokerLike} from '$lib/utils/brokerColors';
+    import {canEditBroker, getBrokerRole, getBrokerInfo} from '$lib/stores/brokerStore';
+    import {getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
+    import {getRoleSvgHtml} from '$lib/utils/brokerRoleHelpers';
 
     interface TXReadItem {
         id: number;
@@ -53,10 +56,67 @@
     }: Props = $props();
 
     let selectedRows = $state<TXReadItem[]>([]);
+    let pickerPage = $state(1);
+    let pickerPageSize = $state(20);
 
     /** Filtered rows: exclude IDs already in BulkModal */
     let filteredMain = $derived(mainRows.filter((r) => !excludeIds.has(r.id)));
     let filteredPartners = $derived(partnerRows.filter((r) => !excludeIds.has(r.id)));
+
+    /** IDs of rows on non-editable brokers (VIEWER / no role). */
+    let disabledIds = $derived.by(() => {
+        const disabled = new Set<number>();
+        const all = [...filteredMain, ...filteredPartners];
+        const lookup = new Map(all.map((r) => [r.id, r]));
+        for (const r of all) {
+            if (disabled.has(r.id)) continue;
+            if (r.related_transaction_id != null) {
+                // Paired: both halves disabled if either broker is non-editable
+                const partner = lookup.get(r.related_transaction_id);
+                const partnerBrokerId = partner?.broker_id;
+                if (!canEditBroker(r.broker_id) || (partnerBrokerId != null && !canEditBroker(partnerBrokerId))) {
+                    disabled.add(r.id);
+                    if (partner) disabled.add(partner.id);
+                }
+            } else {
+                // Standalone: disabled if broker is VIEWER or null role
+                if (!canEditBroker(r.broker_id)) {
+                    disabled.add(r.id);
+                }
+            }
+        }
+        return disabled;
+    });
+
+    /** Tooltip for disabled rows — shows broker icon + name + role SVG + required role. */
+    function disabledTooltipFn(brokerId: number): string {
+        const broker = brokers.find((b) => b.id === brokerId);
+        const brokerFromStore = getBrokerInfo(brokerId);
+        const bName = broker?.name ?? brokerFromStore?.name ?? `#${brokerId}`;
+        const iconUrl = getBrokerIconUrlById(brokerId, brokers);
+        const currentRole = getBrokerRole(brokerId);
+        const roleLabelCurrent = currentRole ? currentRole.charAt(0) + currentRole.slice(1).toLowerCase() : 'None';
+        const brokerIconHtml = iconUrl
+            ? `<img src="${iconUrl}" width="14" height="14" style="display:inline;vertical-align:middle;border-radius:3px;margin-right:3px" alt="" onerror="this.style.display='none'">`
+            : '';
+        const currentRoleSvg = getRoleSvgHtml(currentRole);
+        const requiredRoleSvg = getRoleSvgHtml('EDITOR');
+        return `${brokerIconHtml}<strong>${bName}</strong> ${currentRoleSvg} ${roleLabelCurrent} — ${$t('transactions.picker.requiredRole') || 'required'} ${requiredRoleSvg} Editor`;
+    }
+
+    /** TableRef for dblclick toggle selection. */
+    let tableRef: TransactionsTable | undefined = $state(undefined);
+
+    /** Double-click on selectable row → toggle selection. */
+    function handleRowDoubleClick(row: TXReadItem) {
+        if (disabledIds.has(row.id)) return;
+        const idx = selectedRows.findIndex((r) => r.id === row.id);
+        if (idx >= 0) {
+            selectedRows = selectedRows.filter((r) => r.id !== row.id);
+        } else {
+            selectedRows = [...selectedRows, row];
+        }
+    }
 
     /** Empty event tooltip map — picker doesn't need event tooltips */
     let emptyEventMap = $derived(new Map());
@@ -110,12 +170,20 @@
         <!-- Table -->
         <div class="flex-1 overflow-auto px-6 py-4">
             <TransactionsTable
+                bind:this={tableRef}
                 mainRows={filteredMain as any[]}
                 partnerRows={filteredPartners as any[]}
                 {brokers}
                 eventTooltipMap={emptyEventMap}
-                pageSize={20}
+                currentPage={pickerPage}
+                pageSize={pickerPageSize}
+                onPageChange={(p) => (pickerPage = p)}
+                onPageSizeChange={(s) => { pickerPageSize = s; pickerPage = 1; }}
                 onSelectionChange={handleSelectionChange}
+                {disabledIds}
+                disabledRowTooltipFn={disabledTooltipFn}
+                onRowDoubleClickOverride={handleRowDoubleClick}
+                enableTouchSelection={true}
             />
         </div>
 

@@ -582,6 +582,9 @@
       "deleteSelected": "Eliminar seleccionadas",
       "searchAdd": "Buscar y agregar",
       "cloneRow": "Clonar fila",
+      "confirmEditDelete": "Transacción marcada para eliminación",
+      "confirmEditDeleteMessage": "Esta transacción está marcada para eliminación. ¿Desea restaurarla y editarla?",
+      "restoreAndEdit": "Restaurar y editar",
       "stateNew": "nueva",
       "stateEdit": "editar",
       "stateDel": "eliminar"
@@ -666,8 +669,8 @@
       "fxConversionQtyZero": "La conversión FX debe tener cantidad = 0",
       "eventRequiresAsset": "El enlace a un evento requiere un activo seleccionado",
       "eventTypeIncompatible": "{type} no se puede vincular a un evento de activo (solo {allowed})",
-      "balanceCashNegative": "El saldo <strong>{currency}</strong> se vuelve negativo (<strong>{formattedBalance}</strong>) el {date} en <strong>{brokerName}</strong>",
-      "balanceAssetNegative": "Las posiciones de <strong>{assetName}</strong> se vuelven negativas (<strong>{balance}</strong>) el {date} en <strong>{brokerName}</strong>",
+      "balanceCashNegative": "Guardar haría que el saldo <strong>{currency}</strong> sea negativo (<strong>{formattedBalance}</strong>) el {date} en <strong>{brokerName}</strong>",
+      "balanceAssetNegative": "Guardar haría que las posiciones de <strong>{assetName}</strong> sean negativas (<strong>{balance}</strong>) el {date} en <strong>{brokerName}</strong>",
       "accessDenied": "Acceso denegado: se requiere rol EDITOR para {brokerName}",
       "txNotFound": "Transacción {id} no encontrada",
       "indexAssetForbidden": "No se pueden crear transacciones para activos de tipo INDEX",
@@ -723,12 +726,22 @@
       "blockedMessage": "No se puede eliminar: necesitas acceso de Editor en ambos brokers para eliminar un par vinculado.",
       "contactOwner": "Contacta al propietario de",
       "forAccess": "para acceso.",
-      "deleteBoth": "Eliminar ambas"
+      "deleteBoth": "Eliminar ambas",
+      "toastSuccess": "Eliminada: {type} {asset} en {broker}",
+      "toastPairedSuccess": "Par eliminado: {type} {asset} {brokerFrom} → {brokerTo}",
+      "toastError": "Error al eliminar",
+      "validateNow": "Validar ahora",
+      "canBeDeleted": "Esta transacción se puede eliminar de forma segura.",
+      "validateWarningTitle": "Problemas de validación",
+      "deleteAbortedTitle": "Eliminación cancelada",
+      "deleteAbortedDetail": "La operación fue cancelada porque violaría las reglas de saldo:"
     },
     "picker": {
       "title": "Seleccionar transacciones para agregar",
       "pairedNote": "Al seleccionar una transacción vinculada se agrega automáticamente su par.",
-      "addN": "Agregar {n} seleccionadas",
+      "disabledTooltip": "Se requiere acceso de Editor en el broker {broker}",
+      "requiredRole": "requerido",
+      "addN": "Agregar {n}",
       "searchAdd": "Buscar y agregar"
     },
     "access": {

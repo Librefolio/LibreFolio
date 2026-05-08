@@ -1,7 +1,7 @@
 # Plan — Phase 07 · Part 4 · Round 6 — Piano B23: Bulk Delete via BulkModal + DeleteModal Polish
 
 **Date**: 2026-05-07
-**Status**: ⏳ DRAFT
+**Status**: ✅ COMPLETED
 **Parent**: [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](./plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md) (Step 7 + 9)
 **Previous iteration**: [`plan-phase07-transaction-Part4_Round6_PlanB_TestWalkPhase2.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanB_TestWalkPhase2.prompt.md)
 
@@ -15,7 +15,7 @@ Eliminare `BulkDeleteLinkedPairModal` — la delete multipla avviene direttament
 
 ## Steps
 
-### Step 1 — Rimuovere `BulkDeleteLinkedPairModal` e relativo wiring (~30min)
+### Step 1 — Rimuovere `BulkDeleteLinkedPairModal` e relativo wiring ✅ (~30min)
 
 **Eliminare**: [`BulkDeleteLinkedPairModal.svelte`](frontend/src/lib/components/transactions/BulkDeleteLinkedPairModal.svelte)
 
@@ -28,7 +28,7 @@ Eliminare `BulkDeleteLinkedPairModal` — la delete multipla avviene direttament
 
 ---
 
-### Step 2 — Riscrivere `onBulkDelete()` → apre BulkModal con `initialStatus: 'delete'` (~1h)
+### Step 2 — Riscrivere `onBulkDelete()` → apre BulkModal con `initialStatus: 'delete'` ✅ (~1h)
 
 **File**: [+page.svelte](frontend/src/routes/(app)/transactions/+page.svelte)
 
@@ -43,7 +43,7 @@ Riscrivere `onBulkDelete()` (L.517) con la stessa logica di `onEditBulk()`:
 
 ---
 
-### Step 3 — `TransactionBulkModal`: supporto `initialStatus: 'delete'` (~1h)
+### Step 3 — `TransactionBulkModal`: supporto `initialStatus: 'delete'` ✅ (~1h)
 
 **File**: [TransactionBulkModal.svelte](frontend/src/lib/components/transactions/TransactionBulkModal.svelte)
 
@@ -65,7 +65,7 @@ Usare la chiave i18n `transactions.deleteModal.splitHint` già esistente (L.719 
 
 ---
 
-### Step 4 — Conferma "Edit su riga marcata delete" (~45min)
+### Step 4 — Conferma "Edit su riga marcata delete" ✅ (~45min)
 
 **File**: [TransactionBulkModal.svelte](frontend/src/lib/components/transactions/TransactionBulkModal.svelte)
 
@@ -89,7 +89,7 @@ Quando l'utente clicca l'azione "✏ Edit" (o doppio-click) su una riga con `sta
 
 ---
 
-### Step 5 — `TransactionDeleteModal`: fix bug `committed:false` + toast success (~1.5h)
+### Step 5 — `TransactionDeleteModal`: fix bug `committed:false` + toast success ✅ (~1.5h)
 
 **File**: [+page.svelte](frontend/src/routes/(app)/transactions/+page.svelte) `confirmDeleteModal()` (L.790), [TransactionDeleteModal.svelte](frontend/src/lib/components/transactions/TransactionDeleteModal.svelte)
 
@@ -108,7 +108,7 @@ Quando l'utente clicca l'azione "✏ Edit" (o doppio-click) su una riga con `sta
 
 ---
 
-### Step 6 — `TransactionDeleteModal`: UI polish (~1h)
+### Step 6 — `TransactionDeleteModal`: UI polish ✅ (~1h)
 
 **File**: [TransactionDeleteModal.svelte](frontend/src/lib/components/transactions/TransactionDeleteModal.svelte)
 
@@ -122,7 +122,7 @@ Quando l'utente clicca l'azione "✏ Edit" (o doppio-click) su una riga con `sta
 
 ---
 
-### Step 7 — BulkModal UI polish: icone toolbar + posizione Cerca (~30min)
+### Step 7 — BulkModal UI polish: icone toolbar + posizione Cerca ✅ (~30min)
 
 **File**: [TransactionBulkModal.svelte](frontend/src/lib/components/transactions/TransactionBulkModal.svelte)
 
@@ -134,7 +134,7 @@ Quando l'utente clicca l'azione "✏ Edit" (o doppio-click) su una riga con `sta
 
 ---
 
-### Step 8 — PickerModal: guard righe non-editabili + dblclick/long-press (~2h)
+### Step 8 — PickerModal: guard righe non-editabili + dblclick/long-press ✅ (~2h)
 
 **File**: [TransactionPickerModal.svelte](frontend/src/lib/components/transactions/TransactionPickerModal.svelte), [TransactionsTable.svelte](frontend/src/lib/components/transactions/TransactionsTable.svelte), [DataTable.svelte](frontend/src/lib/components/table/DataTable.svelte)
 
@@ -154,7 +154,7 @@ Quando l'utente clicca l'azione "✏ Edit" (o doppio-click) su una riga con `sta
 
 ---
 
-### Step 9 — Mock data: TX deletable in `populate_mock_data.py` (~30min)
+### Step 9 — Mock data: TX deletable in `populate_mock_data.py` ✅ (~30min)
 
 **File**: `backend/app/db/populate_mock_data.py`
 
@@ -167,7 +167,7 @@ Quando l'utente clicca l'azione "✏ Edit" (o doppio-click) su una riga con `sta
 
 ---
 
-### Step 10 — E2E test suite `tx-delete.spec.ts` (~2h)
+### Step 10 — E2E test suite `tx-delete.spec.ts` ✅ (~2h)
 
 **Nuovo file**: `frontend/e2e/transactions/tx-delete.spec.ts`
 
@@ -185,7 +185,7 @@ Quando l'utente clicca l'azione "✏ Edit" (o doppio-click) su una riga con `sta
 
 ---
 
-### Step 11 — i18n: nuove chiavi in 4 lingue (~30min)
+### Step 11 — i18n: nuove chiavi in 4 lingue ✅ (~30min)
 
 **File**: `frontend/src/lib/i18n/{en,it,fr,es}.json`
 
@@ -202,7 +202,7 @@ Chiavi nuove:
 
 ---
 
-### Step 12 — Nota forward-link nel piano C (Split/Promote) (~5min)
+### Step 12 — Nota forward-link nel piano C (Split/Promote) ✅ (~5min)
 
 **File**: [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md)
 
@@ -243,3 +243,397 @@ Step 12 (nota Piano C)            ← indipendente, 5 min
 
 3. **PickerModal guard + dblclick/long-press**: indipendenti dal refactor delete, procedere come pianificato.
 
+---
+
+## Post-completion polish (from TestWalk feedback)
+
+Appunti estetici emersi dal test umano post-implementazione, corretti in-place:
+
+### P1 — Toast success arricchito (standalone + paired)
+- Toast non più plain text → HTML con icona tipo transazione, icona broker, nome broker **bold**, SVG ruolo accesso (corona OWNER / matita EDITOR)
+- Usa `getTransactionTypeIconUrl()`, `getBrokerIconUrlById()`, `getRoleSvgHtml()` per comporre il messaggio
+- Paired toast: `"{typeIcon}TypeName AssetName {brokerIconA}BrokerA{roleA} → {brokerIconB}BrokerB{roleB}"`
+
+### P2 — Error banner con resolveIssueMessage
+- L'error banner nella DeleteModal ora usa `resolveIssueMessage()` (stessa logica di BulkModal/FormModal)
+- Gli ID di asset e broker vengono risolti in nomi con icone: `"Asset 1 quantity goes negative..."` → icona Apple + "Apple Inc. quantity goes negative -5 📉 on 2026-04-25 for {brokerIcon}Interactive Brokers{roleIcon}"`
+- Banner spostato SOPRA i dettagli (dopo il titolo), coerente con BulkModal
+
+### P3 — Validate now + segnale verde
+- Aggiunto pulsante "⚡ Validate now" nel footer sinistro della DeleteModal (come in BulkModal)
+- Chiama `POST /transactions/validate` con `{deletes: [...ids]}`
+- Se validazione ok → banner verde "✓ This transaction can be deleted safely."
+- Se errori → banner rosso con messaggi risolti (P2)
+- i18n chiave `transactions.deleteModal.canBeDeleted` in 4 lingue
+
+---
+
+## Follow-up: Rimuovere `mode` dalla TransactionBulkModal
+
+**Status**: ✅ COMPLETED (2026-05-07)
+**Trigger**: emerso dall'osservazione che la BulkModal è ormai una modale unica create+edit+delete, il `mode: 'create-many' | 'edit-many'` è ridondante.
+
+### Analisi dello stato attuale
+
+La prop `mode` impatta **6 punti** nel codice della BulkModal:
+
+| # | Dove | Effetto |
+|---|------|---------|
+| 1 | `fromTx()` L185 | `create-many` → `status='new'`, id strippato, date=today, link_uuid rigenerato. `edit-many` → `status='original'`, preserva id/date |
+| 2 | `$effect` open L261 | `mergePairedRows()` eseguito solo in `edit-many` |
+| 3 | `$effect` open L279 | Auto-open FormModal vuoto solo in `create-many` con 0 righe |
+| 4 | `resetRow`/`resetAll` L543-549 | Passa `mode` a `fromTx()` per sapere come resettare |
+| 5 | `editMode` L804 | Derivato da `mode === 'edit-many'` ma **mai usato** nel template (dead code) |
+| 6 | Toolbar L1570 | "🔍 Search & add" picker visibile solo in `edit-many` |
+
+Nel parent (`+page.svelte`) ci sono **8 punti** che settano `bulkMode`.
+
+### Osservazione chiave
+
+La distinzione `create-many` vs `edit-many` è **già implicita nelle righe stesse**:
+- Se `initialRow.id > 0` → è una riga DB esistente (edit)
+- Se `initialRow.id === 0` o assente → è un template/clone (create)
+
+Il commit **non usa mai `mode`** — distingue per `status` (`new`→CREATE, `edited`→UPDATE, `delete`→DELETE). Il `mode` quindi è un'astrazione che non corrisponde più a ciò che fa la modale.
+
+### Pro della rimozione ✅
+
+| Aspetto | Beneficio |
+|---------|-----------|
+| **API semplificata** | 1 prop in meno nella BulkModal, meno stato nel parent (eliminare `bulkMode` e le 8 assegnazioni) |
+| **Batch misti nativi** | Oggi se apri in `edit-many` e aggiungi righe nuove con "+ Add row", le nuove righe sono `status='new'` indipendentemente dal `mode` — il `mode` è già incoerente per le righe inserite dopo l'apertura |
+| **Meno branching** | `fromTx()` non cede più il parametro `m`, l'`$effect` di init si semplifica |
+| **Dead code rimosso** | `editMode` (L804) eliminato |
+| **Coerenza concettuale** | La modale gestisce batch misti (new + edit + delete in uno stream) ma ha un "mode" che dice "sei in create o edit" — contraddizione filosofica risolta |
+| **PickerModal** | Visibilità basata su `allMainRows.length > 0` (condizione già presente L1570), non serve `mode` |
+| **Manutenibilità** | Ogni futuro sviluppo non deve più chiedersi "questo deve funzionare solo in create-many o anche in edit-many?" |
+
+### Contro / Rischi della rimozione ⚠️
+
+| Rischio | Gravità | Mitigazione |
+|---------|---------|-------------|
+| **Regressione sul clone** | 🟢 Bassa | Il parent già setta `id: 0` e `date: today` nelle righe clonate — `fromTx` le tratterebbe come nuove anche senza `mode` |
+| **`resetAll` ambiguo** | 🟢 Bassa | `resetAll` ha senso solo su righe con `original` (edit) — la condizione era già presente: `d.original ? fromTx(d.original, mode) : d`. Senza `mode`, diventa `d.original ? fromTx(d.original) : d` con flag inferito da `d.original.id > 0` |
+| **Auto-open FormModal vuoto** | 🟢 Bassa | Oggi triggerato da `mode === 'create-many' && rows.length === 0`. Senza `mode`: `initialRows.length === 0` basta — se apri la bulk vuota, vuoi creare |
+| **`mergePairedRows` condizione** | 🟢 Bassa | Ora `if (m === 'edit-many')`. Senza `mode`: `if (rows.some(r => r.id > 0 && r.related_transaction_id != null))` — stessa semantica, più precisa |
+| **Test E2E** | 🟡 Media | Nessun test E2E passa `mode` direttamente (viene settato nel parent). I test non cambiano, ma serve un run completo per conferma |
+| **Perdita di leggibilità nel parent** | 🟡 Media | `bulkMode = 'edit-many'` comunicava chiaramente l'intento. Senza, l'intento si legge da `bulkInitial` (righe con `id > 0` vs `id = 0`). Lievemente meno esplicito ma più onesto (riflette ciò che fa veramente il codice) |
+
+### Piano di implementazione
+
+**Effort stimato**: ~30 min, ~25 righe cambiate totali
+
+#### A — `TransactionBulkModal.svelte` (15 righe)
+
+1. Rimuovere `type Mode = 'create-many' | 'edit-many'` e la prop `mode` da `Props`
+2. Modificare `fromTx(tx, overrideStatus?)`: inferire create vs edit da `tx.id > 0`
+   ```ts
+   function fromTx(tx: TXReadItem, overrideStatus?: 'delete'): DraftRow {
+       const isCreate = !(tx.id > 0);
+       // ...resto invariato, usa isCreate al posto di m === 'create-many'
+   }
+   ```
+3. `$effect` init: `mergePairedRows()` condizionato a `rows.some(r => r.id > 0 && r.related_transaction_id != null)` anziché `m === 'edit-many'`
+4. `$effect` init: auto-open FormModal vuoto → `rows.length === 0` (senza check mode)
+5. `resetRow`/`resetAll`: `fromTx(d.original)` senza mode (original ha sempre `id > 0`)
+6. Rimuovere `const editMode = $derived(...)` (dead code)
+7. Toolbar picker: già condizionato a `allMainRows.length > 0` — nessun cambiamento
+
+#### B — `+page.svelte` (10 righe)
+
+1. Rimuovere `let bulkMode = $state<...>('create-many')`
+2. Rimuovere le 7 assegnazioni `bulkMode = '...'` in:
+   - `onAddTransaction()`: non serviva — initialRows vuote → create
+   - `onEditBulk()`: non serviva — initialRows con `id > 0` → edit
+   - `onCloneBulk()`: non serviva — già setta `id: 0` nelle righe
+   - `onBulkDelete()`: non serviva — initialRows con `id > 0` + `initialStatus: 'delete'`
+   - `handleEditRow()`: non serviva — row con `id > 0` → edit
+   - `handleCloneRow()`: non serviva — row con `id: 0` → create
+3. Rimuovere la prop `mode={bulkMode}` dal template `<TransactionBulkModal>`
+
+### Risultato atteso
+
+| Prima | Dopo |
+|-------|------|
+| `Props` ha `mode: 'create-many' \| 'edit-many'` | Nessuna prop `mode` |
+| Parent gestisce `bulkMode` con 8 assegnazioni | Parent prepara solo `bulkInitial` (le righe dicono tutto) |
+| `fromTx(tx, mode)` branch su `mode` | `fromTx(tx)` branch su `tx.id > 0` |
+| Dead code `editMode` presente | Rimosso |
+| Ambiguità concettuale: "mode è create ma ho appena aggiunto una riga edit" | Coerente: ogni riga è quello che dice il suo `id`/`status` |
+| `mergePairedRows` legato a stringa mode | `mergePairedRows` legato alla presenza di dati reali |
+
+La modale diventa una **unified batch editor** pura, dove il comportamento di ogni riga è determinato dai suoi dati, non da un flag globale. I test E2E non richiedono modifiche perché non interagiscono con la prop `mode`.
+
+---
+
+## Bugfix Round 2 — Tooltip arricchiti, Pagination PickerModal, Riformulazione messaggi validazione
+
+**Date**: 2026-05-07
+**Status**: ✅ COMPLETED
+**Trigger**: Test walk post-completion
+
+---
+
+### Bug 1 — Tooltip PickerModal mostra `#1` anziché icona+nome+ruolo
+
+**Sintomo**: nel PickerModal "Cerca e aggiungi", il tooltip sulle righe disabilitate mostra:
+```
+Accesso Editor richiesto sul broker #1
+```
+
+**Atteso**: il tooltip deve mostrare icona broker + nome broker + icona SVG del ruolo corrente dell'utente + ruolo minimo richiesto con icona. Esempio:
+```
+[🏦ico] Interactive Brokers [👁 Viewer] — richiesto [✏ Editor]
+```
+
+**Root cause**: `disabledTooltipFn()` in `TransactionPickerModal.svelte` (L.88-91) fa solo `brokers.find(b => b.id === brokerId)?.name ?? '#${brokerId}'` e non risolve icona/ruolo.
+
+**Fix proposto**:
+1. Usare `getBrokerIconUrlById(brokerId)` per l'icona
+2. Usare `getBrokerRole(brokerId)` per il ruolo corrente
+3. Usare `getRoleSvgHtml(role)` per icona SVG ruolo
+4. Comporre: `"<img...> <strong>BrokerName</strong> <svg...role_icon> CurrentRole — richiesto <svg...editor_icon> Editor"`
+5. Aggiornare chiave i18n `transactions.picker.disabledTooltip` in 4 lingue
+
+**File**: `TransactionPickerModal.svelte`, `{en,it,fr,es}.json`
+
+---
+
+### Bug 2 — Pagination PickerModal non funziona
+
+**Sintomo**: il componente `DataTablePagination` si mostra nel PickerModal ma cliccando i pulsanti non succede nulla — non cambia pagina né il numero di elementi per riga.
+
+**Root cause** (investigata):
+
+La catena di rendering è:
+
+```
+PickerModal → TransactionsTable → DataTable + DataTablePagination (external)
+```
+
+Quando non ci sono filtri né sort attivi, `isGrouped = true` (L.169 TransactionsTable). In questo stato:
+1. DataTable riceve `enablePagination={!isGrouped}` = `false` → paginazione interna disattivata (L.946)
+2. TransactionsTable mostra il **paginator esterno** (L.966-968), la versione pair-never-split
+3. Il paginator esterno chiama `onPageChange?.(idx + 1)` e `onPageSizeChange?.(s)` — ma questi callback vengono dal **parent** (PickerModal)
+4. **PickerModal non passa né `onPageChange` né `onPageSizeChange`** (L.158-170) → entrambi sono `undefined` → il click fa nulla
+5. `currentPage` resta fisso a `1` (default dalla prop) perché nessuno lo aggiorna
+
+Inoltre, `pageSize={20}` è passato come prop ma senza callback per cambiarlo → il dropdown "righe per pagina" è visivamente presente ma inerte.
+
+**Nota positiva**: `ModalBase` usa `{#if open}` (L.112 ModalBase.svelte) → il contenuto viene **distrutto** alla chiusura e **ricreato** all'apertura. Questo significa che filtri, sort, selezione e pagina si resettano automaticamente ad ogni riapertura. Non serve logica di reset esplicita — il requisito "riapertura = stato fresco" è già soddisfatto dall'architettura.
+
+Le `filteredMain` e `filteredPartners` sono `$derived` da `mainRows` + `excludeIds`, quindi le righe mostrate sono sempre aggiornate (righe già aggiunte alla BulkModal vengono escluse tramite `excludeIds`).
+
+**Fix proposto** — solo `TransactionPickerModal.svelte` (~10 righe):
+
+1. Aggiungere stato locale:
+   ```ts
+   let pickerPage = $state(1);
+   let pickerPageSize = $state(20);
+   ```
+
+2. Passare i callback a `TransactionsTable`:
+   ```svelte
+   <TransactionsTable
+       ...props esistenti...
+       currentPage={pickerPage}
+       pageSize={pickerPageSize}
+       onPageChange={(p) => pickerPage = p}
+       onPageSizeChange={(s) => { pickerPageSize = s; pickerPage = 1; }}
+   />
+   ```
+
+3. Non serve reset esplicito al reopen: `ModalBase` distrugge+ricrea il contenuto, gli `$state()` tornano ai valori iniziali.
+
+**File**: `TransactionPickerModal.svelte` (unico file da modificare)
+
+---
+
+### Bug 3 — Riformulazione messaggi validazione: contesto operazione
+
+**Problema**: i messaggi di errore validazione nelle 3 modali (FormModal, BulkModal, DeleteModal) descrivono la violazione come fatto compiuto ("le posizioni vanno in negativo") anziché come conseguenza dell'operazione ("eliminando/salvando → le posizioni andrebbero in negativo"). L'utente non capisce che è l'azione stessa a causare il problema.
+
+**Principio**: ogni messaggio deve comunicare chiaramente:
+1. **Cosa** — quale entità è coinvolta (asset, valuta)
+2. **Quando** — la data della violazione
+3. **Dove** — su quale broker
+4. **Perché** — quale operazione causerebbe il problema
+5. **Che effetto** — il risultato negativo (saldo negativo, posizione negativa)
+
+#### 3a — Codici errore backend e parametri
+
+| Codice | `params` dal backend | Contesto |
+|--------|---------------------|----------|
+| `balanceCashNegative` | `{brokerId, currency, balance, date}` | Saldo cash di una valuta va sotto zero |
+| `balanceAssetNegative` | `{brokerId, assetId, balance, date}` | Quantità detenuta di un asset va sotto zero |
+| `accessDenied` | `{brokerId}` | L'utente non ha ruolo EDITOR sul broker |
+
+#### 3b — Frasi attuali vs proposte
+
+**`balanceCashNegative`**:
+
+| Lingua | Attuale | Proposta |
+|--------|---------|----------|
+| EN | `Cash balance for {currency} goes negative ({formattedBalance}) on {date} at {brokerName}` | `Saving would cause {currency} cash to go negative ({formattedBalance}) on {date} at {brokerName}` |
+| IT | `Il saldo {currency} va in negativo ({formattedBalance}) il {date} su {brokerName}` | `Il salvataggio porterebbe il saldo {currency} in negativo ({formattedBalance}) il {date} su {brokerName}` |
+| FR | `Le solde {currency} devient négatif ({formattedBalance}) le {date} chez {brokerName}` | `L'enregistrement ferait passer le solde {currency} en négatif ({formattedBalance}) le {date} chez {brokerName}` |
+| ES | `El saldo {currency} se vuelve negativo ({formattedBalance}) el {date} en {brokerName}` | `Guardar haría que el saldo {currency} sea negativo ({formattedBalance}) el {date} en {brokerName}` |
+
+**`balanceAssetNegative`**:
+
+| Lingua | Attuale | Proposta |
+|--------|---------|----------|
+| EN | `{assetName} holdings go negative ({balance}) on {date} at {brokerName}` | `Saving would cause {assetName} holdings to go negative ({balance}) on {date} at {brokerName}` |
+| IT | `Le posizioni di {assetName} vanno in negativo ({balance}) il {date} su {brokerName}` | `Il salvataggio porterebbe le posizioni di {assetName} in negativo ({balance}) il {date} su {brokerName}` |
+| FR | `Les positions de {assetName} deviennent négatives ({balance}) le {date} chez {brokerName}` | `L'enregistrement ferait passer les positions de {assetName} en négatif ({balance}) le {date} chez {brokerName}` |
+| ES | `Las posiciones de {assetName} se vuelven negativas ({balance}) el {date} en {brokerName}` | `Guardar haría que las posiciones de {assetName} sean negativas ({balance}) el {date} en {brokerName}` |
+
+> **Nota**: usiamo "Saving" (generico) anziché "Deleting" perché lo stesso messaggio viene usato da FormModal (create/edit), BulkModal (batch misto create+edit+delete) e DeleteModal. Il backend non distingue il contesto — emette sempre lo stesso codice. "Saving" copre tutti i casi: "salvare questa modifica/creazione/eliminazione porterebbe a..."
+
+#### 3c — Banner colori e titoli per la DeleteModal
+
+Attualmente la DeleteModal ha:
+- **Validazione OK** → banner verde "✓ This transaction can be deleted safely" — ✅ OK
+- **Errori** → banner con errori risolti — ma senza titolo chiaro
+
+**Proposta banner DeleteModal**:
+
+| Stato | Colore | Titolo | Contenuto |
+|-------|--------|--------|-----------|
+| Validate OK (issues=[]) | 🟢 Verde | `✓ {canBeDeleted}` | Testo chiave esistente |
+| Validate fallita (issues.length > 0) | 🟡 Giallo | `⚠️ {validateWarningTitle}` | Lista issues con `resolveIssueMessage()` |
+| Commit fallito (committed:false) | 🔴 Rosso | `⛔ {deleteAbortedTitle}` | Lista issues + spiega che l'operazione è stata annullata |
+
+**Nuove chiavi i18n**:
+
+| Chiave | EN | IT | FR | ES |
+|--------|----|----|----|----|
+| `transactions.deleteModal.validateWarningTitle` | `Validation issues` | `Problemi di validazione` | `Problèmes de validation` | `Problemas de validación` |
+| `transactions.deleteModal.deleteAbortedTitle` | `Deletion cancelled` | `Eliminazione annullata` | `Suppression annulée` | `Eliminación cancelada` |
+| `transactions.deleteModal.deleteAbortedDetail` | `The operation was rolled back because it would violate balance rules:` | `L'operazione è stata annullata perché violerebbe le regole di saldo:` | `L'opération a été annulée car elle violerait les règles de solde :` | `La operación fue cancelada porque violaría las reglas de saldo:` |
+
+#### 3d — Banner colori e titoli per FormModal e BulkModal (coerenza)
+
+Per coerenza, verificare e uniformare anche nei FormModal e BulkModal:
+
+| Stato | Colore | Titolo FormModal/BulkModal |
+|-------|--------|---------------------------|
+| Validate OK | 🟢 Verde | `✓ Validation passed` / `✓ Validazione superata` |
+| Validate fallita | 🟡 Giallo | `⚠️ Validation issues` / `⚠️ Problemi di validazione` |
+| Commit fallito | 🔴 Rosso | `⛔ Save cancelled` / `⛔ Salvataggio annullato` |
+
+Le chiavi per BulkModal/FormModal esistono già (`transactions.bulk.commitRolledBack` etc.) — verificare che siano coerenti.
+
+#### 3e — Nota sulla risposta `{committed: false, issues: [], results: [...]}`
+
+⚠️ Attenzione al caso `committed: false` con `issues: []` (array vuoto) ma `results` con `status: "success"`. Questo sembra un bug backend o un edge case — se non c'è alcun issue perché `committed` è `false`? Da investigare:
+- Se è un Validate (dry-run), `committed` è sempre `false` e `issues: []` significa "nessun problema" → è il caso successo
+- Se è un Commit reale, `committed: false` con `issues: []` non dovrebbe accadere
+
+**Verifica necessaria**: il frontend deve distinguere tra:
+1. `POST /validate` (dry-run: `committed` sempre `false`, `issues: []` = tutto OK)
+2. `POST /commit` (real: `committed: false` + `issues: [...]` = errore, `committed: true` = successo)
+
+Se la DeleteModal chiama `/validate` e riceve `{committed: false, issues: []}` → questo è **successo validazione** → banner verde.
+Se chiama `/commit` e riceve `{committed: false, issues: []}` → questo è un **bug** o un caso anomalo → trattare come errore generico.
+
+---
+
+## Bugfix Round 3 — Picker paired reset, remove row action, banner coerenza, currency flag
+
+**Date**: 2026-05-08
+**Status**: ⏳ PLANNED
+**Trigger**: Test walk post Round 2 fix
+
+---
+
+### Bug 4 — "Reimposta tutto" slega le paired transactions importate dal Picker
+
+**Sintomo**: dopo aver aggiunto una coppia paired (#38/#39) dal PickerModal, se si clicca "Reimposta tutto" nella BulkModal, le 2 metà vengono slegate — ottengono `related_transaction_id = null`, `link_uuid` diversi, e appaiono come 2 transazioni standalone indipendenti.
+
+**Root cause**: `resetAll()` chiama `fromTx(d.original)` su ogni draft. Se `fromTx` genera un nuovo `link_uuid` per le righe create (caso `isCreate`), ma le righe paired dal picker hanno `id > 0` (sono edit), il problema è in `mergePairedRows(drafts, ...)` che non viene richiamato dopo il reset. Il risultato:
+- `resetAll` resetta i draft singolarmente
+- I campi `partnerBrokerId`, `_partnerId`, `_hidden`, `link_uuid` vengono persi nel reset
+- Serviva un re-merge dopo il reset
+
+**Fix proposto**:
+1. In `resetAll()`, dopo aver resettato tutti i draft, ri-chiamare `mergePairedRows(drafts, [...allMainRows, ...allPartnerRows])` per ricostruire i legami paired
+2. Trigger `drafts = [...drafts]` per reattività
+
+**File**: `TransactionBulkModal.svelte` — funzione `resetAll()` (~5 righe)
+
+---
+
+### Bug 5 — Nessuna azione "Remove" per righe aggiunte dal Picker (solo "Delete mark")
+
+**Sintomo**: una volta aggiunte righe dal PickerModal, l'unica azione distruttiva è "Segna per eliminazione" (🗑). Ma l'utente vuole poter **rimuovere** la riga dal batch senza marcarla per delete nel DB. Attualmente se rimuovi una riga `status: 'original'`, non c'è modo di farlo — puoi solo marcarla delete (che al commit esegue `DELETE` nel DB).
+
+**Atteso**: un'azione "✕ Rimuovi dal batch" (NOT "elimina dal DB") che:
+- Per righe `status: 'new'` → già presente (il pulsante ✕ remove esiste)
+- Per righe `status: 'original'` aggiunte **dal picker** → rimuove la riga dal batch senza segnarla per l'eliminazione. La riga torna disponibile nel picker (il suo ID esce da `excludeIds`)
+- Per righe `status: 'original'` presenti **dall'apertura iniziale** → NON mostrare l'azione remove (queste vanno solo editate/delete)
+
+**Differenza chiave**:
+- `🗑 Segna per eliminazione` → `status: 'delete'` → al commit: `DELETE /api/v1/transactions/{id}`
+- `✕ Rimuovi dal batch` → rimuove la DraftRow da `drafts[]` → al commit: nessuna operazione su quella TX
+
+**Implementazione proposta**:
+1. Aggiungere un campo `_addedViaPicker: boolean` al DraftRow (default `false`)
+2. In `handlePickerAdd()`, settare `d._addedViaPicker = true` su ogni draft creato dal picker
+3. Aggiungere un'azione riga "✕ Remove" visibile quando `row._addedViaPicker && row.status !== 'new'`
+4. L'azione chiama `removeRow(row.tempId)` (già esistente per `status: 'new'`)
+5. Per paired: se rimuovi una metà, rimuovi anche il partner (come in `removeRow()` attuale)
+
+**i18n**: chiave `transactions.bulk.removeFromBatch` — "Remove from batch" / "Rimuovi dal batch" / "Retirer du lot" / "Quitar del lote"
+
+**File**: `TransactionBulkModal.svelte` — interfaccia DraftRow, handlePickerAdd, actions list (~15 righe)
+
+---
+
+### Bug 6 — Banner validazione: coerenza helper + currency con flag
+
+**6a — Coerenza helper banner**
+
+**Sintomo**: i banner di validazione/commit in FormModal, BulkModal e DeleteModal usano codice duplicato per costruire il markup (icona, titolo, lista issues). Serve un componente unico dedicato alle transazioni.
+
+**Nome**: `TransactionResultBanner.svelte` — non "ValidationBanner" perché copre sia validazione (dry-run) sia commit (salvataggio/eliminazione reale). È specifico per le transazioni, non un generico UI banner.
+
+**Fix proposto**: creare `TransactionResultBanner.svelte` in `lib/components/transactions/` con:
+- Props: `variant: 'success' | 'warning' | 'error'`, `title: string`, `messages: string[]`
+- Varianti:
+  - `success` → verde, icona ✓ (CheckCircle)
+  - `warning` → giallo/amber, icona ⚠️ (TriangleAlert)
+  - `error` → rosso, icona ⛔ (emoji, NON XCircle — coerente con i banner commit attuali che usano emoji per i rollback)
+- Messaggi renderizzati con `{@html}` (contengono `<strong>`, `<img>`, SVGs dal `resolveIssueMessage`)
+- Usato in: `TransactionDeleteModal`, `TransactionBulkModal`, `TransactionFormModal`
+
+**File**: nuovo `frontend/src/lib/components/transactions/TransactionResultBanner.svelte` + refactor 3 modali
+
+---
+
+**6b — Currency con flag+simbolo nel messaggio**
+
+**Sintomo**: nel messaggio di validazione, la currency appare come testo plain `<strong>USD</strong>` senza flag né simbolo. Ma il saldo formattato dopo (tra parentesi) ha già flag+simbolo: `(-2633,50 $ 🇺🇸 USD)`. La prima menzione della currency dovrebbe essere coerente.
+
+**Atteso**: `<strong>$ 🇺🇸 USD</strong>` anziché `<strong>USD</strong>`.
+
+**Root cause**: `resolveIssueMessage()` nella BulkModal/DeleteModal formatta `currency` (dalla prop `params.currency`) come semplice testo bold. Non applica il formatter di valuta con flag.
+
+**Fix proposto**:
+1. In `resolveIssueMessage()`, per il codice `balanceCashNegative`, formattare `params.currency` con la stessa funzione che produce `$ 🇺🇸 USD`:
+   - Usare `formatCurrencyWithFlag(code)` → `{symbol} {flag} {code}`
+   - Dove `symbol` = `getCurrencySymbol(code)`, `flag` = `getCurrencyFlag(code)`
+2. Wrappare in `<strong>`: `<strong>${formatCurrencyWithFlag(code)}</strong>`
+
+**File**: `resolveIssueMessage()` in BulkModal (e stessa logica in DeleteModal/FormModal — se centralizzata con 6a, basta un punto)
+
+---
+
+### Ordine di implementazione Round 3
+
+1. **Bug 6a** (ValidationBanner component) — crea il componente, poi refactora le 3 modali
+2. **Bug 6b** (currency flag) — tocca `resolveIssueMessage`, 1 punto se centralizzato
+3. **Bug 4** (reset paired) — ~5 righe in `resetAll()`
+4. **Bug 5** (remove from batch) — ~15 righe, nuovo campo DraftRow + azione
+
+**Stima totale Round 3**: ~3-4h

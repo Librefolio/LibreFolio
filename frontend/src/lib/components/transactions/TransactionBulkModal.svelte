@@ -5,9 +5,9 @@
   of new drafts + existing rows + rows marked for deletion, validated+committed
   together via the unified backend pipeline.
 
-  Modes (backward compat — internally everything is a mixed batch):
-  - 'create-many' → drafts seeded from `initialRows` (id stripped) or one blank row.
-  - 'edit-many'   → drafts pre-filled from `initialRows`.
+  Mode-less: each row's role is inferred from its data:
+  - initialRow.id > 0 → existing DB row (edit/delete)
+  - initialRow.id ≤ 0 or absent → new draft (create)
 
   Row states:
   - 'new'      → brand new draft, committed as CREATE
@@ -33,7 +33,7 @@
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {X, Plus, Pencil, Copy, Trash2, Check} from 'lucide-svelte';
+    import {X, Plus, Pencil, Copy, Trash2, Check, Undo2} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
@@ -96,12 +96,10 @@
         loc?: string;
     }
 
-    type Mode = 'create-many' | 'edit-many';
-
     interface DraftRow {
         tempId: string; // stable id used by DataTable.getRowId + navigateToRowId
         status: 'new' | 'edited' | 'original' | 'delete';
-        id?: number; // present in edit-many
+        id?: number; // present for existing DB rows
         original?: TXReadItem;
         broker_id: number;
         asset_id: number | null;
@@ -128,7 +126,6 @@
 
     interface Props {
         open: boolean;
-        mode: Mode;
         initialRows?: TXReadItem[];
         /** Bugfix-5 §U20: tag suggestions sourced from the parent's loaded
          *  transactions. The bulk modal augments this list with any tag that
@@ -143,11 +140,13 @@
         allMainRows?: TXReadItem[];
         /** All partner rows from parent page — for PickerModal */
         allPartnerRows?: TXReadItem[];
+        /** B23: when 'delete', all rows start with status='delete' (bulk delete flow). */
+        initialStatus?: 'delete';
         onClose: () => void;
         onCommitted?: (resp: unknown) => void;
     }
 
-    let {open, mode, initialRows = [], availableTags = [], autoOpenForm = null, allMainRows = [], allPartnerRows = [], onClose, onCommitted}: Props = $props();
+    let {open, initialRows = [], availableTags = [], autoOpenForm = null, allMainRows = [], allPartnerRows = [], initialStatus, onClose, onCommitted}: Props = $props();
 
     const AUTO_VALIDATE_THRESHOLD = 50;
 
@@ -180,8 +179,8 @@
         };
     }
 
-    function fromTx(tx: TXReadItem, m: Mode): DraftRow {
-        const isCreate = m === 'create-many';
+    function fromTx(tx: TXReadItem, overrideStatus?: 'delete'): DraftRow {
+        const isCreate = !(tx.id > 0);
         const txRule = getTypeRule(tx.type);
         // Auto-sign: show positive values for auto-negated types
         let qty = tx.quantity;
@@ -192,9 +191,10 @@
         if (cash && txRule.cashSign === 'negative' && Number(cash.amount) < 0) {
             cash = {code: cash.code, amount: String(Math.abs(Number(cash.amount)))};
         }
+        const status = isCreate ? 'new' : (overrideStatus === 'delete' ? 'delete' : 'original');
         return {
             tempId: generateUUID(),
-            status: isCreate ? 'new' : 'original',
+            status,
             id: isCreate ? undefined : tx.id,
             original: isCreate ? undefined : tx,
             broker_id: tx.broker_id,
@@ -233,25 +233,27 @@
      *  for the close-confirmation guard (Bugfix-3 §C11). */
     let initialDraftsKey = $state('');
     let confirmCloseOpen = $state(false);
+    /** B23 Step 4: confirm edit on a row marked for deletion. */
+    let confirmEditDeleteOpen = $state(false);
+    let confirmEditDeleteRow = $state<DraftRow | null>(null);
 
     // Reset on open — compute `next` locally first, then assign once (avoids
     // [[problems/svelte5-effect-read-write-loop]]).
     $effect(() => {
         if (!open) return;
-        const m = mode;
         const rows = initialRows;
+        const initSt = initialStatus;
         untrack(() => {
             issues = [];
             formError = null;
             commitFailed = false;
             confirmCloseOpen = false;
-            // Bugfix-2: in create-many with no initial rows, start with an
-            // EMPTY grid — the user adds rows via the nested FormModal.
-            const next: DraftRow[] = rows.length > 0 ? rows.map((r) => fromTx(r, m)) : [];
+            // When no initial rows → empty grid; user adds rows via nested FormModal.
+            const next: DraftRow[] = rows.length > 0 ? rows.map((r) => fromTx(r, initSt)) : [];
 
-            // B1-13: In edit-many, detect paired rows and merge them into
-            // a single visible row with partner data for Da:/A: rendering.
-            if (m === 'edit-many') {
+            // Detect paired rows and merge them into a single visible row
+            // with partner data for Da:/A: rendering.
+            if (rows.some((r) => r.id > 0 && r.related_transaction_id != null)) {
                 mergePairedRows(next, rows);
             }
 
@@ -269,7 +271,7 @@
                 // Clone: row is 'new' so openEditRowForm uses create mode
                 const firstVisible = next.find((d) => !d._hidden) ?? next[0];
                 queueMicrotask(() => openEditRowForm(firstVisible));
-            } else if (m === 'create-many' && rows.length === 0) {
+            } else if (rows.length === 0) {
                 // Auto-open for brand-new empty grid
                 queueMicrotask(() => {
                     formOpen = true;
@@ -478,6 +480,8 @@
             fromDraft.partnerCash = toDraft.cash;
             fromDraft.partnerDate = toDraft.date;
             fromDraft._partnerId = toDraft.id;
+            // B23: if giver is marked delete, partner inherits delete status
+            if (fromDraft.status === 'delete') toDraft.status = 'delete';
             // Hide the "to" half
             toDraft._hidden = true;
             processed.add(fromIdx);
@@ -531,13 +535,12 @@
     function resetRow(tempId: string) {
         drafts = drafts.map((d) => {
             if (d.tempId !== tempId || !d.original) return d;
-            return fromTx(d.original, mode);
+            return fromTx(d.original);
         });
     }
 
     function resetAll() {
-        if (mode !== 'edit-many') return;
-        drafts = drafts.map((d) => (d.original ? fromTx(d.original, mode) : d));
+        drafts = drafts.map((d) => (d.original ? fromTx(d.original) : d));
     }
 
     // =========================================================================
@@ -792,7 +795,6 @@
     // TYPE_OPTIONS removed in Bugfix-2 §C6 — type column now uses
     // TransactionTypeSearchSelect (PNG icons + i18n labels).
 
-    const editMode = $derived(mode === 'edit-many');
 
     // =========================================================================
     // DRY helpers for readonly cell rendering
@@ -1099,15 +1101,13 @@
             id: 'edit-single',
             icon: Pencil,
             label: () => $t('transactions.bulk.editSingle') || 'Edit row',
-            onClick: (row: DraftRow) => openEditRowForm(row),
-            visible: (row: DraftRow) => row.status !== 'delete',
+            onClick: (row: DraftRow) => handleEditRowClick(row),
         },
         {
             id: 'clone',
             icon: Copy,
             label: () => $t('transactions.bulk.cloneRow') || 'Clone row',
             onClick: (row: DraftRow) => cloneRow(row.tempId),
-            visible: (row: DraftRow) => row.status !== 'delete',
         },
         {
             id: 'mark-delete',
@@ -1128,10 +1128,10 @@
         },
         {
             id: 'reset',
-            icon: () => '↺',
+            icon: Undo2,
             label: () => $t('transactions.bulk.resetRow'),
             onClick: (row: DraftRow) => resetRow(row.tempId),
-            visible: (row: DraftRow) => !!row.original && row.status !== 'delete',
+            visible: (row: DraftRow) => !!row.original && (row.status === 'edited' || row.status === 'delete'),
         },
     ]);
 
@@ -1159,6 +1159,8 @@
     let newCount = $derived(visibleDrafts.filter((d) => d.status === 'new').length);
     let editedCount = $derived(visibleDrafts.filter((d) => d.status === 'edited').length);
     let deleteCount = $derived(visibleDrafts.filter((d) => d.status === 'delete').length);
+    /** B23: true when at least one paired row is marked for deletion — show split hint. */
+    let hasPairedDelete = $derived(visibleDrafts.some((d) => d.status === 'delete' && d._partnerId != null));
     let actionCount = $derived(newCount + editedCount + deleteCount);
     let commitDisabled = $derived(committing || drafts.length === 0 || actionCount === 0);
     let commitLabel = $derived(committing ? $t('common.saving') : $t('transactions.bulk.commitAll'));
@@ -1221,6 +1223,9 @@
             }
             drafts = [...drafts, d];
         }
+        // Merge newly-added paired rows so only the "from" half is visible
+        mergePairedRows(drafts, [...allMainRows, ...allPartnerRows]);
+        drafts = [...drafts]; // trigger reactivity
         pickerOpen = false;
     }
 
@@ -1244,6 +1249,31 @@
         formKey++;
         formOpen = true;
     }
+
+    /** B23 Step 4: intercept edit on deleted row — show confirm before restoring. */
+    function handleEditRowClick(row: DraftRow) {
+        if (row.status === 'delete') {
+            confirmEditDeleteRow = row;
+            confirmEditDeleteOpen = true;
+            return;
+        }
+        openEditRowForm(row);
+    }
+
+    /** B23 Step 4: user confirmed restore-and-edit on a deleted row. */
+    function confirmRestoreAndEdit() {
+        if (!confirmEditDeleteRow) return;
+        const target = drafts.find((d) => d.tempId === confirmEditDeleteRow!.tempId);
+        if (target) {
+            target.status = 'original';
+            drafts = [...drafts];
+        }
+        const row = confirmEditDeleteRow;
+        confirmEditDeleteOpen = false;
+        confirmEditDeleteRow = null;
+        openEditRowForm(row);
+    }
+
     function openEditRowForm(row: DraftRow) {
         // When editing a 'new' draft, open in create mode so type stays editable;
         // formEditingTempId is still set so handleFormPushed patches (not adds).
@@ -1352,7 +1382,7 @@
                 // Find the original source TX for the partner
                 const partnerSource = initialRows?.find((r) => r.id === partnerId);
                 if (partnerSource) {
-                    toDraft = fromTx(partnerSource, 'edit-many');
+                    toDraft = fromTx(partnerSource);
                     toDraft.status = 'edited';
                 } else {
                     toDraft = emptyDraft();
@@ -1400,6 +1430,26 @@
         },
     });
     let bulkActionsForTable = $derived([bulkDeleteSelected] as never);
+
+    /** Rows currently selected in the bulk DataTable (for inline toolbar). */
+    let bulkTableSelectedRows = $state<DraftRow[]>([]);
+
+    function handleBulkTableSelectionChange(selectedIds: string[]) {
+        const idSet = new Set(selectedIds);
+        bulkTableSelectedRows = drafts.filter((d) => idSet.has(d.tempId));
+    }
+
+    function executeBulkDeleteOnSelected() {
+        for (const r of bulkTableSelectedRows) {
+            if (r.id != null) {
+                markDelete(r.tempId);
+            } else {
+                removeRow(r.tempId);
+            }
+        }
+        tableRef?.clearSelection();
+        bulkTableSelectedRows = [];
+    }
 </script>
 
 <ModalBase {open} maxWidth="none" onRequestClose={requestClose} testId="tx-bulk-modal" allowOverflow={true} contentClass="max-w-[95vw] w-[95vw]">
@@ -1498,6 +1548,11 @@
                     <p data-testid="tx-bulk-auto-off">ⓘ {$t('transactions.validate.autoOff', {values: {n: visibleDrafts.length, threshold: AUTO_VALIDATE_THRESHOLD}})}</p>
                 </InfoBanner>
             {/if}
+            {#if hasPairedDelete}
+                <InfoBanner variant="info">
+                    <p data-testid="tx-bulk-split-hint">ℹ️ {$t('transactions.deleteModal.splitHint')}</p>
+                </InfoBanner>
+            {/if}
         </div>
 
         <!-- Toolbar (Bugfix-2 §U9: action buttons right-aligned, most important first
@@ -1507,17 +1562,34 @@
              commit) so the user gets the structured single-row UX while
              staying in the bulk batch. -->
         <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 dark:border-slate-800 text-xs shrink-0">
+            <!-- Left: search & add -->
+            {#if allMainRows.length > 0}
+                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={openPicker} data-testid="tx-bulk-picker">
+                    🔍 {$t('transactions.picker.searchAdd') || 'Search & add'}
+                </button>
+            {/if}
+
+            <!-- Inline selection toolbar (when rows selected in DataTable) -->
+            {#if bulkTableSelectedRows.length > 0}
+                <div class="flex items-center gap-2 ml-2">
+                    <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-[11px]" onclick={() => { tableRef?.clearSelection(); bulkTableSelectedRows = []; }}>
+                        <span class="font-medium">{bulkTableSelectedRows.length}</span> {$t('common.selected') || 'selected'} <span class="opacity-60 ml-0.5">×</span>
+                    </button>
+                    <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-[11px]" onclick={executeBulkDeleteOnSelected} title={$t('transactions.bulk.deleteSelected') || 'Delete selected'}>
+                        <Trash2 size={12} /> {$t('common.delete') || 'Delete'}
+                    </button>
+                </div>
+            {/if}
+
+            <!-- Right: actions -->
             <div class="ml-auto flex flex-row-reverse items-center gap-2 flex-wrap">
                 <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row">
                     <Plus size={12} /> {$t('transactions.bulk.addRow') || 'Add row'}
                 </button>
-                {#if mode === 'edit-many' && allMainRows.length > 0}
-                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={openPicker} data-testid="tx-bulk-picker">
-                        🔍 {$t('transactions.picker.searchAdd') || 'Search & add'}
+                {#if visibleDrafts.length > 0}
+                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all">
+                        <Undo2 size={12} /> {$t('transactions.bulk.resetAll')}
                     </button>
-                {/if}
-                {#if mode === 'edit-many'}
-                    <button type="button" class="px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all">{$t('transactions.bulk.resetAll')}</button>
                 {/if}
                 <ColumnVisibilityToggle tableRef={tableRefForToggle} />
             </div>
@@ -1539,9 +1611,10 @@
                 enableActions={true}
                 rowActions={rowActionsForTable}
                 bulkActions={bulkActionsForTable}
+                onSelectionChange={handleBulkTableSelectionChange}
                 stickyActions={false}
                 {getRowClass}
-                onRowDoubleClick={(row) => openEditRowForm(row)}
+                onRowDoubleClick={(row) => handleEditRowClick(row)}
             />
         </div>
 
@@ -1581,6 +1654,19 @@
     warning
     onConfirm={confirmDiscardAndClose}
     onCancel={() => (confirmCloseOpen = false)}
+    zIndex={70}
+/>
+
+<!-- B23 Step 4: confirm restore-and-edit on a row marked for deletion. -->
+<ConfirmModal
+    open={confirmEditDeleteOpen}
+    title={$t('transactions.bulk.confirmEditDelete') || 'Transaction marked for deletion'}
+    message={$t('transactions.bulk.confirmEditDeleteMessage') || 'This transaction is marked for deletion. Do you want to restore it and edit it instead?'}
+    confirmText={$t('transactions.bulk.restoreAndEdit') || 'Restore & Edit'}
+    cancelText={$t('common.cancel')}
+    warning
+    onConfirm={confirmRestoreAndEdit}
+    onCancel={() => { confirmEditDeleteOpen = false; confirmEditDeleteRow = null; }}
     zIndex={70}
 />
 

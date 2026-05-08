@@ -582,6 +582,9 @@
       "deleteSelected": "Elimina selezionate",
       "searchAdd": "Cerca e aggiungi",
       "cloneRow": "Clona riga",
+      "confirmEditDelete": "Transazione marcata per eliminazione",
+      "confirmEditDeleteMessage": "Questa transazione è marcata per l'eliminazione. Vuoi ripristinarla e modificarla?",
+      "restoreAndEdit": "Ripristina e modifica",
       "stateNew": "nuova",
       "stateEdit": "modifica",
       "stateDel": "elimina"
@@ -666,8 +669,8 @@
       "fxConversionQtyZero": "La conversione FX deve avere quantità = 0",
       "eventRequiresAsset": "Il collegamento a un evento richiede un asset selezionato",
       "eventTypeIncompatible": "{type} non può essere collegato a un evento asset (solo {allowed})",
-      "balanceCashNegative": "Il saldo <strong>{currency}</strong> va in negativo (<strong>{formattedBalance}</strong>) il {date} su <strong>{brokerName}</strong>",
-      "balanceAssetNegative": "Le posizioni di <strong>{assetName}</strong> vanno in negativo (<strong>{balance}</strong>) il {date} su <strong>{brokerName}</strong>",
+      "balanceCashNegative": "Il salvataggio porterebbe il saldo <strong>{currency}</strong> in negativo (<strong>{formattedBalance}</strong>) il {date} su <strong>{brokerName}</strong>",
+      "balanceAssetNegative": "Il salvataggio porterebbe le posizioni di <strong>{assetName}</strong> in negativo (<strong>{balance}</strong>) il {date} su <strong>{brokerName}</strong>",
       "accessDenied": "Accesso negato: ruolo EDITOR necessario per {brokerName}",
       "txNotFound": "Transazione {id} non trovata",
       "indexAssetForbidden": "Non è possibile creare transazioni per asset di tipo INDEX",
@@ -723,12 +726,22 @@
       "blockedMessage": "Impossibile eliminare: serve accesso Editor su entrambi i broker per eliminare una coppia collegata.",
       "contactOwner": "Contatta il proprietario di",
       "forAccess": "per l'accesso.",
-      "deleteBoth": "Elimina entrambe"
+      "deleteBoth": "Elimina entrambe",
+      "toastSuccess": "Eliminata: {type} {asset} su {broker}",
+      "toastPairedSuccess": "Eliminate coppia: {type} {asset} {brokerFrom} → {brokerTo}",
+      "toastError": "Eliminazione fallita",
+      "validateNow": "Valida ora",
+      "canBeDeleted": "Questa transazione può essere eliminata in sicurezza.",
+      "validateWarningTitle": "Problemi di validazione",
+      "deleteAbortedTitle": "Eliminazione annullata",
+      "deleteAbortedDetail": "L'operazione è stata annullata perché violerebbe le regole di saldo:"
     },
     "picker": {
       "title": "Seleziona transazioni da aggiungere",
       "pairedNote": "Selezionando una transazione collegata, il partner viene aggiunto automaticamente.",
-      "addN": "Aggiungi {n} selezionate",
+      "disabledTooltip": "Accesso Editor richiesto sul broker {broker}",
+      "requiredRole": "richiesto",
+      "addN": "Aggiungi {n}",
       "searchAdd": "Cerca e aggiungi"
     },
     "access": {

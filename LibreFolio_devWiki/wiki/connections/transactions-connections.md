@@ -1,7 +1,9 @@
 # Transaction Feature Connections
 
-> Status: Phase 7 — **Parts 1✅, 2✅, 3✅ DONE (2026-04-25), Part 4✅ DONE (Rounds 1–5, 2026-04-30)**.
-> Frontend `/transactions` page fully implemented. F-047 implemented. F-048 modals rewritten (FormModal + BulkModal + PromoteWizard) with unified batch pipeline, server-driven type rules, dual-transaction form, i18n validation errors. BRIM mode deferred to Part 5.
+> Status: Phase 7 — **Parts 1✅, 2✅, 3✅ DONE (2026-04-25), Part 4✅ DONE (Rounds 1–6 complete, 2026-05-07)**.
+> Frontend `/transactions` page fully implemented. F-047 implemented. F-048 modals rewritten (FormModal + BulkModal + PromoteWizard + DeleteModal) with unified batch pipeline, server-driven type rules, dual-transaction form, i18n validation errors.
+> Round 5 Bugfix 1-3: CASH_TRANSFER first-class type ([[decisions/cash-transfer-split-promote]]), split/promote architecture (endpoints planned, not yet built), PATCHABLE_FIELDS allowlist, backend type swap, TagInput.svelte, txPayloadHelpers.ts shared utility.
+> Round 6: ContextMenu default-on ([[decisions/context-menu-all-tables]]), broker access min(role_A, role_B) ([[decisions/broker-access-min-paired]]), TransactionDeleteModal 3 layouts (A/B/C), TransactionPickerModal, partner_broker_id, GET /brokers LEFT JOIN, 48+ E2E tests. BulkModal now mode-less ([[decisions/bulkmodal-mode-removal]]). BRIM mode + Split/Promote full stack deferred to Part 5.
 > See [[connections/dependency-graph]] for the full project view.
 
 ---

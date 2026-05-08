@@ -165,6 +165,11 @@ test.describe('TransactionsTable (main read-view)', () => {
 			const linkIcon = row.locator('[data-testid^="tx-link-icon-"]');
 			if (await linkIcon.count() === 0) continue;
 
+			// Remove any lingering highlight from previous iterations
+			await page.evaluate(() => {
+				document.querySelectorAll('tr.tx-row-highlight').forEach(el => el.classList.remove('tx-row-highlight'));
+			});
+
 			// Click and check: if NO pulse → this is a hidden-partner row
 			await linkIcon.first().click({force: true});
 			await page.waitForTimeout(400);
@@ -262,9 +267,9 @@ test.describe('TransactionsTable (main read-view)', () => {
 		await cb.click();
 		await page.waitForTimeout(200);
 		await page.getByTestId('toolbar-action-delete').click();
-		// BulkDeleteLinkedPairModal (tx-bulk-confirm) or ConfirmModal (confirm-modal-confirm)
-		// — async partner fetch may delay the modal, so wait a bit longer.
-		const confirm = page.locator('[data-testid="tx-bulk-confirm"], [data-testid="confirm-modal-confirm"], [data-testid="tx-bulk-delete-title"]').first();
+		// Delete now opens BulkModal in delete mode (B23 rewrite), or
+		// falls back to the legacy confirm modals.
+		const confirm = page.locator('[data-testid="tx-bulk-modal"], [data-testid="tx-bulk-confirm"], [data-testid="confirm-modal-confirm"], [data-testid="tx-bulk-delete-title"]').first();
 		await expect(confirm).toBeVisible({timeout: 8_000});
 	});
 

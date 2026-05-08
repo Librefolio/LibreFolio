@@ -44,7 +44,7 @@
 | [[features/F-039]] | RSI Signal | Signals | implemented |
 | [[features/F-042]] | FX Pair Comparison Signal | Signals | implemented |
 | [[features/F-047]] | Transaction List Page (DataTable, always-pair-adjacent, client-side filters) | Transactions | implemented |
-| [[features/F-048]] | Staging Modal (manual mode done, BRIM mode Part 5) | Transactions | in-progress |
+| [[features/F-048]] | Transaction Modals (Form / Bulk / Delete / Promote — mode-less, Round 6 done) | Transactions | in-progress |
 | [[features/F-059]] | Provider Registry Pattern | Infrastructure | implemented |
 | [[features/F-060]] | Thread Isolation for Providers | Infrastructure | implemented |
 | [[features/F-061]] | 5-layer Provider Cache | Infrastructure | implemented |
@@ -138,6 +138,7 @@
 | [[problems/datatable-filter-options-disappear]] | Enum filter options disappeared when count reached 0 due to `.filter(o => o.count > 0)` — removed that filter | resolved | frontend, datatable, filter, enum |
 | [[problems/pydantic-422-pre-emption]] | Pydantic 422 pre-emption blocked service-layer validation; fixed by lenient per-row parse in unified pipeline | resolved | backend, pydantic, fastapi, transactions |
 | [[problems/browser-autofill-numeric-fields]] | Chrome autofill on numeric text inputs — fixed with `autocomplete="off"` + randomised `name` | resolved | frontend, ux, forms, autofill |
+| [[problems/dual-form-collect-duplication]] | FormModal/BulkModal had duplicated collect logic causing 3 cascading bugs — fixed via txPayloadHelpers.ts | resolved | frontend, transactions, dual-form, code-duplication |
 
 ## Entities
 
@@ -188,3 +189,10 @@
 | [[sources/phase07-part4-round3-bugfix2]] | `plan-phase07-transaction-Part4_Round3_Bugfix2-i18nValidationErrors.prompt.md` ✅ DONE | 2026-05-25 | phase07, transactions, i18n, validation, pydantic, structured-errors |
 | [[sources/phase07-part4-round4-unified-pipeline]] | `plan-phase07-transaction-Part4_Round4_UnifiedBatchPipeline.prompt.md` ✅ DONE | 2026-05-25 | phase07, transactions, api, pipeline, lenient-parse, breaking-change |
 | [[sources/phase07-part4-round5-server-type-rules]] | `plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md` ✅ DONE | 2026-05-25 | phase07, transactions, type-rules, auto-sign, dual-form, dark-mode |
+| [[sources/phase07-part4-round6-planb23-bulk-delete]] | `plan-phase07-transaction-Part4_Round6_PlanB23_BulkDeleteViaBulkModal.prompt.md` ✅ DONE | 2026-05-27 | phase07, transactions, bulkModal, deleteModal, mode-removal, bulk-delete |
+| [[sources/phase07-part4-round5-bugfix1-dual-form]] | `...Round5_Bugfix1_DualFormAndBulkFixes.prompt.md` ✅ DONE | 2026-05-28 | phase07, transactions, cash-transfer, split, promote, paired-row |
+| [[sources/phase07-part4-round5-bugfix2-testwalk-overhaul]] | `...Round5_Bugfix2_PostTestWalkOverhaul.prompt.md` ✅ DONE | 2026-05-28 | phase07, transactions, bulkModal, readonly, dual-dates |
+| [[sources/phase07-part4-round5-bugfix3-testwalk-fixes]] | `...Round5_Bugfix3_TestWalkFixes.prompt.md` ✅ DONE | 2026-05-28 | phase07, transactions, patchable-fields, type-swap, tagInput |
+| [[sources/phase07-part4-round6-context-menu-delete]] | `...Round6_ContextMenuDeletePolish.prompt.md` ✅ DONE (Steps 1-6,8) | 2026-05-28 | phase07, transactions, context-menu, delete-modal, picker-modal |
+| [[sources/phase07-part4-round6-plana-context-menu-bugfix]] | `...Round6_PlanA_ContextMenuBugfix.prompt.md` ✅ DONE | 2026-05-28 | phase07, transactions, context-menu, bugfix, txPayloadHelpers |
+| [[sources/phase07-part4-round6-planb-delete-picker-access]] | `...Round6_PlanB_DeletePickerAccess.prompt.md` + `PlanB1` ✅ DONE (Fase 1+B1) | 2026-05-28 | phase07, transactions, delete-modal, picker-modal, broker-access |

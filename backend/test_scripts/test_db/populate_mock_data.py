@@ -1095,6 +1095,39 @@ def populate_transactions(session: Session):
 
     session.commit()
 
+    # --- Standalone delete-safe transactions (for E2E delete tests) ---
+    # Tagged 'delete-safe' so tests can locate them easily.
+
+    # 9a.1: DEPOSIT on IB (OWNER) — safe to delete, no balance impact
+    tx_del_deposit = Transaction(
+        broker_id=ib.id,
+        asset_id=None,
+        type=TransactionType.DEPOSIT,
+        date=today - timedelta(days=2),
+        quantity=Decimal("0"),
+        amount=Decimal("100.00"),
+        currency="EUR",
+        description="[delete-safe] Small deposit for delete test",
+        tags="delete-safe",
+    )
+    session.add(tx_del_deposit)
+
+    # 9a.2: FEE on Directa (EDITOR) — safe to delete, small negative cash
+    tx_del_fee = Transaction(
+        broker_id=directa.id,
+        asset_id=None,
+        type=TransactionType.FEE,
+        date=today - timedelta(days=2),
+        quantity=Decimal("0"),
+        amount=Decimal("-5.50"),
+        currency="EUR",
+        description="[delete-safe] Platform fee for delete test",
+        tags="delete-safe,fees",
+    )
+    session.add(tx_del_fee)
+    session.commit()
+    print(f"  🗑️ delete-safe standalone: DEPOSIT #{tx_del_deposit.id}, FEE #{tx_del_fee.id}")
+
     # --- Linked transactions (TRANSFER + FX_CONVERSION) ---
     # These require related_transaction_id (bidirectional FK).
     # We create them after the main commit so IDs are available.
@@ -1302,6 +1335,30 @@ def populate_transactions(session: Session):
     print(f"  🔗 [Asym-c] TRANSFER MSFT IB(OWNER)→DEGIRO(VIEWER) = VIEW-ONLY (#{tx_asym_c_out.id} ↔ #{tx_asym_c_in.id})")
 
     # (d) Asym-d: IB↔Hidden — handled in link_transactions_to_events (hidden broker created later)
+
+    # 9b. delete-safe TRANSFER pair: Coinbase (EDITOR) → IB (OWNER) — both editable
+    # Coinbase has 0.802 ETH from BUY+INTEREST, so sending 0.001 out is safe.
+    tx_del_pair_out = Transaction(
+        broker_id=coinbase.id, asset_id=eth.id, type=TransactionType.TRANSFER,
+        date=today - timedelta(days=1), quantity=Decimal("-0.001"),
+        amount=Decimal("0"), currency="USD",
+        description="[delete-safe] ETH Coinbase→IB for delete test",
+        tags="delete-safe,access-test",
+    )
+    tx_del_pair_in = Transaction(
+        broker_id=ib.id, asset_id=eth.id, type=TransactionType.TRANSFER,
+        date=today - timedelta(days=1), quantity=Decimal("0.001"),
+        amount=Decimal("0"), currency="USD",
+        description="[delete-safe] ETH IB←Coinbase for delete test",
+        tags="delete-safe,access-test",
+    )
+    session.add(tx_del_pair_out)
+    session.add(tx_del_pair_in)
+    session.flush()
+    tx_del_pair_out.related_transaction_id = tx_del_pair_in.id
+    tx_del_pair_in.related_transaction_id = tx_del_pair_out.id
+    session.commit()
+    print(f"  🗑️🔗 delete-safe TRANSFER ETH IB↔Coinbase (#{tx_del_pair_out.id} ↔ #{tx_del_pair_in.id})")
 
 
 def populate_price_history(session: Session):
