@@ -50,7 +50,7 @@
     import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded} from '$lib/stores/transactionTypeStore';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
     import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
-    import {buildCreatePayload, buildUpdateDiff, type TxFields, type TxOriginal} from '$lib/utils/txPayloadHelpers';
+    import {buildCreatePayload, buildUpdateDiff, diffDualItem, type TxFields, type TxOriginal} from '$lib/utils/txPayloadHelpers';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/uuid';
     import {formatCurrencyAmountHtml} from '$lib/utils/currencyFormat';
@@ -58,12 +58,20 @@
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import TransactionFormModal from './TransactionFormModal.svelte';
     import TransactionPickerModal from './TransactionPickerModal.svelte';
-    import {txStoreGetAll, txStoreGet, txStoreCount} from '$lib/stores/txStore.svelte';
+    import {txStoreGet, txStoreCount} from '$lib/stores/txStore.svelte';
     import type {TXReadItem, ValidationIssue} from './types';
 
     // =========================================================================
     // Types
     // =========================================================================
+
+    /** WorkspaceIntent — declarative API for opening the BulkModal.
+     *  +page passes only action + txIds; BulkModal resolves data from txStore. */
+    export type WorkspaceIntent =
+        | {action: 'create'}
+        | {action: 'edit'; txIds: number[]}
+        | {action: 'delete'; txIds: number[]}
+        | {action: 'clone'; txIds: number[]};
 
     interface DraftRow {
         tempId: string; // stable id used by DataTable.getRowId + navigateToRowId
@@ -87,17 +95,22 @@
         partnerBrokerId?: number;
         partnerCash?: {code: string; amount: string} | null;
         partnerDate?: string;
-        /** DB id of the hidden partner row (for edit-many paired rendering). */
+        /** DB id of the linked partner row (for paired rendering + commit). */
         _partnerId?: number;
-        /** True for the "to" half of a merged pair — filtered out from DataTable display. */
-        _hidden?: boolean;
+        /** Full partner payload from FormModal's collectDualCreates().
+         *  For new pairs: a complete CREATE payload with link_uuid.
+         *  For existing pairs being edited: a CREATE-style payload to diff against txStore. */
+        _partnerFormPayload?: Record<string, unknown>;
         /** True for rows added via PickerModal (can be removed without DB delete). */
         _addedViaPicker?: boolean;
     }
 
     interface Props {
         open: boolean;
+        /** Legacy: provide rows directly. Prefer `intent` instead. */
         initialRows?: TXReadItem[];
+        /** Declarative API: action + txIds. BulkModal resolves from txStore. */
+        intent?: WorkspaceIntent;
         /** Bugfix-5 §U20: tag suggestions sourced from the parent's loaded
          *  transactions. The bulk modal augments this list with any tag that
          *  appears in its in-flight drafts (so newly-typed tags are
@@ -113,7 +126,7 @@
         onCommitted?: (resp: unknown) => void;
     }
 
-    let {open, initialRows = [], availableTags = [], autoOpenForm = null, initialStatus, onClose, onCommitted}: Props = $props();
+    let {open, initialRows = [], intent, availableTags = [], autoOpenForm = null, initialStatus, onClose, onCommitted}: Props = $props();
 
     const AUTO_VALIDATE_THRESHOLD = 50;
 
@@ -204,40 +217,75 @@
     let confirmEditDeleteOpen = $state(false);
     let confirmEditDeleteRow = $state<DraftRow | null>(null);
 
+    /** Resolve initialRows from intent (if provided) or use legacy initialRows prop. */
+    function resolveInitialRows(): {rows: TXReadItem[]; status?: 'delete'; autoForm: string | null} {
+        if (intent) {
+            if (intent.action === 'create') {
+                return {rows: [], autoForm: 'create'};
+            }
+            const txIds = intent.txIds;
+            const resolved: TXReadItem[] = [];
+            const seen = new Set<number>();
+            for (const id of txIds) {
+                const tx = txStoreGet(id);
+                if (!tx || seen.has(id)) continue;
+                seen.add(id);
+                resolved.push(tx);
+                // Auto-include partner for edit/delete
+                if (intent.action !== 'clone' && tx.related_transaction_id != null && !seen.has(tx.related_transaction_id)) {
+                    const partner = txStoreGet(tx.related_transaction_id);
+                    if (partner) {
+                        resolved.push(partner);
+                        seen.add(partner.id);
+                    }
+                }
+            }
+            if (intent.action === 'delete') {
+                return {rows: resolved, status: 'delete', autoForm: null};
+            }
+            if (intent.action === 'clone') {
+                const today = new Date().toISOString().slice(0, 10);
+                const cloned = resolved.map((r) => {
+                    const c = {...r, id: 0, date: today, related_transaction_id: null} as TXReadItem;
+                    // Bug6-fix: reset quantity when the type requires qty=0 (e.g. INTEREST)
+                    const rule = getTypeRule(r.type);
+                    if (rule.quantityRule === 'zero') c.quantity = '0';
+                    return c;
+                });
+                return {rows: cloned, autoForm: cloned.length === 1 ? 'create' : null};
+            }
+            // edit — auto-open FormModal only for single-row intent (user selected 1 row)
+            return {rows: resolved, autoForm: txIds.length === 1 ? 'edit' : null};
+        }
+        // Legacy: use initialRows prop
+        return {rows: initialRows, status: initialStatus, autoForm: autoOpenForm};
+    }
+
     // Reset on open — compute `next` locally first, then assign once (avoids
     // [[problems/svelte5-effect-read-write-loop]]).
     $effect(() => {
         if (!open) return;
-        const rows = initialRows;
-        const initSt = initialStatus;
-        const autoForm = autoOpenForm;
+        const {rows, status: initSt, autoForm} = resolveInitialRows();
         untrack(() => {
             issues = [];
             formError = null;
             commitFailed = false;
             confirmCloseOpen = false;
             // When no initial rows → empty grid; user adds rows via nested FormModal.
-            const next: DraftRow[] = rows.length > 0 ? rows.map((r) => fromTx(r, initSt)) : [];
+            let next: DraftRow[] = rows.length > 0 ? rows.map((r) => fromTx(r, initSt)) : [];
 
-            // Detect paired rows and merge them into a single visible row
-            // with partner data for Da:/A: rendering.
-            // NOTE: only attempt if types are already cached — otherwise defer
-            // to the async block below (getTypeRule needs server data to know
-            // which types requiresPair).
-            const hasPairs = rows.some((r) => r.id > 0 && r.related_transaction_id != null);
-            if (hasPairs && isTypesLoaded()) {
-                mergePairedRows(next, rows);
-            }
+            // Collapse paired rows: keep only the "from" half with partner
+            // metadata populated. No dependency on isTypesLoaded — pair detection
+            // uses related_transaction_id (not getTypeRule().requiresPair).
+            next = collapsePairedDrafts(next);
 
             drafts = next;
             initialDraftsKey = serializeDrafts(next);
 
-            // Auto-open only when types are already loaded (pair merge completed above)
+            // Schedule auto-open if types already loaded; otherwise defer.
             if (isTypesLoaded()) {
                 scheduleAutoOpen(autoForm, next);
-            }
-            // If no initial rows and no need for types → open the create form immediately
-            if (!isTypesLoaded() && rows.length === 0) {
+            } else if (rows.length === 0) {
                 queueMicrotask(() => {
                     formOpen = true;
                     formMode = 'create';
@@ -249,17 +297,7 @@
         });
         void (async () => {
             await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded(), ensureTypesLoaded()]);
-            // After types loaded: re-run merge if it was deferred, then auto-open.
             untrack(() => {
-                const hasPairs = rows.some((r) => r.id > 0 && r.related_transaction_id != null);
-                if (hasPairs && drafts.some((d) => !d._hidden && !d.link_uuid)) {
-                    // Merge was deferred — run now that types are loaded
-                    // Use txStoreGetAll() as source (consistent with resetRow/resetAll)
-                    mergePairedRows(drafts, txStoreGetAll());
-                    drafts = [...drafts]; // trigger reactivity
-                    initialDraftsKey = serializeDrafts(drafts);
-                }
-                // Auto-open the form if it hasn't been opened yet
                 if (!formOpen) {
                     scheduleAutoOpen(autoForm, drafts);
                 }
@@ -270,14 +308,10 @@
     /** Schedule auto-open of the nested FormModal based on the mode. */
     function scheduleAutoOpen(autoForm: string | null, draftArr: DraftRow[]) {
         if (autoForm === 'edit' && draftArr.length > 0) {
-            // Bug15-fix: after mergePairedRows the first draft may be hidden
-            // (the receiver side). Always open the first VISIBLE draft.
-            const firstVisible = draftArr.find((d) => !d._hidden) ?? draftArr[0];
-            queueMicrotask(() => openEditRowForm(firstVisible));
+            queueMicrotask(() => openEditRowForm(draftArr[0]));
         } else if (autoForm === 'create' && draftArr.length > 0) {
             // Clone: row is 'new' so openEditRowForm uses create mode
-            const firstVisible = draftArr.find((d) => !d._hidden) ?? draftArr[0];
-            queueMicrotask(() => openEditRowForm(firstVisible));
+            queueMicrotask(() => openEditRowForm(draftArr[0]));
         } else if (draftArr.length === 0) {
             // Auto-open for brand-new empty grid
             queueMicrotask(() => {
@@ -330,26 +364,6 @@
     // Mutators (always emit a new array reference for reactivity)
     // =========================================================================
 
-    function patchDraft(tempId: string, patch: Partial<DraftRow>) {
-        drafts = drafts.map((d) => {
-            if (d.tempId !== tempId) return d;
-            const merged = {...d, ...patch};
-            // Type-rule enforcement: if `type` changed, clear values that
-            // are now forbidden (Bugfix-1 §C3) so the backend doesn't receive
-            // stale data hidden by the UI.
-            if (patch.type && patch.type !== d.type) {
-                const r = getTypeRule(merged.type);
-                if (r.assetField === 'forbidden') merged.asset_id = null;
-                if (r.cashField === 'forbidden') merged.cash = null;
-                if (r.quantityMode === 'forbidden') merged.quantity = '0';
-                if (!r.eventLinkable) merged.asset_event_id = null;
-                if (merged.type !== 'TRANSFER') merged.cost_basis_override = '';
-            }
-            if (merged.status === 'original') merged.status = 'edited';
-            return merged;
-        });
-    }
-
     function addRow() {
         // Bugfix-5 §A4: kept as a programmatic helper. The toolbar entrypoint
         // now opens TransactionFormModal (commitOnSave=false) and pushes the
@@ -383,10 +397,66 @@
         };
     }
 
-    /** C1-fix: find the hidden partner draft for a visible paired draft row. */
-    function findPartnerDraft(d: DraftRow): DraftRow | undefined {
-        if (!d.link_uuid) return undefined;
-        return drafts.find((p) => p._hidden && p.link_uuid === d.link_uuid && p.tempId !== d.tempId);
+    /** Populate partner display metadata on a draft from txStore. */
+    function populatePartnerDisplay(d: DraftRow): void {
+        const pid = d.original?.related_transaction_id ?? d._partnerId;
+        if (pid == null) return;
+        const partner = txStoreGet(pid);
+        if (!partner) return;
+        d._partnerId = partner.id;
+        d.partnerBrokerId = partner.broker_id;
+        d.partnerCash = partner.cash ?? null;
+        d.partnerDate = partner.date;
+    }
+
+    /** Collapse paired drafts in an array: detect partners via
+     *  related_transaction_id, keep the "from" half, set partner metadata,
+     *  remove the "to" half. For solo drafts with a partner in txStore,
+     *  populate partner display data from the store. */
+    function collapsePairedDrafts(draftArr: DraftRow[]): DraftRow[] {
+        const idToIdx = new Map<number, number>();
+        draftArr.forEach((d, i) => {
+            if (d.id != null) idToIdx.set(d.id, i);
+        });
+        const toRemove = new Set<number>();
+        for (let i = 0; i < draftArr.length; i++) {
+            if (toRemove.has(i)) continue;
+            const d = draftArr[i];
+            const partnerId = d.original?.related_transaction_id;
+            if (partnerId == null) continue;
+            const pIdx = idToIdx.get(partnerId);
+            if (pIdx == null || pIdx === i || toRemove.has(pIdx)) continue;
+            const partner = draftArr[pIdx];
+            // Determine from/to: "from" = negative cash (giver)
+            const cashAmt = Number(d.original?.cash?.amount ?? 0);
+            const partnerCashAmt = Number(partner.original?.cash?.amount ?? 0);
+            let fromIdx = i,
+                toIdx = pIdx;
+            if (cashAmt > 0 && partnerCashAmt <= 0) {
+                fromIdx = pIdx;
+                toIdx = i;
+            } else if (cashAmt === 0 && partnerCashAmt === 0) {
+                if (Number(d.original?.quantity ?? 0) > 0) {
+                    fromIdx = pIdx;
+                    toIdx = i;
+                }
+            }
+            const fromDraft = draftArr[fromIdx];
+            const toDraft = draftArr[toIdx];
+            fromDraft._partnerId = toDraft.id;
+            fromDraft.partnerBrokerId = toDraft.broker_id;
+            fromDraft.partnerCash = toDraft.cash;
+            fromDraft.partnerDate = toDraft.date;
+            toRemove.add(toIdx);
+        }
+        const result = draftArr.filter((_, i) => !toRemove.has(i));
+        // For remaining drafts with partner not in batch, populate from txStore
+        for (const d of result) {
+            if (d.original?.related_transaction_id != null && d._partnerId == null) {
+                populatePartnerDisplay(d);
+            }
+        }
+        return result;
     }
 
     /** Apply the form-collected payload to a brand-new draft row. */
@@ -402,11 +472,7 @@
             if (d.tempId !== tempId) return d;
             const merged = {...d};
             applyFormPayload(merged, payload);
-            // Only mark edited if there's a real change vs original
-            if (merged.status === 'original' && merged.original) {
-                const diff = collectUpdate(merged);
-                if (diff && Object.keys(diff).length > 1) merged.status = 'edited';
-            }
+            // Status 'edited' is derived automatically by deriveStatus() — no manual marking needed.
             return merged;
         });
     }
@@ -433,90 +499,8 @@
     // B1-13: Pair Merging (edit-many)
     // =========================================================================
 
-    /** Detect paired rows in the initialRows and merge them: the "from" side
-     *  keeps partner display data, the "to" side is flagged `_hidden`. */
-    function mergePairedRows(draftArr: DraftRow[], sourceRows: TXReadItem[]) {
-        // Map DB id → draft index
-        const idToIdx = new Map<number, number>();
-        draftArr.forEach((d, i) => {
-            if (d.id != null) idToIdx.set(d.id, i);
-        });
-        // Map DB id → source TXReadItem for partner lookup
-        const idToSource = new Map<number, TXReadItem>();
-        sourceRows.forEach((r) => idToSource.set(r.id, r));
-
-        const processed = new Set<number>(); // indices already merged
-
-        for (let i = 0; i < draftArr.length; i++) {
-            if (processed.has(i)) continue;
-            const d = draftArr[i];
-            const rule = getTypeRule(d.type);
-            if (!rule.requiresPair) continue;
-
-            // Find partner via original.related_transaction_id
-            const partnerId = d.original?.related_transaction_id;
-            if (partnerId == null) continue;
-            const pIdx = idToIdx.get(partnerId);
-            if (pIdx == null || pIdx === i || processed.has(pIdx)) continue;
-
-            const partner = draftArr[pIdx];
-            // Determine from/to: "from" side has negative cash or negative qty
-            const cashAmt = Number(d.original?.cash?.amount ?? 0);
-            const partnerCashAmt = Number(partner.original?.cash?.amount ?? 0);
-            let fromIdx = i,
-                toIdx = pIdx;
-            if (cashAmt > 0 && partnerCashAmt <= 0) {
-                fromIdx = pIdx;
-                toIdx = i;
-            } else if (cashAmt === 0 && partnerCashAmt === 0) {
-                // For TRANSFER: check quantity sign
-                const qtyAmt = Number(d.original?.quantity ?? 0);
-                if (qtyAmt > 0) {
-                    fromIdx = pIdx;
-                    toIdx = i;
-                }
-            }
-
-            const fromDraft = draftArr[fromIdx];
-            const toDraft = draftArr[toIdx];
-            // Bug2-fix: generate a shared link_uuid so findPartnerDraft() can
-            // locate the hidden partner and inject it into the FormModal for
-            // dual-form editing.
-            const sharedUuid = generateUUID();
-            fromDraft.link_uuid = sharedUuid;
-            toDraft.link_uuid = sharedUuid;
-            // Set partner data on the visible "from" row
-            fromDraft.partnerBrokerId = toDraft.broker_id;
-            fromDraft.partnerCash = toDraft.cash;
-            fromDraft.partnerDate = toDraft.date;
-            fromDraft._partnerId = toDraft.id;
-            // B23: if giver is marked delete, partner inherits delete status
-            if (fromDraft.status === 'delete') toDraft.status = 'delete';
-            // Hide the "to" half
-            toDraft._hidden = true;
-            processed.add(fromIdx);
-            processed.add(toIdx);
-        }
-    }
-
     function removeRow(tempId: string) {
-        const target = drafts.find((d) => d.tempId === tempId);
-        if (target && target.link_uuid && (target.status === 'new' || target._addedViaPicker)) {
-            // Remove the row + its hidden paired partner (same link_uuid or _partnerId)
-            const partnerTempIds = new Set<string>();
-            if (target._partnerId) {
-                const p = drafts.find((d) => d.id === target._partnerId);
-                if (p) partnerTempIds.add(p.tempId);
-            }
-            drafts = drafts.filter((d) => {
-                if (d.tempId === tempId) return false;
-                if (partnerTempIds.has(d.tempId)) return false;
-                if (d._hidden && d.link_uuid === target.link_uuid) return false;
-                return true;
-            });
-        } else {
-            drafts = drafts.filter((d) => d.tempId !== tempId);
-        }
+        drafts = drafts.filter((d) => d.tempId !== tempId);
     }
 
     /** R6-B.4: Mark an existing row for deletion (toggle). */
@@ -524,8 +508,8 @@
         drafts = drafts.map((d) => {
             if (d.tempId !== tempId) return d;
             if (d.status === 'delete') {
-                // Unmark: revert to 'edited' (user already touched it) or 'original'
-                return {...d, status: d.original ? 'edited' : 'new'};
+                // Unmark: revert to 'original' — deriveStatus() will compute 'edited' if fields changed
+                return {...d, status: d.original ? 'original' : 'new'};
             }
             return {...d, status: 'delete'};
         });
@@ -550,32 +534,27 @@
     function resetRow(tempId: string) {
         const target = drafts.find((d) => d.tempId === tempId);
         if (!target || !target.original) return;
-        // If paired, also reset the hidden partner
-        const partnerTempId = target.link_uuid ? drafts.find((d) => d.tempId !== tempId && d.link_uuid === target.link_uuid)?.tempId : target._partnerId ? drafts.find((d) => d.id === target._partnerId)?.tempId : undefined;
-
         drafts = drafts.map((d) => {
-            if (d.tempId !== tempId && d.tempId !== partnerTempId) return d;
-            if (!d.original) return d;
-            const reset = fromTx(d.original);
+            if (d.tempId !== tempId) return d;
+            const reset = fromTx(d.original!);
             if (d._addedViaPicker) reset._addedViaPicker = true;
+            // Re-populate partner display from txStore
+            populatePartnerDisplay(reset);
+            // Discard any partner edits
+            reset._partnerFormPayload = undefined;
             return reset;
         });
-        // Re-merge to restore paired metadata (link_uuid, _hidden, partnerBrokerId)
-        mergePairedRows(drafts, txStoreGetAll());
-        drafts = [...drafts];
     }
 
     function resetAll() {
         drafts = drafts.map((d) => {
             if (!d.original) return d;
             const reset = fromTx(d.original);
-            // Preserve picker flag across resets
             if (d._addedViaPicker) reset._addedViaPicker = true;
+            populatePartnerDisplay(reset);
+            reset._partnerFormPayload = undefined;
             return reset;
         });
-        // Re-merge paired rows after reset (picker-added pairs need re-linking)
-        mergePairedRows(drafts, txStoreGetAll());
-        drafts = [...drafts];
     }
 
     // =========================================================================
@@ -615,12 +594,33 @@
         };
     }
 
+    /** Derive the effective display status of a draft row.
+     *  'new' and 'delete' are explicit. 'edited' is derived from diff vs original.
+     *  This eliminates "edited falso" bugs — status is always truthful. */
+    function deriveStatus(d: DraftRow): 'new' | 'edited' | 'original' | 'delete' {
+        if (d.status === 'new') return 'new';
+        if (d.status === 'delete') return 'delete';
+        // For existing rows: check whether fields differ from original
+        if (!d.original) return 'original';
+        const diff = collectUpdate(d);
+        if (diff && Object.keys(diff).length > 1) return 'edited';
+        // Also check partner changes
+        if (d._partnerFormPayload && d._partnerId != null) {
+            const partnerOrig = txStoreGet(d._partnerId);
+            if (partnerOrig) {
+                const partnerUpd = diffDualItem(d._partnerFormPayload, partnerOrig as unknown as TxOriginal);
+                if (Object.keys(partnerUpd).length > 1) return 'edited';
+            }
+        }
+        return 'original';
+    }
+
     // =========================================================================
     // Validate scheduler
     // =========================================================================
 
     const scheduler = createValidateScheduler({
-        enabled: () => drafts.length > 0 && drafts.length <= AUTO_VALIDATE_THRESHOLD && drafts.some((d) => d.status !== 'delete' && isDraftReadyForValidation(d)),
+        enabled: () => drafts.length > 0 && drafts.length <= AUTO_VALIDATE_THRESHOLD && drafts.some((d) => deriveStatus(d) !== 'delete' && isDraftReadyForValidation(d)),
         draftKey: () => lastDraftKey,
         validateFn: async () => {
             if (drafts.length === 0) {
@@ -634,12 +634,24 @@
             const updates: Record<string, unknown>[] = [];
             const deletes: number[] = [];
             for (const d of drafts) {
-                if (d.status === 'new') creates.push(collectCreate(d));
-                else if (d.status === 'edited') {
+                const st = deriveStatus(d);
+                if (st === 'new') {
+                    creates.push(collectCreate(d));
+                    if (d._partnerFormPayload) creates.push(d._partnerFormPayload);
+                } else if (st === 'edited') {
                     const upd = collectUpdate(d);
                     if (upd && Object.keys(upd).length > 1) updates.push(upd);
-                } else if (d.status === 'delete' && d.id != null) {
+                    // Partner update from dual-form edits
+                    if (d._partnerFormPayload && d._partnerId != null) {
+                        const partnerOrig = txStoreGet(d._partnerId);
+                        if (partnerOrig) {
+                            const partnerUpd = diffDualItem(d._partnerFormPayload, partnerOrig as unknown as TxOriginal);
+                            if (Object.keys(partnerUpd).length > 1) updates.push(partnerUpd);
+                        }
+                    }
+                } else if (st === 'delete' && d.id != null) {
                     deletes.push(d.id);
+                    if (d._partnerId != null) deletes.push(d._partnerId);
                 }
             }
             const payload: Record<string, unknown> = {};
@@ -770,13 +782,24 @@
             const deletes: number[] = [];
 
             for (const d of drafts) {
-                if (d.status === 'new') {
+                const st = deriveStatus(d);
+                if (st === 'new') {
                     creates.push(collectCreate(d));
-                } else if (d.status === 'edited') {
+                    if (d._partnerFormPayload) creates.push(d._partnerFormPayload);
+                } else if (st === 'edited') {
                     const upd = collectUpdate(d);
                     if (upd && Object.keys(upd).length > 1) updates.push(upd);
-                } else if (d.status === 'delete' && d.id != null) {
+                    // Partner update from dual-form edits
+                    if (d._partnerFormPayload && d._partnerId != null) {
+                        const partnerOrig = txStoreGet(d._partnerId);
+                        if (partnerOrig) {
+                            const partnerUpd = diffDualItem(d._partnerFormPayload, partnerOrig as unknown as TxOriginal);
+                            if (Object.keys(partnerUpd).length > 1) updates.push(partnerUpd);
+                        }
+                    }
+                } else if (st === 'delete' && d.id != null) {
                     deletes.push(d.id);
+                    if (d._partnerId != null) deletes.push(d._partnerId);
                 }
                 // 'original' rows are unchanged — skip
             }
@@ -916,17 +939,20 @@
                 // Bugfix-3 §U14: hidden by default — operations are atomic and
                 // independent so the new/edit badge is rarely actionable.
                 hiddenByDefault: false,
-                cell: (row): CellContent => ({
-                    type: 'html',
-                    html:
-                        row.status === 'new'
-                            ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">new</span>'
-                            : row.status === 'edited'
-                              ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">edit</span>'
-                              : row.status === 'delete'
-                                ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">🔴 del</span>'
-                                : '<span class="text-gray-300 dark:text-gray-600">·</span>',
-                }),
+                cell: (row): CellContent => {
+                    const st = deriveStatus(row);
+                    return {
+                        type: 'html',
+                        html:
+                            st === 'new'
+                                ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">new</span>'
+                                : st === 'edited'
+                                  ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">edit</span>'
+                                  : st === 'delete'
+                                    ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">🔴 del</span>'
+                                    : '<span class="text-gray-300 dark:text-gray-600">·</span>',
+                    };
+                },
             },
             {
                 id: 'id',
@@ -1109,7 +1135,12 @@
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: true,
-                cell: (row): CellContent => ({type: 'html', html: row.link_uuid ? `<code class="text-[10px] font-mono text-gray-400">${row.link_uuid.slice(0, 8)}…</code>` : '—'}),
+                cell: (row): CellContent => {
+                    if (row._partnerId != null) return {type: 'html', html: `<code class="text-[10px] font-mono text-gray-400">↔ #${row._partnerId}</code>`};
+                    if (row._partnerFormPayload != null) return {type: 'html', html: '<code class="text-[10px] font-mono text-indigo-400">↔ new</code>'};
+                    if (row.link_uuid) return {type: 'html', html: `<code class="text-[10px] font-mono text-gray-400">${row.link_uuid.slice(0, 8)}…</code>`};
+                    return {type: 'html', html: '—'};
+                },
             },
             {
                 id: 'created_at',
@@ -1154,7 +1185,7 @@
         {
             id: 'mark-delete',
             icon: Trash2,
-            label: (row: DraftRow) => (row.status === 'delete' ? $t('transactions.bulk.unmarkDelete') || 'Restore' : $t('transactions.bulk.markDelete') || 'Mark for deletion'),
+            label: (row: DraftRow) => (deriveStatus(row) === 'delete' ? $t('transactions.bulk.unmarkDelete') || 'Restore' : $t('transactions.bulk.markDelete') || 'Mark for deletion'),
             onClick: (row: DraftRow) => {
                 if (row.id != null) {
                     // Existing row: toggle delete state
@@ -1171,14 +1202,14 @@
             icon: X,
             label: () => $t('transactions.bulk.removeFromBatch') || 'Remove from batch',
             onClick: (row: DraftRow) => removeRow(row.tempId),
-            visible: (row: DraftRow) => !!row._addedViaPicker && row.status !== 'new',
+            visible: (row: DraftRow) => !!row._addedViaPicker && deriveStatus(row) !== 'new',
         },
         {
             id: 'reset',
             icon: Undo2,
             label: () => $t('transactions.bulk.resetRow'),
             onClick: (row: DraftRow) => resetRow(row.tempId),
-            visible: (row: DraftRow) => !!row.original && (row.status === 'edited' || row.status === 'delete'),
+            visible: (row: DraftRow) => !!row.original && (deriveStatus(row) === 'edited' || deriveStatus(row) === 'delete'),
         },
     ]);
 
@@ -1200,14 +1231,14 @@
     // Bugfix-4 §U16: validate chip removed — banners are the single source
     // of truth. Footer keeps only an inline "Validating…" indicator.
 
-    // B1-13: filter out hidden partner rows for display
-    let visibleDrafts = $derived(drafts.filter((d) => !d._hidden));
+    // All drafts are visible (no more _hidden partner rows)
+    let visibleDrafts = $derived(drafts);
 
-    let newCount = $derived(visibleDrafts.filter((d) => d.status === 'new').length);
-    let editedCount = $derived(visibleDrafts.filter((d) => d.status === 'edited').length);
-    let deleteCount = $derived(visibleDrafts.filter((d) => d.status === 'delete').length);
+    let newCount = $derived(visibleDrafts.filter((d) => deriveStatus(d) === 'new').length);
+    let editedCount = $derived(visibleDrafts.filter((d) => deriveStatus(d) === 'edited').length);
+    let deleteCount = $derived(visibleDrafts.filter((d) => deriveStatus(d) === 'delete').length);
     /** B23: true when at least one paired row is marked for deletion — show split hint. */
-    let hasPairedDelete = $derived(visibleDrafts.some((d) => d.status === 'delete' && d._partnerId != null));
+    let hasPairedDelete = $derived(visibleDrafts.some((d) => deriveStatus(d) === 'delete' && d._partnerId != null));
     let actionCount = $derived(newCount + editedCount + deleteCount);
     let commitDisabled = $derived(committing || drafts.length === 0 || actionCount === 0);
     let commitLabel = $derived(committing ? $t('common.saving') : $t('transactions.bulk.commitAll'));
@@ -1237,8 +1268,9 @@
     }
     function handlePickerAdd(rows: TXReadItem[]) {
         const existing = new Set(drafts.filter((d) => d.id != null).map((d) => d.id!));
+        const newDrafts: DraftRow[] = [];
         for (const r of rows) {
-            if (existing.has(r.id)) continue; // dedup
+            if (existing.has(r.id)) continue;
             existing.add(r.id);
             const d = emptyDraft();
             d.id = r.id;
@@ -1257,21 +1289,11 @@
             d.cost_basis_override = r.cost_basis_override ?? '';
             d.created_at = r.created_at;
             d.updated_at = r.updated_at;
-            // If paired, populate partner display info
-            if (r.related_transaction_id != null) {
-                const partner = rows.find((p) => p.id === r.related_transaction_id) ?? txStoreGet(r.related_transaction_id);
-                if (partner) {
-                    d.partnerBrokerId = partner.broker_id;
-                    d.partnerCash = partner.cash ?? null;
-                    d.partnerDate = partner.date;
-                    d._partnerId = partner.id;
-                }
-            }
-            drafts = [...drafts, d];
+            newDrafts.push(d);
         }
-        // Merge newly-added paired rows so only the "from" half is visible
-        mergePairedRows(drafts, txStoreGetAll());
-        drafts = [...drafts]; // trigger reactivity
+        // Collapse paired rows so only the "from" half is visible
+        const collapsed = collapsePairedDrafts(newDrafts);
+        drafts = [...drafts, ...collapsed];
         pickerOpen = false;
     }
 
@@ -1298,7 +1320,7 @@
 
     /** B23 Step 4: intercept edit on deleted row — show confirm before restoring. */
     function handleEditRowClick(row: DraftRow) {
-        if (row.status === 'delete') {
+        if (deriveStatus(row) === 'delete') {
             confirmEditDeleteRow = row;
             confirmEditDeleteOpen = true;
             return;
@@ -1323,13 +1345,17 @@
     function openEditRowForm(row: DraftRow) {
         // When editing a 'new' draft, open in create mode so type stays editable;
         // formEditingTempId is still set so handleFormPushed patches (not adds).
-        formMode = row.status === 'new' ? 'create' : 'edit';
+        formMode = deriveStatus(row) === 'new' ? 'create' : 'edit';
         formInitial = draftToTxLike(row);
         formEditingTempId = row.tempId;
-        // C1-fix: for paired drafts, inject partner data so FormModal can
-        // populate the dual form without fetching from the API.
-        const partner = findPartnerDraft(row);
-        formPartnerRow = partner ? draftToTxLike(partner) : null;
+        // For paired drafts, get the partner from txStore (existing rows)
+        // or synthesize from _partnerFormPayload (new pairs).
+        let partnerTxLike: TXReadItem | null = null;
+        if (row._partnerId != null) {
+            const p = txStoreGet(row._partnerId);
+            if (p) partnerTxLike = p;
+        }
+        formPartnerRow = partnerTxLike;
         formKey++;
         formOpen = true;
     }
@@ -1354,106 +1380,47 @@
         formEditingTempId = null;
     }
 
-    /** Add a paired draft row: visible "from" draft + hidden "to" draft. */
+    /** Add a paired draft row: single visible draft with partner payload stored. */
     function addDualRowFromForm(payload: Record<string, unknown>) {
         const items = payload._items as Record<string, unknown>[];
         if (!items || items.length < 2) {
             addRowFromForm(payload);
             return;
         }
-        const linkUuid = (items[0].link_uuid as string) ?? generateUUID();
 
         // "From" side — visible row
         const fromDraft = emptyDraft();
         applyFormPayload(fromDraft, items[0]);
-        fromDraft.link_uuid = linkUuid;
         fromDraft.partnerBrokerId = (items[1].broker_id as number) ?? 0;
         fromDraft.partnerCash = (items[1].cash as DraftRow['partnerCash']) ?? null;
         fromDraft.partnerDate = (items[1].date as string) ?? fromDraft.date;
+        // Store the full partner create payload for commit
+        fromDraft._partnerFormPayload = items[1];
 
-        // "To" side — hidden partner
-        const toDraft = emptyDraft();
-        applyFormPayload(toDraft, items[1]);
-        toDraft.link_uuid = linkUuid;
-        toDraft._hidden = true;
-
-        drafts = [...drafts, fromDraft, toDraft];
+        drafts = [...drafts, fromDraft];
     }
 
-    /** Patch a paired draft row: update both visible and hidden partner. */
+    /** Patch a paired draft row: update visible draft + store partner payload. */
     function patchDualRowFromForm(tempId: string, payload: Record<string, unknown>) {
         const items = payload._items as Record<string, unknown>[];
         if (!items || items.length < 2) {
             patchRowFromForm(tempId, payload);
             return;
         }
-        // Preserve existing link_uuid to avoid orphaning the hidden partner
-        const currentDraft = drafts.find((d) => d.tempId === tempId);
-        const linkUuid = currentDraft?.link_uuid ?? (items[0].link_uuid as string) ?? generateUUID();
 
         drafts = drafts.map((d) => {
-            if (d.tempId === tempId) {
-                // Update the visible "from" row
-                const merged = {...d};
-                applyFormPayload(merged, items[0]);
-                merged.link_uuid = linkUuid;
-                merged.partnerBrokerId = (items[1].broker_id as number) ?? 0;
-                merged.partnerCash = (items[1].cash as DraftRow['partnerCash']) ?? null;
-                merged.partnerDate = (items[1].date as string) ?? merged.date;
-                // Only mark edited if there's a real change
-                if (merged.status === 'original' && merged.original) {
-                    const diff = collectUpdate(merged);
-                    if (diff && Object.keys(diff).length > 1) merged.status = 'edited'; // >1 because diff always has {id}
-                }
-                return merged;
-            }
-            return d;
+            if (d.tempId !== tempId) return d;
+            const merged = {...d};
+            applyFormPayload(merged, items[0]);
+            // Update partner display data
+            merged.partnerBrokerId = (items[1].broker_id as number) ?? 0;
+            merged.partnerCash = (items[1].cash as DraftRow['partnerCash']) ?? null;
+            merged.partnerDate = (items[1].date as string) ?? merged.date;
+            // Store the full partner payload for commit diffing
+            merged._partnerFormPayload = items[1];
+            // Status 'edited' is derived automatically by deriveStatus() — no manual marking needed.
+            return merged;
         });
-
-        // Find or create the hidden partner draft
-        // Bug14-fix: also match by _partnerId (visible draft's partner DB id)
-        // in case the link_uuid was regenerated by the FormModal.
-        const visibleDraft = drafts.find((d) => d.tempId === tempId);
-        const existingPartner = drafts.find((d) => d._hidden && d.tempId !== tempId && ((d.link_uuid && d.link_uuid === linkUuid) || (visibleDraft?._partnerId != null && d.id === visibleDraft._partnerId)));
-        if (existingPartner) {
-            drafts = drafts.map((d) => {
-                if (d.tempId !== existingPartner.tempId) return d;
-                const merged = {...d};
-                applyFormPayload(merged, items[1]);
-                merged.link_uuid = linkUuid;
-                // Only mark edited if there's a real change
-                if (merged.status === 'original' && merged.original) {
-                    const diff = collectUpdate(merged);
-                    if (diff && Object.keys(diff).length > 1) merged.status = 'edited';
-                }
-                return merged;
-            });
-        } else {
-            // Create a new hidden partner draft.
-            // R7-C1 fix: if the visible row has a _partnerId (DB row), preserve
-            // the partner's id/status/original so collectUpdate() picks it up
-            // instead of collectCreate().
-            const partnerId = visibleDraft?._partnerId;
-            let toDraft: DraftRow;
-            if (partnerId != null) {
-                // Find the original source TX for the partner
-                const partnerSource = initialRows?.find((r) => r.id === partnerId);
-                if (partnerSource) {
-                    toDraft = fromTx(partnerSource);
-                    toDraft.status = 'edited';
-                } else {
-                    toDraft = emptyDraft();
-                    toDraft.id = partnerId;
-                    toDraft.status = 'edited';
-                }
-            } else {
-                toDraft = emptyDraft();
-            }
-            applyFormPayload(toDraft, items[1]);
-            toDraft.link_uuid = linkUuid;
-            toDraft._hidden = true;
-            drafts = [...drafts, toDraft];
-        }
     }
 
     // Cast to `never` is required because DataTable<T> is generic and Svelte 5
@@ -1464,9 +1431,10 @@
 
     /** Row background tint by status for immediate visual recognition. */
     function getRowClass(row: DraftRow): string {
-        if (row.status === 'delete') return 'row-deleted line-through';
-        if (row.status === 'new') return 'row-appended';
-        if (row.status === 'edited') return 'row-edited';
+        const st = deriveStatus(row);
+        if (st === 'delete') return 'row-deleted line-through';
+        if (st === 'new') return 'row-appended';
+        if (st === 'edited') return 'row-edited';
         // B1-13: visual indicator for paired rows
         if (getTypeRule(row.type).requiresPair && row.partnerBrokerId != null) return 'row-paired';
         return '';
@@ -1660,7 +1628,7 @@
                     >
                         <span class="font-medium">{bulkTableSelectedRows.length}</span> <span class="hidden sm:inline">{$t('common.selected') || 'selected'}</span> <span class="opacity-60 ml-0.5">×</span>
                     </button>
-                    {#if bulkTableSelectedRows.some((d) => (d.status === 'edited' || d.status === 'delete') && d.original)}
+                    {#if bulkTableSelectedRows.some((d) => (deriveStatus(d) === 'edited' || deriveStatus(d) === 'delete') && d.original)}
                         <button
                             type="button"
                             class="inline-flex items-center gap-1 px-2 py-1 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 text-[11px]"
@@ -1684,7 +1652,7 @@
                 <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row" title={$t('transactions.bulk.addRow') || 'Add row'}>
                     <Plus size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.addRow') || 'Add row'}</span>
                 </button>
-                {#if visibleDrafts.some((d) => (d.status === 'edited' || d.status === 'delete') && d.original)}
+                {#if visibleDrafts.some((d) => (deriveStatus(d) === 'edited' || deriveStatus(d) === 'delete') && d.original)}
                     <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all" title={$t('transactions.bulk.resetAll')}>
                         <Undo2 size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.resetAll')}</span>
                     </button>
