@@ -62,39 +62,13 @@
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import TransactionFormModal from './TransactionFormModal.svelte';
     import TransactionPickerModal from './TransactionPickerModal.svelte';
+    import {txStoreGetAll, txStoreGet, txStoreCount} from '$lib/stores/txStore.svelte';
+    import type {TXReadItem, ValidationIssue} from './types';
 
     // =========================================================================
     // Types
     // =========================================================================
 
-    export interface TXReadItem {
-        id: number;
-        broker_id: number;
-        asset_id?: number | null;
-        type: string;
-        date: string;
-        quantity: string;
-        cash?: {code: string; amount: string} | null;
-        related_transaction_id?: number | null;
-        tags?: string[] | null;
-        description?: string | null;
-        cost_basis_override?: string | null;
-        asset_event_id?: number | null;
-        created_at?: string;
-        updated_at?: string;
-    }
-
-    interface ValidationIssue {
-        operation: 'create' | 'update' | 'delete';
-        index: number;
-        ref_id?: number | null;
-        error: string;
-        code?: string | null;
-        params?: Record<string, any> | null;
-        field?: string | null;
-        /** Pydantic loc path (e.g. "body.creates.0.broker_id"). */
-        loc?: string;
-    }
 
     interface DraftRow {
         tempId: string; // stable id used by DataTable.getRowId + navigateToRowId
@@ -138,17 +112,13 @@
          *  'edit' → opens the first draft for editing
          *  'create' → opens a new row form */
         autoOpenForm?: 'create' | 'edit' | null;
-        /** All main rows from parent page — for PickerModal (zero extra fetch) */
-        allMainRows?: TXReadItem[];
-        /** All partner rows from parent page — for PickerModal */
-        allPartnerRows?: TXReadItem[];
         /** B23: when 'delete', all rows start with status='delete' (bulk delete flow). */
         initialStatus?: 'delete';
         onClose: () => void;
         onCommitted?: (resp: unknown) => void;
     }
 
-    let {open, initialRows = [], availableTags = [], autoOpenForm = null, allMainRows = [], allPartnerRows = [], initialStatus, onClose, onCommitted}: Props = $props();
+    let {open, initialRows = [], availableTags = [], autoOpenForm = null, initialStatus, onClose, onCommitted}: Props = $props();
 
     const AUTO_VALIDATE_THRESHOLD = 50;
 
@@ -561,7 +531,7 @@
             return reset;
         });
         // Re-merge to restore paired metadata (link_uuid, _hidden, partnerBrokerId)
-        mergePairedRows(drafts, [...allMainRows, ...allPartnerRows]);
+        mergePairedRows(drafts, txStoreGetAll());
         drafts = [...drafts];
     }
 
@@ -574,7 +544,7 @@
             return reset;
         });
         // Re-merge paired rows after reset (picker-added pairs need re-linking)
-        mergePairedRows(drafts, [...allMainRows, ...allPartnerRows]);
+        mergePairedRows(drafts, txStoreGetAll());
         drafts = [...drafts];
     }
 
@@ -1225,7 +1195,7 @@
     // PickerModal (Plan B Step 9): "Search & add" existing DB transactions.
     let pickerOpen = $state(false);
     let pickerExcludeIds = $derived(new Set(drafts.filter((d) => d.id != null).map((d) => d.id!)));
-    let pickerBrokers = $derived(getAllBrokers() as import('$lib/utils/brokerColors').BrokerLike[]);
+    // PickerModal reads from txStore directly (Plan C Step 2)
 
     function openPicker() {
         pickerOpen = true;
@@ -1255,8 +1225,7 @@
             // If paired, populate partner display info
             if (r.related_transaction_id != null) {
                 const partner = rows.find((p) => p.id === r.related_transaction_id) ??
-                    allMainRows.find((p) => p.id === r.related_transaction_id) ??
-                    allPartnerRows.find((p) => p.id === r.related_transaction_id);
+                    txStoreGet(r.related_transaction_id);
                 if (partner) {
                     d.partnerBrokerId = partner.broker_id;
                     d.partnerCash = partner.cash ?? null;
@@ -1267,7 +1236,7 @@
             drafts = [...drafts, d];
         }
         // Merge newly-added paired rows so only the "from" half is visible
-        mergePairedRows(drafts, [...allMainRows, ...allPartnerRows]);
+        mergePairedRows(drafts, txStoreGetAll());
         drafts = [...drafts]; // trigger reactivity
         pickerOpen = false;
     }
@@ -1536,7 +1505,7 @@
                     <p class="font-semibold mb-1" data-testid="tx-bulk-error">⛔ {$t('transactions.bulk.rolledBackTitle')}</p>
                     {#if fieldIssues.length > 0}
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.issuesHeader')}</p>
-                        <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-bulk-issues">
+                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-issues">
                             {#each fieldIssues as issue}
                                 <li>
                                     <button type="button" class="underline hover:opacity-80" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
@@ -1548,7 +1517,7 @@
                     {/if}
                     {#if balanceIssues.length > 0}
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
-                        <ul class="list-disc list-inside space-y-0.5 text-sm">
+                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left">
                             {#each balanceIssues as issue}
                                 {@const resolvedRow = findRowForBalanceIssue(issue)}
                                 <li>
@@ -1569,7 +1538,7 @@
                 <InfoBanner variant="warning" dismissible ondismiss={() => (issuesDismissed = true)}>
                     {#if fieldIssues.length > 0}
                         <p class="font-semibold text-sm mb-1.5" data-testid="tx-bulk-issues-header">{$t('transactions.validate.issuesHeader')}</p>
-                        <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-bulk-issues">
+                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-issues">
                             {#each fieldIssues as issue}
                                 <li>
                                     <button type="button" class="underline hover:opacity-80" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
@@ -1581,7 +1550,7 @@
                     {/if}
                     {#if balanceIssues.length > 0}
                         <p class="font-semibold text-sm {fieldIssues.length > 0 ? 'mt-2' : ''} mb-1.5">{$t('transactions.validate.balanceIssuesHeader')}</p>
-                        <ul class="list-disc list-inside space-y-0.5 text-sm">
+                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left">
                             {#each balanceIssues as issue}
                                 {@const resolvedRow = findRowForBalanceIssue(issue)}
                                 <li>
@@ -1618,7 +1587,7 @@
              staying in the bulk batch. -->
         <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 dark:border-slate-800 text-xs shrink-0">
             <!-- Left: search & add -->
-            {#if allMainRows.length > 0}
+            {#if txStoreCount() > 0}
                 <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={openPicker} data-testid="tx-bulk-picker" title={$t('transactions.picker.searchAdd') || 'Search & add'}>
                     🔍 <span class="hidden sm:inline">{$t('transactions.picker.searchAdd') || 'Search & add'}</span>
                 </button>
@@ -1755,9 +1724,6 @@
 <!-- Plan B Step 9: PickerModal for adding existing DB transactions -->
 <TransactionPickerModal
     open={pickerOpen}
-    mainRows={allMainRows as any[]}
-    partnerRows={allPartnerRows as any[]}
-    brokers={pickerBrokers}
     excludeIds={pickerExcludeIds}
     onAdd={handlePickerAdd}
     onClose={() => (pickerOpen = false)}

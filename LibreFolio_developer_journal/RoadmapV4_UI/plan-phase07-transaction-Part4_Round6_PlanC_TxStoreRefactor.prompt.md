@@ -1,7 +1,7 @@
 # Plan — Phase 07 · Part 4 · Round 6 · Piano C — txStore Refactor
 
 **Date**: 2026-05-08
-**Status**: ⏳ NOT STARTED
+**Status**: ✅ COMPLETED
 **Parent**: [`plan-phase07-transaction-Part4_Round6_PlanB23_Appendix1_UIPolish.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanB23_Appendix1_UIPolish.prompt.md)
 
 ---
@@ -132,7 +132,7 @@ PendingOp =
 
 ## Steps
 
-### Step 1 — Creare `txStore.ts` (~120 LOC)
+### Step 1 — Creare `txStore.ts` (~120 LOC) ✅
 
 **File**: `frontend/src/lib/stores/txStore.ts` (o `.svelte.ts` se serve reattività Svelte 5)
 
@@ -151,7 +151,7 @@ PendingOp =
 
 ---
 
-### Step 2 — Migrare `TransactionPickerModal`
+### Step 2 — Migrare `TransactionPickerModal` ✅
 
 **Obiettivo**: rimuovere props `mainRows`/`partnerRows`/`brokers`, leggere tutto da txStore.
 
@@ -165,7 +165,7 @@ PendingOp =
 
 ---
 
-### Step 3 — Migrare `TransactionBulkModal`
+### Step 3 — Migrare `TransactionBulkModal` ✅
 
 **Obiettivo**: sostituire l'array di `DraftRow` con copia completa con `PendingOp[]` + derivazione status.
 
@@ -183,7 +183,7 @@ PendingOp =
 
 ---
 
-### Step 4 — Semplificare `+page.svelte`
+### Step 4 — Semplificare `+page.svelte` ✅
 
 **Obiettivo**: rimuovere duplicazione dati e props cascade.
 
@@ -200,7 +200,40 @@ PendingOp =
 
 ---
 
-### Step 5 — Test di non-regressione finale
+### Step 5 — Test di non-regressione finale ✅
+
+**Risultati** (2026-05-08):
+- ✅ transactions-modals: 14/14 passed
+- ✅ transactions-table: all passed
+- ✅ tx-broker-access: 4/4 passed
+- ✅ tx-paired-edit: 4/4 passed
+- ✅ tx-delete: 15/15 passed
+- ✅ tx-picker-pagination: 5/5 passed
+- ⚠️ tx-tooltips: 1/2 passed (1 flaky pre-esistente, non correlato a txStore)
+
+---
+
+### Step 6 — Post-completion polish ✅
+
+**6a) Deduplica interfacce TXReadItem/ValidationIssue/AssetEvent**
+
+Creato `frontend/src/lib/components/transactions/types.ts` come canonical source. Migrati:
+- `+page.svelte` → import from `types.ts`
+- `TransactionsTable.svelte` → re-export from `types.ts`
+- `TransactionBulkModal.svelte` → import from `types.ts`
+- `txStore.svelte.ts` → re-export from `types.ts`
+
+Remaining (future cleanup): TransactionFormModal, TransactionDeleteModal, BulkDeleteLinkedPairModal — possono essere allineati in follow-up.
+
+**6b) Fix banner validate: alignment + bullet spacing**
+
+Problema: `list-inside` causava gap eccessivo tra bullet e testo + rendering centrato in contesti narrow.
+Fix: sostituito `list-disc list-inside` → `list-disc pl-4 text-left` su tutte e 4 le `<ul>` di issues nel BulkModal.
+
+**6c) Fix test flaky: tx-tooltips "paired tooltip shows broker name in bold"**
+
+Problema: la colonna Links è scrollata fuori viewport (1280px) con tutte le colonne visibili → `toBeVisible` falliva.
+Fix: aggiunto `scrollIntoViewIfNeeded()` prima dell'hover, aumentati timeout (2s→5s per visibilità, 2s→3s per tooltip). Root cause confermata non correlata a txStore.
 
 - `./dev.py test front-transaction all` — tutti i 5 spec file
 - Verifica manuale: create, edit, clone, delete (singola + paired + bulk)
