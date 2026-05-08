@@ -979,10 +979,6 @@
         toggleColumnVisibility(columnId);
     }
 
-    /** Get ordered column IDs */
-    export function getColumnOrder(): string[] {
-        return [...columnOrder];
-    }
 
     /** Set column order (reorder columns) */
     export function setColumnOrder(newOrder: string[]) {
@@ -1005,15 +1001,9 @@
         onFiltersChange?.({});
     }
 
-    /** Get currently selected rows (for external toolbar) */
-    export function getSelectedRows(): T[] {
-        return selectedRows;
-    }
-
-    /** Execute a bulk action by ID (triggers confirm modal if required) */
-    export function executeBulkAction(actionId: string) {
-        const action = bulkActions.find((a) => a.id === actionId);
-        if (action) handleBulkAction(action);
+    /** Toggle selection for a specific row by ID (external access, e.g. Picker dblclick). */
+    export function toggleRowSelectionById(rowId: string) {
+        toggleRowSelection(rowId);
     }
 </script>
 

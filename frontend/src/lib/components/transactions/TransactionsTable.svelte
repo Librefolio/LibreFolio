@@ -102,9 +102,11 @@
         onRowDoubleClickOverride?: (row: TXReadItem) => void;
         /** Enable long-press touch to toggle selection (mobile picker). */
         enableTouchSelection?: boolean;
+        /** B3-fix: hide row actions and context menu (used in Picker mode). */
+        hideActions?: boolean;
     }
 
-    let {mainRows = [], partnerRows = [], brokers = [], eventTooltipMap = new Map(), currentPage = 1, pageSize = 50, onSelectionChange, onLinkedPairClick, onEditRow, onCloneRow, onDeleteRow, onViewRow, onPageChange, onPageSizeChange, onFiltersChange, initialFilters, disabledIds, disabledRowTooltipFn, onRowDoubleClickOverride, enableTouchSelection = false}: Props = $props();
+    let {mainRows = [], partnerRows = [], brokers = [], eventTooltipMap = new Map(), currentPage = 1, pageSize = 50, onSelectionChange, onLinkedPairClick, onEditRow, onCloneRow, onDeleteRow, onViewRow, onPageChange, onPageSizeChange, onFiltersChange, initialFilters, disabledIds, disabledRowTooltipFn, onRowDoubleClickOverride, enableTouchSelection = false, hideActions = false}: Props = $props();
 
     /** Exposed DataTable ref for ColumnVisibilityToggle / external selection control. */
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
@@ -155,6 +157,12 @@
     export function resetFilters(): void {
         activeColumnFilters = {};
         tableRef?.clearFilters();
+    }
+
+    /** Toggle selection for a specific row by its tx.id (for Picker dblclick sync). */
+    export function toggleSelectionByTxId(txId: number): void {
+        const rowId = `tx-${txId}`;
+        tableRef?.toggleRowSelectionById(rowId);
     }
 
     /**
@@ -915,8 +923,8 @@
         storageKey="transactions-list"
         enableSelection={true}
         selectionMode="multi"
-        enableActions={true}
-        {rowActions}
+        enableActions={!hideActions}
+        rowActions={hideActions ? [] : rowActions}
         enablePagination={!isGrouped}
         enableColumnVisibility={true}
         enableColumnFilters={true}
