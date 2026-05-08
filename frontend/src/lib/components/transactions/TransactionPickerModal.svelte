@@ -94,15 +94,10 @@
     /** TableRef for dblclick toggle selection. */
     let tableRef: TransactionsTable | undefined = $state(undefined);
 
-    /** Double-click on selectable row → toggle selection. */
+    /** Double-click on selectable row → toggle selection via DataTable internal state. */
     function handleRowDoubleClick(row: TXReadItem) {
         if (disabledIds.has(row.id)) return;
-        const idx = selectedRows.findIndex((r) => r.id === row.id);
-        if (idx >= 0) {
-            selectedRows = selectedRows.filter((r) => r.id !== row.id);
-        } else {
-            selectedRows = [...selectedRows, row];
-        }
+        tableRef?.toggleSelectionByTxId(row.id);
     }
 
     /** Empty event tooltip map — picker doesn't need event tooltips */
@@ -169,6 +164,7 @@
                 disabledRowTooltipFn={disabledTooltipFn}
                 onRowDoubleClickOverride={handleRowDoubleClick}
                 enableTouchSelection={true}
+                hideActions={true}
             />
         </div>
 

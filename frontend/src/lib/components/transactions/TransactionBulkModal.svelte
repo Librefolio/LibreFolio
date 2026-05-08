@@ -244,12 +244,27 @@
                 return {rows: resolved, status: 'delete', autoForm: null};
             }
             if (intent.action === 'clone') {
+                // B2-fix: auto-include partner for paired clone
+                for (const id of txIds) {
+                    const tx = txStoreGet(id);
+                    if (tx?.related_transaction_id != null && !seen.has(tx.related_transaction_id)) {
+                        const partner = txStoreGet(tx.related_transaction_id);
+                        if (partner) {
+                            resolved.push(partner);
+                            seen.add(partner.id);
+                        }
+                    }
+                }
                 const today = new Date().toISOString().slice(0, 10);
+                // Generate shared link_uuid for paired clones
+                const sharedLinkUuid = resolved.length === 2 && resolved[0].type === resolved[1].type
+                    ? generateUUID() : null;
                 const cloned = resolved.map((r) => {
                     const c = {...r, id: 0, date: today, related_transaction_id: null} as TXReadItem;
                     // Bug6-fix: reset quantity when the type requires qty=0 (e.g. INTEREST)
                     const rule = getTypeRule(r.type);
                     if (rule.quantityRule === 'zero') c.quantity = '0';
+                    if (sharedLinkUuid) (c as any).link_uuid = sharedLinkUuid;
                     return c;
                 });
                 return {rows: cloned, autoForm: cloned.length === 1 ? 'create' : null};
@@ -1429,14 +1444,13 @@
     let tableRefForToggle = $derived(tableRef as never);
     let rowActionsForTable = $derived(rowActions as never);
 
-    /** Row background tint by status for immediate visual recognition. */
+    /** Row background tint by status for immediate visual recognition.
+     *  Color is purely status-based — paired nature is visible from Da:/A: rendering. */
     function getRowClass(row: DraftRow): string {
         const st = deriveStatus(row);
-        if (st === 'delete') return 'row-deleted line-through';
+        if (st === 'delete') return 'row-deleted';
         if (st === 'new') return 'row-appended';
         if (st === 'edited') return 'row-edited';
-        // B1-13: visual indicator for paired rows
-        if (getTypeRule(row.type).requiresPair && row.partnerBrokerId != null) return 'row-paired';
         return '';
     }
 

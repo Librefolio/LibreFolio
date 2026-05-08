@@ -1141,7 +1141,7 @@ def populate_transactions(session: Session):
         quantity=Decimal("-5"),
         amount=Decimal("0"),
         currency="USD",
-        description="Transfer AAPL to DEGIRO",
+        description="Transfer AAPL IB ↔ DEGIRO",
         tags="rebalance",
     )
     tx_transfer_in = Transaction(
@@ -1152,7 +1152,7 @@ def populate_transactions(session: Session):
         quantity=Decimal("5"),
         amount=Decimal("0"),
         currency="USD",
-        description="Transfer AAPL from IB",
+        description="Transfer AAPL IB ↔ DEGIRO",
         tags="rebalance",
     )
     session.add(tx_transfer_out)
@@ -1172,7 +1172,7 @@ def populate_transactions(session: Session):
         quantity=Decimal("-0.1"),
         amount=Decimal("0"),
         currency="USD",
-        description="Transfer BTC to IB",
+        description="Transfer BTC Coinbase ↔ IB",
         tags="rebalance",
     )
     tx_btc_in = Transaction(
@@ -1183,7 +1183,7 @@ def populate_transactions(session: Session):
         quantity=Decimal("0.1"),
         amount=Decimal("0"),
         currency="USD",
-        description="Transfer BTC from Coinbase",
+        description="Transfer BTC Coinbase ↔ IB",
         tags="rebalance",
     )
     session.add(tx_btc_out)
@@ -1232,7 +1232,7 @@ def populate_transactions(session: Session):
         quantity=Decimal("0"),
         amount=Decimal("-2000"),
         currency="EUR",
-        description="Cash transfer to IB",
+        description="Cash transfer DEGIRO ↔ IB",
         tags="giroconto",
     )
     tx_cash_in = Transaction(
@@ -1243,7 +1243,7 @@ def populate_transactions(session: Session):
         quantity=Decimal("0"),
         amount=Decimal("2000"),
         currency="EUR",
-        description="Cash transfer from DEGIRO",
+        description="Cash transfer DEGIRO ↔ IB",
         tags="giroconto",
     )
     session.add(tx_cash_out)
@@ -1270,14 +1270,14 @@ def populate_transactions(session: Session):
         broker_id=ib.id, asset_id=apple.id, type=TransactionType.TRANSFER,
         date=today - timedelta(days=5), quantity=Decimal("-3"),
         amount=Decimal("0"), currency="USD",
-        description="[Asym-a] AAPL IB→Directa (OWNER↔EDITOR=full)",
+        description="[Asym-a] AAPL IB ↔ Directa (OWNER↔EDITOR=full)",
         tags="access-test",
     )
     tx_asym_a_in = Transaction(
         broker_id=directa.id, asset_id=apple.id, type=TransactionType.TRANSFER,
         date=today - timedelta(days=5), quantity=Decimal("3"),
         amount=Decimal("0"), currency="USD",
-        description="[Asym-a] AAPL Directa←IB (EDITOR↔OWNER=full)",
+        description="[Asym-a] AAPL IB ↔ Directa (OWNER↔EDITOR=full)",
         tags="access-test",
     )
     session.add(tx_asym_a_out)
@@ -1293,14 +1293,14 @@ def populate_transactions(session: Session):
         broker_id=ib.id, asset_id=btc.id, type=TransactionType.TRANSFER,
         date=today - timedelta(days=4), quantity=Decimal("-0.05"),
         amount=Decimal("0"), currency="USD",
-        description="[Asym-b] BTC IB→Coinbase (OWNER↔EDITOR=full)",
+        description="[Asym-b] BTC IB ↔ Coinbase (OWNER↔EDITOR=full)",
         tags="access-test",
     )
     tx_asym_b_in = Transaction(
         broker_id=coinbase.id, asset_id=btc.id, type=TransactionType.TRANSFER,
         date=today - timedelta(days=4), quantity=Decimal("0.05"),
         amount=Decimal("0"), currency="USD",
-        description="[Asym-b] BTC Coinbase←IB (EDITOR↔OWNER=full)",
+        description="[Asym-b] BTC IB ↔ Coinbase (OWNER↔EDITOR=full)",
         tags="access-test",
     )
     session.add(tx_asym_b_out)
@@ -1316,14 +1316,14 @@ def populate_transactions(session: Session):
         broker_id=ib.id, asset_id=msft.id, type=TransactionType.TRANSFER,
         date=today - timedelta(days=3), quantity=Decimal("-2"),
         amount=Decimal("0"), currency="USD",
-        description="[Asym-c] MSFT IB→DEGIRO (OWNER↔VIEWER=view-only)",
+        description="[Asym-c] MSFT IB ↔ DEGIRO (OWNER↔VIEWER=view-only)",
         tags="access-test",
     )
     tx_asym_c_in = Transaction(
         broker_id=degiro.id, asset_id=msft.id, type=TransactionType.TRANSFER,
         date=today - timedelta(days=3), quantity=Decimal("2"),
         amount=Decimal("0"), currency="USD",
-        description="[Asym-c] MSFT DEGIRO←IB (VIEWER↔OWNER=view-only)",
+        description="[Asym-c] MSFT IB ↔ DEGIRO (OWNER↔VIEWER=view-only)",
         tags="access-test",
     )
     session.add(tx_asym_c_out)
@@ -1342,14 +1342,14 @@ def populate_transactions(session: Session):
         broker_id=coinbase.id, asset_id=eth.id, type=TransactionType.TRANSFER,
         date=today - timedelta(days=1), quantity=Decimal("-0.001"),
         amount=Decimal("0"), currency="USD",
-        description="[delete-safe] ETH Coinbase→IB for delete test",
+        description="[delete-safe] ETH Coinbase ↔ IB",
         tags="delete-safe,access-test",
     )
     tx_del_pair_in = Transaction(
         broker_id=ib.id, asset_id=eth.id, type=TransactionType.TRANSFER,
         date=today - timedelta(days=1), quantity=Decimal("0.001"),
         amount=Decimal("0"), currency="USD",
-        description="[delete-safe] ETH IB←Coinbase for delete test",
+        description="[delete-safe] ETH Coinbase ↔ IB",
         tags="delete-safe,access-test",
     )
     session.add(tx_del_pair_out)
@@ -1688,14 +1688,14 @@ def link_transactions_to_events(session: Session):
             broker_id=ib.id, asset_id=apple_for_asym.id, type=TransactionType.TRANSFER,
             date=today - timedelta(days=2), quantity=Decimal("-1"),
             amount=Decimal("0"), currency="USD",
-            description="[Asym-d] AAPL IB→HiddenBroker (OWNER↔none=locked)",
+            description="[Asym-d] AAPL IB ↔ HiddenBroker (OWNER↔none=locked)",
             tags="access-test",
         )
         tx_asym_d_in = Transaction(
             broker_id=hidden_broker.id, asset_id=apple_for_asym.id, type=TransactionType.TRANSFER,
             date=today - timedelta(days=2), quantity=Decimal("1"),
             amount=Decimal("0"), currency="USD",
-            description="[Asym-d] AAPL HiddenBroker←IB (none↔OWNER=locked)",
+            description="[Asym-d] AAPL IB ↔ HiddenBroker (OWNER↔none=locked)",
             tags="access-test",
         )
         session.add(tx_asym_d_out)
