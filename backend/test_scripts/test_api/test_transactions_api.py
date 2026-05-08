@@ -1025,3 +1025,135 @@ async def test_get_transactions_partner_broker_id(test_server):
 
         print_success("✓ partner_broker_id correctly populated for linked pair")
 
+
+# ============================================================================
+# PAIR DESCRIPTION/TAGS VALIDATION
+# ============================================================================
+
+
+@pytest.mark.asyncio
+class TestPairDescriptionTagsValidation:
+    """Tests for pair description/tags consistency validation (Step 2 of Plan C2)."""
+
+    @pytest.fixture(autouse=True)
+    def server(self, test_server):
+        yield
+
+    async def _setup(self, client: httpx.AsyncClient) -> tuple[int, int, int]:
+        """Register, login, create 2 brokers + 1 asset. Returns (broker1_id, broker2_id, asset_id)."""
+        await create_test_user(client)
+        # Create 2 brokers
+        resp = await client.post(f"{API_BASE}/brokers", json=[
+            {"name": f"PairVal-B1-{uuid.uuid4().hex[:6]}", "allow_cash_overdraft": True, "allow_asset_shorting": True},
+            {"name": f"PairVal-B2-{uuid.uuid4().hex[:6]}", "allow_cash_overdraft": True, "allow_asset_shorting": True},
+        ], timeout=TIMEOUT)
+        assert resp.status_code == 200
+        brokers = resp.json()["results"]
+        b1 = brokers[0]["broker_id"]
+        b2 = brokers[1]["broker_id"]
+        # Create asset
+        asset_resp = await client.post(f"{API_BASE}/assets", json=[
+            {"display_name": f"PairValAsset-{uuid.uuid4().hex[:6]}", "asset_type": "STOCK", "currency": "USD"},
+        ], timeout=TIMEOUT)
+        assert asset_resp.status_code == 200
+        asset_id = asset_resp.json()["results"][0]["asset_id"]
+        return b1, b2, asset_id
+
+    async def test_create_pair_same_description_ok(self):
+        """Create a TRANSFER pair with identical description → committed=True."""
+        print_section("PAIR VALIDATION: same description OK")
+        async with httpx.AsyncClient() as client:
+            b1, b2, asset_id = await self._setup(client)
+            link = str(uuid.uuid4())
+            payload = {"creates": [
+                {"broker_id": b1, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-10",
+                 "quantity": "-5", "link_uuid": link, "description": "Transfer A ↔ B", "tags": ["test"]},
+                {"broker_id": b2, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-10",
+                 "quantity": "5", "link_uuid": link, "description": "Transfer A ↔ B", "tags": ["test"]},
+            ]}
+            resp = await client.post(f"{API_BASE}/transactions/commit", json=payload, timeout=TIMEOUT)
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["committed"] is True, f"Expected committed=True, got issues: {data.get('issues')}"
+            print_success("✓ Pair with identical description committed OK")
+
+    async def test_create_pair_different_description_rejected(self):
+        """Create a TRANSFER pair with different descriptions → rejected."""
+        print_section("PAIR VALIDATION: different description rejected")
+        async with httpx.AsyncClient() as client:
+            b1, b2, asset_id = await self._setup(client)
+            link = str(uuid.uuid4())
+            payload = {"creates": [
+                {"broker_id": b1, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-10",
+                 "quantity": "-5", "link_uuid": link, "description": "Description A"},
+                {"broker_id": b2, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-10",
+                 "quantity": "5", "link_uuid": link, "description": "Description B"},
+            ]}
+            resp = await client.post(f"{API_BASE}/transactions/commit", json=payload, timeout=TIMEOUT)
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["committed"] is False
+            codes = [i["code"] for i in data.get("issues", [])]
+            assert "pairDescriptionMismatch" in codes, f"Expected pairDescriptionMismatch, got {codes}"
+            print_success("✓ Pair with different descriptions correctly rejected")
+
+    async def test_create_pair_different_tags_rejected(self):
+        """Create a TRANSFER pair with different tags → rejected."""
+        print_section("PAIR VALIDATION: different tags rejected")
+        async with httpx.AsyncClient() as client:
+            b1, b2, asset_id = await self._setup(client)
+            link = str(uuid.uuid4())
+            payload = {"creates": [
+                {"broker_id": b1, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-10",
+                 "quantity": "-5", "link_uuid": link, "tags": ["alpha", "beta"]},
+                {"broker_id": b2, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-10",
+                 "quantity": "5", "link_uuid": link, "tags": ["alpha", "gamma"]},
+            ]}
+            resp = await client.post(f"{API_BASE}/transactions/commit", json=payload, timeout=TIMEOUT)
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["committed"] is False
+            codes = [i["code"] for i in data.get("issues", [])]
+            assert "pairTagsMismatch" in codes, f"Expected pairTagsMismatch, got {codes}"
+            print_success("✓ Pair with different tags correctly rejected")
+
+    async def test_update_description_pair_consistency(self):
+        """Update description on one side without partner → rejected. Update both → OK."""
+        print_section("PAIR VALIDATION: update consistency")
+        async with httpx.AsyncClient() as client:
+            b1, b2, asset_id = await self._setup(client)
+            # First create a valid pair
+            link = str(uuid.uuid4())
+            payload = {"creates": [
+                {"broker_id": b1, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-15",
+                 "quantity": "-2", "link_uuid": link, "description": "Original desc"},
+                {"broker_id": b2, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-15",
+                 "quantity": "2", "link_uuid": link, "description": "Original desc"},
+            ]}
+            create_resp = await client.post(f"{API_BASE}/transactions/commit", json=payload, timeout=TIMEOUT)
+            assert create_resp.status_code == 200
+            assert create_resp.json()["committed"] is True
+            created_ids = [r["id"] for r in create_resp.json()["results"] if r["operation"] == "create"]
+            assert len(created_ids) == 2
+
+            # Update only one side → should be rejected
+            update_one = {"updates": [
+                {"id": created_ids[0], "description": "Changed desc"},
+            ]}
+            resp1 = await client.post(f"{API_BASE}/transactions/commit", json=update_one, timeout=TIMEOUT)
+            assert resp1.status_code == 200
+            data1 = resp1.json()
+            assert data1["committed"] is False
+            codes = [i["code"] for i in data1.get("issues", [])]
+            assert "pairDescriptionMismatch" in codes, f"Expected mismatch, got {codes}"
+
+            # Update both sides → should succeed
+            update_both = {"updates": [
+                {"id": created_ids[0], "description": "Changed desc"},
+                {"id": created_ids[1], "description": "Changed desc"},
+            ]}
+            resp2 = await client.post(f"{API_BASE}/transactions/commit", json=update_both, timeout=TIMEOUT)
+            assert resp2.status_code == 200
+            assert resp2.json()["committed"] is True
+            print_success("✓ Pair update consistency validated (reject one-sided, accept both)")
+

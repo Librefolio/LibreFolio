@@ -478,8 +478,22 @@
         formOpen = false;
         void reload({soft: true});
     }
-    function handleBulkCommitted() {
+    function handleBulkCommitted(resp: unknown) {
         bulkOpen = false;
+        // B4-fix: show toast with operation summary
+        const r = resp as {results?: Array<{operation: string; status: string}>};
+        if (r?.results) {
+            const created = r.results.filter((x) => x.operation === 'create' && x.status === 'success').length;
+            const updated = r.results.filter((x) => x.operation === 'update' && x.status === 'success').length;
+            const deleted = r.results.filter((x) => x.operation === 'delete' && x.status === 'success').length;
+            const parts: string[] = [];
+            if (created) parts.push(`${created} ${$_('transactions.toast.created') || 'created'}`);
+            if (updated) parts.push(`${updated} ${$_('transactions.toast.updated') || 'updated'}`);
+            if (deleted) parts.push(`${deleted} ${$_('transactions.toast.deleted') || 'deleted'}`);
+            if (parts.length > 0) {
+                toasts.success(`✅ ${parts.join(', ')}`);
+            }
+        }
         void reload({soft: true});
     }
 

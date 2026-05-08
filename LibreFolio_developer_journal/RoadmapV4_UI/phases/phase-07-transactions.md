@@ -535,6 +535,7 @@ Sistema preview funzionante in 3 punti di accesso (Files Static, Files BRIM, Bro
 > - Entry point wiring + flow integration — R6-B.8
 > - Import ▾ menu with broker picker from `/transactions`
 > - See [`plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md`](../plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md) §R6-B checklist
+> - **Description/Tags merge su Promote** *(aggiunto Part 4 Round 7)*: quando la Staging Modal propone il promote di due TX standalone in coppia, le description possono differire. Il backend rifiuterà il commit se description/tags non sono identici (`pairDescriptionMismatch`). La UX dovrà offrire una **modale di diff a 3 vie** (description lato A, description lato B, risultato merged editabile) dove l'utente sceglie o compone il testo finale. Per i tags: proporre l'**union** dei due set con checkbox per deselezionare quelli indesiderati. Solo dopo l'allineamento l'utente può committare il promote. Vedi `TransactionService._validate_pair_description_tags()`, introdotto in [`plan-phase07Part4Round7-C2BugfixAndPairValidation.prompt.md`](../../plan-phase07Part4Round7-C2BugfixAndPairValidation.prompt.md).
 
 ### Flusso BRIM completo (post-Revisione 2)
 

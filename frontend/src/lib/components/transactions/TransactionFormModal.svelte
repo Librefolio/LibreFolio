@@ -466,6 +466,22 @@
             dualTo = {broker_id: toRow.broker_id, cash: null, date: toRow.date};
             qtyDisplay = formatDecimalForDisplay(draft.quantity);
         }
+        // B1-fix: if the pair has mismatched description, concatenate with explanatory note
+        const rowDesc = row.description ?? '';
+        const partnerDesc = partner.description ?? '';
+        if (rowDesc !== partnerDesc) {
+            const parts: string[] = [];
+            if (rowDesc) parts.push(rowDesc);
+            if (partnerDesc) parts.push(partnerDesc);
+            draft = {...draft, description: parts.join(' | ') + ' [auto-merged: pair had mismatched descriptions]'};
+        }
+        // B1-fix: if the pair has mismatched tags, union them
+        const rowTags = row.tags ?? [];
+        const partnerTags = partner.tags ?? [];
+        if (JSON.stringify([...rowTags].sort()) !== JSON.stringify([...partnerTags].sort())) {
+            const merged = [...new Set([...rowTags, ...partnerTags])].sort();
+            draft = {...draft, tags: merged};
+        }
         initialDraftKey = JSON.stringify(draft) + JSON.stringify(dualTo);
     }
 

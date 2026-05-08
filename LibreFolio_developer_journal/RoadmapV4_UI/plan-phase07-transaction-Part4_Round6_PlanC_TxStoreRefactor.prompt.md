@@ -543,3 +543,31 @@ Dipende da `PendingOp[]`: quando i partner non sono più clonati ma referenziati
 | `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` | +Bug6-fix clone, +autoForm fix, +intent prop |
 | `frontend/src/routes/(app)/transactions/+page.svelte` | handleEditRow/handleCloneRow → intent, rimossi legacy vars, template aggiornato |
 | `frontend/e2e/transactions/tx-paired-edit.spec.ts` | Fix testid per dual transfer_asset layout |
+
+---
+
+## Session Log 3 — 2026-05-08 tarda sera (Bug cosmetici + Picker dblclick)
+
+### Osservazioni utente
+
+L'utente ha testato manualmente la BulkModal e segnalato 3 problemi:
+
+1. **Picker dblclick non sincronizza checkbox**: il doppio click nella PickerModal seleziona/deseleziona logicamente la riga (`selectedRows`), ma la checkbox visiva del DataTable interno non si aggiorna — perché `handleRowDoubleClick` nel PickerModal gestiva uno stato locale (`selectedRows`) senza propagare la selezione al DataTable sottostante.
+
+2. **Righe delete sbarrate (line-through)**: `getRowClass()` applicava `row-deleted line-through` alle righe marcate per cancellazione. Il `line-through` è ridondante perché lo sfondo rosso + badge `🔴 del` sono sufficienti per comunicare lo stato. Rimosso.
+
+3. **Righe paired sempre porpora**: `getRowClass()` applicava `row-paired` (indigo) a tutte le righe paired in stato `original`. L'utente vuole **colore solo basato sullo stato**, non sulla natura paired. Le righe paired sono già riconoscibili dal rendering duale Da:/A:. Rimosso il fallthrough a `row-paired`.
+
+### Fix applicati
+
+| # | Cosa | File | Descrizione |
+|---|---|---|---|
+| F1 | DataTable: `toggleRowSelectionById()` | `DataTable.svelte` | Nuovo export che delega a `toggleRowSelection()` interna |
+| F2 | TransactionsTable: `toggleSelectionByTxId()` | `TransactionsTable.svelte` | Nuovo export che delega a DataTable con formato `tx-${id}` |
+| F3 | PickerModal: dblclick sincronizza checkbox | `TransactionPickerModal.svelte` | `handleRowDoubleClick` ora chiama `tableRef.toggleSelectionByTxId()` anziché gestire stato locale |
+| F4 | BulkModal: rimosso `line-through` | `TransactionBulkModal.svelte` | `getRowClass()` → `row-deleted` senza `line-through` |
+| F5 | BulkModal: rimosso `row-paired` | `TransactionBulkModal.svelte` | `getRowClass()` → colore solo da status (`new`/`edited`/`delete`), righe original+paired → nessun colore |
+
+### Nota positiva
+
+L'utente ha confermato: "mi pare che finalmente le cose iniziano a funzionare!" e "non sono riuscito a trovare nessun altro bug!". I fix precedenti (txStore, WorkspaceIntent, eliminazione `_hidden`/`mergePairedRows`) sono stabili.

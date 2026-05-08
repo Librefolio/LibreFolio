@@ -260,6 +260,32 @@ class TransactionService:
             )
         return None
 
+    @staticmethod
+    def _validate_pair_description_tags(a: Transaction, b: Transaction) -> Optional[tuple[str, str, dict]]:
+        """Validate that a linked pair has identical description and tags.
+
+        Returns None when consistent, otherwise (error_message, code, params).
+        """
+        # Normalize None to "" for comparison
+        desc_a = a.description or ""
+        desc_b = b.description or ""
+        if desc_a != desc_b:
+            return (
+                "Linked pair must have identical description",
+                "pairDescriptionMismatch",
+                {"descA": desc_a[:50], "descB": desc_b[:50]},
+            )
+        # Tags are stored as CSV strings; normalize None to ""
+        tags_a = a.tags or ""
+        tags_b = b.tags or ""
+        if tags_a != tags_b:
+            return (
+                "Linked pair must have identical tags",
+                "pairTagsMismatch",
+                {"tagsA": tags_a, "tagsB": tags_b},
+            )
+        return None
+
     # =========================================================================
     # READ OPERATIONS
     # =========================================================================
@@ -1087,6 +1113,25 @@ class TransactionService:
             except Exception as e:  # noqa: BLE001
                 issues.append(TXValidationIssue(operation="update", index=orig_idx, ref_id=item.id, error=str(e)))
 
+        # 4b. Validate pair desc/tags consistency for updated linked TXs
+        for orig_idx, item in parsed_updates:
+            if item.tags is None and item.description is None:
+                continue
+            tx = existing_by_id.get(item.id)
+            if not tx or not tx.related_transaction_id:
+                continue
+            partner = existing_by_id.get(tx.related_transaction_id)
+            if partner is None:
+                partner = await self.session.get(Transaction, tx.related_transaction_id)
+            if partner is not None:
+                desc_result = self._validate_pair_description_tags(tx, partner)
+                if desc_result is not None:
+                    err_msg, err_code, err_params = desc_result
+                    issues.append(TXValidationIssue(
+                        operation="update", index=orig_idx, ref_id=item.id,
+                        error=err_msg, code=err_code, params=err_params,
+                    ))
+
         # 5. Apply creates (only successfully-parsed rows)
         link_uuid_map: Dict[str, List[Tuple[int, Transaction]]] = defaultdict(list)
         for orig_idx, item in parsed_creates:
@@ -1130,6 +1175,12 @@ class TransactionService:
                 if pair_result is not None:
                     pair_error, pair_code, pair_params = pair_result
                     issues.append(TXValidationIssue(operation="create", index=pairs[0][0], ref_id=None, error=pair_error, code=pair_code, params=pair_params))
+                    continue
+                # Validate description/tags consistency
+                desc_result = self._validate_pair_description_tags(pairs[0][1], pairs[1][1])
+                if desc_result is not None:
+                    desc_error, desc_code, desc_params = desc_result
+                    issues.append(TXValidationIssue(operation="create", index=pairs[0][0], ref_id=None, error=desc_error, code=desc_code, params=desc_params))
                     continue
                 pairs[0][1].related_transaction_id = pairs[1][1].id
                 pairs[1][1].related_transaction_id = pairs[0][1].id
