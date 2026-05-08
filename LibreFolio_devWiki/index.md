@@ -91,6 +91,7 @@
 | [[decisions/server-driven-type-rules]] | Replace 3 hardcoded frontend type-rule files with server-fetched `transactionTypeStore` | 2026-04-30 | backend, frontend, transactions, type-rules, auto-sign |
 | [[decisions/test-runner-package-split]] | Monolithic test_runner.py (4841 lines) → 18-module package with distributed registry pattern | 2026-05-26 | testing, infrastructure, cli, refactoring, test_runner |
 | [[decisions/static-metadata-export]] | Static JSON export of constant metadata at compile-time — deferred to Phase 8+ | 2026-05-26 | backend, frontend, architecture, api-sync, metadata, performance |
+| [[decisions/txstore-single-source-of-truth]] | txStore replaces prop cascade — single Map<id,TXReadItem> eliminates 5 bug categories; -30% LOC | 2026-05-08 | frontend, transactions, stores, architecture, refactor |
 
 ## Concepts
 
@@ -116,6 +117,7 @@
 | [[concepts/validate-scheduler-pattern]] | Debounce 1s + idle 60s + manual validate with anti-bounce 10s; auto-disable above 50 rows | frontend, transactions, validation, scheduling |
 | [[concepts/resolve-validation-message-pattern]] | Frontend i18n error resolution: code→i18n key, ID→name via stores, amount→formatted | frontend, transactions, i18n, error-handling |
 | [[concepts/safe-decimal-pattern]] | SafeDecimal type prevents scientific notation in JSON responses; use instead of Decimal in response schemas | backend, serialization, pydantic, decimal, json |
+| [[concepts/txstore-pattern]] | txStore.svelte.ts: page-scoped Map<id,TXReadItem> — single source of truth for transactions, WorkspaceIntent + PendingOp model | frontend, stores, transactions, svelte5, single-source-of-truth |
 
 ## Problems
 
@@ -196,3 +198,5 @@
 | [[sources/phase07-part4-round6-context-menu-delete]] | `...Round6_ContextMenuDeletePolish.prompt.md` ✅ DONE (Steps 1-6,8) | 2026-05-28 | phase07, transactions, context-menu, delete-modal, picker-modal |
 | [[sources/phase07-part4-round6-plana-context-menu-bugfix]] | `...Round6_PlanA_ContextMenuBugfix.prompt.md` ✅ DONE | 2026-05-28 | phase07, transactions, context-menu, bugfix, txPayloadHelpers |
 | [[sources/phase07-part4-round6-planb-delete-picker-access]] | `...Round6_PlanB_DeletePickerAccess.prompt.md` + `PlanB1` ✅ DONE (Fase 1+B1) | 2026-05-28 | phase07, transactions, delete-modal, picker-modal, broker-access |
+| [[sources/phase07-part4-round6-planb23-appendix1-ui-polish]] | `...Round6_PlanB23_Appendix1_UIPolish.prompt.md` ✅ DONE | 2026-05-29 | phase07, transactions, ui-polish, responsive, toast, row-tints |
+| [[sources/phase07-part4-round6-planc-txstore-refactor]] | `...Round6_PlanC_TxStoreRefactor.prompt.md` ✅ DONE | 2026-05-29 | phase07, transactions, txStore, refactor, single-source-of-truth |

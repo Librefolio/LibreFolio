@@ -37,6 +37,7 @@
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import TransactionResultBanner from './TransactionResultBanner.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
@@ -46,15 +47,10 @@
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/brokerStore';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
-    import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded} from '$lib/stores/transactionTypeStore';
+    import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded} from '$lib/stores/transactionTypeStore';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
     import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
-    import {
-        buildCreatePayload,
-        buildUpdateDiff,
-        type TxFields,
-        type TxOriginal,
-    } from '$lib/utils/txPayloadHelpers';
+    import {buildCreatePayload, buildUpdateDiff, type TxFields, type TxOriginal} from '$lib/utils/txPayloadHelpers';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/uuid';
     import {formatCurrencyAmountHtml} from '$lib/utils/currencyFormat';
@@ -68,7 +64,6 @@
     // =========================================================================
     // Types
     // =========================================================================
-
 
     interface DraftRow {
         tempId: string; // stable id used by DataTable.getRowId + navigateToRowId
@@ -163,7 +158,7 @@
         if (cash && txRule.cashSign === 'negative' && Number(cash.amount) < 0) {
             cash = {code: cash.code, amount: String(Math.abs(Number(cash.amount)))};
         }
-        const status = isCreate ? 'new' : (overrideStatus === 'delete' ? 'delete' : 'original');
+        const status = isCreate ? 'new' : overrideStatus === 'delete' ? 'delete' : 'original';
         return {
             tempId: generateUUID(),
             status,
@@ -215,6 +210,7 @@
         if (!open) return;
         const rows = initialRows;
         const initSt = initialStatus;
+        const autoForm = autoOpenForm;
         untrack(() => {
             issues = [];
             formError = null;
@@ -225,26 +221,23 @@
 
             // Detect paired rows and merge them into a single visible row
             // with partner data for Da:/A: rendering.
-            if (rows.some((r) => r.id > 0 && r.related_transaction_id != null)) {
+            // NOTE: only attempt if types are already cached — otherwise defer
+            // to the async block below (getTypeRule needs server data to know
+            // which types requiresPair).
+            const hasPairs = rows.some((r) => r.id > 0 && r.related_transaction_id != null);
+            if (hasPairs && isTypesLoaded()) {
                 mergePairedRows(next, rows);
             }
 
             drafts = next;
             initialDraftsKey = serializeDrafts(next);
 
-            // Determine whether to auto-open the FormModal
-            const autoForm = autoOpenForm;
-            if (autoForm === 'edit' && next.length > 0) {
-                // Bug15-fix: after mergePairedRows the first draft may be hidden
-                // (the receiver side). Always open the first VISIBLE draft.
-                const firstVisible = next.find((d) => !d._hidden) ?? next[0];
-                queueMicrotask(() => openEditRowForm(firstVisible));
-            } else if (autoForm === 'create' && next.length > 0) {
-                // Clone: row is 'new' so openEditRowForm uses create mode
-                const firstVisible = next.find((d) => !d._hidden) ?? next[0];
-                queueMicrotask(() => openEditRowForm(firstVisible));
-            } else if (rows.length === 0) {
-                // Auto-open for brand-new empty grid
+            // Auto-open only when types are already loaded (pair merge completed above)
+            if (isTypesLoaded()) {
+                scheduleAutoOpen(autoForm, next);
+            }
+            // If no initial rows and no need for types → open the create form immediately
+            if (!isTypesLoaded() && rows.length === 0) {
                 queueMicrotask(() => {
                     formOpen = true;
                     formMode = 'create';
@@ -256,8 +249,46 @@
         });
         void (async () => {
             await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded(), ensureTypesLoaded()]);
+            // After types loaded: re-run merge if it was deferred, then auto-open.
+            untrack(() => {
+                const hasPairs = rows.some((r) => r.id > 0 && r.related_transaction_id != null);
+                if (hasPairs && drafts.some((d) => !d._hidden && !d.link_uuid)) {
+                    // Merge was deferred — run now that types are loaded
+                    // Use txStoreGetAll() as source (consistent with resetRow/resetAll)
+                    mergePairedRows(drafts, txStoreGetAll());
+                    drafts = [...drafts]; // trigger reactivity
+                    initialDraftsKey = serializeDrafts(drafts);
+                }
+                // Auto-open the form if it hasn't been opened yet
+                if (!formOpen) {
+                    scheduleAutoOpen(autoForm, drafts);
+                }
+            });
         })();
     });
+
+    /** Schedule auto-open of the nested FormModal based on the mode. */
+    function scheduleAutoOpen(autoForm: string | null, draftArr: DraftRow[]) {
+        if (autoForm === 'edit' && draftArr.length > 0) {
+            // Bug15-fix: after mergePairedRows the first draft may be hidden
+            // (the receiver side). Always open the first VISIBLE draft.
+            const firstVisible = draftArr.find((d) => !d._hidden) ?? draftArr[0];
+            queueMicrotask(() => openEditRowForm(firstVisible));
+        } else if (autoForm === 'create' && draftArr.length > 0) {
+            // Clone: row is 'new' so openEditRowForm uses create mode
+            const firstVisible = draftArr.find((d) => !d._hidden) ?? draftArr[0];
+            queueMicrotask(() => openEditRowForm(firstVisible));
+        } else if (draftArr.length === 0) {
+            // Auto-open for brand-new empty grid
+            queueMicrotask(() => {
+                formOpen = true;
+                formMode = 'create';
+                formInitial = null;
+                formPartnerRow = null;
+                formEditingTempId = null;
+            });
+        }
+    }
 
     /** Stable, comparison-friendly serialization of the drafts array (drops
      *  the volatile `tempId` so newly seeded rows compare equal to the
@@ -342,7 +373,7 @@
             // C1-fix: if this is a paired row, expose the partner id so FormModal
             // opens in dual mode. For 'new' drafts _partnerId is undefined, so we
             // use a sentinel -1 to signal "pair present, fetch locally".
-            related_transaction_id: (d._partnerId ?? (d.partnerBrokerId != null ? -1 : null)),
+            related_transaction_id: d._partnerId ?? (d.partnerBrokerId != null ? -1 : null),
             tags: d.tags,
             description: d.description,
             cost_basis_override: d.cost_basis_override || null,
@@ -407,7 +438,9 @@
     function mergePairedRows(draftArr: DraftRow[], sourceRows: TXReadItem[]) {
         // Map DB id → draft index
         const idToIdx = new Map<number, number>();
-        draftArr.forEach((d, i) => { if (d.id != null) idToIdx.set(d.id, i); });
+        draftArr.forEach((d, i) => {
+            if (d.id != null) idToIdx.set(d.id, i);
+        });
         // Map DB id → source TXReadItem for partner lookup
         const idToSource = new Map<number, TXReadItem>();
         sourceRows.forEach((r) => idToSource.set(r.id, r));
@@ -430,7 +463,8 @@
             // Determine from/to: "from" side has negative cash or negative qty
             const cashAmt = Number(d.original?.cash?.amount ?? 0);
             const partnerCashAmt = Number(partner.original?.cash?.amount ?? 0);
-            let fromIdx = i, toIdx = pIdx;
+            let fromIdx = i,
+                toIdx = pIdx;
             if (cashAmt > 0 && partnerCashAmt <= 0) {
                 fromIdx = pIdx;
                 toIdx = i;
@@ -517,11 +551,7 @@
         const target = drafts.find((d) => d.tempId === tempId);
         if (!target || !target.original) return;
         // If paired, also reset the hidden partner
-        const partnerTempId = target.link_uuid
-            ? drafts.find((d) => d.tempId !== tempId && d.link_uuid === target.link_uuid)?.tempId
-            : target._partnerId
-                ? drafts.find((d) => d.id === target._partnerId)?.tempId
-                : undefined;
+        const partnerTempId = target.link_uuid ? drafts.find((d) => d.tempId !== tempId && d.link_uuid === target.link_uuid)?.tempId : target._partnerId ? drafts.find((d) => d.id === target._partnerId)?.tempId : undefined;
 
         drafts = drafts.map((d) => {
             if (d.tempId !== tempId && d.tempId !== partnerTempId) return d;
@@ -699,7 +729,11 @@
             if (!b) return null;
             if (b.icon_url?.trim()) return b.icon_url;
             if (b.portal_url?.trim()) {
-                try { return new URL(b.portal_url).origin + '/favicon.ico'; } catch { /* skip */ }
+                try {
+                    return new URL(b.portal_url).origin + '/favicon.ico';
+                } catch {
+                    /* skip */
+                }
             }
             return null;
         },
@@ -757,10 +791,7 @@
             if (updates.length > 0) payload.updates = updates;
             if (deletes.length > 0) payload.deletes = deletes;
 
-            const result = await saveWithRetry(
-                () => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never),
-                {fallback: $t('transactions.bulk.saveFailed'), toast: false},
-            );
+            const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.bulk.saveFailed'), toast: false});
             if (result.status === 'error') {
                 formError = result.message;
                 return;
@@ -799,7 +830,6 @@
 
     // TYPE_OPTIONS removed in Bugfix-2 §C6 — type column now uses
     // TransactionTypeSearchSelect (PNG icons + i18n labels).
-
 
     // =========================================================================
     // DRY helpers for readonly cell rendering
@@ -854,9 +884,7 @@
         const name = info?.display_name ?? `#${assetId}`;
         // Bug11-fix: use asset type icon as fallback when icon_url is null
         const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
-        const iconHtml = iconUrl
-            ? `<img src="${iconUrl}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`
-            : '';
+        const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
         return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${name}</span>`;
     }
 
@@ -868,11 +896,11 @@
         if (b?.icon_url) {
             iconSrc = b.icon_url;
         } else if (b?.portal_url) {
-            try { iconSrc = new URL(b.portal_url).origin + '/favicon.ico'; } catch {}
+            try {
+                iconSrc = new URL(b.portal_url).origin + '/favicon.ico';
+            } catch {}
         }
-        const iconHtml = iconSrc
-            ? `<img src="${iconSrc}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`
-            : '';
+        const iconHtml = iconSrc ? `<img src="${iconSrc}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
         return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${name}</span>`;
     }
 
@@ -890,7 +918,14 @@
                 hiddenByDefault: false,
                 cell: (row): CellContent => ({
                     type: 'html',
-                    html: row.status === 'new' ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">new</span>' : row.status === 'edited' ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">edit</span>' : row.status === 'delete' ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">🔴 del</span>' : '<span class="text-gray-300 dark:text-gray-600">·</span>',
+                    html:
+                        row.status === 'new'
+                            ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">new</span>'
+                            : row.status === 'edited'
+                              ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">edit</span>'
+                              : row.status === 'delete'
+                                ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">🔴 del</span>'
+                                : '<span class="text-gray-300 dark:text-gray-600">·</span>',
                 }),
             },
             {
@@ -1036,11 +1071,13 @@
                 hiddenByDefault: true,
                 cell: (row): CellContent => {
                     if (row.tags.length === 0) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
-                    const html = row.tags.map((tag) => {
-                        const escaped = tag.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                        const c = getStringColor(tag);
-                        return `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded mr-0.5 mb-0.5" style="background:${c.bg};color:${c.text}">${escaped}</span>`;
-                    }).join('');
+                    const html = row.tags
+                        .map((tag) => {
+                            const escaped = tag.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                            const c = getStringColor(tag);
+                            return `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded mr-0.5 mb-0.5" style="background:${c.bg};color:${c.text}">${escaped}</span>`;
+                        })
+                        .join('');
                     return {type: 'html', html: `<span class="flex flex-wrap gap-0.5" data-testid="tx-bulk-tags">${html}</span>`};
                 },
             },
@@ -1117,9 +1154,7 @@
         {
             id: 'mark-delete',
             icon: Trash2,
-            label: (row: DraftRow) => row.status === 'delete'
-                ? ($t('transactions.bulk.unmarkDelete') || 'Restore')
-                : ($t('transactions.bulk.markDelete') || 'Mark for deletion'),
+            label: (row: DraftRow) => (row.status === 'delete' ? $t('transactions.bulk.unmarkDelete') || 'Restore' : $t('transactions.bulk.markDelete') || 'Mark for deletion'),
             onClick: (row: DraftRow) => {
                 if (row.id != null) {
                     // Existing row: toggle delete state
@@ -1224,8 +1259,7 @@
             d.updated_at = r.updated_at;
             // If paired, populate partner display info
             if (r.related_transaction_id != null) {
-                const partner = rows.find((p) => p.id === r.related_transaction_id) ??
-                    txStoreGet(r.related_transaction_id);
+                const partner = rows.find((p) => p.id === r.related_transaction_id) ?? txStoreGet(r.related_transaction_id);
                 if (partner) {
                     d.partnerBrokerId = partner.broker_id;
                     d.partnerCash = partner.cash ?? null;
@@ -1323,7 +1357,10 @@
     /** Add a paired draft row: visible "from" draft + hidden "to" draft. */
     function addDualRowFromForm(payload: Record<string, unknown>) {
         const items = payload._items as Record<string, unknown>[];
-        if (!items || items.length < 2) { addRowFromForm(payload); return; }
+        if (!items || items.length < 2) {
+            addRowFromForm(payload);
+            return;
+        }
         const linkUuid = (items[0].link_uuid as string) ?? generateUUID();
 
         // "From" side — visible row
@@ -1346,7 +1383,10 @@
     /** Patch a paired draft row: update both visible and hidden partner. */
     function patchDualRowFromForm(tempId: string, payload: Record<string, unknown>) {
         const items = payload._items as Record<string, unknown>[];
-        if (!items || items.length < 2) { patchRowFromForm(tempId, payload); return; }
+        if (!items || items.length < 2) {
+            patchRowFromForm(tempId, payload);
+            return;
+        }
         // Preserve existing link_uuid to avoid orphaning the hidden partner
         const currentDraft = drafts.find((d) => d.tempId === tempId);
         const linkUuid = currentDraft?.link_uuid ?? (items[0].link_uuid as string) ?? generateUUID();
@@ -1374,12 +1414,7 @@
         // Bug14-fix: also match by _partnerId (visible draft's partner DB id)
         // in case the link_uuid was regenerated by the FormModal.
         const visibleDraft = drafts.find((d) => d.tempId === tempId);
-        const existingPartner = drafts.find(
-            (d) => d._hidden && d.tempId !== tempId && (
-                (d.link_uuid && d.link_uuid === linkUuid) ||
-                (visibleDraft?._partnerId != null && d.id === visibleDraft._partnerId)
-            )
-        );
+        const existingPartner = drafts.find((d) => d._hidden && d.tempId !== tempId && ((d.link_uuid && d.link_uuid === linkUuid) || (visibleDraft?._partnerId != null && d.id === visibleDraft._partnerId)));
         if (existingPartner) {
             drafts = drafts.map((d) => {
                 if (d.tempId !== existingPartner.tempId) return d;
@@ -1429,11 +1464,11 @@
 
     /** Row background tint by status for immediate visual recognition. */
     function getRowClass(row: DraftRow): string {
-        if (row.status === 'delete') return 'bg-red-100/50 dark:bg-red-900/15 line-through opacity-60';
-        if (row.status === 'new') return 'bg-emerald-100/40 dark:bg-emerald-900/15';
-        if (row.status === 'edited') return 'bg-amber-100/40 dark:bg-amber-900/15';
+        if (row.status === 'delete') return 'row-deleted line-through';
+        if (row.status === 'new') return 'row-appended';
+        if (row.status === 'edited') return 'row-edited';
         // B1-13: visual indicator for paired rows
-        if (getTypeRule(row.type).requiresPair && row.partnerBrokerId != null) return 'border-l-2 border-l-indigo-400 dark:border-l-indigo-500';
+        if (getTypeRule(row.type).requiresPair && row.partnerBrokerId != null) return 'row-paired';
         return '';
     }
 
@@ -1484,7 +1519,11 @@
                 📋 {$t('transactions.bulk.title', {values: {total: visibleDrafts.length}})}
                 {#if actionCount > 0}
                     <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
-                        ({#if newCount > 0}<span class="text-emerald-600 dark:text-emerald-400">{newCount} {$t('transactions.bulk.stateNew')}</span>{/if}{#if newCount > 0 && (editedCount > 0 || deleteCount > 0)} · {/if}{#if editedCount > 0}<span class="text-amber-600 dark:text-amber-400">{editedCount} {$t('transactions.bulk.stateEdit')}</span>{/if}{#if editedCount > 0 && deleteCount > 0} · {/if}{#if deleteCount > 0}<span class="text-red-600 dark:text-red-400">{deleteCount} {$t('transactions.bulk.stateDel')}</span>{/if})
+                        ({#if newCount > 0}<span class="text-emerald-600 dark:text-emerald-400">{newCount} {$t('transactions.bulk.stateNew')}</span>{/if}{#if newCount > 0 && (editedCount > 0 || deleteCount > 0)}
+                            ·
+                        {/if}{#if editedCount > 0}<span class="text-amber-600 dark:text-amber-400">{editedCount} {$t('transactions.bulk.stateEdit')}</span>{/if}{#if editedCount > 0 && deleteCount > 0}
+                            ·
+                        {/if}{#if deleteCount > 0}<span class="text-red-600 dark:text-red-400">{deleteCount} {$t('transactions.bulk.stateDel')}</span>{/if})
                     </span>
                 {/if}
             </h2>
@@ -1496,19 +1535,15 @@
         <!-- Banners -->
         <div class="px-5 pt-3 space-y-2 shrink-0">
             {#if formError}
-                <InfoBanner variant="error" dismissible ondismiss={() => (formError = null)}>
-                    <p class="font-semibold mb-1" data-testid="tx-bulk-error">⛔ {$t('transactions.bulk.rolledBackTitle')}</p>
-                    <p>{formError}</p>
-                </InfoBanner>
+                <TransactionResultBanner variant="error" title={`⛔ ${$t('transactions.bulk.rolledBackTitle')}`} subtitle={formError} dismissible ondismiss={() => (formError = null)} testId="tx-bulk-error" />
             {:else if commitFailed && issues.length > 0}
-                <InfoBanner variant="error" dismissible ondismiss={() => (commitFailed = false)}>
-                    <p class="font-semibold mb-1" data-testid="tx-bulk-error">⛔ {$t('transactions.bulk.rolledBackTitle')}</p>
+                <TransactionResultBanner variant="error" title={`⛔ ${$t('transactions.bulk.rolledBackTitle')}`} dismissible ondismiss={() => (commitFailed = false)} testId="tx-bulk-error">
                     {#if fieldIssues.length > 0}
-                        <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.issuesHeader')}</p>
+                        <p class="font-semibold text-sm mt-1 mb-1">{$t('transactions.validate.issuesHeader')}</p>
                         <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-issues">
                             {#each fieldIssues as issue}
                                 <li>
-                                    <button type="button" class="underline hover:opacity-80" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
+                                    <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
                                         {$t('transactions.bulk.rowN', {values: {n: issue.index + 1}})}: {resolveIssueMessage(issue, $t, resolverCtx)}
                                     </button>
                                 </li>
@@ -1522,7 +1557,14 @@
                                 {@const resolvedRow = findRowForBalanceIssue(issue)}
                                 <li>
                                     {#if resolvedRow >= 0}
-                                        <button type="button" class="underline hover:opacity-80" onclick={() => { const d = drafts[resolvedRow]; if (d) tableRef?.navigateToRowId(d.tempId); }}>
+                                        <button
+                                            type="button"
+                                            class="underline hover:opacity-80 text-left"
+                                            onclick={() => {
+                                                const d = drafts[resolvedRow];
+                                                if (d) tableRef?.navigateToRowId(d.tempId);
+                                            }}
+                                        >
                                             {$t('transactions.bulk.rowN', {values: {n: resolvedRow + 1}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
                                         </button>
                                     {:else}
@@ -1532,16 +1574,15 @@
                             {/each}
                         </ul>
                     {/if}
-                </InfoBanner>
+                </TransactionResultBanner>
             {/if}
             {#if showIssuesBanner && !formError && !commitFailed}
-                <InfoBanner variant="warning" dismissible ondismiss={() => (issuesDismissed = true)}>
+                <TransactionResultBanner variant="warning" title={`⚠️ ${$t('transactions.validate.issuesHeader')}`} dismissible ondismiss={() => (issuesDismissed = true)} testId="tx-bulk-issues-header">
                     {#if fieldIssues.length > 0}
-                        <p class="font-semibold text-sm mb-1.5" data-testid="tx-bulk-issues-header">{$t('transactions.validate.issuesHeader')}</p>
                         <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-issues">
                             {#each fieldIssues as issue}
                                 <li>
-                                    <button type="button" class="underline hover:opacity-80" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
+                                    <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
                                         {$t('transactions.bulk.rowN', {values: {n: issue.index + 1}})}: {resolveIssueMessage(issue, $t, resolverCtx)}
                                     </button>
                                 </li>
@@ -1549,13 +1590,20 @@
                         </ul>
                     {/if}
                     {#if balanceIssues.length > 0}
-                        <p class="font-semibold text-sm {fieldIssues.length > 0 ? 'mt-2' : ''} mb-1.5">{$t('transactions.validate.balanceIssuesHeader')}</p>
+                        <p class="font-semibold text-sm {fieldIssues.length > 0 ? 'mt-2' : ''} mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
                         <ul class="list-disc pl-4 space-y-0.5 text-sm text-left">
                             {#each balanceIssues as issue}
                                 {@const resolvedRow = findRowForBalanceIssue(issue)}
                                 <li>
                                     {#if resolvedRow >= 0}
-                                        <button type="button" class="underline hover:opacity-80" onclick={() => { const d = drafts[resolvedRow]; if (d) tableRef?.navigateToRowId(d.tempId); }}>
+                                        <button
+                                            type="button"
+                                            class="underline hover:opacity-80 text-left"
+                                            onclick={() => {
+                                                const d = drafts[resolvedRow];
+                                                if (d) tableRef?.navigateToRowId(d.tempId);
+                                            }}
+                                        >
                                             {$t('transactions.bulk.rowN', {values: {n: resolvedRow + 1}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
                                         </button>
                                     {:else}
@@ -1565,7 +1613,7 @@
                             {/each}
                         </ul>
                     {/if}
-                </InfoBanner>
+                </TransactionResultBanner>
             {/if}
             {#if visibleDrafts.length > AUTO_VALIDATE_THRESHOLD}
                 <InfoBanner variant="info">
@@ -1588,7 +1636,13 @@
         <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 dark:border-slate-800 text-xs shrink-0">
             <!-- Left: search & add -->
             {#if txStoreCount() > 0}
-                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={openPicker} data-testid="tx-bulk-picker" title={$t('transactions.picker.searchAdd') || 'Search & add'}>
+                <button
+                    type="button"
+                    class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600"
+                    onclick={openPicker}
+                    data-testid="tx-bulk-picker"
+                    title={$t('transactions.picker.searchAdd') || 'Search & add'}
+                >
                     🔍 <span class="hidden sm:inline">{$t('transactions.picker.searchAdd') || 'Search & add'}</span>
                 </button>
             {/if}
@@ -1596,11 +1650,26 @@
             <!-- Inline selection toolbar (when rows selected in DataTable) -->
             {#if bulkTableSelectedRows.length > 0}
                 <div class="flex items-center gap-2 ml-2">
-                    <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-[11px]" onclick={() => { tableRef?.clearSelection(); bulkTableSelectedRows = []; }}>
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-1 px-2 py-1 rounded text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-[11px]"
+                        onclick={() => {
+                            tableRef?.clearSelection();
+                            bulkTableSelectedRows = [];
+                        }}
+                    >
                         <span class="font-medium">{bulkTableSelectedRows.length}</span> <span class="hidden sm:inline">{$t('common.selected') || 'selected'}</span> <span class="opacity-60 ml-0.5">×</span>
                     </button>
-                    {#if bulkTableSelectedRows.some(d => (d.status === 'edited' || d.status === 'delete') && d.original)}
-                        <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 text-[11px]" onclick={() => { for (const r of bulkTableSelectedRows) resetRow(r.tempId); }} title={$t('transactions.bulk.resetSelected') || 'Reset selected'} data-testid="tx-bulk-reset-selected">
+                    {#if bulkTableSelectedRows.some((d) => (d.status === 'edited' || d.status === 'delete') && d.original)}
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1 px-2 py-1 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 text-[11px]"
+                            onclick={() => {
+                                for (const r of bulkTableSelectedRows) resetRow(r.tempId);
+                            }}
+                            title={$t('transactions.bulk.resetSelected') || 'Reset selected'}
+                            data-testid="tx-bulk-reset-selected"
+                        >
                             <Undo2 size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.resetSelected') || 'Reset'}</span>
                         </button>
                     {/if}
@@ -1615,7 +1684,7 @@
                 <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row" title={$t('transactions.bulk.addRow') || 'Add row'}>
                     <Plus size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.addRow') || 'Add row'}</span>
                 </button>
-                {#if visibleDrafts.some(d => (d.status === 'edited' || d.status === 'delete') && d.original)}
+                {#if visibleDrafts.some((d) => (d.status === 'edited' || d.status === 'delete') && d.original)}
                     <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all" title={$t('transactions.bulk.resetAll')}>
                         <Undo2 size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.resetAll')}</span>
                     </button>
@@ -1659,12 +1728,15 @@
                     <span class="text-[11px] text-gray-500 dark:text-gray-400" data-testid="tx-bulk-validating">{$t('transactions.validate.validating')}</span>
                 {:else if isFreshlyValid && !formError && !commitFailed}
                     <span class="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1" data-testid="tx-bulk-valid">
-                        <Check size={14} /> {$t('transactions.validate.ok')}
+                        <Check size={14} />
+                        {$t('transactions.validate.ok')}
                     </span>
                 {/if}
             </div>
             <div class="flex items-center gap-2">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 inline-flex items-center gap-1.5" onclick={requestClose} data-testid="tx-bulk-cancel" title={$t('common.cancel')}><X size={15} /> <span class="hidden sm:inline">{$t('common.cancel')}</span></button>
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 inline-flex items-center gap-1.5" onclick={requestClose} data-testid="tx-bulk-cancel" title={$t('common.cancel')}
+                    ><X size={15} /> <span class="hidden sm:inline">{$t('common.cancel')}</span></button
+                >
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5" disabled={commitDisabled} onclick={commit} data-testid="tx-bulk-commit" title={commitLabel}>
                     <Save size={15} /> <span class="hidden sm:inline">{commitLabel}</span>
                 </button>
@@ -1695,7 +1767,10 @@
     cancelText={$t('common.cancel')}
     warning
     onConfirm={confirmRestoreAndEdit}
-    onCancel={() => { confirmEditDeleteOpen = false; confirmEditDeleteRow = null; }}
+    onCancel={() => {
+        confirmEditDeleteOpen = false;
+        confirmEditDeleteRow = null;
+    }}
     zIndex={70}
 />
 
@@ -1722,10 +1797,4 @@
 />
 
 <!-- Plan B Step 9: PickerModal for adding existing DB transactions -->
-<TransactionPickerModal
-    open={pickerOpen}
-    excludeIds={pickerExcludeIds}
-    onAdd={handlePickerAdd}
-    onClose={() => (pickerOpen = false)}
-/>
-
+<TransactionPickerModal open={pickerOpen} excludeIds={pickerExcludeIds} onAdd={handlePickerAdd} onClose={() => (pickerOpen = false)} />

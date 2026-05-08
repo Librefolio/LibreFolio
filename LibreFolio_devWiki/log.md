@@ -4,6 +4,18 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-05-29] ingest | Phase 07 Part 4 Round 6 Plan C — txStore Refactor
+Ingested from `RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md`.
+**Created**: [[sources/phase07-part4-round6-planc-txstore-refactor]], [[concepts/txstore-pattern]], [[decisions/txstore-single-source-of-truth]].
+**Updated**: [[features/F-048]] (txStore as single source of truth, WorkspaceIntent pattern, PendingOp model, interface deduplication in types.ts, -30% LOC).
+Key insight: 5 recurring bug categories (17+ instances) all rooted in 3-copy prop cascade; eliminated structurally by centralized store. Piano D (Split/Promote) now trivial.
+
+## [2026-05-29] ingest | Phase 07 Part 4 Round 6 Plan B23 Appendix 1 — UI Polish
+Ingested from `RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanB23_Appendix1_UIPolish.prompt.md`.
+**Created**: [[sources/phase07-part4-round6-planb23-appendix1-ui-polish]].
+**Updated**: [[features/F-048]] (structured delete toast, responsive footer buttons, row background tints, viewer-only guard on bulk actions, conditional "Reset all", "Reset selected" toolbar button).
+Note: Execution order in master plan updated — old Piano C (Split/Promote) renamed Piano D; txStore refactor inserted as Piano C prerequisite.
+
 ## [2026-05-27] ingest | Phase 07 Part 4 Round 6 Plan B23 — Bulk Delete via BulkModal + Mode Removal
 Ingested Plan B23 + 3 source files (TransactionBulkModal.svelte, TransactionDeleteModal.svelte, +page.svelte transactions).
 **Created**: [[sources/phase07-part4-round6-planb23-bulk-delete]], [[decisions/bulkmodal-mode-removal]].
