@@ -483,7 +483,14 @@ class TestMultiUserIsolation:
 
     @pytest.mark.asyncio
     async def test_user_cannot_see_others_brokers(self, test_server):
-        """ACCESS-043: User A cannot see broker of User B."""
+        """ACCESS-043: User A cannot see broker of User B.
+
+        Note: GET /brokers uses LEFT JOIN and returns ALL brokers, but with
+        user_role=null for brokers the user has no access to. This allows the
+        frontend to render broker names in paired-tx placeholders. The isolation
+        guarantee is that user_role is null (no operational access), not that
+        the broker is hidden from the list.
+        """
         print_section("ACCESS-043: User isolation")
 
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
@@ -492,10 +499,15 @@ class TestMultiUserIsolation:
 
             await create_user_and_login(client2)
 
+            # GET /brokers returns all brokers (LEFT JOIN), but user_role must be null
+            # for brokers the user has no access to.
             list_resp = await client2.get(f"{API_BASE}/brokers", timeout=TIMEOUT)
-            broker_ids = [b["id"] for b in list_resp.json()]
-            assert broker_id not in broker_ids
+            brokers_data = list_resp.json()
+            other_broker = next((b for b in brokers_data if b["id"] == broker_id), None)
+            assert other_broker is not None, "LEFT JOIN should expose all brokers"
+            assert other_broker.get("user_role") is None, "user_role must be null for inaccessible broker"
 
+            # Direct access by ID must still return 404 (strict isolation)
             direct_resp = await client2.get(
                 f"{API_BASE}/brokers/{broker_id}",
                 timeout=TIMEOUT,

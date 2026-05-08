@@ -22,10 +22,17 @@
     import TransactionFormModal from '$lib/components/transactions/TransactionFormModal.svelte';
     import TransactionBulkModal from '$lib/components/transactions/TransactionBulkModal.svelte';
     import TransactionDeleteModal from '$lib/components/transactions/TransactionDeleteModal.svelte';
-    import BulkDeleteLinkedPairModal, {type ProblemPair} from '$lib/components/transactions/BulkDeleteLinkedPairModal.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import {getBrokerInfo, getPairedAccessLevel, canEditBroker, canEditPaired} from '$lib/stores/brokerStore';
     import {getTypeRule} from '$lib/stores/transactionTypeStore';
+    import {getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
+    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
+    import {getRoleSvgHtml} from '$lib/utils/brokerRoleHelpers';
+    import {getBrokerRole} from '$lib/stores/brokerStore';
+    import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
 
     // =========================================================================
     // Types (local, derived from generated.ts shapes)
@@ -423,12 +430,8 @@
     });
 
     function onAddTransaction() {
-        // Bugfix-5 §A4: revert to BulkModal as the entrypoint for `+ Add`.
-        // BulkModal seeds 1 empty draft when `initialRows=[]`, and its
-        // toolbar `+ Add row` opens a nested FormModal (single-row UX) that
-        // pushes its draft back to the grid without committing — best of
-        // both worlds (structured single-row form + multi-row batch commit).
-        bulkMode = 'create-many';
+        // BulkModal with empty initialRows → auto-opens nested FormModal for
+        // single-row create UX within the batch commit workflow.
         bulkInitial = [];
         bulkOpen = true;
     }
@@ -448,9 +451,8 @@
     let formMode = $state<'create' | 'edit' | 'duplicate' | 'view'>('create');
     let formInitial = $state<TXReadItem | null>(null);
 
-    // Bulk modal (create-many / edit-many on DataTable).
+    // Bulk modal (unified batch editor on DataTable).
     let bulkOpen = $state(false);
-    let bulkMode = $state<'create-many' | 'edit-many'>('create-many');
     let bulkInitial = $state<TXReadItem[]>([]);
     /** When set, BulkModal auto-opens FormModal on the first row after mounting. */
     let bulkAutoOpenForm = $state<'create' | 'edit' | null>(null);
@@ -466,7 +468,7 @@
 
     function onEditBulk() {
         if (selectedRows.length === 0) return;
-        bulkMode = 'edit-many';
+        bulkInitialStatus = undefined;
         bulkInitial = [...selectedRows];
         // C2-fix: when editing a single row via toolbar, auto-open FormModal
         // so the user immediately gets the structured single-row edit UX.
@@ -483,7 +485,7 @@
     }
     function onCloneBulk() {
         if (selectedRows.length === 0) return;
-        bulkMode = 'create-many';
+        bulkInitialStatus = undefined;
         const today = new Date().toISOString().slice(0, 10);
         bulkInitial = selectedRows.map((r) => ({
             ...r,
@@ -503,104 +505,51 @@
     }
 
     // =========================================================================
-    // Bulk delete (Step 8)
+    // Bulk delete → reuse BulkModal with initialStatus: 'delete' (B23 Step 1-2)
     // =========================================================================
 
-    let bulkDeleteOpen = $state(false);
-    let bulkDeleteClean = $state<TXReadItem[]>([]);
-    let bulkDeleteProblems = $state<ProblemPair[]>([]);
-    /** Step 22 (F5): lightweight delete confirm for standalone rows. */
-    let simpleDeleteOpen = $state(false);
-    let simpleDeleteRows = $state<TXReadItem[]>([]);
-    let simpleDeleting = $state(false);
+    let bulkInitialStatus = $state<'delete' | undefined>(undefined);
 
     async function onBulkDelete() {
         if (selectedRows.length === 0) return;
         const selectedIds = new Set(selectedRows.map((r) => r.id));
-        const clean: TXReadItem[] = [];
-        const problems: ProblemPair[] = [];
-        const missingPartnerIds = new Set<number>();
+        const allRows: TXReadItem[] = [...selectedRows];
 
-        // Index of in-memory rows for partner resolution.
+        // Auto-include partners of paired rows not in selection.
         const inMemory = new Map<number, TXReadItem>();
         for (const r of mainRows) inMemory.set(r.id, r);
         for (const r of partnerRows) inMemory.set(r.id, r);
 
+        const missingPartnerIds = new Set<number>();
         for (const r of selectedRows) {
-            const partnerId = r.related_transaction_id;
-            if (partnerId == null) {
-                clean.push(r);
-                continue;
-            }
-            if (selectedIds.has(partnerId)) {
-                // Both halves are selected — no extender prompt needed; treat as clean.
-                clean.push(r);
-                continue;
-            }
-            const cached = inMemory.get(partnerId);
+            const pid = r.related_transaction_id;
+            if (pid == null || selectedIds.has(pid)) continue;
+            const cached = inMemory.get(pid);
             if (cached) {
-                problems.push({selected: r, partner: cached});
+                allRows.push(cached);
+                selectedIds.add(pid);
             } else {
-                missingPartnerIds.add(partnerId);
+                missingPartnerIds.add(pid);
             }
         }
 
-        // Resolve missing partners with a single batched fetch.
         if (missingPartnerIds.size > 0) {
             try {
                 const fetched = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {ids: [...missingPartnerIds]}} as never)) as TXReadItem[];
-                const byId = new Map(fetched.map((r) => [r.id, r]));
-                for (const r of selectedRows) {
-                    const partnerId = r.related_transaction_id;
-                    if (partnerId == null || selectedIds.has(partnerId)) continue;
-                    if (inMemory.has(partnerId)) continue;
-                    const partner = byId.get(partnerId);
-                    if (partner) problems.push({selected: r, partner});
-                    else clean.push(r); // Server hides the partner — let backend reject if needed.
+                for (const r of fetched) {
+                    if (!selectedIds.has(r.id)) {
+                        allRows.push(r);
+                        selectedIds.add(r.id);
+                    }
                 }
             } catch (e) {
                 console.warn('Failed to resolve partner IDs for bulk delete:', e);
             }
         }
 
-        bulkDeleteClean = clean;
-        bulkDeleteProblems = problems;
-
-        // Step 22 (F5): if all rows are standalone (no partner conflicts),
-        // use a lightweight ConfirmModal instead of BulkDeleteLinkedPairModal.
-        if (problems.length === 0 && clean.length > 0) {
-            simpleDeleteRows = clean;
-            simpleDeleteOpen = true;
-            return;
-        }
-
-        bulkDeleteOpen = true;
-    }
-
-    function handleBulkDeleteCommitted() {
-        bulkDeleteOpen = false;
-        selectedRows = [];
-        void reload({soft: true});
-    }
-
-    /** Step 22 (F5): simple delete for standalone rows — direct commit. */
-    async function confirmSimpleDelete() {
-        if (simpleDeleting || simpleDeleteRows.length === 0) return;
-        simpleDeleting = true;
-        try {
-            const ids = simpleDeleteRows.map((r) => r.id);
-            const resp = await zodiosApi.commit_transactions_api_v1_transactions_commit_post({deletes: ids} as never) as {committed?: boolean};
-            if (resp?.committed) {
-                simpleDeleteOpen = false;
-                simpleDeleteRows = [];
-                selectedRows = [];
-                void reload({soft: true});
-            }
-        } catch (e) {
-            console.error('[SimpleDelete] failed:', e);
-        } finally {
-            simpleDeleting = false;
-        }
+        bulkInitial = allRows;
+        bulkInitialStatus = 'delete';
+        bulkOpen = true;
     }
 
     // =========================================================================
@@ -691,7 +640,6 @@
 
 
     function handleEditRow(row: TXReadItem) {
-        bulkMode = 'edit-many';
         // C2-fix: if the row has a linked partner, include both halves so
         // the BulkModal can merge them and the FormModal opens pre-populated.
         if (row.related_transaction_id != null) {
@@ -707,7 +655,6 @@
 
     function handleCloneRow(row: TXReadItem) {
         const today = new Date().toISOString().slice(0, 10);
-        bulkMode = 'create-many';
         const clone: TXReadItem = {...row, id: 0, date: today, related_transaction_id: null};
         // Bug6-fix: reset quantity when the type requires qty=0 (e.g. INTEREST)
         const rule = getTypeRule(row.type);
@@ -743,6 +690,10 @@
     let deleteModalPartner = $state<TXReadItem | null>(null);
     let deleteModalPartnerInaccessible = $state(false);
     let deleteModalPartnerBrokerName = $state('');
+    let deleteModalErrors = $state<string[]>([]);
+    let deleteModalErrorVariant = $state<'warning' | 'error'>('error');
+    let deleteModalValidating = $state(false);
+    let deleteModalValidated = $state(false);
 
     function handleDeleteRow(row: TXReadItem) {
         const partnerId = row.related_transaction_id;
@@ -752,6 +703,7 @@
             deleteModalPartner = null;
             deleteModalPartnerInaccessible = false;
             deleteModalPartnerBrokerName = '';
+            deleteModalErrors = [];
             deleteModalOpen = true;
             return;
         }
@@ -787,23 +739,114 @@
         }
     }
 
+    /** Build resolver context for resolveIssueMessage (same shape as BulkModal). */
+    function buildResolverCtx(): ResolverContext {
+        const brkrs = getAllBrokers();
+        return {
+            brokers: brkrs as unknown as Array<{id: number; name: string}>,
+            assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
+            getBrokerIconUrl: (brokerId: number) => getBrokerIconUrlById(brokerId, brkrs as any[]),
+        };
+    }
+
+    /** Build an HTML-rich broker label: icon + name + role SVG. */
+    function brokerHtml(brokerId: number): string {
+        const info = getBrokerInfo(brokerId);
+        const name = info?.name ?? `#${brokerId}`;
+        const brkrs = getAllBrokers();
+        const iconUrl = getBrokerIconUrlById(brokerId, brkrs as any[]);
+        const iconTag = iconUrl
+            ? `<img src="${iconUrl}" alt="" width="14" height="14" style="display:inline;vertical-align:middle;margin-right:2px;border-radius:2px" onerror="this.style.display='none'">`
+            : '';
+        const role = getBrokerRole(brokerId);
+        const roleSvg = role ? getRoleSvgHtml(role) : '';
+        return `${iconTag}<strong>${name}</strong>${roleSvg ? ' ' + roleSvg : ''}`;
+    }
+
+    /** Build an HTML-rich type label: type icon + translated name. */
+    function typeHtml(type: string): string {
+        const iconUrl = getTransactionTypeIconUrl(type);
+        const name = $_(`transactions.types.${type}`) || type;
+        const iconTag = iconUrl
+            ? `<img src="${iconUrl}" alt="" width="14" height="14" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`
+            : '';
+        return `${iconTag}${name}`;
+    }
+
     async function confirmDeleteModal() {
         if (!deleteModalTx) return;
+        deleteModalErrors = [];
         try {
             const ids = [deleteModalTx.id];
             if (deleteModalPartner && !deleteModalPartnerInaccessible) {
                 ids.push(deleteModalPartner.id);
             }
-            const resp = (await zodiosApi.commit_transactions_api_v1_transactions_commit_post({deletes: ids} as never)) as {committed?: boolean};
+            const resp = (await zodiosApi.commit_transactions_api_v1_transactions_commit_post({deletes: ids} as never)) as {committed?: boolean; issues?: Array<{error: string; code?: string; params?: Record<string, any>}>};
             if (resp?.committed) {
+                // Build rich HTML toast from cached TX data
+                const tx = deleteModalTx;
+                const typeLabel = typeHtml(tx.type);
+                const assetName = tx.asset_id ? (getAssetInfo(tx.asset_id)?.display_name ?? '') : '';
+                const dateStr = tx.date;
+                const brokerLabel = brokerHtml(tx.broker_id);
+                if (deleteModalPartner) {
+                    const partnerBrokerLabel = brokerHtml(deleteModalPartner.broker_id);
+                    toasts.success(
+                        `<div style="display:flex;flex-direction:column;gap:2px">`
+                        + `<span>${typeLabel} ${assetName}</span>`
+                        + `<span style="font-size:0.8em;opacity:0.85">${brokerLabel} → ${partnerBrokerLabel}</span>`
+                        + `<span style="font-size:0.75em;opacity:0.7">${dateStr}</span>`
+                        + `</div>`,
+                    );
+                } else {
+                    toasts.success(
+                        `<div style="display:flex;flex-direction:column;gap:2px">`
+                        + `<span>${typeLabel} ${assetName}</span>`
+                        + `<span style="font-size:0.8em;opacity:0.85">${brokerLabel}</span>`
+                        + `<span style="font-size:0.75em;opacity:0.7">${dateStr}</span>`
+                        + `</div>`,
+                    );
+                }
                 deleteModalOpen = false;
                 deleteModalTx = null;
                 deleteModalPartner = null;
                 selectedRows = [];
                 void reload({soft: true});
+            } else {
+                // committed: false — resolve errors with resolveIssueMessage
+                const ctx = buildResolverCtx();
+                deleteModalErrors = (resp?.issues ?? []).map((i) => resolveIssueMessage(i, $_, ctx));
+                deleteModalErrorVariant = 'error';
             }
         } catch (e) {
             console.error('[DeleteModal] failed:', e);
+            deleteModalErrors = [e instanceof Error ? e.message : String(e)];
+            deleteModalErrorVariant = 'error';
+        }
+    }
+
+    async function validateDeleteModal() {
+        if (!deleteModalTx) return;
+        deleteModalValidating = true;
+        deleteModalValidated = false;
+        deleteModalErrors = [];
+        try {
+            const ids = [deleteModalTx.id];
+            if (deleteModalPartner && !deleteModalPartnerInaccessible) {
+                ids.push(deleteModalPartner.id);
+            }
+            const resp = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post({deletes: ids} as never)) as {committed?: boolean; issues?: Array<{error: string; code?: string; params?: Record<string, any>}>};
+            if (resp?.committed !== false && (!resp?.issues || resp.issues.length === 0)) {
+                deleteModalValidated = true;
+            } else {
+                const ctx = buildResolverCtx();
+                deleteModalErrors = (resp?.issues ?? []).map((i) => resolveIssueMessage(i, $_, ctx));
+                deleteModalErrorVariant = 'warning';
+            }
+        } catch (e) {
+            deleteModalErrors = [e instanceof Error ? e.message : String(e)];
+        } finally {
+            deleteModalValidating = false;
         }
     }
 
@@ -922,27 +965,20 @@
 </div>
 
 <TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} {availableTags} canEdit={formCanEdit} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} onSwitchToEdit={() => { formOpen = false; if (formInitial) handleEditRow(formInitial); }} />
-<TransactionBulkModal open={bulkOpen} mode={bulkMode} initialRows={bulkInitial} {availableTags} autoOpenForm={bulkAutoOpenForm} allMainRows={mainRows} allPartnerRows={partnerRows} onClose={() => { bulkOpen = false; bulkAutoOpenForm = null; }} onCommitted={handleBulkCommitted} />
+<TransactionBulkModal open={bulkOpen} initialRows={bulkInitial} initialStatus={bulkInitialStatus} {availableTags} autoOpenForm={bulkAutoOpenForm} allMainRows={mainRows} allPartnerRows={partnerRows} onClose={() => { bulkOpen = false; bulkAutoOpenForm = null; bulkInitialStatus = undefined; }} onCommitted={handleBulkCommitted} />
 <TransactionDeleteModal
     open={deleteModalOpen}
     transaction={deleteModalTx}
     partner={deleteModalPartner}
     partnerInaccessible={deleteModalPartnerInaccessible}
     partnerBrokerName={deleteModalPartnerBrokerName}
+    errors={deleteModalErrors}
+    errorVariant={deleteModalErrorVariant}
+    validating={deleteModalValidating}
+    validated={deleteModalValidated}
     onConfirm={confirmDeleteModal}
-    onCancel={() => { deleteModalOpen = false; deleteModalTx = null; deleteModalPartner = null; }}
-/>
-<BulkDeleteLinkedPairModal open={bulkDeleteOpen} cleanRows={bulkDeleteClean} problemRows={bulkDeleteProblems} onClose={() => (bulkDeleteOpen = false)} onCommitted={handleBulkDeleteCommitted} />
-<!-- Step 22 (F5): lightweight ConfirmModal for standalone deletes -->
-<ConfirmModal
-    open={simpleDeleteOpen}
-    title={`🗑️ ${$_('transactions.actions.delete') || 'Delete'}`}
-    message={$_('transactions.bulkDelete.confirmSimple', {values: {n: simpleDeleteRows.length}}) || `Delete ${simpleDeleteRows.length} transaction(s)?`}
-    confirmText={simpleDeleting ? ($_('common.deleting') || 'Deleting...') : (`🗑️ ${$_('common.delete') || 'Delete'}`)}
-    cancelText={$_('common.cancel')}
-    onConfirm={confirmSimpleDelete}
-    onCancel={() => { simpleDeleteOpen = false; simpleDeleteRows = []; }}
-    danger={true}
+    onValidate={validateDeleteModal}
+    onCancel={() => { deleteModalOpen = false; deleteModalTx = null; deleteModalPartner = null; deleteModalErrors = []; deleteModalValidated = false; deleteModalErrorVariant = 'error'; }}
 />
 <ConfirmModal
     open={promoteConfirmOpen}

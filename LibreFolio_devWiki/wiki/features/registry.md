@@ -112,7 +112,7 @@
 |------|-------|-------|--------|--------|
 | [[F-046]] | Transaction Model & Unified Batch API (validate + commit) | fullstack | `implemented` | [`dev/arch/database/brokers_transactions.md`](developer/architecture/database/brokers_transactions.md) |
 | [[F-047]] | Transaction List Page (DataTable + filters + dual-form modals) | frontend | `implemented` | — |
-| [[F-048]] | Transaction Modals (Form / Bulk / Promote Wizard + server-driven type rules) | frontend | `in-progress` | — |
+| [[F-048]] | Transaction Modals (Form / Bulk / Delete / Promote Wizard — mode-less, broker-access-gated, context menu) | frontend | `in-progress` | — |
 | [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | `in-progress` | — |
 | [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | `planned` | — |
 | [[F-051]] | Transaction ↔ AssetEvent Link | backend | `implemented` | — |

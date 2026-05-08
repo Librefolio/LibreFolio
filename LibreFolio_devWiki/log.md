@@ -4,6 +4,18 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-05-27] ingest | Phase 07 Part 4 Round 6 Plan B23 — Bulk Delete via BulkModal + Mode Removal
+Ingested Plan B23 + 3 source files (TransactionBulkModal.svelte, TransactionDeleteModal.svelte, +page.svelte transactions).
+**Created**: [[sources/phase07-part4-round6-planb23-bulk-delete]], [[decisions/bulkmodal-mode-removal]].
+**Updated**: [[features/F-048]] (mode-less architecture, delete flow, enriched DeleteModal, PickerModal guard),
+[[features/F-047]] (BulkDeleteLinkedPairModal removed, bulkMode state removed),
+[[connections/transactions-connections]] (Round 6 status), [[domains/transactions]],
+[[features/registry]] (F-048 title), index.md.
+Key changes: (1) BulkDeleteLinkedPairModal eliminated — bulk delete now via BulkModal with `initialStatus:'delete'`;
+(2) `mode` prop removed from BulkModal — now mode-less, each row infers create/edit from `tx.id > 0`;
+(3) TransactionDeleteModal enriched: 3 layouts, validate-now, error banners with resolveIssueMessage, success toast with icons;
+(4) PickerModal guard for non-editable rows; (5) Confirm edit on deleted row.
+
 ## [2026-05-27] query | AssetMatchingWizard / asset search / Phase 6 Step 5 status
 Synthesized answer from: F-028, F-049, F-012, domains/assets, workflows/brim-import-flow, workflows/asset-onboarding-flow, connections/assets-connections, sources/phase06-step3-rounds, phase-06-assets.md plan.
 **Key finding**: AssetMatchingWizard.svelte was never built — Phase 6 Step 5 is still ⏳. The component exists only in plans and wiki references but has zero source files in the codebase. AssetSearchAutocomplete.svelte (F-028) exists and works for asset creation, but the 3-step matching wizard (DB search → provider search → manual create) for BRIM import was interrupted before Phase 07 Part 4 bugfix rounds.
@@ -690,3 +702,52 @@ Batch ingest of 5 Phase 7 Part 4 plan files covering the transaction modal syste
 **Key problems surfaced**:
 - [[problems/pydantic-422-preemption]] — new (resolved by unified pipeline)
 - [[problems/browser-autofill-numeric-fields]] — already existed
+
+## [2026-05-28] ingest | Phase 07 Part 4 Rounds 5-6 (8 plan files — Bugfix 1-3 + Round 6 Plans A/B/B1)
+
+Batch ingest of 8 Phase 7 Part 4 plan files covering Round 5 Bugfix 1-3 and Round 6 Plans A/B/B1. Git hash: `0351d65f`.
+
+**Source files ingested**:
+- `plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md` (re-anchored: R6-B expansion)
+- `plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md`
+- `plan-phase07-transaction-Part4_Round5_Bugfix2_PostTestWalkOverhaul.prompt.md`
+- `plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md`
+- `plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`
+- `plan-phase07-transaction-Part4_Round6_PlanA_ContextMenuBugfix.prompt.md`
+- `plan-phase07-transaction-Part4_Round6_PlanB_DeletePickerAccess.prompt.md`
+- `plan-phase07-transaction-Part4_Round6_PlanB1_BugfixRound1.prompt.md`
+
+**Created** (6 source pages):
+- [[sources/phase07-part4-round5-bugfix1-dual-form]] — CASH_TRANSFER, split/promote architecture, paired rendering
+- [[sources/phase07-part4-round5-bugfix2-testwalk-overhaul]] — BulkModal readonly, "✓ Applica", dual dates
+- [[sources/phase07-part4-round5-bugfix3-testwalk-fixes]] — PATCHABLE_FIELDS, type swap, TagInput, SafeDecimal
+- [[sources/phase07-part4-round6-context-menu-delete]] — Round 6 master plan: ContextMenu, delete, picker
+- [[sources/phase07-part4-round6-plana-context-menu-bugfix]] — ContextMenu + R7-C1/H1 fix + txPayloadHelpers.ts
+- [[sources/phase07-part4-round6-planb-delete-picker-access]] — Broker access, DeleteModal 3 layouts, PickerModal, 48+ E2E tests
+
+**Created** (3 decisions):
+- [[decisions/cash-transfer-split-promote]] — CASH_TRANSFER first-class enum + split/promote immediate endpoints
+- [[decisions/context-menu-all-tables]] — ContextMenu default ON on all DataTables
+- [[decisions/broker-access-min-paired]] — Paired access = min(role_A, role_B) + 3-layout delete + partner_broker_id
+
+**Created** (1 problem):
+- [[problems/dual-form-collect-duplication]] — FormModal/BulkModal duplicated collect logic → txPayloadHelpers.ts
+
+**Updated**:
+- [[sources/phase07-part4-round5-server-type-rules]] — re-anchored at `0351d65f` (R6-B expansion)
+- [[features/F-047]] — ContextMenu, asset clickable, description column, URL filter sync, broker access, soft reload, flat mode adjacency
+- [[features/F-048]] — CASH_TRANSFER, split/promote architecture, PATCHABLE_FIELDS, type swap, TagInput, txPayloadHelpers, broker access gating, 3-layout DeleteModal, PickerModal, 48+ E2E tests, round 5-6 status history
+- [[features/registry]] — F-048 title updated
+- [[connections/transactions-connections]] — header updated with Round 5-6 achievements
+- [[domains/transactions]] — F-048 feature cluster row updated
+- `index.md` — 6 source pages, 3 decisions, 1 problem added
+- `raw/ingest-registry.md` — 8 new entries at `0351d65f`
+
+**Key architectural decisions surfaced**:
+1. **CASH_TRANSFER** first-class enum (replaces VALID_MIXED_PAIRS hack); split/promote as immediate dedicated endpoints (schemas ready, backend endpoints in Plan C)
+2. **ContextMenu** default ON on all DataTables (right-click + mobile long-press, zero consumer changes)
+3. **Paired access = min(role_A, role_B)** — 3-layout TransactionDeleteModal (standalone/paired-full/paired-blocked); GET /brokers LEFT JOIN returning all brokers with user_role=null; partner_broker_id in TXReadItem
+4. **txPayloadHelpers.ts** — shared utility eliminating 3 cascading bugs from FormModal/BulkModal logic duplication
+
+**Pages created**: 6 sources + 3 decisions + 1 problem = 10 new wiki pages.
+**Pages updated**: 7 existing pages + index.md + ingest-registry.md.

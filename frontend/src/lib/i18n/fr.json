@@ -582,6 +582,9 @@
       "deleteSelected": "Supprimer sélectionnées",
       "searchAdd": "Chercher et ajouter",
       "cloneRow": "Cloner la ligne",
+      "confirmEditDelete": "Transaction marquée pour suppression",
+      "confirmEditDeleteMessage": "Cette transaction est marquée pour suppression. Voulez-vous la restaurer et la modifier ?",
+      "restoreAndEdit": "Restaurer et modifier",
       "stateNew": "nouveau",
       "stateEdit": "modif.",
       "stateDel": "suppr."
@@ -666,8 +669,8 @@
       "fxConversionQtyZero": "La conversion FX doit avoir une quantité = 0",
       "eventRequiresAsset": "Le lien vers un événement nécessite un actif sélectionné",
       "eventTypeIncompatible": "{type} ne peut pas être lié à un événement d'actif (uniquement {allowed})",
-      "balanceCashNegative": "Le solde <strong>{currency}</strong> devient négatif (<strong>{formattedBalance}</strong>) le {date} chez <strong>{brokerName}</strong>",
-      "balanceAssetNegative": "Les positions de <strong>{assetName}</strong> deviennent négatives (<strong>{balance}</strong>) le {date} chez <strong>{brokerName}</strong>",
+      "balanceCashNegative": "L'enregistrement ferait passer le solde <strong>{currency}</strong> en négatif (<strong>{formattedBalance}</strong>) le {date} chez <strong>{brokerName}</strong>",
+      "balanceAssetNegative": "L'enregistrement ferait passer les positions de <strong>{assetName}</strong> en négatif (<strong>{balance}</strong>) le {date} chez <strong>{brokerName}</strong>",
       "accessDenied": "Accès refusé : rôle EDITOR requis pour {brokerName}",
       "txNotFound": "Transaction {id} introuvable",
       "indexAssetForbidden": "Impossible de créer des transactions pour les actifs de type INDEX",
@@ -723,12 +726,22 @@
       "blockedMessage": "Suppression impossible : accès Éditeur requis sur les deux courtiers pour supprimer une paire liée.",
       "contactOwner": "Contactez le propriétaire de",
       "forAccess": "pour l'accès.",
-      "deleteBoth": "Supprimer les deux"
+      "deleteBoth": "Supprimer les deux",
+      "toastSuccess": "Supprimée : {type} {asset} sur {broker}",
+      "toastPairedSuccess": "Paire supprimée : {type} {asset} {brokerFrom} → {brokerTo}",
+      "toastError": "Échec de la suppression",
+      "validateNow": "Valider maintenant",
+      "canBeDeleted": "Cette transaction peut être supprimée en toute sécurité.",
+      "validateWarningTitle": "Problèmes de validation",
+      "deleteAbortedTitle": "Suppression annulée",
+      "deleteAbortedDetail": "L'opération a été annulée car elle violerait les règles de solde :"
     },
     "picker": {
       "title": "Sélectionner des transactions à ajouter",
       "pairedNote": "La sélection d'une transaction liée ajoute automatiquement son partenaire.",
-      "addN": "Ajouter {n} sélectionnée(s)",
+      "disabledTooltip": "Accès Éditeur requis sur le courtier {broker}",
+      "requiredRole": "requis",
+      "addN": "Ajouter {n}",
       "searchAdd": "Chercher et ajouter"
     },
     "access": {
