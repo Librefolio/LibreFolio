@@ -189,7 +189,8 @@
             cost_basis_override: tx.cost_basis_override ?? '',
             // Regenerate link_uuid for pairs being cloned (create-many) — though
             // pair types are not editable here, BRIM/duplicate flows may seed them.
-            link_uuid: isCreate && tx.related_transaction_id != null ? generateUUID() : null,
+            // If resolveInitialRows already set a shared link_uuid (clone paired), preserve it.
+            link_uuid: (tx as any).link_uuid ?? (isCreate && tx.related_transaction_id != null ? generateUUID() : null),
             created_at: tx.created_at,
             updated_at: tx.updated_at,
         };

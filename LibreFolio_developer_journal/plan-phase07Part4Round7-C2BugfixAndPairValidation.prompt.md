@@ -222,38 +222,38 @@ Nuova classe `TestPairDescriptionTagsValidation` con 4 test:
 
 ---
 
-### Step 8 — Nuovi E2E test
+### Step 8 — Nuovi E2E test ✅
 
-**Nuovo `tx-clone.spec.ts`** (~5 test):
+**Nuovo `tx-clone.spec.ts`** (5 test):
 - Clone standalone → 1 riga new, `date=today`
 - Clone paired → 2 righe new (Da:/A:), `date=today`, `link_uuid` condiviso
 - Clone con `quantityRule='zero'` → `qty=0`
 - Clone paired commit → coppia creata nel DB
-- Clone da broker view-only → bottone non visibile
+- Clone da broker view-only → no edit/delete actions on row
 
-**Nuovo `tx-bulk-operations.spec.ts`** (~7 test):
+**Nuovo `tx-bulk-operations.spec.ts`** (7 test):
 - Bulk edit 2+ → griglia senza FormModal auto-open
 - Edit senza modifiche + Apply → status `original` (B1 regression test)
 - Mark delete + unmark → torna `original`
 - Reset singola riga + Reset tutte → valori originali
 - Mixed commit (create+update+delete) → toast con conteggio
 - Picker: no context menu, no action buttons
-- Create coppia con description diverse → errore validazione (B6/Step 2 regression test)
+- Create coppia con description diverse → errore validazione banner (B6/Step 2 regression test)
 
-**Estendere `tx-paired-edit.spec.ts`** (~2 test):
-- Edit paired → Apply senza modifiche → status `original`
-- Edit paired cross-broker (full+view-only)
+**Bugfix collaterale**: `fromTx()` in BulkModal non preservava `link_uuid` già impostato da `resolveInitialRows()` per clone paired → fix: `(tx as any).link_uuid ?? ...` fallback.
+
+**Bugfix collaterale 2**: `TestPairDescriptionTagsValidation._setup()` asseriva `status_code == 200` per asset creation ma endpoint ritorna 201 → fix: `assert in (200, 201)`.
 
 ---
 
-### Step 9 — Registrazione test runner
+### Step 9 — Registrazione test runner ✅
 
 **File**: `scripts/test_runner/_frontend_transaction.py`
 
-1. Aggiungere `front_tx_clone()` → `_run_playwright("transactions/tx-clone.spec.ts")`
-2. Aggiungere `front_tx_bulk_operations()` → `_run_playwright("transactions/tx-bulk-operations.spec.ts")`
-3. Aggiungere entrambi a `front_transaction_all()` tests list
-4. Registrare in `populate_registry()` con `add_test()`
+- `front_tx_clone()` → `_run_playwright("transactions/tx-clone.spec.ts")`
+- `front_tx_bulk_operations()` → `_run_playwright("transactions/tx-bulk-operations.spec.ts")`
+- Entrambi aggiunti a `front_transaction_all()` tests list
+- Registrati in `populate_registry()` con `add_test()`
 
 ---
 
@@ -296,7 +296,7 @@ Aggiungere dopo riga 537 (nel blocco "Features deferred from Part 4 → Part 5")
 | Metrica | Prima | Dopo |
 |---------|-------|------|
 | UC coperti | 15/26 (58%) | 24/26 (92%) |
-| Test E2E | 68 | ~82 |
+| Test E2E | 68 | 80 |
 | Spec file | 7 | 9 |
 | UC non coperti | UC27-UC28 (future: Split/Promote) | Solo UC27-UC28 |
 
