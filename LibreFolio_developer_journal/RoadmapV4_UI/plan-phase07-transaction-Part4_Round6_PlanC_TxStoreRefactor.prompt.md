@@ -1,7 +1,7 @@
 # Plan — Phase 07 · Part 4 · Round 6 · Piano C — txStore Refactor
 
 **Date**: 2026-05-08
-**Status**: ✅ COMPLETED
+**Status**: ⚠️ PARTIALLY COMPLETED — see [§ Remaining Work](#remaining-work-post-audit) below
 **Parent**: [`plan-phase07-transaction-Part4_Round6_PlanB23_Appendix1_UIPolish.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanB23_Appendix1_UIPolish.prompt.md)
 
 ---
@@ -165,38 +165,43 @@ PendingOp =
 
 ---
 
-### Step 3 — Migrare `TransactionBulkModal` ✅
+### Step 3 — Migrare `TransactionBulkModal` ⚠️ PARTIAL
 
 **Obiettivo**: sostituire l'array di `DraftRow` con copia completa con `PendingOp[]` + derivazione status.
 
-**Cambi**:
-- Le "modifiche pendenti" diventano un array tipizzato
-- Il rendering della griglia fa `txStore.get(txId)` + merge con overrides
-- Status derivato automaticamente (nessun `markEdited()` manuale)
-- `fromTx()`, `mergePairedRows()`, `resetRow()`, `patchDualRowFromForm()` riscritti sulla nuova base
-- **link_uuid scompare** — paired risolti da `txStore.getPartner()`
-- Hidden row non serve più: riga paired renderizzata come "riga doppia" leggendo entrambi i lati dallo store
+**Fatto**:
+- txStore usato per `resetRow()`, `resetAll()`, `addPickerRows()` (passato a `mergePairedRows` come source)
+- PickerModal legge da txStore direttamente (Plan C Step 2 ✅)
 
-**Impatto LOC stimato**: BulkModal 1766 → ~1200 (-30%)
+**NON fatto — architettura legacy ancora in uso**:
+- ❌ `DraftRow[]` con copia completa ancora al posto di `PendingOp[]` + overrides
+- ❌ `fromTx()` ancora presente (~35 LOC) — clone completo anziché ref a txStore
+- ❌ `mergePairedRows()` ancora presente (~60 LOC) — paired risolti tramite `link_uuid`/`_hidden` anziché `txStore.getPartner()`
+- ❌ `link_uuid` ancora generato in 3+ punti — causa dei bug storici documentati in Motivazione
+- ❌ `_hidden` row pattern ancora in uso — partner occultato anziché rendering diretto da txStore
+- ❌ `patchDualRowFromForm()` ancora presente (~70 LOC) — partner match fragile via link_uuid
+- ❌ Status marcato manualmente (`merged.status = 'edited'`) anziché derivato da diff vs txStore
+- ❌ Bug timing: `mergePairedRows` richiede `getTypeRule()` che dipende da `ensureTypesLoaded()` — gated con hotfix `isTypesLoaded()` ma non eliminato strutturalmente
 
-**Test**: `./dev.py test front-transaction all` dopo completamento.
+**Impatto LOC EFFETTIVO**: BulkModal 1766 → 1800 (+2%) anziché il target -30%
 
 ---
 
-### Step 4 — Semplificare `+page.svelte` ✅
+### Step 4 — Semplificare `+page.svelte` ⚠️ PARTIAL
 
 **Obiettivo**: rimuovere duplicazione dati e props cascade.
 
-**Cambi**:
-- Rimuovere variabili `allMainRows`/`allPartnerRows`
-- Rimuovere `filterEditableRows` (ora `txStore.canEdit()`)
-- Rimuovere duplicazione partner lookup
-- Le azioni toolbar passano solo `{action, txIds}` alla BulkModal (WorkspaceIntent)
-- `reload()` popola `txStore.setAll()` e basta
+**Fatto**:
+- ✅ `allMainRows`/`allPartnerRows` rimossi — `reload()` popola `txStoreSetAll()`
+- ✅ `txStoreCanEdit()` usato per viewer guard
+- ✅ `txStoreGet()` usato per partner lookup
 
-**Impatto LOC stimato**: +page 1035 → ~700 (-30%)
+**NON fatto**:
+- ❌ `WorkspaceIntent` non implementato — BulkModal riceve ancora `initialRows: TXReadItem[]` come prop anziché `{action, txIds}`
+- ❌ `bulkInitial` (array di `TXReadItem`) ancora costruito in 10+ punti in +page
+- ❌ `filterEditableRows` logica ancora inline (non centralizzata)
 
-**Test**: `./dev.py test front-transaction all` dopo completamento.
+**Impatto LOC EFFETTIVO**: +page 1035 → 993 (-4%) anziché il target -30%
 
 ---
 
@@ -234,6 +239,29 @@ Fix: sostituito `list-disc list-inside` → `list-disc pl-4 text-left` su tutte 
 
 Problema: la colonna Links è scrollata fuori viewport (1280px) con tutte le colonne visibili → `toBeVisible` falliva.
 Fix: aggiunto `scrollIntoViewIfNeeded()` prima dell'hover, aumentati timeout (2s→5s per visibilità, 2s→3s per tooltip). Root cause confermata non correlata a txStore.
+
+**6d) Unificazione banner: TransactionResultBanner condiviso tra BulkModal e DeleteModal**
+
+Problema: BulkModal usava `InfoBanner` generico (con icone SVG lucide), DeleteModal usava `TransactionResultBanner` (con emoji) — stile incoerente.
+Fix:
+- Riscritto `TransactionResultBanner` per supportare: `dismissible`, `ondismiss`, `children` slot (per contenuti complessi come liste clickabili), `border` come design, `text-left` forzato
+- BulkModal migrato da `InfoBanner` → `TransactionResultBanner` per tutti i banner error/warning
+- `InfoBanner` mantenuto solo per i messaggi info puri (ⓘ autoOff, ℹ️ splitHint)
+- DeleteModal già usava il componente → ora entrambi hanno stessa estetica senza nessuna icona SVG lucide
+
+**6e) Riga paired: sfondo pieno anziché border-l sottile** — ⚠️ PARZIALE
+
+Problema: le righe paired nella griglia BulkModal avevano solo `border-l-2 border-l-indigo-400` (striscia sottile a sinistra), non coerente con gli altri status (new/edited/delete) che usano sfondo pieno.
+Fix intenzionato: sfondo diverso per ogni status (`getRowClass()` in BulkModal).
+
+Stato attuale: `getRowClass()` esiste ed applica:
+- `new` → `row-appended` (verde, DataTable nativo) ✅
+- `edited` → `row-edited` (blu, DataTable nativo) ✅
+- `delete` → `row-deleted line-through` (rosso + opacity, DataTable nativo) ✅
+- `paired (original)` → `row-paired` (indigo, classe aggiunta al DataTable) ✅
+- ❌ `original` (non-paired) → nessun sfondo — la riga è indistinguibile dal default
+
+**Fix audit 2026-05-08**: le classi Tailwind inline (`bg-amber-100/40` etc.) erano **invisibili** perché il CSS scoped del DataTable (`tbody tr { background: white }`) le sovrascriveva per specificità. Migrato a classi native DataTable (`row-deleted`, `row-edited`, `row-appended`) che usano `!important` sulle `<td>`. Aggiunta classe `row-paired` (indigo) nel DataTable per le righe paired.
 
 - `./dev.py test front-transaction all` — tutti i 5 spec file
 - Verifica manuale: create, edit, clone, delete (singola + paired + bulk)
@@ -280,4 +308,100 @@ Fix: aggiunto `scrollIntoViewIfNeeded()` prima dell'hover, aumentati timeout (2s
 - **Piano D**: Split/Promote full stack (UC27-UC28) — dipende da questo piano (descritto nel master plan Round 6)
 - **Part 5 (BRIM staging)**: `plan-phase07-transaction-Part5_BRIMStaging.prompt.md` — beneficia di txStore
 
+---
+
+## Remaining Work (Post-Audit)
+
+**Audit date**: 2026-05-08
+**Auditor**: AI agent review durante debug di bug timing `mergePairedRows`
+
+### Bug trovato durante l'audit
+
+`mergePairedRows()` gira **sync** nell'`$effect` init della BulkModal, PRIMA che `ensureTypesLoaded()` completi. Se il type store non è cachato (prima visita, page refresh), `getTypeRule('TRANSFER')` ritorna `FALLBACK_RULE` con `requiresPair: false` → la merge viene completamente saltata.
+
+**Impatto**: FormModal aperto in modalità singola anziché dual → validate `{"updates":[]}` vuoto → Apply genera partner con `broker_id:0` → 2 righe visibili nella griglia anziché 1.
+
+**Hotfix applicato**: gate `mergePairedRows()` e auto-open dietro `isTypesLoaded()`, con deferred re-run nell'async block. Funziona MA non elimina il root cause (dipendenza fragile da type store per la pair detection).
+
+**Root cause strutturale**: l'architettura `mergePairedRows` con `link_uuid`/`_hidden` richiede che il type store sia caricato per sapere quali tipi sono paired. Con `txStore.getPartner()` (via `related_transaction_id`) il type store non servirebbe affatto.
+
+### Checklist lavoro residuo
+
+| # | Cosa manca | Step | Impatto |
+|---|---|---|---|
+| R1 | `PendingOp[]` + status derivato da diff | Step 3 | Elimina bug "edited falso", semplifica status management |
+| R2 | Eliminare `link_uuid` — paired via `txStore.getPartner()` | Step 3 | Elimina 5+ bug storici documentati in Motivazione |
+| R3 | Eliminare `_hidden` row pattern — rendering diretto da txStore | Step 3 | Elimina `mergePairedRows` (~60 LOC) e il bug timing |
+| R4 | Eliminare `fromTx()` clone — ref a txStore + overrides | Step 3 | -35 LOC, single source of truth |
+| R5 | Riscrivere `patchDualRowFromForm()` su txStore base | Step 3 | -70 LOC, elimina partner match fragile |
+| R6 | `WorkspaceIntent` API per BulkModal | Step 4 | Elimina `bulkInitial` e 10+ costruzioni inline in +page |
+| R7 | Riduzione LOC +page (993 → ~700) | Step 4 | -30% come target originale |
+| R8 | ~~Sfondo righe BulkModal invisibile~~ | Step 6e | ✅ RISOLTO — classi Tailwind sostituite con classi native DataTable |
+
+### Stima effort
+
+- R1-R5 (Step 3 completo): ~1.5 giorni — è il cuore del refactor
+- R6-R7 (Step 4 completo): ~0.5 giorni — meccanico una volta che Step 3 è fatto
+
+**Totale**: ~2 giorni per completare il piano come descritto originariamente.
+
+---
+
+## Piano di Rientro — Completamento refactor txStore
+
+**Data**: 2026-05-08
+**Contesto**: il piano originale era marcato ✅ COMPLETED ma l'audit ha rivelato che Step 3 (BulkModal) e Step 4 (+page) sono solo parzialmente implementati. Il cuore del refactor (eliminare `link_uuid`, `_hidden`, `mergePairedRows`, `DraftRow[]` con clone) non è stato fatto. Hotfix applicati per bug timing + sfondo righe invisibile.
+
+### Fase 1 — Eliminare `_hidden` + `mergePairedRows` + `link_uuid` (R2, R3)
+
+**Obiettivo**: la riga paired smette di essere "1 visibile + 1 nascosta" → diventa 1 riga con rendering dual (Da:/A:) leggendo entrambi i lati da `txStore.get(id)` + `txStore.getPartner(id)`.
+
+**Cambi**:
+- `mergePairedRows()` (~60 LOC) eliminata completamente
+- `link_uuid` non più generato/usato — partner risolto via `related_transaction_id` nel txStore
+- `_hidden` row pattern eliminato — `visibleDrafts` non serve più filtrare
+- `findPartnerDraft()` sostituita da `txStore.getPartner(draft.id)`
+- **Elimina alla radice il bug timing** (`isTypesLoaded` gate non serve più perché `getTypeRule().requiresPair` non è più necessario per la pair detection)
+
+**Test**: `./dev.py test front-transaction all`
+
+### Fase 2 — `PendingOp[]` + status derivato (R1, R4, R5)
+
+**Obiettivo**: sostituire `DraftRow[]` (clone completo + status manuale) con `PendingOp[]` + status derivato da diff.
+
+**Cambi**:
+- `PendingOp = { op: 'create'|'edit'|'delete', txId?: number, overrides?: Partial<TxFields> }`
+- Status derivato: `op=create` → new, `op=edit` con diff → edited, ecc. (nessun `markEdited()` manuale)
+- `fromTx()` (~35 LOC) eliminata — rendering legge da txStore + applica overrides
+- `patchDualRowFromForm()` (~70 LOC) riscritta: FormModal emette `{fromOverrides, toOverrides}`, BulkModal aggiorna i 2 PendingOp
+- `collectUpdate()` semplificata: diff = txStore vs overrides
+
+**Test**: `./dev.py test front-transaction all`
+
+### Fase 3 — `WorkspaceIntent` API (R6, R7)
+
+**Obiettivo**: +page passa solo `{action, txIds}` alla BulkModal anziché array di TXReadItem.
+
+**Cambi**:
+- Definire tipo `WorkspaceIntent = { action: 'create'|'edit'|'delete'|'clone', txIds?: number[] }`
+- BulkModal prop `intent: WorkspaceIntent` sostituisce `initialRows: TXReadItem[]`
+- BulkModal legge righe internamente via `txStore.get(id)` per ogni `intent.txIds`
+- 10+ costruzioni `bulkInitial` in +page sostituite da 1-liner `bulkIntent = {action, txIds}`
+- Target: +page 993 → ~700 LOC (-30%)
+
+**Test**: `./dev.py test front-transaction all`
+
+### Rischi e mitigazioni
+
+| Rischio | Mitigazione |
+|---|---|
+| Regressione E2E (43+ test) | Ogni fase testata con `./dev.py test front-transaction all` |
+| Breaking change FormModal | FormModal cambia solo l'output di `onPushDraft` — formato interno resta invariato |
+| Paired rendering | La dual-row rendering (Da:/A: labels) esiste già — si sposta solo la fonte dati |
+
+### Priorità
+
+1. **Fase 1** (eliminare `_hidden`/`mergePairedRows`) è la più urgente: elimina il root cause del bug timing e 5 classi di bug storici
+2. **Fase 2** (`PendingOp`) è il cuore architetturale — prerequisito per Fase 3
+3. **Fase 3** (WorkspaceIntent) è meccanica e a basso rischio — può essere rimandata
 

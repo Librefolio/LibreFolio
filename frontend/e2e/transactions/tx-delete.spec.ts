@@ -356,6 +356,14 @@ test.describe('PickerModal disabled rows', () => {
 		const bulkModal = page.getByTestId('tx-bulk-modal');
 		await expect(bulkModal).toBeVisible({timeout: 5_000});
 
+		// C2-fix may auto-open FormModal when guardViewerOnly reduces to 1 row.
+		// If so, close it first so it stops intercepting pointer events.
+		const formModal = page.getByTestId('tx-form-modal');
+		if (await formModal.isVisible({timeout: 1_000}).catch(() => false)) {
+			await formModal.getByTestId('tx-form-cancel').click();
+			await expect(formModal).not.toBeVisible({timeout: 3_000});
+		}
+
 		// Open picker
 		const searchAddBtn = bulkModal.getByTestId('tx-bulk-picker');
 		test.skip(!(await searchAddBtn.isVisible({timeout: 2_000}).catch(() => false)), 'Search & Add not visible');
