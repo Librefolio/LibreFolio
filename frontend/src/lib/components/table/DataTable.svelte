@@ -2231,4 +2231,12 @@
     :global(.dark) :global(tr.row-stale) td {
         background: rgba(245, 158, 11, var(--stale-opacity, 0.08)) !important;
     }
+
+    :global(tr.row-paired) td {
+        background: rgba(99, 102, 241, 0.06) !important;
+    }
+
+    :global(.dark) :global(tr.row-paired) td {
+        background: rgba(99, 102, 241, 0.15) !important;
+    }
 </style>
