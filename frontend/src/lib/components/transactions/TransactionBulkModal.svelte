@@ -33,7 +33,7 @@
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {X, Plus, Pencil, Copy, Trash2, Check, Undo2} from 'lucide-svelte';
+    import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
@@ -122,6 +122,8 @@
         _partnerId?: number;
         /** True for the "to" half of a merged pair — filtered out from DataTable display. */
         _hidden?: boolean;
+        /** True for rows added via PickerModal (can be removed without DB delete). */
+        _addedViaPicker?: boolean;
     }
 
     interface Props {
@@ -399,7 +401,11 @@
             if (d.tempId !== tempId) return d;
             const merged = {...d};
             applyFormPayload(merged, payload);
-            if (merged.status === 'original') merged.status = 'edited';
+            // Only mark edited if there's a real change vs original
+            if (merged.status === 'original' && merged.original) {
+                const diff = collectUpdate(merged);
+                if (diff && Object.keys(diff).length > 1) merged.status = 'edited';
+            }
             return merged;
         });
     }
@@ -490,12 +496,17 @@
     }
 
     function removeRow(tempId: string) {
-        // C3-fix: for paired 'new' rows, also remove the hidden partner.
         const target = drafts.find((d) => d.tempId === tempId);
-        if (target && target.link_uuid && target.status === 'new') {
+        if (target && target.link_uuid && (target.status === 'new' || target._addedViaPicker)) {
+            // Remove the row + its hidden paired partner (same link_uuid or _partnerId)
+            const partnerTempIds = new Set<string>();
+            if (target._partnerId) {
+                const p = drafts.find((d) => d.id === target._partnerId);
+                if (p) partnerTempIds.add(p.tempId);
+            }
             drafts = drafts.filter((d) => {
                 if (d.tempId === tempId) return false;
-                // Remove hidden partner with same link_uuid
+                if (partnerTempIds.has(d.tempId)) return false;
                 if (d._hidden && d.link_uuid === target.link_uuid) return false;
                 return true;
             });
@@ -533,14 +544,38 @@
     }
 
     function resetRow(tempId: string) {
+        const target = drafts.find((d) => d.tempId === tempId);
+        if (!target || !target.original) return;
+        // If paired, also reset the hidden partner
+        const partnerTempId = target.link_uuid
+            ? drafts.find((d) => d.tempId !== tempId && d.link_uuid === target.link_uuid)?.tempId
+            : target._partnerId
+                ? drafts.find((d) => d.id === target._partnerId)?.tempId
+                : undefined;
+
         drafts = drafts.map((d) => {
-            if (d.tempId !== tempId || !d.original) return d;
-            return fromTx(d.original);
+            if (d.tempId !== tempId && d.tempId !== partnerTempId) return d;
+            if (!d.original) return d;
+            const reset = fromTx(d.original);
+            if (d._addedViaPicker) reset._addedViaPicker = true;
+            return reset;
         });
+        // Re-merge to restore paired metadata (link_uuid, _hidden, partnerBrokerId)
+        mergePairedRows(drafts, [...allMainRows, ...allPartnerRows]);
+        drafts = [...drafts];
     }
 
     function resetAll() {
-        drafts = drafts.map((d) => (d.original ? fromTx(d.original) : d));
+        drafts = drafts.map((d) => {
+            if (!d.original) return d;
+            const reset = fromTx(d.original);
+            // Preserve picker flag across resets
+            if (d._addedViaPicker) reset._addedViaPicker = true;
+            return reset;
+        });
+        // Re-merge paired rows after reset (picker-added pairs need re-linking)
+        mergePairedRows(drafts, [...allMainRows, ...allPartnerRows]);
+        drafts = [...drafts];
     }
 
     // =========================================================================
@@ -1127,6 +1162,13 @@
             variant: 'danger' as const,
         },
         {
+            id: 'remove-from-batch',
+            icon: X,
+            label: () => $t('transactions.bulk.removeFromBatch') || 'Remove from batch',
+            onClick: (row: DraftRow) => removeRow(row.tempId),
+            visible: (row: DraftRow) => !!row._addedViaPicker && row.status !== 'new',
+        },
+        {
             id: 'reset',
             icon: Undo2,
             label: () => $t('transactions.bulk.resetRow'),
@@ -1197,6 +1239,7 @@
             d.id = r.id;
             d.status = 'original';
             d.original = r;
+            d._addedViaPicker = true;
             d.broker_id = r.broker_id;
             d.asset_id = r.asset_id ?? null;
             d.type = r.type as TransactionTypeCode;
@@ -1335,7 +1378,9 @@
     function patchDualRowFromForm(tempId: string, payload: Record<string, unknown>) {
         const items = payload._items as Record<string, unknown>[];
         if (!items || items.length < 2) { patchRowFromForm(tempId, payload); return; }
-        const linkUuid = (items[0].link_uuid as string) ?? generateUUID();
+        // Preserve existing link_uuid to avoid orphaning the hidden partner
+        const currentDraft = drafts.find((d) => d.tempId === tempId);
+        const linkUuid = currentDraft?.link_uuid ?? (items[0].link_uuid as string) ?? generateUUID();
 
         drafts = drafts.map((d) => {
             if (d.tempId === tempId) {
@@ -1346,7 +1391,11 @@
                 merged.partnerBrokerId = (items[1].broker_id as number) ?? 0;
                 merged.partnerCash = (items[1].cash as DraftRow['partnerCash']) ?? null;
                 merged.partnerDate = (items[1].date as string) ?? merged.date;
-                if (merged.status === 'original') merged.status = 'edited';
+                // Only mark edited if there's a real change
+                if (merged.status === 'original' && merged.original) {
+                    const diff = collectUpdate(merged);
+                    if (diff && Object.keys(diff).length > 1) merged.status = 'edited'; // >1 because diff always has {id}
+                }
                 return merged;
             }
             return d;
@@ -1368,7 +1417,11 @@
                 const merged = {...d};
                 applyFormPayload(merged, items[1]);
                 merged.link_uuid = linkUuid;
-                if (merged.status === 'original') merged.status = 'edited';
+                // Only mark edited if there's a real change
+                if (merged.status === 'original' && merged.original) {
+                    const diff = collectUpdate(merged);
+                    if (diff && Object.keys(diff).length > 1) merged.status = 'edited';
+                }
                 return merged;
             });
         } else {
@@ -1405,9 +1458,11 @@
     let tableRefForToggle = $derived(tableRef as never);
     let rowActionsForTable = $derived(rowActions as never);
 
-    /** R6-B.4: Red tint for rows marked for deletion. */
+    /** Row background tint by status for immediate visual recognition. */
     function getRowClass(row: DraftRow): string {
-        if (row.status === 'delete') return 'bg-red-50/60 dark:bg-red-950/20 line-through opacity-60';
+        if (row.status === 'delete') return 'bg-red-100/50 dark:bg-red-900/15 line-through opacity-60';
+        if (row.status === 'new') return 'bg-emerald-100/40 dark:bg-emerald-900/15';
+        if (row.status === 'edited') return 'bg-amber-100/40 dark:bg-amber-900/15';
         // B1-13: visual indicator for paired rows
         if (getTypeRule(row.type).requiresPair && row.partnerBrokerId != null) return 'border-l-2 border-l-indigo-400 dark:border-l-indigo-500';
         return '';
@@ -1564,8 +1619,8 @@
         <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 dark:border-slate-800 text-xs shrink-0">
             <!-- Left: search & add -->
             {#if allMainRows.length > 0}
-                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={openPicker} data-testid="tx-bulk-picker">
-                    🔍 {$t('transactions.picker.searchAdd') || 'Search & add'}
+                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={openPicker} data-testid="tx-bulk-picker" title={$t('transactions.picker.searchAdd') || 'Search & add'}>
+                    🔍 <span class="hidden sm:inline">{$t('transactions.picker.searchAdd') || 'Search & add'}</span>
                 </button>
             {/if}
 
@@ -1573,22 +1628,27 @@
             {#if bulkTableSelectedRows.length > 0}
                 <div class="flex items-center gap-2 ml-2">
                     <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-[11px]" onclick={() => { tableRef?.clearSelection(); bulkTableSelectedRows = []; }}>
-                        <span class="font-medium">{bulkTableSelectedRows.length}</span> {$t('common.selected') || 'selected'} <span class="opacity-60 ml-0.5">×</span>
+                        <span class="font-medium">{bulkTableSelectedRows.length}</span> <span class="hidden sm:inline">{$t('common.selected') || 'selected'}</span> <span class="opacity-60 ml-0.5">×</span>
                     </button>
+                    {#if bulkTableSelectedRows.some(d => (d.status === 'edited' || d.status === 'delete') && d.original)}
+                        <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 text-[11px]" onclick={() => { for (const r of bulkTableSelectedRows) resetRow(r.tempId); }} title={$t('transactions.bulk.resetSelected') || 'Reset selected'} data-testid="tx-bulk-reset-selected">
+                            <Undo2 size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.resetSelected') || 'Reset'}</span>
+                        </button>
+                    {/if}
                     <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-[11px]" onclick={executeBulkDeleteOnSelected} title={$t('transactions.bulk.deleteSelected') || 'Delete selected'}>
-                        <Trash2 size={12} /> {$t('common.delete') || 'Delete'}
+                        <Trash2 size={12} /> <span class="hidden sm:inline">{$t('common.delete') || 'Delete'}</span>
                     </button>
                 </div>
             {/if}
 
             <!-- Right: actions -->
             <div class="ml-auto flex flex-row-reverse items-center gap-2 flex-wrap">
-                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row">
-                    <Plus size={12} /> {$t('transactions.bulk.addRow') || 'Add row'}
+                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row" title={$t('transactions.bulk.addRow') || 'Add row'}>
+                    <Plus size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.addRow') || 'Add row'}</span>
                 </button>
-                {#if visibleDrafts.length > 0}
-                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all">
-                        <Undo2 size={12} /> {$t('transactions.bulk.resetAll')}
+                {#if visibleDrafts.some(d => (d.status === 'edited' || d.status === 'delete') && d.original)}
+                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all" title={$t('transactions.bulk.resetAll')}>
+                        <Undo2 size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.resetAll')}</span>
                     </button>
                 {/if}
                 <ColumnVisibilityToggle tableRef={tableRefForToggle} />
@@ -1623,8 +1683,8 @@
              source of truth for validate state). -->
         <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0 text-xs">
             <div class="flex items-center gap-2 flex-wrap">
-                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={() => scheduler.trigger('manual')} data-testid="tx-bulk-validate-now">
-                    ⚡ {$t('transactions.validate.now')}
+                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={() => scheduler.trigger('manual')} data-testid="tx-bulk-validate-now" title={$t('transactions.validate.now')}>
+                    ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now')}</span>
                 </button>
                 {#if scheduler.state.isValidating}
                     <span class="text-[11px] text-gray-500 dark:text-gray-400" data-testid="tx-bulk-validating">{$t('transactions.validate.validating')}</span>
@@ -1635,9 +1695,9 @@
                 {/if}
             </div>
             <div class="flex items-center gap-2">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600" onclick={requestClose} data-testid="tx-bulk-cancel">{$t('common.cancel')}</button>
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50" disabled={commitDisabled} onclick={commit} data-testid="tx-bulk-commit">
-                    💾 {commitLabel}
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 inline-flex items-center gap-1.5" onclick={requestClose} data-testid="tx-bulk-cancel" title={$t('common.cancel')}><X size={15} /> <span class="hidden sm:inline">{$t('common.cancel')}</span></button>
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5" disabled={commitDisabled} onclick={commit} data-testid="tx-bulk-commit" title={commitLabel}>
+                    <Save size={15} /> <span class="hidden sm:inline">{commitLabel}</span>
                 </button>
             </div>
         </div>

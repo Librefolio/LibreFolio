@@ -266,6 +266,15 @@ Appunti estetici emersi dal test umano post-implementazione, corretti in-place:
 - Se errori → banner rosso con messaggi risolti (P2)
 - i18n chiave `transactions.deleteModal.canBeDeleted` in 4 lingue
 
+### P3b — Inline "rimozione ammessa" + fix validate condition (2026-05-08)
+- **Bug**: cliccando "Verifica ora" non appariva mai il segnale verde inline
+- **Root cause**: condizione `resp?.committed !== false` in `validateDeleteModal()` — l'endpoint `/validate` ritorna **sempre** `committed: false` (dry-run), quindi la condizione non era mai soddisfatta
+- **Fix 1**: rimossa la condizione `committed !== false` — ora basta `!resp?.issues || resp.issues.length === 0` per impostare `deleteModalValidated = true`
+- **Fix 2**: aggiunto span inline verde `✓ rimozione ammessa` accanto al bottone "Verifica ora" (stesso pattern del FormModal con `<Check size={14} />`)
+- **Fix 3**: rimosso il banner success `TransactionResultBanner variant=success` — per coerenza con Form e Bulk, quando la validazione passa basta lo span inline, il banner serve solo per errori/warning
+- **i18n**: nuova chiave `transactions.validate.deleteOk` in 4 lingue: "removal allowed" / "rimozione ammessa" / "suppression autorisée" / "eliminación permitida"
+- **File modificati**: `TransactionDeleteModal.svelte`, `+page.svelte` (validateDeleteModal), `{en,it,fr,es}.json`
+
 ---
 
 ## Follow-up: Rimuovere `mode` dalla TransactionBulkModal
@@ -542,7 +551,7 @@ Se chiama `/commit` e riceve `{committed: false, issues: []}` → questo è un *
 ## Bugfix Round 3 — Picker paired reset, remove row action, banner coerenza, currency flag
 
 **Date**: 2026-05-08
-**Status**: ⏳ PLANNED
+**Status**: ✅ COMPLETED
 **Trigger**: Test walk post Round 2 fix
 
 ---
@@ -637,3 +646,12 @@ Se chiama `/commit` e riceve `{committed: false, issues: []}` → questo è un *
 4. **Bug 5** (remove from batch) — ~15 righe, nuovo campo DraftRow + azione
 
 **Stima totale Round 3**: ~3-4h
+
+---
+
+## Appendix 1 — UI Polish & Guard Fix
+
+**Forward-link**: [`plan-phase07-transaction-Part4_Round6_PlanB23_Appendix1_UIPolish.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanB23_Appendix1_UIPolish.prompt.md)
+
+Toast delete leggibile, modale paired più larga, footer responsive icon-only su mobile (tutte e 4 le modali), guard viewer-only su bulk edit/delete, tooltip Picker a capo, "Reimposta tutto" condizionale.
+

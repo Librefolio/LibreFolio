@@ -743,15 +743,17 @@ Step 12 (Split/Promote Main)    ← DIPENDE da Step 10 + Step 11
 | **Piano B** — Delete + Picker modals + Broker Access | 7 + 9 + Access | Due nuove modali + visibilità accesso broker | ~8-10h | [`PlanB_DeletePickerAccess`](./plan-phase07-transaction-Part4_Round6_PlanB_DeletePickerAccess.prompt.md) |
 |       | ↳ B1 — Bugfix Round 1 (Fase 1) |  | Fix 7 bug + 1 enhancement test walk | ✅ | [`PlanB1_BugfixRound1`](./plan-phase07-transaction-Part4_Round6_PlanB1_BugfixRound1.prompt.md) |
 |       | ↳ B23 — Bulk Delete via BulkModal + DeleteModal Polish |  | Elimina BulkDeleteModal, riusa BulkModal | ~11-12h | [`PlanB23_BulkDeleteViaBulkModal`](./plan-phase07-transaction-Part4_Round6_PlanB23_BulkDeleteViaBulkModal.prompt.md) |
-| **Piano C** — Split/Promote full stack | 10 → 11 → 12 | Backend → BulkModal UI → Main Table + wiring | ~4.5h | |
+| **Piano C** — txStore Refactor | Architettura | Unica fonte di verità per TX, elimina 5 categorie bug | ~2-3d | [`PlanC_TxStoreRefactor`](./plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md) |
+| **Piano D** — Split/Promote full stack | 10 → 11 → 12 | Backend → BulkModal UI → Main Table + wiring | ~4.5h | |
 
-> **Nota Piano C**: Quando si implementa Split, aggiungere nella `TransactionBulkModal` un'azione riga "✂ Split" visibile solo su righe paired. L'azione chiama `POST /transactions/split` e aggiorna il batch in-place (le due metà diventano standalone). Questo completa il flusso "elimina solo un lato" suggerito dall'InfoBanner split hint aggiunto in Piano B23 Step 3e.
+> **Nota Piano D**: Quando si implementa Split, aggiungere nella `TransactionBulkModal` un'azione riga "✂ Split" visibile solo su righe paired. L'azione chiama `POST /transactions/split` e aggiorna il batch in-place (le due metà diventano standalone). Questo completa il flusso "elimina solo un lato" suggerito dall'InfoBanner split hint aggiunto in Piano B23 Step 3e.
 
 ### Ordine di esecuzione
 
 1. **Piano A** (ContextMenu + bugfix 2,3) — ✅ DONE — sblocca UX base, fix bug critici
 2. **Piano B** (DeleteModal + PickerModal) — nuove modali, user-facing
-3. **Piano C** (Split/Promote full stack) — feature più complessa, ultima
+3. **Piano C** (txStore Refactor) — prerequisito architetturale per Piano D
+4. **Piano D** (Split/Promote full stack) — feature più complessa, ultima
 
 ---
 

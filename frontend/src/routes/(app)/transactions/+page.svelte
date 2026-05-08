@@ -466,14 +466,51 @@
         selectedRows = rows;
     }
 
+    /** Filter out rows on viewer-only brokers. Returns editable + skipped. */
+    function filterEditableRows(rows: TXReadItem[]): { editable: TXReadItem[]; skipped: TXReadItem[] } {
+        const editable: TXReadItem[] = [];
+        const skipped: TXReadItem[] = [];
+        // Build lookup for partner broker resolution
+        const allKnown = new Map<number, TXReadItem>();
+        for (const r of mainRows) allKnown.set(r.id, r);
+        for (const r of partnerRows) allKnown.set(r.id, r);
+        for (const r of rows) allKnown.set(r.id, r);
+
+        for (const r of rows) {
+            if (r.related_transaction_id == null) {
+                (canEditBroker(r.broker_id) ? editable : skipped).push(r);
+            } else {
+                const partner = allKnown.get(r.related_transaction_id);
+                const partnerBrokerId = partner?.broker_id ?? r.broker_id;
+                (canEditPaired(r.broker_id, partnerBrokerId) ? editable : skipped).push(r);
+            }
+        }
+        return {editable, skipped};
+    }
+
+    /** Show toast warning for skipped viewer-only rows. Returns false if all skipped. */
+    function guardViewerOnly(rows: TXReadItem[]): TXReadItem[] | null {
+        const {editable, skipped} = filterEditableRows(rows);
+        if (skipped.length > 0 && editable.length > 0) {
+            toasts.warning($_('transactions.bulk.skippedViewerOnly', {values: {n: skipped.length}}) || `${skipped.length} transactions excluded: Editor access required`);
+        }
+        if (editable.length === 0) {
+            toasts.error($_('transactions.bulk.allViewerOnly') || 'No editable transactions in selection');
+            return null;
+        }
+        return editable;
+    }
+
     function onEditBulk() {
         if (selectedRows.length === 0) return;
+        const rows = guardViewerOnly(selectedRows);
+        if (!rows) return;
         bulkInitialStatus = undefined;
-        bulkInitial = [...selectedRows];
+        bulkInitial = [...rows];
         // C2-fix: when editing a single row via toolbar, auto-open FormModal
         // so the user immediately gets the structured single-row edit UX.
-        if (selectedRows.length === 1) {
-            const row = selectedRows[0];
+        if (rows.length === 1) {
+            const row = rows[0];
             if (row.related_transaction_id != null) {
                 const partner = partnerRows.find((r) => r.id === row.related_transaction_id)
                     ?? mainRows.find((r) => r.id === row.related_transaction_id);
@@ -512,8 +549,10 @@
 
     async function onBulkDelete() {
         if (selectedRows.length === 0) return;
-        const selectedIds = new Set(selectedRows.map((r) => r.id));
-        const allRows: TXReadItem[] = [...selectedRows];
+        const editableRows = guardViewerOnly(selectedRows);
+        if (!editableRows) return;
+        const selectedIds = new Set(editableRows.map((r) => r.id));
+        const allRows: TXReadItem[] = [...editableRows];
 
         // Auto-include partners of paired rows not in selection.
         const inMemory = new Map<number, TXReadItem>();
@@ -521,7 +560,7 @@
         for (const r of partnerRows) inMemory.set(r.id, r);
 
         const missingPartnerIds = new Set<number>();
-        for (const r of selectedRows) {
+        for (const r of editableRows) {
             const pid = r.related_transaction_id;
             if (pid == null || selectedIds.has(pid)) continue;
             const cached = inMemory.get(pid);
@@ -789,20 +828,24 @@
                 const assetName = tx.asset_id ? (getAssetInfo(tx.asset_id)?.display_name ?? '') : '';
                 const dateStr = tx.date;
                 const brokerLabel = brokerHtml(tx.broker_id);
+                const onLabel = $_('transactions.deleteModal.toastOnBroker') || 'on';
                 if (deleteModalPartner) {
                     const partnerBrokerLabel = brokerHtml(deleteModalPartner.broker_id);
+                    const heading = $_('transactions.deleteModal.toastDeletedPaired') || 'Pair deleted:';
                     toasts.success(
                         `<div style="display:flex;flex-direction:column;gap:2px">`
+                        + `<span style="font-weight:600">${heading}</span>`
                         + `<span>${typeLabel} ${assetName}</span>`
                         + `<span style="font-size:0.8em;opacity:0.85">${brokerLabel} → ${partnerBrokerLabel}</span>`
                         + `<span style="font-size:0.75em;opacity:0.7">${dateStr}</span>`
                         + `</div>`,
                     );
                 } else {
+                    const heading = $_('transactions.deleteModal.toastDeletedStandalone') || 'Transaction deleted:';
                     toasts.success(
                         `<div style="display:flex;flex-direction:column;gap:2px">`
-                        + `<span>${typeLabel} ${assetName}</span>`
-                        + `<span style="font-size:0.8em;opacity:0.85">${brokerLabel}</span>`
+                        + `<span style="font-weight:600">${heading}</span>`
+                        + `<span>${typeLabel} ${assetName ? assetName + ' ' : ''}${onLabel} ${brokerLabel}</span>`
                         + `<span style="font-size:0.75em;opacity:0.7">${dateStr}</span>`
                         + `</div>`,
                     );
@@ -836,7 +879,7 @@
                 ids.push(deleteModalPartner.id);
             }
             const resp = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post({deletes: ids} as never)) as {committed?: boolean; issues?: Array<{error: string; code?: string; params?: Record<string, any>}>};
-            if (resp?.committed !== false && (!resp?.issues || resp.issues.length === 0)) {
+            if (!resp?.issues || resp.issues.length === 0) {
                 deleteModalValidated = true;
             } else {
                 const ctx = buildResolverCtx();

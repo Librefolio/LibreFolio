@@ -197,17 +197,23 @@
         return content;
     });
 
-    // Register/unregister click-outside listener
+    // Register/unregister click-outside listener + scroll-dismiss
     $effect(() => {
         if (visible) {
             document.addEventListener('click', handleClickOutside);
             document.addEventListener('touchstart', handleTouchOutside);
+            document.addEventListener('scroll', handleScrollDismiss, {capture: true, passive: true});
             return () => {
                 document.removeEventListener('click', handleClickOutside);
                 document.removeEventListener('touchstart', handleTouchOutside);
+                document.removeEventListener('scroll', handleScrollDismiss, true);
             };
         }
     });
+
+    function handleScrollDismiss() {
+        if (visible) hide();
+    }
 
     function handleTouchOutside(event: TouchEvent) {
         if (visible && triggerElement && !triggerElement.contains(event.target as Node)) {
