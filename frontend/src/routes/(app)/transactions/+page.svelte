@@ -33,39 +33,13 @@
     import {getRoleSvgHtml} from '$lib/utils/brokerRoleHelpers';
     import {getBrokerRole} from '$lib/stores/brokerStore';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
+    import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/stores/txStore.svelte';
+    import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
 
     // =========================================================================
     // Types (local, derived from generated.ts shapes)
     // =========================================================================
 
-    interface TXReadItem {
-        id: number;
-        broker_id: number;
-        asset_id?: number | null;
-        type: string;
-        date: string;
-        quantity: string;
-        cash?: {code: string; amount: string} | null;
-        related_transaction_id?: number | null;
-        partner_broker_id?: number | null;
-        tags?: string[] | null;
-        description?: string | null;
-        cost_basis_override?: string | null;
-        asset_event_id?: number | null;
-        created_at: string;
-        updated_at: string;
-    }
-
-    interface AssetEvent {
-        id: number;
-        asset_id: number;
-        type: string;
-        date: string;
-        value: string;
-        currency: string;
-        is_auto: boolean;
-        notes?: string | null;
-    }
 
     type FilterMap = {
         broker_id?: number;
@@ -383,6 +357,9 @@
             // Stage 2: partners + tooltip + asset hydration in parallel.
             const [partner] = await Promise.all([loadPartnerRows(main), loadEventTooltipMap(main), ensureAssetsLoaded()]);
             partnerRows = partner;
+
+            // Populate txStore (single source of truth for modals).
+            txStoreSetAll(main, partner);
         } catch (e) {
             error = e instanceof Error ? e.message : String(e);
         } finally {
@@ -470,20 +447,8 @@
     function filterEditableRows(rows: TXReadItem[]): { editable: TXReadItem[]; skipped: TXReadItem[] } {
         const editable: TXReadItem[] = [];
         const skipped: TXReadItem[] = [];
-        // Build lookup for partner broker resolution
-        const allKnown = new Map<number, TXReadItem>();
-        for (const r of mainRows) allKnown.set(r.id, r);
-        for (const r of partnerRows) allKnown.set(r.id, r);
-        for (const r of rows) allKnown.set(r.id, r);
-
         for (const r of rows) {
-            if (r.related_transaction_id == null) {
-                (canEditBroker(r.broker_id) ? editable : skipped).push(r);
-            } else {
-                const partner = allKnown.get(r.related_transaction_id);
-                const partnerBrokerId = partner?.broker_id ?? r.broker_id;
-                (canEditPaired(r.broker_id, partnerBrokerId) ? editable : skipped).push(r);
-            }
+            (txStoreCanEdit(r.id) ? editable : skipped).push(r);
         }
         return {editable, skipped};
     }
@@ -512,8 +477,7 @@
         if (rows.length === 1) {
             const row = rows[0];
             if (row.related_transaction_id != null) {
-                const partner = partnerRows.find((r) => r.id === row.related_transaction_id)
-                    ?? mainRows.find((r) => r.id === row.related_transaction_id);
+                const partner = txStoreGet(row.related_transaction_id);
                 if (partner) bulkInitial = [row, partner];
             }
             bulkAutoOpenForm = 'edit';
@@ -555,15 +519,11 @@
         const allRows: TXReadItem[] = [...editableRows];
 
         // Auto-include partners of paired rows not in selection.
-        const inMemory = new Map<number, TXReadItem>();
-        for (const r of mainRows) inMemory.set(r.id, r);
-        for (const r of partnerRows) inMemory.set(r.id, r);
-
         const missingPartnerIds = new Set<number>();
         for (const r of editableRows) {
             const pid = r.related_transaction_id;
             if (pid == null || selectedIds.has(pid)) continue;
-            const cached = inMemory.get(pid);
+            const cached = txStoreGet(pid);
             if (cached) {
                 allRows.push(cached);
                 selectedIds.add(pid);
@@ -682,8 +642,7 @@
         // C2-fix: if the row has a linked partner, include both halves so
         // the BulkModal can merge them and the FormModal opens pre-populated.
         if (row.related_transaction_id != null) {
-            const partner = partnerRows.find((r) => r.id === row.related_transaction_id)
-                ?? mainRows.find((r) => r.id === row.related_transaction_id);
+            const partner = txStoreGet(row.related_transaction_id);
             bulkInitial = partner ? [row, partner] : [row];
         } else {
             bulkInitial = [row];
@@ -747,7 +706,7 @@
             return;
         }
         // Paired — try to find partner
-        const partner = partnerRows.find((r) => r.id === partnerId) ?? mainRows.find((r) => r.id === partnerId) ?? null;
+        const partner = txStoreGet(partnerId) ?? null;
         if (!partner) {
             // Partner not found → Layout C (inaccessible)
             deleteModalTx = row;
@@ -1008,7 +967,7 @@
 </div>
 
 <TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} {availableTags} canEdit={formCanEdit} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} onSwitchToEdit={() => { formOpen = false; if (formInitial) handleEditRow(formInitial); }} />
-<TransactionBulkModal open={bulkOpen} initialRows={bulkInitial} initialStatus={bulkInitialStatus} {availableTags} autoOpenForm={bulkAutoOpenForm} allMainRows={mainRows} allPartnerRows={partnerRows} onClose={() => { bulkOpen = false; bulkAutoOpenForm = null; bulkInitialStatus = undefined; }} onCommitted={handleBulkCommitted} />
+<TransactionBulkModal open={bulkOpen} initialRows={bulkInitial} initialStatus={bulkInitialStatus} {availableTags} autoOpenForm={bulkAutoOpenForm} onClose={() => { bulkOpen = false; bulkAutoOpenForm = null; bulkInitialStatus = undefined; }} onCommitted={handleBulkCommitted} />
 <TransactionDeleteModal
     open={deleteModalOpen}
     transaction={deleteModalTx}

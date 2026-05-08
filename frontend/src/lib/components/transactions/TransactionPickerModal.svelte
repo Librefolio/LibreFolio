@@ -1,10 +1,12 @@
 <!--
   TransactionPickerModal — Select existing DB transactions to add to BulkModal.
 
-  Reuses TransactionsTable with pickerMode=true. Receives `mainRows` from parent
-  (zero additional fetch). Filters out IDs already in the BulkModal via excludeIds.
+  Reuses TransactionsTable with pickerMode=true. Reads all transactions from
+  txStore (single source of truth) instead of receiving mainRows/partnerRows
+  via props. Filters out IDs already in the BulkModal via excludeIds.
 
   Plan B — Phase 07, Step 8.
+  Plan C — txStore migration (Step 2).
   Svelte 5 runes, dark mode, data-testid.
 -->
 <script lang="ts">
@@ -13,32 +15,13 @@
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import TransactionsTable from './TransactionsTable.svelte';
     import type {BrokerLike} from '$lib/utils/brokerColors';
-    import {canEditBroker, getBrokerRole, getBrokerInfo} from '$lib/stores/brokerStore';
+    import {canEditBroker, getBrokerRole, getBrokerInfo, getAllBrokers} from '$lib/stores/brokerStore';
     import {getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
     import {getRoleSvgHtml} from '$lib/utils/brokerRoleHelpers';
-
-    interface TXReadItem {
-        id: number;
-        broker_id: number;
-        asset_id?: number | null;
-        type: string;
-        date: string;
-        quantity: string;
-        cash?: {code: string; amount: string} | null;
-        related_transaction_id?: number | null;
-        tags?: string[] | null;
-        description?: string | null;
-        cost_basis_override?: string | null;
-        asset_event_id?: number | null;
-        created_at?: string;
-        updated_at?: string;
-    }
+    import {txStoreGetAll, txStoreGet, type TXReadItem} from '$lib/stores/txStore.svelte';
 
     interface Props {
         open: boolean;
-        mainRows: TXReadItem[];
-        partnerRows: TXReadItem[];
-        brokers: BrokerLike[];
         /** IDs already in BulkModal — hidden from picker */
         excludeIds: Set<number>;
         onAdd: (rows: TXReadItem[]) => void;
@@ -47,9 +30,6 @@
 
     let {
         open = $bindable(false),
-        mainRows = [],
-        partnerRows = [],
-        brokers = [],
         excludeIds = new Set(),
         onAdd,
         onClose,
@@ -59,9 +39,16 @@
     let pickerPage = $state(1);
     let pickerPageSize = $state(20);
 
+    /** Read all transactions from txStore — reactive via Svelte 5 fine-grained tracking. */
+    let allRows = $derived(txStoreGetAll());
+
+    /** Brokers from store (for TransactionsTable compatibility). */
+    let brokers = $derived(getAllBrokers() as BrokerLike[]);
+
     /** Filtered rows: exclude IDs already in BulkModal */
-    let filteredMain = $derived(mainRows.filter((r) => !excludeIds.has(r.id)));
-    let filteredPartners = $derived(partnerRows.filter((r) => !excludeIds.has(r.id)));
+    let filteredMain = $derived(allRows.filter((r) => !excludeIds.has(r.id)));
+    /** Partners not needed separately since txStore merges main+partners. */
+    let filteredPartners = $derived<TXReadItem[]>([]);
 
     /** IDs of rows on non-editable brokers (VIEWER / no role). */
     let disabledIds = $derived.by(() => {
@@ -134,9 +121,7 @@
 
         for (const row of selectedRows) {
             if (row.related_transaction_id != null && !addedIds.has(row.related_transaction_id)) {
-                const partner =
-                    mainRows.find((r) => r.id === row.related_transaction_id) ??
-                    partnerRows.find((r) => r.id === row.related_transaction_id);
+                const partner = txStoreGet(row.related_transaction_id);
                 if (partner && !excludeIds.has(partner.id)) {
                     toAdd.push(partner);
                     addedIds.add(partner.id);

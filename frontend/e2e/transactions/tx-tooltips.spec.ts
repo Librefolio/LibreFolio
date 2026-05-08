@@ -54,19 +54,22 @@ test.describe('Transaction Linked Pair Tooltips', () => {
 
 	// === Bug 8 — Tooltip contains HTML with favicon + bold name + SVG icon ===
 	test('paired tooltip shows broker name in bold for OWNER↔EDITOR pair', async ({page}) => {
-		// Asym-a: Apple Inc. on Directa (EDITOR role)
+		// Asym-a: Apple Inc. on IB→Directa (OWNER↔EDITOR=full)
+		// findRow matches by textContent — both "Directa" and "Apple" appear in description
 		const row = await findRow(page, 'Directa', 'Apple');
 
-		// Find the link icon inside the row and hover
+		// Find the link icon inside the row and scroll into view
+		// The icon is inside a Tooltip wrapper → .tx-links-slot contains the .tx-link-icon button
 		const linkIcon = row.locator('.tx-link-icon, .tx-links-slot').first();
-		await expect(linkIcon).toBeVisible({timeout: 2_000});
+		await linkIcon.scrollIntoViewIfNeeded();
+		await expect(linkIcon).toBeVisible({timeout: 5_000});
 
 		await linkIcon.hover();
-		await page.waitForTimeout(500);
+		await page.waitForTimeout(600);
 
 		// Tooltip must appear with HTML content
 		const tooltip = page.locator('[data-testid="tooltip-content"]');
-		await expect(tooltip).toBeVisible({timeout: 2_000});
+		await expect(tooltip).toBeVisible({timeout: 3_000});
 		const html = await tooltip.innerHTML();
 		expect(html, 'Tooltip should contain <strong> for broker name').toContain('<strong>');
 		expect(html, 'Tooltip should contain SVG role icon').toContain('<svg');
