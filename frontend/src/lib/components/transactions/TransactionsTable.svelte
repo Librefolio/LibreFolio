@@ -50,37 +50,11 @@
     ensureCurrenciesLoaded($locale ?? 'en');
 
     // =========================================================================
-    // Types
+    // Types (re-exported from shared)
     // =========================================================================
 
-    export interface TXReadItem {
-        id: number;
-        broker_id: number;
-        asset_id?: number | null;
-        type: string;
-        date: string;
-        quantity: string;
-        cash?: {code: string; amount: string} | null;
-        related_transaction_id?: number | null;
-        partner_broker_id?: number | null;
-        tags?: string[] | null;
-        description?: string | null;
-        cost_basis_override?: string | null;
-        asset_event_id?: number | null;
-        created_at: string;
-        updated_at: string;
-    }
-
-    export interface AssetEvent {
-        id: number;
-        asset_id: number;
-        type: string;
-        date: string;
-        value: string;
-        currency: string;
-        is_auto: boolean;
-        notes?: string | null;
-    }
+    export type {TXReadItem, AssetEvent} from './types';
+    import type {TXReadItem, AssetEvent} from './types';
 
     /**
      * Display row = TXReadItem + decoration metadata for adjacency rendering.
