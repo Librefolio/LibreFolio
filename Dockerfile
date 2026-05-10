@@ -44,6 +44,17 @@ RUN mkdir -p /app/backend/data/prod/sqlite \
              /app/backend/data/prod/logs \
              /app/backend/data/test/sqlite
 
+# Create non-root user with configurable UID/GID (default 1000:1000).
+# At runtime, docker-compose passes the host user's UID/GID so that
+# bind-mounted files are owned by the current user, not root.
+ARG UID=1000
+ARG GID=1000
+RUN groupadd -g ${GID} librefolio 2>/dev/null || true && \
+    useradd -u ${UID} -g ${GID} -m -s /bin/bash librefolio 2>/dev/null || true && \
+    chown -R ${UID}:${GID} /app
+
+USER librefolio
+
 # Default environment
 ENV HOST=0.0.0.0 \
     PORT=8000 \

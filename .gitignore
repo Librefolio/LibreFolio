@@ -69,6 +69,8 @@ mkdocs_src/site/
 /mkdocs_src/mkdocs_src/site/
 mkdocs_src/docs/javascripts/vendor/
 /mkdocs_src/docs/gallery/**/*.png
+# Cached fonts (auto-downloaded by scripts/update_js_cache.py)
+frontend/static/fonts/
 
 # Coverage reports
 htmlcov/
