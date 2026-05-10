@@ -1184,6 +1184,8 @@ def cmd_docker_build(args):
     docker_cmd = ["docker", "build", "-t", image_tag]
     # Also tag as 'librefolio:latest'
     docker_cmd.extend(["-t", "librefolio:latest"])
+    # Pass host UID/GID so container user matches host user
+    docker_cmd.extend(["--build-arg", f"UID={os.getuid()}", "--build-arg", f"GID={os.getgid()}"])
     if no_cache:
         docker_cmd.append("--no-cache")
     docker_cmd.append(".")
@@ -1211,6 +1213,8 @@ def cmd_docker_rebuild(args):
     image_tag = _get_docker_tag(tag_override)
     print(Colors.info(f"[1/3] Building new image: {image_tag}..."))
     docker_cmd = ["docker", "build", "-t", image_tag, "-t", "librefolio:latest"]
+    # Pass host UID/GID so container user matches host user
+    docker_cmd.extend(["--build-arg", f"UID={os.getuid()}", "--build-arg", f"GID={os.getgid()}"])
     if no_cache:
         docker_cmd.append("--no-cache")
     docker_cmd.append(".")
@@ -1248,6 +1252,21 @@ def cmd_docker_down(args):
     """Stop containers."""
     print(Colors.success("🐳 Stopping LibreFolio containers..."))
     return run_command_live(["docker", "compose", "down"])
+
+
+def cmd_docker_restart(args):
+    """Restart containers (down + up -d)."""
+    print(Colors.success("🐳 Restarting LibreFolio containers..."))
+    print(Colors.info("[1/2] Stopping containers..."))
+    result = run_command_live(["docker", "compose", "down"])
+    if result != 0:
+        return result
+    print()
+    print(Colors.info("[2/2] Starting containers..."))
+    result = run_command_live(["docker", "compose", "up", "-d"])
+    if result == 0:
+        print_success("✅ Containers restarted successfully")
+    return result
 
 
 def cmd_docker_logs(args):
@@ -1719,6 +1738,9 @@ Examples:
 
     docker_p = docker_sub.add_parser("down", help="Stop containers (docker compose down)")
     docker_p.set_defaults(func=cmd_docker_down)
+
+    docker_p = docker_sub.add_parser("restart", help="Restart containers (down + up -d)")
+    docker_p.set_defaults(func=cmd_docker_restart)
 
     docker_p = docker_sub.add_parser("logs", help="Show container logs")
     docker_p.add_argument("-f", "--follow", action="store_true", help="Follow log output")

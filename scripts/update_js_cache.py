@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
 """
-JS Library Cache Manager for LibreFolio.
+Static Resource Cache Manager for LibreFolio.
 
-Downloads external JS libraries to local vendor/ directories for offline use.
-Maintains versioned cache with automatic cleanup of old versions.
+Downloads external JS libraries and font resources to local directories
+for offline use.  Maintains versioned cache with automatic cleanup.
+
+Supported resource types:
+  - "js"   → single-file JS library (MathJax, etc.)
+  - "font" → multi-file Google Fonts resource (CSS + woff2 subsets)
 
 Usage:
     python scripts/update_js_cache.py [--force]
 
 Called automatically by:
-    - dev.sh server (at startup)
-    - Backend main.py (at startup, async)
+    - dev.py server (at startup)
+    - Docker build (at build time)
 """
 
 import hashlib
 import json
+import re
 import shutil
 import sys
 import urllib.request
@@ -28,15 +33,32 @@ CACHE_MANIFEST_FILE = ".cache_manifest.json"
 CACHE_CHECK_INTERVAL_HOURS = 24  # Skip check if checked within this time
 
 # Libraries to cache
+# type="js"   → single file download
+# type="font" → fetch CSS from Google Fonts, parse woff2 URLs, download all
 LIBRARIES = {
     "mathjax": {
+        "type": "js",
         "url": "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js",
         "target": "tex-mml-chtml.js",
-        }
-    }
+        "vendor_dir_key": "mkdocs",
+    },
+    "noto-color-emoji": {
+        "type": "font",
+        "css_url": "https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap",
+        "file_prefix": "noto-color-emoji",
+        "css_file": "noto-color-emoji.css",
+        "vendor_dir_key": "fonts",
+    },
+}
 
-# Target directories
-MKDOCS_VENDOR_DIR = Path(__file__).parent.parent / "mkdocs_src" / "docs" / "javascripts" / "vendor"
+# Target directories (keyed by vendor_dir_key)
+VENDOR_DIRS = {
+    "mkdocs": Path(__file__).parent.parent / "mkdocs_src" / "docs" / "javascripts" / "vendor",
+    "fonts": Path(__file__).parent.parent / "frontend" / "static" / "fonts" / "noto-color-emoji",
+}
+
+# Backward compat alias
+MKDOCS_VENDOR_DIR = VENDOR_DIRS["mkdocs"]
 
 
 def get_file_hash(content: bytes) -> str:
@@ -58,12 +80,12 @@ def get_remote_headers(url: str, timeout: int = 10) -> Optional[dict]:
         return None
 
 
-def download_file(url: str, timeout: int = 30) -> Optional[bytes]:
+def download_file(url: str, timeout: int = 30, ua: str = "LibreFolio-CacheManager/1.0") -> Optional[bytes]:
     """Download file from URL, return content or None on failure."""
     try:
         req = urllib.request.Request(
             url,
-            headers={"User-Agent": "LibreFolio-CacheManager/1.0"}
+            headers={"User-Agent": ua}
             )
         with urllib.request.urlopen(req, timeout=timeout) as response:
             return response.read()
@@ -119,12 +141,156 @@ def should_skip_check(manifest: dict) -> bool:
         return False
 
 
+def _parse_google_fonts_css(css_text: str):
+    """
+    Parse a Google Fonts CSS response into a list of subsets.
+
+    Returns list of dicts:
+      {src_url, unicode_range}
+    """
+    subsets = []
+    # Find each @font-face block
+    for match in re.finditer(r"@font-face\s*\{([^}]+)\}", css_text):
+        block = match.group(1)
+        url_match = re.search(r"src:\s*url\(([^)]+)\)", block)
+        range_match = re.search(r"unicode-range:\s*([^;]+);", block)
+        if url_match and range_match:
+            subsets.append({
+                "src_url": url_match.group(1).strip(),
+                "unicode_range": range_match.group(1).strip(),
+            })
+    return subsets
+
+
+def _download_font_resource(
+    vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False
+) -> bool:
+    """
+    Download a Google Fonts resource (CSS + woff2 files).
+
+    Fetches the CSS from Google Fonts, extracts woff2 URLs, downloads each
+    subset file, and writes a local CSS with relative paths.
+    """
+    print(f"🔤 Checking font {name}...")
+
+    lib_data = manifest.get("libraries", {}).get(name, {})
+    current_hash = lib_data.get("current_hash")
+
+    target_dir = vendor_dir
+    css_path = target_dir / config["css_file"]
+    file_exists = css_path.exists()
+
+    # Fetch CSS from Google Fonts (need a modern User-Agent to get woff2)
+    css_bytes = download_file(
+        config["css_url"],
+        ua="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+           "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    )
+    if css_bytes is None:
+        if file_exists:
+            print(f"  ⚠️  CSS download failed, keeping cached version")
+        else:
+            print(f"  ❌ CSS download failed and no cached version exists")
+        return False
+
+    css_text = css_bytes.decode("utf-8")
+    css_hash = get_file_hash(css_bytes)
+
+    if current_hash == css_hash and not force and file_exists:
+        print(f"  ✓ Already up-to-date (CSS hash: {css_hash})")
+        return False
+
+    # Parse subsets
+    subsets = _parse_google_fonts_css(css_text)
+    if not subsets:
+        print(f"  ⚠️  No subsets found in Google Fonts CSS")
+        return False
+
+    print(f"  📋 Found {len(subsets)} subsets")
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    # Download each woff2 file
+    prefix = config["file_prefix"]
+    local_css_lines = [
+        "/*",
+        f" * {name} — self-hosted subsets (Google Fonts)",
+        f" * Auto-downloaded by scripts/update_js_cache.py",
+        f" * Source: {config['css_url']}",
+        f" * Updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+        f" * Subsets: {len(subsets)}",
+        " */",
+        "",
+    ]
+
+    total_size = 0
+    font_family = " ".join(w.capitalize() for w in name.split("-"))
+    for i, subset in enumerate(subsets):
+        local_filename = f"{prefix}.{i}.woff2"
+        woff2_content = download_file(subset["src_url"])
+        if woff2_content is None:
+            print(f"  ⚠️  Failed to download subset {i}, skipping")
+            continue
+
+        woff2_path = target_dir / local_filename
+        with open(woff2_path, "wb") as f:
+            f.write(woff2_content)
+        total_size += len(woff2_content)
+
+        # Build CSS block
+        local_css_lines.extend([
+            f"/* Subset {i} */",
+            "@font-face {",
+            f"\tfont-family: '{font_family}';",
+            "\tfont-style: normal;",
+            "\tfont-weight: 400;",
+            "\tfont-display: swap;",
+            f"\tsrc: url('./{local_filename}') format('woff2');",
+            f"\tunicode-range: {subset['unicode_range']};",
+            "}",
+            "",
+        ])
+
+    # Write local CSS
+    css_content = "\n".join(local_css_lines) + "\n"
+    with open(css_path, "w") as f:
+        f.write(css_content)
+
+    # Update manifest
+    if "libraries" not in manifest:
+        manifest["libraries"] = {}
+    if name not in manifest["libraries"]:
+        manifest["libraries"][name] = {"versions": []}
+
+    manifest["libraries"][name]["current_hash"] = css_hash
+    manifest["libraries"][name]["url"] = config["css_url"]
+    manifest["libraries"][name]["type"] = "font"
+    manifest["libraries"][name]["subset_count"] = len(subsets)
+    manifest["libraries"][name]["total_size"] = total_size
+    manifest["libraries"][name]["updated_at"] = datetime.now(timezone.utc).isoformat()
+    manifest["libraries"][name]["versions"].append({
+        "hash": css_hash,
+        "downloaded_at": datetime.now(timezone.utc).isoformat(),
+        "subset_count": len(subsets),
+        "total_size": total_size,
+    })
+
+    cleanup_old_versions(vendor_dir, manifest, name)
+    print(f"  ✅ Updated {len(subsets)} subsets ({total_size / 1024:.0f} KB total)")
+    return True
+
+
 def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:
     """
     Update a single library.
 
     Returns True if updated, False if already up-to-date.
+    Dispatches to type-specific handler (js or font).
     """
+    resource_type = config.get("type", "js")
+    if resource_type == "font":
+        return _download_font_resource(vendor_dir, manifest, name, config, force)
+
+    # Original single-file JS logic
     print(f"📦 Checking {name}...")
 
     lib_data = manifest.get("libraries", {}).get(name, {})
@@ -209,30 +375,28 @@ def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, fo
 def update_all_libraries(force: bool = False):
     """Update all configured libraries."""
     print("=" * 60)
-    print("LibreFolio JS Library Cache Manager")
+    print("LibreFolio Static Resource Cache Manager")
     print("=" * 60)
 
-    # Ensure vendor directory exists
-    MKDOCS_VENDOR_DIR.mkdir(parents=True, exist_ok=True)
+    # Ensure all vendor directories exist
+    for vendor_dir in VENDOR_DIRS.values():
+        vendor_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load manifest
-    manifest = load_manifest(MKDOCS_VENDOR_DIR)
-
-    # Update each library
+    # Update each library (each may use a different vendor dir)
     updated_count = 0
     for name, config in LIBRARIES.items():
-        if update_library(MKDOCS_VENDOR_DIR, manifest, name, config, force):
+        vendor_dir = VENDOR_DIRS[config.get("vendor_dir_key", "mkdocs")]
+        manifest = load_manifest(vendor_dir)
+        if update_library(vendor_dir, manifest, name, config, force):
             updated_count += 1
-
-    # Save manifest
-    manifest["last_check"] = datetime.now(timezone.utc).isoformat()
-    save_manifest(MKDOCS_VENDOR_DIR, manifest)
+        manifest["last_check"] = datetime.now(timezone.utc).isoformat()
+        save_manifest(vendor_dir, manifest)
 
     print("-" * 60)
     if updated_count > 0:
-        print(f"✅ Updated {updated_count} library(ies)")
+        print(f"✅ Updated {updated_count} resource(s)")
     else:
-        print("✓ All libraries up-to-date")
+        print("✓ All resources up-to-date")
     print("=" * 60)
 
     return updated_count
