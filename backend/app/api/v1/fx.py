@@ -101,8 +101,9 @@ async def list_providers(
         # Get all providers from registry
         providers_list = FXProviderRegistry.list_providers()
 
-        # Always filter out MANUAL provider — it's an internal sentinel
-        providers_list = [p for p in providers_list if p["code"] != "MANUAL"]
+        # Filter out internal/testing providers from public list
+        _HIDDEN_FX_PROVIDERS = {"MANUAL", "MOCKFX", "MOCKFX_FAIL"}
+        providers_list = [p for p in providers_list if p["code"] not in _HIDDEN_FX_PROVIDERS]
 
         # Filter by requested provider codes (case-insensitive)
         if providers:

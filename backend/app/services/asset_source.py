@@ -968,92 +968,14 @@ class AssetSourceManager:
         # (only relevant when called from full-replace endpoints)
         await session.commit()
 
-        # Build results and auto-populate metadata
+        # Build results (no auto-populate — metadata comes via explicit refresh/probe)
         for assignment in assignments:
             result = FAProviderAssignmentResult(
                 asset_id=assignment.asset_id,
                 success=True,
                 message=f"Provider {assignment.provider_code} assigned",
-                fields_detail=None,  # No auto-refresh during assignment
+                fields_detail=None,
             )
-
-            # Try to auto-populate metadata from provider
-            try:
-                # Get provider instance
-                provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
-
-                if provider:
-                    # Get asset to fetch currency and current metadata
-                    asset_result = await session.execute(select(Asset).where(Asset.id == assignment.asset_id))
-                    asset = asset_result.scalar_one_or_none()
-
-                    if asset:
-                        # Try to fetch metadata (returns None if not supported)
-                        try:
-                            _id = assignment.identifier
-                            _id_type = AssetSourceProvider.map_input_type_to_identifier_type(assignment.identifier_type)
-                            _params = assignment.provider_params
-                            patch_item = await _run_provider_in_thread(lambda _p=provider, _i=_id, _it=_id_type, _pr=_params: _p.fetch_asset_metadata(_i, _it, _pr), timeout=30.0)
-
-                            if patch_item:
-                                # Set correct asset_id
-                                patch_item.asset_id = assignment.asset_id
-
-                                # Apply metadata to asset
-                                changes_count = 0
-
-                                # Update asset_type if provided
-                                if patch_item.asset_type and patch_item.asset_type != asset.asset_type:
-                                    asset.asset_type = patch_item.asset_type
-                                    changes_count += 1
-
-                                # Update classification_params if provided
-                                if patch_item.classification_params:
-                                    # Parse current classification_params (JSON string -> object)
-                                    current_params = None
-                                    if asset.classification_params:
-                                        try:
-                                            current_dict = json.loads(asset.classification_params)
-                                            current_params = FAClassificationParams(**current_dict)
-                                        except Exception:
-                                            pass  # Invalid JSON, start fresh
-
-                                    # Apply partial update
-                                    updated_params = AssetMetadataService.apply_partial_update(current_params, patch_item.classification_params)
-
-                                    # Serialize back to JSON
-                                    asset.classification_params = json.dumps(updated_params.model_dump(mode="json", exclude_none=True))
-                                    changes_count += 1
-
-                                if changes_count > 0:
-                                    await session.commit()
-
-                                logger.info(
-                                    "Metadata auto-populated from provider",
-                                    asset_id=assignment.asset_id,
-                                    provider=assignment.provider_code,
-                                    changes_count=changes_count,
-                                )
-                            # #R4-4: removed dead branch ``result.metadata_updated = False`` —
-                            # the field does not exist on FAProviderAssignmentResult (extra='forbid')
-                            # and had no corresponding ``= True`` counterpart, so every invocation
-                            # raised a cosmetic AttributeError swallowed by the ``except Exception``
-                            # below, polluting logs with a misleading "Failed to fetch metadata" warning.
-                        except Exception as e:
-                            # Log but don't fail assignment
-                            logger.warning(
-                                "Failed to fetch metadata from provider",
-                                asset_id=assignment.asset_id,
-                                provider=assignment.provider_code,
-                                error=str(e),
-                            )
-            except Exception as e:
-                # Log but don't fail assignment
-                logger.warning(
-                    "Error during metadata auto-populate",
-                    asset_id=assignment.asset_id,
-                    error=str(e),
-                )
 
             results.append(result)
 

@@ -15,21 +15,22 @@ Autocompletion setup:
     eval "$(register-python-argcomplete dev.py)"
 """
 
-import os
-import sys
-import re
+import argparse
 import math
+import os
+import platform
+import re
+import secrets
 import shutil
 import signal
-import secrets
-import argparse
-import platform
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 try:
     import argcomplete
+
     HAS_ARGCOMPLETE = True
 except ImportError:
     HAS_ARGCOMPLETE = False
@@ -57,7 +58,7 @@ from scripts.cli_base import (
     print_warning,
     check_server_running,
     pipenv_prefix,
-)
+    )
 
 from scripts.cli_tree_parser import TreeParser, format_help
 
@@ -76,7 +77,7 @@ def check_port_in_use(port: int) -> list:
             result = subprocess.run(
                 ["lsof", "-i", f":{port}", "-t"],
                 capture_output=True, text=True
-            )
+                )
             if result.stdout.strip():
                 pids = [int(p) for p in result.stdout.strip().split('\n') if p]
                 # Get process name for each PID
@@ -85,7 +86,7 @@ def check_port_in_use(port: int) -> list:
                         ps_result = subprocess.run(
                             ["ps", "-p", str(pid), "-o", "comm="],
                             capture_output=True, text=True
-                        )
+                            )
                         proc_name = ps_result.stdout.strip() or "unknown"
                         processes.append((pid, proc_name))
                     except Exception:
@@ -94,7 +95,7 @@ def check_port_in_use(port: int) -> list:
             result = subprocess.run(
                 ["fuser", f"{port}/tcp"],
                 capture_output=True, text=True, stderr=subprocess.DEVNULL
-            )
+                )
             if result.stdout.strip():
                 pids = [int(p) for p in result.stdout.strip().split() if p]
                 for pid in pids:
@@ -102,7 +103,7 @@ def check_port_in_use(port: int) -> list:
                         ps_result = subprocess.run(
                             ["ps", "-p", str(pid), "-o", "comm="],
                             capture_output=True, text=True
-                        )
+                            )
                         proc_name = ps_result.stdout.strip() or "unknown"
                         processes.append((pid, proc_name))
                     except Exception:
@@ -188,9 +189,11 @@ def cmd_server(args):
     # Handle frontend rebuild
     if rebuild:
         print(Colors.info("📦 Forcing frontend rebuild..."))
+
         # Create a mock args object with debug flag
         class BuildArgs:
             debug = debug_mode
+
         result = cmd_fe_build(BuildArgs())
         if result != 0:
             print_error("Frontend build failed. Server not started.")
@@ -282,7 +285,7 @@ def cmd_server(args):
             "backend.app.main:app",
             "--host", host,
             "--port", str(port),
-        ]
+            ]
         print(f"{Colors.YELLOW}📊 Coverage tracking enabled via 'coverage run'{Colors.NC}")
         print(f"{Colors.YELLOW}   Config: {coveragerc}{Colors.NC}")
         print(f"{Colors.YELLOW}   Coverage data will be written to .coverage.<pid> on shutdown{Colors.NC}")
@@ -300,7 +303,7 @@ def cmd_server(args):
             "backend.app.main:app",
             "--host", host,
             "--port", str(port),
-        ]
+            ]
         if workers > 1:
             uvicorn_cmd.extend(["--workers", str(workers)])
         else:
@@ -329,7 +332,7 @@ def cmd_db_current(args):
     return run_command_live(
         [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "current"],
         env=env
-    )
+        )
 
 
 def cmd_db_migrate(args):
@@ -346,7 +349,7 @@ def cmd_db_migrate(args):
     return run_command_live(
         [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "revision", "--autogenerate", "-m", message],
         env=env
-    )
+        )
 
 
 def cmd_db_upgrade(args):
@@ -361,7 +364,7 @@ def cmd_db_upgrade(args):
     return run_command_live(
         [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "upgrade", "head"],
         env=env
-    )
+        )
 
 
 def cmd_db_downgrade(args):
@@ -376,7 +379,7 @@ def cmd_db_downgrade(args):
     return run_command_live(
         [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "downgrade", "-1"],
         env=env
-    )
+        )
 
 
 def cmd_db_create_clean(args):
@@ -411,7 +414,7 @@ def cmd_db_create_clean(args):
     result = run_command_live(
         [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "upgrade", "head"],
         env=env
-    )
+        )
 
     if result == 0:
         print_success(f"Database created successfully: {db_path}")
@@ -435,7 +438,10 @@ def cmd_fe_dev(args):
 
 def cmd_fe_build(args):
     """Build frontend for production."""
-    # First, sync API types to ensure frontend types are aligned with backend
+    # Ensure fonts/JS libs exist before SvelteKit prerender (validates app.html refs)
+    update_js_cache()
+
+    # Sync API types to ensure frontend types are aligned with backend
     print(Colors.success("Syncing API types before build..."))
     sync_result = cmd_api_sync(args)
     if sync_result != 0:
@@ -500,7 +506,7 @@ def cmd_api_client(args):
     return run_command_live(
         ["npm", "run", "generate-api"],
         cwd=PROJECT_ROOT / "frontend"
-    )
+        )
 
 
 def cmd_api_sync(args):
@@ -509,7 +515,6 @@ def cmd_api_sync(args):
     if result != 0:
         return result
     return cmd_api_client(args)
-
 
 
 # =============================================================================
@@ -564,15 +569,16 @@ def _check_admonition_empty_lines():
         print(Colors.warning(
             f"⚠️  {len(bad_files)} file(s) have admonitions without empty line after !!!/??? "
             f"(Prettier will break them):"
-        ))
+            ))
         for f in bad_files[:10]:
             print(f)
         if len(bad_files) > 10:
             print(f"  ... and {len(bad_files) - 10} more")
         print(Colors.info(
             "  Fix: add an empty line between the !!! directive and the indented body."
-        ))
+            ))
         print()
+
 
 def _check_image_paths_in_built_site():
     """Check that all <img src> paths in built HTML resolve to existing files.
@@ -604,7 +610,7 @@ def _check_image_paths_in_built_site():
         print()
         print(Colors.warning(
             f"⚠️  {len(broken)} broken icon path(s) found in built site:"
-        ))
+            ))
         for html_path, img_src in broken[:20]:
             print(f"  ❌ {html_path}")
             print(f"     → {img_src}")
@@ -612,7 +618,7 @@ def _check_image_paths_in_built_site():
             print(f"  ... and {len(broken) - 20} more")
         print(Colors.info(
             "  Fix: use Markdown image syntax ![](path) instead of raw <img> for path auto-adjustment."
-        ))
+            ))
         print()
     else:
         print(Colors.success("✅ All static icon paths in built site verified"))
@@ -702,7 +708,7 @@ def cmd_mkdocs_gallery(args):
         result = subprocess.run(
             ["python", "dev.py", "test", "db", "populate", "--force", "--clean", "--with-static", "--with-reports"],
             cwd=PROJECT_ROOT
-        )
+            )
         if result.returncode != 0:
             print_error("Failed to populate test database")
             return 1
@@ -774,7 +780,7 @@ def cmd_mkdocs_gallery(args):
         "npm", "run", "test:e2e", "--",
         "gallery.spec.ts",
         "--workers", str(worker_count),
-    ]
+        ]
     if use_headed:
         cmd.append("--headed")
     for viewport, _label in viewports:
@@ -798,7 +804,7 @@ def cmd_mkdocs_gallery(args):
         proc = subprocess.Popen(
             run_cmd, cwd=PROJECT_ROOT / "frontend", env=gallery_env,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-        )
+            )
         output_lines = []
         for line in proc.stdout:
             print(line, end='')
@@ -920,7 +926,7 @@ def cmd_mkdocs_check_links(args):
             docs_root / file_path_str / "index.en.md",
             docs_root / f"{file_path_str}.md",
             docs_root / file_path_str / "index.md",
-        ]
+            ]
 
         found_file = None
         for c in candidates:
@@ -977,7 +983,7 @@ def cmd_mkdocs_check_links(args):
                     docs_root / file_part / "index.en.md",
                     docs_root / f"{file_part}.md",
                     docs_root / file_part / "index.md",
-                ]
+                    ]
                 found_file = None
                 for c in candidates:
                     if c.exists():
@@ -1080,7 +1086,7 @@ def _check_env_file():
                     print_warning(
                         f"⚠ env variable {key} is set in terminal ({shell_value}) "
                         f"but differs from .env ({value})"
-                    )
+                        )
                     print(Colors.info(f"  Terminal value takes priority. To use .env value: unset {key}"))
     except Exception:
         pass  # Non-blocking: if .env parsing fails, just skip the check
@@ -1096,11 +1102,16 @@ def _docker_ensure_assets_built():
     """
     from scripts.cli_base import check_frontend_needs_build
 
-    # --- 1. Frontend ----------------------------------------------------------
+    # --- 1. JS library cache (fonts must exist before SvelteKit prerender) ----
+    update_js_cache()
+
+    # --- 2. Frontend ----------------------------------------------------------
     if check_frontend_needs_build():
         print_warning("Frontend build missing or outdated — building now...")
+
         class BuildArgs:
             debug = False
+
         result = cmd_fe_build(BuildArgs())
         if result != 0:
             print_error("Frontend build failed. Cannot build Docker image.")
@@ -1109,7 +1120,7 @@ def _docker_ensure_assets_built():
     else:
         print(Colors.info("ℹ️  Frontend build is up to date"))
 
-    # --- 2. MkDocs ------------------------------------------------------------
+    # --- 3. MkDocs ------------------------------------------------------------
     docs_index = PROJECT_ROOT / "mkdocs_src" / "site" / "index.html"
     docs_dir = PROJECT_ROOT / "mkdocs_src" / "docs"
     needs_mkdocs = False
@@ -1137,9 +1148,6 @@ def _docker_ensure_assets_built():
     else:
         print(Colors.info("ℹ️  MkDocs build is up to date"))
 
-    # --- 3. JS library cache --------------------------------------------------
-    update_js_cache()
-
     # --- 4. requirements.txt for Docker (no pipenv needed in image) -----------
     req_file = PROJECT_ROOT / "requirements.txt"
     lock_file = PROJECT_ROOT / "Pipfile.lock"
@@ -1153,10 +1161,7 @@ def _docker_ensure_assets_built():
 
     if needs_req:
         print(Colors.info("📦 Generating requirements.txt from Pipfile.lock..."))
-        result = subprocess.run(
-            ["pipenv", "requirements"],
-            capture_output=True, text=True, cwd=PROJECT_ROOT
-        )
+        result = subprocess.run(["pipenv", "requirements"], capture_output=True, text=True, cwd=PROJECT_ROOT)
         if result.returncode != 0:
             print_error(f"Failed to generate requirements.txt: {result.stderr}")
             return 1
@@ -1401,10 +1406,10 @@ def auto_build_frontend(debug=False):
     # Create args object for cmd_fe_build
     class BuildArgs:
         pass
+
     args = BuildArgs()
     args.debug = debug
     return cmd_fe_build(args)
-
 
 
 def auto_build_mkdocs():
@@ -1461,7 +1466,7 @@ def copy_docs_assets():
         shutil.copy(src_logo, static_dir / "logo.png")
     if src_favicon.exists():
         shutil.copy(src_favicon, static_dir / "favicon.png")
-    
+
     # Copy icons folder
     if src_icons.exists():
         dest_icons = static_dir / "icons"
@@ -1475,7 +1480,7 @@ def update_js_cache():
     result = run_command_live(
         [*pipenv_prefix(), "python", "scripts/update_js_cache.py"],
         cwd=PROJECT_ROOT
-    )
+        )
     if result == 0:
         print_success("JS libraries cached")
     else:
@@ -1534,7 +1539,7 @@ Examples:
   ./dev.py mkdocs serve        Serve documentation locally
   ./dev.py user list           List all users
 """
-    )
+        )
 
     subparsers = parser.add_subparsers(dest="command", metavar="command")
 
@@ -1642,23 +1647,23 @@ Examples:
 
     mk_p = mk_sub.add_parser("gallery", help="Generate gallery screenshots with Playwright")
     mk_p.add_argument("--list", "-l", action="store_true", dest="list_tests",
-                       help="List available gallery test names (for use with --filter)")
+                      help="List available gallery test names (for use with --filter)")
     mk_p.add_argument("--filter", "-f", type=str, default=None,
-                       help="Filter: only run tests matching this text (passed as -g to Playwright)")
+                      help="Filter: only run tests matching this text (passed as -g to Playwright)")
     mk_p.add_argument("--desktop-only", action="store_true",
-                       help="Only generate desktop screenshots")
+                      help="Only generate desktop screenshots")
     mk_p.add_argument("--mobile-only", action="store_true",
-                       help="Only generate mobile screenshots")
+                      help="Only generate mobile screenshots")
     mk_p.add_argument("--no-populate", action="store_true",
-                       help="Skip DB population (faster for re-runs)")
+                      help="Skip DB population (faster for re-runs)")
     mk_p.add_argument("--workers", "-w", type=int, default=None,
-                       help="Number of Playwright workers (default: CPU count)")
+                      help="Number of Playwright workers (default: CPU count)")
     mk_p.add_argument("--test-port", type=int, default=None,
-                       help="Port for the test server (default: TEST_PORT env or 8001)")
+                      help="Port for the test server (default: TEST_PORT env or 8001)")
     mk_p.add_argument("--headed", action="store_true",
-                       help="Run browser in headed mode (visible window) instead of headless")
+                      help="Run browser in headed mode (visible window) instead of headless")
     mk_p.add_argument("--force", action="store_true",
-                       help="Kill zombie processes blocking the test port instead of failing")
+                      help="Kill zombie processes blocking the test port instead of failing")
     mk_p.set_defaults(func=cmd_mkdocs_gallery)
 
     mk_p = mk_sub.add_parser("check-links", help="Validate cross-boundary links (frontend/backend → docs)")
@@ -1795,4 +1800,3 @@ Examples:
 
 if __name__ == "__main__":
     sys.exit(main())
-

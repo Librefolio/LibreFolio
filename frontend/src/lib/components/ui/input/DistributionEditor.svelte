@@ -155,7 +155,7 @@
     }
 
     function updateWeight(id: string, newVal: number) {
-        entries = entries.map((e) => (e.id === id ? {...e, weight: Math.max(0, Math.min(100, newVal))} : e));
+        entries = entries.map((e) => (e.id === id ? {...e, weight: Math.max(0, newVal)} : e));
         emitChange();
     }
 
@@ -207,7 +207,7 @@
                 // All selected have weight 0: distribute equally
                 share = delta / selectedEntries.length;
             }
-            return {...e, weight: Math.max(0, Math.min(100, Number((e.weight + share).toFixed(2))))};
+            return {...e, weight: Math.max(0, Number((e.weight + share).toFixed(2)))};
         });
         emitChange();
     }
@@ -319,7 +319,6 @@
                     value: Number(row.weight.toFixed(2)),
                     step: 0.01,
                     min: 0,
-                    max: 100,
                     placeholder: '0.00',
                     onchange: (newVal: number | null) => updateWeight(row.id, newVal ?? 0),
                 };
@@ -354,7 +353,7 @@
     );
 </script>
 
-<div class="space-y-1">
+<div class="space-y-1" data-testid="distribution-editor-{kind}">
     <!-- Section header with +Add, bulk toolbar, and Ask Provider buttons -->
     <div class="flex items-center justify-between mb-1">
         <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
@@ -389,6 +388,7 @@
                 <button
                     type="button"
                     onclick={addEntry}
+                    data-testid="distribution-add-{kind}"
                     class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                     title={kind === 'sector' ? $t('assets.distribution.addSector') : $t('assets.distribution.addCountry')}
                 >
@@ -444,7 +444,7 @@
         <!-- Total badge -->
         <div class="flex items-center justify-end gap-1.5 text-xs font-medium pt-1">
             <span class="text-gray-500 dark:text-gray-400">{$t('assets.distribution.total')}:</span>
-            <span class="{isValid ? 'text-green-600 dark:text-green-400' : isExcess ? 'text-red-500' : 'text-amber-500'} font-mono">
+            <span data-testid="distribution-total-{kind}" class="{isValid ? 'text-green-600 dark:text-green-400' : isExcess ? 'text-red-500' : 'text-amber-500'} font-mono">
                 {totalPercent.toFixed(2)}%
             </span>
             {#if isValid}

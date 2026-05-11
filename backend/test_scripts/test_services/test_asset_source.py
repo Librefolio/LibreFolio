@@ -51,6 +51,7 @@ from backend.app.services.asset_source import AssetSourceManager, AssetSourcePro
 from backend.app.services.asset_source_providers.scheduled_investment import (
     calculate_day_count_fraction,
 )
+from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import (
     print_info,
     print_section,
@@ -242,57 +243,270 @@ async def test_bulk_assign_providers():
 
 
 @pytest.mark.asyncio
-async def test_metadata_auto_populate(asset_ids: list[int]):
-    """Test metadata auto-populate on provider assignment."""
-    print_section("Test 6a: Metadata Auto-Populate")
+async def test_assign_does_not_modify_metadata(asset_ids: list[int]):
+    """Test that provider assignment does NOT auto-populate metadata (removed in C2R2)."""
+    print_section("Test 6a: Assign Does Not Modify Metadata")
 
     timestamp = int(time.time() * 1000)
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        # Create new test asset for metadata test
         test_asset = Asset(
-            display_name=f"MockProvider Test Asset {timestamp}",
+            display_name=f"NoAutoPopulate Test {timestamp}",
             currency="USD",
             asset_type=AssetType.STOCK,
             active=True,
-            classification_params=None,  # Start with no metadata
+            classification_params=None,
         )
         session.add(test_asset)
         await session.commit()
         await session.refresh(test_asset)
 
-        print_info(f"Created test asset {test_asset.id} with no metadata")
-        # Bulk assign providers (single item for compatibility)
         item = FAProviderAssignmentItem(
             asset_id=test_asset.id,
             provider_code="mockprov",
-            identifier="MOCK_META_TEST",
+            identifier="MOCK_NO_AUTO",
             identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params={"mock_param": "test"},
         )
 
         results = await AssetSourceManager.bulk_assign_providers([item], session)
-        # Assuming single result, extract it
         result = results[0]
-
-        print_info(f"Assignment result: {result}")
         assert result.success, f"Assignment failed: {result.message}"
 
-        # Refresh asset to get updated metadata
+        await session.refresh(test_asset)
+        assert test_asset.classification_params is None, (
+            f"classification_params should be None after assign (no auto-populate), "
+            f"got: {test_asset.classification_params}"
+        )
+        print_success("✓ Assignment does not auto-populate metadata")
+
+
+@pytest.mark.asyncio
+async def test_assign_preserves_existing_metadata(asset_ids: list[int]):
+    """Test that provider assignment preserves pre-existing metadata."""
+    print_section("Test 6b: Assign Preserves Existing Metadata")
+
+    timestamp = int(time.time() * 1000)
+    pre_existing = json.dumps({
+        "sector_area": {"distribution": {"Healthcare": 1.0}},
+        "geographic_area": {"distribution": {"DEU": 0.5, "FRA": 0.5}},
+        "short_description": "Pre-existing description",
+    })
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        test_asset = Asset(
+            display_name=f"PreserveMetadata Test {timestamp}",
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            active=True,
+            classification_params=pre_existing,
+        )
+        session.add(test_asset)
+        await session.commit()
         await session.refresh(test_asset)
 
-        # Verify metadata was populated (mockprov MUST populate metadata)
-        assert test_asset.classification_params is not None, "Metadata should be populated by mockprov provider"
-        print_success(f"✓ Metadata auto-populated: {test_asset.classification_params[:100]}")
+        item = FAProviderAssignmentItem(
+            asset_id=test_asset.id,
+            provider_code="mockprov",
+            identifier="MOCK_PRESERVE",
+            identifier_type=ProviderInputType.AUTO_GENERATED,
+            provider_params={},
+        )
 
-        # Parse and verify content
+        results = await AssetSourceManager.bulk_assign_providers([item], session)
+        assert results[0].success
+
+        await session.refresh(test_asset)
+        assert test_asset.classification_params == pre_existing, (
+            "classification_params should be unchanged after assign"
+        )
         metadata = json.loads(test_asset.classification_params)
-        assert "Technology" in metadata["sector_area"]["distribution"], "sector incorrect"
-        print_success("✓ Metadata content verified (sector=Technology)")
+        assert "Healthcare" in metadata["sector_area"]["distribution"]
+        assert "DEU" in metadata["geographic_area"]["distribution"]
+        print_success("✓ Pre-existing metadata preserved after assignment")
 
-        # Metadata auto-populate during assignment is successful (verified by log and DB content above)
-        # Note: fields_detail is None during assignment (it's used in refresh endpoint)
-        print_success("✓ Metadata auto-populate on assignment completed successfully")
+
+@pytest.mark.asyncio
+async def test_refresh_populates_empty_asset(asset_ids: list[int]):
+    """Test that explicit refresh populates metadata on an empty asset."""
+    print_section("Test 6c: Refresh Populates Empty Asset")
+
+    AssetProviderRegistry.auto_discover()
+
+    timestamp = int(time.time() * 1000)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        test_asset = Asset(
+            display_name=f"RefreshPopulate Test {timestamp}",
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            active=True,
+            classification_params=None,
+        )
+        session.add(test_asset)
+        await session.commit()
+        await session.refresh(test_asset)
+
+        # Assign provider first (no auto-populate)
+        item = FAProviderAssignmentItem(
+            asset_id=test_asset.id,
+            provider_code="mockprov",
+            identifier="MOCK_REFRESH",
+            identifier_type=ProviderInputType.AUTO_GENERATED,
+            provider_params={},
+        )
+        results = await AssetSourceManager.bulk_assign_providers([item], session)
+        assert results[0].success
+
+        # Explicit refresh
+        refresh_resp = await AssetSourceManager.refresh_assets_from_provider([test_asset.id], session)
+        assert len(refresh_resp.results) == 1
+        r = refresh_resp.results[0]
+        assert r.success, f"Refresh failed: {r.message}"
+
+        # Verify metadata written to DB
+        await session.refresh(test_asset)
+        assert test_asset.classification_params is not None, "Metadata should be populated after refresh"
+        metadata = json.loads(test_asset.classification_params)
+        assert "Technology" in metadata.get("sector_area", {}).get("distribution", {}), "sector not populated"
+        assert "USA" in metadata.get("geographic_area", {}).get("distribution", {}), "geo not populated"
+        print_success("✓ Refresh populated empty asset with metadata from mockprov")
+
+
+@pytest.mark.asyncio
+async def test_refresh_returns_metadata_fields(asset_ids: list[int]):
+    """Test that refresh returns fields_detail with refreshed_fields info."""
+    print_section("Test 6d: Refresh Returns Metadata Fields")
+
+    AssetProviderRegistry.auto_discover()
+
+    timestamp = int(time.time() * 1000)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        test_asset = Asset(
+            display_name=f"RefreshFields Test {timestamp}",
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            active=True,
+            classification_params=None,
+        )
+        session.add(test_asset)
+        await session.commit()
+        await session.refresh(test_asset)
+
+        item = FAProviderAssignmentItem(
+            asset_id=test_asset.id,
+            provider_code="mockprov",
+            identifier="MOCK_FIELDS",
+            identifier_type=ProviderInputType.AUTO_GENERATED,
+            provider_params={},
+        )
+        await AssetSourceManager.bulk_assign_providers([item], session)
+
+        refresh_resp = await AssetSourceManager.refresh_assets_from_provider([test_asset.id], session)
+        r = refresh_resp.results[0]
+        assert r.success
+        assert r.fields_detail is not None, "fields_detail should be present"
+
+        refreshed_names = [f.info for f in r.fields_detail.refreshed_fields]
+        assert "classification_params" in refreshed_names, (
+            f"classification_params should be in refreshed_fields, got: {refreshed_names}"
+        )
+        print_success(f"✓ Refresh returned fields_detail with refreshed_fields: {refreshed_names}")
+
+
+@pytest.mark.asyncio
+async def test_refresh_field_detail_completeness(asset_ids: list[int]):
+    """Test that refresh reports missing_data_fields for fields not returned by provider."""
+    print_section("Test 6e: Refresh Field Detail Completeness")
+
+    AssetProviderRegistry.auto_discover()
+
+    timestamp = int(time.time() * 1000)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        test_asset = Asset(
+            display_name=f"FieldCompleteness Test {timestamp}",
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            active=True,
+            classification_params=None,
+        )
+        session.add(test_asset)
+        await session.commit()
+        await session.refresh(test_asset)
+
+        item = FAProviderAssignmentItem(
+            asset_id=test_asset.id,
+            provider_code="mockprov",
+            identifier="MOCK_COMPLETE",
+            identifier_type=ProviderInputType.AUTO_GENERATED,
+            provider_params={},
+        )
+        await AssetSourceManager.bulk_assign_providers([item], session)
+
+        refresh_resp = await AssetSourceManager.refresh_assets_from_provider([test_asset.id], session)
+        r = refresh_resp.results[0]
+        assert r.success
+        assert r.fields_detail is not None
+
+        # mockprov returns classification_params only — other patchable fields are missing
+        missing = r.fields_detail.missing_data_fields
+        assert isinstance(missing, list)
+        assert len(missing) > 0, "Should have missing_data_fields for fields not returned by mockprov"
+        assert r.fields_detail.ignored_fields == [], "ignored_fields should be empty"
+        print_success(f"✓ missing_data_fields={missing}, ignored_fields=[]")
+
+
+@pytest.mark.asyncio
+async def test_refresh_overwrites_user_set_fields(asset_ids: list[int]):
+    """Test that explicit refresh overwrites user-set fields (refresh = take from provider)."""
+    print_section("Test 6f: Refresh Overwrites User-Set Fields")
+
+    AssetProviderRegistry.auto_discover()
+
+    timestamp = int(time.time() * 1000)
+
+    # Start with user-set geographic_area different from mockprov
+    user_params = json.dumps({
+        "geographic_area": {"distribution": {"JPN": 1.0}},
+        "short_description": "User description",
+    })
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        test_asset = Asset(
+            display_name=f"RefreshOverwrite Test {timestamp}",
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            active=True,
+            classification_params=user_params,
+        )
+        session.add(test_asset)
+        await session.commit()
+        await session.refresh(test_asset)
+
+        item = FAProviderAssignmentItem(
+            asset_id=test_asset.id,
+            provider_code="mockprov",
+            identifier="MOCK_OVERWRITE",
+            identifier_type=ProviderInputType.AUTO_GENERATED,
+            provider_params={},
+        )
+        await AssetSourceManager.bulk_assign_providers([item], session)
+
+        # Refresh — mockprov returns geo=USA+ITA, sector=Technology
+        refresh_resp = await AssetSourceManager.refresh_assets_from_provider([test_asset.id], session)
+        r = refresh_resp.results[0]
+        assert r.success, f"Refresh failed: {r.message}"
+
+        await session.refresh(test_asset)
+        metadata = json.loads(test_asset.classification_params)
+
+        # mockprov's geo (USA+ITA) should have overwritten user's (JPN)
+        geo = metadata.get("geographic_area", {}).get("distribution", {})
+        assert "USA" in geo, f"Expected USA in geo after refresh, got: {geo}"
+        assert "JPN" not in geo, f"JPN should have been overwritten by provider, got: {geo}"
+        print_success("✓ Refresh correctly overwrites user-set fields with provider data")
 
 
 @pytest.mark.asyncio

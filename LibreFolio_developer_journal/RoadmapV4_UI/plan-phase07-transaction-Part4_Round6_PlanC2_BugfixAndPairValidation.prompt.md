@@ -148,7 +148,7 @@ Stessa logica per tags: se diversi, fare union (dedup) senza nota (i tags sono a
 
 Modificare il blocco `intent.action === 'clone'` (righe 246–255):
 
-1. Aggiungere auto-inclusione partner: prima del `map`, per ogni TX clicata che ha `related_transaction_id`, fare `txStoreGet(tx.related_transaction_id)` e aggiungerla al `resolved` (come nel blocco edit/delete riga 235)
+1. Aggiungere auto-inclusione partner: prima del `map`, per ogni TX cliccata che ha `related_transaction_id`, fare `txStoreGet(tx.related_transaction_id)` e aggiungerla al `resolved` (come nel blocco edit/delete riga 235)
 2. Generare un `link_uuid` condiviso per la coppia clonata
 3. Su entrambe: `id: 0`, `date: today`, `related_transaction_id: null`
 4. Applicare `quantityRule: 'zero'` se il tipo lo richiede
@@ -306,3 +306,101 @@ Aggiungere dopo riga 537 (nel blocco "Features deferred from Part 4 → Part 5")
 - **Toast singola op**: riutilizzare `typeHtml()` e `brokerHtml()` da `+page.svelte` (stesso layout del delete toast)
 - **B1 dati legacy**: la concatenazione nel FormModal è un fallback per vecchie coppie; con la regola di validazione backend (Step 2), le nuove coppie non potranno mai divergere
 
+---
+
+## Addendum: Fix infrastrutturali (fuori scope Phase 07, stesso commit batch)
+
+### A1 — Docker: container non più root
+
+**Problema**: il container Docker girava come `root` → `LibreFolio-data/` creata con `root:root` sull'host, causando problemi di permessi.
+
+**Fix applicati**:
+
+| File | Modifica |
+|------|----------|
+| `Dockerfile` | Aggiunto `ARG UID=1000`/`ARG GID=1000`, creato utente `librefolio` con UID/GID dell'host, `chown -R /app`, `USER librefolio` |
+| `docker-compose.yml` | `build.args` con `UID`/`GID` dall'env, `user: "${UID:-1000}:${GID:-1000}"` per runtime |
+| `dev.py` (docker build/rebuild) | `--build-arg UID=$(id -u) GID=$(id -g)` passati automaticamente via `os.getuid()`/`os.getgid()` |
+| `.env.example` | Documentate variabili `UID`/`GID` |
+
+### A2 — Font Noto Color Emoji self-hosted
+
+**Problema**: `@import url('https://fonts.googleapis.com/...')` in `app.css` → chiamata esterna bloccante, 23s di attesa quando il CDN Google è lento/irraggiungibile. Incompatibile con deploy self-hosted offline.
+
+**Fix applicati**:
+
+| File | Modifica |
+|------|----------|
+| `scripts/update_js_cache.py` | Esteso da "JS Library Cache" a "Static Resource Cache Manager": nuovo tipo `"font"` → scarica CSS da Google Fonts, parsa URL woff2, scarica tutti i subset, genera CSS locale con path relativi. Supporto `vendor_dir_key` per directory target diverse |
+| `frontend/src/app.css` | Rimosso `@import url(...)` da Google Fonts |
+| `frontend/src/app.html` | Aggiunto `<link>` al CSS font locale nel `<head>` |
+| `.gitignore` | `frontend/static/fonts/` ignorato (auto-scaricato dal cache system) |
+| `.gitattributes` | `*.woff2` marcati come binari per git |
+
+**Flusso**: `./dev.py server` / `./dev.py docker build` → `update_js_cache()` → MathJax + Noto Color Emoji controllati/aggiornati. Se Google Fonts irraggiungibile → mantiene versione cached. Con `--force` → ri-scarica tutto.
+
+### A3 — FX multi-route fallback in `sync_pairs_bulk`
+
+**Problema**: `sync_pairs_bulk` in `fx.py` usava solo la route primaria (`routes[0]`, priority=1). Se BOE falliva (bot protection → HTML instead of CSV), la coppia falliva completamente, ignorando le route di fallback (ECB, FED, SNB) configurate con priorità più bassa.
+
+**Root cause**: Phase 1 raccoglieva legs solo dalla route primaria. Phase 3 faceva `raise FXServiceError` al primo leg fallito senza tentare route alternative.
+
+**Fix applicati** in `backend/app/services/fx.py`:
+
+| Fase | Prima | Dopo |
+|------|-------|------|
+| Phase 1 (collect legs) | Solo `routes[0]` → `pair_route_map[slug] = route` | Tutte le routes → `pair_routes_map[slug] = [route1, route2, ...]`. Legs raccolti da TUTTE le routes per pre-fetch parallelo |
+| Phase 2 (fetch) | Invariato | Invariato (ora fetcha dati per tutti i provider referenziati da tutte le routes) |
+| Phase 3 (process) | `_process_route()` monolitica, un solo tentativo | Loop su routes in ordine di priorità. Se legs di una route falliscono → `continue` alla prossima. Log di fallback per diagnostica |
+| Compute helpers | Inline in `_process_route()` | Estratti in `_compute_single_step()` e `_compute_multi_step()` per riuso nel loop |
+
+**Comportamento nuovo**: BOE fallisce → log warning "Route 1 failed, trying next route" → ECB/FED tentati automaticamente → sync OK con provider alternativo. L'errore originale della route primaria viene preservato nel campo `errors[]` della risposta per diagnostica.
+
+### A4 — classification_params sovrascritto dall'auto-populate
+
+**Problema**: dopo il salvataggio di un asset con `geographic_area` (distribuzione), l'auto-populate dal provider (justetf) sovrascriveva `classification_params` eliminando `geographic_area`.
+
+**Root cause**: race condition in `bulk_assign_providers()` — l'auto-populate leggeva l'asset dalla sessione aperta PRIMA del commit del PATCH. Il provider restituiva solo `short_description` (senza `geographic_area`), e `apply_partial_update()` applicava il merge sulla versione stale → `geographic_area` perduto.
+
+**Fix applicati** in `backend/app/services/asset_source.py`, funzione auto-populate metadata (riga ~998):
+
+1. **`await session.refresh(asset)`** prima dell'auto-populate → forza re-read dal DB con i dati più recenti (incluso `geographic_area` appena salvato dal PATCH)
+2. **Confronto `new_json != asset.classification_params`** prima di scrivere → evita scritture inutili e falsi positivi in `changes_count`
+
+---
+
+## Test mancanti per prevenire regressioni
+
+### Backend (pytest)
+
+| Test | File suggerito | Descrizione |
+|------|---------------|-------------|
+| **FX fallback sync** | `test_scripts/test_services/test_fx_fallback.py` | Mockare un provider che fallisce (raise `FXServiceError`), verificare che `sync_pairs_bulk` provi la route successiva e ritorni `SyncStatus.OK` con il provider di fallback. Verificare che `errors[]` contenga l'errore della route primaria |
+| **FX all routes fail** | stesso file | Mockare tutti i provider per una coppia come falliti → verificare `SyncStatus.FAILED` e che tutti gli errori siano elencati |
+| **FX MANUAL-only skip** | stesso file | Coppia con sole routes MANUAL → `SyncStatus.SKIPPED` |
+| **classification_params race condition** | `test_scripts/test_api/test_assets_classification.py` | Creare asset → assegnare provider → PATCH con `geographic_area` → GET → verificare che `geographic_area` sia presente. Simulare il timing del race condition: PATCH + provider assignment in rapida successione |
+| **classification_params idempotent auto-populate** | stesso file | Asset con `geographic_area` → trigger auto-populate da provider che restituisce solo `short_description` → verificare che `geographic_area` sia preservato |
+| **classification_params clear** | stesso file | PATCH con `geographic_area: null` → verificare che viene rimosso |
+
+### Frontend E2E (Playwright)
+
+| Test | File suggerito | Descrizione |
+|------|---------------|-------------|
+| **Asset geographic distribution save/reload** | `e2e/assets/asset-classification.spec.ts` | Aprire asset modal → impostare distribuzione geografica → salva → riaprire → verificare che la distribuzione sia ancora presente (`data-testid` sui chip/valori della mappa) |
+| **Asset geographic distribution clear** | stesso file | Impostare distribuzione → salva → riaprire → rimuovere distribuzione → salva → riaprire → verificare che sia vuota |
+| **FX sync con provider in errore** | `e2e/fx/fx-sync-fallback.spec.ts` | Difficile da testare E2E senza mock del provider. Alternativa: verificare che dopo un sync fallito, la UI mostri il messaggio di errore con dettaglio per-route nella response. Intercettare la risposta API e verificare il campo `errors[]` |
+
+### Nota sulla copertura Docker
+
+I fix Docker (A1) non sono testabili con unit/E2E. Verificare manualmente:
+```bash
+./dev.py docker build && docker compose up -d
+ls -la LibreFolio-data/  # owner deve essere $(id -u):$(id -g), non root
+docker exec librefolio whoami  # deve essere "librefolio", non "root"
+```
+
+---
+
+## Link forward
+
+→ **Round 2**: `plan-phase07-transaction-Part4_Round6_PlanC2Round2_FixRegressionsAndMockFX.prompt.md` — Fix regressions + MockFX + Rimozione auto-populate + Test
