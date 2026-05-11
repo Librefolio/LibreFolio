@@ -181,6 +181,16 @@ def api_transactions_validate(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Transactions validate tests", verbose=verbose)
 
 
+def api_tx_balance_walk(verbose: bool = False, test_names: list = None) -> bool:
+    """Run transaction balance walk tests (same-day, cascade, end-of-day)."""
+    print_section("Transaction Balance Walk Tests")
+    print_info("Testing end-of-day balance validation, same-day ordering, cascading edits/deletes")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_tx_balance_walk.py", test_names)
+    return run_command(cmd, "Balance walk tests", verbose=verbose)
+
+
 def api_events_suggest(verbose: bool = False, test_names: list = None) -> bool:
     """Run POST /transactions/events/suggest tests."""
     print_section("Events Suggest (C.2) API Tests")
@@ -457,6 +467,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")
     add_test(api, "transfer-promotion", api_transfer_promotion, name="Transfer Promotion", desc="DEPOSIT/WITHDRAWAL → TRANSFER")
     add_test(api, "transactions-validate", api_transactions_validate, name="Transactions Validate", desc="POST /transactions/validate dry-run")
+    add_test(api, "tx-balance-walk", api_tx_balance_walk, name="TX Balance Walk", desc="Same-day ordering, cascade, end-of-day")
     add_test(api, "events-suggest", api_events_suggest, name="Events Suggest", desc="Candidate events within tolerance")
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="Sentinel rules on POST /assets/prices")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")

@@ -593,6 +593,40 @@
         return buildUpdateDiff(draftToTxFields(d), d.original as unknown as TxOriginal, rule, origRule);
     }
 
+    /**
+     * Build the bulk payload excluding one specific draft (by tempId).
+     * Used by FormModal for context-aware validation: the form sends the
+     * entire bulk + its own row to /validate, so the balance walk sees
+     * all in-flight changes.
+     */
+    function getBulkContextExcluding(excludeTempId: string | null): {creates: Record<string, unknown>[]; updates: Record<string, unknown>[]; deletes: number[]} {
+        const creates: Record<string, unknown>[] = [];
+        const updates: Record<string, unknown>[] = [];
+        const deletes: number[] = [];
+        for (const d of drafts) {
+            if (d.tempId === excludeTempId) continue;
+            const st = deriveStatus(d);
+            if (st === 'new') {
+                creates.push(collectCreate(d));
+                if (d._partnerFormPayload) creates.push(d._partnerFormPayload);
+            } else if (st === 'edited') {
+                const upd = collectUpdate(d);
+                if (upd && Object.keys(upd).length > 1) updates.push(upd);
+                if (d._partnerFormPayload && d._partnerId != null) {
+                    const partnerOrig = txStoreGet(d._partnerId);
+                    if (partnerOrig) {
+                        const partnerUpd = diffDualItem(d._partnerFormPayload, partnerOrig as unknown as TxOriginal);
+                        if (Object.keys(partnerUpd).length > 1) updates.push(partnerUpd);
+                    }
+                }
+            } else if (st === 'delete' && d.id != null) {
+                deletes.push(d.id);
+                if (d._partnerId != null) deletes.push(d._partnerId);
+            }
+        }
+        return {creates, updates, deletes};
+    }
+
     /** Convert a DraftRow to the shared TxFields interface. */
     function draftToTxFields(d: DraftRow): TxFields {
         return {
@@ -1771,6 +1805,7 @@
     availableTags={aggregatedTags}
     zIndex={70}
     openKey={formKey}
+    getBulkContext={() => getBulkContextExcluding(formEditingTempId)}
     onClose={() => {
         formOpen = false;
         formEditingTempId = null;

@@ -253,3 +253,304 @@ Tutti i 10 step implementati. Review utente ha evidenziato:
 | Asset — classification persistence | ✅ | geo+sector ora persistono dopo PATCH+reload |
 | Asset — network flow | ✅ | PATCH assets → GET all → GET assignments → GET query → GET current |
 
+---
+
+## Edge Case: Form Validate vs Bulk Validate (Same-Day Intra-Batch Dependencies)
+
+### Scenario osservato
+
+Bulk con DEPOSIT + BUY nello stesso giorno:
+```json
+{"creates":[
+  {"broker_id":1,"type":"DEPOSIT","date":"2026-05-11","quantity":"0","cash":{"code":"EUR","amount":"1000"}},
+  {"broker_id":1,"type":"BUY","date":"2026-05-11","quantity":"11","asset_id":1,"cash":{"code":"EUR","amount":"-10"}}
+]}
+```
+
+- **Bulk `/validate`** → ✅ `issues: []` (processa entrambe le righe insieme, DEPOSIT porta il bilancio a +1000, BUY spende -10 = resta +990)
+- **FormModal** validate (singola riga BUY) → ❌ `balanceCashNegative` (vede solo il BUY senza il DEPOSIT che lo precede nella stessa bulk)
+
+### Analisi: FormModal valida in isolamento
+
+`TransactionFormModal.svelte` riga 695:
+```typescript
+const payload = mode === 'edit' ? {updates: [collectUpdate()]} : {creates: [collectCreate()]};
+```
+
+Invia **solo la riga corrente** a `/validate`. Non include le altre righe presenti nella BulkModal. Ciò causa falsi negativi quando una riga dipende da un'altra nella stessa batch (e.g. DEPOSIT → BUY same day).
+
+### Domanda: la Form esiste ancora come entità standalone?
+
+**No** — la FormModal è oggi esclusivamente invocata **dall'interno della BulkModal** per editare/creare una singola riga. Non esiste più un flusso "crea transazione singola fuori dalla bulk". Ogni transazione nasce dentro la bulk table.
+
+### Proposta: validate contestuale
+
+La FormModal dovrebbe mandare a `/validate` il payload completo della bulk (compresa la riga corrente modificata), non solo la singola riga. Così il balance walk vede tutte le transazioni in-flight:
+
+```typescript
+// Invece di:
+{creates: [collectCreate()]}
+// Dovrebbe essere:
+{creates: [...otherBulkCreates, collectCreate()], updates: [...otherBulkUpdates]}
+```
+
+Oppure — soluzione più leggera — la FormModal **non valida affatto** (non chiama `/validate`), e la validazione rimane solo nella BulkModal al "Validate All" / auto-debounce. La FormModal si limita al check strutturale locale (campi obbligatori presenti).
+
+**Decisione da prendere**: disabilitare la validate nella FormModal (solo structural check locale) oppure passarle il contesto della bulk.
+
+### Same-Day Ordering: come funziona
+
+`_validate_broker_balances()` ordina le transazioni con:
+```python
+ORDER BY Transaction.date, Transaction.id
+```
+
+Le transazioni **dello stesso giorno** vengono processate in ordine di `id` (auto-increment). Nella bulk, l'ordine di inserimento determina l'ordine degli ID:
+- index 0 → ID più basso → processato per primo
+- index 1 → ID più alto → processato dopo
+
+**Implicazione**: l'ordine delle righe nella bulk array matters! Un BUY prima di un DEPOSIT nello stesso giorno fallirà la validazione, anche se la somma finale è positiva.
+
+**Coerenza**: questo è il design corretto per un sistema daily-point. Il vincolo "mai negativo" deve essere vero in ogni istante, e l'ordine di inserimento (ID) è l'unico modo deterministico di risolvere l'ambiguità intra-giorno.
+
+### Test coverage attuale
+
+**Non esistono test backend** per i seguenti scenari:
+- Same-day DEPOSIT+BUY (ordine corretto → pass)
+- Same-day BUY+DEPOSIT (ordine invertito → fail)
+- Same-day multiple operations che si compensano
+- Validate della singola riga vs batch completa
+
+**Raccomandazione**: creare `backend/test_scripts/test_api/test_tx_balance_walk.py` con test specifici per:
+1. Same-day deposit-then-buy (pass)
+2. Same-day buy-then-deposit (fail — saldo negativo intra-day)
+3. Multi-day cumulative balance
+4. Edit che sposta la data di un deposit → cascata di violazioni
+5. Delete di un deposit a metà timeline → downstream BUY diventa invalido
+
+---
+
+## Pending: Missing i18n Keys for Transaction Toasts ✅
+
+### Piano originale (PlanC2 Step 6)
+
+Riferimento: `plan-phase07-transaction-Part4_Round6_PlanC2_BugfixAndPairValidation.prompt.md`, Step 6 — Fix B4.
+
+Il piano prevedeva:
+1. `handleBulkCommitted(resp)` conta per tipo di operazione i `status:'success'`
+2. **Singola operazione** → toast **dettagliato** (stile delete: tipo, asset, broker, data) — riutilizzare `typeHtml()` e `brokerHtml()` da `+page.svelte`
+3. **Multiple operazioni** → toast **sommario**: "✅ N creazioni, M modifiche, D eliminazioni salvate"
+4. Chiavi previste: `transactions.toast.bulkSummary`, `transactions.toast.created`, `transactions.toast.updated`, `transactions.toast.deleted`
+
+### Stato attuale
+
+L'implementazione (riga 481-496 di `+page.svelte`) fa **solo il sommario numerico** per tutti i casi:
+```typescript
+if (created) parts.push(`${created} ${$_('transactions.toast.created') || 'created'}`);
+```
+- Il toast dettagliato per singola operazione **non è stato implementato**
+- La chiave `transactions.toast.bulkSummary` **non è definita né usata**
+- Le 3 chiavi `.created/.updated/.deleted` sono usate ma **non definite** nei file i18n (fallback hardcoded)
+
+### Azioni da fare
+
+1. Aggiungere le 3 chiavi i18n mancanti (sommario numerico)
+2. Valutare se implementare il toast dettagliato per singola op (pianificato ma mai fatto) — bassa priorità, il sommario è sufficiente
+3. Rimuovere `transactions.toast.bulkSummary` dal piano (non più necessaria, il codice costruisce la frase direttamente dalle 3 chiavi componenti)
+
+---
+
+## Pending: Toast Informativo per Asset Creati da Transaction ⏳ (chiave i18n aggiunta, implementazione frontend TBD)
+
+### Scenario
+
+Utente crea un asset direttamente dalla TransactionFormModal (pulsante "Crea Asset"), poi crea un BUY per quell'asset. Al commit della bulk, l'asset esiste ma non ha nessun prezzo storico.
+
+### Decisione: solo toast informativo (no auto-sync)
+
+Al commit della bulk, se sono stati creati asset "vergini" (senza price history), mostrare un **toast informativo** che:
+- ✅ Conferma la creazione dell'asset
+- ℹ️ Comunica all'utente che per i prezzi dovrà andare nella pagina asset e fare sync al termine dell'inserimento delle transazioni
+
+**No auto-sync**: l'utente decide lui quando e come popolare i prezzi storici.
+
+### Implementazione
+
+Nel callback `handleBulkCommitted()` di `transactions/+page.svelte`:
+1. Per ogni `result` con `operation: "create"` → raccogliere gli `asset_id` unici
+2. Filtrare quelli appena creati nella sessione corrente (tracking via AssetModal)
+3. Toast: `"Asset {name} created. Go to the asset page to sync price history."`
+
+Chiave i18n: `transactions.toast.assetCreatedHint`
+
+---
+
+## Pending: FormModal Validate con Contesto Bulk ✅
+
+### Decisione: mandare l'intero bulk
+
+La FormModal deve inviare a `/validate` l'**intera bulk** (tutte le creates + updates + deletes), con la riga corrente sostituita/aggiunta. Così il balance walk vede il contesto completo.
+
+### Implementazione
+
+1. **BulkModal** passa alla FormModal un callback `getBulkContext()` che ritorna il payload corrente della bulk (creates, updates, deletes) **esclusa** la riga in editing
+2. **FormModal** nella `validateFn`:
+   ```typescript
+   const bulkContext = getBulkContext(); // {creates: [...], updates: [...], deletes: [...]}
+   const myPayload = mode === 'edit' ? {updates: [collectUpdate()]} : {creates: [collectCreate()]};
+   // Merge: bulk context + current row
+   const fullPayload = {
+       creates: [...(bulkContext.creates || []), ...(myPayload.creates || [])],
+       updates: [...(bulkContext.updates || []), ...(myPayload.updates || [])],
+       deletes: bulkContext.deletes || [],
+   };
+   const res = await zodiosApi.validate_transactions_...(fullPayload);
+   // Filter issues: show only those with index matching current row
+   ```
+3. **Issue filtering**: `/validate` ritorna issues per tutte le righe, ma la FormModal deve mostrare solo quelle relative alla riga corrente (match per `index` e `operation`)
+
+### Banner text per errori contestuali
+
+Quando la FormModal mostra errori derivanti dalla validazione contestuale (cioè la riga è valida da sola, ma viola i vincoli considerando le altre modifiche pianificate), usare un header distinto nel banner:
+
+- **Chiave**: `transactions.validate.contextualIssuesHeader`
+- **EN**: `"With the other pending changes, this row causes the following issues:"`
+- **IT**: `"Considerando le altre modifiche in sospeso, questa riga causa i seguenti problemi:"`
+- **FR**: `"Avec les autres modifications en attente, cette ligne provoque les problèmes suivants :"`
+- **ES**: `"Con los demás cambios pendientes, esta fila causa los siguientes problemas:"`
+
+Questo header sostituisce `validate.issuesHeader` / `validate.balanceIssuesHeader` solo quando l'errore proviene dal contesto (cioè la stessa riga validata da sola non avrebbe errori). In pratica, si usa sempre il header contestuale nella FormModal perché lì la validazione è sempre contestuale.
+
+### Vantaggi
+- Zero duplicazione di logica (il backend è l'unico validatore)
+- La FormModal vede sempre il contesto corretto (same-day dependencies risolte)
+- La BulkModal non perde la sua validate globale
+
+---
+
+## Pending: Same-Day Ordering Algorithm ✅ (confirmed end-of-day + tests)
+
+### Problema attuale
+
+`ORDER BY date, id` funziona solo se l'ordine di inserimento corrisponde all'ordine logico delle operazioni. Ma per l'utente, l'ordine in cui clicca "Add row" nella bulk non ha significato semantico — un DEPOSIT e un BUY nello stesso giorno sono concettuali, non sequenziali.
+
+### Opzione A: Ordinamento per tipo (type-priority)
+
+Definire una priorità fissa per `TransactionType` che riflette l'ordine logico:
+
+| Priority | Type | Reasoning |
+|----------|------|-----------|
+| 1 | DEPOSIT | Cash enters the broker first |
+| 2 | TRANSFER_IN | Assets/cash arrive |
+| 3 | BUY | Requires cash already present |
+| 4 | DIVIDEND | Passive income on held assets |
+| 5 | INTEREST | Passive income on cash |
+| 6 | FEE | Deducted from balance |
+| 7 | TAX | Deducted from balance |
+| 8 | SELL | Liquidates held assets |
+| 9 | WITHDRAWAL | Cash leaves (alias: TRANSFER_OUT) |
+| 10 | TRANSFER_OUT | Assets/cash leave |
+| 11 | SPLIT | Structural change |
+| 12 | OTHER | Catch-all |
+
+`ORDER BY date, type_priority, id`
+
+**Pro**: deterministico, semanticamente corretto (deposit prima di buy), ordine indipendente dall'inserimento.
+**Contro**: regole rigide — edge cases dove l'utente vuole un ordine diverso? Rari.
+
+### Opzione B: End-of-Day balance check (somma giornaliera)
+
+Invece di validare istante per istante dentro la giornata, sommare tutti i delta del giorno e verificare che il saldo a fine giornata sia ≥ 0.
+
+```python
+# Attuale: per-transaction within day
+for tx in txs_of_day:
+    balance += tx.amount
+    if balance < 0: FAIL  # ← fails mid-day
+
+# Proposta: end-of-day
+day_delta = sum(tx.amount for tx in txs_of_day)
+balance += day_delta
+if balance < 0: FAIL  # ← checks only EOD
+```
+
+**Pro**: ordine intra-giorno irrilevante, nessuna ambiguità.
+**Contro**: permette stati "transienti negativi" dentro la giornata. Ma dato che il nostro sistema è daily-point (un prezzo per giorno, un saldo per giorno), i saldi intra-giorno non hanno significato osservabile.
+
+### Raccomandazione
+
+**Opzione B (end-of-day)** è più coerente con il design daily-point di LibreFolio:
+- Se il sistema ragiona per giorno, non ha senso imporre un ordine intra-giorno
+- Elimina la dipendenza dall'ordine di inserimento
+- Elimina il problema FormModal (DEPOSIT + BUY same day sono equivalenti a BUY + DEPOSIT)
+- Implementazione più semplice (3 righe di codice cambiate)
+
+L'Opzione A (type-priority) è un buon fallback se in futuro si volesse un ordinamento deterministico per visualizzazione, ma non per la validazione.
+
+### Impatto sul codice
+
+`_validate_broker_balances()` in `transaction_service.py` righe 432-465:
+
+```python
+# PRIMA (per-tx within day):
+while current_date <= end_date:
+    for tx in txs_by_date.get(current_date, []):
+        cash_balances[tx.currency] += tx.amount
+        asset_balances[tx.asset_id] += tx.quantity
+    # check balances AFTER processing ALL transactions of the day
+    ...
+```
+
+In realtà il codice **già** processa tutte le transazioni del giorno prima di controllare i saldi! Il loop è:
+1. `for tx in txs_of_day:` → accumula tutti i delta
+2. **poi** `if balance < 0: FAIL`
+
+Quindi **il codice implementa già l'Opzione B** (end-of-day check). Il "problema" osservato dall'utente nella FormModal non è un bug di ordinamento — è un bug di **contesto mancante** (la FormModal valida solo 1 riga, non l'intera bulk).
+
+### Conclusione
+
+- L'algoritmo di balance walk è **già corretto** (end-of-day, non per-transazione)
+- Il fix è solo **passare il contesto bulk alla FormModal** (sezione precedente)
+- **Test backend da creare** per confermare e documentare il comportamento end-of-day
+
+### Test backend pianificati: `test_tx_balance_walk.py`
+
+**File**: `backend/test_scripts/test_api/test_tx_balance_walk.py` (nuovo)
+
+| # | Test | Scenario | Expected |
+|---|------|----------|----------|
+| 1 | `test_same_day_deposit_then_buy_pass` | Bulk: DEPOSIT +1000 + BUY -10, same day | ✅ committed=True |
+| 2 | `test_same_day_buy_then_deposit_pass` | Bulk: BUY -10 + DEPOSIT +1000, same day (ordine invertito) | ✅ committed=True (end-of-day: +990) |
+| 3 | `test_same_day_net_negative_fail` | Bulk: DEPOSIT +100 + BUY -200, same day | ❌ balanceCashNegative |
+| 4 | `test_multi_day_cumulative` | Day 1: DEPOSIT +1000. Day 2: BUY -500. Day 3: BUY -600 | ❌ Day 3: balance -100 |
+| 5 | `test_edit_move_deposit_date_cascade` | Committed: DEPOSIT day 1, BUY day 2. Update: move DEPOSIT to day 3 | ❌ Day 2: BUY without deposit |
+| 6 | `test_delete_deposit_cascades` | Committed: DEPOSIT day 1, BUY day 2. Delete DEPOSIT | ❌ Day 2: balance negative |
+| 7 | `test_same_day_multi_ops_compensating` | DEPOSIT +500, BUY -300, SELL +200, WITHDRAWAL -400, same day | ✅ net=0 |
+| 8 | `test_validate_single_row_vs_batch` | Validate BUY -10 alone → ❌. Validate DEPOSIT +1000 + BUY -10 → ✅ | Confirms context matters |
+
+### Session 3 — Execution Log (2026-05-11)
+
+#### Implementazioni completate
+
+| # | Item | File(s) | Risultato |
+|---|------|---------|-----------|
+| 1 | i18n: 3 chiavi toast mancanti | `{en,it,fr,es}.json` | ✅ `transactions.toast.{created,updated,deleted}` |
+| 2 | i18n: banner contestuale | `{en,it,fr,es}.json` | ✅ `transactions.validate.contextualIssuesHeader` |
+| 3 | i18n: hint asset creato | `{en,it,fr,es}.json` | ✅ `transactions.toast.assetCreatedHint` |
+| 4 | Backend: 8 balance walk tests | `test_tx_balance_walk.py` (nuovo) | ✅ 8/8 passed — conferma end-of-day algorithm |
+| 5 | Frontend: FormModal context-aware validate | `TransactionFormModal.svelte` | ✅ prop `getBulkContext`, merge payload, issue filtering |
+| 6 | Frontend: BulkModal → FormModal context | `TransactionBulkModal.svelte` | ✅ `getBulkContextExcluding(tempId)` + prop passata |
+| 7 | Frontend: banner contestuale | `TransactionFormModal.svelte` | ✅ header diverso quando `getBulkContext` presente |
+| 8 | Docker: entrypoint gosu | `Dockerfile`, `entrypoint.sh`, `docker-compose.yml` | ✅ Testato su server Linux |
+| 9 | Docker: docs aggiornata | `docker_advanced.en.md` | ✅ Semplificata, cheatsheet Linux |
+| 10 | translate-diff: LaTeX validation | `translate_docs.py` | ✅ LATEX_COUNT con line numbers, LATEX_SYNTAX |
+
+#### Verifiche
+
+- `svelte-check`: 0 errors, 0 warnings ✅
+- Backend balance walk: 8/8 tests pass ✅
+- Docker build+up su server Linux: ✅ `LibreFolio-data/` owner corretto
+
+#### Ancora da fare (non in questo round)
+
+- Toast informativo per asset vergini (`assetCreatedHint`) — chiave i18n pronta, implementazione frontend non ancora

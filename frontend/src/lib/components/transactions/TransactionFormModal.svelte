@@ -144,9 +144,13 @@
         /** Bug15-fix: monotonic key that forces re-init when the modal is
          *  re-opened without `open` transitioning through `false`. */
         openKey?: number;
+        /** Context-aware validation: when set, the FormModal sends the entire
+         *  bulk payload (from this callback) merged with its own row to /validate,
+         *  so the balance walk sees all in-flight changes. */
+        getBulkContext?: () => {creates: Record<string, unknown>[]; updates: Record<string, unknown>[]; deletes: number[]};
     }
 
-    let {open, mode, initialRow = null, forcedBroker = null, commitOnSave = true, unlockImmutable = false, availableTags = [], zIndex = 50, injectedPartnerRow = null, onClose, onCommitted, onPushDraft, onSwitchToEdit, canEdit = true, openKey = 0}: Props = $props();
+    let {open, mode, initialRow = null, forcedBroker = null, commitOnSave = true, unlockImmutable = false, availableTags = [], zIndex = 50, injectedPartnerRow = null, onClose, onCommitted, onPushDraft, onSwitchToEdit, canEdit = true, openKey = 0, getBulkContext}: Props = $props();
 
     // =========================================================================
     // Form state
@@ -661,9 +665,22 @@
             if (isReadonly) return {issuesCount: 0};
             if (pairLayout) {
                 // Dual mode: validate both sides
-                const payload = mode === 'edit'
+                const dualPayload = mode === 'edit'
                     ? {updates: collectDualUpdates()}
                     : {creates: collectDualCreates()};
+                // Merge bulk context if available
+                let payload: Record<string, unknown>;
+                if (getBulkContext) {
+                    const ctx = getBulkContext();
+                    const mergedCreates = [...(ctx.creates || []), ...(dualPayload.creates || [] as Record<string, unknown>[])];
+                    const mergedUpdates = [...(ctx.updates || []), ...(dualPayload.updates || [] as Record<string, unknown>[])];
+                    payload = {};
+                    if (mergedCreates.length > 0) payload.creates = mergedCreates;
+                    if (mergedUpdates.length > 0) payload.updates = mergedUpdates;
+                    if (ctx.deletes?.length > 0) payload.deletes = ctx.deletes;
+                } else {
+                    payload = dualPayload;
+                }
                 const sentKey = lastDraftKey;
                 try {
                     const res = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post(payload as never)) as {committed?: boolean; issues?: ValidationIssue[]};
@@ -692,11 +709,33 @@
                     return {issuesCount: issues.length};
                 }
             }
-            const payload = mode === 'edit' ? {updates: [collectUpdate()]} : {creates: [collectCreate()]};
+            const myPayload = mode === 'edit' ? {updates: [collectUpdate()]} : {creates: [collectCreate()]};
+            // Context-aware validation: merge bulk context if available
+            let payload: Record<string, unknown>;
+            let myOperation: 'create' | 'update' = mode === 'edit' ? 'update' : 'create';
+            let myIndex: number;
+            if (getBulkContext) {
+                const ctx = getBulkContext();
+                const mergedCreates = [...(ctx.creates || []), ...(myPayload.creates || [] as Record<string, unknown>[])];
+                const mergedUpdates = [...(ctx.updates || []), ...(myPayload.updates || [] as Record<string, unknown>[])];
+                payload = {};
+                if (mergedCreates.length > 0) payload.creates = mergedCreates;
+                if (mergedUpdates.length > 0) payload.updates = mergedUpdates;
+                if (ctx.deletes?.length > 0) payload.deletes = ctx.deletes;
+                // My row is the last item in creates or updates
+                myIndex = myOperation === 'create' ? mergedCreates.length - 1 : mergedUpdates.length - 1;
+            } else {
+                payload = myPayload;
+                myIndex = 0;
+            }
             const sentKey = lastDraftKey;
             try {
                 const res = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post(payload as never)) as {committed?: boolean; issues?: ValidationIssue[]};
-                issues = res?.issues ?? [];
+                // Filter: show only issues for my row (or global balance issues with index=-1)
+                const allIssues = res?.issues ?? [];
+                issues = getBulkContext
+                    ? allIssues.filter((i) => (i.operation === myOperation && i.index === myIndex) || i.index === -1)
+                    : allIssues;
                 lastValidatedDraftKey = sentKey;
                 issuesDismissed = false;
                 return {issuesCount: issues.length};
@@ -1280,7 +1319,7 @@
             {:else if showIssuesBanner}
                 <InfoBanner variant="warning" dismissible ondismiss={() => (issuesDismissed = true)}>
                     {#if fieldIssues.length > 0}
-                        <p class="font-semibold text-sm mb-1.5" data-testid="tx-form-issues-header">{$t('transactions.validate.issuesHeader')}</p>
+                        <p class="font-semibold text-sm mb-1.5" data-testid="tx-form-issues-header">{getBulkContext ? $t('transactions.validate.contextualIssuesHeader') : $t('transactions.validate.issuesHeader')}</p>
                         <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
                             {#each fieldIssues as issue}
                                 <li data-testid="tx-form-issue">{resolveIssueMessage(issue, $t, resolverCtx)}</li>
