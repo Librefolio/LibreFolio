@@ -27,9 +27,9 @@ services:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
     container_name: librefolio
-    # Run as non-root. Default 1000:1000 matches the 'librefolio' user in the image.
-    # Override in .env if your host user has a different UID/GID (see docs).
-    user: "${UID:-1000}:${GID:-1000}"
+    # The container starts as root so the entrypoint can fix bind-mount
+    # permissions, then drops to the 'librefolio' user via gosu.
+    # (Same pattern as postgres, mysql, redis official images.)
     restart: unless-stopped
     ports:
       - "${PORT:-8000}:8000"

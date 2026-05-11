@@ -12,8 +12,9 @@ FROM python:3.13-slim
 # System dependencies
 #   - gcc, libffi-dev: build native Python extensions
 #   - git: needed for justetf-scraping pip dependency
+#   - gosu: privilege drop in entrypoint (like postgres/mysql/redis images)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libffi-dev git \
+    gcc libffi-dev git gosu \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -50,13 +51,14 @@ RUN groupadd -g ${GID} librefolio 2>/dev/null || true && \
     useradd -u ${UID} -g ${GID} -m -s /bin/bash librefolio 2>/dev/null || true && \
     chown -R ${UID}:${GID} /app
 
-# Run as non-root user
-USER librefolio
+# Entrypoint: fix bind-mount permissions then drop to non-root via gosu
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Default environment
 ENV HOST=0.0.0.0 \
     PORT=8000 \
-    LIBREFOLIO_DATA_DIR=/app/backend/data/prod \
+    LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker \
     LOG_LEVEL=INFO \
     PORTFOLIO_BASE_CURRENCY=EUR
 
@@ -66,5 +68,6 @@ EXPOSE 8000 8001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/api/v1/system/health')" || exit 1
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
