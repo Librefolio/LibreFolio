@@ -541,6 +541,73 @@ _RE_BULLET = re.compile(r'^\s*[-*+]\s')
 _RE_NUMBERED = re.compile(r'^\s*\d+\.\s')
 
 
+# ---------------------------------------------------------------------------
+# LaTeX formula extraction & validation
+# ---------------------------------------------------------------------------
+
+# Match $$...$$ (block) first, then $...$ (inline, non-greedy)
+_RE_LATEX_BLOCK = re.compile(r'\$\$(.+?)\$\$', re.DOTALL)
+_RE_LATEX_INLINE = re.compile(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)')
+
+
+def _extract_latex_formulas(text: str) -> list[str]:
+    """Extract all LaTeX formulas from markdown (block $$ and inline $)."""
+    formulas = []
+    # Block formulas first
+    for m in _RE_LATEX_BLOCK.finditer(text):
+        formulas.append(m.group(0))
+    # Remove block formulas to avoid double-matching inline
+    text_no_block = _RE_LATEX_BLOCK.sub('', text)
+    for m in _RE_LATEX_INLINE.finditer(text_no_block):
+        formulas.append(m.group(0))
+    return formulas
+
+
+def _validate_latex_syntax(formula: str) -> list[str]:
+    """
+    Check a LaTeX formula for common syntax errors that break rendering.
+
+    Returns list of error descriptions (empty = valid).
+    Checks: balanced braces, balanced \\left/\\right, unescaped underscores
+    in text context, orphan backslashes, balanced \\begin/\\end.
+    """
+    # Strip outer $/$$ delimiters for analysis
+    inner = formula.strip('$').strip()
+    errors = []
+
+    # 1. Balanced curly braces
+    depth = 0
+    for ch in inner:
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+        if depth < 0:
+            break
+    if depth != 0:
+        errors.append(f"unbalanced braces (depth={depth:+d})")
+
+    # 2. Balanced \left / \right
+    lefts = len(re.findall(r'\\left[\s({[\|.]', inner + ' '))
+    rights = len(re.findall(r'\\right[\s)}\]|.]', inner + ' '))
+    if lefts != rights:
+        errors.append(f"\\left/{lefts} vs \\right/{rights}")
+
+    # 3. Balanced \begin{X} / \end{X}
+    begins = re.findall(r'\\begin\{(\w+)\}', inner)
+    ends = re.findall(r'\\end\{(\w+)\}', inner)
+    if begins != ends:
+        errors.append(f"\\begin/{begins} vs \\end/{ends}")
+
+    # 4. Orphan backslash (single \ not followed by a letter, another \, or valid symbols)
+    # Valid after \: letters (commands), \, {, }, space, !, ,, ;, :, > (spacing), %, &, #, _, ^
+    orphans = re.findall(r'(?<!\\)\\(?![a-zA-Z\\{} !,;:>%&#_^\n])', inner)
+    if orphans:
+        errors.append(f"orphan backslash(es): {len(orphans)}")
+
+    return errors
+
+
 def _structural_diff(source_text: str, translated_text: str) -> str:
     """
     Compare markdown structure between source (EN) and translated text.
@@ -725,7 +792,31 @@ def _structural_diff(source_text: str, translated_text: str) -> str:
             f"(Δ{delta_lines:+d}, >{15}% difference)"
         )
 
-    # ── 13. Source heading outline (for critic reference) ──
+    # ── 13. LaTeX formulas — count + syntax validation ──
+    src_formulas = _extract_latex_formulas(source_text)
+    trn_formulas = _extract_latex_formulas(translated_text)
+    if len(src_formulas) != len(trn_formulas):
+        issues.append(
+            f"LATEX_COUNT: source={len(src_formulas)}, "
+            f"translated={len(trn_formulas)} "
+            f"(Δ{len(trn_formulas) - len(src_formulas):+d})"
+        )
+    # Validate syntax of each translated formula and show source counterpart
+    broken = []
+    for idx, tf in enumerate(trn_formulas):
+        errs = _validate_latex_syntax(tf)
+        if errs:
+            src_f = src_formulas[idx] if idx < len(src_formulas) else "(no source)"
+            broken.append(f"  #{idx + 1}: {', '.join(errs)}\n"
+                          f"    EN:  {src_f}\n"
+                          f"    TRN: {tf}")
+    if broken:
+        issues.append(
+            f"LATEX_SYNTAX: {len(broken)} formula(s) with broken LaTeX:\n"
+            + "\n".join(broken)
+        )
+
+    # ── 14. Source heading outline (for critic reference) ──
     info.append("SOURCE_OUTLINE (for reference):")
     for h in src["headings"]:
         indent = "  " * (h["level"] - 1)
