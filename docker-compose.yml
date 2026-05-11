@@ -27,8 +27,8 @@ services:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
     container_name: librefolio
-    # Run as host user so bind-mounted files are not owned by root.
-    # Override with: UID=$(id -u) GID=$(id -g) docker compose up -d
+    # Run as non-root. Default 1000:1000 matches the 'librefolio' user in the image.
+    # Override in .env if your host user has a different UID/GID (see docs).
     user: "${UID:-1000}:${GID:-1000}"
     restart: unless-stopped
     ports:
