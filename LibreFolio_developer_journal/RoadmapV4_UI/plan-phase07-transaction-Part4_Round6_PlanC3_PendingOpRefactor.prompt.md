@@ -1,7 +1,7 @@
 # Plan: C3 — Completamento Refactor Architetturale: DraftRow → PendingOp
 
 **Date**: 2026-05-11
-**Status**: ⏳ IN REVIEW
+**Status**: ⏳ IN PROGRESS — Steps 1-8 completati, Step 9 (test E2E) pendente
 **Origine**: Piano C (txStore) ha raggiunto ~80% dell'architettura target. Restano 3 item strutturali (R1 parziale, R4, R5) interdipendenti e bloccanti per Piano D (Split/Promote). Questo piano completa la migrazione a `PendingOp` + rimozione legacy `DraftRow` clone, elimina le props legacy morte, rinomina `drafts` → `ops`, e stringe il tipo di `_partnerFormPayload` da `Record<string,unknown>` a `TxFields | null`.
 
 **Link back**: [`plan-phase07-transaction-Part4_Round6_PlanC2Round2_FixRegressionsAndMockFX.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanC2Round2_FixRegressionsAndMockFX.prompt.md)
@@ -505,10 +505,46 @@ Il delta LOC è modesto perché il refactor è di **qualità strutturale** (type
 
 ## Post-implementazione
 
-1. `./dev.py lint-format frontend` → 0 errors
-2. `./dev.py test front-transaction all` → 9/9 ✅
-3. `./dev.py test all-frontend` → tutti verdi ✅
-4. Ingestione wiki: specchio architetturale + decisioni da archiviare
+### Esecuzione (2026-05-11)
+
+Il refactor è stato eseguito in 2 passaggi:
+
+**Passaggio 1** (grep-based bulk rename — parziale):
+- Applicato rename `drafts` → `ops` globale
+- Applicato rename `DraftRow` → `PendingOp` / `DraftFields`
+- Applicato rename `_partnerId` → `partnerId`, `_partnerFormPayload` → `partnerPayload`
+- Rimossi props legacy, `fromTx()`, `draftToTxFields()`, `draftToTxLike()`, `mergePairedRows()`
+- Introdotti `collectCreate()`, `collectUpdate()`, `opToTxFields()`, `opToTxLike()`
+- Aggiornato header comment
+
+**Passaggio 2** (fix errori residui — manuale):
+Dopo il primo passaggio restavano 5 errori di compilazione + 1 warning (unused function):
+
+| Riga | Errore | Fix |
+|------|--------|-----|
+| 339 | `serializeOps(drafts)` — `drafts` non esiste | → `serializeOps(ops)` |
+| 554 | `getTypeRule(d.type)` — `PendingOp` non ha `.type` top-level | → `getTypeRule(d.fields.type)` |
+| 733 | `drafts[i].broker_id` — `drafts` non esiste + campo flat | → `ops[i].fields.broker_id` |
+| 738 | `drafts[i].cash?.code` — idem | → `ops[i].fields.cash?.code` |
+| 988 | `row.date` — `PendingOp` ha `.fields.date` | → `row.fields.date` |
+| 906 | `assetName()` unused (sostituita da `renderAssetHtml()`) | Rimossa |
+
+**Warnings residui** (3): `onerror` attribute marcato "obsolete" da svelte-check su stringhe HTML template (`renderTypeHtml`, `renderAssetHtml`, `renderBrokerHtml`). Falsi positivi — l'attributo `onerror` è su raw HTML iniettato via `{@html}`, non su elementi Svelte reali. Non richiede intervento.
+
+### LOC effettivi
+
+| File | Prima | Dopo | Delta |
+|------|-------|------|-------|
+| `TransactionBulkModal.svelte` | 1819 | 1748 | −71 (−4%) |
+
+### Verifiche
+
+| Verifica | Stato | Note |
+|----------|-------|------|
+| `svelte-check --threshold error` | ✅ 0 errors, 0 warnings | Confermato 2026-05-11 |
+| `./dev.py test front-transaction all` | ⏳ Non ancora eseguito | |
+| `./dev.py test all-frontend` | ⏳ Non ancora eseguito | |
+| Ingestione wiki | ⏳ Pendente | Specchio architetturale da archiviare |
 
 ---
 
