@@ -652,7 +652,8 @@
       "issuesHeader": "Se han encontrado errores de validación",
       "balanceIssuesHeader": "Esta configuración genera datos inconsistentes",
       "autoOff": "Auto-validación OFF ({n} filas > {threshold}) — pulsa Validar antes del commit",
-      "issuesCount": "{n} problemas"
+      "issuesCount": "{n} problemas",
+      "contextualIssuesHeader": "Con los demás cambios pendientes, esta fila causa los siguientes problemas:"
     },
     "errors": {
       "idRequired": "El ID de transacción es obligatorio y debe ser > 0",
@@ -754,6 +755,12 @@
       "viewOnly": "Solo lectura",
       "editBlocked": "Edición bloqueada: acceso de visor en el broker asociado.",
       "partnerNotAccessible": "La transacción vinculada está en un broker al cual el usuario no tiene acceso."
+    },
+    "toast": {
+      "created": "creadas",
+      "updated": "actualizadas",
+      "deleted": "eliminadas",
+      "assetCreatedHint": "Activo creado. Para agregar el historial de precios, ve a la página del activo y sincroniza al terminar de ingresar las transacciones."
     }
   },
   "fx": {

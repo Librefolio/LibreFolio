@@ -652,7 +652,8 @@
       "issuesHeader": "Sono stati identificati degli errori nei campi",
       "balanceIssuesHeader": "Questa configurazione genera dati inconsistenti",
       "autoOff": "Auto-validazione OFF ({n} righe > {threshold}) — premi Verifica ora prima del commit",
-      "issuesCount": "{n} problemi"
+      "issuesCount": "{n} problemi",
+      "contextualIssuesHeader": "Considerando le altre modifiche in sospeso, questa riga causa i seguenti problemi:"
     },
     "errors": {
       "idRequired": "L'ID transazione è obbligatorio e deve essere > 0",
@@ -754,6 +755,12 @@
       "viewOnly": "Solo visualizzazione",
       "editBlocked": "Modifica bloccata: accesso viewer sul broker partner.",
       "partnerNotAccessible": "La transazione collegata è su un broker al quale l'utente non ha accesso."
+    },
+    "toast": {
+      "created": "create",
+      "updated": "aggiornate",
+      "deleted": "eliminate",
+      "assetCreatedHint": "Asset creato. Per aggiungere lo storico prezzi, vai nella pagina dell'asset e sincronizza al termine dell'inserimento delle transazioni."
     }
   },
   "fx": {
