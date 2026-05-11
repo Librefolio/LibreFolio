@@ -360,7 +360,7 @@ if (created) parts.push(`${created} ${$_('transactions.toast.created') || 'creat
 
 ---
 
-## Pending: Toast Informativo per Asset Creati da Transaction ⏳ (chiave i18n aggiunta, implementazione frontend TBD)
+## Pending: Toast Informativo per Asset Creati da Transaction ✅
 
 ### Scenario
 
@@ -553,4 +553,4 @@ Quindi **il codice implementa già l'Opzione B** (end-of-day check). Il "problem
 
 #### Ancora da fare (non in questo round)
 
-- Toast informativo per asset vergini (`assetCreatedHint`) — chiave i18n pronta, implementazione frontend non ancora
+- Nessuno — tutti gli item del round completati

@@ -652,7 +652,8 @@
       "issuesHeader": "Des erreurs de validation ont été détectées",
       "balanceIssuesHeader": "Cette configuration génère des données incohérentes",
       "autoOff": "Auto-validation OFF ({n} lignes > {threshold}) — cliquez sur Valider avant de soumettre",
-      "issuesCount": "{n} problèmes"
+      "issuesCount": "{n} problèmes",
+      "contextualIssuesHeader": "Avec les autres modifications en attente, cette ligne provoque les problèmes suivants :"
     },
     "errors": {
       "idRequired": "L'ID de transaction est requis et doit être > 0",
@@ -754,6 +755,12 @@
       "viewOnly": "Lecture seule",
       "editBlocked": "Modification bloquée : accès lecteur sur le courtier partenaire.",
       "partnerNotAccessible": "La transaction liée est sur un courtier auquel l'utilisateur n'a pas accès."
+    },
+    "toast": {
+      "created": "créées",
+      "updated": "mises à jour",
+      "deleted": "supprimées",
+      "assetCreatedHint": "Actif créé. Pour ajouter l'historique des prix, accédez à la page de l'actif et synchronisez après avoir terminé vos transactions."
     }
   },
   "fx": {

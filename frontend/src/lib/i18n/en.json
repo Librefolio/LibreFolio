@@ -652,7 +652,8 @@
       "issuesHeader": "Validation errors were found",
       "balanceIssuesHeader": "This configuration causes data inconsistencies",
       "autoOff": "Auto-validate is OFF ({n} rows > {threshold}) — press Validate now before commit",
-      "issuesCount": "{n} issues"
+      "issuesCount": "{n} issues",
+      "contextualIssuesHeader": "With the other pending changes, this row causes the following issues:"
     },
     "errors": {
       "idRequired": "Transaction ID is required and must be > 0",
@@ -754,6 +755,12 @@
       "viewOnly": "View only",
       "editBlocked": "Edit blocked: viewer access on partner broker.",
       "partnerNotAccessible": "The linked transaction is on a broker the user cannot access."
+    },
+    "toast": {
+      "created": "created",
+      "updated": "updated",
+      "deleted": "deleted",
+      "assetCreatedHint": "Asset created. To add price history, go to the asset page and sync after finishing your transactions."
     }
   },
   "fx": {

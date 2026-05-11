@@ -54,6 +54,7 @@
     import {zodiosApi} from '$lib/api';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets, refreshAllAssets} from '$lib/stores/assetStore';
+    import {toasts} from '$lib/stores/toastStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getEditableBrokers, brokerStoreVersion, refreshAllBrokers, getBrokerInfo, getBrokerRole, type BrokerInfo} from '$lib/stores/brokerStore';
     import {type TransactionTypeCode, type PairFormLayout, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, getSwapGroup, typesVersion} from '$lib/stores/transactionTypeStore';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
@@ -1209,6 +1210,10 @@
     function handleAssetCreated(assetId: number) {
         draft = {...draft, asset_id: assetId};
         createAssetOpen = false;
+        // Show info toast: remind user to sync prices after completing transactions
+        const info = getAssetInfo(assetId);
+        const name = info?.display_name || `#${assetId}`;
+        toasts.info(`ℹ️ ${name} — ${$t('transactions.toast.assetCreatedHint')}`);
     }
 
     // =========================================================================
