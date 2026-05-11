@@ -28,6 +28,9 @@ from backend.app.schemas.refresh import FXSyncBulkResponse
 # Test server fixture
 from backend.test_scripts.test_server_helper import _TestingServerManager
 
+# Import mock provider constants for precise assertions
+from backend.app.services.fx_providers.mockfx import MOCKFX_FIXED_RATE, MockFXFailProvider
+
 # Constants
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -528,3 +531,154 @@ async def test_sync_multi_step_chain(test_server):
                 json=[{"base": "CHF", "quote": "USD"}],
                 timeout=TIMEOUT,
             )
+
+
+# ============================================================
+# FX Fallback Tests with Mock Providers (MOCKFX / MOCKFX_FAIL)
+# ============================================================
+
+_MOCKFX_FAIL_MSG = MockFXFailProvider.FAIL_MESSAGE
+
+
+class TestFXFallbackWithMockProviders:
+    """Test FX multi-route fallback using deterministic mock providers."""
+
+    # Use a unique pair unlikely to clash with real routes
+    PAIR_BASE = "EUR"
+    PAIR_QUOTE = "JPY"
+    PAIR_SLUG = "EUR-JPY"
+
+    @pytest.fixture(autouse=True)
+    def server(self, test_server):
+        """Ensure test server running."""
+        yield
+
+    async def _create_routes(self, client: httpx.AsyncClient, routes: list[dict]):
+        """Helper to create routes via API."""
+        resp = await client.post(
+            f"{API_BASE}/fx/providers/routes",
+            json=routes,
+            timeout=TIMEOUT,
+        )
+        # 201 = created, 200 = updated, or may already exist
+        assert resp.status_code in (200, 201), f"Failed to create routes: {resp.text}"
+
+    async def _delete_routes(self, client: httpx.AsyncClient):
+        """Helper to delete test routes."""
+        await client.request(
+            "DELETE",
+            f"{API_BASE}/fx/providers/routes",
+            json=[{"base": self.PAIR_BASE, "quote": self.PAIR_QUOTE}],
+            timeout=TIMEOUT,
+        )
+
+    async def _sync_pair(self, client: httpx.AsyncClient) -> dict:
+        """Sync the test pair and return the pair result dict."""
+        today = date.today()
+        start = today - timedelta(days=3)
+        resp = await client.post(
+            f"{API_BASE}/fx/currencies/sync",
+            json={
+                "pairs": [self.PAIR_SLUG],
+                "start": start.isoformat(),
+                "end": today.isoformat(),
+            },
+            timeout=TIMEOUT,
+        )
+        assert resp.status_code == 200, f"Sync failed: {resp.text}"
+        data = resp.json()
+        results = data.get("results", [])
+        assert len(results) >= 1, f"Expected at least 1 result, got: {results}"
+        # Find result for our pair
+        for r in results:
+            if r["pair"] == self.PAIR_SLUG:
+                return r
+        pytest.fail(f"No result for {self.PAIR_SLUG} in sync response")
+
+    @pytest.mark.asyncio
+    async def test_fx_fallback_primary_fails(self):
+        """Primary route (MOCKFX_FAIL) fails → fallback to MOCKFX → status=OK."""
+        print_section("FX Fallback: primary fails, fallback succeeds")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+            try:
+                # Route 1: MOCKFX_FAIL (priority=1), Route 2: MOCKFX (priority=2)
+                await self._create_routes(client, [
+                    _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX_FAIL", priority=1),
+                    _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX", priority=2),
+                ])
+
+                result = await self._sync_pair(client)
+
+                assert result["status"] == "ok", f"Expected OK, got {result['status']}"
+                assert "MOCKFX" in (result.get("provider_used") or ""), (
+                    f"Expected MOCKFX as provider_used, got: {result.get('provider_used')}"
+                )
+                assert len(result.get("errors", [])) > 0, (
+                    f"Expected errors from route 1, got none: {result}"
+                )
+                # Verify the error message matches MOCKFX_FAIL's distinctive message
+                assert any(_MOCKFX_FAIL_MSG in e for e in result["errors"]), (
+                    f"Expected MOCKFX_FAIL error message in errors, got: {result['errors']}"
+                )
+                print_success(
+                    f"✓ Fallback worked: provider_used={result['provider_used']}, "
+                    f"errors={result['errors']}"
+                )
+            finally:
+                await self._delete_routes(client)
+
+    @pytest.mark.asyncio
+    async def test_fx_fallback_all_fail(self):
+        """All routes fail (both MOCKFX_FAIL) → status=FAILED, errors from both."""
+        print_section("FX Fallback: all routes fail")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+            try:
+                await self._create_routes(client, [
+                    _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX_FAIL", priority=1),
+                    _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX_FAIL", priority=2),
+                ])
+
+                result = await self._sync_pair(client)
+
+                assert result["status"] == "failed", f"Expected FAILED, got {result['status']}"
+                errors = result.get("errors", [])
+                assert len(errors) >= 2, (
+                    f"Expected errors from both routes, got {len(errors)}: {errors}"
+                )
+                # Both errors should contain the distinctive MOCKFX_FAIL message
+                fail_errors = [e for e in errors if _MOCKFX_FAIL_MSG in e]
+                assert len(fail_errors) >= 2, (
+                    f"Expected both errors to contain MOCKFX_FAIL message, got: {errors}"
+                )
+                print_success(f"✓ All routes failed correctly: {len(errors)} error(s)")
+            finally:
+                await self._delete_routes(client)
+
+    @pytest.mark.asyncio
+    async def test_fx_direct_mockfx(self):
+        """Single MOCKFX route → status=OK, no errors."""
+        print_section("FX Direct: MOCKFX only → OK")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+            try:
+                await self._create_routes(client, [
+                    _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX", priority=1),
+                ])
+
+                result = await self._sync_pair(client)
+
+                assert result["status"] == "ok", f"Expected OK, got {result['status']}"
+                assert result.get("points_fetched", 0) > 0, "Expected points_fetched > 0"
+                errors = result.get("errors", [])
+                assert len(errors) == 0, f"Expected no errors, got: {errors}"
+                print_success(
+                    f"✓ Direct MOCKFX sync OK: {result['points_fetched']} points fetched"
+                )
+            finally:
+                await self._delete_routes(client)
+

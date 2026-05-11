@@ -801,8 +801,8 @@ async def sync_pairs_bulk(
         route_lookup[key].append(r)
 
     # ── Phase 1: Collect legs, group by provider, create Events ──
-    # For each pair, use the primary (priority=1) route
-    pair_route_map: dict[str, FxConversionRoute] = {}  # pair_slug → route
+    # For each pair, collect legs from ALL routes (for fallback support)
+    pair_routes_map: dict[str, list[FxConversionRoute]] = {}  # pair_slug → [route1, route2, ...]
     provider_legs: dict[str, set[str]] = {}  # provider_code → {target_currencies}
     leg_events: dict[tuple[str, str, str], asyncio.Event] = {}  # (norm_base, norm_quote, provider) → Event
     leg_rates: dict[tuple, Decimal] = {}  # (norm_base, norm_quote, date) → rate
@@ -812,49 +812,50 @@ async def sync_pairs_bulk(
         base, quote = pair_slug.split("-")
         routes = route_lookup.get((base, quote), [])
         if not routes:
-            pair_route_map[pair_slug] = None
+            pair_routes_map[pair_slug] = []
             continue
 
-        # Use primary route (first by priority)
-        route = routes[0]
-        pair_route_map[pair_slug] = route
-        steps = route.parsed_steps
+        pair_routes_map[pair_slug] = routes
 
-        # Skip MANUAL-only routes
-        if all(s["provider"].upper() == "MANUAL" for s in steps):
-            continue
+        # Collect legs from ALL routes (not just primary) so fallback data is available
+        for route in routes:
+            steps = route.parsed_steps
 
-        for step in steps:
-            provider_code = step["provider"]
-            if provider_code.upper() == "MANUAL":
+            # Skip MANUAL-only routes
+            if all(s["provider"].upper() == "MANUAL" for s in steps):
                 continue
 
-            provider = FXProviderRegistry.get_provider_instance(provider_code)
-            if not provider:
-                continue
+            for step in steps:
+                provider_code = step["provider"]
+                if provider_code.upper() == "MANUAL":
+                    continue
 
-            fc, tc = step["from"], step["to"]
-            base_cur = provider.base_currency
+                provider = FXProviderRegistry.get_provider_instance(provider_code)
+                if not provider:
+                    continue
 
-            # Determine target currency from provider's perspective
-            if fc == base_cur:
-                target_cur = tc
-            elif tc == base_cur:
-                target_cur = fc
-            else:
-                # Neither from nor to is the provider's base — error
-                continue
+                fc, tc = step["from"], step["to"]
+                base_cur = provider.base_currency
 
-            if provider_code not in provider_legs:
-                provider_legs[provider_code] = set()
-            provider_legs[provider_code].add(target_cur)
+                # Determine target currency from provider's perspective
+                if fc == base_cur:
+                    target_cur = tc
+                elif tc == base_cur:
+                    target_cur = fc
+                else:
+                    # Neither from nor to is the provider's base — error
+                    continue
 
-            # Create Event for this leg
-            norm_b = min(fc, tc)
-            norm_q = max(fc, tc)
-            leg_key = (norm_b, norm_q, provider_code)
-            if leg_key not in leg_events:
-                leg_events[leg_key] = asyncio.Event()
+                if provider_code not in provider_legs:
+                    provider_legs[provider_code] = set()
+                provider_legs[provider_code].add(target_cur)
+
+                # Create Event for this leg
+                norm_b = min(fc, tc)
+                norm_q = max(fc, tc)
+                leg_key = (norm_b, norm_q, provider_code)
+                if leg_key not in leg_events:
+                    leg_events[leg_key] = asyncio.Event()
 
     # ── Phase 2: Fetch in parallel per provider ──
     async def _fetch_provider(provider_code: str, target_currencies: set[str]):
@@ -905,12 +906,13 @@ async def sync_pairs_bulk(
         await asyncio.gather(*provider_tasks)
 
     # ── Phase 3: Route coroutines — await Events, compute, upsert+commit ──
+    # With fallback: try routes in priority order, skip to next if legs failed
     async def _process_route(pair_slug: str) -> FXSyncPairResult:
-        """Process a single route: await legs, compute chain rate, upsert."""
+        """Process a single pair: try routes in priority order, use first one with all legs available."""
         t_route_start = time.monotonic_ns()  # Per-route timer
-        route = pair_route_map.get(pair_slug)
+        routes = pair_routes_map.get(pair_slug, [])
 
-        if route is None:
+        if not routes:
             return FXSyncPairResult(
                 pair=pair_slug,
                 status=SyncStatus.FAILED,
@@ -922,10 +924,8 @@ async def sync_pairs_bulk(
                 elapsed_ms=(time.monotonic_ns() - t_route_start) // 1_000_000,
             )
 
-        steps = route.parsed_steps
-
-        # Check MANUAL-only
-        if all(s["provider"].upper() == "MANUAL" for s in steps):
+        # Check if ALL routes are MANUAL-only
+        if all(all(s["provider"].upper() == "MANUAL" for s in r.parsed_steps) for r in routes):
             return FXSyncPairResult(
                 pair=pair_slug,
                 status=SyncStatus.SKIPPED,
@@ -936,212 +936,264 @@ async def sync_pairs_bulk(
                 elapsed_ms=None,
             )
 
-        try:
-            # Wait for all leg events
-            my_events = []
-            my_leg_keys = []
-            for step in steps:
-                fc, tc = step["from"], step["to"]
-                prov = step["provider"]
-                norm_b = min(fc, tc)
-                norm_q = max(fc, tc)
-                leg_key = (norm_b, norm_q, prov)
-                if leg_key in leg_events:
-                    my_events.append(leg_events[leg_key].wait())
-                    my_leg_keys.append(leg_key)
+        fallback_errors: list[str] = []
 
-            if my_events:
-                try:
-                    await asyncio.wait_for(asyncio.gather(*my_events), timeout=120.0)
-                except TimeoutError:
-                    raise FXServiceError(f"Timeout waiting for provider data for {pair_slug} " f"(waited 120s for {len(my_events)} leg(s))") from None
+        for route_idx, route in enumerate(routes):
+            steps = route.parsed_steps
 
-            # Check for failed legs
-            for lk in my_leg_keys:
-                if lk in leg_errors:
-                    raise FXServiceError(f"Leg {lk[0]}-{lk[1]} ({lk[2]}) failed: {leg_errors[lk]}")
+            # Skip MANUAL-only routes in loop
+            if all(s["provider"].upper() == "MANUAL" for s in steps):
+                continue
 
-            if len(steps) == 1:
-                # 1-step direct route
-                step = steps[0]
-                provider_code = step["provider"]
-                fc, tc = step["from"], step["to"]
-
-                # Collect rates for this pair from leg_rates
-                norm_b = min(route.base, route.quote)
-                norm_q = max(route.base, route.quote)
-
-                computed_rates = []
-                for key, rate in leg_rates.items():
-                    if key[0] == norm_b and key[1] == norm_q:
-                        d = key[2]
-                        if start_date <= d <= end_date:
-                            computed_rates.append((d, norm_b, norm_q, truncate_fx_rate(rate)))
-
-                if computed_rates:
-                    async with AsyncSession(get_async_engine(), expire_on_commit=False) as pair_session:
-                        actual_changed = await _count_actual_changes(pair_session, computed_rates)
-
-                        values_list = [
-                            {
-                                "date": d,
-                                "base": b,
-                                "quote": q,
-                                "rate": r,
-                                "source": provider_code,
-                                "fetched_at": func.current_timestamp(),
-                            }
-                            for d, b, q, r in computed_rates
-                        ]
-                        batch_stmt = insert(FxRate).values(values_list)
-                        batch_stmt = batch_stmt.on_conflict_do_update(
-                            index_elements=["date", "base", "quote"],
-                            set_={
-                                "rate": batch_stmt.excluded.rate,
-                                "source": batch_stmt.excluded.source,
-                                "fetched_at": func.current_timestamp(),
-                            },
-                        )
-                        await pair_session.execute(batch_stmt)
-                        await pair_session.commit()
-                else:
-                    actual_changed = 0
-
-                elapsed_ms = (time.monotonic_ns() - t_route_start) // 1_000_000
-                partial_msg = None if computed_rates else (f"Provider {provider_code} returned no data for " f"{route.base}/{route.quote} in {start_date}–{end_date}")
-                # Build per-leg detail for single-step route
-                leg_detail = None
-                if not computed_rates:
-                    leg_detail = [
-                        FXSyncLegDetail(
-                            provider=provider_code,
-                            leg=f"{fc}→{tc}",
-                            dates_available=0,
-                            error=None,
-                        )
-                    ]
-                return FXSyncPairResult(
-                    pair=pair_slug,
-                    status=SyncStatus.OK if computed_rates else SyncStatus.PARTIAL,
-                    provider_used=provider_code,
-                    points_fetched=len(computed_rates),
-                    points_changed=actual_changed,
-                    message=partial_msg,
-                    detail=leg_detail,
-                    elapsed_ms=elapsed_ms,
-                )
-            else:
-                # Multi-step chain
-                providers_used = [s["provider"] for s in steps]
-                source = "CHAIN:" + "+".join(providers_used)
-
-                # Collect all dates from leg_rates
-                all_dates = sorted({key[2] for key in leg_rates.keys() if start_date <= key[2] <= end_date})
-
-                computed_rates = []
-                for d in all_dates:
-                    chain_rate = compute_chain_rate(steps, leg_rates, d)
-                    if chain_rate is not None:
-                        norm_base, norm_quote, norm_rate = normalize_rate_for_storage(route.base, route.quote, chain_rate)
-                        norm_rate = truncate_fx_rate(norm_rate)
-                        computed_rates.append((d, norm_base, norm_quote, norm_rate))
-
-                if computed_rates:
-                    async with AsyncSession(get_async_engine(), expire_on_commit=False) as pair_session:
-                        actual_changed = await _count_actual_changes(pair_session, computed_rates)
-
-                        values_list = [
-                            {
-                                "date": d,
-                                "base": b,
-                                "quote": q,
-                                "rate": r,
-                                "source": source,
-                                "fetched_at": func.current_timestamp(),
-                            }
-                            for d, b, q, r in computed_rates
-                        ]
-                        batch_stmt = insert(FxRate).values(values_list)
-                        batch_stmt = batch_stmt.on_conflict_do_update(
-                            index_elements=["date", "base", "quote"],
-                            set_={
-                                "rate": batch_stmt.excluded.rate,
-                                "source": batch_stmt.excluded.source,
-                                "fetched_at": func.current_timestamp(),
-                            },
-                        )
-                        await pair_session.execute(batch_stmt)
-                        await pair_session.commit()
-                else:
-                    actual_changed = 0
-
-                elapsed_ms = (time.monotonic_ns() - t_route_start) // 1_000_000
-
-                # Build per-leg detail for diagnostics
-                chain_leg_details = []
+            try:
+                # Wait for all leg events of THIS route
+                my_events = []
+                my_leg_keys = []
                 for step in steps:
                     fc, tc = step["from"], step["to"]
                     prov = step["provider"]
+                    if prov.upper() == "MANUAL":
+                        continue
                     norm_b = min(fc, tc)
                     norm_q = max(fc, tc)
-                    leg_key_prefix = (norm_b, norm_q)
-                    # Count dates this leg has in the requested range
-                    leg_date_count = sum(1 for key in leg_rates.keys() if key[0] == leg_key_prefix[0] and key[1] == leg_key_prefix[1] and start_date <= key[2] <= end_date)
-                    # Check if this leg had errors
-                    leg_err_key = (norm_b, norm_q, prov)
-                    leg_error = leg_errors.get(leg_err_key)
-                    chain_leg_details.append(
-                        FXSyncLegDetail(
-                            provider=prov,
-                            leg=f"{fc}→{tc}",
-                            dates_available=leg_date_count,
-                            error=str(leg_error) if leg_error else None,
-                        )
+                    leg_key = (norm_b, norm_q, prov)
+                    if leg_key in leg_events:
+                        my_events.append(leg_events[leg_key].wait())
+                        my_leg_keys.append(leg_key)
+
+                if my_events:
+                    try:
+                        await asyncio.wait_for(asyncio.gather(*my_events), timeout=120.0)
+                    except TimeoutError:
+                        err_msg = f"Route {route_idx + 1}: timeout waiting for legs (120s)"
+                        fallback_errors.append(err_msg)
+                        logger.warning(f"Pair {pair_slug}: {err_msg}, trying next route...")
+                        continue  # Try next route
+
+                # Check for failed legs in this route
+                failed_legs = [lk for lk in my_leg_keys if lk in leg_errors]
+                if failed_legs:
+                    failed_desc = ", ".join(f"{lk[0]}-{lk[1]}({lk[2]}): {leg_errors[lk]}" for lk in failed_legs)
+                    err_msg = f"Route {route_idx + 1}: legs failed — {failed_desc}"
+                    fallback_errors.append(err_msg)
+                    logger.warning(f"Pair {pair_slug}: {err_msg}, trying next route...")
+                    continue  # Try next route
+
+                # ── All legs OK for this route — compute rates ──
+                if len(steps) == 1:
+                    result = await _compute_single_step(pair_slug, route, steps[0], t_route_start, fallback_errors)
+                else:
+                    result = await _compute_multi_step(pair_slug, route, steps, t_route_start, fallback_errors)
+
+                # If fallback was used, log it
+                if route_idx > 0 and result.status in (SyncStatus.OK, SyncStatus.PARTIAL):
+                    providers_used = [s["provider"] for s in steps if s["provider"].upper() != "MANUAL"]
+                    logger.info(
+                        f"Pair {pair_slug}: primary route failed, used fallback route {route_idx + 1} "
+                        f"(providers: {', '.join(providers_used)})"
                     )
 
-                # Build human-readable message and errors list
-                chain_errors: list[str] = []
-                if computed_rates:
-                    chain_partial_msg = None
-                    chain_detail = chain_leg_details  # always include detail for chains
-                else:
-                    leg_summaries = []
-                    for ld in chain_leg_details:
-                        if ld.error:
-                            leg_summaries.append(f"  • {ld.leg} ({ld.provider}): ERROR — {ld.error}")
-                            chain_errors.append(f"{ld.leg} ({ld.provider}): {ld.error}")
-                        elif ld.dates_available == 0:
-                            leg_summaries.append(f"  • {ld.leg} ({ld.provider}): 0 dates — no data returned")
-                        else:
-                            leg_summaries.append(f"  • {ld.leg} ({ld.provider}): {ld.dates_available} dates available")
-                    chain_partial_msg = f"Chain {source} produced no complete rates for " f"{route.base}/{route.quote} in {start_date}–{end_date} " f"({len(all_dates)} dates checked).\n" f"Per-leg breakdown:\n" + "\n".join(leg_summaries)
-                    chain_detail = chain_leg_details
+                return result
 
-                return FXSyncPairResult(
-                    pair=pair_slug,
-                    status=SyncStatus.OK if computed_rates else SyncStatus.PARTIAL,
-                    provider_used=source,
-                    points_fetched=len(computed_rates),
-                    points_changed=actual_changed,
-                    message=chain_partial_msg,
-                    errors=chain_errors,
-                    detail=chain_detail,
-                    elapsed_ms=elapsed_ms,
+            except Exception as e:
+                err_msg = f"Route {route_idx + 1}: {e}"
+                fallback_errors.append(err_msg)
+                logger.warning(f"Pair {pair_slug}: {err_msg}, trying next route...")
+                continue  # Try next route
+
+        # All routes exhausted
+        elapsed_ms = (time.monotonic_ns() - t_route_start) // 1_000_000
+        logger.error(f"Pair {pair_slug}: all {len(routes)} route(s) failed")
+        return FXSyncPairResult(
+            pair=pair_slug,
+            status=SyncStatus.FAILED,
+            provider_used=None,
+            points_fetched=0,
+            points_changed=0,
+            message=f"All {len(routes)} route(s) failed for {pair_slug}",
+            errors=fallback_errors,
+            elapsed_ms=elapsed_ms,
+        )
+
+    async def _compute_single_step(
+        pair_slug: str,
+        route,
+        step: dict,
+        t_route_start: int,
+        fallback_errors: list[str],
+    ) -> FXSyncPairResult:
+        """Compute rates for a single-step route."""
+        provider_code = step["provider"]
+        fc, tc = step["from"], step["to"]
+
+        norm_b = min(route.base, route.quote)
+        norm_q = max(route.base, route.quote)
+
+        computed_rates = []
+        for key, rate in leg_rates.items():
+            if key[0] == norm_b and key[1] == norm_q:
+                d = key[2]
+                if start_date <= d <= end_date:
+                    computed_rates.append((d, norm_b, norm_q, truncate_fx_rate(rate)))
+
+        if computed_rates:
+            async with AsyncSession(get_async_engine(), expire_on_commit=False) as pair_session:
+                actual_changed = await _count_actual_changes(pair_session, computed_rates)
+
+                values_list = [
+                    {
+                        "date": d,
+                        "base": b,
+                        "quote": q,
+                        "rate": r,
+                        "source": provider_code,
+                        "fetched_at": func.current_timestamp(),
+                    }
+                    for d, b, q, r in computed_rates
+                ]
+                batch_stmt = insert(FxRate).values(values_list)
+                batch_stmt = batch_stmt.on_conflict_do_update(
+                    index_elements=["date", "base", "quote"],
+                    set_={
+                        "rate": batch_stmt.excluded.rate,
+                        "source": batch_stmt.excluded.source,
+                        "fetched_at": func.current_timestamp(),
+                    },
                 )
+                await pair_session.execute(batch_stmt)
+                await pair_session.commit()
+        else:
+            actual_changed = 0
 
-        except Exception as e:
-            elapsed_ms = (time.monotonic_ns() - t_route_start) // 1_000_000
-            logger.error(f"Pair {pair_slug}: sync failed: {e}")
-            return FXSyncPairResult(
-                pair=pair_slug,
-                status=SyncStatus.FAILED,
-                provider_used=None,
-                points_fetched=0,
-                points_changed=0,
-                message=None,
-                errors=[str(e)],
-                elapsed_ms=elapsed_ms,
+        elapsed_ms = (time.monotonic_ns() - t_route_start) // 1_000_000
+        partial_msg = None if computed_rates else (f"Provider {provider_code} returned no data for " f"{route.base}/{route.quote} in {start_date}–{end_date}")
+        # Build per-leg detail for single-step route
+        leg_detail = None
+        if not computed_rates:
+            leg_detail = [
+                FXSyncLegDetail(
+                    provider=provider_code,
+                    leg=f"{fc}→{tc}",
+                    dates_available=0,
+                    error=None,
+                )
+            ]
+        return FXSyncPairResult(
+            pair=pair_slug,
+            status=SyncStatus.OK if computed_rates else SyncStatus.PARTIAL,
+            provider_used=provider_code,
+            points_fetched=len(computed_rates),
+            points_changed=actual_changed,
+            message=partial_msg,
+            errors=fallback_errors or [],
+            detail=leg_detail,
+            elapsed_ms=elapsed_ms,
+        )
+
+    async def _compute_multi_step(
+        pair_slug: str,
+        route,
+        steps: list[dict],
+        t_route_start: int,
+        fallback_errors: list[str],
+    ) -> FXSyncPairResult:
+        """Compute rates for a multi-step chain route."""
+        providers_used = [s["provider"] for s in steps]
+        source = "CHAIN:" + "+".join(providers_used)
+
+        # Collect all dates from leg_rates
+        all_dates = sorted({key[2] for key in leg_rates.keys() if start_date <= key[2] <= end_date})
+
+        computed_rates = []
+        for d in all_dates:
+            chain_rate = compute_chain_rate(steps, leg_rates, d)
+            if chain_rate is not None:
+                norm_base, norm_quote, norm_rate = normalize_rate_for_storage(route.base, route.quote, chain_rate)
+                norm_rate = truncate_fx_rate(norm_rate)
+                computed_rates.append((d, norm_base, norm_quote, norm_rate))
+
+        if computed_rates:
+            async with AsyncSession(get_async_engine(), expire_on_commit=False) as pair_session:
+                actual_changed = await _count_actual_changes(pair_session, computed_rates)
+
+                values_list = [
+                    {
+                        "date": d,
+                        "base": b,
+                        "quote": q,
+                        "rate": r,
+                        "source": source,
+                        "fetched_at": func.current_timestamp(),
+                    }
+                    for d, b, q, r in computed_rates
+                ]
+                batch_stmt = insert(FxRate).values(values_list)
+                batch_stmt = batch_stmt.on_conflict_do_update(
+                    index_elements=["date", "base", "quote"],
+                    set_={
+                        "rate": batch_stmt.excluded.rate,
+                        "source": batch_stmt.excluded.source,
+                        "fetched_at": func.current_timestamp(),
+                    },
+                )
+                await pair_session.execute(batch_stmt)
+                await pair_session.commit()
+        else:
+            actual_changed = 0
+
+        elapsed_ms = (time.monotonic_ns() - t_route_start) // 1_000_000
+
+        # Build per-leg detail for diagnostics
+        chain_leg_details = []
+        for step in steps:
+            fc, tc = step["from"], step["to"]
+            prov = step["provider"]
+            norm_b = min(fc, tc)
+            norm_q = max(fc, tc)
+            leg_key_prefix = (norm_b, norm_q)
+            # Count dates this leg has in the requested range
+            leg_date_count = sum(1 for key in leg_rates.keys() if key[0] == leg_key_prefix[0] and key[1] == leg_key_prefix[1] and start_date <= key[2] <= end_date)
+            # Check if this leg had errors
+            leg_err_key = (norm_b, norm_q, prov)
+            leg_error = leg_errors.get(leg_err_key)
+            chain_leg_details.append(
+                FXSyncLegDetail(
+                    provider=prov,
+                    leg=f"{fc}→{tc}",
+                    dates_available=leg_date_count,
+                    error=str(leg_error) if leg_error else None,
+                )
             )
+
+        # Build human-readable message and errors list
+        chain_errors: list[str] = list(fallback_errors) if fallback_errors else []
+        if computed_rates:
+            chain_partial_msg = None
+            chain_detail = chain_leg_details  # always include detail for chains
+        else:
+            leg_summaries = []
+            for ld in chain_leg_details:
+                if ld.error:
+                    leg_summaries.append(f"  • {ld.leg} ({ld.provider}): ERROR — {ld.error}")
+                    chain_errors.append(f"{ld.leg} ({ld.provider}): {ld.error}")
+                elif ld.dates_available == 0:
+                    leg_summaries.append(f"  • {ld.leg} ({ld.provider}): 0 dates — no data returned")
+                else:
+                    leg_summaries.append(f"  • {ld.leg} ({ld.provider}): {ld.dates_available} dates available")
+            chain_partial_msg = f"Chain {source} produced no complete rates for " f"{route.base}/{route.quote} in {start_date}–{end_date} " f"({len(all_dates)} dates checked).\n" f"Per-leg breakdown:\n" + "\n".join(leg_summaries)
+            chain_detail = chain_leg_details
+
+        return FXSyncPairResult(
+            pair=pair_slug,
+            status=SyncStatus.OK if computed_rates else SyncStatus.PARTIAL,
+            provider_used=source,
+            points_fetched=len(computed_rates),
+            points_changed=actual_changed,
+            message=chain_partial_msg,
+            errors=chain_errors or [],
+            detail=chain_detail,
+            elapsed_ms=elapsed_ms,
+        )
 
     # ── Dispatch all routes and assemble response ──
     pair_results = await asyncio.gather(*[_process_route(slug) for slug in pairs])
