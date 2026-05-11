@@ -44,7 +44,6 @@ The `docker-compose.yml` file defines the service and persistent data directory.
 ### 🔧 Service: `librefolio`
 
 - 🏗️ **`build: .`**: Builds from the `Dockerfile` in the project root.
-- 👤 **`user`**: Runs the container as a non-root user (default `1000:1000`). See [User & Permissions](#-user--permissions) below.
 - 🔌 **`ports`**: Maps the host port (`${PORT:-8000}`) to the container's port `8000`, and `${TEST_PORT:-8001}` to `8001` for test mode.
 - 📂 **`volumes`**: A bind mount `./LibreFolio-data` → `/app/backend/data/prod-docker` persists database, uploads, broker reports, and logs **in the same directory as `docker-compose.yml`**.
 - 📝 **`env_file: .env`**: Loads all configuration from the `.env` file (copied from `.env.example`).
@@ -57,88 +56,85 @@ A **bind mount** directory created alongside `docker-compose.yml`. Contains the 
 
 ### 👤 User & Permissions
 
-The LibreFolio container runs as a **non-root user** for security. The Docker image ships with a user called `librefolio` (UID/GID `1000:1000`), and the `docker-compose.yml` enforces this via the `user:` directive.
+The LibreFolio container runs as a **non-root user** for security. The default UID/GID is `1000:1000`. Files created by the application in `LibreFolio-data/` will be owned by this UID/GID on the host.
 
-#### Finding your UID and GID
+#### Choosing the right UID and GID
 
-On Linux or macOS, run:
-
-```bash
-id -u    # → your UID (e.g. 1000)
-id -g    # → your GID (e.g. 1000)
-```
-
-If both return `1000`, **you're all set** — the default configuration works out of the box.
-
-#### Matching your host user
-
-If your UID/GID is different from `1000`, set them in your `.env` file:
+Set `UID` and `GID` in your `.env` file to match the **host user** (or dedicated user) that should own the data files:
 
 ```bash
-UID=1001
-GID=1001
+UID=1000
+GID=1000
 ```
 
-Then rebuild the image so the internal `librefolio` user matches:
 
-```bash
-./dev.py docker build
-```
+!!! note "How `ls -l` shows ownership"
 
-This ensures that files created by the container in the `LibreFolio-data/` directory are owned by **your host user**, not by a mismatched numeric ID.
+    On the **host**, `ls -l LibreFolio-data/` shows your chosen user/group name (resolved from UID/GID via `/etc/passwd`).
 
-!!! note "How `ls -l` works with Docker users"
+    **Inside the container**, the same files show as `librefolio:librefolio` — it's the same numeric UID/GID, just resolved against the container's own `/etc/passwd`.
 
-    When you run `ls -l` on the **host machine** inside `LibreFolio-data/`, you will see files owned by the UID/GID you configured (e.g. your own username and group).
+??? tip "Linux cheatsheet: users, groups, and IDs"
 
-    When you run `ls -l` **inside the container** (via `docker compose exec librefolio ls -l`), you will see files owned by `librefolio:librefolio` — because inside the container, UID 1000 is mapped to the `librefolio` user name defined in `/etc/passwd`.
-
-    Both views refer to the **same underlying numeric UID/GID** — only the name resolution differs between host and container.
-
-#### Preparing the data directory
-
-The bind mount directory must be writable by the container user. If it doesn't exist yet, create it before the first run:
-
-```bash
-mkdir -p ./LibreFolio-data
-```
-
-If your UID is `1000`, ownership is already correct. If you set a custom UID/GID, also run:
-
-```bash
-chown ${UID}:${GID} ./LibreFolio-data
-```
-
-??? tip "Advanced: dedicated user and group for LibreFolio"
-
-    If you plan to run **multiple LibreFolio instances** on the same server, or want to isolate file ownership from your personal user, you can create a dedicated system user and group:
+    **Discover your current UID and GID:**
 
     ```bash
-    # Create a system group 'librefolio' (no login)
-    sudo groupadd --system librefolio
+    id -u              # your user ID (e.g. 1000)
+    id -g              # your primary group ID (e.g. 1000)
+    id                 # full info: uid, gid, groups
+    ```
 
-    # Create a system user 'librefolio' in that group (no login, no home)
+    **Find the UID/GID of any user:**
+
+    ```bash
+    id -u username     # UID of 'username'
+    id -g username     # primary GID of 'username'
+    ```
+
+    **Create a new group:**
+
+    ```bash
+    sudo groupadd librefolio          # create group (auto-assigns GID)
+    sudo groupadd -g 1500 librefolio  # create group with specific GID
+    ```
+
+    **Create a new user:**
+
+    ```bash
+    # System user (no home, no login — ideal for services)
     sudo useradd --system --no-create-home --gid librefolio --shell /usr/sbin/nologin librefolio
 
-    # Check the assigned UID and GID
+    # Regular user with home directory
+    sudo useradd -m -g librefolio librefolio
+    ```
+
+    **Check the assigned IDs:**
+
+    ```bash
     id librefolio
     # → uid=998(librefolio) gid=998(librefolio) groups=998(librefolio)
     ```
 
-    Then set the UID/GID in your `.env` file to match:
+    **Add your existing user to a group:**
 
     ```bash
-    UID=998
-    GID=998
+    sudo usermod -aG librefolio $USER
+    newgrp librefolio    # activate in current session (or log out/in)
     ```
 
-    And ensure the data directory is owned by this user:
+    **Verify group membership:**
+
+    ```bash
+    groups $USER         # list all groups for your user
+    ```
+
+    **Set ownership of the data directory:**
 
     ```bash
     sudo chown -R librefolio:librefolio ./LibreFolio-data
     ```
 
-    Rebuild the image with `./dev.py docker build` so the container's internal user also gets the matching UID/GID. Each instance can have its own dedicated user with its own data directory, providing clean ownership isolation.
+    Then set the matching UID/GID in `.env`.
 
 ## 🛠️ CLI Commands
 
@@ -247,14 +243,15 @@ services:
         UID: ${UID:-1000}              # (1) Match host user UID
         GID: ${GID:-1000}              # (1) Match host user GID
     container_name: librefolio
-    user: "${UID:-1000}:${GID:-1000}"  # (2) Run as non-root user
+    # No 'user:' directive — entrypoint starts as root, fixes permissions,
+    # then drops to 'librefolio' user via gosu (same pattern as postgres/redis).
     restart: unless-stopped
     ports:
-      - "${PORT:-8000}:8000"           # (3) Production port — change via PORT in .env
-      - "${TEST_PORT:-8001}:8001"      # (4) Test server port (optional)
+      - "${PORT:-8000}:8000"           # (2) Production port — change via PORT in .env
+      - "${TEST_PORT:-8001}:8001"      # (3) Test server port (optional)
     volumes:
-      - ./LibreFolio-data:/app/backend/data/prod-docker  # (5) Persistent data (bind mount)
-    env_file: .env                     # (6) All config from .env file
+      - ./LibreFolio-data:/app/backend/data/prod-docker  # (4) Persistent data (bind mount)
+    env_file: .env                     # (5) All config from .env file
     environment:
       - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker  # Docker-specific override
       - HOST=0.0.0.0
@@ -271,11 +268,10 @@ services:
 | # | What | How |
 |---|------|-----|
 | (1) | Match host UID/GID | Set `UID=1001` and `GID=1001` in `.env`, then rebuild |
-| (2) | Non-root container | Matches the `librefolio` user created during build |
-| (3) | Change production port | Set `PORT=3000` in `.env` |
-| (4) | Disable test port | Remove the `TEST_PORT` line from `ports:` |
-| (5) | Custom data path | Change bind mount: `./my-data:/app/backend/data/prod-docker` |
-| (6) | All configuration | Edit `.env` file (copied from `.env.example`) |
+| (2) | Change production port | Set `PORT=3000` in `.env` |
+| (3) | Disable test port | Remove the `TEST_PORT` line from `ports:` |
+| (4) | Custom data path | Change bind mount: `./my-data:/app/backend/data/prod-docker` |
+| (5) | All configuration | Edit `.env` file (copied from `.env.example`) |
 
 !!! tip "First user"
 
