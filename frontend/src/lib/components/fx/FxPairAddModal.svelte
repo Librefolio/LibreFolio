@@ -18,8 +18,9 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {saveWithRetry} from '$lib/utils/saveWithRetry';
-    import {ArrowDownUp, ArrowLeftRight, Lock, RotateCcw, X} from 'lucide-svelte';
+    import {ArrowDownUp, ArrowLeftRight, Lock, RotateCw, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import {toasts} from '$lib/stores/toastStore.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import {CurrencySearchSelect, FxProviderSelect} from '$lib/components/ui/select';
@@ -249,9 +250,9 @@
                 return;
             }
 
-            // Auto-sync if real routes exist (not MANUAL-only)
+            // Auto-sync only on creation (not in editMode — detail page manages sync explicitly)
             const hasRealProvider = selectedRoutes.length > 0;
-            if (hasRealProvider && dateStart && dateEnd) {
+            if (!editMode && hasRealProvider && dateStart && dateEnd) {
                 syncing = true;
                 try {
                     const mainSlug = base < quote ? `${base}-${quote}` : `${quote}-${base}`;
@@ -261,11 +262,17 @@
                         const iSlug = `${item.base}-${item.quote}`;
                         pairsToSync.push(iSlug);
                     }
-                    await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+                    const syncResult = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
                         pairs: pairsToSync,
                         start: dateStart,
                         end: dateEnd,
                     });
+                    // Show toast with sync result
+                    const r = (syncResult as any)?.results?.[0];
+                    if (r && r.status === 'ok') {
+                        const pairLabel = mainSlug.replace('-', '/');
+                        toasts.success(`${pairLabel} ${$_('fx.sync.synced')} — ${r.points_changed ?? r.points_fetched ?? 0} pts`);
+                    }
                 } catch (e) {
                     console.warn('Auto-sync after pair creation failed:', e);
                 } finally {
@@ -438,7 +445,7 @@
                 type="button"
             >
                 {#if syncing}
-                    <RotateCcw size={14} class="animate-spin" />
+                    <RotateCw size={14} class="animate-spin" />
                     {$_('common.syncing')}
                 {:else if saving}
                     {$_('common.saving')}

@@ -1232,6 +1232,7 @@
             </label>
             <textarea
                 id="asset-description"
+                data-testid="asset-modal-description"
                 bind:value={shortDescription}
                 rows={2}
                 placeholder="Brief description of the asset…"
@@ -1249,6 +1250,7 @@
                 class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer select-none"
                 role="button"
                 tabindex="0"
+                data-testid="asset-modal-more-info"
                 onclick={() => {
                     moreInfoExpanded = !moreInfoExpanded;
                 }}

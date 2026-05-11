@@ -571,3 +571,14 @@ L'utente ha testato manualmente la BulkModal e segnalato 3 problemi:
 ### Nota positiva
 
 L'utente ha confermato: "mi pare che finalmente le cose iniziano a funzionare!" e "non sono riuscito a trovare nessun altro bug!". I fix precedenti (txStore, WorkspaceIntent, eliminazione `_hidden`/`mergePairedRows`) sono stabili.
+
+---
+
+## ➡️ Seguito: Plan C2 — Bugfix & Pair Validation
+
+Dopo il test manuale sono emersi 6 bug + necessità di validazione pair desc/tags. Documentato in:
+
+→ [`plan-phase07-transaction-Part4_Round6_PlanC2_BugfixAndPairValidation.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanC2_BugfixAndPairValidation.prompt.md)
+
+Include anche fix infrastrutturali (Docker non-root, font self-hosted, FX multi-route fallback, classification_params race condition).
+
