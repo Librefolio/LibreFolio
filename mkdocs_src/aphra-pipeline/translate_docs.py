@@ -563,6 +563,44 @@ def _extract_latex_formulas(text: str) -> list[str]:
     return formulas
 
 
+def _extract_latex_with_lines(text: str) -> list[tuple[str, int]]:
+    """Extract LaTeX formulas with their line numbers (1-based).
+
+    Returns list of (formula_text, line_number) tuples.
+    """
+    results = []
+    lines = text.split('\n')
+
+    # Track which char offset corresponds to which line
+    line_starts = [0]
+    for line in lines:
+        line_starts.append(line_starts[-1] + len(line) + 1)
+
+    def _offset_to_line(offset: int) -> int:
+        for i, start in enumerate(line_starts):
+            if i + 1 < len(line_starts) and offset < line_starts[i + 1]:
+                return i + 1
+        return len(lines)
+
+    # Block formulas first
+    for m in _RE_LATEX_BLOCK.finditer(text):
+        results.append((m.group(0), _offset_to_line(m.start())))
+    # Inline (on text with blocks removed — but we need original offsets)
+    # Use a different approach: scan original text for inline after excluding block ranges
+    block_ranges = [(m.start(), m.end()) for m in _RE_LATEX_BLOCK.finditer(text)]
+
+    def _in_block(pos):
+        return any(s <= pos < e for s, e in block_ranges)
+
+    for m in _RE_LATEX_INLINE.finditer(text):
+        if not _in_block(m.start()):
+            results.append((m.group(0), _offset_to_line(m.start())))
+
+    # Sort by line number
+    results.sort(key=lambda x: x[1])
+    return results
+
+
 def _validate_latex_syntax(formula: str) -> list[str]:
     """
     Check a LaTeX formula for common syntax errors that break rendering.
@@ -795,19 +833,34 @@ def _structural_diff(source_text: str, translated_text: str) -> str:
     # ── 13. LaTeX formulas — count + syntax validation ──
     src_formulas = _extract_latex_formulas(source_text)
     trn_formulas = _extract_latex_formulas(translated_text)
+    src_formulas_lines = _extract_latex_with_lines(source_text)
+    trn_formulas_lines = _extract_latex_with_lines(translated_text)
     if len(src_formulas) != len(trn_formulas):
-        issues.append(
+        # Build a compact side-by-side showing line numbers
+        detail_lines = [
             f"LATEX_COUNT: source={len(src_formulas)}, "
             f"translated={len(trn_formulas)} "
             f"(Δ{len(trn_formulas) - len(src_formulas):+d})"
-        )
+        ]
+        # Truncate formulas for display (single line, max 60 chars)
+        def _short(f: str, maxlen: int = 60) -> str:
+            s = f.replace('\n', ' ').strip()
+            return s if len(s) <= maxlen else s[:maxlen] + "…"
+
+        detail_lines.append("  EN formulas:")
+        for formula, line_no in src_formulas_lines:
+            detail_lines.append(f"    L{line_no:3d}: {_short(formula)}")
+        detail_lines.append("  TRN formulas:")
+        for formula, line_no in trn_formulas_lines:
+            detail_lines.append(f"    L{line_no:3d}: {_short(formula)}")
+        issues.append("\n".join(detail_lines))
     # Validate syntax of each translated formula and show source counterpart
     broken = []
-    for idx, tf in enumerate(trn_formulas):
+    for idx, (tf, tline) in enumerate(trn_formulas_lines):
         errs = _validate_latex_syntax(tf)
         if errs:
-            src_f = src_formulas[idx] if idx < len(src_formulas) else "(no source)"
-            broken.append(f"  #{idx + 1}: {', '.join(errs)}\n"
+            src_f = src_formulas_lines[idx][0] if idx < len(src_formulas_lines) else "(no source)"
+            broken.append(f"  #{idx + 1} (TRN L{tline}): {', '.join(errs)}\n"
                           f"    EN:  {src_f}\n"
                           f"    TRN: {tf}")
     if broken:
