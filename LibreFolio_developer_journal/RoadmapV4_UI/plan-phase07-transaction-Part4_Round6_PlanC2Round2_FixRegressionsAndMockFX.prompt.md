@@ -554,3 +554,10 @@ Quindi **il codice implementa già l'Opzione B** (end-of-day check). Il "problem
 #### Ancora da fare (non in questo round)
 
 - Nessuno — tutti gli item del round completati
+
+---
+
+## Link forward
+
+→ **Piano C3**: [`plan-phase07-transaction-Part4_Round6_PlanC3_PendingOpRefactor.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanC3_PendingOpRefactor.prompt.md) — Completamento refactor architetturale: `DraftRow` → `PendingOp` + `DraftFields`, eliminazione `fromTx()`, props legacy, rinomina `drafts` → `ops`.
+
