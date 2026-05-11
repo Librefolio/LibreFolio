@@ -1,26 +1,18 @@
 <!--
   TransactionBulkModal.svelte — Unified bulk editor for transactions.
 
-  Built on top of `DataTable.svelte` with editable cells. Supports a mixed bag
-  of new drafts + existing rows + rows marked for deletion, validated+committed
-  together via the unified backend pipeline.
+  Built on top of `DataTable.svelte`. Each visible row is a `PendingOp`:
+  - op='create' → new draft, committed as CREATE
+  - op='edit' + markedDelete=false → DB row (skipped if unchanged, UPDATE if edited)
+  - op='edit' + markedDelete=true → DB row marked for deletion, committed as DELETE
 
-  Mode-less: each row's role is inferred from its data:
-  - initialRow.id > 0 → existing DB row (edit/delete)
-  - initialRow.id ≤ 0 or absent → new draft (create)
+  Status is DERIVED by `deriveStatus()` — never set manually:
+  - 'new' = op='create'
+  - 'original' = op='edit', fields unchanged vs txStore
+  - 'edited' = op='edit', fields differ from txStore
+  - 'delete' = op='edit' + markedDelete
 
-  Row states:
-  - 'new'      → brand new draft, committed as CREATE
-  - 'original' → existing row loaded but unmodified (skipped on commit)
-  - 'edited'   → existing row with changes, committed as UPDATE
-  - 'delete'   → existing row marked for deletion, committed as DELETE
-
-  Features:
-  - Checkbox selection with bulk actions (delete selected)
-  - Date sorting (asc/desc)
-  - Row actions: edit, clone, remove, mark/unmark delete
-  - Nested TransactionFormModal for structured single-row editing
-  - Paired rows (TRANSFER/FX_CONVERSION) with special rendering (future)
+  Originals are NEVER copied — `txStoreGet(op.txId)` is the single source of truth.
 
   Validation: 100% server-side via POST /transactions/validate. Auto-validate
   is debounced (1 s) + idle-fire (60 s) when N ≤ 50; above that threshold only
@@ -28,6 +20,8 @@
 
   Commit: POST /transactions/commit with creates + updates + deletes. On
   `committed=false` the modal stays open with a persistent banner.
+
+  Architecture: Plan C3 — PendingOp refactor (2026-05-11).
 -->
 <script lang="ts">
     import {onDestroy, untrack} from 'svelte';
@@ -73,11 +67,8 @@
         | {action: 'delete'; txIds: number[]}
         | {action: 'clone'; txIds: number[]};
 
-    interface DraftRow {
-        tempId: string; // stable id used by DataTable.getRowId + navigateToRowId
-        status: 'new' | 'edited' | 'original' | 'delete';
-        id?: number; // present for existing DB rows
-        original?: TXReadItem;
+    /** Fields displayed & editable in the grid — pure data, no metadata. */
+    interface DraftFields {
         broker_id: number;
         asset_id: number | null;
         type: TransactionTypeCode;
@@ -88,45 +79,34 @@
         description: string;
         asset_event_id: number | null;
         cost_basis_override: string;
-        link_uuid: string | null;
-        created_at?: string;
-        updated_at?: string;
-        // B1-13: partner data for paired types (Da:/A: display)
+    }
+
+    /** Partner display data for paired rendering (Da:/A: columns). */
+    interface PartnerDisplay {
+        partnerId?: number;
         partnerBrokerId?: number;
         partnerCash?: {code: string; amount: string} | null;
         partnerDate?: string;
-        /** DB id of the linked partner row (for paired rendering + commit). */
-        _partnerId?: number;
-        /** Full partner payload from FormModal's collectDualCreates().
-         *  For new pairs: a complete CREATE payload with link_uuid.
-         *  For existing pairs being edited: a CREATE-style payload to diff against txStore. */
-        _partnerFormPayload?: Record<string, unknown>;
-        /** True for rows added via PickerModal (can be removed without DB delete). */
-        _addedViaPicker?: boolean;
+        /** Full partner payload from FormModal (TxFields for type-safe diffing). */
+        partnerPayload?: TxFields | null;
     }
+
+    /** Pending operation — one per visible row in the BulkModal grid.
+     *  Tagged union: 'create' for new rows, 'edit' for existing DB rows. */
+    type PendingOp = (
+        | { op: 'create'; link_uuid: string | null; }
+        | { op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean; }
+    ) & { tempId: string; fields: DraftFields; } & PartnerDisplay;
 
     interface Props {
         open: boolean;
-        /** Legacy: provide rows directly. Prefer `intent` instead. */
-        initialRows?: TXReadItem[];
-        /** Declarative API: action + txIds. BulkModal resolves from txStore. */
         intent?: WorkspaceIntent;
-        /** Bugfix-5 §U20: tag suggestions sourced from the parent's loaded
-         *  transactions. The bulk modal augments this list with any tag that
-         *  appears in its in-flight drafts (so newly-typed tags are
-         *  immediately available across rows). */
         availableTags?: string[];
-        /** When set, auto-opens the FormModal on mount:
-         *  'edit' → opens the first draft for editing
-         *  'create' → opens a new row form */
-        autoOpenForm?: 'create' | 'edit' | null;
-        /** B23: when 'delete', all rows start with status='delete' (bulk delete flow). */
-        initialStatus?: 'delete';
         onClose: () => void;
         onCommitted?: (resp: unknown) => void;
     }
 
-    let {open, initialRows = [], intent, availableTags = [], autoOpenForm = null, initialStatus, onClose, onCommitted}: Props = $props();
+    let {open, intent, availableTags = [], onClose, onCommitted}: Props = $props();
 
     const AUTO_VALIDATE_THRESHOLD = 50;
 
@@ -138,69 +118,65 @@
         return new Date().toISOString().slice(0, 10);
     }
 
-    function emptyDraft(): DraftRow {
+    /** Default DraftFields for a brand-new transaction. */
+    function defaultFields(): DraftFields {
         const brokers = getAllBrokers();
-        // Bugfix-2 §C9: only auto-pick if exactly one broker exists.
         const defaultBroker = brokers.length === 1 ? brokers[0].id : 0;
         return {
-            tempId: generateUUID(),
-            status: 'new',
-            broker_id: defaultBroker,
-            asset_id: null,
-            type: 'BUY',
-            date: todayIso(),
-            quantity: '0',
-            cash: null,
-            tags: [],
-            description: '',
-            asset_event_id: null,
-            cost_basis_override: '',
-            link_uuid: null,
+            broker_id: defaultBroker, asset_id: null, type: 'BUY', date: todayIso(),
+            quantity: '0', cash: null, tags: [], description: '',
+            asset_event_id: null, cost_basis_override: '',
         };
     }
 
-    function fromTx(tx: TXReadItem, overrideStatus?: 'delete'): DraftRow {
-        const isCreate = !(tx.id > 0);
-        const txRule = getTypeRule(tx.type);
-        // Auto-sign: show positive values for auto-negated types
+    /** Create an empty 'create' PendingOp. */
+    function createOpEmpty(): PendingOp {
+        return {op: 'create', tempId: generateUUID(), fields: defaultFields(), link_uuid: null};
+    }
+
+    /** Extract display-ready DraftFields from a TXReadItem (auto-sign applied). */
+    function fieldsFromTx(tx: TXReadItem): DraftFields {
+        const rule = getTypeRule(tx.type);
         let qty = tx.quantity;
-        if (txRule.quantityRule === 'negative' && Number(qty) < 0) {
-            qty = String(Math.abs(Number(qty)));
-        }
+        if (rule.quantityRule === 'negative' && Number(qty) < 0) qty = String(Math.abs(Number(qty)));
         let cash = tx.cash ? {code: tx.cash.code, amount: tx.cash.amount} : null;
-        if (cash && txRule.cashSign === 'negative' && Number(cash.amount) < 0) {
+        if (cash && rule.cashSign === 'negative' && Number(cash.amount) < 0) {
             cash = {code: cash.code, amount: String(Math.abs(Number(cash.amount)))};
         }
-        const status = isCreate ? 'new' : overrideStatus === 'delete' ? 'delete' : 'original';
         return {
-            tempId: generateUUID(),
-            status,
-            id: isCreate ? undefined : tx.id,
-            original: isCreate ? undefined : tx,
-            broker_id: tx.broker_id,
-            asset_id: tx.asset_id ?? null,
-            type: tx.type as TransactionTypeCode,
-            date: isCreate ? todayIso() : tx.date,
-            quantity: qty,
-            cash,
-            tags: [...(tx.tags ?? [])],
-            description: tx.description ?? '',
-            asset_event_id: tx.asset_event_id ?? null,
-            cost_basis_override: tx.cost_basis_override ?? '',
-            // Regenerate link_uuid for pairs being cloned (create-many) — though
-            // pair types are not editable here, BRIM/duplicate flows may seed them.
-            // If resolveInitialRows already set a shared link_uuid (clone paired), preserve it.
-            link_uuid: (tx as any).link_uuid ?? (isCreate && tx.related_transaction_id != null ? generateUUID() : null),
-            created_at: tx.created_at,
-            updated_at: tx.updated_at,
+            broker_id: tx.broker_id, asset_id: tx.asset_id ?? null,
+            type: tx.type as TransactionTypeCode, date: tx.date, quantity: qty, cash,
+            tags: [...(tx.tags ?? [])], description: tx.description ?? '',
+            asset_event_id: tx.asset_event_id ?? null, cost_basis_override: tx.cost_basis_override ?? '',
         };
+    }
+
+    /** Create 'edit' PendingOp from DB transaction (reads txStore, zero copies). */
+    function editOpFromTx(txId: number, opts?: {markedDelete?: boolean; addedViaPicker?: boolean}): PendingOp {
+        const tx = txStoreGet(txId)!;
+        return {op: 'edit', tempId: generateUUID(), txId, fields: fieldsFromTx(tx),
+                markedDelete: opts?.markedDelete ?? false, addedViaPicker: opts?.addedViaPicker};
+    }
+
+    /** Create 'create' PendingOp by cloning from a TXReadItem. */
+    function createOpFromClone(tx: TXReadItem, linkUuid?: string | null): PendingOp {
+        const fields = fieldsFromTx(tx);
+        fields.date = todayIso();
+        const rule = getTypeRule(tx.type);
+        if (rule.quantityRule === 'zero') fields.quantity = '0';
+        return {op: 'create', tempId: generateUUID(), fields, link_uuid: linkUuid ?? null};
+    }
+
+    /** Get DB id from PendingOp (undefined for creates). */
+    function opTxId(op: PendingOp): number | undefined {
+        return op.op === 'edit' ? op.txId : undefined;
     }
 
     // =========================================================================
     // State
     // =========================================================================
 
-    let drafts = $state<DraftRow[]>([]);
+    let ops = $state<PendingOp[]>([]);
     let issues = $state<ValidationIssue[]>([]);
     let formError = $state<string | null>(null);
     let commitFailed = $state(false);
@@ -209,14 +185,14 @@
     let lastCommitDraftKey = $state('');
     let lastCommitAt = $state(0);
     const COMMIT_ANTI_BOUNCE_MS = 10000;
-    let tableRef = $state<DataTable<DraftRow> | undefined>(undefined);
-    /** Snapshot of `drafts` at modal-open time, used to detect unsaved changes
+    let tableRef = $state<DataTable<PendingOp> | undefined>(undefined);
+    /** Snapshot of `ops` at modal-open time, used to detect unsaved changes
      *  for the close-confirmation guard (Bugfix-3 §C11). */
-    let initialDraftsKey = $state('');
+    let initialOpsKey = $state('');
     let confirmCloseOpen = $state(false);
     /** B23 Step 4: confirm edit on a row marked for deletion. */
     let confirmEditDeleteOpen = $state(false);
-    let confirmEditDeleteRow = $state<DraftRow | null>(null);
+    let confirmEditDeleteRow = $state<PendingOp | null>(null);
 
     /** Resolve initialRows from intent (if provided) or use legacy initialRows prop. */
     function resolveInitialRows(): {rows: TXReadItem[]; status?: 'delete'; autoForm: string | null} {
@@ -273,8 +249,7 @@
             // edit — auto-open FormModal only for single-row intent (user selected 1 row)
             return {rows: resolved, autoForm: txIds.length === 1 ? 'edit' : null};
         }
-        // Legacy: use initialRows prop
-        return {rows: initialRows, status: initialStatus, autoForm: autoOpenForm};
+        throw new Error('BulkModal: intent prop is required');
     }
 
     // Reset on open — compute `next` locally first, then assign once (avoids
@@ -288,15 +263,22 @@
             commitFailed = false;
             confirmCloseOpen = false;
             // When no initial rows → empty grid; user adds rows via nested FormModal.
-            let next: DraftRow[] = rows.length > 0 ? rows.map((r) => fromTx(r, initSt)) : [];
+            let next: PendingOp[] = [];
+            if (rows.length > 0) {
+                if (initSt === 'delete') {
+                    next = rows.filter(r => r.id > 0).map(r => editOpFromTx(r.id, {markedDelete: true}));
+                } else {
+                    next = rows.map(r => r.id > 0 ? editOpFromTx(r.id) : createOpFromClone(r, (r as any).link_uuid));
+                }
+            }
 
             // Collapse paired rows: keep only the "from" half with partner
             // metadata populated. No dependency on isTypesLoaded — pair detection
             // uses related_transaction_id (not getTypeRule().requiresPair).
-            next = collapsePairedDrafts(next);
+            next = collapsePairedOps(next);
 
-            drafts = next;
-            initialDraftsKey = serializeDrafts(next);
+            ops = next;
+            initialOpsKey = serializeOps(next);
 
             // Schedule auto-open if types already loaded; otherwise defer.
             if (isTypesLoaded()) {
@@ -315,20 +297,20 @@
             await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded(), ensureTypesLoaded()]);
             untrack(() => {
                 if (!formOpen) {
-                    scheduleAutoOpen(autoForm, drafts);
+                    scheduleAutoOpen(autoForm, ops);
                 }
             });
         })();
     });
 
     /** Schedule auto-open of the nested FormModal based on the mode. */
-    function scheduleAutoOpen(autoForm: string | null, draftArr: DraftRow[]) {
-        if (autoForm === 'edit' && draftArr.length > 0) {
-            queueMicrotask(() => openEditRowForm(draftArr[0]));
-        } else if (autoForm === 'create' && draftArr.length > 0) {
+    function scheduleAutoOpen(autoForm: string | null, opArr: PendingOp[]) {
+        if (autoForm === 'edit' && opArr.length > 0) {
+            queueMicrotask(() => openEditRowForm(opArr[0]));
+        } else if (autoForm === 'create' && opArr.length > 0) {
             // Clone: row is 'new' so openEditRowForm uses create mode
-            queueMicrotask(() => openEditRowForm(draftArr[0]));
-        } else if (draftArr.length === 0) {
+            queueMicrotask(() => openEditRowForm(opArr[0]));
+        } else if (opArr.length === 0) {
             // Auto-open for brand-new empty grid
             queueMicrotask(() => {
                 formOpen = true;
@@ -343,18 +325,18 @@
     /** Stable, comparison-friendly serialization of the drafts array (drops
      *  the volatile `tempId` so newly seeded rows compare equal to the
      *  original snapshot). */
-    function serializeDrafts(rows: DraftRow[]): string {
+    function serializeOps(rows: PendingOp[]): string {
         return JSON.stringify(
             rows.map((d) => {
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const {tempId: _tempId, original: _original, status: _status, ...rest} = d;
+                const {tempId: _tempId, ...rest} = d;
                 return rest;
             }),
         );
     }
 
     function hasUnsavedChanges(): boolean {
-        return serializeDrafts(drafts) !== initialDraftsKey;
+        return serializeOps(ops) !== initialOpsKey;
     }
 
     function requestClose() {
@@ -384,42 +366,45 @@
         // Bugfix-5 §A4: kept as a programmatic helper. The toolbar entrypoint
         // now opens TransactionFormModal (commitOnSave=false) and pushes the
         // resulting draft into the grid via `addRowFromForm`.
-        drafts = [...drafts, emptyDraft()];
+        ops = [...ops, createOpEmpty()];
     }
     void addRow;
 
-    /** Convert a DraftRow to a TXReadItem-shaped object so it can be fed back to
+    /** Convert a PendingOp to a TXReadItem-shaped object so it can be fed back to
      *  TransactionFormModal as `initialRow`. We reuse the BulkModal's in-flight
      *  draft state, NOT a server-persisted row, so id/timestamps are synthetic. */
-    function draftToTxLike(d: DraftRow): TXReadItem {
+    function opToTxLike(d: PendingOp): TXReadItem {
+        const id = opTxId(d);
+        const orig = id != null ? txStoreGet(id) : undefined;
         return {
-            id: d.id ?? 0,
-            broker_id: d.broker_id,
-            asset_id: d.asset_id,
-            type: d.type,
-            date: d.date,
-            quantity: d.quantity,
-            cash: d.cash,
+            id: id ?? 0,
+            broker_id: d.fields.broker_id,
+            asset_id: d.fields.asset_id,
+            type: d.fields.type,
+            date: d.fields.date,
+            quantity: d.fields.quantity,
+            cash: d.fields.cash,
             // C1-fix: if this is a paired row, expose the partner id so FormModal
             // opens in dual mode. For 'new' drafts _partnerId is undefined, so we
             // use a sentinel -1 to signal "pair present, fetch locally".
-            related_transaction_id: d._partnerId ?? (d.partnerBrokerId != null ? -1 : null),
-            tags: d.tags,
-            description: d.description,
-            cost_basis_override: d.cost_basis_override || null,
-            asset_event_id: d.asset_event_id,
-            created_at: d.created_at,
-            updated_at: d.updated_at,
+            related_transaction_id: d.partnerId ?? (d.partnerBrokerId != null ? -1 : null),
+            tags: d.fields.tags,
+            description: d.fields.description,
+            cost_basis_override: d.fields.cost_basis_override || null,
+            asset_event_id: d.fields.asset_event_id,
+            created_at: orig?.created_at,
+            updated_at: orig?.updated_at,
         };
     }
 
     /** Populate partner display metadata on a draft from txStore. */
-    function populatePartnerDisplay(d: DraftRow): void {
-        const pid = d.original?.related_transaction_id ?? d._partnerId;
+    function populatePartnerDisplay(d: PendingOp): void {
+        const origTx = d.op === 'edit' ? txStoreGet(d.txId) : undefined;
+        const pid = origTx?.related_transaction_id ?? d.partnerId;
         if (pid == null) return;
         const partner = txStoreGet(pid);
         if (!partner) return;
-        d._partnerId = partner.id;
+        d.partnerId = partner.id;
         d.partnerBrokerId = partner.broker_id;
         d.partnerCash = partner.cash ?? null;
         d.partnerDate = partner.date;
@@ -429,46 +414,46 @@
      *  related_transaction_id, keep the "from" half, set partner metadata,
      *  remove the "to" half. For solo drafts with a partner in txStore,
      *  populate partner display data from the store. */
-    function collapsePairedDrafts(draftArr: DraftRow[]): DraftRow[] {
+    function collapsePairedOps(opArr: PendingOp[]): PendingOp[] {
         const idToIdx = new Map<number, number>();
-        draftArr.forEach((d, i) => {
-            if (d.id != null) idToIdx.set(d.id, i);
+        opArr.forEach((d, i) => {
+            { const _id = opTxId(d); if (_id != null) idToIdx.set(_id, i); }
         });
         const toRemove = new Set<number>();
-        for (let i = 0; i < draftArr.length; i++) {
+        for (let i = 0; i < opArr.length; i++) {
             if (toRemove.has(i)) continue;
-            const d = draftArr[i];
-            const partnerId = d.original?.related_transaction_id;
+            const d = opArr[i];
+            const partnerId = (d.op === 'edit' ? txStoreGet(d.txId) : undefined)?.related_transaction_id;
             if (partnerId == null) continue;
             const pIdx = idToIdx.get(partnerId);
             if (pIdx == null || pIdx === i || toRemove.has(pIdx)) continue;
-            const partner = draftArr[pIdx];
+            const partner = opArr[pIdx];
             // Determine from/to: "from" = negative cash (giver)
-            const cashAmt = Number(d.original?.cash?.amount ?? 0);
-            const partnerCashAmt = Number(partner.original?.cash?.amount ?? 0);
+            const cashAmt = Number((d.op === 'edit' ? txStoreGet(d.txId) : undefined)?.cash?.amount ?? 0);
+            const partnerCashAmt = Number((partner.op === 'edit' ? txStoreGet(partner.txId) : undefined)?.cash?.amount ?? 0);
             let fromIdx = i,
                 toIdx = pIdx;
             if (cashAmt > 0 && partnerCashAmt <= 0) {
                 fromIdx = pIdx;
                 toIdx = i;
             } else if (cashAmt === 0 && partnerCashAmt === 0) {
-                if (Number(d.original?.quantity ?? 0) > 0) {
+                if (Number((d.op === 'edit' ? txStoreGet(d.txId) : undefined)?.quantity ?? 0) > 0) {
                     fromIdx = pIdx;
                     toIdx = i;
                 }
             }
-            const fromDraft = draftArr[fromIdx];
-            const toDraft = draftArr[toIdx];
-            fromDraft._partnerId = toDraft.id;
-            fromDraft.partnerBrokerId = toDraft.broker_id;
-            fromDraft.partnerCash = toDraft.cash;
-            fromDraft.partnerDate = toDraft.date;
+            const fromDraft = opArr[fromIdx];
+            const toDraft = opArr[toIdx];
+            fromDraft.partnerId = opTxId(toDraft);
+            fromDraft.partnerBrokerId = toDraft.fields.broker_id;
+            fromDraft.partnerCash = toDraft.fields.cash;
+            fromDraft.partnerDate = toDraft.fields.date;
             toRemove.add(toIdx);
         }
-        const result = draftArr.filter((_, i) => !toRemove.has(i));
+        const result = opArr.filter((_, i) => !toRemove.has(i));
         // For remaining drafts with partner not in batch, populate from txStore
         for (const d of result) {
-            if (d.original?.related_transaction_id != null && d._partnerId == null) {
+            if ((d.op === 'edit' ? txStoreGet(d.txId) : undefined)?.related_transaction_id != null && d.partnerId == null) {
                 populatePartnerDisplay(d);
             }
         }
@@ -477,98 +462,82 @@
 
     /** Apply the form-collected payload to a brand-new draft row. */
     function addRowFromForm(payload: Record<string, unknown>) {
-        const next = emptyDraft();
-        applyFormPayload(next, payload);
-        drafts = [...drafts, next];
+        const next = createOpEmpty();
+        applyFormPayload(next.fields, payload);
+        if (typeof payload.link_uuid === 'string' && next.op === 'create') (next as any).link_uuid = payload.link_uuid;
+        ops = [...ops, next];
     }
 
     /** Apply the form-collected payload to an existing draft (deep-edit). */
     function patchRowFromForm(tempId: string, payload: Record<string, unknown>) {
-        drafts = drafts.map((d) => {
+        ops = ops.map((d) => {
             if (d.tempId !== tempId) return d;
-            const merged = {...d};
-            applyFormPayload(merged, payload);
-            // Status 'edited' is derived automatically by deriveStatus() — no manual marking needed.
+            const merged = {...d, fields: {...d.fields}};
+            applyFormPayload(merged.fields, payload);
             return merged;
         });
     }
 
-    function applyFormPayload(target: DraftRow, p: Record<string, unknown>) {
+    function applyFormPayload(target: DraftFields, p: Record<string, unknown>) {
         if (typeof p.broker_id === 'number') target.broker_id = p.broker_id;
         if (typeof p.type === 'string') target.type = p.type as TransactionTypeCode;
         if (typeof p.date === 'string') target.date = p.date;
         if (typeof p.quantity === 'string') target.quantity = p.quantity;
         target.asset_id = (p.asset_id as number | null | undefined) ?? null;
-        target.cash = (p.cash as DraftRow['cash']) ?? null;
+        target.cash = (p.cash as DraftFields['cash']) ?? null;
         target.tags = Array.isArray(p.tags) ? (p.tags as string[]) : [];
         target.description = typeof p.description === 'string' ? p.description : '';
         target.asset_event_id = (p.asset_event_id as number | null | undefined) ?? null;
         target.cost_basis_override = typeof p.cost_basis_override === 'string' ? p.cost_basis_override : '';
-        if (typeof p.link_uuid === 'string') target.link_uuid = p.link_uuid;
-        // B1-13: partner data from dual FormModal push
-        if (typeof p._partnerBrokerId === 'number') target.partnerBrokerId = p._partnerBrokerId;
-        if (p._partnerCash !== undefined) target.partnerCash = (p._partnerCash as DraftRow['partnerCash']) ?? null;
-        if (typeof p._partnerDate === 'string') target.partnerDate = p._partnerDate;
     }
 
     // =========================================================================
-    // B1-13: Pair Merging (edit-many)
+    // Pair operations + row lifecycle
     // =========================================================================
 
     function removeRow(tempId: string) {
-        drafts = drafts.filter((d) => d.tempId !== tempId);
+        ops = ops.filter((d) => d.tempId !== tempId);
     }
 
-    /** R6-B.4: Mark an existing row for deletion (toggle). */
+    /** Mark an existing row for deletion (toggle). */
     function markDelete(tempId: string) {
-        drafts = drafts.map((d) => {
+        ops = ops.map((d) => {
             if (d.tempId !== tempId) return d;
-            if (d.status === 'delete') {
-                // Unmark: revert to 'original' — deriveStatus() will compute 'edited' if fields changed
-                return {...d, status: d.original ? 'original' : 'new'};
-            }
-            return {...d, status: 'delete'};
+            if (d.op !== 'edit') return d; // can't mark-delete a create — just remove it
+            return {...d, markedDelete: !(d as any).markedDelete};
         });
     }
 
-    /** R6-B.4: Clone a draft row as a new row. */
+    /** Clone a row as a new row. */
     function cloneRow(tempId: string) {
-        const src = drafts.find((d) => d.tempId === tempId);
+        const src = ops.find((d) => d.tempId === tempId);
         if (!src) return;
-        const clone: DraftRow = {
-            ...src,
+        const clone: PendingOp = {
+            op: 'create',
             tempId: generateUUID(),
-            status: 'new',
-            id: undefined,
-            original: undefined,
-            link_uuid: src.link_uuid ? generateUUID() : null,
-            date: todayIso(),
+            fields: {...src.fields, date: todayIso()},
+            link_uuid: (src.op === 'create' && src.link_uuid) ? generateUUID() : null,
+            partnerBrokerId: src.partnerBrokerId,
+            partnerCash: src.partnerCash,
+            partnerDate: src.partnerDate,
         };
-        drafts = [...drafts, clone];
+        ops = [...ops, clone];
     }
 
     function resetRow(tempId: string) {
-        const target = drafts.find((d) => d.tempId === tempId);
-        if (!target || !target.original) return;
-        drafts = drafts.map((d) => {
-            if (d.tempId !== tempId) return d;
-            const reset = fromTx(d.original!);
-            if (d._addedViaPicker) reset._addedViaPicker = true;
-            // Re-populate partner display from txStore
+        ops = ops.map((d) => {
+            if (d.tempId !== tempId || d.op !== 'edit') return d;
+            const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker});
             populatePartnerDisplay(reset);
-            // Discard any partner edits
-            reset._partnerFormPayload = undefined;
             return reset;
         });
     }
 
     function resetAll() {
-        drafts = drafts.map((d) => {
-            if (!d.original) return d;
-            const reset = fromTx(d.original);
-            if (d._addedViaPicker) reset._addedViaPicker = true;
+        ops = ops.map((d) => {
+            if (d.op !== 'edit') return d;
+            const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker});
             populatePartnerDisplay(reset);
-            reset._partnerFormPayload = undefined;
             return reset;
         });
     }
@@ -581,16 +550,18 @@
     // Shared helpers for collectCreate / collectUpdate
     // -----------------------------------------------------------------
 
-    function collectCreate(d: DraftRow): Record<string, unknown> {
-        const rule = getTypeRule(d.type);
-        return buildCreatePayload(draftToTxFields(d), rule);
+    function collectCreate(d: PendingOp): Record<string, unknown> {
+        const rule = getTypeRule(d.fields.type);
+        return buildCreatePayload(opToTxFields(d), rule);
     }
 
-    function collectUpdate(d: DraftRow): Record<string, unknown> | null {
-        if (!d.original || d.id == null) return null;
-        const rule = getTypeRule(d.type);
-        const origRule = getTypeRule(d.original.type as TransactionTypeCode);
-        return buildUpdateDiff(draftToTxFields(d), d.original as unknown as TxOriginal, rule, origRule);
+    function collectUpdate(d: PendingOp): Record<string, unknown> | null {
+        if (d.op !== 'edit') return null;
+        const orig = txStoreGet(d.txId);
+        if (!orig) return null;
+        const rule = getTypeRule(d.fields.type);
+        const origRule = getTypeRule(orig.type as TransactionTypeCode);
+        return buildUpdateDiff(opToTxFields(d), orig as unknown as TxOriginal, rule, origRule);
     }
 
     /**
@@ -603,62 +574,50 @@
         const creates: Record<string, unknown>[] = [];
         const updates: Record<string, unknown>[] = [];
         const deletes: number[] = [];
-        for (const d of drafts) {
+        for (const d of ops) {
             if (d.tempId === excludeTempId) continue;
             const st = deriveStatus(d);
             if (st === 'new') {
                 creates.push(collectCreate(d));
-                if (d._partnerFormPayload) creates.push(d._partnerFormPayload);
+                if (d.partnerPayload) creates.push(d.partnerPayload as unknown as Record<string, unknown>);
             } else if (st === 'edited') {
                 const upd = collectUpdate(d);
                 if (upd && Object.keys(upd).length > 1) updates.push(upd);
-                if (d._partnerFormPayload && d._partnerId != null) {
-                    const partnerOrig = txStoreGet(d._partnerId);
+                if (d.partnerPayload && d.partnerId != null) {
+                    const partnerOrig = txStoreGet(d.partnerId);
                     if (partnerOrig) {
-                        const partnerUpd = diffDualItem(d._partnerFormPayload, partnerOrig as unknown as TxOriginal);
+                        const partnerUpd = diffDualItem(d.partnerPayload as unknown as Record<string, unknown>, partnerOrig as unknown as TxOriginal);
                         if (Object.keys(partnerUpd).length > 1) updates.push(partnerUpd);
                     }
                 }
-            } else if (st === 'delete' && d.id != null) {
-                deletes.push(d.id);
-                if (d._partnerId != null) deletes.push(d._partnerId);
+            } else if (st === 'delete' && d.op === 'edit') {
+                deletes.push((d as any).txId);
+                if (d.partnerId != null) deletes.push(d.partnerId);
             }
         }
         return {creates, updates, deletes};
     }
 
-    /** Convert a DraftRow to the shared TxFields interface. */
-    function draftToTxFields(d: DraftRow): TxFields {
-        return {
-            type: d.type,
-            broker_id: d.broker_id,
-            date: d.date,
-            quantity: d.quantity,
-            asset_id: d.asset_id,
-            cash: d.cash,
-            tags: d.tags,
-            description: d.description,
-            cost_basis_override: d.cost_basis_override,
-            asset_event_id: d.asset_event_id,
-            link_uuid: d.link_uuid,
-        };
+    /** Convert a PendingOp to the shared TxFields interface. */
+    function opToTxFields(d: PendingOp): TxFields {
+        return {...d.fields, link_uuid: d.op === 'create' ? d.link_uuid : null};
     }
 
     /** Derive the effective display status of a draft row.
      *  'new' and 'delete' are explicit. 'edited' is derived from diff vs original.
      *  This eliminates "edited falso" bugs — status is always truthful. */
-    function deriveStatus(d: DraftRow): 'new' | 'edited' | 'original' | 'delete' {
-        if (d.status === 'new') return 'new';
-        if (d.status === 'delete') return 'delete';
-        // For existing rows: check whether fields differ from original
-        if (!d.original) return 'original';
+    function deriveStatus(d: PendingOp): 'new' | 'edited' | 'original' | 'delete' {
+        if (d.op === 'create') return 'new';
+        if (d.op === 'edit' && d.markedDelete) return 'delete';
+        // For existing rows: check whether fields differ from txStore original
+        if (d.op !== 'edit') return 'original';
         const diff = collectUpdate(d);
         if (diff && Object.keys(diff).length > 1) return 'edited';
         // Also check partner changes
-        if (d._partnerFormPayload && d._partnerId != null) {
-            const partnerOrig = txStoreGet(d._partnerId);
+        if (d.partnerPayload && d.partnerId != null) {
+            const partnerOrig = txStoreGet(d.partnerId);
             if (partnerOrig) {
-                const partnerUpd = diffDualItem(d._partnerFormPayload, partnerOrig as unknown as TxOriginal);
+                const partnerUpd = diffDualItem(d.partnerPayload as unknown as Record<string, unknown>, partnerOrig as unknown as TxOriginal);
                 if (Object.keys(partnerUpd).length > 1) return 'edited';
             }
         }
@@ -670,10 +629,10 @@
     // =========================================================================
 
     const scheduler = createValidateScheduler({
-        enabled: () => drafts.length > 0 && drafts.length <= AUTO_VALIDATE_THRESHOLD && drafts.some((d) => deriveStatus(d) !== 'delete' && isDraftReadyForValidation(d)),
+        enabled: () => ops.length > 0 && ops.length <= AUTO_VALIDATE_THRESHOLD && ops.some((d) => deriveStatus(d) !== 'delete' && isDraftReadyForValidation(d.fields as any)),
         draftKey: () => lastDraftKey,
         validateFn: async () => {
-            if (drafts.length === 0) {
+            if (ops.length === 0) {
                 issues = [];
                 lastValidatedDraftKey = lastDraftKey;
                 issuesDismissed = false;
@@ -683,25 +642,25 @@
             const creates: Record<string, unknown>[] = [];
             const updates: Record<string, unknown>[] = [];
             const deletes: number[] = [];
-            for (const d of drafts) {
+            for (const d of ops) {
                 const st = deriveStatus(d);
                 if (st === 'new') {
                     creates.push(collectCreate(d));
-                    if (d._partnerFormPayload) creates.push(d._partnerFormPayload);
+                    if (d.partnerPayload) creates.push(d.partnerPayload as unknown as Record<string, unknown>);
                 } else if (st === 'edited') {
                     const upd = collectUpdate(d);
                     if (upd && Object.keys(upd).length > 1) updates.push(upd);
                     // Partner update from dual-form edits
-                    if (d._partnerFormPayload && d._partnerId != null) {
-                        const partnerOrig = txStoreGet(d._partnerId);
+                    if (d.partnerPayload && d.partnerId != null) {
+                        const partnerOrig = txStoreGet(d.partnerId);
                         if (partnerOrig) {
-                            const partnerUpd = diffDualItem(d._partnerFormPayload, partnerOrig as unknown as TxOriginal);
+                            const partnerUpd = diffDualItem(d.partnerPayload as unknown as Record<string, unknown>, partnerOrig as unknown as TxOriginal);
                             if (Object.keys(partnerUpd).length > 1) updates.push(partnerUpd);
                         }
                     }
-                } else if (st === 'delete' && d.id != null) {
-                    deletes.push(d.id);
-                    if (d._partnerId != null) deletes.push(d._partnerId);
+                } else if (st === 'delete' && d.op === 'edit') {
+                    deletes.push((d as any).txId);
+                    if (d.partnerId != null) deletes.push(d.partnerId);
                 }
             }
             const payload: Record<string, unknown> = {};
@@ -770,13 +729,13 @@
 
         if (issue.code === 'balanceAssetNegative') {
             const assetId = Number(p.assetId);
-            for (let i = drafts.length - 1; i >= 0; i--) {
-                if (drafts[i].broker_id === brokerId && drafts[i].asset_id === assetId) return i;
+            for (let i = ops.length - 1; i >= 0; i--) {
+                if (ops[i].fields.broker_id === brokerId && ops[i].fields.asset_id === assetId) return i;
             }
         } else if (issue.code === 'balanceCashNegative') {
             const currency = p.currency as string;
-            for (let i = drafts.length - 1; i >= 0; i--) {
-                if (drafts[i].broker_id === brokerId && drafts[i].cash?.code === currency) return i;
+            for (let i = ops.length - 1; i >= 0; i--) {
+                if (ops[i].fields.broker_id === brokerId && ops[i].fields.cash?.code === currency) return i;
             }
         }
         return -1;
@@ -803,7 +762,7 @@
 
     $effect(() => {
         if (!open) return;
-        const key = JSON.stringify(drafts);
+        const key = JSON.stringify(ops);
         if (key === lastDraftKey) return;
         lastDraftKey = key;
         commitFailed = false;
@@ -831,25 +790,25 @@
             const updates: Record<string, unknown>[] = [];
             const deletes: number[] = [];
 
-            for (const d of drafts) {
+            for (const d of ops) {
                 const st = deriveStatus(d);
                 if (st === 'new') {
                     creates.push(collectCreate(d));
-                    if (d._partnerFormPayload) creates.push(d._partnerFormPayload);
+                    if (d.partnerPayload) creates.push(d.partnerPayload as unknown as Record<string, unknown>);
                 } else if (st === 'edited') {
                     const upd = collectUpdate(d);
                     if (upd && Object.keys(upd).length > 1) updates.push(upd);
                     // Partner update from dual-form edits
-                    if (d._partnerFormPayload && d._partnerId != null) {
-                        const partnerOrig = txStoreGet(d._partnerId);
+                    if (d.partnerPayload && d.partnerId != null) {
+                        const partnerOrig = txStoreGet(d.partnerId);
                         if (partnerOrig) {
-                            const partnerUpd = diffDualItem(d._partnerFormPayload, partnerOrig as unknown as TxOriginal);
+                            const partnerUpd = diffDualItem(d.partnerPayload as unknown as Record<string, unknown>, partnerOrig as unknown as TxOriginal);
                             if (Object.keys(partnerUpd).length > 1) updates.push(partnerUpd);
                         }
                     }
-                } else if (st === 'delete' && d.id != null) {
-                    deletes.push(d.id);
-                    if (d._partnerId != null) deletes.push(d._partnerId);
+                } else if (st === 'delete' && d.op === 'edit') {
+                    deletes.push((d as any).txId);
+                    if (d.partnerId != null) deletes.push(d.partnerId);
                 }
                 // 'original' rows are unchanged — skip
             }
@@ -905,7 +864,7 @@
     // TransactionTypeSearchSelect (PNG icons + i18n labels).
 
     // =========================================================================
-    // DRY helpers for readonly cell rendering
+    // DRY helpers for cell rendering
     // =========================================================================
 
     /** Render a Da:/A: dual-line cell for paired rows.
@@ -943,12 +902,6 @@
         return brokers.find((b) => b.id === brokerId)?.name ?? '—';
     }
 
-    /** Asset display name lookup. */
-    function assetName(assetId: number | null | undefined): string {
-        if (assetId == null) return '—';
-        const info = getAssetInfo(assetId);
-        return info?.display_name ?? `#${assetId}`;
-    }
 
     /** H1-fix: Asset name with icon for readonly cells. */
     function renderAssetHtml(assetId: number | null | undefined): string {
@@ -977,7 +930,7 @@
         return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${name}</span>`;
     }
 
-    let columns = $derived.by<ColumnDef<DraftRow>[]>(() => {
+    let columns = $derived.by<ColumnDef<PendingOp>[]>(() => {
         return [
             {
                 id: 'status',
@@ -1013,12 +966,12 @@
                 filterable: false,
                 hiddenByDefault: false,
                 cell: (row): CellContent => {
-                    if (row.id == null) return {type: 'html', html: '—'};
-                    const rule = getTypeRule(row.type);
-                    if (rule.requiresPair && row._partnerId != null) {
-                        return {type: 'html', html: renderDualHtml(`#${row.id}`, `#${row._partnerId}`)};
+                    if (opTxId(row) == null) return {type: 'html', html: '—'};
+                    const rule = getTypeRule(row.fields.type);
+                    if (rule.requiresPair && row.partnerId != null) {
+                        return {type: 'html', html: renderDualHtml(`#${opTxId(row)}`, `#${row.partnerId}`)};
                     }
-                    return {type: 'html', html: `#${row.id}`};
+                    return {type: 'html', html: `#${opTxId(row)}`};
                 },
             },
             {
@@ -1029,12 +982,12 @@
                 sortable: false,
                 filterable: false,
                 cell: (row): CellContent => {
-                    const rule = getTypeRule(row.type);
+                    const rule = getTypeRule(row.fields.type);
                     // Paired rows with different dates → Da:/A:
-                    if (rule.requiresPair && row.partnerDate && row.partnerDate !== row.date) {
-                        return {type: 'html', html: renderDualHtml(row.date, row.partnerDate)};
+                    if (rule.requiresPair && row.partnerDate && row.partnerDate !== row.fields.date) {
+                        return {type: 'html', html: renderDualHtml(row.fields.date, row.partnerDate)};
                     }
-                    return {type: 'html', html: `<span class="font-mono text-sm text-gray-700 dark:text-gray-200">${row.date}</span>`};
+                    return {type: 'html', html: `<span class="font-mono text-sm text-gray-700 dark:text-gray-200">${row.fields.date}</span>`};
                 },
             },
             {
@@ -1044,7 +997,7 @@
                 width: 155,
                 sortable: false,
                 filterable: false,
-                cell: (row): CellContent => ({type: 'html', html: renderTypeHtml(row.type)}),
+                cell: (row): CellContent => ({type: 'html', html: renderTypeHtml(row.fields.type)}),
             },
             {
                 id: 'asset',
@@ -1054,10 +1007,10 @@
                 sortable: false,
                 filterable: false,
                 cell: (row): CellContent => {
-                    if (getTypeRule(row.type).assetField === 'forbidden') {
+                    if (getTypeRule(row.fields.type).assetField === 'forbidden') {
                         return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
                     }
-                    return {type: 'html', html: renderAssetHtml(row.asset_id)};
+                    return {type: 'html', html: renderAssetHtml(row.fields.asset_id)};
                 },
             },
             {
@@ -1068,12 +1021,12 @@
                 sortable: false,
                 filterable: false,
                 cell: (row): CellContent => {
-                    if (getTypeRule(row.type).quantityMode === 'forbidden') {
+                    if (getTypeRule(row.fields.type).quantityMode === 'forbidden') {
                         return {type: 'html', html: '<span class="text-gray-400 italic">n/a</span>'};
                     }
-                    const qty = row.quantity ?? '0';
+                    const qty = row.fields.quantity ?? '0';
                     // H2-fix: paired rows with non-zero qty → show Da:/A: with signed values + emoji
-                    const rule = getTypeRule(row.type);
+                    const rule = getTypeRule(row.fields.type);
                     if (rule.requiresPair && row.partnerBrokerId != null && Number(qty) !== 0) {
                         const absVal = Math.abs(Number(qty));
                         const fromQty = `-${absVal} 📉`;
@@ -1091,15 +1044,15 @@
                 sortable: false,
                 filterable: false,
                 cell: (row): CellContent => {
-                    const rule = getTypeRule(row.type);
+                    const rule = getTypeRule(row.fields.type);
                     if (rule.cashField === 'forbidden') {
                         return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
                     }
                     // Paired row → show Da:/A: dual cash lines
                     if (rule.requiresPair && row.partnerCash !== undefined && row.partnerBrokerId != null) {
-                        return {type: 'html', html: renderDualHtml(formatCashText(row.cash), formatCashText(row.partnerCash))};
+                        return {type: 'html', html: renderDualHtml(formatCashText(row.fields.cash), formatCashText(row.partnerCash))};
                     }
-                    return {type: 'html', html: `<span class="text-sm">${formatCashText(row.cash)}</span>`};
+                    return {type: 'html', html: `<span class="text-sm">${formatCashText(row.fields.cash)}</span>`};
                 },
             },
             {
@@ -1111,12 +1064,12 @@
                 filterable: false,
                 hiddenByDefault: false,
                 cell: (row): CellContent => {
-                    const rule = getTypeRule(row.type);
+                    const rule = getTypeRule(row.fields.type);
                     // Paired row with different brokers → Da:/A:
-                    if (rule.requiresPair && row.partnerBrokerId != null && row.partnerBrokerId !== row.broker_id) {
-                        return {type: 'html', html: renderDualHtml(renderBrokerHtml(row.broker_id), renderBrokerHtml(row.partnerBrokerId))};
+                    if (rule.requiresPair && row.partnerBrokerId != null && row.partnerBrokerId !== row.fields.broker_id) {
+                        return {type: 'html', html: renderDualHtml(renderBrokerHtml(row.fields.broker_id), renderBrokerHtml(row.partnerBrokerId))};
                     }
-                    return {type: 'html', html: renderBrokerHtml(row.broker_id)};
+                    return {type: 'html', html: renderBrokerHtml(row.fields.broker_id)};
                 },
             },
             {
@@ -1128,12 +1081,12 @@
                 filterable: false,
                 hiddenByDefault: false,
                 cell: (row): CellContent => {
-                    if (!row.description) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
-                    const escaped = row.description.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    if (!row.fields.description) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                    const escaped = row.fields.description.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                     return {
                         type: 'html',
                         html: `<span class="text-xs text-gray-600 dark:text-gray-300 truncate block leading-tight">${escaped}</span>`,
-                        tooltip: {text: row.description, position: 'top', maxWidth: '400px'},
+                        tooltip: {text: row.fields.description, position: 'top', maxWidth: '400px'},
                     };
                 },
             },
@@ -1146,8 +1099,8 @@
                 filterable: false,
                 hiddenByDefault: true,
                 cell: (row): CellContent => {
-                    if (row.tags.length === 0) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
-                    const html = row.tags
+                    if (row.fields.tags.length === 0) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                    const html = row.fields.tags
                         .map((tag) => {
                             const escaped = tag.replace(/</g, '&lt;').replace(/>/g, '&gt;');
                             const c = getStringColor(tag);
@@ -1165,7 +1118,7 @@
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: true,
-                cell: (row): CellContent => ({type: 'html', html: row.cost_basis_override ? `<span class="font-mono text-xs">${row.cost_basis_override}</span>` : '<span class="text-gray-400 italic">auto</span>'}),
+                cell: (row): CellContent => ({type: 'html', html: row.fields.cost_basis_override ? `<span class="font-mono text-xs">${row.fields.cost_basis_override}</span>` : '<span class="text-gray-400 italic">auto</span>'}),
             },
             {
                 id: 'asset_event_id',
@@ -1175,7 +1128,7 @@
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: true,
-                cell: (row): CellContent => ({type: 'html', html: row.asset_event_id != null ? `<span class="font-mono text-xs">#${row.asset_event_id}</span>` : '<span class="text-gray-400">—</span>'}),
+                cell: (row): CellContent => ({type: 'html', html: row.fields.asset_event_id != null ? `<span class="font-mono text-xs">#${row.fields.asset_event_id}</span>` : '<span class="text-gray-400">—</span>'}),
             },
             {
                 id: 'link_uuid',
@@ -1186,9 +1139,9 @@
                 filterable: false,
                 hiddenByDefault: true,
                 cell: (row): CellContent => {
-                    if (row._partnerId != null) return {type: 'html', html: `<code class="text-[10px] font-mono text-gray-400">↔ #${row._partnerId}</code>`};
-                    if (row._partnerFormPayload != null) return {type: 'html', html: '<code class="text-[10px] font-mono text-indigo-400">↔ new</code>'};
-                    if (row.link_uuid) return {type: 'html', html: `<code class="text-[10px] font-mono text-gray-400">${row.link_uuid.slice(0, 8)}…</code>`};
+                    if (row.partnerId != null) return {type: 'html', html: `<code class="text-[10px] font-mono text-gray-400">↔ #${row.partnerId}</code>`};
+                    if (row.partnerPayload != null) return {type: 'html', html: '<code class="text-[10px] font-mono text-indigo-400">↔ new</code>'};
+                    if (row.op === 'create' && row.link_uuid) return {type: 'html', html: `<code class="text-[10px] font-mono text-gray-400">${row.op === 'create' ? row.link_uuid?.slice(0, 8) : ''}…</code>`};
                     return {type: 'html', html: '—'};
                 },
             },
@@ -1200,7 +1153,7 @@
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: true,
-                cell: (row): CellContent => ({type: 'html', html: row.created_at ?? '—'}),
+                cell: (row): CellContent => ({type: 'html', html: (row.op === 'edit' ? txStoreGet(row.txId)?.created_at : undefined) ?? '—'}),
             },
             {
                 id: 'updated_at',
@@ -1210,9 +1163,9 @@
                 sortable: false,
                 filterable: false,
                 hiddenByDefault: true,
-                cell: (row): CellContent => ({type: 'html', html: row.updated_at ?? '—'}),
+                cell: (row): CellContent => ({type: 'html', html: (row.op === 'edit' ? txStoreGet(row.txId)?.updated_at : undefined) ?? '—'}),
             },
-        ] satisfies ColumnDef<DraftRow>[];
+        ] satisfies ColumnDef<PendingOp>[];
     });
 
     // =========================================================================
@@ -1224,20 +1177,20 @@
             id: 'edit-single',
             icon: Pencil,
             label: () => $t('transactions.bulk.editSingle') || 'Edit row',
-            onClick: (row: DraftRow) => handleEditRowClick(row),
+            onClick: (row: PendingOp) => handleEditRowClick(row),
         },
         {
             id: 'clone',
             icon: Copy,
             label: () => $t('transactions.bulk.cloneRow') || 'Clone row',
-            onClick: (row: DraftRow) => cloneRow(row.tempId),
+            onClick: (row: PendingOp) => cloneRow(row.tempId),
         },
         {
             id: 'mark-delete',
             icon: Trash2,
-            label: (row: DraftRow) => (deriveStatus(row) === 'delete' ? $t('transactions.bulk.unmarkDelete') || 'Restore' : $t('transactions.bulk.markDelete') || 'Mark for deletion'),
-            onClick: (row: DraftRow) => {
-                if (row.id != null) {
+            label: (row: PendingOp) => (deriveStatus(row) === 'delete' ? $t('transactions.bulk.unmarkDelete') || 'Restore' : $t('transactions.bulk.markDelete') || 'Mark for deletion'),
+            onClick: (row: PendingOp) => {
+                if (row.op === 'edit') {
                     // Existing row: toggle delete state
                     markDelete(row.tempId);
                 } else {
@@ -1251,15 +1204,15 @@
             id: 'remove-from-batch',
             icon: X,
             label: () => $t('transactions.bulk.removeFromBatch') || 'Remove from batch',
-            onClick: (row: DraftRow) => removeRow(row.tempId),
-            visible: (row: DraftRow) => !!row._addedViaPicker && deriveStatus(row) !== 'new',
+            onClick: (row: PendingOp) => removeRow(row.tempId),
+            visible: (row: PendingOp) => row.op === 'edit' && row.addedViaPicker && deriveStatus(row) !== 'new',
         },
         {
             id: 'reset',
             icon: Undo2,
             label: () => $t('transactions.bulk.resetRow'),
-            onClick: (row: DraftRow) => resetRow(row.tempId),
-            visible: (row: DraftRow) => !!row.original && (deriveStatus(row) === 'edited' || deriveStatus(row) === 'delete'),
+            onClick: (row: PendingOp) => resetRow(row.tempId),
+            visible: (row: PendingOp) => row.op === 'edit' && (deriveStatus(row) === 'edited' || deriveStatus(row) === 'delete'),
         },
     ]);
 
@@ -1269,7 +1222,7 @@
 
     function jumpToIssue(issue: ValidationIssue) {
         if (issue.index < 0) return; // broker-level error, no specific row
-        const draft = drafts[issue.index];
+        const draft = ops[issue.index];
         if (!draft) return;
         tableRef?.navigateToRowId(draft.tempId);
     }
@@ -1281,16 +1234,16 @@
     // Bugfix-4 §U16: validate chip removed — banners are the single source
     // of truth. Footer keeps only an inline "Validating…" indicator.
 
-    // All drafts are visible (no more _hidden partner rows)
-    let visibleDrafts = $derived(drafts);
+    // All ops are visible (no more _hidden partner rows)
+    let visibleOps = $derived(ops);
 
-    let newCount = $derived(visibleDrafts.filter((d) => deriveStatus(d) === 'new').length);
-    let editedCount = $derived(visibleDrafts.filter((d) => deriveStatus(d) === 'edited').length);
-    let deleteCount = $derived(visibleDrafts.filter((d) => deriveStatus(d) === 'delete').length);
+    let newCount = $derived(visibleOps.filter((d) => deriveStatus(d) === 'new').length);
+    let editedCount = $derived(visibleOps.filter((d) => deriveStatus(d) === 'edited').length);
+    let deleteCount = $derived(visibleOps.filter((d) => deriveStatus(d) === 'delete').length);
     /** B23: true when at least one paired row is marked for deletion — show split hint. */
-    let hasPairedDelete = $derived(visibleDrafts.some((d) => deriveStatus(d) === 'delete' && d._partnerId != null));
+    let hasPairedDelete = $derived(visibleOps.some((d) => deriveStatus(d) === 'delete' && d.partnerId != null));
     let actionCount = $derived(newCount + editedCount + deleteCount);
-    let commitDisabled = $derived(committing || drafts.length === 0 || actionCount === 0);
+    let commitDisabled = $derived(committing || ops.length === 0 || actionCount === 0);
     let commitLabel = $derived(committing ? $t('common.saving') : $t('transactions.bulk.commitAll'));
 
     // -------------------------------------------------------------------------
@@ -1310,52 +1263,32 @@
 
     // PickerModal (Plan B Step 9): "Search & add" existing DB transactions.
     let pickerOpen = $state(false);
-    let pickerExcludeIds = $derived(new Set(drafts.filter((d) => d.id != null).map((d) => d.id!)));
+    let pickerExcludeIds = $derived(new Set(ops.filter((d) => opTxId(d) != null).map((d) => opTxId(d)!)));
     // PickerModal reads from txStore directly (Plan C Step 2)
 
     function openPicker() {
         pickerOpen = true;
     }
     function handlePickerAdd(rows: TXReadItem[]) {
-        const existing = new Set(drafts.filter((d) => d.id != null).map((d) => d.id!));
-        const newDrafts: DraftRow[] = [];
+        const existing = new Set(ops.filter((d) => opTxId(d) != null).map((d) => opTxId(d)!));
+        const newOps: PendingOp[] = [];
         for (const r of rows) {
             if (existing.has(r.id)) continue;
             existing.add(r.id);
-            const d = emptyDraft();
-            d.id = r.id;
-            d.status = 'original';
-            d.original = r;
-            d._addedViaPicker = true;
-            d.broker_id = r.broker_id;
-            d.asset_id = r.asset_id ?? null;
-            d.type = r.type as TransactionTypeCode;
-            d.date = r.date;
-            d.quantity = r.quantity;
-            d.cash = r.cash ?? null;
-            d.tags = r.tags ?? [];
-            d.description = r.description ?? '';
-            d.asset_event_id = r.asset_event_id ?? null;
-            d.cost_basis_override = r.cost_basis_override ?? '';
-            d.created_at = r.created_at;
-            d.updated_at = r.updated_at;
-            newDrafts.push(d);
+            newOps.push(editOpFromTx(r.id, {addedViaPicker: true}));
         }
-        // Collapse paired rows so only the "from" half is visible
-        const collapsed = collapsePairedDrafts(newDrafts);
-        drafts = [...drafts, ...collapsed];
+        const collapsed = collapsePairedOps(newOps);
+        ops = [...ops, ...collapsed];
         pickerOpen = false;
     }
 
-    /** Aggregated tag suggestions: union of tags currently in any draft +
-     *  any tag in the initialRows snapshot + the parent-supplied
+    /** Aggregated tag suggestions: union of tags in current ops +
      *  `availableTags` (sourced from the loaded transactions table). Drives
      *  the autocomplete in the nested FormModal's tag field (Bugfix-5 §U20
      *  client-side MVP). */
     let aggregatedTags = $derived.by<string[]>(() => {
         const seen = new Set<string>(availableTags);
-        for (const d of drafts) for (const tg of d.tags ?? []) if (tg) seen.add(tg);
-        for (const r of initialRows) for (const tg of r.tags ?? []) if (tg) seen.add(tg);
+        for (const d of ops) for (const tg of d.fields.tags ?? []) if (tg) seen.add(tg);
         return [...seen].sort((a, b) => a.localeCompare(b));
     });
 
@@ -1369,7 +1302,7 @@
     }
 
     /** B23 Step 4: intercept edit on deleted row — show confirm before restoring. */
-    function handleEditRowClick(row: DraftRow) {
+    function handleEditRowClick(row: PendingOp) {
         if (deriveStatus(row) === 'delete') {
             confirmEditDeleteRow = row;
             confirmEditDeleteOpen = true;
@@ -1381,10 +1314,10 @@
     /** B23 Step 4: user confirmed restore-and-edit on a deleted row. */
     function confirmRestoreAndEdit() {
         if (!confirmEditDeleteRow) return;
-        const target = drafts.find((d) => d.tempId === confirmEditDeleteRow!.tempId);
+        const target = ops.find((d) => d.tempId === confirmEditDeleteRow!.tempId);
         if (target) {
-            target.status = 'original';
-            drafts = [...drafts];
+            if (target.op === 'edit') (target as any).markedDelete = false;
+            ops = [...ops];
         }
         const row = confirmEditDeleteRow;
         confirmEditDeleteOpen = false;
@@ -1392,17 +1325,17 @@
         openEditRowForm(row);
     }
 
-    function openEditRowForm(row: DraftRow) {
+    function openEditRowForm(row: PendingOp) {
         // When editing a 'new' draft, open in create mode so type stays editable;
         // formEditingTempId is still set so handleFormPushed patches (not adds).
         formMode = deriveStatus(row) === 'new' ? 'create' : 'edit';
-        formInitial = draftToTxLike(row);
+        formInitial = opToTxLike(row);
         formEditingTempId = row.tempId;
         // For paired drafts, get the partner from txStore (existing rows)
-        // or synthesize from _partnerFormPayload (new pairs).
+        // or synthesize from partnerPayload (new pairs).
         let partnerTxLike: TXReadItem | null = null;
-        if (row._partnerId != null) {
-            const p = txStoreGet(row._partnerId);
+        if (row.partnerId != null) {
+            const p = txStoreGet(row.partnerId);
             if (p) partnerTxLike = p;
         }
         formPartnerRow = partnerTxLike;
@@ -1439,15 +1372,15 @@
         }
 
         // "From" side — visible row
-        const fromDraft = emptyDraft();
-        applyFormPayload(fromDraft, items[0]);
-        fromDraft.partnerBrokerId = (items[1].broker_id as number) ?? 0;
-        fromDraft.partnerCash = (items[1].cash as DraftRow['partnerCash']) ?? null;
-        fromDraft.partnerDate = (items[1].date as string) ?? fromDraft.date;
-        // Store the full partner create payload for commit
-        fromDraft._partnerFormPayload = items[1];
+        const fromOp = createOpEmpty();
+        applyFormPayload(fromOp.fields, items[0]);
+        if (typeof items[0].link_uuid === 'string' && fromOp.op === 'create') (fromOp as any).link_uuid = items[0].link_uuid;
+        fromOp.partnerBrokerId = (items[1].broker_id as number) ?? 0;
+        fromOp.partnerCash = (items[1].cash as DraftFields['cash']) ?? null;
+        fromOp.partnerDate = (items[1].date as string) ?? fromOp.fields.date;
+        fromOp.partnerPayload = items[1] as unknown as TxFields;
 
-        drafts = [...drafts, fromDraft];
+        ops = [...ops, fromOp];
     }
 
     /** Patch a paired draft row: update visible draft + store partner payload. */
@@ -1458,17 +1391,14 @@
             return;
         }
 
-        drafts = drafts.map((d) => {
+        ops = ops.map((d) => {
             if (d.tempId !== tempId) return d;
-            const merged = {...d};
-            applyFormPayload(merged, items[0]);
-            // Update partner display data
+            const merged = {...d, fields: {...d.fields}};
+            applyFormPayload(merged.fields, items[0]);
             merged.partnerBrokerId = (items[1].broker_id as number) ?? 0;
-            merged.partnerCash = (items[1].cash as DraftRow['partnerCash']) ?? null;
-            merged.partnerDate = (items[1].date as string) ?? merged.date;
-            // Store the full partner payload for commit diffing
-            merged._partnerFormPayload = items[1];
-            // Status 'edited' is derived automatically by deriveStatus() — no manual marking needed.
+            merged.partnerCash = (items[1].cash as DraftFields['cash']) ?? null;
+            merged.partnerDate = (items[1].date as string) ?? merged.fields.date;
+            merged.partnerPayload = items[1] as unknown as TxFields;
             return merged;
         });
     }
@@ -1481,7 +1411,7 @@
 
     /** Row background tint by status for immediate visual recognition.
      *  Color is purely status-based — paired nature is visible from Da:/A: rendering. */
-    function getRowClass(row: DraftRow): string {
+    function getRowClass(row: PendingOp): string {
         const st = deriveStatus(row);
         if (st === 'delete') return 'row-deleted';
         if (st === 'new') return 'row-appended';
@@ -1489,15 +1419,15 @@
         return '';
     }
 
-    /** R6-B.4: Bulk actions for selected rows. */
+    /** Bulk actions for selected rows. */
     let bulkDeleteSelected = $derived({
         id: 'delete-selected',
         icon: Trash2,
         label: () => $t('transactions.bulk.deleteSelected') || 'Delete selected',
         variant: 'danger' as const,
-        onClick: (rows: DraftRow[]) => {
+        onClick: (rows: PendingOp[]) => {
             for (const r of rows) {
-                if (r.id != null) {
+                if (r.op === 'edit') {
                     markDelete(r.tempId);
                 } else {
                     removeRow(r.tempId);
@@ -1508,16 +1438,16 @@
     let bulkActionsForTable = $derived([bulkDeleteSelected] as never);
 
     /** Rows currently selected in the bulk DataTable (for inline toolbar). */
-    let bulkTableSelectedRows = $state<DraftRow[]>([]);
+    let bulkTableSelectedRows = $state<PendingOp[]>([]);
 
     function handleBulkTableSelectionChange(selectedIds: string[]) {
         const idSet = new Set(selectedIds);
-        bulkTableSelectedRows = drafts.filter((d) => idSet.has(d.tempId));
+        bulkTableSelectedRows = ops.filter((d) => idSet.has(d.tempId));
     }
 
     function executeBulkDeleteOnSelected() {
         for (const r of bulkTableSelectedRows) {
-            if (r.id != null) {
+            if (r.op === 'edit') {
                 markDelete(r.tempId);
             } else {
                 removeRow(r.tempId);
@@ -1533,7 +1463,7 @@
         <!-- Header -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-bulk-title">
-                📋 {$t('transactions.bulk.title', {values: {total: visibleDrafts.length}})}
+                📋 {$t('transactions.bulk.title', {values: {total: visibleOps.length}})}
                 {#if actionCount > 0}
                     <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
                         ({#if newCount > 0}<span class="text-emerald-600 dark:text-emerald-400">{newCount} {$t('transactions.bulk.stateNew')}</span>{/if}{#if newCount > 0 && (editedCount > 0 || deleteCount > 0)}
@@ -1578,7 +1508,7 @@
                                             type="button"
                                             class="underline hover:opacity-80 text-left"
                                             onclick={() => {
-                                                const d = drafts[resolvedRow];
+                                                const d = ops[resolvedRow];
                                                 if (d) tableRef?.navigateToRowId(d.tempId);
                                             }}
                                         >
@@ -1617,7 +1547,7 @@
                                             type="button"
                                             class="underline hover:opacity-80 text-left"
                                             onclick={() => {
-                                                const d = drafts[resolvedRow];
+                                                const d = ops[resolvedRow];
                                                 if (d) tableRef?.navigateToRowId(d.tempId);
                                             }}
                                         >
@@ -1632,9 +1562,9 @@
                     {/if}
                 </TransactionResultBanner>
             {/if}
-            {#if visibleDrafts.length > AUTO_VALIDATE_THRESHOLD}
+            {#if visibleOps.length > AUTO_VALIDATE_THRESHOLD}
                 <InfoBanner variant="info">
-                    <p data-testid="tx-bulk-auto-off">ⓘ {$t('transactions.validate.autoOff', {values: {n: visibleDrafts.length, threshold: AUTO_VALIDATE_THRESHOLD}})}</p>
+                    <p data-testid="tx-bulk-auto-off">ⓘ {$t('transactions.validate.autoOff', {values: {n: visibleOps.length, threshold: AUTO_VALIDATE_THRESHOLD}})}</p>
                 </InfoBanner>
             {/if}
             {#if hasPairedDelete}
@@ -1677,7 +1607,7 @@
                     >
                         <span class="font-medium">{bulkTableSelectedRows.length}</span> <span class="hidden sm:inline">{$t('common.selected') || 'selected'}</span> <span class="opacity-60 ml-0.5">×</span>
                     </button>
-                    {#if bulkTableSelectedRows.some((d) => (deriveStatus(d) === 'edited' || deriveStatus(d) === 'delete') && d.original)}
+                    {#if bulkTableSelectedRows.some((d) => d.op === 'edit' && (deriveStatus(d) === 'edited' || deriveStatus(d) === 'delete'))}
                         <button
                             type="button"
                             class="inline-flex items-center gap-1 px-2 py-1 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 text-[11px]"
@@ -1701,7 +1631,7 @@
                 <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row" title={$t('transactions.bulk.addRow') || 'Add row'}>
                     <Plus size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.addRow') || 'Add row'}</span>
                 </button>
-                {#if visibleDrafts.some((d) => (deriveStatus(d) === 'edited' || deriveStatus(d) === 'delete') && d.original)}
+                {#if visibleOps.some((d) => d.op === 'edit' && (deriveStatus(d) === 'edited' || deriveStatus(d) === 'delete'))}
                     <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all" title={$t('transactions.bulk.resetAll')}>
                         <Undo2 size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.resetAll')}</span>
                     </button>
@@ -1714,7 +1644,7 @@
         <div class="flex-1 min-h-0 overflow-y-auto px-3 py-2" data-testid="tx-bulk-body">
             <DataTable
                 bind:this={tableRef}
-                data={visibleDrafts}
+                data={visibleOps}
                 {columns}
                 getRowId={(d) => d.tempId}
                 storageKey="tx-bulk-modal"
