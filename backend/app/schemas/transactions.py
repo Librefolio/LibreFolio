@@ -590,6 +590,9 @@ class TXDeleteItem(BaseModel):
 # - "not_attempted": processing stopped before this item was considered.
 TXItemStatus = Literal["success", "simulated", "failed", "not_attempted"]
 
+# Batch operation types — single source of truth for all operation Literals.
+TXBatchOperation = Literal["create", "update", "delete", "split", "promote"]
+
 
 class TXDeleteResult(BaseDeleteResult):
     """
@@ -622,6 +625,8 @@ class TXMixedBatch(BaseModel):
     creates: List[dict] = Field(default_factory=list, max_length=500)
     updates: List[dict] = Field(default_factory=list, max_length=500)
     deletes: List[int] = Field(default_factory=list, max_length=500)
+    splits: List[dict] = Field(default_factory=list, max_length=100)
+    promotes: List[dict] = Field(default_factory=list, max_length=100)
 
 
 class TXBatchResultItem(BaseModel):
@@ -629,7 +634,7 @@ class TXBatchResultItem(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    operation: Literal["create", "update", "delete"]
+    operation: TXBatchOperation
     index: int
     id: Optional[int] = None
     link_uuid: Optional[str] = None
@@ -656,7 +661,7 @@ class TXValidationIssue(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    operation: Literal["create", "update", "delete"]
+    operation: TXBatchOperation
     index: int = Field(..., ge=-1, description="Index within the corresponding list (-1 = broker-level, not row-specific)")
     ref_id: Optional[int] = Field(default=None, description="Transaction ID for update/delete, None for create")
     error: str
@@ -754,75 +759,82 @@ class TXTransferPromoteResponse(BaseModel):
 
 
 # =============================================================================
-# BULK SPLIT / PROMOTE (server-driven, immediate)
+# BATCH SPLIT / PROMOTE ITEMS (pipeline-only, no standalone endpoints)
 # =============================================================================
 
 
-class TXSplitItem(BaseModel):
-    """Single split request: one half of a pair to split."""
+class TXSplitBatchItem(BaseModel):
+    """Single split within a batch. Only for saved paired TXs."""
 
     model_config = ConfigDict(extra="forbid")
 
-    id: int = Field(..., gt=0, description="ID of one half of the pair (backend finds partner)")
+    id: int = Field(..., gt=0, description="ID of one half of the pair to split")
 
 
-class TXSplitRequest(BaseModel):
-    """Bulk split request: list of pairs to split."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    items: List[TXSplitItem] = Field(..., min_length=1, max_length=100)
-
-
-class TXSplitResultItem(BaseModel):
-    """Result for a single split operation."""
+class TXPromoteBatchItem(BaseModel):
+    """Single promote within a batch. Supports saved+saved, new+new, saved+new."""
 
     model_config = ConfigDict(extra="forbid")
 
-    from_tx: TXReadItem
-    to_tx: TXReadItem
+    id_a: Optional[int] = Field(None, gt=0, description="Real ID for saved TX A")
+    id_b: Optional[int] = Field(None, gt=0, description="Real ID for saved TX B")
+    link_uuid_a: Optional[str] = Field(None, max_length=36, description="link_uuid to resolve TX A from creates in same batch")
+    link_uuid_b: Optional[str] = Field(None, max_length=36, description="link_uuid to resolve TX B from creates in same batch")
+    resolved_fields: Optional[Dict[str, Any]] = Field(None, description="Merged field values from PromoteMergeModal: description, tags, date, cost_basis_override")
+
+    @model_validator(mode="after")
+    def _validate_refs(self) -> "TXPromoteBatchItem":
+        """At least one of id_a/link_uuid_a and id_b/link_uuid_b must be set."""
+        if self.id_a is None and self.link_uuid_a is None:
+            raise ValueError("Either id_a or link_uuid_a must be provided for TX A")
+        if self.id_b is None and self.link_uuid_b is None:
+            raise ValueError("Either id_b or link_uuid_b must be provided for TX B")
+        if self.id_a is not None and self.link_uuid_a is not None:
+            raise ValueError("Provide either id_a or link_uuid_a for TX A, not both")
+        if self.id_b is not None and self.link_uuid_b is not None:
+            raise ValueError("Provide either id_b or link_uuid_b for TX B, not both")
+        return self
 
 
-class TXSplitResponse(BaseModel):
-    """Bulk split response."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    results: List[TXSplitResultItem]
+# =============================================================================
+# PROMOTE-SUGGEST (bulk candidate search)
+# =============================================================================
 
 
-class TXPromoteItem(BaseModel):
-    """Single promote request: two standalone rows to link."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    id_a: int = Field(..., gt=0, description="First standalone transaction ID")
-    id_b: int = Field(..., gt=0, description="Second standalone transaction ID")
-
-
-class TXPromoteRequest(BaseModel):
-    """Bulk promote request: list of pairs to promote."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    items: List[TXPromoteItem] = Field(..., min_length=1, max_length=100)
-
-
-class TXPromoteResultItem(BaseModel):
-    """Result for a single promote operation."""
+class TXPromoteSuggestInput(BaseModel):
+    """Single TX to find promote candidates for. id < 0 = fake (unsaved)."""
 
     model_config = ConfigDict(extra="forbid")
 
-    pair_a: TXReadItem
-    pair_b: TXReadItem
+    id: int = Field(..., description="Real ID (>0) or fake ID (<0) for unsaved TX")
+    type: TransactionType
+    broker_id: int = Field(..., gt=0)
+    date: date_type
+    currency: Optional[str] = None
+    asset_id: Optional[int] = None
+    amount: Optional[SafeDecimal] = None
+    quantity: Optional[SafeDecimal] = None
 
 
-class TXPromoteResponse(BaseModel):
-    """Bulk promote response."""
+class TXPromoteSuggestCandidate(BaseModel):
+    """A DB transaction that could be promoted with the input TX."""
 
     model_config = ConfigDict(extra="forbid")
 
-    results: List[TXPromoteResultItem]
+    id: int = Field(..., gt=0)
+    broker_id: int
+    date: date_type
+    type: str
+    currency: Optional[str] = None
+    asset_id: Optional[int] = None
+
+
+class TXPromoteSuggestResponse(BaseModel):
+    """Map of input id/fakeId → list of DB candidates."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    results: Dict[int, List[TXPromoteSuggestCandidate]]
 
 
 # =============================================================================

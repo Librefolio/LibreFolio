@@ -1,7 +1,7 @@
 # Plan D1 — Backend: Batch Pipeline + Promote-Suggest
 
 **Date**: 2026-05-12
-**Status**: ⏳ PLANNED
+**Status**: ✅ DONE
 **Priority**: P1 (feature completion)
 **Estimated effort**: ~10h (~2 days)
 
@@ -38,7 +38,7 @@ Quando un promote consuma un `link_uuid_a` o `link_uuid_b` dal `link_uuid_map` (
 
 ---
 
-## Step E1 — Mock data: 4 TX standalone tagged `promote-test`
+## Step E1 — ✅ Mock data: 4 TX standalone tagged `promote-test`
 
 **File**: `backend/test_scripts/test_db/populate_mock_data.py`
 **Posizione**: dopo riga ~1255 (sezione linked TX, dopo CASH TRANSFER pair)
@@ -94,7 +94,7 @@ print(f"  💡 promote-test standalone: W#{tx_prom_withdrawal.id}, D#{tx_prom_de
 
 ---
 
-## Step E2 — Refresh test DB
+## Step E2 — ✅ Refresh test DB
 
 ```bash
 ./dev.py db create-clean --test
@@ -102,7 +102,7 @@ print(f"  💡 promote-test standalone: W#{tx_prom_withdrawal.id}, D#{tx_prom_de
 
 ---
 
-## Step A1 — Schema: estendere `TXMixedBatch` + nuovi item
+## Step A1 — ✅ Schema: estendere `TXMixedBatch` + nuovi item
 
 **File**: `backend/app/schemas/transactions.py`
 
@@ -210,7 +210,7 @@ Rimuovere completamente:
 
 ---
 
-## Step A2 — Pipeline: Step 5b (splits) + Step 5c (promotes) in `execute_batch`
+## Step A2 — ✅ Pipeline: Step 5b (splits) + Step 5c (promotes) in `execute_batch`
 
 **File**: `backend/app/services/transaction_service.py`
 
@@ -609,7 +609,7 @@ La logica è ora interamente in Step 5b/5c di `execute_batch`.
 
 ---
 
-## Step A3 — API: eliminare `/split` e `/promote`, aggiungere `/promote-suggest`
+## Step A3 — ✅ API: eliminare `/split` e `/promote`, aggiungere `/promote-suggest`
 
 **File**: `backend/app/api/v1/transactions.py`
 
@@ -700,7 +700,7 @@ async def promote_suggest(
 
 ---
 
-## Step A4 — Cleanup import references
+## Step A4 — ✅ Cleanup import references
 
 **File**: `backend/app/services/transaction_service.py`
 
@@ -710,7 +710,7 @@ Aggiornare il blocco import schemas (riga ~33):
 
 ---
 
-## Step A5 — API sync
+## Step A5 — ✅ API sync
 
 ```bash
 ./dev.py api sync
@@ -720,7 +720,7 @@ Rigenerare il client TypeScript dopo tutte le modifiche schemas+endpoints.
 
 ---
 
-## Step B1 — Test: split nel batch
+## Step B1 — ✅ Test: split nel batch
 
 **Nuovo file**: `backend/test_scripts/test_api/test_transactions_batch_split_promote.py`
 
@@ -781,7 +781,7 @@ async def test_commit_with_split_transfer(self):
 
 ---
 
-## Step B2 — Test: promote nel batch
+## Step B2 — ✅ Test: promote nel batch
 
 Stesso file di B1.
 
@@ -838,7 +838,7 @@ async def test_commit_promote_new_new(self):
 
 ---
 
-## Step B3 — Test: promote-suggest
+## Step B3 — ✅ Test: promote-suggest
 
 Stesso file.
 
