@@ -48,22 +48,22 @@ export type PairFormLayout = NonNullable<ServerTXType['pair_form_layout']>;
 // =============================================================================
 
 export interface TypeRule {
-	assetField: FieldMode;
-	cashField: FieldMode;
-	quantityMode: FieldMode;
-	quantityRule: SignRule;
-	cashSign: SignRule;
-	eventLinkable: boolean;
-	requiresPair: boolean;
-	pairFormLayout: PairFormLayout | null;
+    assetField: FieldMode;
+    cashField: FieldMode;
+    quantityMode: FieldMode;
+    quantityRule: SignRule;
+    cashSign: SignRule;
+    eventLinkable: boolean;
+    requiresPair: boolean;
+    pairFormLayout: PairFormLayout | null;
 }
 
 export interface ValidatableDraft {
-	type: string;
-	broker_id: number;
-	asset_id?: number | null;
-	quantity?: string | null;
-	cash?: {code: string; amount: string} | null;
+    type: string;
+    broker_id: number;
+    asset_id?: number | null;
+    quantity?: string | null;
+    cash?: {code: string; amount: string} | null;
 }
 
 // =============================================================================
@@ -84,24 +84,24 @@ export const typesVersion = writable(0);
 // =============================================================================
 
 function serverTypeToRule(s: ServerTXType): TypeRule {
-	return {
-		assetField: s.asset_mode,
-		cashField: s.cash_mode,
-		quantityMode: s.quantity_mode,
-		quantityRule: s.quantity_sign,
-		cashSign: s.cash_sign,
-		eventLinkable: s.event_compatible,
-		requiresPair: s.requires_link,
-		pairFormLayout: s.pair_form_layout ?? null,
-	};
+    return {
+        assetField: s.asset_mode,
+        cashField: s.cash_mode,
+        quantityMode: s.quantity_mode,
+        quantityRule: s.quantity_sign,
+        cashSign: s.cash_sign,
+        eventLinkable: s.event_compatible,
+        requiresPair: s.requires_link,
+        pairFormLayout: s.pair_form_layout ?? null,
+    };
 }
 
 function rebuildRuleMap(types: ServerTXType[]): Record<string, TypeRule> {
-	const map: Record<string, TypeRule> = {};
-	for (const t of types) {
-		map[t.code] = serverTypeToRule(t);
-	}
-	return map;
+    const map: Record<string, TypeRule> = {};
+    for (const t of types) {
+        map[t.code] = serverTypeToRule(t);
+    }
+    return map;
 }
 
 // =============================================================================
@@ -109,14 +109,14 @@ function rebuildRuleMap(types: ServerTXType[]): Record<string, TypeRule> {
 // =============================================================================
 
 const FALLBACK_RULE: TypeRule = {
-	assetField: 'optional',
-	cashField: 'optional',
-	quantityMode: 'optional',
-	quantityRule: 'free',
-	cashSign: 'free',
-	eventLinkable: false,
-	requiresPair: false,
-	pairFormLayout: null,
+    assetField: 'optional',
+    cashField: 'optional',
+    quantityMode: 'optional',
+    quantityRule: 'free',
+    cashSign: 'free',
+    eventLinkable: false,
+    requiresPair: false,
+    pairFormLayout: null,
 };
 
 // =============================================================================
@@ -128,45 +128,45 @@ const FALLBACK_RULE: TypeRule = {
  * Returns immediately if already loaded. Safe to call multiple times.
  */
 export async function ensureTypesLoaded(): Promise<void> {
-	if (_cache) return;
-	if (_loading) return _loading;
-	_loading = (async () => {
-		try {
-			const resp = (await zodiosApi.get_transaction_types_api_v1_transactions_types_get()) as unknown as ServerTypesResponse;
-			_cache = resp;
-			_ruleMap = rebuildRuleMap(resp.transaction_types);
-			typesVersion.update((v) => v + 1);
-		} catch (e) {
-			console.error('[transactionTypeStore] Failed to fetch /transactions/types', e);
-			throw e; // let caller handle — frontend cannot work without type rules
-		} finally {
-			_loading = null;
-		}
-	})();
-	return _loading;
+    if (_cache) return;
+    if (_loading) return _loading;
+    _loading = (async () => {
+        try {
+            const resp = (await zodiosApi.get_transaction_types_api_v1_transactions_types_get()) as unknown as ServerTypesResponse;
+            _cache = resp;
+            _ruleMap = rebuildRuleMap(resp.transaction_types);
+            typesVersion.update((v) => v + 1);
+        } catch (e) {
+            console.error('[transactionTypeStore] Failed to fetch /transactions/types', e);
+            throw e; // let caller handle — frontend cannot work without type rules
+        } finally {
+            _loading = null;
+        }
+    })();
+    return _loading;
 }
 
 /** Whether the type cache has been populated. Use in $derived to defer rendering. */
 export function isTypesLoaded(): boolean {
-	return _cache != null;
+    return _cache != null;
 }
 
 /** Safe lookup — returns FALLBACK_RULE only for truly unknown codes. */
 export function getTypeRule(type: string | null | undefined): TypeRule {
-	const code = (type ?? '').toUpperCase();
-	return _ruleMap[code] ?? FALLBACK_RULE;
+    const code = (type ?? '').toUpperCase();
+    return _ruleMap[code] ?? FALLBACK_RULE;
 }
 
 /** Icon URL for a transaction type. */
 export function getTypeIconUrl(type: string | null | undefined): string {
-	const code = (type ?? '').toUpperCase();
-	if (_cache) {
-		const st = _cache.transaction_types.find((t) => t.code === code);
-		if (st) return `/icons/transactions/${st.icon_slug}.png`;
-	}
-	// Derive slug from code (e.g. FX_CONVERSION → fx-conversion)
-	const slug = code.toLowerCase().replace(/_/g, '-');
-	return `/icons/transactions/${slug}.png`;
+    const code = (type ?? '').toUpperCase();
+    if (_cache) {
+        const st = _cache.transaction_types.find((t) => t.code === code);
+        if (st) return `/icons/transactions/${st.icon_slug}.png`;
+    }
+    // Derive slug from code (e.g. FX_CONVERSION → fx-conversion)
+    const slug = code.toLowerCase().replace(/_/g, '-');
+    return `/icons/transactions/${slug}.png`;
 }
 
 /** Alias matching the old transactionTypes.ts export name. */
@@ -177,31 +177,31 @@ const DOC_LANGS = new Set(['it', 'fr', 'es']);
 
 /** Docs URL for a transaction type, language-aware. */
 export function getTxTypeDocUrl(type: string | null | undefined, lang: string = 'en'): string {
-	const code = (type ?? '').toUpperCase();
-	let slug: string | null = null;
+    const code = (type ?? '').toUpperCase();
+    let slug: string | null = null;
 
-	if (_cache) {
-		const st = _cache.transaction_types.find((t) => t.code === code);
-		slug = (st?.doc_slug as string | null | undefined) ?? null;
-	}
+    if (_cache) {
+        const st = _cache.transaction_types.find((t) => t.code === code);
+        slug = (st?.doc_slug as string | null | undefined) ?? null;
+    }
 
-	const langPrefix = DOC_LANGS.has(lang) ? `/${lang}` : '';
-	return slug ? `/mkdocs${langPrefix}/financial-theory/instruments/transaction-types/${slug}/` : `/mkdocs${langPrefix}/financial-theory/instruments/transaction-types/`;
+    const langPrefix = DOC_LANGS.has(lang) ? `/${lang}` : '';
+    return slug ? `/mkdocs${langPrefix}/financial-theory/instruments/transaction-types/${slug}/` : `/mkdocs${langPrefix}/financial-theory/instruments/transaction-types/`;
 }
 
 /** Emoji for an event type. */
 export function getEventTypeEmoji(type: string | null | undefined): string {
-	const code = (type ?? '').toUpperCase();
-	if (_cache) {
-		const et = _cache.event_types.find((e) => e.code === code);
-		if (et) return et.emoji;
-	}
-	return '📌';
+    const code = (type ?? '').toUpperCase();
+    if (_cache) {
+        const et = _cache.event_types.find((e) => e.code === code);
+        if (et) return et.emoji;
+    }
+    return '📌';
 }
 
 /** Types NOT requiring the pair-wizard — selectable in bulk modal / form. */
 export function getStandaloneTypes(): TransactionTypeCode[] {
-	return TX_TYPES.filter((t) => !getTypeRule(t).requiresPair);
+    return TX_TYPES.filter((t) => !getTypeRule(t).requiresPair);
 }
 
 // =============================================================================
@@ -213,34 +213,34 @@ export function getStandaloneTypes(): TransactionTypeCode[] {
  *  Server sends only swap *partners* (not self), so we prepend self.
  *  Returns [type] for unknown types or when cache is not loaded. */
 export function getSwapGroup(type: TransactionTypeCode): TransactionTypeCode[] {
-	if (_cache) {
-		const st = _cache.transaction_types.find((t) => t.code === type);
-		if (st) {
-			const partners = (st.swap_group ?? []) as TransactionTypeCode[];
-			return [type, ...partners];
-		}
-	}
-	return [type]; // fallback: singleton
+    if (_cache) {
+        const st = _cache.transaction_types.find((t) => t.code === type);
+        if (st) {
+            const partners = (st.swap_group ?? []) as TransactionTypeCode[];
+            return [type, ...partners];
+        }
+    }
+    return [type]; // fallback: singleton
 }
 
 /** Pair-only types — created via promote wizard. */
 export function getPairTypes(): TransactionTypeCode[] {
-	return TX_TYPES.filter((t) => getTypeRule(t).requiresPair);
+    return TX_TYPES.filter((t) => getTypeRule(t).requiresPair);
 }
 
 /** Types that have a dual-transaction form layout. */
 export function getDualFormTypes(): TransactionTypeCode[] {
-	return TX_TYPES.filter((t) => getTypeRule(t).pairFormLayout != null);
+    return TX_TYPES.filter((t) => getTypeRule(t).pairFormLayout != null);
 }
 
 /** Get the pair form layout for a type (null = standard single form). */
 export function getPairFormLayout(type: string | null | undefined): PairFormLayout | null {
-	return getTypeRule(type).pairFormLayout;
+    return getTypeRule(type).pairFormLayout;
 }
 
 /** Types that may link to an AssetEvent. */
 export function getEventLinkableTypes(): TransactionTypeCode[] {
-	return TX_TYPES.filter((t) => getTypeRule(t).eventLinkable);
+    return TX_TYPES.filter((t) => getTypeRule(t).eventLinkable);
 }
 
 /**
@@ -248,30 +248,30 @@ export function getEventLinkableTypes(): TransactionTypeCode[] {
  * Gates auto-validation triggers so the user doesn't see obvious errors on empty rows.
  */
 export function isDraftReadyForValidation(d: ValidatableDraft): boolean {
-	if (!d.broker_id || d.broker_id <= 0) return false;
-	const r = getTypeRule(d.type);
-	if (r.assetField === 'required' && d.asset_id == null) return false;
-	if (r.cashField === 'required' && (!d.cash || !d.cash.amount || d.cash.amount.trim() === '' || d.cash.amount === '0')) return false;
-	if (r.quantityMode !== 'forbidden') {
-		const q = (d.quantity ?? '').trim();
-		if (q === '' || Number(q) === 0) return false;
-	}
-	return true;
+    if (!d.broker_id || d.broker_id <= 0) return false;
+    const r = getTypeRule(d.type);
+    if (r.assetField === 'required' && d.asset_id == null) return false;
+    if (r.cashField === 'required' && (!d.cash || !d.cash.amount || d.cash.amount.trim() === '' || d.cash.amount === '0')) return false;
+    if (r.quantityMode !== 'forbidden') {
+        const q = (d.quantity ?? '').trim();
+        if (q === '' || Number(q) === 0) return false;
+    }
+    return true;
 }
 
 /**
  * Build SelectOption[] for transaction type dropdowns (with icons).
  */
 export function buildTransactionTypeOptions(t: (key: string) => string): Array<{
-	value: string;
-	label: string;
-	icon: string;
+    value: string;
+    label: string;
+    icon: string;
 }> {
-	return TX_TYPES.map((tt) => ({
-		value: tt,
-		label: t(`transactions.types.${tt}`) || tt,
-		icon: getTypeIconUrl(tt),
-	}));
+    return TX_TYPES.map((tt) => ({
+        value: tt,
+        label: t(`transactions.types.${tt}`) || tt,
+        icon: getTypeIconUrl(tt),
+    }));
 }
 
 // =============================================================================
@@ -279,10 +279,10 @@ export function buildTransactionTypeOptions(t: (key: string) => string): Array<{
 // =============================================================================
 
 export interface PromoteMatch {
-	/** Target paired type code (e.g. CASH_TRANSFER, TRANSFER, FX_CONVERSION). */
-	targetType: string;
-	/** Translated name of the target type. */
-	targetLabel: string;
+    /** Target paired type code (e.g. CASH_TRANSFER, TRANSFER, FX_CONVERSION). */
+    targetType: string;
+    /** Translated name of the target type. */
+    targetLabel: string;
 }
 
 /**
@@ -291,28 +291,23 @@ export interface PromoteMatch {
  *
  * The matching considers both orderings (rowA is type_a + rowB is type_b, or vice versa).
  */
-export function findPromoteMatch(
-	typeA: string,
-	typeB: string,
-	t: (key: string) => string,
-): PromoteMatch | null {
-	if (!_cache) return null;
-	for (const st of _cache.transaction_types) {
-		const promoteRules = st.promote_from;
-		if (!promoteRules || !Array.isArray(promoteRules)) continue;
-		for (const rule of promoteRules) {
-			if (!rule || typeof rule !== 'object' || Array.isArray(rule)) continue;
-			const r = rule as {type_a: string; type_b: string};
-			const matchForward = typeA === r.type_a && typeB === r.type_b;
-			const matchReverse = typeA === r.type_b && typeB === r.type_a;
-			if (matchForward || matchReverse) {
-				return {
-					targetType: st.code,
-					targetLabel: t(`transactions.types.${st.code}`) || st.code,
-				};
-			}
-		}
-	}
-	return null;
+export function findPromoteMatch(typeA: string, typeB: string, t: (key: string) => string): PromoteMatch | null {
+    if (!_cache) return null;
+    for (const st of _cache.transaction_types) {
+        const promoteRules = st.promote_from;
+        if (!promoteRules || !Array.isArray(promoteRules)) continue;
+        for (const rule of promoteRules) {
+            if (!rule || typeof rule !== 'object' || Array.isArray(rule)) continue;
+            const r = rule as {type_a: string; type_b: string};
+            const matchForward = typeA === r.type_a && typeB === r.type_b;
+            const matchReverse = typeA === r.type_b && typeB === r.type_a;
+            if (matchForward || matchReverse) {
+                return {
+                    targetType: st.code,
+                    targetLabel: t(`transactions.types.${st.code}`) || st.code,
+                };
+            }
+        }
+    }
+    return null;
 }
-

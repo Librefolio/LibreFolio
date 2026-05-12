@@ -166,10 +166,7 @@ export function getEditableBrokers(): BrokerInfo[] {
  * - `viewer`: at least one is VIEWER → view only
  * - `none`: partner broker not accessible → view only (locked)
  */
-export function getPairedAccessLevel(
-    brokerIdA: number,
-    partnerBrokerId: number | null | undefined,
-): PairedAccessLevel {
+export function getPairedAccessLevel(brokerIdA: number, partnerBrokerId: number | null | undefined): PairedAccessLevel {
     const rankA = getRoleRank(getBrokerRole(brokerIdA));
     if (partnerBrokerId == null) {
         // Standalone

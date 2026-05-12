@@ -158,7 +158,7 @@
     }
 </script>
 
-<ModalBase closeOnBackdropClick={!loading} closeOnEscape={!loading} maxWidth="lg" onRequestClose={handleClose} open={isOpen} testId="broker-modal" zIndex={zIndex}>
+<ModalBase closeOnBackdropClick={!loading} closeOnEscape={!loading} maxWidth="lg" onRequestClose={handleClose} open={isOpen} testId="broker-modal" {zIndex}>
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div class="flex flex-col max-h-[85vh]" on:input={handleFormChange}>
         <!-- Header (sticky top) -->

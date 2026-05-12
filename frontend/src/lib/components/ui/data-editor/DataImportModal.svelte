@@ -267,8 +267,7 @@
         </div>
         <div class="flex gap-2">
             <button class="px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" onclick={requestClose}>{$t('common.cancel')}</button>
-            <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled={validRows.length === 0} onclick={handleConfirm}>{$t('csvImport.import', {values: {n: validRows.length}})}</button
-            >
+            <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled={validRows.length === 0} onclick={handleConfirm}>{$t('csvImport.import', {values: {n: validRows.length}})}</button>
         </div>
     </div>
 </ModalBase>

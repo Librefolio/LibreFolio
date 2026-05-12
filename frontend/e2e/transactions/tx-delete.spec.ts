@@ -38,36 +38,36 @@ test.setTimeout(25_000);
 // ---------------------------------------------------------------------------
 
 async function goToTransactions(page: Page) {
-	await navigateTo(page, '/transactions');
-	await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
-	await page.waitForTimeout(500);
+    await navigateTo(page, '/transactions');
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
+    await page.waitForTimeout(500);
 }
 
 /** Find a row whose text content contains ALL given substrings. Returns null if not found. */
 async function findRow(page: Page, ...substrings: string[]): Promise<Locator | null> {
-	const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
-	const count = await rows.count();
-	for (let i = 0; i < count; i++) {
-		const row = rows.nth(i);
-		const text = (await row.textContent()) ?? '';
-		if (substrings.every((s) => text.includes(s))) return row;
-	}
-	return null;
+    const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
+    const count = await rows.count();
+    for (let i = 0; i < count; i++) {
+        const row = rows.nth(i);
+        const text = (await row.textContent()) ?? '';
+        if (substrings.every((s) => text.includes(s))) return row;
+    }
+    return null;
 }
 
 /** Click the delete action (🗑 = red danger button) on a row. */
 async function clickDeleteOnRow(row: Locator) {
-	await row.hover();
-	const deleteBtn = row.locator('button.action-btn.danger');
-	await expect(deleteBtn).toBeVisible({timeout: 3_000});
-	await deleteBtn.click();
+    await row.hover();
+    const deleteBtn = row.locator('button.action-btn.danger');
+    await expect(deleteBtn).toBeVisible({timeout: 3_000});
+    await deleteBtn.click();
 }
 
 /** Count visible action buttons on a row (hover first to reveal). */
 async function countVisibleActions(row: Locator): Promise<number> {
-	await row.hover();
-	await row.page().waitForTimeout(300);
-	return row.locator('button.action-btn').count();
+    await row.hover();
+    await row.page().waitForTimeout(300);
+    return row.locator('button.action-btn').count();
 }
 
 // ---------------------------------------------------------------------------
@@ -75,147 +75,147 @@ async function countVisibleActions(row: Locator): Promise<number> {
 // ---------------------------------------------------------------------------
 
 test.describe('TransactionDeleteModal', () => {
-	test.beforeEach(async ({page}) => {
-		await login(page, TEST_USER);
-		await goToTransactions(page);
-	});
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+        await goToTransactions(page);
+    });
 
-	// === A1: Layout A — Standalone delete ===
+    // === A1: Layout A — Standalone delete ===
 
-	test('A1: standalone delete — modal shows Layout A fields, cancel keeps row', async ({page}) => {
-		const row = await findRow(page, 'delete-safe', 'Small deposit');
-		test.skip(!row, 'delete-safe DEPOSIT row not found — run ./dev.py db create-clean');
+    test('A1: standalone delete — modal shows Layout A fields, cancel keeps row', async ({page}) => {
+        const row = await findRow(page, 'delete-safe', 'Small deposit');
+        test.skip(!row, 'delete-safe DEPOSIT row not found — run ./dev.py db create-clean');
 
-		// A1.1: Open DeleteModal
-		await clickDeleteOnRow(row!);
-		const modal = page.getByTestId('tx-delete-modal');
-		await expect(modal).toBeVisible({timeout: 5_000});
+        // A1.1: Open DeleteModal
+        await clickDeleteOnRow(row!);
+        const modal = page.getByTestId('tx-delete-modal');
+        await expect(modal).toBeVisible({timeout: 5_000});
 
-		// A1.2-A1.8: Verify Layout A details table
-		const details = modal.getByTestId('tx-delete-details');
-		await expect(details).toBeVisible();
+        // A1.2-A1.8: Verify Layout A details table
+        const details = modal.getByTestId('tx-delete-details');
+        await expect(details).toBeVisible();
 
-		// Type icon present
-		await expect(details.locator('img').first()).toBeVisible();
+        // Type icon present
+        await expect(details.locator('img').first()).toBeVisible();
 
-		// A1.9: Cancel keeps row
-		await modal.getByTestId('tx-delete-modal-cancel').click();
-		await expect(modal).not.toBeVisible();
-		const rowStill = await findRow(page, 'delete-safe', 'Small deposit');
-		expect(rowStill).not.toBeNull();
-	});
+        // A1.9: Cancel keeps row
+        await modal.getByTestId('tx-delete-modal-cancel').click();
+        await expect(modal).not.toBeVisible();
+        const rowStill = await findRow(page, 'delete-safe', 'Small deposit');
+        expect(rowStill).not.toBeNull();
+    });
 
-	test('A1-confirm: standalone delete — confirm removes row', async ({page}) => {
-		// Use the delete-safe FEE (won't cause balance issues)
-		const row = await findRow(page, 'delete-safe', 'Platform fee');
-		test.skip(!row, 'delete-safe FEE row not found');
+    test('A1-confirm: standalone delete — confirm removes row', async ({page}) => {
+        // Use the delete-safe FEE (won't cause balance issues)
+        const row = await findRow(page, 'delete-safe', 'Platform fee');
+        test.skip(!row, 'delete-safe FEE row not found');
 
-		await clickDeleteOnRow(row!);
-		const modal = page.getByTestId('tx-delete-modal');
-		await expect(modal).toBeVisible({timeout: 5_000});
+        await clickDeleteOnRow(row!);
+        const modal = page.getByTestId('tx-delete-modal');
+        await expect(modal).toBeVisible({timeout: 5_000});
 
-		await modal.getByTestId('tx-delete-modal-confirm').click();
-		await expect(modal).not.toBeVisible({timeout: 5_000});
+        await modal.getByTestId('tx-delete-modal-confirm').click();
+        await expect(modal).not.toBeVisible({timeout: 5_000});
 
-		// Row gone
-		await page.waitForTimeout(800);
-		const rowAfter = await findRow(page, 'delete-safe', 'Platform fee');
-		expect(rowAfter).toBeNull();
-	});
+        // Row gone
+        await page.waitForTimeout(800);
+        const rowAfter = await findRow(page, 'delete-safe', 'Platform fee');
+        expect(rowAfter).toBeNull();
+    });
 
-	// === A2: Layout B — Paired full-access delete ===
+    // === A2: Layout B — Paired full-access delete ===
 
-	test('A2: paired delete — Layout B shows From/To, split hint, cancel keeps', async ({page}) => {
-		const row = await findRow(page, 'delete-safe', 'ETH');
-		test.skip(!row, 'delete-safe TRANSFER ETH row not found');
+    test('A2: paired delete — Layout B shows From/To, split hint, cancel keeps', async ({page}) => {
+        const row = await findRow(page, 'delete-safe', 'ETH');
+        test.skip(!row, 'delete-safe TRANSFER ETH row not found');
 
-		await clickDeleteOnRow(row!);
-		const modal = page.getByTestId('tx-delete-modal');
-		await expect(modal).toBeVisible({timeout: 5_000});
+        await clickDeleteOnRow(row!);
+        const modal = page.getByTestId('tx-delete-modal');
+        await expect(modal).toBeVisible({timeout: 5_000});
 
-		// Title: "Delete linked transaction"
-		await expect(modal).toContainText(/linked|collegat/i);
+        // Title: "Delete linked transaction"
+        await expect(modal).toContainText(/linked|collegat/i);
 
-		// Paired details From/To
-		const paired = modal.getByTestId('tx-delete-paired-details');
-		await expect(paired).toBeVisible();
+        // Paired details From/To
+        const paired = modal.getByTestId('tx-delete-paired-details');
+        await expect(paired).toBeVisible();
 
-		// Split hint
-		await expect(modal).toContainText(/split|scollegar/i);
+        // Split hint
+        await expect(modal).toContainText(/split|scollegar/i);
 
-		// "Delete both" button
-		const confirmBtn = modal.getByTestId('tx-delete-modal-confirm');
-		await expect(confirmBtn).toContainText(/both|entramb/i);
+        // "Delete both" button
+        const confirmBtn = modal.getByTestId('tx-delete-modal-confirm');
+        await expect(confirmBtn).toContainText(/both|entramb/i);
 
-		// Cancel
-		await modal.getByTestId('tx-delete-modal-cancel').click();
-		await expect(modal).not.toBeVisible();
-		const rowStill = await findRow(page, 'delete-safe', 'ETH');
-		expect(rowStill).not.toBeNull();
-	});
+        // Cancel
+        await modal.getByTestId('tx-delete-modal-cancel').click();
+        await expect(modal).not.toBeVisible();
+        const rowStill = await findRow(page, 'delete-safe', 'ETH');
+        expect(rowStill).not.toBeNull();
+    });
 
-	test('A2-confirm: paired delete — confirm removes both halves', async ({page}) => {
-		const row = await findRow(page, 'delete-safe', 'ETH');
-		test.skip(!row, 'delete-safe TRANSFER ETH row not found');
+    test('A2-confirm: paired delete — confirm removes both halves', async ({page}) => {
+        const row = await findRow(page, 'delete-safe', 'ETH');
+        test.skip(!row, 'delete-safe TRANSFER ETH row not found');
 
-		await clickDeleteOnRow(row!);
-		const modal = page.getByTestId('tx-delete-modal');
-		await expect(modal).toBeVisible({timeout: 5_000});
+        await clickDeleteOnRow(row!);
+        const modal = page.getByTestId('tx-delete-modal');
+        await expect(modal).toBeVisible({timeout: 5_000});
 
-		await modal.getByTestId('tx-delete-modal-confirm').click();
-		await expect(modal).not.toBeVisible({timeout: 5_000});
+        await modal.getByTestId('tx-delete-modal-confirm').click();
+        await expect(modal).not.toBeVisible({timeout: 5_000});
 
-		// Both halves gone
-		await page.waitForTimeout(800);
-		const remaining = await findRow(page, 'delete-safe', 'ETH');
-		expect(remaining).toBeNull();
-	});
+        // Both halves gone
+        await page.waitForTimeout(800);
+        const remaining = await findRow(page, 'delete-safe', 'ETH');
+        expect(remaining).toBeNull();
+    });
 
-	// === A4/A5: Guard — delete hidden on VIEWER/hidden broker paired ===
+    // === A4/A5: Guard — delete hidden on VIEWER/hidden broker paired ===
 
-	test('A4: delete button hidden on VIEWER paired rows (Asym-c)', async ({page}) => {
-		const row = await findRow(page, 'Asym-c');
-		test.skip(!row, 'Asym-c row not found');
+    test('A4: delete button hidden on VIEWER paired rows (Asym-c)', async ({page}) => {
+        const row = await findRow(page, 'Asym-c');
+        test.skip(!row, 'Asym-c row not found');
 
-		await row!.hover();
-		await page.waitForTimeout(300);
-		const deleteBtn = row!.locator('button.action-btn.danger');
-		await expect(deleteBtn).toHaveCount(0);
-	});
+        await row!.hover();
+        await page.waitForTimeout(300);
+        const deleteBtn = row!.locator('button.action-btn.danger');
+        await expect(deleteBtn).toHaveCount(0);
+    });
 
-	test('A5: delete button hidden on hidden broker paired rows (Asym-d)', async ({page}) => {
-		const row = await findRow(page, 'Asym-d');
-		test.skip(!row, 'Asym-d row not found');
+    test('A5: delete button hidden on hidden broker paired rows (Asym-d)', async ({page}) => {
+        const row = await findRow(page, 'Asym-d');
+        test.skip(!row, 'Asym-d row not found');
 
-		await row!.hover();
-		await page.waitForTimeout(300);
-		const deleteBtn = row!.locator('button.action-btn.danger');
-		await expect(deleteBtn).toHaveCount(0);
-	});
+        await row!.hover();
+        await page.waitForTimeout(300);
+        const deleteBtn = row!.locator('button.action-btn.danger');
+        await expect(deleteBtn).toHaveCount(0);
+    });
 
-	// === committed:false → error banner ===
+    // === committed:false → error banner ===
 
-	test('A1-error: delete failure shows error banner in modal', async ({page}) => {
-		// Delete a BUY that causes negative balance
-		const row = await findRow(page, 'Initial AAPL');
-		test.skip(!row, 'AAPL BUY row not found');
+    test('A1-error: delete failure shows error banner in modal', async ({page}) => {
+        // Delete a BUY that causes negative balance
+        const row = await findRow(page, 'Initial AAPL');
+        test.skip(!row, 'AAPL BUY row not found');
 
-		await clickDeleteOnRow(row!);
-		const modal = page.getByTestId('tx-delete-modal');
-		await expect(modal).toBeVisible({timeout: 5_000});
+        await clickDeleteOnRow(row!);
+        const modal = page.getByTestId('tx-delete-modal');
+        await expect(modal).toBeVisible({timeout: 5_000});
 
-		await modal.getByTestId('tx-delete-modal-confirm').click();
+        await modal.getByTestId('tx-delete-modal-confirm').click();
 
-		// Modal stays open, error banner appears
-		await expect(modal).toBeVisible({timeout: 5_000});
-		const errorBanner = modal.getByTestId('tx-delete-modal-errors');
-		await expect(errorBanner).toBeVisible({timeout: 5_000});
-		await expect(errorBanner).toContainText(/negative|negativ/i);
+        // Modal stays open, error banner appears
+        await expect(modal).toBeVisible({timeout: 5_000});
+        const errorBanner = modal.getByTestId('tx-delete-modal-errors');
+        await expect(errorBanner).toBeVisible({timeout: 5_000});
+        await expect(errorBanner).toContainText(/negative|negativ/i);
 
-		// Cancel closes
-		await modal.getByTestId('tx-delete-modal-cancel').click();
-		await expect(modal).not.toBeVisible();
-	});
+        // Cancel closes
+        await modal.getByTestId('tx-delete-modal-cancel').click();
+        await expect(modal).not.toBeVisible();
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -223,40 +223,40 @@ test.describe('TransactionDeleteModal', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Bulk delete via BulkModal', () => {
-	test.beforeEach(async ({page}) => {
-		await login(page, TEST_USER);
-		await goToTransactions(page);
-	});
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+        await goToTransactions(page);
+    });
 
-	test('A6: toolbar 🗑 opens BulkModal with pre-delete rows', async ({page}) => {
-		const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
-		const count = await rows.count();
-		test.skip(count < 2, 'Not enough rows');
+    test('A6: toolbar 🗑 opens BulkModal with pre-delete rows', async ({page}) => {
+        const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
+        const count = await rows.count();
+        test.skip(count < 2, 'Not enough rows');
 
-		// Select first two selectable rows
-		let selected = 0;
-		for (let i = 0; i < count && selected < 2; i++) {
-			const checkbox = rows.nth(i).locator('.checkbox-btn');
-			if ((await checkbox.count()) > 0) {
-				await checkbox.click();
-				selected++;
-			}
-		}
-		test.skip(selected < 2, 'Could not select 2 rows');
+        // Select first two selectable rows
+        let selected = 0;
+        for (let i = 0; i < count && selected < 2; i++) {
+            const checkbox = rows.nth(i).locator('.checkbox-btn');
+            if ((await checkbox.count()) > 0) {
+                await checkbox.click();
+                selected++;
+            }
+        }
+        test.skip(selected < 2, 'Could not select 2 rows');
 
-		// Click bulk delete in toolbar
-		const bulkDelBtn = page.getByTestId('toolbar-action-delete');
-		await expect(bulkDelBtn).toBeVisible({timeout: 3_000});
-		await bulkDelBtn.click();
+        // Click bulk delete in toolbar
+        const bulkDelBtn = page.getByTestId('toolbar-action-delete');
+        await expect(bulkDelBtn).toBeVisible({timeout: 3_000});
+        await bulkDelBtn.click();
 
-		// BulkModal opens
-		const bulkModal = page.getByTestId('tx-bulk-modal');
-		await expect(bulkModal).toBeVisible({timeout: 5_000});
-		await page.waitForTimeout(500);
+        // BulkModal opens
+        const bulkModal = page.getByTestId('tx-bulk-modal');
+        await expect(bulkModal).toBeVisible({timeout: 5_000});
+        await page.waitForTimeout(500);
 
-		// Verify modal opened (detailed row styling depends on implementation)
-		await expect(bulkModal).toBeVisible();
-	});
+        // Verify modal opened (detailed row styling depends on implementation)
+        await expect(bulkModal).toBeVisible();
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -264,62 +264,62 @@ test.describe('Bulk delete via BulkModal', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Action visibility by access level', () => {
-	test.beforeEach(async ({page}) => {
-		await login(page, TEST_USER);
-		await goToTransactions(page);
-	});
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+        await goToTransactions(page);
+    });
 
-	test('C1.1: standalone OWNER row shows 4 actions', async ({page}) => {
-		const row = await findRow(page, 'Initial EUR funding');
-		test.skip(!row, 'IB DEPOSIT row not found');
-		const cnt = await countVisibleActions(row!);
-		expect(cnt).toBe(4);
-	});
+    test('C1.1: standalone OWNER row shows 4 actions', async ({page}) => {
+        const row = await findRow(page, 'Initial EUR funding');
+        test.skip(!row, 'IB DEPOSIT row not found');
+        const cnt = await countVisibleActions(row!);
+        expect(cnt).toBe(4);
+    });
 
-	test('C1.2: standalone VIEWER row shows only view action', async ({page}) => {
-		const row = await findRow(page, 'P2P lending capital');
-		test.skip(!row, 'Recrowd DEPOSIT row not found');
-		const cnt = await countVisibleActions(row!);
-		expect(cnt).toBe(1);
-	});
+    test('C1.2: standalone VIEWER row shows only view action', async ({page}) => {
+        const row = await findRow(page, 'P2P lending capital');
+        test.skip(!row, 'Recrowd DEPOSIT row not found');
+        const cnt = await countVisibleActions(row!);
+        expect(cnt).toBe(1);
+    });
 
-	test('C1.3: paired full-access row (Asym-a) shows 4 actions', async ({page}) => {
-		const row = await findRow(page, 'Asym-a');
-		test.skip(!row, 'Asym-a row not found');
-		const cnt = await countVisibleActions(row!);
-		expect(cnt).toBe(4);
-	});
+    test('C1.3: paired full-access row (Asym-a) shows 5 actions (view, edit, clone, split, delete)', async ({page}) => {
+        const row = await findRow(page, 'Asym-a');
+        test.skip(!row, 'Asym-a row not found');
+        const cnt = await countVisibleActions(row!);
+        expect(cnt).toBe(5);
+    });
 
-	test('C1.4: paired viewer row (Asym-c) shows only view', async ({page}) => {
-		const row = await findRow(page, 'Asym-c');
-		test.skip(!row, 'Asym-c row not found');
-		const cnt = await countVisibleActions(row!);
-		expect(cnt).toBe(1);
-	});
+    test('C1.4: paired viewer row (Asym-c) shows only view', async ({page}) => {
+        const row = await findRow(page, 'Asym-c');
+        test.skip(!row, 'Asym-c row not found');
+        const cnt = await countVisibleActions(row!);
+        expect(cnt).toBe(1);
+    });
 
-	test('C2.1: context menu on OWNER row has 4 items', async ({page}) => {
-		const row = await findRow(page, 'Initial EUR funding');
-		test.skip(!row, 'IB DEPOSIT row not found');
+    test('C2.1: context menu on OWNER row has 4 items', async ({page}) => {
+        const row = await findRow(page, 'Initial EUR funding');
+        test.skip(!row, 'IB DEPOSIT row not found');
 
-		await row!.click({button: 'right'});
-		const menu = page.locator('[data-testid="context-menu"]');
-		await expect(menu).toBeVisible({timeout: 3_000});
-		const items = menu.locator('[data-testid^="context-menu-action-"]');
-		expect(await items.count()).toBe(4);
-		await page.keyboard.press('Escape');
-	});
+        await row!.click({button: 'right'});
+        const menu = page.locator('[data-testid="context-menu"]');
+        await expect(menu).toBeVisible({timeout: 3_000});
+        const items = menu.locator('[data-testid^="context-menu-action-"]');
+        expect(await items.count()).toBe(4);
+        await page.keyboard.press('Escape');
+    });
 
-	test('C2.2: context menu on VIEWER row has 1 item', async ({page}) => {
-		const row = await findRow(page, 'P2P lending capital');
-		test.skip(!row, 'Recrowd row not found');
+    test('C2.2: context menu on VIEWER row has 1 item', async ({page}) => {
+        const row = await findRow(page, 'P2P lending capital');
+        test.skip(!row, 'Recrowd row not found');
 
-		await row!.click({button: 'right'});
-		const menu = page.locator('[data-testid="context-menu"]');
-		await expect(menu).toBeVisible({timeout: 3_000});
-		const items = menu.locator('[data-testid^="context-menu-action-"]');
-		expect(await items.count()).toBe(1);
-		await page.keyboard.press('Escape');
-	});
+        await row!.click({button: 'right'});
+        const menu = page.locator('[data-testid="context-menu"]');
+        await expect(menu).toBeVisible({timeout: 3_000});
+        const items = menu.locator('[data-testid^="context-menu-action-"]');
+        expect(await items.count()).toBe(1);
+        await page.keyboard.press('Escape');
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -327,77 +327,76 @@ test.describe('Action visibility by access level', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('PickerModal disabled rows', () => {
-	test.beforeEach(async ({page}) => {
-		await login(page, TEST_USER);
-		await goToTransactions(page);
-	});
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+        await goToTransactions(page);
+    });
 
-	test('B3-guard: picker shows ⊘ for VIEWER broker rows, select-all skips them', async ({page}) => {
-		// Need 2+ rows selected to get edit-many mode → BulkModal → Picker
-		const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
-		const count = await rows.count();
-		test.skip(count < 2, 'Not enough rows');
+    test('B3-guard: picker shows ⊘ for VIEWER broker rows, select-all skips them', async ({page}) => {
+        // Need 2+ rows selected to get edit-many mode → BulkModal → Picker
+        const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
+        const count = await rows.count();
+        test.skip(count < 2, 'Not enough rows');
 
-		// Select first two selectable rows
-		let selected = 0;
-		for (let i = 0; i < count && selected < 2; i++) {
-			const checkbox = rows.nth(i).locator('.checkbox-btn');
-			if ((await checkbox.count()) > 0) {
-				await checkbox.click();
-				selected++;
-			}
-		}
-		test.skip(selected < 2, 'Could not select 2 rows');
+        // Select first two selectable rows
+        let selected = 0;
+        for (let i = 0; i < count && selected < 2; i++) {
+            const checkbox = rows.nth(i).locator('.checkbox-btn');
+            if ((await checkbox.count()) > 0) {
+                await checkbox.click();
+                selected++;
+            }
+        }
+        test.skip(selected < 2, 'Could not select 2 rows');
 
-		const editBtn = page.getByTestId('toolbar-action-edit');
-		await expect(editBtn).toBeVisible({timeout: 3_000});
-		await editBtn.click();
+        const editBtn = page.getByTestId('toolbar-action-edit');
+        await expect(editBtn).toBeVisible({timeout: 3_000});
+        await editBtn.click();
 
-		const bulkModal = page.getByTestId('tx-bulk-modal');
-		await expect(bulkModal).toBeVisible({timeout: 5_000});
+        const bulkModal = page.getByTestId('tx-bulk-modal');
+        await expect(bulkModal).toBeVisible({timeout: 5_000});
 
-		// C2-fix may auto-open FormModal when guardViewerOnly reduces to 1 row.
-		// If so, close it first so it stops intercepting pointer events.
-		const formModal = page.getByTestId('tx-form-modal');
-		if (await formModal.isVisible({timeout: 1_000}).catch(() => false)) {
-			await formModal.getByTestId('tx-form-cancel').click();
-			await expect(formModal).not.toBeVisible({timeout: 3_000});
-		}
+        // C2-fix may auto-open FormModal when guardViewerOnly reduces to 1 row.
+        // If so, close it first so it stops intercepting pointer events.
+        const formModal = page.getByTestId('tx-form-modal');
+        if (await formModal.isVisible({timeout: 1_000}).catch(() => false)) {
+            await formModal.getByTestId('tx-form-cancel').click();
+            await expect(formModal).not.toBeVisible({timeout: 3_000});
+        }
 
-		// Open picker
-		const searchAddBtn = bulkModal.getByTestId('tx-bulk-picker');
-		test.skip(!(await searchAddBtn.isVisible({timeout: 2_000}).catch(() => false)), 'Search & Add not visible');
-		await searchAddBtn.click();
+        // Open picker
+        const searchAddBtn = bulkModal.getByTestId('tx-bulk-picker');
+        test.skip(!(await searchAddBtn.isVisible({timeout: 2_000}).catch(() => false)), 'Search & Add not visible');
+        await searchAddBtn.click();
 
-		const picker = page.getByTestId('tx-picker-modal');
-		await expect(picker).toBeVisible({timeout: 5_000});
-		await page.waitForTimeout(500);
+        const picker = page.getByTestId('tx-picker-modal');
+        await expect(picker).toBeVisible({timeout: 5_000});
+        await page.waitForTimeout(500);
 
-		// ⊘ icons should exist for VIEWER broker rows (DEGIRO, eToro, Recrowd)
-		const disabledIcons = picker.locator('.disabled-select-icon');
-		const disabledCount = await disabledIcons.count();
-		expect(disabledCount).toBeGreaterThan(0);
+        // ⊘ icons should exist for VIEWER broker rows (DEGIRO, eToro, Recrowd)
+        const disabledIcons = picker.locator('.disabled-select-icon');
+        const disabledCount = await disabledIcons.count();
+        expect(disabledCount).toBeGreaterThan(0);
 
-		// Select-all should skip disabled rows
-		const selectAllBtn = picker.locator('th .checkbox-btn');
-		if ((await selectAllBtn.count()) > 0) {
-			await selectAllBtn.click();
-			await page.waitForTimeout(300);
+        // Select-all should skip disabled rows
+        const selectAllBtn = picker.locator('th .checkbox-btn');
+        if ((await selectAllBtn.count()) > 0) {
+            await selectAllBtn.click();
+            await page.waitForTimeout(300);
 
-			// "Add N selected" should have fewer than total rows
-			const addBtn = picker.getByTestId('tx-picker-add');
-			const addText = (await addBtn.textContent()) ?? '';
-			const match = addText.match(/(\d+)/);
-			if (match) {
-				const selectedCount = parseInt(match[1]);
-				const totalRows = await picker.locator('tbody tr[data-row-id]').count();
-				expect(selectedCount).toBeLessThan(totalRows);
-			}
-		}
+            // "Add N selected" should have fewer than total rows
+            const addBtn = picker.getByTestId('tx-picker-add');
+            const addText = (await addBtn.textContent()) ?? '';
+            const match = addText.match(/(\d+)/);
+            if (match) {
+                const selectedCount = parseInt(match[1]);
+                const totalRows = await picker.locator('tbody tr[data-row-id]').count();
+                expect(selectedCount).toBeLessThan(totalRows);
+            }
+        }
 
-		// Close
-		await picker.getByTestId('tx-picker-cancel').click();
-		await expect(picker).not.toBeVisible();
-	});
+        // Close
+        await picker.getByTestId('tx-picker-cancel').click();
+        await expect(picker).not.toBeVisible();
+    });
 });
-

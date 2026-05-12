@@ -57,21 +57,14 @@ export interface TxOriginal {
 /** Fields accepted by the TXUpdateItem backend schema.
  *  Everything else (broker_id, asset_id, link_uuid, related_transaction_id,
  *  created_at, updated_at) is immutable and MUST NOT be sent. */
-export const PATCHABLE_FIELDS = new Set([
-    'type', 'date', 'quantity', 'cash', 'tags', 'description',
-    'cost_basis_override', 'asset_event_id',
-]);
+export const PATCHABLE_FIELDS = new Set(['type', 'date', 'quantity', 'cash', 'tags', 'description', 'cost_basis_override', 'asset_event_id']);
 
 // =============================================================================
 //  Sign-flip helpers
 // =============================================================================
 
 /** Apply sign-flip rules based on the TypeRule. Pure function, no side effects. */
-export function applySignRules(
-    qty: string,
-    cash: CashValue | null | undefined,
-    rule: TypeRule,
-): {signedQty: string; signedCash: CashValue | null} {
+export function applySignRules(qty: string, cash: CashValue | null | undefined, rule: TypeRule): {signedQty: string; signedCash: CashValue | null} {
     const negQty = rule.quantityRule === 'negative';
     const negCash = rule.cashSign === 'negative';
     const signedQty = negQty ? String(-Math.abs(Number(qty))) : qty;
@@ -80,10 +73,7 @@ export function applySignRules(
 }
 
 /** Build a cash value with sign applied. */
-export function buildSignedCash(
-    cash: CashValue | null | undefined,
-    negate: boolean,
-): CashValue | null {
+export function buildSignedCash(cash: CashValue | null | undefined, negate: boolean): CashValue | null {
     if (!cash) return null;
     if (negate) return {code: cash.code, amount: String(-Math.abs(Number(cash.amount)))};
     return {code: cash.code, amount: cash.amount};
@@ -156,18 +146,9 @@ export function buildCreatePayload(fields: TxFields, rule: TypeRule): Record<str
 /** Build a TXUpdateItem payload by diffing current fields against the original.
  *  Uses the original type's sign rules for correct comparison when type changed.
  *  Only includes changed fields from PATCHABLE_FIELDS. */
-export function buildUpdateDiff(
-    current: TxFields,
-    original: TxOriginal,
-    currentRule: TypeRule,
-    originalRule: TypeRule,
-): Record<string, unknown> {
+export function buildUpdateDiff(current: TxFields, original: TxOriginal, currentRule: TypeRule, originalRule: TypeRule): Record<string, unknown> {
     const {signedQty, signedCash} = applySignRules(current.quantity, current.cash, currentRule);
-    const {signedQty: origSignedQty, signedCash: origSignedCash} = applySignRules(
-        original.quantity,
-        original.cash,
-        originalRule,
-    );
+    const {signedQty: origSignedQty, signedCash: origSignedCash} = applySignRules(original.quantity, original.cash, originalRule);
 
     // Field definitions: [key, currentValue, originalValue]
     const fieldPairs: Array<[string, unknown, unknown]> = [
@@ -199,10 +180,7 @@ export function buildUpdateDiff(
 /** Build update diff for a dual-form item (from collectDualCreates output).
  *  Compares the full CREATE payload against original, filtering to PATCHABLE_FIELDS.
  *  Used by FormModal's collectDualUpdates(). */
-export function diffDualItem(
-    item: Record<string, unknown>,
-    orig: TxOriginal,
-): Record<string, unknown> {
+export function diffDualItem(item: Record<string, unknown>, orig: TxOriginal): Record<string, unknown> {
     const out: Record<string, unknown> = {id: orig.id};
     for (const key of PATCHABLE_FIELDS) {
         if (!(key in item)) continue;
@@ -213,4 +191,3 @@ export function diffDualItem(
     }
     return out;
 }
-

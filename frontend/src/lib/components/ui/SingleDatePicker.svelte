@@ -193,7 +193,9 @@
 <div class="relative sdp-trigger {inputStyle ? 'block w-full' : 'inline-block'}">
     <button
         bind:this={triggerEl}
-        class="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 cursor-pointer hover:border-libre-green/50 transition-colors {inputStyle ? 'w-full px-3 py-2 text-sm' : compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} {calendarOpen ? 'ring-1 ring-libre-green border-libre-green' : ''}"
+        class="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 cursor-pointer hover:border-libre-green/50 transition-colors {inputStyle ? 'w-full px-3 py-2 text-sm' : compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} {calendarOpen
+            ? 'ring-1 ring-libre-green border-libre-green'
+            : ''}"
         onclick={(e) => {
             e.stopPropagation();
             openCalendar();

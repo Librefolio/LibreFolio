@@ -979,7 +979,6 @@
         toggleColumnVisibility(columnId);
     }
 
-
     /** Set column order (reorder columns) */
     export function setColumnOrder(newOrder: string[]) {
         reorderColumns(newOrder);
@@ -1393,13 +1392,16 @@
         y={contextMenuPos.y}
         items={rowActions
             .filter((a) => !a.visible || a.visible(cmRow))
-            .map((a) => ({
-                id: a.id,
-                label: typeof a.label === 'function' ? a.label(cmRow) : a.label,
-                icon: a.icon,
-                variant: a.variant,
-                disabled: a.disabled?.(cmRow) ?? false,
-            } satisfies ContextMenuItem))}
+            .map(
+                (a) =>
+                    ({
+                        id: a.id,
+                        label: typeof a.label === 'function' ? a.label(cmRow) : a.label,
+                        icon: a.icon,
+                        variant: a.variant,
+                        disabled: a.disabled?.(cmRow) ?? false,
+                    }) satisfies ContextMenuItem,
+            )}
         onAction={(id) => {
             const action = rowActions.find((a) => a.id === id);
             if (action) handleRowAction(action, cmRow);

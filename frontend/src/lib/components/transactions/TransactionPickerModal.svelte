@@ -28,12 +28,7 @@
         onClose: () => void;
     }
 
-    let {
-        open = $bindable(false),
-        excludeIds = new Set(),
-        onAdd,
-        onClose,
-    }: Props = $props();
+    let {open = $bindable(false), excludeIds = new Set(), onAdd, onClose}: Props = $props();
 
     let selectedRows = $state<TXReadItem[]>([]);
     let pickerPage = $state(1);
@@ -83,9 +78,7 @@
         const iconUrl = getBrokerIconUrlById(brokerId, brokers);
         const currentRole = getBrokerRole(brokerId);
         const roleLabelCurrent = currentRole ? currentRole.charAt(0) + currentRole.slice(1).toLowerCase() : 'None';
-        const brokerIconHtml = iconUrl
-            ? `<img src="${iconUrl}" width="14" height="14" style="display:inline;vertical-align:middle;border-radius:3px;margin-right:3px" alt="" onerror="this.style.display='none'">`
-            : '';
+        const brokerIconHtml = iconUrl ? `<img src="${iconUrl}" width="14" height="14" style="display:inline;vertical-align:middle;border-radius:3px;margin-right:3px" alt="" onerror="this.style.display='none'">` : '';
         const currentRoleSvg = getRoleSvgHtml(currentRole);
         const requiredRoleSvg = getRoleSvgHtml('EDITOR');
         return `${brokerIconHtml}<strong>${bName}</strong> ${currentRoleSvg} ${roleLabelCurrent}<br>${$t('transactions.picker.requiredRole') || 'required'} ${requiredRoleSvg} Editor`;
@@ -158,7 +151,10 @@
                 currentPage={pickerPage}
                 pageSize={pickerPageSize}
                 onPageChange={(p) => (pickerPage = p)}
-                onPageSizeChange={(s) => { pickerPageSize = s; pickerPage = 1; }}
+                onPageSizeChange={(s) => {
+                    pickerPageSize = s;
+                    pickerPage = 1;
+                }}
                 onSelectionChange={handleSelectionChange}
                 {disabledIds}
                 disabledRowTooltipFn={disabledTooltipFn}
@@ -197,4 +193,3 @@
         </div>
     </div>
 </ModalBase>
-

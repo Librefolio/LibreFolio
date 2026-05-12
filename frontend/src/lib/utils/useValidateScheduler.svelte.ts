@@ -102,11 +102,7 @@ export function createValidateScheduler(opts: ValidateSchedulerOptions): Validat
         // Anti-bounce: if draft hasn't changed since last validate and we're within the window, skip.
         if (opts.draftKey) {
             const currentKey = opts.draftKey();
-            if (
-                currentKey === lastValidatedDraftKey &&
-                state.lastValidatedAt != null &&
-                Date.now() - state.lastValidatedAt < antiBounceMs
-            ) {
+            if (currentKey === lastValidatedDraftKey && state.lastValidatedAt != null && Date.now() - state.lastValidatedAt < antiBounceMs) {
                 return;
             }
         }
@@ -174,4 +170,3 @@ export function createValidateScheduler(opts: ValidateSchedulerOptions): Validat
 
     return {state, trigger, dispose};
 }
-

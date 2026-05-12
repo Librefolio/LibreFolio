@@ -145,7 +145,8 @@
 <ModalBase {open} maxWidth="3xl" onRequestClose={onClose} testId="tx-bulk-delete-modal">
     <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-bulk-delete-title">
-            🗑 {$t('transactions.bulkDelete.title')} — {cleanRows.length + problemRows.length} {$t('common.selected') || 'selected'}
+            🗑 {$t('transactions.bulkDelete.title')} — {cleanRows.length + problemRows.length}
+            {$t('common.selected') || 'selected'}
         </h2>
         <button class="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" onclick={onClose} data-testid="tx-bulk-delete-close" aria-label="Close">
             <X size={18} />

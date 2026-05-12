@@ -99,4 +99,3 @@ export function txStoreGetVersion(): number {
 export function txStoreCount(): number {
     return _map.size;
 }
-
