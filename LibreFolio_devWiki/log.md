@@ -4,6 +4,37 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-05-30] ingest | Phase 07 Part 4 Round 6 Plans C2 + C2R2 — Bugfix, Pair Validation, MockFX, Contextual Validate
+
+Ingested 2 new plan files (C2 @ `6aac0dce`, C2R2 @ `f9f3bec2`). Verified 8 already-ingested plans from the same batch — no re-ingest needed; existing pages accurate.
+
+**Created** (2 source pages):
+- [[sources/phase07-part4-round6-planc2-bugfix-pair-validation]] — 6 bugs fixed, pair desc/tags validation, clone paired, picker hideActions, bulk toast, UC 58%→92%, Docker non-root, font self-hosted, FX fallback, classification race
+- [[sources/phase07-part4-round6-planc2r2-regressions-mockfx]] — MockFX providers, auto-populate removal, DistributionEditor fix, contextual validate, end-of-day balance confirmation, 8 balance walk tests, 3 FX fallback tests, 3 asset classification E2E
+
+**Created** (4 decisions):
+- [[decisions/pair-description-tags-validation]] — linked pairs must have identical desc+tags
+- [[decisions/auto-populate-removal]] — metadata flow frontend-driven (probe→diff→PATCH)
+- [[decisions/formmodal-contextual-validate]] — FormModal sends entire bulk context to /validate
+- [[decisions/end-of-day-balance-check]] — intra-day order irrelevant, end-of-day aggregation
+
+**Created** (1 problem):
+- [[problems/fx-multi-route-no-fallback]] — FX sync used only primary route, no fallback to ECB/FED/SNB
+
+**Updated**:
+- [[features/F-048]] — Plan C2/C2R2 entries in status history, contextual validate, clone paired, picker hideActions, bulk toast, balance walk, 4 new related_decisions
+- index.md, raw/ingest-registry.md
+
+**Verification of already-ingested plans** (8 files): All source pages for Round 6 ContextMenu, Plan A, Plan B, Plan B1, Plan B23, Plan B23 Appendix, Plan C, Plan C3 confirmed accurate with no contradictions. Plan C3 page verified — no updates needed (correctly documents PendingOp as successor to C2R2 work).
+
+Key architectural progression documented: C2 (bugfix + pair validation + infrastructure) → C2R2 (MockFX + auto-populate removal + contextual validate + balance confirmation) → C3 (PendingOp tagged union).
+
+## [2026-05-30] ingest | Phase 07 Part 4 Round 6 Plan C3 — PendingOp Refactor
+Ingested from `RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanC3_PendingOpRefactor.prompt.md`.
+**Created**: [[sources/phase07-part4-round6-planc3-pendingop-refactor]], [[decisions/pendingop-tagged-union]].
+**Updated**: [[features/F-048]] (PendingOp tagged union, factory functions, 3 new E2E tests, data-action-id), [[concepts/txstore-pattern]] (PendingOp model updated to final implementation), [[concepts/e2e-data-testid-rule]] (data-action-id pattern).
+Key insight: DraftRow→PendingOp completes 80%→100% of txStore architecture. Zero-copy originals + tagged discriminator + derived status make Plan D (Split/Promote) trivial (~10 LOC per action). `data-action-id` establishes i18n-resilient E2E selectors for DataTable row actions.
+
 ## [2026-05-29] ingest | Phase 07 Part 4 Round 6 Plan C — txStore Refactor
 Ingested from `RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md`.
 **Created**: [[sources/phase07-part4-round6-planc-txstore-refactor]], [[concepts/txstore-pattern]], [[decisions/txstore-single-source-of-truth]].

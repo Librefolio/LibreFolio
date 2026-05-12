@@ -5,8 +5,10 @@ tags: [frontend, stores, transactions, svelte5, single-source-of-truth, refactor
 related:
   - concepts/entity-store-pattern
   - decisions/txstore-single-source-of-truth
+  - decisions/pendingop-tagged-union
   - features/F-048
   - sources/phase07-part4-round6-planc-txstore-refactor
+  - sources/phase07-part4-round6-planc3-pendingop-refactor
 ---
 
 # Concept: txStore Pattern
@@ -56,22 +58,50 @@ type WorkspaceIntent =
 
 BulkModal reads the actual data from txStore using the provided IDs.
 
-## PendingOp Model
+## PendingOp Model (Plan C3 — final architecture)
 
-BulkModal holds modifications as typed operations, not full row copies:
+BulkModal holds modifications as a `PendingOp[]` tagged union — not full row copies:
 
 ```ts
-type PendingOp =
-  | { op: 'create', draft: TxFields }
-  | { op: 'edit', txId: number, overrides: Partial<TxFields> }
-  | { op: 'delete', txId: number }
+/** Pure editable data fields — no metadata. */
+interface DraftFields {
+    broker_id: number; asset_id: number | null; type: TransactionTypeCode;
+    date: string; quantity: string; cash: {code: string; amount: string} | null;
+    tags: string[]; description: string; asset_event_id: number | null;
+    cost_basis_override: string;
+}
+
+/** Partner rendering data for paired transactions. */
+interface PartnerDisplay {
+    partnerId?: number; partnerBrokerId?: number;
+    partnerCash?: {code: string; amount: string} | null;
+    partnerDate?: string; partnerPayload?: TxFields | null;
+}
+
+/** Tagged union — one per visible row in BulkModal grid. */
+type PendingOp = (
+    | { op: 'create'; link_uuid: string | null; }
+    | { op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean; }
+) & { tempId: string; fields: DraftFields; } & PartnerDisplay;
 ```
 
-**Status is derived**, never set manually:
-- `op='create'` → `new`
-- `op='edit'` + non-empty overrides → `edited`
-- `op='delete'` → `delete`
+### Key invariants
+
+1. **Zero-copy originals**: original is ALWAYS `txStoreGet(op.txId)` — never stored on the op
+2. **Status always derived**: `deriveStatus(op)` computes from diff vs txStore
+3. **Tagged discriminator**: `op.op === 'create'` has `link_uuid`; `op.op === 'edit'` has `txId` + `markedDelete`
+4. **Factory functions** (replaced `fromTx()`):
+   - `fieldsFromTx(tx)` — pure field extraction with auto-sign
+   - `editOpFromTx(txId)` — creates edit op, reads from txStore
+   - `createOpFromClone(tx)` — creates create op with today's date
+
+**Status derivation** (never set manually):
+- `op.op === 'create'` → `new`
+- `op.op === 'edit'` + `markedDelete` → `delete`
+- `op.op === 'edit'` + non-empty diff vs txStore → `edited`
 - otherwise → `original`
+
+See [[decisions/pendingop-tagged-union]] for rationale.
 
 ## Relationship to entityStore
 
