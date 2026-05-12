@@ -744,7 +744,7 @@ Step 12 (Split/Promote Main)    ← DIPENDE da Step 10 + Step 11
 |       | ↳ B1 — Bugfix Round 1 (Fase 1) |  | Fix 7 bug + 1 enhancement test walk | ✅ | [`PlanB1_BugfixRound1`](./plan-phase07-transaction-Part4_Round6_PlanB1_BugfixRound1.prompt.md) |
 |       | ↳ B23 — Bulk Delete via BulkModal + DeleteModal Polish |  | Elimina BulkDeleteModal, riusa BulkModal | ~11-12h | [`PlanB23_BulkDeleteViaBulkModal`](./plan-phase07-transaction-Part4_Round6_PlanB23_BulkDeleteViaBulkModal.prompt.md) |
 | **Piano C** — txStore Refactor | Architettura | Unica fonte di verità per TX, elimina 5 categorie bug | ~2-3d | [`PlanC_TxStoreRefactor`](./plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md) |
-| **Piano D** — Split/Promote full stack | 10 → 11 → 12 | Backend → BulkModal UI → Main Table + wiring | ~4.5h | |
+| **Piano D** — Split/Promote full stack | 10 → 11 → 12 | Backend batch integration → BulkModal UI → Main Table + suggest | ~5-6d | [`PlanD_SplitPromoteFullStack`](./plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md) |
 
 > **Nota Piano D**: Quando si implementa Split, aggiungere nella `TransactionBulkModal` un'azione riga "✂ Split" visibile solo su righe paired. L'azione chiama `POST /transactions/split` e aggiorna il batch in-place (le due metà diventano standalone). Questo completa il flusso "elimina solo un lato" suggerito dall'InfoBanner split hint aggiunto in Piano B23 Step 3e.
 
