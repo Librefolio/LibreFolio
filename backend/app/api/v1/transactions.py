@@ -34,12 +34,12 @@ from backend.app.schemas.transactions import (
     TXEventSuggestRequestItem,
     TXEventSuggestResultItem,
     TXMixedBatch,
-    TXPromoteRequest,
-    TXPromoteResponse,
+    TXPromoteBatchItem,
+    TXPromoteSuggestInput,
+    TXPromoteSuggestResponse,
     TXQueryParams,
     TXReadItem,
-    TXSplitRequest,
-    TXSplitResponse,
+    TXSplitBatchItem,
     TXTransferPromoteRequest,
     TXTransferPromoteResponse,
     TXTypeMetadata,
@@ -72,6 +72,8 @@ tx_router = APIRouter(prefix="/transactions", tags=["TX (Transactions)"])
                             "creates": {"type": "array", "items": TXCreateItem.model_json_schema()},
                             "updates": {"type": "array", "items": TXUpdateItem.model_json_schema()},
                             "deletes": {"type": "array", "items": {"type": "integer"}},
+                            "splits": {"type": "array", "items": TXSplitBatchItem.model_json_schema()},
+                            "promotes": {"type": "array", "items": TXPromoteBatchItem.model_json_schema()},
                         },
                     }
                 }
@@ -85,10 +87,10 @@ async def validate_transactions(
     current_user: User = Depends(get_current_user),
 ) -> TXBatchResponse:
     """
-    Dry-run validator for a mixed batch (creates + updates + deletes).
+    Dry-run validator for a mixed batch (creates + updates + deletes + splits + promotes).
 
     Semantics:
-    - Applies `deletes -> updates -> creates` in a single session that is
+    - Applies `deletes -> updates -> creates -> splits -> promotes` in a single session that is
       ALWAYS rolled back at the end (never commits).
     - Does NOT stop at the first error: collects the full set of issues so
       the UI can show all problems at once.
@@ -101,6 +103,8 @@ async def validate_transactions(
         creates_raw=batch.creates,
         updates_raw=batch.updates,
         deletes=batch.deletes,
+        splits_raw=batch.splits,
+        promotes_raw=batch.promotes,
         user_id=user_id,
         commit=False,
     )
@@ -127,6 +131,8 @@ async def validate_transactions(
                             "creates": {"type": "array", "items": TXCreateItem.model_json_schema()},
                             "updates": {"type": "array", "items": TXUpdateItem.model_json_schema()},
                             "deletes": {"type": "array", "items": {"type": "integer"}},
+                            "splits": {"type": "array", "items": TXSplitBatchItem.model_json_schema()},
+                            "promotes": {"type": "array", "items": TXPromoteBatchItem.model_json_schema()},
                         },
                     }
                 }
@@ -140,7 +146,7 @@ async def commit_transactions(
     current_user: User = Depends(get_current_user),
 ) -> TXBatchResponse:
     """
-    Commit a mixed batch (creates + updates + deletes).
+    Commit a mixed batch (creates + updates + deletes + splits + promotes).
 
     Semantics:
     - If any issue is detected → rollback, `committed=False`.
@@ -148,10 +154,12 @@ async def commit_transactions(
     """
     user_id = current_user.id
     logger.info(
-        "Commit batch: %d creates, %d updates, %d deletes",
+        "Commit batch: %d creates, %d updates, %d deletes, %d splits, %d promotes",
         len(batch.creates),
         len(batch.updates),
         len(batch.deletes),
+        len(batch.splits),
+        len(batch.promotes),
         user_id=user_id,
     )
 
@@ -160,6 +168,8 @@ async def commit_transactions(
         creates_raw=batch.creates,
         updates_raw=batch.updates,
         deletes=batch.deletes,
+        splits_raw=batch.splits,
+        promotes_raw=batch.promotes,
         user_id=user_id,
         commit=True,
     )
@@ -270,54 +280,27 @@ async def suggest_events(
 
 
 # =============================================================================
-# BULK SPLIT / PROMOTE (immediate, server-driven)
+# PROMOTE-SUGGEST (bulk candidate search)
 # =============================================================================
 
 
-@tx_router.post("/split", response_model=TXSplitResponse)
-async def split_pairs(
-    req: TXSplitRequest,
+@tx_router.post("/promote-suggest", response_model=TXPromoteSuggestResponse)
+async def promote_suggest(
+    inputs: List[TXPromoteSuggestInput],
+    tolerance_days: int = Query(7, ge=1, le=30),
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
-) -> TXSplitResponse:
-    """
-    Split linked pairs into standalone rows (immediate, not deferred).
+) -> TXPromoteSuggestResponse:
+    """Find DB transactions compatible for promote with each input TX.
 
-    Each item.id is one half of a pair; the backend finds the partner via
-    related_transaction_id. Types are mutated per SPLIT_TYPE_MAP and the
-    link is removed.
+    Each input can have a real ID (>0) or a fake ID (<0, unsaved).
+    Results are keyed by the input ID.
     """
-    user_id = current_user.id
-    logger.info("Split %d pair(s)", len(req.items), user_id=user_id)
+    if len(inputs) > 500:
+        raise HTTPException(status_code=422, detail="Max 500 inputs per call")
 
     service = TransactionService(session)
-    response = await service.split_pairs(req.items, user_id=user_id)
-    await session.commit()
-    logger.info("Split committed: %d pair(s)", len(response.results), user_id=user_id)
-    return response
-
-
-@tx_router.post("/promote", response_model=TXPromoteResponse)
-async def promote_pairs(
-    req: TXPromoteRequest,
-    session: AsyncSession = Depends(get_session_generator),
-    current_user: User = Depends(get_current_user),
-) -> TXPromoteResponse:
-    """
-    Promote standalone rows into linked pairs (immediate, not deferred).
-
-    Each item contains (id_a, id_b). The backend finds matching promote
-    rules from TXTypeMetadata, validates field constraints, mutates types,
-    and creates bidirectional links.
-    """
-    user_id = current_user.id
-    logger.info("Promote %d pair(s)", len(req.items), user_id=user_id)
-
-    service = TransactionService(session)
-    response = await service.promote_pairs(req.items, user_id=user_id)
-    await session.commit()
-    logger.info("Promote committed: %d pair(s)", len(response.results), user_id=user_id)
-    return response
+    return await service.promote_suggest_bulk(inputs, tolerance_days, user_id=current_user.id)
 
 
 # =============================================================================
