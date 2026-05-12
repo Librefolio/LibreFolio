@@ -119,6 +119,30 @@ expect(count).toBeGreaterThan(0);
 1. **Third-party components** (e.g., Flowbite dropdowns, modals) — use Playwright's `getByRole()` with accessible name
 2. **Dynamic content where adding testid is impractical** (rare) — use `locator()` with specific context
 
+## data-action-id Pattern (Plan C3, 2026-05-12)
+
+For DataTable row action buttons, `data-action-id={action.id}` provides **i18n-resilient selectors** complementary to `data-testid`:
+
+```svelte
+<!-- DataTable.svelte row action button -->
+<button type="button" class="action-btn" data-action-id={action.id} ...>
+```
+
+**Why not just `data-testid`?** Action buttons are generated dynamically from the `rowActions[]` config array — their purpose is defined by `action.id` (e.g., `"remove-from-batch"`, `"mark-delete"`, `"clone"`, `"reset"`). The `title` attribute is i18n-translated and fragile.
+
+**Test helper pattern**:
+```typescript
+/** Hover a row and click the action button by stable action-id. */
+async function clickRowAction(row: Locator, actionId: string) {
+    await row.hover();
+    const btn = row.locator(`[data-action-id="${actionId}"]`);
+    await expect(btn).toBeVisible({timeout: 2_000});
+    await btn.click();
+}
+```
+
+**Known action IDs**: `mark-delete`, `remove-from-batch`, `clone`, `reset`, `edit`.
+
 Example:
 
 ```typescript
