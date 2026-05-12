@@ -59,7 +59,7 @@ export async function ensureTxTypesLoaded(): Promise<void> {
     loadPromise = (async () => {
         try {
             const resp = await zodiosApi.get_transaction_types_api_v1_transactions_types_get();
-            const items = ((resp as unknown) as {transaction_types?: TXTypeMetadata[]})?.transaction_types ?? (resp as unknown as TXTypeMetadata[]);
+            const items = (resp as unknown as {transaction_types?: TXTypeMetadata[]})?.transaction_types ?? (resp as unknown as TXTypeMetadata[]);
             metadataMap.clear();
             for (const m of items) metadataMap.set(m.code, m);
             loaded = true;

@@ -44,9 +44,7 @@
     let suggestions = $derived.by<string[]>(() => {
         const q = inputBuffer.trim().toLowerCase();
         const used = new Set(value);
-        return availableTags
-            .filter((tg) => !used.has(tg) && (q === '' || tg.toLowerCase().includes(q)))
-            .slice(0, 20);
+        return availableTags.filter((tg) => !used.has(tg) && (q === '' || tg.toLowerCase().includes(q))).slice(0, 20);
     });
 
     function addTag(raw: string) {
@@ -168,10 +166,7 @@
 </script>
 
 <div class="relative" data-testid="tag-input-wrapper">
-    <div
-        class="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg min-h-[38px] {disabled ? 'opacity-60 cursor-not-allowed' : ''}"
-        data-testid="tag-input-container"
-    >
+    <div class="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg min-h-[38px] {disabled ? 'opacity-60 cursor-not-allowed' : ''}" data-testid="tag-input-container">
         {#each value as tag, i}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -183,7 +178,16 @@
             >
                 {tag}
                 {#if !disabled}
-                    <button type="button" class="opacity-70 hover:opacity-100 leading-none" aria-label="remove tag" onclick={(e) => { e.stopPropagation(); removeTag(i); }} data-testid={`tag-chip-remove-${i}`}>
+                    <button
+                        type="button"
+                        class="opacity-70 hover:opacity-100 leading-none"
+                        aria-label="remove tag"
+                        onclick={(e) => {
+                            e.stopPropagation();
+                            removeTag(i);
+                        }}
+                        data-testid={`tag-chip-remove-${i}`}
+                    >
                         <X size={12} />
                     </button>
                 {/if}
@@ -198,19 +202,17 @@
                 {placeholder}
                 bind:value={inputBuffer}
                 onkeydown={handleKeydown}
-                onfocus={() => { dropdownOpen = true; }}
+                onfocus={() => {
+                    dropdownOpen = true;
+                }}
                 onblur={handleBlur}
-                oninput={() => { focusedTagIndex = -1; }}
+                oninput={() => {
+                    focusedTagIndex = -1;
+                }}
                 data-testid="tag-input-field"
             />
             {#if availableTags.length > 0}
-                <button
-                    type="button"
-                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0 p-0.5"
-                    onclick={toggleDropdown}
-                    data-testid="tag-input-toggle"
-                    aria-label="Toggle tag suggestions"
-                >
+                <button type="button" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0 p-0.5" onclick={toggleDropdown} data-testid="tag-input-toggle" aria-label="Toggle tag suggestions">
                     <ChevronDown size={14} class={dropdownOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
                 </button>
             {/if}
@@ -219,16 +221,15 @@
 
     {#if dropdownOpen && suggestions.length > 0 && !disabled}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-            class="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg"
-            data-testid="tag-input-dropdown"
-            role="listbox"
-        >
+        <div class="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg" data-testid="tag-input-dropdown" role="listbox">
             {#each suggestions as suggestion, idx}
                 <button
                     type="button"
                     class="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 transition-colors {idx === highlightedIndex ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}"
-                    onmousedown={(e) => { e.preventDefault(); handleSuggestionClick(suggestion); }}
+                    onmousedown={(e) => {
+                        e.preventDefault();
+                        handleSuggestionClick(suggestion);
+                    }}
                     data-testid={`tag-suggestion-${suggestion}`}
                     aria-selected={idx === highlightedIndex}
                     role="option"
@@ -250,4 +251,3 @@
         color: var(--badge-dark-text, #e2e8f0);
     }
 </style>
-

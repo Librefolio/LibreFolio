@@ -446,7 +446,11 @@
                 <button
                     type="button"
                     class="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-libre-green hover:bg-libre-green/10 dark:hover:bg-libre-green/20 border-t border-gray-100 dark:border-slate-700 transition-colors"
-                    onclick={(e) => { e.stopPropagation(); closeDropdown(); onCreateNew?.(); }}
+                    onclick={(e) => {
+                        e.stopPropagation();
+                        closeDropdown();
+                        onCreateNew?.();
+                    }}
                     data-testid="search-select-create-new"
                 >
                     <Plus size={14} class="shrink-0" />

@@ -464,7 +464,29 @@
       "clone": "Clona",
       "delete": "Elimina",
       "promotePair": "Promuovi coppia",
-      "view": "Visualizza"
+      "view": "Visualizza",
+      "split": "Scollega coppia"
+    },
+    "split": {
+      "confirmTitle": "Scollegare questa coppia?",
+      "confirmMessage": "Le 2 transazioni diventeranno righe indipendenti.",
+      "success": "Coppia scollegata"
+    },
+    "promote": {
+      "mergeTitle": "Promuovi a {type}",
+      "mergeConfirm": "Conferma promozione",
+      "fieldDescription": "Descrizione",
+      "fieldTags": "Tag",
+      "fieldDate": "Data",
+      "fieldCostBasis": "Costo base",
+      "useLeft": "Usa sinistra",
+      "useMerge": "Unisci",
+      "useRight": "Usa destra"
+    },
+    "promoteSuggest": {
+      "banner": "Riga {a} e Riga {b} sono compatibili — promuovi a {type}",
+      "bannerMore": "e altri {n}...",
+      "dbMatch": "Match nel DB: {type} su {broker} ({date})"
     },
     "empty": "Nessuna transazione",
     "ghost": {

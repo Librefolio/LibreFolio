@@ -56,4 +56,3 @@ export function formatDecimalForDisplay(value: string | number | null | undefine
     const out = frac.length > 0 ? `${intPart}.${frac}` : intPart;
     return negative && out !== '0' ? `-${out}` : out;
 }
-

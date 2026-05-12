@@ -62,13 +62,7 @@
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/uuid';
     import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
-    import {
-        buildCreatePayload,
-        buildUpdateDiff,
-        diffDualItem,
-        type TxFields,
-        type TxOriginal,
-    } from '$lib/utils/txPayloadHelpers';
+    import {buildCreatePayload, buildUpdateDiff, diffDualItem, type TxFields, type TxOriginal} from '$lib/utils/txPayloadHelpers';
 
     // =========================================================================
     // Types (mirror schemas/transactions.py — kept local to avoid pulling Zod)
@@ -396,9 +390,9 @@
     async function fetchPartner(row: TXReadItem) {
         if (!row.related_transaction_id) return;
         try {
-            const results = await zodiosApi.query_transactions_api_v1_transactions_get({
+            const results = (await zodiosApi.query_transactions_api_v1_transactions_get({
                 queries: {ids: [row.related_transaction_id], limit: 1},
-            }) as unknown as TXReadItem[];
+            })) as unknown as TXReadItem[];
             if (results.length > 0) {
                 const partner = results[0];
                 partnerRow = partner;
@@ -493,7 +487,7 @@
     /** Detect unsaved changes vs. the snapshot taken at modal-open. */
     function hasUnsavedChanges(): boolean {
         if (isReadonly) return false;
-        return (JSON.stringify(draft) + JSON.stringify(dualTo)) !== initialDraftKey;
+        return JSON.stringify(draft) + JSON.stringify(dualTo) !== initialDraftKey;
     }
 
     function requestClose() {
@@ -623,10 +617,14 @@
     let dualTitle = $derived.by(() => {
         if (!pairLayout) return '';
         switch (pairLayout) {
-            case 'fx': return $t('transactions.form.fxTitle');
-            case 'transfer_asset': return $t('transactions.form.transferAssetTitle');
-            case 'transfer_cash': return $t('transactions.form.transferCashTitle');
-            default: return '';
+            case 'fx':
+                return $t('transactions.form.fxTitle');
+            case 'transfer_asset':
+                return $t('transactions.form.transferAssetTitle');
+            case 'transfer_cash':
+                return $t('transactions.form.transferCashTitle');
+            default:
+                return '';
         }
     });
 
@@ -666,15 +664,13 @@
             if (isReadonly) return {issuesCount: 0};
             if (pairLayout) {
                 // Dual mode: validate both sides
-                const dualPayload = mode === 'edit'
-                    ? {updates: collectDualUpdates()}
-                    : {creates: collectDualCreates()};
+                const dualPayload = mode === 'edit' ? {updates: collectDualUpdates()} : {creates: collectDualCreates()};
                 // Merge bulk context if available
                 let payload: Record<string, unknown>;
                 if (getBulkContext) {
                     const ctx = getBulkContext();
-                    const mergedCreates = [...(ctx.creates || []), ...(dualPayload.creates || [] as Record<string, unknown>[])];
-                    const mergedUpdates = [...(ctx.updates || []), ...(dualPayload.updates || [] as Record<string, unknown>[])];
+                    const mergedCreates = [...(ctx.creates || []), ...(dualPayload.creates || ([] as Record<string, unknown>[]))];
+                    const mergedUpdates = [...(ctx.updates || []), ...(dualPayload.updates || ([] as Record<string, unknown>[]))];
                     payload = {};
                     if (mergedCreates.length > 0) payload.creates = mergedCreates;
                     if (mergedUpdates.length > 0) payload.updates = mergedUpdates;
@@ -693,14 +689,16 @@
                 } catch (e) {
                     const extracted = extractValidationIssues(e);
                     if (extracted.length > 0) {
-                        issues = deduplicateIssues(extracted.map((iss) => ({
-                            operation: (mode === 'edit' ? 'update' : 'create') as 'create' | 'update',
-                            index: 0,
-                            error: iss.msg,
-                            code: iss.code,
-                            params: iss.params,
-                            loc: iss.loc,
-                        })));
+                        issues = deduplicateIssues(
+                            extracted.map((iss) => ({
+                                operation: (mode === 'edit' ? 'update' : 'create') as 'create' | 'update',
+                                index: 0,
+                                error: iss.msg,
+                                code: iss.code,
+                                params: iss.params,
+                                loc: iss.loc,
+                            })),
+                        );
                     } else {
                         const msg = extractErrorMessage(e, $t('transactions.form.saveFailed'));
                         issues = [{operation: mode === 'edit' ? 'update' : 'create', index: 0, error: msg}];
@@ -717,8 +715,8 @@
             let myIndex: number;
             if (getBulkContext) {
                 const ctx = getBulkContext();
-                const mergedCreates = [...(ctx.creates || []), ...(myPayload.creates || [] as Record<string, unknown>[])];
-                const mergedUpdates = [...(ctx.updates || []), ...(myPayload.updates || [] as Record<string, unknown>[])];
+                const mergedCreates = [...(ctx.creates || []), ...(myPayload.creates || ([] as Record<string, unknown>[]))];
+                const mergedUpdates = [...(ctx.updates || []), ...(myPayload.updates || ([] as Record<string, unknown>[]))];
                 payload = {};
                 if (mergedCreates.length > 0) payload.creates = mergedCreates;
                 if (mergedUpdates.length > 0) payload.updates = mergedUpdates;
@@ -734,9 +732,7 @@
                 const res = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post(payload as never)) as {committed?: boolean; issues?: ValidationIssue[]};
                 // Filter: show only issues for my row (or global balance issues with index=-1)
                 const allIssues = res?.issues ?? [];
-                issues = getBulkContext
-                    ? allIssues.filter((i) => (i.operation === myOperation && i.index === myIndex) || i.index === -1)
-                    : allIssues;
+                issues = getBulkContext ? allIssues.filter((i) => (i.operation === myOperation && i.index === myIndex) || i.index === -1) : allIssues;
                 lastValidatedDraftKey = sentKey;
                 issuesDismissed = false;
                 return {issuesCount: issues.length};
@@ -784,7 +780,11 @@
             if (!b) return null;
             if (b.icon_url?.trim()) return b.icon_url;
             if (b.portal_url?.trim()) {
-                try { return new URL(b.portal_url).origin + '/favicon.ico'; } catch { /* skip */ }
+                try {
+                    return new URL(b.portal_url).origin + '/favicon.ico';
+                } catch {
+                    /* skip */
+                }
             }
             return null;
         },
@@ -816,12 +816,8 @@
      *  but TS can't widen via the prop attribute. We cast in script. */
     let brokersForSelect = $derived(brokers as unknown as Array<{id: number; name: string; icon_url?: string | null}>);
     /** W37: Filtered broker lists for dual form — prevent same broker on both sides. */
-    let brokersForFrom = $derived(pairLayout && pairLayout !== 'fx'
-        ? brokersForSelect.filter((b) => b.id !== dualTo.broker_id || !dualTo.broker_id)
-        : brokersForSelect);
-    let brokersForTo = $derived(pairLayout && pairLayout !== 'fx'
-        ? brokersForSelect.filter((b) => b.id !== draft.broker_id || !draft.broker_id)
-        : brokersForSelect);
+    let brokersForFrom = $derived(pairLayout && pairLayout !== 'fx' ? brokersForSelect.filter((b) => b.id !== dualTo.broker_id || !dualTo.broker_id) : brokersForSelect);
+    let brokersForTo = $derived(pairLayout && pairLayout !== 'fx' ? brokersForSelect.filter((b) => b.id !== draft.broker_id || !draft.broker_id) : brokersForSelect);
     let brokerIdValue = $derived<number | null>(draft.broker_id || null);
     let brokerToIdValue = $derived<number | null>(dualTo.broker_id || null);
 
@@ -891,8 +887,14 @@
                 cash: {code: dualTo.cash?.code ?? '', amount: toCashAmt},
                 link_uuid: linkUuid,
             };
-            if (sharedTags) { fromItem.tags = sharedTags; toItem.tags = sharedTags; }
-            if (sharedDesc) { fromItem.description = sharedDesc; toItem.description = sharedDesc; }
+            if (sharedTags) {
+                fromItem.tags = sharedTags;
+                toItem.tags = sharedTags;
+            }
+            if (sharedDesc) {
+                fromItem.description = sharedDesc;
+                toItem.description = sharedDesc;
+            }
             return [fromItem, toItem];
         }
 
@@ -913,10 +915,19 @@
                 quantity: absQty,
                 link_uuid: linkUuid,
             };
-            if (draft.asset_id != null) { fromItem.asset_id = draft.asset_id; toItem.asset_id = draft.asset_id; }
+            if (draft.asset_id != null) {
+                fromItem.asset_id = draft.asset_id;
+                toItem.asset_id = draft.asset_id;
+            }
             if (draft.cost_basis_override.trim()) toItem.cost_basis_override = draft.cost_basis_override.trim();
-            if (sharedTags) { fromItem.tags = sharedTags; toItem.tags = sharedTags; }
-            if (sharedDesc) { fromItem.description = sharedDesc; toItem.description = sharedDesc; }
+            if (sharedTags) {
+                fromItem.tags = sharedTags;
+                toItem.tags = sharedTags;
+            }
+            if (sharedDesc) {
+                fromItem.description = sharedDesc;
+                toItem.description = sharedDesc;
+            }
             return [fromItem, toItem];
         }
 
@@ -940,8 +951,14 @@
                 cash: {code: cashCode, amount: absAmount},
                 link_uuid: linkUuid,
             };
-            if (sharedTags) { fromItem.tags = sharedTags; toItem.tags = sharedTags; }
-            if (sharedDesc) { fromItem.description = sharedDesc; toItem.description = sharedDesc; }
+            if (sharedTags) {
+                fromItem.tags = sharedTags;
+                toItem.tags = sharedTags;
+            }
+            if (sharedDesc) {
+                fromItem.description = sharedDesc;
+                toItem.description = sharedDesc;
+            }
             return [fromItem, toItem];
         }
 
@@ -962,22 +979,22 @@
         let toOrig: TXReadItem = partnerRow;
         if (pairLayout === 'fx') {
             if (Number(initialRow.cash?.amount ?? 0) > 0) {
-                fromOrig = partnerRow; toOrig = initialRow;
+                fromOrig = partnerRow;
+                toOrig = initialRow;
             }
         } else if (pairLayout === 'transfer_asset') {
             if (Number(initialRow.quantity) > 0) {
-                fromOrig = partnerRow; toOrig = initialRow;
+                fromOrig = partnerRow;
+                toOrig = initialRow;
             }
         } else if (pairLayout === 'transfer_cash') {
             if (Number(initialRow.cash?.amount ?? 0) >= 0) {
-                fromOrig = partnerRow; toOrig = initialRow;
+                fromOrig = partnerRow;
+                toOrig = initialRow;
             }
         }
 
-        const allItems = [
-            diffDualItem(items[0], fromOrig as unknown as TxOriginal),
-            diffDualItem(items[1], toOrig as unknown as TxOriginal),
-        ];
+        const allItems = [diffDualItem(items[0], fromOrig as unknown as TxOriginal), diffDualItem(items[1], toOrig as unknown as TxOriginal)];
         // Only include items that have actual changes (more than just `id`)
         return allItems.filter((item) => Object.keys(item).length > 1);
     }
@@ -1032,17 +1049,33 @@
                 if (mode === 'edit' && partnerRow) {
                     const payload = {updates: collectDualUpdates()};
                     const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.form.saveFailed'), toast: false});
-                    if (result.status === 'error') { formError = result.message; return; }
+                    if (result.status === 'error') {
+                        formError = result.message;
+                        return;
+                    }
                     const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{id?: number}>};
-                    if (!resp.committed) { issues = resp.issues ?? []; issuesDismissed = false; commitFailed = true; return; }
+                    if (!resp.committed) {
+                        issues = resp.issues ?? [];
+                        issuesDismissed = false;
+                        commitFailed = true;
+                        return;
+                    }
                     onCommitted?.({transaction_id: resp.results?.[0]?.id ?? null});
                     onClose();
                 } else {
                     const payload = {creates: collectDualCreates()};
                     const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.form.saveFailed'), toast: false});
-                    if (result.status === 'error') { formError = result.message; return; }
+                    if (result.status === 'error') {
+                        formError = result.message;
+                        return;
+                    }
                     const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{id?: number | null}>};
-                    if (!resp.committed) { issues = resp.issues ?? []; issuesDismissed = false; commitFailed = true; return; }
+                    if (!resp.committed) {
+                        issues = resp.issues ?? [];
+                        issuesDismissed = false;
+                        commitFailed = true;
+                        return;
+                    }
                     onCommitted?.({transaction_id: resp.results?.[0]?.id ?? null});
                     onClose();
                 }
@@ -1163,7 +1196,6 @@
         draft = {...draft, cost_basis_override: (e.currentTarget as HTMLInputElement).value};
     }
 
-
     // =========================================================================
     // Quantity / cash sign hints
     // =========================================================================
@@ -1173,21 +1205,30 @@
     /** Label suffix for a sign rule: (+), (−), (≠0), or empty. */
     function signLabel(sign: import('$lib/stores/transactionTypeStore').SignRule): string {
         switch (sign) {
-            case 'positive': return '(+)';
-            case 'negative': return '(−)';
-            case 'nonzero': return '(≠0)';
-            default: return '';
+            case 'positive':
+                return '(+)';
+            case 'negative':
+                return '(−)';
+            case 'nonzero':
+                return '(≠0)';
+            default:
+                return '';
         }
     }
 
     /** Hint text below the field explaining the sign constraint. */
     function signHintText(sign: import('$lib/stores/transactionTypeStore').SignRule): string {
         switch (sign) {
-            case 'positive': return $t('transactions.form.hintSignPositive');
-            case 'negative': return $t('transactions.form.hintSignNegative');
-            case 'zero': return $t('transactions.form.hintSignZero');
-            case 'nonzero': return $t('transactions.form.hintSignNonzero');
-            default: return '';
+            case 'positive':
+                return $t('transactions.form.hintSignPositive');
+            case 'negative':
+                return $t('transactions.form.hintSignNegative');
+            case 'zero':
+                return $t('transactions.form.hintSignZero');
+            case 'nonzero':
+                return $t('transactions.form.hintSignNonzero');
+            default:
+                return '';
         }
     }
 
@@ -1235,7 +1276,6 @@
     // Bugfix-4 §U16: validate chip removed in favor of the green/warning
     // banners (single source of truth). The footer now shows only an inline
     // "Validating…" indicator while a request is in flight (see template).
-
 </script>
 
 <ModalBase {open} maxWidth="3xl" onRequestClose={requestClose} testId="tx-form-modal" allowOverflow={true} {zIndex}>
@@ -1363,7 +1403,15 @@
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
                             {#if typeImmutable}
                                 <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-type-readonly">
-                                    <img src={getTransactionTypeIconUrl(draft.type)} alt="" class="w-6 h-6 object-contain shrink-0" onerror={(e) => { const el = e.currentTarget; if (el instanceof HTMLImageElement) el.style.display = 'none'; }} />
+                                    <img
+                                        src={getTransactionTypeIconUrl(draft.type)}
+                                        alt=""
+                                        class="w-6 h-6 object-contain shrink-0"
+                                        onerror={(e) => {
+                                            const el = e.currentTarget;
+                                            if (el instanceof HTMLImageElement) el.style.display = 'none';
+                                        }}
+                                    />
                                     <span class="font-medium">{dualTitle}</span>
                                 </div>
                             {:else}
@@ -1392,7 +1440,7 @@
                     {#if pairLayout === 'transfer_asset'}
                         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')} *</span>
-                            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly ? undefined : ($t('assets.create') || 'New asset')} onCreateNew={isReadonly ? undefined : (() => (createAssetOpen = true))} />
+                            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly ? undefined : $t('assets.create') || 'New asset'} onCreateNew={isReadonly ? undefined : () => (createAssetOpen = true)} />
                         </div>
                         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">
@@ -1453,10 +1501,24 @@
                         </div>
 
                         <!-- Arrow (clickable to swap Da↔A) -->
-                        <button type="button" class="hidden sm:flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-libre-green self-center p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" onclick={swapDualSides} title={$t('transactions.form.swapSides') || 'Swap sides'} data-testid="tx-form-dual-swap" disabled={isReadonly}>
+                        <button
+                            type="button"
+                            class="hidden sm:flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-libre-green self-center p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                            onclick={swapDualSides}
+                            title={$t('transactions.form.swapSides') || 'Swap sides'}
+                            data-testid="tx-form-dual-swap"
+                            disabled={isReadonly}
+                        >
                             <ArrowRight size={20} />
                         </button>
-                        <button type="button" class="flex sm:hidden items-center justify-center text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-libre-green p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" onclick={swapDualSides} title={$t('transactions.form.swapSides') || 'Swap sides'} data-testid="tx-form-dual-swap-mobile" disabled={isReadonly}>
+                        <button
+                            type="button"
+                            class="flex sm:hidden items-center justify-center text-gray-400 dark:text-gray-500 hover:text-libre-green dark:hover:text-libre-green p-1 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                            onclick={swapDualSides}
+                            title={$t('transactions.form.swapSides') || 'Swap sides'}
+                            data-testid="tx-form-dual-swap-mobile"
+                            disabled={isReadonly}
+                        >
                             <ArrowDown size={20} />
                         </button>
 
@@ -1467,14 +1529,21 @@
                             {#if inaccessiblePartnerBrokerId != null || (isReadonly && !partnerRow && dualTo.broker_id > 0 && getBrokerRole(dualTo.broker_id) == null)}
                                 <!-- partner inaccessible — hide date -->
                             {:else}
-                            <div class="flex flex-col gap-1 mb-2">
-                                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
-                                {#if isReadonly}
-                                    <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{dualTo.date || '—'}</div>
-                                {:else}
-                                    <SingleDatePicker bind:value={dualTo.date} label="" inputStyle={true} onchange={(d) => { dualTo = {...dualTo, date: d}; }} />
-                                {/if}
-                            </div>
+                                <div class="flex flex-col gap-1 mb-2">
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
+                                    {#if isReadonly}
+                                        <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{dualTo.date || '—'}</div>
+                                    {:else}
+                                        <SingleDatePicker
+                                            bind:value={dualTo.date}
+                                            label=""
+                                            inputStyle={true}
+                                            onchange={(d) => {
+                                                dualTo = {...dualTo, date: d};
+                                            }}
+                                        />
+                                    {/if}
+                                </div>
                             {/if}
                             {#if pairLayout === 'fx'}
                                 <CompactCashCell value={dualTo.cash} onChange={setCashTo} signHint="positive" disabled={isReadonly} testid="tx-form-cash-to" defaultCode="USD" />
@@ -1501,7 +1570,12 @@
                                         <!-- Bug10/13-fix: in view mode show static broker info -->
                                         {@const toInfo = getBrokerInfo(dualTo.broker_id)}
                                         {@const toRole = toInfo ? getBrokerRole(dualTo.broker_id) : null}
-                                        <div class="flex {toRole == null && toInfo ? 'flex-col gap-1.5' : 'items-center gap-2'} px-3 py-2 {toRole == null && toInfo ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400' : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200'} border rounded-lg text-sm" data-testid="tx-form-broker-to-readonly">
+                                        <div
+                                            class="flex {toRole == null && toInfo ? 'flex-col gap-1.5' : 'items-center gap-2'} px-3 py-2 {toRole == null && toInfo
+                                                ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400'
+                                                : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200'} border rounded-lg text-sm"
+                                            data-testid="tx-form-broker-to-readonly"
+                                        >
                                             {#if toInfo && toRole != null}
                                                 <!-- Accessible broker (OWNER/EDITOR/VIEWER) -->
                                                 {@const RoleIcon = getRoleIcon(toRole)}
@@ -1559,9 +1633,9 @@
                     {/if}
                 </fieldset>
 
-            <!-- ============================================================= -->
-            <!-- STANDARD SINGLE FORM (unchanged) -->
-            <!-- ============================================================= -->
+                <!-- ============================================================= -->
+                <!-- STANDARD SINGLE FORM (unchanged) -->
+                <!-- ============================================================= -->
             {:else}
                 <!-- Required section -->
                 <fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required">
@@ -1594,7 +1668,15 @@
                                      enlarged (w-6 h-6) so it stays legible
                                      alongside the other selectors. -->
                                 <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-type-readonly">
-                                    <img src={getTransactionTypeIconUrl(draft.type)} alt="" class="w-6 h-6 object-contain shrink-0" onerror={(e) => { const el = e.currentTarget; if (el instanceof HTMLImageElement) el.style.display = 'none'; }} />
+                                    <img
+                                        src={getTransactionTypeIconUrl(draft.type)}
+                                        alt=""
+                                        class="w-6 h-6 object-contain shrink-0"
+                                        onerror={(e) => {
+                                            const el = e.currentTarget;
+                                            if (el instanceof HTMLImageElement) el.style.display = 'none';
+                                        }}
+                                    />
                                     <span class="font-medium">{$t(`transactions.types.${draft.type}`) || draft.type}</span>
                                 </div>
                             {:else}
@@ -1611,7 +1693,8 @@
                             <!-- Both visible: 2-col layout -->
                             <div class="flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
                                 <span class="text-xs text-gray-500 dark:text-gray-400">
-                                    {$t('transactions.table.quantity')}{#if qtyLabel} <span class="text-amber-500">{qtyLabel}</span>{/if}
+                                    {$t('transactions.table.quantity')}{#if qtyLabel}
+                                        <span class="text-amber-500">{qtyLabel}</span>{/if}
                                 </span>
                                 <input
                                     type="number"
@@ -1633,9 +1716,18 @@
                             </div>
                             <div class="flex flex-col gap-1" data-testid="tx-form-cash-wrap">
                                 <span class="text-xs text-gray-500 dark:text-gray-400">
-                                    {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel} <span class="text-amber-500">{cashLabel}</span>{/if}
+                                    {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel}
+                                        <span class="text-amber-500">{cashLabel}</span>{/if}
                                 </span>
-                                <CompactCashCell value={draft.cash} onChange={setCash} signHint={rule.cashSign} disabled={isReadonly} testid="tx-form-cash" defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'} originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined} />
+                                <CompactCashCell
+                                    value={draft.cash}
+                                    onChange={setCash}
+                                    signHint={rule.cashSign}
+                                    disabled={isReadonly}
+                                    testid="tx-form-cash"
+                                    defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'}
+                                    originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined}
+                                />
                                 {#if cashHint}
                                     <span class="text-[10px] text-gray-400">{cashHint}</span>
                                 {/if}
@@ -1644,7 +1736,8 @@
                             <!-- Only quantity visible (cash forbidden) → full width -->
                             <div class="flex flex-col gap-1 col-span-2" data-testid="tx-form-quantity-wrap">
                                 <span class="text-xs text-gray-500 dark:text-gray-400">
-                                    {$t('transactions.table.quantity')}{#if qtyLabel} <span class="text-amber-500">{qtyLabel}</span>{/if}
+                                    {$t('transactions.table.quantity')}{#if qtyLabel}
+                                        <span class="text-amber-500">{qtyLabel}</span>{/if}
                                 </span>
                                 <input
                                     type="number"
@@ -1668,10 +1761,19 @@
                             <!-- Only cash visible (quantity forbidden) → full width -->
                             <div class="flex flex-col gap-1 col-span-2" data-testid="tx-form-cash-wrap">
                                 <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                                    {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel} <span class="text-amber-500">{cashLabel}</span>{/if}
+                                    {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel}
+                                        <span class="text-amber-500">{cashLabel}</span>{/if}
                                     <span class="text-[10px] text-gray-400 italic" data-testid="tx-form-quantity-locked">· {$t('transactions.form.hintSignZero')}</span>
                                 </span>
-                                <CompactCashCell value={draft.cash} onChange={setCash} signHint={rule.cashSign} disabled={isReadonly} testid="tx-form-cash" defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'} originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined} />
+                                <CompactCashCell
+                                    value={draft.cash}
+                                    onChange={setCash}
+                                    signHint={rule.cashSign}
+                                    disabled={isReadonly}
+                                    testid="tx-form-cash"
+                                    defaultCode={(draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR'}
+                                    originalCurrency={draft.asset_id != null ? getAssetInfo(draft.asset_id)?.currency : undefined}
+                                />
                                 {#if cashHint}
                                     <span class="text-[10px] text-gray-400">{cashHint}</span>
                                 {/if}
@@ -1683,8 +1785,11 @@
                     <!-- Asset (full width) -->
                     {#if rule.assetField !== 'forbidden'}
                         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}{rule.assetField === 'required' ? ' *' : ''}{#if rule.assetField === 'optional'} <span class="text-gray-400 italic">({$t('common.optional')})</span>{/if}</span>
-                            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly ? undefined : ($t('assets.create') || 'New asset')} onCreateNew={isReadonly ? undefined : (() => (createAssetOpen = true))} />
+                            <span class="text-xs text-gray-500 dark:text-gray-400"
+                                >{$t('transactions.table.asset')}{rule.assetField === 'required' ? ' *' : ''}{#if rule.assetField === 'optional'}
+                                    <span class="text-gray-400 italic">({$t('common.optional')})</span>{/if}</span
+                            >
+                            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly ? undefined : $t('assets.create') || 'New asset'} onCreateNew={isReadonly ? undefined : () => (createAssetOpen = true)} />
                         </div>
                     {/if}
 
@@ -1716,17 +1821,28 @@
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.tags')}</span>
                             <TagInput
                                 value={draft.tags}
-                                availableTags={availableTags}
+                                {availableTags}
                                 placeholder={$t('transactions.form.tagsPlaceholder')}
                                 disabled={isReadonly}
-                                onchange={(v) => { draft = {...draft, tags: v}; }}
+                                onchange={(v) => {
+                                    draft = {...draft, tags: v};
+                                }}
                             />
                         </div>
 
                         <!-- Description -->
                         <label class="flex flex-col gap-1">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.description')}</span>
-                            <textarea autocomplete="off" class="px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg resize-y min-h-[60px] disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30" rows="2" bind:value={draft.description} disabled={isReadonly} oninput={onDescriptionInput} data-testid="tx-form-description" maxlength="500"></textarea>
+                            <textarea
+                                autocomplete="off"
+                                class="px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg resize-y min-h-[60px] disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
+                                rows="2"
+                                bind:value={draft.description}
+                                disabled={isReadonly}
+                                oninput={onDescriptionInput}
+                                data-testid="tx-form-description"
+                                maxlength="500"
+                            ></textarea>
                         </label>
                     </div>
                 </details>
@@ -1741,7 +1857,17 @@
                         {#if canShowAssetEvent}
                             <div class="flex items-center gap-2">
                                 <span class="text-xs text-gray-500 dark:text-gray-400 w-32 shrink-0">{$t('transactions.form.assetEvent')}</span>
-                                <input type="number" autocomplete="off" name="event-{autocompleteNonce}" class="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg disabled:opacity-60" placeholder="event id" value={draft.asset_event_id ?? ''} disabled={isReadonly} oninput={onAssetEventInput} data-testid="tx-form-asset-event" />
+                                <input
+                                    type="number"
+                                    autocomplete="off"
+                                    name="event-{autocompleteNonce}"
+                                    class="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg disabled:opacity-60"
+                                    placeholder="event id"
+                                    value={draft.asset_event_id ?? ''}
+                                    disabled={isReadonly}
+                                    oninput={onAssetEventInput}
+                                    data-testid="tx-form-asset-event"
+                                />
                                 {#if draft.asset_event_id != null && !isReadonly}
                                     <button type="button" class="text-xs text-gray-500 hover:text-red-500" onclick={unlinkEvent} data-testid="tx-form-asset-event-unlink">{$t('transactions.form.unlink')}</button>
                                 {/if}
@@ -1752,7 +1878,19 @@
                         {#if showCostBasisField}
                             <label class="flex items-center gap-2">
                                 <span class="text-xs text-gray-500 dark:text-gray-400 w-32 shrink-0">{$t('transactions.form.costBasis')}</span>
-                                <input type="number" step="any" inputmode="decimal" autocomplete="off" name="cb-{autocompleteNonce}" class="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg disabled:opacity-60" placeholder="auto" value={draft.cost_basis_override} disabled={isReadonly} oninput={onCostBasisInput} data-testid="tx-form-cost-basis" />
+                                <input
+                                    type="number"
+                                    step="any"
+                                    inputmode="decimal"
+                                    autocomplete="off"
+                                    name="cb-{autocompleteNonce}"
+                                    class="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg disabled:opacity-60"
+                                    placeholder="auto"
+                                    value={draft.cost_basis_override}
+                                    disabled={isReadonly}
+                                    oninput={onCostBasisInput}
+                                    data-testid="tx-form-cost-basis"
+                                />
                             </label>
                         {/if}
 
@@ -1802,14 +1940,28 @@
                     <span class="text-[11px] text-gray-500 dark:text-gray-400">{$t('transactions.validate.validating')}</span>
                 {:else if isFreshlyValid}
                     <span class="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1" data-testid="tx-form-valid-inline">
-                        <Check size={14} /> {$t('transactions.validate.ok')}
+                        <Check size={14} />
+                        {$t('transactions.validate.ok')}
                     </span>
                 {/if}
             </div>
             <div class="flex items-center gap-2">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 inline-flex items-center gap-1.5" onclick={requestClose} data-testid="tx-form-cancel" title={isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}><X size={15} /> <span class="hidden sm:inline">{isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}</span></button>
+                <button
+                    type="button"
+                    class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 inline-flex items-center gap-1.5"
+                    onclick={requestClose}
+                    data-testid="tx-form-cancel"
+                    title={isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}><X size={15} /> <span class="hidden sm:inline">{isReadonly ? $t('common.close') || 'Close' : $t('common.cancel')}</span></button
+                >
                 {#if !isReadonly}
-                    <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5" disabled={committing || loadingPartner || !!dualValidationError || (!commitOnSave && !isFormComplete)} onclick={commit} data-testid="tx-form-save" title={committing ? ($t('common.saving')) : (!commitOnSave ? ($t('transactions.form.apply')) : ($t('common.save')))}>
+                    <button
+                        type="button"
+                        class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5"
+                        disabled={committing || loadingPartner || !!dualValidationError || (!commitOnSave && !isFormComplete)}
+                        onclick={commit}
+                        data-testid="tx-form-save"
+                        title={committing ? $t('common.saving') : !commitOnSave ? $t('transactions.form.apply') : $t('common.save')}
+                    >
                         {#if committing}
                             <span class="hidden sm:inline">{$t('common.saving')}</span>
                         {:else if !commitOnSave}
@@ -1857,4 +2009,3 @@
         appearance: textfield;
     }
 </style>
-

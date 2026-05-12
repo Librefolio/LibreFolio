@@ -22,7 +22,7 @@
 <script lang="ts">
     import {_ as t, locale} from '$lib/i18n';
     import {goto} from '$app/navigation';
-    import {Eye, Pencil, Copy, Trash2} from 'lucide-svelte';
+    import {Eye, Pencil, Copy, Trash2, Unlink} from 'lucide-svelte';
 
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTablePagination from '$lib/components/table/DataTablePagination.svelte';
@@ -87,6 +87,7 @@
         onCloneRow?: (row: TXReadItem) => void;
         onDeleteRow?: (row: TXReadItem) => void;
         onViewRow?: (row: TXReadItem) => void;
+        onSplitRow?: (row: TXReadItem) => void;
         onPageChange?: (page: number) => void;
         onPageSizeChange?: (pageSize: number) => void;
         /** Bidirectional URL filter sync. When provided, header column filters
@@ -106,7 +107,30 @@
         hideActions?: boolean;
     }
 
-    let {mainRows = [], partnerRows = [], brokers = [], eventTooltipMap = new Map(), currentPage = 1, pageSize = 50, onSelectionChange, onLinkedPairClick, onEditRow, onCloneRow, onDeleteRow, onViewRow, onPageChange, onPageSizeChange, onFiltersChange, initialFilters, disabledIds, disabledRowTooltipFn, onRowDoubleClickOverride, enableTouchSelection = false, hideActions = false}: Props = $props();
+    let {
+        mainRows = [],
+        partnerRows = [],
+        brokers = [],
+        eventTooltipMap = new Map(),
+        currentPage = 1,
+        pageSize = 50,
+        onSelectionChange,
+        onLinkedPairClick,
+        onEditRow,
+        onCloneRow,
+        onDeleteRow,
+        onViewRow,
+        onSplitRow,
+        onPageChange,
+        onPageSizeChange,
+        onFiltersChange,
+        initialFilters,
+        disabledIds,
+        disabledRowTooltipFn,
+        onRowDoubleClickOverride,
+        enableTouchSelection = false,
+        hideActions = false,
+    }: Props = $props();
 
     /** Exposed DataTable ref for ColumnVisibilityToggle / external selection control. */
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
@@ -254,19 +278,26 @@
                     const giver = rIsGiverFlag ? r : partner;
                     const receiver = rIsGiverFlag ? partner : r;
                     out.push({
-                        tx: giver, isGhost: false, isReceiver: false,
-                        pairAnchorId: giver.related_transaction_id ?? null, sortIndex: idx,
+                        tx: giver,
+                        isGhost: false,
+                        isReceiver: false,
+                        pairAnchorId: giver.related_transaction_id ?? null,
+                        sortIndex: idx,
                     });
                     out.push({
-                        tx: receiver, isGhost: false, isReceiver: true,
-                        pairAnchorId: receiver.related_transaction_id ?? null, sortIndex: idx + 0.5,
+                        tx: receiver,
+                        isGhost: false,
+                        isReceiver: true,
+                        pairAnchorId: receiver.related_transaction_id ?? null,
+                        sortIndex: idx + 0.5,
                     });
                     processed.add(giver.id);
                     processed.add(receiver.id);
                     idx += 1;
                 } else {
                     out.push({
-                        tx: r, isGhost: false,
+                        tx: r,
+                        isGhost: false,
                         isReceiver: hasPartner ? !isGiver(r) : false,
                         pairAnchorId: hasPartner ? (partnerId ?? null) : null,
                         sortIndex: idx,
@@ -479,9 +510,7 @@
         const roleSvg = getRoleSvgHtml(role);
         // Resolve icon via the full fallback chain (icon_url → portal_url → plugin)
         const iconUrl = getBrokerIconUrlById(brokerId, brokers);
-        const iconTag = iconUrl
-            ? `<img src="${escapeHtml(iconUrl)}" alt="" width="16" height="16" style="display:inline-block;vertical-align:middle;margin-right:3px;border-radius:2px" onerror="this.style.display='none'" />`
-            : '';
+        const iconTag = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" width="16" height="16" style="display:inline-block;vertical-align:middle;margin-right:3px;border-radius:2px" onerror="this.style.display='none'" />` : '';
         return `${iconTag}<strong>${name}</strong> ${roleSvg}`;
     }
 
@@ -715,7 +744,10 @@
                 const name = escapeHtml(info?.display_name ?? `#${d.tx.asset_id}`);
                 const iconSrc = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
                 const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" width="20" height="20" loading="lazy" class="inline-block mr-1 align-middle" onerror="this.style.display='none'" />` : '';
-                return {type: 'html', html: `<span role="link" tabindex="0" data-asset-navigate="${d.tx.asset_id}" class="inline-flex items-center gap-1 cursor-pointer group" data-testid="tx-asset-link-${d.tx.asset_id}">${iconHtml}<span>${name}</span><span class="opacity-0 group-hover:opacity-60 transition-opacity text-gray-400 dark:text-gray-500 text-[10px] ml-0.5">↗</span></span>`};
+                return {
+                    type: 'html',
+                    html: `<span role="link" tabindex="0" data-asset-navigate="${d.tx.asset_id}" class="inline-flex items-center gap-1 cursor-pointer group" data-testid="tx-asset-link-${d.tx.asset_id}">${iconHtml}<span>${name}</span><span class="opacity-0 group-hover:opacity-60 transition-opacity text-gray-400 dark:text-gray-500 text-[10px] ml-0.5">↗</span></span>`,
+                };
             },
         },
         {
@@ -853,6 +885,13 @@
             },
         },
         {
+            id: 'split',
+            icon: Unlink,
+            label: () => $t('transactions.actions.split') || 'Split pair',
+            onClick: (d) => onSplitRow?.(d.tx),
+            visible: (d) => d.tx.related_transaction_id != null && rowAccessLevel(d) === 'full',
+        },
+        {
             id: 'delete',
             icon: Trash2,
             label: () => $t('transactions.actions.delete') || 'Delete',
@@ -934,7 +973,7 @@
         {getRowClass}
         {getRowStyle}
         {isRowSelectable}
-        disabledRowTooltip={disabledRowTooltip}
+        {disabledRowTooltip}
         {enableTouchSelection}
         onFiltersChange={handleFiltersChangeInternal}
         onSortChange={(s) => (activeSort = s)}
@@ -942,7 +981,7 @@
         {initialFilters}
         onSelectionChange={handleSelectionChange}
         getRowDisplayName={(d) => `#${d.tx.id} ${d.tx.type}`}
-         onRowDoubleClick={(d) => onRowDoubleClickOverride ? onRowDoubleClickOverride(d.tx) : onViewRow?.(d.tx)}
+        onRowDoubleClick={(d) => (onRowDoubleClickOverride ? onRowDoubleClickOverride(d.tx) : onViewRow?.(d.tx))}
     />
 
     {#if isGrouped && externalPaginatorTotal > 0}

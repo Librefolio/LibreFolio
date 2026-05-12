@@ -50,20 +50,7 @@
         onCancel: () => void;
     }
 
-    let {
-        open = $bindable(false),
-        transaction = null,
-        partner = null,
-        partnerInaccessible = false,
-        partnerBrokerName = '',
-        errors = [],
-        errorVariant = 'error',
-        validating = false,
-        validated = false,
-        onConfirm,
-        onValidate,
-        onCancel,
-    }: Props = $props();
+    let {open = $bindable(false), transaction = null, partner = null, partnerInaccessible = false, partnerBrokerName = '', errors = [], errorVariant = 'error', validating = false, validated = false, onConfirm, onValidate, onCancel}: Props = $props();
 
     let brkrs = $derived(getAllBrokers() as BrokerLike[]);
     let isPaired = $derived(transaction?.related_transaction_id != null);
@@ -100,16 +87,8 @@
         onCancel();
     }
 
-    let giver = $derived(
-        transaction && partner
-            ? (Number(transaction.quantity) < 0 ? transaction : partner)
-            : transaction,
-    );
-    let receiver = $derived(
-        transaction && partner
-            ? (Number(transaction.quantity) < 0 ? partner : transaction)
-            : transaction,
-    );
+    let giver = $derived(transaction && partner ? (Number(transaction.quantity) < 0 ? transaction : partner) : transaction);
+    let receiver = $derived(transaction && partner ? (Number(transaction.quantity) < 0 ? partner : transaction) : transaction);
 </script>
 
 <ModalBase {open} maxWidth={layout === 'B' ? 'xl' : 'lg'} onRequestClose={handleClose} testId="tx-delete-modal">
@@ -131,10 +110,8 @@
         {#if errors.length > 0}
             <TransactionResultBanner
                 variant={errorVariant}
-                title={errorVariant === 'error'
-                    ? `⛔ ${$t('transactions.deleteModal.deleteAbortedTitle') || 'Deletion cancelled'}`
-                    : `⚠️ ${$t('transactions.deleteModal.validateWarningTitle') || 'Validation issues'}`}
-                subtitle={errorVariant === 'error' ? ($t('transactions.deleteModal.deleteAbortedDetail') || '') : ''}
+                title={errorVariant === 'error' ? `⛔ ${$t('transactions.deleteModal.deleteAbortedTitle') || 'Deletion cancelled'}` : `⚠️ ${$t('transactions.deleteModal.validateWarningTitle') || 'Validation issues'}`}
+                subtitle={errorVariant === 'error' ? $t('transactions.deleteModal.deleteAbortedDetail') || '' : ''}
                 messages={errors}
                 testId="tx-delete-modal-errors"
             />
@@ -161,12 +138,21 @@
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}</td>
                                 <td class="px-3 py-2 flex items-center gap-2">
                                     {#if aIconUrl(transaction.asset_id)}
-                                        <img src={aIconUrl(transaction.asset_id)} alt="" class="w-5 h-5 object-contain" onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                                        <img
+                                            src={aIconUrl(transaction.asset_id)}
+                                            alt=""
+                                            class="w-5 h-5 object-contain"
+                                            onerror={(e) => {
+                                                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                            }}
+                                        />
                                     {/if}
                                     {aName(transaction.asset_id)}
                                 </td>
                             </tr>
-                            <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</td><td class="px-3 py-2"><BrokerBadge broker={bLike(transaction.broker_id)} brokers={brkrs} showRole role={getBrokerRole(transaction.broker_id)} /></td></tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700"
+                                ><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</td><td class="px-3 py-2"><BrokerBadge broker={bLike(transaction.broker_id)} brokers={brkrs} showRole role={getBrokerRole(transaction.broker_id)} /></td></tr
+                            >
                             {#if transaction.tags?.length}
                                 <tr class="border-b border-gray-100 dark:border-gray-700">
                                     <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.tags')}</td>
@@ -188,7 +174,6 @@
                         </tbody>
                     </table>
                 </div>
-
             {:else if layout === 'B'}
                 <p class="text-sm text-gray-600 dark:text-gray-400">{$t('transactions.deleteModal.pairedIntro') || 'Both transactions in this pair will be deleted.'}</p>
                 {#if giver && receiver}
@@ -203,7 +188,31 @@
                             </thead>
                             <tbody>
                                 <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</td><td class="px-3 py-2">{giver.date}</td><td class="px-3 py-2">{receiver.date}</td></tr>
-                                <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}</td><td class="px-3 py-2"><span class="inline-flex items-center gap-1.5">{#if aIconUrl(giver.asset_id)}<img src={aIconUrl(giver.asset_id)} alt="" class="w-4 h-4 object-contain" onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />{/if}{aName(giver.asset_id)}</span></td><td class="px-3 py-2"><span class="inline-flex items-center gap-1.5">{#if aIconUrl(receiver.asset_id)}<img src={aIconUrl(receiver.asset_id)} alt="" class="w-4 h-4 object-contain" onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />{/if}{aName(receiver.asset_id)}</span></td></tr>
+                                <tr class="border-b border-gray-100 dark:border-gray-700"
+                                    ><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}</td><td class="px-3 py-2"
+                                        ><span class="inline-flex items-center gap-1.5"
+                                            >{#if aIconUrl(giver.asset_id)}<img
+                                                    src={aIconUrl(giver.asset_id)}
+                                                    alt=""
+                                                    class="w-4 h-4 object-contain"
+                                                    onerror={(e) => {
+                                                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                                    }}
+                                                />{/if}{aName(giver.asset_id)}</span
+                                        ></td
+                                    ><td class="px-3 py-2"
+                                        ><span class="inline-flex items-center gap-1.5"
+                                            >{#if aIconUrl(receiver.asset_id)}<img
+                                                    src={aIconUrl(receiver.asset_id)}
+                                                    alt=""
+                                                    class="w-4 h-4 object-contain"
+                                                    onerror={(e) => {
+                                                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                                    }}
+                                                />{/if}{aName(receiver.asset_id)}</span
+                                        ></td
+                                    ></tr
+                                >
                                 <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.quantity')}</td><td class="px-3 py-2">{fQ(giver.quantity)}</td><td class="px-3 py-2">{fQ(receiver.quantity)}</td></tr>
                                 <tr class="border-b border-gray-100 dark:border-gray-700">
                                     <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</td>
@@ -219,7 +228,6 @@
                     <Info size={14} class="mt-0.5 flex-shrink-0" />
                     <span>{$t('transactions.deleteModal.splitHint') || 'To delete only one side, first use Split to unlink the pair.'}</span>
                 </div>
-
             {:else}
                 <p class="text-sm text-gray-600 dark:text-gray-400">{$t('transactions.deleteModal.linkedInfo') || 'This transaction is part of a linked pair.'}</p>
                 <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden" data-testid="tx-delete-blocked-details">
@@ -278,38 +286,54 @@
                     {#if validating}
                         <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.validate.validating') || 'Validating...'}</span>
                     {:else}
-                        <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={onValidate} data-testid="tx-delete-validate-now" title={$t('transactions.validate.now') || 'Validate now'}>
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
+                            onclick={onValidate}
+                            data-testid="tx-delete-validate-now"
+                            title={$t('transactions.validate.now') || 'Validate now'}
+                        >
                             ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now') || 'Validate now'}</span>
                         </button>
                     {/if}
                     {#if validated && errors.length === 0}
                         <span class="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1" data-testid="tx-delete-valid-inline">
-                            <Check size={14} /> {$t('transactions.validate.deleteOk') || 'Removal allowed'}
+                            <Check size={14} />
+                            {$t('transactions.validate.deleteOk') || 'Removal allowed'}
                         </span>
                     {/if}
                 {/if}
             </div>
             <div class="flex gap-3">
-            <button class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition inline-flex items-center gap-1.5" onclick={handleClose} data-testid="tx-delete-modal-cancel" title={layout === 'C' ? ($t('common.close') || 'Close') : ($t('common.cancel') || 'Cancel')}>
-                <X size={15} />
-                {#if layout === 'C'}
-                    <span class="hidden sm:inline">{$t('common.close') || 'Close'}</span>
-                {:else}
-                    <span class="hidden sm:inline">{$t('common.cancel') || 'Cancel'}</span>
-                {/if}
-            </button>
-            {#if layout !== 'C'}
-                <button class="px-4 py-2 text-sm text-white bg-red-600 rounded-lg hover:bg-red-700 transition flex items-center gap-1.5" onclick={onConfirm} data-testid="tx-delete-modal-confirm" title={layout === 'B' ? ($t('transactions.deleteModal.deleteBoth') || 'Delete both') : ($t('common.delete') || 'Delete')}>
-                    <Trash2 size={15} />
-                    {#if layout === 'B'}
-                        <span class="hidden sm:inline">{$t('transactions.deleteModal.deleteBoth') || 'Delete both'}</span>
+                <button
+                    class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition inline-flex items-center gap-1.5"
+                    onclick={handleClose}
+                    data-testid="tx-delete-modal-cancel"
+                    title={layout === 'C' ? $t('common.close') || 'Close' : $t('common.cancel') || 'Cancel'}
+                >
+                    <X size={15} />
+                    {#if layout === 'C'}
+                        <span class="hidden sm:inline">{$t('common.close') || 'Close'}</span>
                     {:else}
-                        <span class="hidden sm:inline">{$t('common.delete') || 'Delete'}</span>
+                        <span class="hidden sm:inline">{$t('common.cancel') || 'Cancel'}</span>
                     {/if}
                 </button>
-            {/if}
+                {#if layout !== 'C'}
+                    <button
+                        class="px-4 py-2 text-sm text-white bg-red-600 rounded-lg hover:bg-red-700 transition flex items-center gap-1.5"
+                        onclick={onConfirm}
+                        data-testid="tx-delete-modal-confirm"
+                        title={layout === 'B' ? $t('transactions.deleteModal.deleteBoth') || 'Delete both' : $t('common.delete') || 'Delete'}
+                    >
+                        <Trash2 size={15} />
+                        {#if layout === 'B'}
+                            <span class="hidden sm:inline">{$t('transactions.deleteModal.deleteBoth') || 'Delete both'}</span>
+                        {:else}
+                            <span class="hidden sm:inline">{$t('common.delete') || 'Delete'}</span>
+                        {/if}
+                    </button>
+                {/if}
             </div>
         </div>
     </div>
 </ModalBase>
-

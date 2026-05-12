@@ -20,7 +20,6 @@
     import CurrencySearchSelect from './select/CurrencySearchSelect.svelte';
     import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
 
-
     interface CashValue {
         amount: string;
         code: string;
@@ -156,7 +155,9 @@
         padding: 0.5rem 0.625rem;
         outline: none;
         color: inherit;
-        transition: border-color 120ms ease, box-shadow 120ms ease;
+        transition:
+            border-color 120ms ease,
+            box-shadow 120ms ease;
         -moz-appearance: textfield;
         appearance: textfield;
     }
@@ -211,8 +212,3 @@
         border: 0;
     }
 </style>
-
-
-
-
-

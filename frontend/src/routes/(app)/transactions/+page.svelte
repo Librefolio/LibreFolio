@@ -4,7 +4,7 @@
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
-    import {Plus, Upload, Pencil, Copy, Trash2, RefreshCw, Link2} from 'lucide-svelte';
+    import {Plus, Upload, Pencil, Copy, Trash2, RefreshCw, Link2, Unlink} from 'lucide-svelte';
 
     import {zodiosApi} from '$lib/api';
     import {ensureTxTypesLoaded} from '$lib/stores/txTypeStore';
@@ -23,6 +23,7 @@
     import TransactionBulkModal from '$lib/components/transactions/TransactionBulkModal.svelte';
     import TransactionDeleteModal from '$lib/components/transactions/TransactionDeleteModal.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
+    import PromoteMergeModal from '$lib/components/transactions/PromoteMergeModal.svelte';
     import {getBrokerInfo, getPairedAccessLevel, canEditBroker, canEditPaired} from '$lib/stores/brokerStore';
     import {getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
     import {toasts} from '$lib/stores/toastStore.svelte';
@@ -38,7 +39,6 @@
     // =========================================================================
     // Types (local, derived from generated.ts shapes)
     // =========================================================================
-
 
     type FilterMap = {
         broker_id?: number;
@@ -228,22 +228,29 @@
             if (k === 'types' && v.type === 'enum') next.types = v.selected.length > 0 ? v.selected : undefined;
             else if (k === 'tags' && v.type === 'multi-enum') next.tags = v.selected.length > 0 ? v.selected : undefined;
             else if (k === 'broker_id' && v.type === 'enum') {
-                if (v.selected.length === 1) { next.broker_id = Number(v.selected[0]); next.broker_ids = undefined; }
-                else if (v.selected.length > 1) { next.broker_id = undefined; next.broker_ids = v.selected.map(Number); }
-            }
-            else if (k === 'asset_id' && v.type === 'enum') {
-                if (v.selected.length === 1) { next.asset_id = Number(v.selected[0]); next.asset_ids = undefined; }
-                else if (v.selected.length > 1) { next.asset_id = undefined; next.asset_ids = v.selected.map(Number); }
-            }
-            else if (k === 'date' && v.type === 'date') {
+                if (v.selected.length === 1) {
+                    next.broker_id = Number(v.selected[0]);
+                    next.broker_ids = undefined;
+                } else if (v.selected.length > 1) {
+                    next.broker_id = undefined;
+                    next.broker_ids = v.selected.map(Number);
+                }
+            } else if (k === 'asset_id' && v.type === 'enum') {
+                if (v.selected.length === 1) {
+                    next.asset_id = Number(v.selected[0]);
+                    next.asset_ids = undefined;
+                } else if (v.selected.length > 1) {
+                    next.asset_id = undefined;
+                    next.asset_ids = v.selected.map(Number);
+                }
+            } else if (k === 'date' && v.type === 'date') {
                 next.date_start = v.from || undefined;
                 next.date_end = v.to || undefined;
             } else if (k === 'cash' && v.type === 'currency-stack') next.cash = v.items.length > 0 ? v.items.map((i) => ({...i})) : undefined;
             else if (k === 'id' && v.type === 'number') {
                 next.id_min = v.min;
                 next.id_max = v.max;
-            }
-            else if (k === 'qty' && v.type === 'number') {
+            } else if (k === 'qty' && v.type === 'number') {
                 next.qty_min = v.min;
                 next.qty_max = v.max;
             }
@@ -434,13 +441,20 @@
     let promoteConfirmOpen = $state(false);
     let promoteTarget = $state<{targetType: string; targetLabel: string; idA: number; idB: number} | null>(null);
     let promoting = $state(false);
+    let promoteMergeOpen = $state(false);
+    let promoteMergeData = $state<{txA: any; txB: any; targetTypeLabel: string} | null>(null);
+
+    // Split state
+    let splitConfirmOpen = $state(false);
+    let splitConfirmTx = $state<TXReadItem | null>(null);
+    let splitting = $state(false);
 
     function handleSelectionChange(rows: TXReadItem[]) {
         selectedRows = rows;
     }
 
     /** Filter out rows on viewer-only brokers. Returns editable + skipped. */
-    function filterEditableRows(rows: TXReadItem[]): { editable: TXReadItem[]; skipped: TXReadItem[] } {
+    function filterEditableRows(rows: TXReadItem[]): {editable: TXReadItem[]; skipped: TXReadItem[]} {
         const editable: TXReadItem[] = [];
         const skipped: TXReadItem[] = [];
         for (const r of rows) {
@@ -530,30 +544,90 @@
 
     function onPromotePair() {
         if (selectedRows.length !== 2 || !promoteMatch) return;
+        const a = selectedRows[0];
+        const b = selectedRows[1];
         promoteTarget = {
             targetType: promoteMatch.targetType,
             targetLabel: promoteMatch.targetLabel,
-            idA: selectedRows[0].id,
-            idB: selectedRows[1].id,
+            idA: a.id,
+            idB: b.id,
         };
-        promoteConfirmOpen = true;
+        // Check if fields diverge → MergeModal, else direct ConfirmModal
+        const descA = a.description ?? '',
+            descB = b.description ?? '';
+        const tagsA = a.tags ?? [],
+            tagsB = b.tags ?? [];
+        const dateA = a.date,
+            dateB = b.date;
+        const cbA = a.cost_basis_override ?? '',
+            cbB = b.cost_basis_override ?? '';
+        const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB) || dateA !== dateB || cbA !== cbB;
+        if (diverges) {
+            promoteMergeData = {
+                txA: {label: `#${a.id}`, description: descA, tags: tagsA, date: dateA, cost_basis_override: cbA},
+                txB: {label: `#${b.id}`, description: descB, tags: tagsB, date: dateB, cost_basis_override: cbB},
+                targetTypeLabel: promoteMatch.targetLabel,
+            };
+            promoteMergeOpen = true;
+        } else {
+            promoteConfirmOpen = true;
+        }
     }
 
     async function confirmPromote() {
         if (!promoteTarget) return;
+        // Direct commit (no merge needed — fields identical)
+        await onPromoteMergeConfirm({});
+    }
+
+    async function onPromoteMergeConfirm(resolved: Record<string, unknown>) {
+        if (!promoteTarget) return;
         promoting = true;
         try {
-            await zodiosApi.promote_pairs_api_v1_transactions_promote_post({
-                items: [{id_a: promoteTarget.idA, id_b: promoteTarget.idB}],
-            } as never);
-            promoteConfirmOpen = false;
-            promoteTarget = null;
-            selectedRows = [];
-            await reload();
+            const payload: Record<string, unknown> = {
+                promotes: [{id_a: promoteTarget.idA, id_b: promoteTarget.idB, ...(Object.keys(resolved).length > 0 ? {resolved_fields: resolved} : {})}],
+            };
+            const resp = (await zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never)) as {committed?: boolean; issues?: unknown[]};
+            if (resp?.committed) {
+                promoteMergeOpen = false;
+                promoteConfirmOpen = false;
+                promoteTarget = null;
+                promoteMergeData = null;
+                selectedRows = [];
+                await reload({soft: true});
+            } else {
+                console.error('[promote] commit failed:', resp?.issues);
+            }
         } catch (e) {
             console.error('[promote]', e);
         } finally {
             promoting = false;
+        }
+    }
+
+    function handleSplitRow(row: TXReadItem) {
+        splitConfirmTx = row;
+        splitConfirmOpen = true;
+    }
+
+    async function confirmSplit() {
+        if (!splitConfirmTx) return;
+        splitting = true;
+        try {
+            const resp = (await zodiosApi.commit_transactions_api_v1_transactions_commit_post({splits: [{id: splitConfirmTx.id}]} as never)) as {committed?: boolean; issues?: unknown[]};
+            if (resp?.committed) {
+                toasts.success($_('transactions.split.success') || 'Pair unlinked successfully');
+                splitConfirmOpen = false;
+                splitConfirmTx = null;
+                selectedRows = [];
+                await reload({soft: true});
+            } else {
+                console.error('[split] commit failed:', resp?.issues);
+            }
+        } catch (e) {
+            console.error('[split]', e);
+        } finally {
+            splitting = false;
         }
     }
 
@@ -594,7 +668,6 @@
             pulseElement(el);
         }
     }
-
 
     function handleEditRow(row: TXReadItem) {
         bulkIntent = {action: 'edit', txIds: [row.id]};
@@ -697,9 +770,7 @@
         const name = info?.name ?? `#${brokerId}`;
         const brkrs = getAllBrokers();
         const iconUrl = getBrokerIconUrlById(brokerId, brkrs as any[]);
-        const iconTag = iconUrl
-            ? `<img src="${iconUrl}" alt="" width="14" height="14" style="display:inline;vertical-align:middle;margin-right:2px;border-radius:2px" onerror="this.style.display='none'">`
-            : '';
+        const iconTag = iconUrl ? `<img src="${iconUrl}" alt="" width="14" height="14" style="display:inline;vertical-align:middle;margin-right:2px;border-radius:2px" onerror="this.style.display='none'">` : '';
         const role = getBrokerRole(brokerId);
         const roleSvg = role ? getRoleSvgHtml(role) : '';
         return `${iconTag}<strong>${name}</strong>${roleSvg ? ' ' + roleSvg : ''}`;
@@ -709,9 +780,7 @@
     function typeHtml(type: string): string {
         const iconUrl = getTransactionTypeIconUrl(type);
         const name = $_(`transactions.types.${type}`) || type;
-        const iconTag = iconUrl
-            ? `<img src="${iconUrl}" alt="" width="14" height="14" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`
-            : '';
+        const iconTag = iconUrl ? `<img src="${iconUrl}" alt="" width="14" height="14" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">` : '';
         return `${iconTag}${name}`;
     }
 
@@ -736,21 +805,21 @@
                     const partnerBrokerLabel = brokerHtml(deleteModalPartner.broker_id);
                     const heading = $_('transactions.deleteModal.toastDeletedPaired') || 'Pair deleted:';
                     toasts.success(
-                        `<div style="display:flex;flex-direction:column;gap:2px">`
-                        + `<span style="font-weight:600">${heading}</span>`
-                        + `<span>${typeLabel} ${assetName}</span>`
-                        + `<span style="font-size:0.8em;opacity:0.85">${brokerLabel} → ${partnerBrokerLabel}</span>`
-                        + `<span style="font-size:0.75em;opacity:0.7">${dateStr}</span>`
-                        + `</div>`,
+                        `<div style="display:flex;flex-direction:column;gap:2px">` +
+                            `<span style="font-weight:600">${heading}</span>` +
+                            `<span>${typeLabel} ${assetName}</span>` +
+                            `<span style="font-size:0.8em;opacity:0.85">${brokerLabel} → ${partnerBrokerLabel}</span>` +
+                            `<span style="font-size:0.75em;opacity:0.7">${dateStr}</span>` +
+                            `</div>`,
                     );
                 } else {
                     const heading = $_('transactions.deleteModal.toastDeletedStandalone') || 'Transaction deleted:';
                     toasts.success(
-                        `<div style="display:flex;flex-direction:column;gap:2px">`
-                        + `<span style="font-weight:600">${heading}</span>`
-                        + `<span>${typeLabel} ${assetName ? assetName + ' ' : ''}${onLabel} ${brokerLabel}</span>`
-                        + `<span style="font-size:0.75em;opacity:0.7">${dateStr}</span>`
-                        + `</div>`,
+                        `<div style="display:flex;flex-direction:column;gap:2px">` +
+                            `<span style="font-weight:600">${heading}</span>` +
+                            `<span>${typeLabel} ${assetName ? assetName + ' ' : ''}${onLabel} ${brokerLabel}</span>` +
+                            `<span style="font-size:0.75em;opacity:0.7">${dateStr}</span>` +
+                            `</div>`,
                     );
                 }
                 deleteModalOpen = false;
@@ -903,6 +972,7 @@
             onCloneRow={handleCloneRow}
             onDeleteRow={handleDeleteRow}
             onViewRow={handleViewRow}
+            onSplitRow={handleSplitRow}
             onPageChange={handlePageChange}
             onPageSizeChange={handlePageSizeChange}
             onFiltersChange={handleColumnFiltersChange}
@@ -910,8 +980,29 @@
     {/if}
 </div>
 
-<TransactionFormModal open={formOpen} mode={formMode} initialRow={formInitial} {availableTags} canEdit={formCanEdit} onClose={() => (formOpen = false)} onCommitted={handleFormCommitted} onSwitchToEdit={() => { formOpen = false; if (formInitial) handleEditRow(formInitial); }} />
-<TransactionBulkModal open={bulkOpen} intent={bulkIntent} {availableTags} onClose={() => { bulkOpen = false; bulkIntent = undefined; }} onCommitted={handleBulkCommitted} />
+<TransactionFormModal
+    open={formOpen}
+    mode={formMode}
+    initialRow={formInitial}
+    {availableTags}
+    canEdit={formCanEdit}
+    onClose={() => (formOpen = false)}
+    onCommitted={handleFormCommitted}
+    onSwitchToEdit={() => {
+        formOpen = false;
+        if (formInitial) handleEditRow(formInitial);
+    }}
+/>
+<TransactionBulkModal
+    open={bulkOpen}
+    intent={bulkIntent}
+    {availableTags}
+    onClose={() => {
+        bulkOpen = false;
+        bulkIntent = undefined;
+    }}
+    onCommitted={handleBulkCommitted}
+/>
 <TransactionDeleteModal
     open={deleteModalOpen}
     transaction={deleteModalTx}
@@ -924,14 +1015,48 @@
     validated={deleteModalValidated}
     onConfirm={confirmDeleteModal}
     onValidate={validateDeleteModal}
-    onCancel={() => { deleteModalOpen = false; deleteModalTx = null; deleteModalPartner = null; deleteModalErrors = []; deleteModalValidated = false; deleteModalErrorVariant = 'error'; }}
+    onCancel={() => {
+        deleteModalOpen = false;
+        deleteModalTx = null;
+        deleteModalPartner = null;
+        deleteModalErrors = [];
+        deleteModalValidated = false;
+        deleteModalErrorVariant = 'error';
+    }}
 />
 <ConfirmModal
     open={promoteConfirmOpen}
     title={`🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`}
     message={promoteTarget ? `${selectedRows[0]?.type ?? ''} + ${selectedRows[1]?.type ?? ''} → ${promoteTarget.targetLabel}` : ''}
-    confirmText={promoting ? ($_('common.saving') || 'Saving...') : (`🔗 ${$_('transactions.actions.promotePair') || 'Link'}`)}
+    confirmText={promoting ? $_('common.saving') || 'Saving...' : `🔗 ${$_('transactions.actions.promotePair') || 'Link'}`}
     cancelText={$_('common.cancel')}
     onConfirm={confirmPromote}
-    onCancel={() => { promoteConfirmOpen = false; promoteTarget = null; }}
+    onCancel={() => {
+        promoteConfirmOpen = false;
+        promoteTarget = null;
+    }}
+/>
+<PromoteMergeModal
+    open={promoteMergeOpen}
+    txA={promoteMergeData?.txA}
+    txB={promoteMergeData?.txB}
+    targetTypeLabel={promoteMergeData?.targetTypeLabel ?? ''}
+    onConfirm={onPromoteMergeConfirm}
+    onCancel={() => {
+        promoteMergeOpen = false;
+        promoteMergeData = null;
+    }}
+/>
+<ConfirmModal
+    open={splitConfirmOpen}
+    title={`✂️ ${$_('transactions.split.confirmTitle') || 'Unlink this pair?'}`}
+    message={$_('transactions.split.confirmMessage') || 'The 2 transactions will become independent rows.'}
+    confirmText={splitting ? $_('common.saving') || 'Saving...' : `✂️ ${$_('transactions.split.confirmTitle') || 'Split'}`}
+    cancelText={$_('common.cancel')}
+    warning
+    onConfirm={confirmSplit}
+    onCancel={() => {
+        splitConfirmOpen = false;
+        splitConfirmTx = null;
+    }}
 />

@@ -68,13 +68,7 @@
     });
 </script>
 
-<div
-    bind:this={menuEl}
-    role="menu"
-    class="context-menu"
-    style="left:{adjustedX}px;top:{adjustedY}px"
-    data-testid="context-menu"
->
+<div bind:this={menuEl} role="menu" class="context-menu" style="left:{adjustedX}px;top:{adjustedY}px" data-testid="context-menu">
     {#each items as item}
         {#if item.type === 'separator'}
             <hr class="context-separator" />
@@ -111,14 +105,18 @@
         background: white;
         border: 1px solid #e2e8f0;
         border-radius: 0.5rem;
-        box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+        box-shadow:
+            0 10px 25px -5px rgb(0 0 0 / 0.1),
+            0 4px 6px -2px rgb(0 0 0 / 0.05);
         padding: 0.25rem 0;
         overflow: hidden;
     }
     :global(.dark) .context-menu {
         background: #1e293b;
         border-color: #334155;
-        box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.4), 0 4px 6px -2px rgb(0 0 0 / 0.2);
+        box-shadow:
+            0 10px 25px -5px rgb(0 0 0 / 0.4),
+            0 4px 6px -2px rgb(0 0 0 / 0.2);
     }
     .context-item {
         display: flex;
@@ -168,4 +166,3 @@
         border-top-color: #334155;
     }
 </style>
-

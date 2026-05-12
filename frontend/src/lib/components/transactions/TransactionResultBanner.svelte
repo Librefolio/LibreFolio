@@ -62,8 +62,6 @@
         {/if}
     </div>
     {#if dismissible && ondismiss}
-        <button type="button" class="shrink-0 p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity" onclick={ondismiss} aria-label="Dismiss">
-            ✕
-        </button>
+        <button type="button" class="shrink-0 p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity" onclick={ondismiss} aria-label="Dismiss"> ✕ </button>
     {/if}
 </div>

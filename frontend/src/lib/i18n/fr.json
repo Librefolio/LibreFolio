@@ -464,7 +464,29 @@
       "clone": "Cloner",
       "delete": "Supprimer",
       "promotePair": "Promouvoir la paire",
-      "view": "Voir"
+      "view": "Voir",
+      "split": "Séparer la paire"
+    },
+    "split": {
+      "confirmTitle": "Dissocier cette paire ?",
+      "confirmMessage": "Les 2 transactions deviendront des lignes indépendantes.",
+      "success": "Paire dissociée"
+    },
+    "promote": {
+      "mergeTitle": "Promouvoir en {type}",
+      "mergeConfirm": "Confirmer la promotion",
+      "fieldDescription": "Description",
+      "fieldTags": "Tags",
+      "fieldDate": "Date",
+      "fieldCostBasis": "Coût de base",
+      "useLeft": "Utiliser gauche",
+      "useMerge": "Fusionner",
+      "useRight": "Utiliser droite"
+    },
+    "promoteSuggest": {
+      "banner": "Ligne {a} et Ligne {b} sont compatibles — promouvoir en {type}",
+      "bannerMore": "et {n} de plus...",
+      "dbMatch": "Correspondance en BDD : {type} sur {broker} ({date})"
     },
     "empty": "Aucune transaction",
     "ghost": {

@@ -1,7 +1,7 @@
 # Plan — Phase 07 · Part 4 · Round 6 · Plan D — Split/Promote Full Stack
 
 **Date**: 2026-05-12
-**Status**: ⏳ PLANNED
+**Status**: 🔄 IN PROGRESS (D1 ✅, D2 ⏳, D3 ⏳)
 **Priority**: P1 (feature completion)
 **Estimated effort**: ~5-6 days
 
@@ -18,23 +18,34 @@ Integrare split/promote nella pipeline batch unificata (validate/commit), aggiun
 
 ## Stato attuale
 
-### Backend (già implementato)
-- `POST /transactions/split` — endpoint immediato, thin (delega a `TransactionService.split_pairs`)
-- `POST /transactions/promote` — endpoint immediato, thin (delega a `TransactionService.promote_pairs`)
-- `POST /transactions/validate` — dry-run batch (creates + updates + deletes)
-- `POST /transactions/commit` — commit batch (creates + updates + deletes)
+### Backend (post-D1 ✅)
+- `POST /transactions/split` — **ELIMINATO** (DD2 di D1: mai usato in produzione)
+- `POST /transactions/promote` — **ELIMINATO** (DD2 di D1: mai usato in produzione)
+- `POST /transactions/validate` — dry-run batch (creates + updates + deletes + **splits** + **promotes**)
+- `POST /transactions/commit` — commit batch (creates + updates + deletes + **splits** + **promotes**)
+- `POST /transactions/promote-suggest` — **NUOVO**: bulk candidate search con tolerance_days
+- `TXMixedBatch`: esteso con `splits: List[dict]` e `promotes: List[dict]`
+- `TXBatchOperation`: tipo centralizzato `Literal["create","update","delete","split","promote"]`
+- `TXSplitBatchItem`: `{id}` — one half of a pair to split
+- `TXPromoteBatchItem`: `{id_a?, id_b?, link_uuid_a?, link_uuid_b?, resolved_fields?}` — supports saved+saved, new+new, saved+new
+- `TXPromoteSuggestInput/Candidate/Response`: promote-suggest I/O
+- `_PromoteCandidate` dataclass: duck-typed constraint validation
+- `_find_promote_rule_match()`, `_resolve_promote_ref()`: pipeline helpers
+- `consumed_link_uuids`: prevents Step 6 from re-processing promotes' link_uuids
 - `SPLIT_TYPE_MAP`: TRANSFER→(ADJUSTMENT,ADJUSTMENT), CASH_TRANSFER→(WITHDRAWAL,DEPOSIT), FX_CONVERSION→(WITHDRAWAL,DEPOSIT)
 - `promote_from` rules in `TX_TYPE_METADATA`: ADJUSTMENT+ADJUSTMENT→TRANSFER, WITHDRAWAL+DEPOSIT(same currency, diff broker)→CASH_TRANSFER, WITHDRAWAL+DEPOSIT(diff currency, same broker)→FX_CONVERSION
+- 18 backend tests: all passing (`./dev.py test api batch-split-promote`)
 
-### Frontend (già implementato)
-- Main Table promote: selection-based (2 rows) → `ConfirmModal` → `POST /promote` → reload
+### Frontend (già implementato, pre-D2)
+- Main Table promote: selection-based (2 rows) → `ConfirmModal` → **vecchio `POST /promote` — ORA ROTTO** → serve migrare a batch `{promotes: [...]}`
 - `findPromoteMatch(typeA, typeB, t)` — client-side promote rule matching
 - BulkModal: `WorkspaceIntent` API, `PendingOp` tagged union, txStore SSoT
 - Split hint banner in BulkModal (passive, info-only)
 
-### Cosa manca
-- Split/promote NON sono nella pipeline batch → non atomici con creates/updates
-- Nessun promote-suggest endpoint
+### Cosa manca (D2 + D3)
+- ~~Split/promote NON sono nella pipeline batch~~ ✅ D1
+- ~~Nessun promote-suggest endpoint~~ ✅ D1
+- Migrare Main Table promote da vecchio `/promote` a batch `{promotes: [...]}`
 - Split come row action non esiste (né Main Table né BulkModal)
 - Promote tra new rows (locale) non supportato
 - Promote tra saved+new (mixed) non supportato
@@ -169,31 +180,16 @@ for orig_idx, item in parsed_promotes:
 
 ---
 
-### A3. Refactor endpoint `/split` e `/promote` → thin wrappers
+### A3. ~~Refactor endpoint `/split` e `/promote` → thin wrappers~~ → ELIMINATI (D1 DD2)
 
-**File**: `backend/app/api/v1/transactions.py`
+> **Deviazione D1**: gli endpoint `/split` e `/promote` non sono mai stati usati in produzione. Invece di mantenerli come thin wrapper, sono stati **completamente eliminati**. Split e promote passano esclusivamente per `/validate` e `/commit` tramite `splits[]` e `promotes[]` di `TXMixedBatch`. Anche i relativi schema orfani sono stati rimossi (`TXSplitItem`, `TXSplitRequest`, `TXSplitResponse`, `TXPromoteItem`, `TXPromoteRequest`, `TXPromoteResponse`).
+>
+> **Impatto D2**: la Main Table promote attualmente usa il vecchio `POST /promote` che non esiste più. D2 deve migrare a `POST /transactions/commit` con `{promotes: [{id_a, id_b, resolved_fields}]}`.
 
-Entrambi gli endpoint diventano wrapper che delegano a `execute_batch`:
-
-```python
-@tx_router.post("/split", response_model=TXSplitResponse)
-async def split_pairs(req: TXSplitRequest, ...):
-    """Split linked pairs (delegates to execute_batch for uniform validation)."""
-    batch = TXMixedBatch(splits=[item.model_dump() for item in req.items])
-    service = TransactionService(session)
-    batch_resp = await service.execute_batch(
-        creates_raw=[], updates_raw=[], deletes=[],
-        splits_raw=batch.splits, promotes_raw=[],
-        user_id=user_id, commit=True,
-    )
-    if not batch_resp.committed:
-        raise HTTPException(422, detail=batch_resp.issues[0].error if batch_resp.issues else "Split failed")
-    await session.commit()
-    # Re-fetch and return TXSplitResponse format (backward compat)
-    ...
-```
-
-Stessa struttura per `/promote`. Nessun breaking change nell'API esterna — stessi input/output.
+**Files eliminati/modificati** (in D1):
+- `backend/app/api/v1/transactions.py` — rimossi endpoint + relativi imports
+- `backend/app/schemas/transactions.py` — rimossi 8 schema orfani
+- `backend/app/services/transaction_service.py` — rimossi `split_pairs()` e `promote_pairs()`
 
 ---
 
@@ -758,8 +754,8 @@ Phase 4: E2E
 
 | Sotto-piano | Steps inclusi | Focus | Stima | File | Status |
 |------------|---------------|-------|-------|------|--------|
-| **D1** — Backend: Batch Pipeline + Suggest | E1, E2, A1, A2, A3, A4, A5, B1, B2, B3 | Schema estesi, pipeline execute_batch con split/promote, eliminazione endpoint /split e /promote (mai usati), endpoint promote-suggest, mock data, tutti i test backend | ~9h | [`PlanD1_BackendBatchSuggest`](./plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md) | ⏳ |
-| **D2** — Frontend: Split/Promote UI + Suggest Banner | C5, C3, C4, C1, C2, C6, C7 | PromoteMergeModal, BulkModal split/promote, Main Table split/promote, suggest banner verde, i18n | ~10h | [`PlanD2_FrontendSplitPromoteUI`](./plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md) | ⏳ |
+| **D1** — Backend: Batch Pipeline + Suggest | E1, E2, A1, A2, A3, A4, A5, B1, B2, B3 | Schema estesi, pipeline execute_batch con split/promote, eliminazione endpoint /split e /promote (mai usati), endpoint promote-suggest, mock data, tutti i test backend | ~9h | [`PlanD1_BackendBatchSuggest`](./plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md) | ✅ |
+| **D2** — Frontend: Split/Promote UI + Suggest Banner | C5, C3, C4, C1, C2, C6, C7 | PromoteMergeModal, BulkModal split/promote, Main Table split/promote, suggest banner verde, i18n | ~12h | [`PlanD2_FrontendSplitPromoteUI`](./plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md) | ⏳ piano creato |
 | **D3** — E2E Tests | D1, D2 | tx-split-promote.spec.ts, runner registration, 10 scenari | ~3h | [`PlanD3_E2ETests`](./plan-phase07-transaction-Part4_Round6_PlanD3_E2ETests.prompt.md) | ⏳ |
 
 ### Ordine di esecuzione
@@ -798,7 +794,7 @@ Il file va salvato come: plan-phase07-transaction-Part4_Round6_PlanD1_BackendBat
 ### Prompt D2 — Frontend: Split/Promote UI + Suggest Banner
 
 ```
-Leggiti il piano padre #file:plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md e il sotto-piano D1 già completato #file:plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md (+ eventuali bugfix D1).
+Leggiti il piano padre #file:plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md e il sotto-piano D1 già completato #file:plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md.
 
 Poi leggiti il contesto dell'architettura frontend consultando i piani precedenti nella cartella #file:RoadmapV4_UI — in particolare i sotto-piani e bugfix di Round 6 (PlanA, PlanB, PlanB1, PlanB23, PlanC, PlanC2, PlanC2Round2, PlanC3) per avere pieno contesto di:
 - Come funziona il PendingOp tagged union nel BulkModal
@@ -807,7 +803,16 @@ Poi leggiti il contesto dell'architettura frontend consultando i piani precedent
 - Come funziona il promote esistente nella Main Table (selection-based)
 - Come funziona il txStore SSoT (txStoreGet, txStoreSetAll, txStoreInvalidate)
 
-Se a seguito delle scelte implementative fatte in D1 (backend), qualcosa nel piano D padre va raffinato per il frontend, segnalalo esplicitamente.
+⚠️ BREAKING CHANGE DA D1:
+- Gli endpoint `POST /transactions/split` e `POST /transactions/promote` sono stati ELIMINATI.
+- Split e promote passano esclusivamente per `POST /transactions/commit` con `{splits: [...], promotes: [...]}`.
+- Schema eliminati: TXSplitItem, TXSplitRequest, TXSplitResponse, TXPromoteItem, TXPromoteRequest, TXPromoteResponse.
+- Nuovo endpoint: `POST /transactions/promote-suggest` (body: List[TXPromoteSuggestInput], query: tolerance_days).
+- Il client TS è già rigenerato (`./dev.py api sync` fatto in D1).
+- La Main Table promote (`confirmPromote()`) attualmente chiamerebbe il vecchio /promote che non esiste più → va migrata a batch `{promotes: [{id_a, id_b, resolved_fields}]}`.
+- La tipizzazione `TXBatchOperation = Literal["create","update","delete","split","promote"]` è centralizzata in transactions.py.
+
+Se a seguito delle scelte implementative fatte in D1 (eliminazione endpoint standalone, `consumed_link_uuids`, `resolved_fields` applicato a entrambi i lati), qualcosa nel piano D padre va raffinato per il frontend, segnalalo esplicitamente.
 
 Crea il sotto-piano D2 che copre gli step: C5, C3, C4, C1, C2, C6, C7.
 
@@ -815,9 +820,9 @@ In sintesi devi pianificare:
 1. PromoteMergeModal (C5) — nuovo componente greenfield, 3-column diff UI (sinistra readonly, centro editabile, destra readonly), pulsanti ◀ ⟷ ▸, per description/tags/date/cost_basis
 2. BulkModal split row action (C3) — saved paired → pendingSplits nel commit, new paired → trasformazione locale
 3. BulkModal promote toolbar (C4) — 2 saved, 2 new (locale), 1 saved + 1 new (mixed)
-4. Main Table split row action (C1) — nuova row action + ConfirmModal + handler
-5. Main Table promote evoluzione (C2) — usare MergeModal se campi divergono, batch commit
-6. Promote suggest green banner (C6) — DB candidates via $effect + local candidates via $derived, banner verde con pulse + click 🔗
+4. Main Table split row action (C1) — nuova row action + ConfirmModal + handler. Usa batch: `{splits: [{id}]}`
+5. Main Table promote evoluzione (C2) — MIGRARE da vecchio /promote a batch `{promotes: [{id_a, id_b, resolved_fields}]}`. Usare MergeModal se campi divergono.
+6. Promote suggest green banner (C6) — DB candidates via $effect + local candidates via $derived, banner verde con pulse + click 🔗. Endpoint: `POST /transactions/promote-suggest`.
 7. i18n (C7)
 
 Il file va salvato come: plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md

@@ -27,7 +27,7 @@
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save} from 'lucide-svelte';
+    import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save, Unlink, Link2} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
@@ -42,6 +42,8 @@
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/brokerStore';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded} from '$lib/stores/transactionTypeStore';
+    import {findPromoteMatch} from '$lib/stores/transactionTypeStore';
+    import PromoteMergeModal from './PromoteMergeModal.svelte';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
     import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
     import {buildCreatePayload, buildUpdateDiff, diffDualItem, type TxFields, type TxOriginal} from '$lib/utils/txPayloadHelpers';
@@ -61,11 +63,7 @@
 
     /** WorkspaceIntent — declarative API for opening the BulkModal.
      *  +page passes only action + txIds; BulkModal resolves data from txStore. */
-    export type WorkspaceIntent =
-        | {action: 'create'}
-        | {action: 'edit'; txIds: number[]}
-        | {action: 'delete'; txIds: number[]}
-        | {action: 'clone'; txIds: number[]};
+    export type WorkspaceIntent = {action: 'create'} | {action: 'edit'; txIds: number[]} | {action: 'delete'; txIds: number[]} | {action: 'clone'; txIds: number[]};
 
     /** Fields displayed & editable in the grid — pure data, no metadata. */
     interface DraftFields {
@@ -93,10 +91,7 @@
 
     /** Pending operation — one per visible row in the BulkModal grid.
      *  Tagged union: 'create' for new rows, 'edit' for existing DB rows. */
-    type PendingOp = (
-        | { op: 'create'; link_uuid: string | null; }
-        | { op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean; }
-    ) & { tempId: string; fields: DraftFields; } & PartnerDisplay;
+    type PendingOp = ({op: 'create'; link_uuid: string | null} | {op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean}) & {tempId: string; fields: DraftFields} & PartnerDisplay;
 
     interface Props {
         open: boolean;
@@ -109,6 +104,13 @@
     let {open, intent, availableTags = [], onClose, onCommitted}: Props = $props();
 
     const AUTO_VALIDATE_THRESHOLD = 50;
+
+    /** Client-side mirror of backend SPLIT_TYPE_MAP. */
+    const SPLIT_TYPE_MAP: Record<string, [string, string]> = {
+        TRANSFER: ['ADJUSTMENT', 'ADJUSTMENT'],
+        CASH_TRANSFER: ['WITHDRAWAL', 'DEPOSIT'],
+        FX_CONVERSION: ['WITHDRAWAL', 'DEPOSIT'],
+    };
 
     // =========================================================================
     // Helpers
@@ -123,9 +125,16 @@
         const brokers = getAllBrokers();
         const defaultBroker = brokers.length === 1 ? brokers[0].id : 0;
         return {
-            broker_id: defaultBroker, asset_id: null, type: 'BUY', date: todayIso(),
-            quantity: '0', cash: null, tags: [], description: '',
-            asset_event_id: null, cost_basis_override: '',
+            broker_id: defaultBroker,
+            asset_id: null,
+            type: 'BUY',
+            date: todayIso(),
+            quantity: '0',
+            cash: null,
+            tags: [],
+            description: '',
+            asset_event_id: null,
+            cost_basis_override: '',
         };
     }
 
@@ -144,18 +153,23 @@
             cash = {code: cash.code, amount: String(Math.abs(Number(cash.amount)))};
         }
         return {
-            broker_id: tx.broker_id, asset_id: tx.asset_id ?? null,
-            type: tx.type as TransactionTypeCode, date: tx.date, quantity: qty, cash,
-            tags: [...(tx.tags ?? [])], description: tx.description ?? '',
-            asset_event_id: tx.asset_event_id ?? null, cost_basis_override: tx.cost_basis_override ?? '',
+            broker_id: tx.broker_id,
+            asset_id: tx.asset_id ?? null,
+            type: tx.type as TransactionTypeCode,
+            date: tx.date,
+            quantity: qty,
+            cash,
+            tags: [...(tx.tags ?? [])],
+            description: tx.description ?? '',
+            asset_event_id: tx.asset_event_id ?? null,
+            cost_basis_override: tx.cost_basis_override ?? '',
         };
     }
 
     /** Create 'edit' PendingOp from DB transaction (reads txStore, zero copies). */
     function editOpFromTx(txId: number, opts?: {markedDelete?: boolean; addedViaPicker?: boolean}): PendingOp {
         const tx = txStoreGet(txId)!;
-        return {op: 'edit', tempId: generateUUID(), txId, fields: fieldsFromTx(tx),
-                markedDelete: opts?.markedDelete ?? false, addedViaPicker: opts?.addedViaPicker};
+        return {op: 'edit', tempId: generateUUID(), txId, fields: fieldsFromTx(tx), markedDelete: opts?.markedDelete ?? false, addedViaPicker: opts?.addedViaPicker};
     }
 
     /** Create 'create' PendingOp by cloning from a TXReadItem. */
@@ -186,6 +200,22 @@
     let lastCommitAt = $state(0);
     const COMMIT_ANTI_BOUNCE_MS = 10000;
     let tableRef = $state<DataTable<PendingOp> | undefined>(undefined);
+    /** Accumulated splits for saved paired TXs (sent in batch.splits). */
+    let pendingSplits = $state<{id: number}[]>([]);
+    /** Accumulated promotes for saved TXs (sent in batch.promotes). */
+    let pendingPromotes = $state<{id_a?: number; id_b?: number; link_uuid_a?: string; link_uuid_b?: string; resolved_fields?: Record<string, unknown>}[]>([]);
+    /** Promote merge modal state. */
+    let promoteMergeOpen = $state(false);
+    let promoteMergeData = $state<{txA: any; txB: any; targetTypeLabel: string; opA: PendingOp; opB: PendingOp} | null>(null);
+
+    // =========================================================================
+    // C6 — Promote Suggest (DB + local candidates)
+    // =========================================================================
+    let suggestFromDB = $state<Map<number, Array<{id: number; broker_id: number; date: string; type: string}>>>(new Map());
+    let suggestTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Last JSON key sent to promote-suggest — avoids redundant calls. */
+    let lastSuggestKey = '';
+
     /** Snapshot of `ops` at modal-open time, used to detect unsaved changes
      *  for the close-confirmation guard (Bugfix-3 §C11). */
     let initialOpsKey = $state('');
@@ -234,8 +264,7 @@
                 }
                 const today = new Date().toISOString().slice(0, 10);
                 // Generate shared link_uuid for paired clones
-                const sharedLinkUuid = resolved.length === 2 && resolved[0].type === resolved[1].type
-                    ? generateUUID() : null;
+                const sharedLinkUuid = resolved.length === 2 && resolved[0].type === resolved[1].type ? generateUUID() : null;
                 const cloned = resolved.map((r) => {
                     const c = {...r, id: 0, date: today, related_transaction_id: null} as TXReadItem;
                     // Bug6-fix: reset quantity when the type requires qty=0 (e.g. INTEREST)
@@ -262,13 +291,23 @@
             formError = null;
             commitFailed = false;
             confirmCloseOpen = false;
+            pendingSplits = [];
+            pendingPromotes = [];
+            promoteMergeOpen = false;
+            promoteMergeData = null;
+            suggestFromDB = new Map();
+            lastSuggestKey = '';
+            if (suggestTimer) {
+                clearTimeout(suggestTimer);
+                suggestTimer = null;
+            }
             // When no initial rows → empty grid; user adds rows via nested FormModal.
             let next: PendingOp[] = [];
             if (rows.length > 0) {
                 if (initSt === 'delete') {
-                    next = rows.filter(r => r.id > 0).map(r => editOpFromTx(r.id, {markedDelete: true}));
+                    next = rows.filter((r) => r.id > 0).map((r) => editOpFromTx(r.id, {markedDelete: true}));
                 } else {
-                    next = rows.map(r => r.id > 0 ? editOpFromTx(r.id) : createOpFromClone(r, (r as any).link_uuid));
+                    next = rows.map((r) => (r.id > 0 ? editOpFromTx(r.id) : createOpFromClone(r, (r as any).link_uuid)));
                 }
             }
 
@@ -417,7 +456,10 @@
     function collapsePairedOps(opArr: PendingOp[]): PendingOp[] {
         const idToIdx = new Map<number, number>();
         opArr.forEach((d, i) => {
-            { const _id = opTxId(d); if (_id != null) idToIdx.set(_id, i); }
+            {
+                const _id = opTxId(d);
+                if (_id != null) idToIdx.set(_id, i);
+            }
         });
         const toRemove = new Set<number>();
         for (let i = 0; i < opArr.length; i++) {
@@ -516,7 +558,7 @@
             op: 'create',
             tempId: generateUUID(),
             fields: {...src.fields, date: todayIso()},
-            link_uuid: (src.op === 'create' && src.link_uuid) ? generateUUID() : null,
+            link_uuid: src.op === 'create' && src.link_uuid ? generateUUID() : null,
             partnerBrokerId: src.partnerBrokerId,
             partnerCash: src.partnerCash,
             partnerDate: src.partnerDate,
@@ -540,6 +582,55 @@
             populatePartnerDisplay(reset);
             return reset;
         });
+    }
+
+    /** Split a paired row in the BulkModal.
+     *  Saved paired → accumulate in pendingSplits for batch commit.
+     *  New paired (link_uuid shared) → local transformation only. */
+    function handleSplitRow(row: PendingOp) {
+        if (row.op === 'edit' && row.partnerId != null) {
+            // Case A: Saved paired → backend split
+            const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
+            if (!splitTypes) return;
+            pendingSplits = [...pendingSplits, {id: (row as any).txId}];
+            const [fromType, toType] = splitTypes;
+            // Determine from/to by sign
+            const cashAmt = Number(row.fields.cash?.amount ?? 0);
+            const qty = Number(row.fields.quantity ?? 0);
+            const isFrom = row.fields.type === 'TRANSFER' ? qty < 0 : cashAmt < 0;
+            row.fields.type = (isFrom ? fromType : toType) as TransactionTypeCode;
+            // Clear partner display
+            row.partnerId = undefined;
+            row.partnerBrokerId = undefined;
+            row.partnerCash = undefined;
+            row.partnerDate = undefined;
+            row.partnerPayload = undefined;
+            ops = [...ops];
+        } else if (row.op === 'create' && row.link_uuid) {
+            // Case B: New paired (link_uuid shared) → local transformation
+            const partner = ops.find((o) => o !== row && o.op === 'create' && (o as any).link_uuid === row.link_uuid);
+            if (!partner) return;
+            const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
+            if (!splitTypes) return;
+            const [fromType, toType] = splitTypes;
+            // Determine from/to by sign
+            const cashAmt = Number(row.fields.cash?.amount ?? 0);
+            const qty = Number(row.fields.quantity ?? 0);
+            const isFrom = row.fields.type === 'TRANSFER' ? qty < 0 : cashAmt < 0;
+            row.fields.type = (isFrom ? fromType : toType) as TransactionTypeCode;
+            partner.fields.type = (isFrom ? toType : fromType) as TransactionTypeCode;
+            (row as any).link_uuid = null;
+            (partner as any).link_uuid = null;
+            // Clear partner display on both
+            for (const o of [row, partner]) {
+                o.partnerId = undefined;
+                o.partnerBrokerId = undefined;
+                o.partnerCash = undefined;
+                o.partnerDate = undefined;
+                o.partnerPayload = undefined;
+            }
+            ops = [...ops];
+        }
     }
 
     // =========================================================================
@@ -702,7 +793,10 @@
         },
     });
 
-    onDestroy(() => scheduler.dispose());
+    onDestroy(() => {
+        scheduler.dispose();
+        if (suggestTimer) clearTimeout(suggestTimer);
+    });
 
     let lastDraftKey = $state('');
     /** Bugfix-4 §U16: track which draft state we last validated, so the UI
@@ -813,7 +907,7 @@
                 // 'original' rows are unchanged — skip
             }
 
-            if (creates.length === 0 && updates.length === 0 && deletes.length === 0) {
+            if (creates.length === 0 && updates.length === 0 && deletes.length === 0 && pendingSplits.length === 0 && pendingPromotes.length === 0) {
                 onClose();
                 return;
             }
@@ -822,6 +916,8 @@
             if (creates.length > 0) payload.creates = creates;
             if (updates.length > 0) payload.updates = updates;
             if (deletes.length > 0) payload.deletes = deletes;
+            if (pendingSplits.length > 0) payload.splits = pendingSplits;
+            if (pendingPromotes.length > 0) payload.promotes = pendingPromotes;
 
             const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.bulk.saveFailed'), toast: false});
             if (result.status === 'error') {
@@ -848,6 +944,8 @@
                 return;
             }
             onCommitted?.(resp);
+            pendingSplits = [];
+            pendingPromotes = [];
             onClose();
         } finally {
             committing = false;
@@ -901,7 +999,6 @@
     function brokerName(brokerId: number): string {
         return brokers.find((b) => b.id === brokerId)?.name ?? '—';
     }
-
 
     /** H1-fix: Asset name with icon for readonly cells. */
     function renderAssetHtml(assetId: number | null | undefined): string {
@@ -1186,6 +1283,21 @@
             onClick: (row: PendingOp) => cloneRow(row.tempId),
         },
         {
+            id: 'split',
+            icon: Unlink,
+            label: () => $t('transactions.actions.split') || 'Split pair',
+            onClick: (row: PendingOp) => handleSplitRow(row),
+            visible: (row: PendingOp) => {
+                // Saved paired → backend split
+                if (row.op === 'edit' && row.partnerId != null) return true;
+                // New paired (link_uuid shared) → local split
+                if (row.op === 'create' && row.link_uuid != null) {
+                    return ops.some((o) => o !== row && o.op === 'create' && (o as any).link_uuid === row.link_uuid);
+                }
+                return false;
+            },
+        },
+        {
             id: 'mark-delete',
             icon: Trash2,
             label: (row: PendingOp) => (deriveStatus(row) === 'delete' ? $t('transactions.bulk.unmarkDelete') || 'Restore' : $t('transactions.bulk.markDelete') || 'Mark for deletion'),
@@ -1242,7 +1354,7 @@
     let deleteCount = $derived(visibleOps.filter((d) => deriveStatus(d) === 'delete').length);
     /** B23: true when at least one paired row is marked for deletion — show split hint. */
     let hasPairedDelete = $derived(visibleOps.some((d) => deriveStatus(d) === 'delete' && d.partnerId != null));
-    let actionCount = $derived(newCount + editedCount + deleteCount);
+    let actionCount = $derived(newCount + editedCount + deleteCount + pendingSplits.length + pendingPromotes.length);
     let commitDisabled = $derived(committing || ops.length === 0 || actionCount === 0);
     let commitLabel = $derived(committing ? $t('common.saving') : $t('transactions.bulk.commitAll'));
 
@@ -1440,6 +1552,272 @@
     /** Rows currently selected in the bulk DataTable (for inline toolbar). */
     let bulkTableSelectedRows = $state<PendingOp[]>([]);
 
+    /** Selection-based promote detection — 2 standalone rows with matching promote rule. */
+    let selectedForPromote = $derived.by(() => {
+        if (bulkTableSelectedRows.length !== 2) return null;
+        const [a, b] = bulkTableSelectedRows;
+        // Both must be standalone (no partnerId, no partnerPayload)
+        if (a.partnerId != null || b.partnerId != null) return null;
+        if (a.partnerPayload != null || b.partnerPayload != null) return null;
+        // Check markedDelete
+        if ((a.op === 'edit' && a.markedDelete) || (b.op === 'edit' && b.markedDelete)) return null;
+        const match = findPromoteMatch(a.fields.type, b.fields.type, $t);
+        if (!match) return null;
+        return {...match, opA: a, opB: b};
+    });
+
+    /** Handle promote of 2 selected rows. */
+    function handlePromoteSelected() {
+        if (!selectedForPromote) return;
+        const {opA, opB, targetLabel} = selectedForPromote;
+        // Check if fields diverge
+        const descA = opA.fields.description,
+            descB = opB.fields.description;
+        const tagsA = opA.fields.tags,
+            tagsB = opB.fields.tags;
+        const dateA = opA.fields.date,
+            dateB = opB.fields.date;
+        const cbA = opA.fields.cost_basis_override,
+            cbB = opB.fields.cost_basis_override;
+        const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB) || dateA !== dateB || cbA !== cbB;
+        if (diverges) {
+            const labelA = opA.op === 'edit' ? `#${(opA as any).txId}` : opA.tempId.slice(0, 6);
+            const labelB = opB.op === 'edit' ? `#${(opB as any).txId}` : opB.tempId.slice(0, 6);
+            promoteMergeData = {
+                txA: {label: labelA, description: descA, tags: tagsA, date: dateA, cost_basis_override: cbA},
+                txB: {label: labelB, description: descB, tags: tagsB, date: dateB, cost_basis_override: cbB},
+                targetTypeLabel: targetLabel,
+                opA,
+                opB,
+            };
+            promoteMergeOpen = true;
+            return;
+        }
+        executePromote(opA, opB, {});
+    }
+
+    /** Execute a promote between two ops. */
+    function executePromote(opA: PendingOp, opB: PendingOp, resolved: Record<string, unknown>) {
+        const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t);
+        if (!match) return;
+        if (opA.op === 'edit' && opB.op === 'edit') {
+            // 2 saved → batch promotes
+            pendingPromotes = [
+                ...pendingPromotes,
+                {
+                    id_a: (opA as any).txId,
+                    id_b: (opB as any).txId,
+                    ...(Object.keys(resolved).length > 0 ? {resolved_fields: resolved} : {}),
+                },
+            ];
+            // Update display: set partner metadata
+            opA.fields.type = match.targetType as TransactionTypeCode;
+            opB.fields.type = match.targetType as TransactionTypeCode;
+            opA.partnerId = (opB as any).txId;
+            opA.partnerBrokerId = opB.fields.broker_id;
+            opA.partnerCash = opB.fields.cash;
+            opA.partnerDate = opB.fields.date;
+        } else if (opA.op === 'create' && opB.op === 'create') {
+            // 2 new → local transformation (assign shared link_uuid)
+            const sharedUuid = generateUUID();
+            (opA as any).link_uuid = sharedUuid;
+            (opB as any).link_uuid = sharedUuid;
+            opA.fields.type = match.targetType as TransactionTypeCode;
+            opB.fields.type = match.targetType as TransactionTypeCode;
+            opA.partnerBrokerId = opB.fields.broker_id;
+            opA.partnerCash = opB.fields.cash;
+            opA.partnerDate = opB.fields.date;
+        } else {
+            // 1 saved + 1 new (mixed)
+            const savedOp = opA.op === 'edit' ? opA : opB;
+            const newOp = opA.op === 'create' ? opA : opB;
+            if (!(newOp as any).link_uuid && newOp.op === 'create') (newOp as any).link_uuid = generateUUID();
+            pendingPromotes = [
+                ...pendingPromotes,
+                {
+                    id_a: (savedOp as any).txId,
+                    link_uuid_b: (newOp as any).link_uuid,
+                    ...(Object.keys(resolved).length > 0 ? {resolved_fields: resolved} : {}),
+                },
+            ];
+            savedOp.fields.type = match.targetType as TransactionTypeCode;
+            newOp.fields.type = match.targetType as TransactionTypeCode;
+            savedOp.partnerBrokerId = newOp.fields.broker_id;
+            savedOp.partnerCash = newOp.fields.cash;
+            savedOp.partnerDate = newOp.fields.date;
+        }
+        ops = [...ops];
+    }
+
+    /** Promote merge modal confirm handler. */
+    function onBulkPromoteMergeConfirm(resolved: Record<string, unknown>) {
+        if (!promoteMergeData) return;
+        executePromote(promoteMergeData.opA, promoteMergeData.opB, resolved);
+        promoteMergeOpen = false;
+        promoteMergeData = null;
+    }
+
+    // =========================================================================
+    // C6 — Promote Suggest: DB candidates ($effect + debounce) + local candidates ($derived)
+    // =========================================================================
+
+    /** Reactive effect: when ops change, debounce-call promote-suggest API for
+     *  standalone edit ops (saved rows without partner). */
+    $effect(() => {
+        if (!open) return;
+        const editStandalone = ops.filter((o) => o.op === 'edit' && !o.partnerId && !(o as any).markedDelete && !o.partnerPayload);
+        if (editStandalone.length === 0) {
+            untrack(() => {
+                suggestFromDB = new Map();
+            });
+            return;
+        }
+        const inputs = editStandalone.map((o) => ({
+            id: (o as any).txId as number,
+            type: o.fields.type,
+            broker_id: o.fields.broker_id,
+            date: o.fields.date,
+            currency: o.fields.cash?.code ?? null,
+            asset_id: o.fields.asset_id,
+        }));
+        const key = JSON.stringify(inputs);
+        untrack(() => {
+            if (key === lastSuggestKey) return;
+            if (suggestTimer) clearTimeout(suggestTimer);
+            suggestTimer = setTimeout(async () => {
+                try {
+                    const resp = await zodiosApi.promote_suggest_api_v1_transactions_promote_suggest_post(inputs as never, {queries: {tolerance_days: 7}});
+                    const raw = (resp as any).results ?? {};
+                    suggestFromDB = new Map(Object.entries(raw).map(([k, v]) => [Number(k), v as Array<{id: number; broker_id: number; date: string; type: string}>]));
+                    lastSuggestKey = key;
+                } catch (e) {
+                    console.warn('[promote-suggest]', e);
+                }
+            }, 500);
+        });
+    });
+
+    /** Local promote suggestions: match new standalone ops against each other. */
+    let localSuggestions = $derived.by(() => {
+        const newStandalone = ops.filter((o) => o.op === 'create' && !(o as any).link_uuid && !o.partnerId && !o.partnerPayload);
+        const results: Array<{tempIdA: string; tempIdB: string; labelA: string; labelB: string; targetLabel: string}> = [];
+        for (let i = 0; i < newStandalone.length; i++) {
+            for (let j = i + 1; j < newStandalone.length; j++) {
+                const match = findPromoteMatch(newStandalone[i].fields.type, newStandalone[j].fields.type, $t);
+                if (match) {
+                    results.push({
+                        tempIdA: newStandalone[i].tempId,
+                        tempIdB: newStandalone[j].tempId,
+                        labelA: `${newStandalone[i].fields.type}`,
+                        labelB: `${newStandalone[j].fields.type}`,
+                        targetLabel: match.targetLabel,
+                    });
+                }
+            }
+        }
+        return results;
+    });
+
+    /** Combined promote suggestions (local new+new + DB edit→candidate). */
+    let allSuggestions = $derived.by(() => {
+        const combined: Array<{tempIdA: string; tempIdB: string; labelA: string; labelB: string; targetLabel: string; isDB?: boolean; dbCandidateId?: number}> = [];
+        for (const s of localSuggestions) combined.push(s);
+        for (const [txId, candidates] of suggestFromDB) {
+            const op = ops.find((o) => o.op === 'edit' && (o as any).txId === txId);
+            if (!op || !candidates.length) continue;
+            const best = candidates[0];
+            const match = findPromoteMatch(op.fields.type, best.type, $t);
+            if (!match) continue;
+            combined.push({
+                tempIdA: op.tempId,
+                tempIdB: `db-${best.id}`,
+                labelA: `#${txId} ${op.fields.type}`,
+                labelB: `DB #${best.id} ${best.type}`,
+                targetLabel: match.targetLabel,
+                isDB: true,
+                dbCandidateId: best.id,
+            });
+        }
+        return combined;
+    });
+
+    /** Scroll to a row in the DataTable by tempId. */
+    function scrollToSuggestRow(tempIdOrDbRef: string) {
+        if (tempIdOrDbRef.startsWith('db-')) return; // DB row not in batch — cannot scroll
+        tableRef?.navigateToRowId(tempIdOrDbRef);
+    }
+
+    /** Trigger promote from a suggestion line (auto-select both ops + invoke handler). */
+    function triggerPromoteFromSuggestion(sug: (typeof allSuggestions)[number]) {
+        if (!sug.isDB) {
+            // Local new+new: find both ops by tempId, select them, then promote
+            const opA = ops.find((o) => o.tempId === sug.tempIdA);
+            const opB = ops.find((o) => o.tempId === sug.tempIdB);
+            if (!opA || !opB) return;
+            // Directly execute promote (no need to simulate DataTable selection)
+            const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t);
+            if (!match) return;
+            // Check divergence
+            const descA = opA.fields.description,
+                descB = opB.fields.description;
+            const tagsA = opA.fields.tags,
+                tagsB = opB.fields.tags;
+            const dateA = opA.fields.date,
+                dateB = opB.fields.date;
+            const cbA = opA.fields.cost_basis_override,
+                cbB = opB.fields.cost_basis_override;
+            const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB) || dateA !== dateB || cbA !== cbB;
+            if (diverges) {
+                promoteMergeData = {
+                    txA: {label: sug.labelA, description: descA, tags: tagsA, date: dateA, cost_basis_override: cbA},
+                    txB: {label: sug.labelB, description: descB, tags: tagsB, date: dateB, cost_basis_override: cbB},
+                    targetTypeLabel: match.targetLabel,
+                    opA,
+                    opB,
+                };
+                promoteMergeOpen = true;
+            } else {
+                executePromote(opA, opB, {});
+            }
+        } else {
+            // DB suggestion: edit → DB candidate
+            const opA = ops.find((o) => o.tempId === sug.tempIdA);
+            if (!opA || !sug.dbCandidateId) return;
+            // Check if DB candidate is already in ops
+            let opB = ops.find((o) => o.op === 'edit' && (o as any).txId === sug.dbCandidateId);
+            if (!opB) {
+                // Add DB candidate to ops via picker
+                const tx = txStoreGet(sug.dbCandidateId);
+                if (!tx) return; // TX not in store — can't proceed
+                opB = editOpFromTx(sug.dbCandidateId, {addedViaPicker: true});
+                ops = [...ops, opB];
+            }
+            const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t);
+            if (!match) return;
+            const descA = opA.fields.description,
+                descB = opB.fields.description;
+            const tagsA = opA.fields.tags,
+                tagsB = opB.fields.tags;
+            const dateA = opA.fields.date,
+                dateB = opB.fields.date;
+            const cbA = opA.fields.cost_basis_override,
+                cbB = opB.fields.cost_basis_override;
+            const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB) || dateA !== dateB || cbA !== cbB;
+            if (diverges) {
+                promoteMergeData = {
+                    txA: {label: sug.labelA, description: descA, tags: tagsA, date: dateA, cost_basis_override: cbA},
+                    txB: {label: sug.labelB, description: descB, tags: tagsB, date: dateB, cost_basis_override: cbB},
+                    targetTypeLabel: match.targetLabel,
+                    opA,
+                    opB,
+                };
+                promoteMergeOpen = true;
+            } else {
+                executePromote(opA, opB, {});
+            }
+        }
+    }
+
     function handleBulkTableSelectionChange(selectedIds: string[]) {
         const idSet = new Set(selectedIds);
         bulkTableSelectedRows = ops.filter((d) => idSet.has(d.tempId));
@@ -1572,6 +1950,23 @@
                     <p data-testid="tx-bulk-split-hint">ℹ️ {$t('transactions.deleteModal.splitHint')}</p>
                 </InfoBanner>
             {/if}
+            {#if allSuggestions.length > 0}
+                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-2 text-xs space-y-0.5" data-testid="promote-suggest-banner">
+                    {#each allSuggestions.slice(0, 5) as sug, idx}
+                        <div class="flex items-center gap-1 flex-wrap" data-testid="promote-suggest-item-{idx}">
+                            <span>💡</span>
+                            <button type="button" class="underline text-green-700 dark:text-green-300" onclick={() => scrollToSuggestRow(sug.tempIdA)}>{sug.labelA}</button>
+                            <span>&amp;</span>
+                            <button type="button" class="underline text-green-700 dark:text-green-300" onclick={() => scrollToSuggestRow(sug.tempIdB)}>{sug.labelB}</button>
+                            <span>→ {sug.targetLabel}</span>
+                            <button type="button" class="text-green-600 font-bold hover:text-green-800 dark:text-green-400 dark:hover:text-green-200" onclick={() => triggerPromoteFromSuggestion(sug)} data-testid="promote-suggest-link-{idx}">🔗</button>
+                        </div>
+                    {/each}
+                    {#if allSuggestions.length > 5}
+                        <span class="text-gray-500 text-[11px]">{$t('transactions.promoteSuggest.bannerMore', {values: {n: allSuggestions.length - 5}})}</span>
+                    {/if}
+                </div>
+            {/if}
         </div>
 
         <!-- Toolbar (Bugfix-2 §U9: action buttons right-aligned, most important first
@@ -1623,6 +2018,17 @@
                     <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-[11px]" onclick={executeBulkDeleteOnSelected} title={$t('transactions.bulk.deleteSelected') || 'Delete selected'}>
                         <Trash2 size={12} /> <span class="hidden sm:inline">{$t('common.delete') || 'Delete'}</span>
                     </button>
+                    {#if selectedForPromote}
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1 px-2 py-1 rounded text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-[11px]"
+                            onclick={handlePromoteSelected}
+                            data-testid="promote-toolbar-confirm"
+                            title={$t('transactions.actions.promotePair')}
+                        >
+                            <Link2 size={12} /> <span class="hidden sm:inline">🔗 {selectedForPromote.targetLabel}</span>
+                        </button>
+                    {/if}
                 </div>
             {/if}
 
@@ -1746,3 +2152,16 @@
 
 <!-- Plan B Step 9: PickerModal for adding existing DB transactions -->
 <TransactionPickerModal open={pickerOpen} excludeIds={pickerExcludeIds} onAdd={handlePickerAdd} onClose={() => (pickerOpen = false)} />
+
+<!-- Plan D2 Step C4: PromoteMergeModal for resolving divergent fields during promote -->
+<PromoteMergeModal
+    open={promoteMergeOpen}
+    txA={promoteMergeData?.txA}
+    txB={promoteMergeData?.txB}
+    targetTypeLabel={promoteMergeData?.targetTypeLabel ?? ''}
+    onConfirm={onBulkPromoteMergeConfirm}
+    onCancel={() => {
+        promoteMergeOpen = false;
+        promoteMergeData = null;
+    }}
+/>

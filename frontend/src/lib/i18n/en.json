@@ -482,7 +482,29 @@
       "clone": "Clone",
       "delete": "Delete",
       "promotePair": "Promote pair",
-      "view": "View"
+      "view": "View",
+      "split": "Split pair"
+    },
+    "split": {
+      "confirmTitle": "Unlink this pair?",
+      "confirmMessage": "The 2 transactions will become independent rows.",
+      "success": "Pair unlinked successfully"
+    },
+    "promote": {
+      "mergeTitle": "Promote to {type}",
+      "mergeConfirm": "Confirm promotion",
+      "fieldDescription": "Description",
+      "fieldTags": "Tags",
+      "fieldDate": "Date",
+      "fieldCostBasis": "Cost basis",
+      "useLeft": "Use left",
+      "useMerge": "Merge",
+      "useRight": "Use right"
+    },
+    "promoteSuggest": {
+      "banner": "Row {a} and Row {b} are compatible — promote to {type}",
+      "bannerMore": "and {n} more...",
+      "dbMatch": "Match found in DB: {type} on {broker} ({date})"
     },
     "types": {
       "BUY": "Buy",

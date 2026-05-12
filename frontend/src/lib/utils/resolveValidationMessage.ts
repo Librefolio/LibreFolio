@@ -132,11 +132,7 @@ function translateFieldName(fieldName: string, t: (key: string, opts?: any) => s
  * @param t      The i18n translation function (`$t` from svelte-i18n)
  * @param ctx    Optional stores for resolving brokerId/assetId into display names
  */
-export function resolveIssueMessage(
-    issue: ResolvableIssue,
-    t: (key: string, opts?: {values?: Record<string, any>}) => string,
-    ctx?: ResolverContext,
-): string {
+export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opts?: {values?: Record<string, any>}) => string, ctx?: ResolverContext): string {
     const code = issue.code;
     if (!code) {
         return issue.error || issue.msg || 'Unknown error';
@@ -160,9 +156,7 @@ export function resolveIssueMessage(
     if (rawParams.brokerId != null && ctx?.brokers) {
         const broker = ctx.brokers.find((b) => b.id === rawParams.brokerId);
         const iconUrl = ctx.getBrokerIconUrl?.(rawParams.brokerId);
-        const brokerIcon = iconUrl
-            ? `<img src="${iconUrl}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`
-            : '';
+        const brokerIcon = iconUrl ? `<img src="${iconUrl}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">` : '';
         enriched.brokerName = broker ? `${brokerIcon}${broker.name}` : `Broker #${rawParams.brokerId}`;
     } else if (rawParams.brokerId != null) {
         enriched.brokerName = `Broker #${rawParams.brokerId}`;
@@ -184,11 +178,7 @@ export function resolveIssueMessage(
 
     // Format balance with currency if both present
     if (rawParams.balance != null && rawParams.currency) {
-        enriched.formattedBalance = formatCurrencyAmountPlain(
-            parseFloat(rawParams.balance),
-            rawParams.currency,
-            {showSign: true, minFraction: 2, maxFraction: 2},
-        );
+        enriched.formattedBalance = formatCurrencyAmountPlain(parseFloat(rawParams.balance), rawParams.currency, {showSign: true, minFraction: 2, maxFraction: 2});
     } else if (rawParams.balance != null) {
         const num = parseFloat(rawParams.balance);
         // Asset balances: no forced decimals (show "5" not "5.00"), emoji 📈/📉 after number
@@ -241,6 +231,3 @@ export function resolveIssueMessage(
     const rawMsg = issue.error || issue.msg || code;
     return fieldLabel ? `${fieldLabel}: ${rawMsg}` : rawMsg;
 }
-
-
-

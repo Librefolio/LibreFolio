@@ -88,5 +88,3 @@ export function getRoleSvgHtml(role: string | null | undefined): string {
     const svg = ROLE_SVG[role ?? ''] ?? ROLE_SVG.LOCKED;
     return `<span class="${color} inline-flex align-middle ml-0.5">${svg}</span>`;
 }
-
-

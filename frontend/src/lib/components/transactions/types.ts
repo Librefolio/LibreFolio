@@ -47,4 +47,3 @@ export interface AssetEvent {
     is_auto: boolean;
     notes?: string | null;
 }
-
