@@ -92,6 +92,15 @@
 | [[decisions/test-runner-package-split]] | Monolithic test_runner.py (4841 lines) → 18-module package with distributed registry pattern | 2026-05-26 | testing, infrastructure, cli, refactoring, test_runner |
 | [[decisions/static-metadata-export]] | Static JSON export of constant metadata at compile-time — deferred to Phase 8+ | 2026-05-26 | backend, frontend, architecture, api-sync, metadata, performance |
 | [[decisions/txstore-single-source-of-truth]] | txStore replaces prop cascade — single Map<id,TXReadItem> eliminates 5 bug categories; -30% LOC | 2026-05-08 | frontend, transactions, stores, architecture, refactor |
+| [[decisions/pendingop-tagged-union]] | PendingOp tagged union (create\|edit) replaces DraftRow — zero-copy originals, derived status, type-safe branching | 2026-05-11 | frontend, transactions, bulkModal, architecture, type-safety |
+| [[decisions/bulkmodal-mode-removal]] | BulkModal mode-less: no mode prop, each row infers create/edit from tx.id > 0 | 2026-05-07 | frontend, transactions, bulkModal, architecture |
+| [[decisions/cash-transfer-split-promote]] | CASH_TRANSFER first-class enum + split/promote immediate endpoints | 2026-04-30 | frontend, backend, transactions, transfer, enum |
+| [[decisions/context-menu-all-tables]] | ContextMenu default ON on all DataTables (right-click + mobile long-press) | 2026-05-05 | frontend, datatable, ux, context-menu |
+| [[decisions/broker-access-min-paired]] | Paired access = min(role_A, role_B) + 3-layout delete + partner_broker_id | 2026-05-05 | frontend, transactions, broker-access, paired |
+| [[decisions/pair-description-tags-validation]] | Linked transaction pairs must have identical description and tags — backend validates with pairDescriptionMismatch/pairTagsMismatch | 2026-05-10 | backend, transactions, validation, pair |
+| [[decisions/auto-populate-removal]] | Remove implicit auto-populate from bulk_assign_providers — metadata flow now frontend-driven (probe→diff→PATCH) | 2026-05-11 | backend, assets, providers, metadata |
+| [[decisions/formmodal-contextual-validate]] | FormModal sends entire bulk context to /validate for same-day dependency resolution | 2026-05-11 | frontend, transactions, validation, formModal |
+| [[decisions/end-of-day-balance-check]] | Balance validation uses end-of-day aggregation — intra-day order irrelevant; consistent with daily-point policy | 2026-05-11 | backend, transactions, validation, balance |
 
 ## Concepts
 
@@ -141,6 +150,7 @@
 | [[problems/pydantic-422-pre-emption]] | Pydantic 422 pre-emption blocked service-layer validation; fixed by lenient per-row parse in unified pipeline | resolved | backend, pydantic, fastapi, transactions |
 | [[problems/browser-autofill-numeric-fields]] | Chrome autofill on numeric text inputs — fixed with `autocomplete="off"` + randomised `name` | resolved | frontend, ux, forms, autofill |
 | [[problems/dual-form-collect-duplication]] | FormModal/BulkModal had duplicated collect logic causing 3 cascading bugs — fixed via txPayloadHelpers.ts | resolved | frontend, transactions, dual-form, code-duplication |
+| [[problems/fx-multi-route-no-fallback]] | FX sync_pairs_bulk used only primary route with no fallback — alternative routes (ECB/FED/SNB) ignored on failure | resolved | backend, fx, providers, sync, fallback |
 
 ## Entities
 
@@ -200,3 +210,6 @@
 | [[sources/phase07-part4-round6-planb-delete-picker-access]] | `...Round6_PlanB_DeletePickerAccess.prompt.md` + `PlanB1` ✅ DONE (Fase 1+B1) | 2026-05-28 | phase07, transactions, delete-modal, picker-modal, broker-access |
 | [[sources/phase07-part4-round6-planb23-appendix1-ui-polish]] | `...Round6_PlanB23_Appendix1_UIPolish.prompt.md` ✅ DONE | 2026-05-29 | phase07, transactions, ui-polish, responsive, toast, row-tints |
 | [[sources/phase07-part4-round6-planc-txstore-refactor]] | `...Round6_PlanC_TxStoreRefactor.prompt.md` ✅ DONE | 2026-05-29 | phase07, transactions, txStore, refactor, single-source-of-truth |
+| [[sources/phase07-part4-round6-planc3-pendingop-refactor]] | `...Round6_PlanC3_PendingOpRefactor.prompt.md` ✅ DONE | 2026-05-30 | phase07, transactions, bulkModal, pendingOp, tagged-union, e2e |
+| [[sources/phase07-part4-round6-planc2-bugfix-pair-validation]] | `...Round6_PlanC2_BugfixAndPairValidation.prompt.md` ✅ DONE | 2026-05-30 | phase07, transactions, bugfix, pair-validation, clone, picker, toast, e2e |
+| [[sources/phase07-part4-round6-planc2r2-regressions-mockfx]] | `...Round6_PlanC2Round2_FixRegressionsAndMockFX.prompt.md` ✅ DONE | 2026-05-30 | phase07, transactions, mockfx, auto-populate, contextual-validate, balance-walk |

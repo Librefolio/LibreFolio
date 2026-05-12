@@ -1,7 +1,7 @@
 # Plan: C3 — Completamento Refactor Architetturale: DraftRow → PendingOp
 
 **Date**: 2026-05-11
-**Status**: ⏳ IN PROGRESS — Steps 1-8 completati, Step 9 (test E2E) pendente
+**Status**: ✅ COMPLETATO (2026-05-12)
 **Origine**: Piano C (txStore) ha raggiunto ~80% dell'architettura target. Restano 3 item strutturali (R1 parziale, R4, R5) interdipendenti e bloccanti per Piano D (Split/Promote). Questo piano completa la migrazione a `PendingOp` + rimozione legacy `DraftRow` clone, elimina le props legacy morte, rinomina `drafts` → `ops`, e stringe il tipo di `_partnerFormPayload` da `Record<string,unknown>` a `TxFields | null`.
 
 **Link back**: [`plan-phase07-transaction-Part4_Round6_PlanC2Round2_FixRegressionsAndMockFX.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanC2Round2_FixRegressionsAndMockFX.prompt.md)
@@ -537,14 +537,140 @@ Dopo il primo passaggio restavano 5 errori di compilazione + 1 warning (unused f
 |------|-------|------|-------|
 | `TransactionBulkModal.svelte` | 1819 | 1748 | −71 (−4%) |
 
+
+## Step 9b — Test E2E aggiuntivi (copertura gap pre-Piano D) ✅
+
+Analisi gap sulla suite attuale (84 test / 9 file): tre aree non coperte che diventano critiche con Piano D.
+
+**Esecuzione**: 2026-05-12 — 10/10 passed (59.7s).
+
+### Prerequisito — Aggiungere `data-action-id` al DataTable ✅
+
+**File**: `frontend/src/lib/components/table/DataTable.svelte` (riga ~1358)
+
+**Modifica**: aggiungere `data-action-id={action.id}` al `<button class="action-btn">` nel loop `{#each rowActions as action}`.
+
+```svelte
+<!-- Era: -->
+<button type="button" class="action-btn" ...>
+
+<!-- Diventa: -->
+<button type="button" class="action-btn" data-action-id={action.id} ...>
+```
+
+**Motivo**: i title dei bottoni sono i18n → fragili come selector. `data-action-id` è stabile e testabile con `[data-action-id="remove-from-batch"]`.
+
+### Helper — `clickRowAction(row, actionId)` ✅
+
+Aggiungere in cima a `tx-bulk-operations.spec.ts`:
+
+```typescript
+/** Hover a BulkModal row and click the action button by its stable action-id. */
+async function clickRowAction(row: Locator, actionId: string) {
+    await row.hover();
+    const btn = row.locator(`[data-action-id="${actionId}"]`);
+    await expect(btn).toBeVisible({timeout: 2_000});
+    await btn.click();
+    await row.page().waitForTimeout(300);
+}
+```
+
+---
+
+### Test 1 — Picker add → remove from batch (`addedViaPicker`) ✅
+
+**File**: `frontend/e2e/transactions/tx-bulk-operations.spec.ts`
+
+**Flow**:
+1. Seleziona 1 riga editable → toolbar Edit → BulkModal apre
+2. Chiudi FormModal auto-opened
+3. Nota il count iniziale di righe nella griglia BulkModal (`countBefore`)
+4. Clicca `[data-testid="tx-bulk-picker"]` → Picker apre
+5. Seleziona 1 riga nel Picker (checkbox sulla prima non-disabled) → clicca `[data-testid="tx-picker-add"]`
+6. Picker si chiude, griglia BulkModal ha +1 riga (`countBefore + 1`)
+7. Sulla riga appena aggiunta (ultima): verifica `[data-action-id="remove-from-batch"]` è visibile (via hover)
+8. Click `[data-action-id="remove-from-batch"]` → riga sparisce
+9. Griglia torna a `countBefore` righe
+
+**Assertions chiave**:
+- `expect(countAfterAdd).toBe(countBefore + 1)`
+- action `remove-from-batch` visibile solo sulla riga picker-added
+- `expect(countAfterRemove).toBe(countBefore)`
+
+**Perché serve per Piano D**: Split crea righe `addedViaPicker`-like che l'utente deve poter rimuovere.
+
+---
+
+### Test 2 — Reset All ripristina tutte le righe modificate ✅
+
+**File**: `frontend/e2e/transactions/tx-bulk-operations.spec.ts`
+
+**Flow**:
+1. Seleziona 3+ righe editable → toolbar Edit → BulkModal apre (no auto-form per 3+)
+2. Dblclick riga 1 → FormModal → cambia description → Save → torna in griglia
+3. Dblclick riga 2 → FormModal → cambia description → Save → torna in griglia
+4. Sulla riga 3: `clickRowAction(row3, 'mark-delete')` → riga marcata
+5. Verifica header `[data-testid="tx-bulk-title"]` contiene testo con `edit` E `del`
+6. Verifica commit non è disabled (c'è almeno 1 azione)
+7. Clicca `[data-testid="tx-bulk-reset-all"]`
+8. Verifica: nessuna riga ha class `row-edited` o `row-deleted`
+9. Verifica: commit IS disabled (nessuna azione pendente)
+10. Verifica: header title NON contiene più `edit` o `del`
+
+**Assertions chiave**:
+- Pre-reset: `expect(title).toContain('edit')` e `toContain('del')`
+- Post-reset: `expect(commitBtn).toBeDisabled()`
+- Post-reset: `expect(page.locator('.row-edited, .row-deleted')).toHaveCount(0)`
+
+**Perché serve per Piano D**: Split/Promote modifica più righe simultaneamente — reset all deve annullare tutto atomicamente.
+
+---
+
+### Test 3 — Status CSS classes: new / edited / delete / original ✅
+
+**File**: `frontend/e2e/transactions/tx-bulk-operations.spec.ts`
+
+**Flow**:
+1. Seleziona 1 riga editable → toolbar Edit → BulkModal
+2. Chiudi FormModal auto-opened
+3. **Original**: verifica la riga NON ha classi `row-edited`, `row-deleted`, `row-appended`
+4. **Edited**: dblclick → FormModal → cambia description → Save → verifica riga ha class `row-edited`
+5. **Delete**: `clickRowAction(row, 'mark-delete')` → verifica riga ha class `row-deleted` (e NON `row-edited` — delete prevale)
+6. **Reset → Original**: `clickRowAction(row, 'reset')` → verifica riga NON ha più classi speciali
+7. **New (row-appended)**: `clickRowAction(row, 'clone')` → verifica nuova riga (last) ha class `row-appended`
+
+**Assertions chiave**:
+- `expect(row).toHaveClass(/row-edited/)` (step 4)
+- `expect(row).toHaveClass(/row-deleted/)` (step 5)
+- `expect(row).not.toHaveClass(/row-edited|row-deleted|row-appended/)` (steps 3, 6)
+- `expect(newRow).toHaveClass(/row-appended/)` (step 7)
+
+**Perché serve per Piano D**: Split cambia lo status di righe esistenti (edit → delete + new) — il feedback visivo deve essere corretto.
+
+---
+
+### Registrazione nel test runner ✅
+
+Nessuna registrazione necessaria: i 3 test vanno in `tx-bulk-operations.spec.ts` che è già registrato nel runner sotto `front-transaction tx-bulk-operations`.
+
+### Riepilogo file modificati (Step 9b)
+
+| File | Modifica |
+|------|----------|
+| `frontend/src/lib/components/table/DataTable.svelte` | +1 attributo `data-action-id={action.id}` su `button.action-btn` |
+| `frontend/e2e/transactions/tx-bulk-operations.spec.ts` | +1 helper `clickRowAction` + 3 test (~120 LOC) |
+
+---
+
 ### Verifiche
 
 | Verifica | Stato | Note |
 |----------|-------|------|
 | `svelte-check --threshold error` | ✅ 0 errors, 0 warnings | Confermato 2026-05-11 |
-| `./dev.py test front-transaction all` | ⏳ Non ancora eseguito | |
-| `./dev.py test all-frontend` | ⏳ Non ancora eseguito | |
-| Ingestione wiki | ⏳ Pendente | Specchio architetturale da archiviare |
+| `./dev.py test front-transaction tx-bulk-operations` | ✅ 10/10 passed (59.7s) | Confermato 2026-05-12, include 3 nuovi test |
+| `./dev.py test front-transaction all` | ✅ 9/9 suites passed | Confermato 2026-05-12 |
+| `./dev.py test all-frontend` | ✅ 6/6 suites passed | Confermato 2026-05-12 |
+| Ingestione wiki | ✅ Completata | 2026-05-12: 2 nuove pagine + 5 aggiornate |
 
 ---
 
