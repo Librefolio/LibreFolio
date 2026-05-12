@@ -201,6 +201,18 @@ def api_events_suggest(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Events suggest tests", verbose=verbose)
 
 
+def api_batch_split_promote(verbose: bool = False, test_names: list = None) -> bool:
+    """Run batch split, promote, and promote-suggest pipeline tests."""
+    print_section("Batch Split/Promote Pipeline Tests")
+    print_info("Testing splits[] and promotes[] in unified batch")
+    print_info("Tests: Split TRANSFER/CASH_TRANSFER, Promote saved+saved/new+new/saved+new")
+    print_info("Tests: POST /transactions/promote-suggest bulk candidate search")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_transactions_batch_split_promote.py", test_names)
+    return run_command(cmd, "Batch split/promote tests", verbose=verbose)
+
+
 def api_ohlc_sentinel(verbose: bool = False, test_names: list = None) -> bool:
     """Run OHLC sentinel semantics tests."""
     print_section("OHLC Sentinel (F.4) API Tests")
@@ -469,6 +481,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "transactions-validate", api_transactions_validate, name="Transactions Validate", desc="POST /transactions/validate dry-run")
     add_test(api, "tx-balance-walk", api_tx_balance_walk, name="TX Balance Walk", desc="Same-day ordering, cascade, end-of-day")
     add_test(api, "events-suggest", api_events_suggest, name="Events Suggest", desc="Candidate events within tolerance")
+    add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="Sentinel rules on POST /assets/prices")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")
     add_test(api, "prices-currency-coherence", api_prices_currency_coherence, name="Prices Currency Coherence", desc="Hard-400 on currency mismatch")

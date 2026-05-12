@@ -39,14 +39,12 @@ from backend.app.schemas.transactions import (
     TXEventSuggestCandidate,
     TXEventSuggestRequestItem,
     TXEventSuggestResultItem,
-    TXPromoteItem,
-    TXPromoteResultItem,
-    TXPromoteResponse,
+    TXPromoteBatchItem,
+    TXPromoteSuggestCandidate,
+    TXPromoteSuggestResponse,
     TXQueryParams,
     TXReadItem,
-    TXSplitItem,
-    TXSplitResultItem,
-    TXSplitResponse,
+    TXSplitBatchItem,
     TXTransferPromoteRequest,
     TXTransferPromoteResponse,
     TXUpdateItem,
@@ -83,6 +81,21 @@ class LinkedTransactionError(Exception):
     """Raised when linked transaction operations fail."""
 
     pass
+
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class _PromoteCandidate:
+    """Lightweight duck-type-compatible object for _check_promote_constraints.
+    Used by promote-suggest to validate constraints without a full Transaction."""
+
+    broker_id: int
+    asset_id: Optional[int]
+    currency: Optional[str]
+    amount: Decimal
+    quantity: Decimal
 
 
 def _loc_to_field(loc: tuple | list) -> Optional[str]:
@@ -734,213 +747,39 @@ class TransactionService:
     # For WITHDRAWAL+DEPOSIT we need to distinguish CASH_TRANSFER vs FX_CONVERSION
     # using field constraints, so the service checks dynamically.
 
-    async def split_pairs(
-        self,
-        items: List[TXSplitItem],
-        user_id: Optional[int] = None,
-    ) -> TXSplitResponse:
+    @staticmethod
+    def _find_promote_rule_match(tx_a, tx_b) -> Optional[TransactionType]:
+        """Scan TX_TYPE_METADATA promote_from rules for a match between tx_a and tx_b."""
+        for pair_type, meta in TX_TYPE_METADATA.items():
+            if meta.promote_from is None:
+                continue
+            for rule in meta.promote_from:
+                if (tx_a.type.value == rule.type_a and tx_b.type.value == rule.type_b) or (
+                    tx_a.type.value == rule.type_b and tx_b.type.value == rule.type_a
+                ):
+                    if TransactionService._check_promote_constraints(tx_a, tx_b, rule.field_constraints):
+                        return pair_type
+        return None
+
+    @staticmethod
+    def _resolve_promote_ref(
+        id_val: Optional[int],
+        link_uuid_val: Optional[str],
+        existing_by_id: Dict[int, Transaction],
+        link_uuid_map: Dict[str, List[Tuple[int, Transaction]]],
+    ) -> Optional[Transaction]:
+        """Resolve a promote reference to a Transaction.
+
+        - id_val > 0 → lookup in existing_by_id
+        - link_uuid_val → lookup first TX in link_uuid_map[link_uuid_val]
         """
-        Split linked pairs into standalone rows (immediate, not deferred).
-
-        For each item.id:
-        1. Find the transaction and its partner via related_transaction_id
-        2. Determine "from" (negative side) and "to" (positive side)
-        3. Mutate types per SPLIT_TYPE_MAP
-        4. Remove related_transaction_id from both
-        5. Return the updated rows
-        """
-        results: List[TXSplitResultItem] = []
-
-        # Collect all IDs to look up
-        all_ids: set[int] = set()
-        for item in items:
-            all_ids.add(item.id)
-
-        # Fetch all transactions
-        existing = await self.get_by_ids(list(all_ids))
-        by_id = {tx.id: tx for tx in existing}
-
-        # Also fetch partners
-        partner_ids: set[int] = set()
-        for item in items:
-            tx = by_id.get(item.id)
-            if tx and tx.related_transaction_id:
-                partner_ids.add(tx.related_transaction_id)
-        if partner_ids - all_ids:
-            partners = await self.get_by_ids(list(partner_ids - all_ids))
-            for tx in partners:
-                by_id[tx.id] = tx
-
-        # Access check on all touched brokers
-        touched_brokers: set[int] = {tx.broker_id for tx in by_id.values()}
-        await self._enforce_batch_access(touched_brokers, user_id, min_role=UserRole.EDITOR)
-
-        for item in items:
-            tx = by_id.get(item.id)
-            if tx is None:
-                raise HTTPException(status_code=422, detail=f"Transaction {item.id} not found")
-            if tx.related_transaction_id is None:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Transaction {item.id} has no related_transaction_id — cannot split",
-                )
-
-            partner = by_id.get(tx.related_transaction_id)
-            if partner is None:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Partner transaction {tx.related_transaction_id} not found",
-                )
-
-            split_types = self.SPLIT_TYPE_MAP.get(tx.type)
-            if split_types is None:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Transaction type {tx.type.value} cannot be split",
-                )
-
-            from_type, to_type = split_types
-
-            # Determine which is "from" and which is "to" based on value signs
-            # For TRANSFER/CASH_TRANSFER: negative side = from, positive = to
-            # For FX_CONVERSION: negative cash = from, positive cash = to
-            if tx.type == TransactionType.TRANSFER:
-                if tx.quantity < Decimal("0"):
-                    tx_from, tx_to = tx, partner
-                else:
-                    tx_from, tx_to = partner, tx
-            else:
-                # Cash-based: negative amount = from
-                if tx.amount < Decimal("0"):
-                    tx_from, tx_to = tx, partner
-                else:
-                    tx_from, tx_to = partner, tx
-
-            # Mutate types
-            tx_from.type = from_type
-            tx_to.type = to_type
-
-            # Remove link
-            tx_from.related_transaction_id = None
-            tx_to.related_transaction_id = None
-
-            # For TRANSFER → ADJUSTMENT: keep asset_id and quantity, clear cash
-            # For CASH_TRANSFER/FX → WITHDRAWAL/DEPOSIT: keep cash, clear asset
-            if split_types == (TransactionType.ADJUSTMENT, TransactionType.ADJUSTMENT):
-                # Already correct: TRANSFER has asset+qty, no cash
-                pass
-            else:
-                # WITHDRAWAL/DEPOSIT: clear asset fields
-                tx_from.asset_id = None
-                tx_to.asset_id = None
-
-            tx_from.updated_at = utcnow()
-            tx_to.updated_at = utcnow()
-
-            results.append(
-                TXSplitResultItem(
-                    from_tx=TXReadItem.from_db_model(tx_from),
-                    to_tx=TXReadItem.from_db_model(tx_to),
-                )
-            )
-
-        await self.session.flush()
-        return TXSplitResponse(results=results)
-
-    async def promote_pairs(
-        self,
-        items: List[TXPromoteItem],
-        user_id: Optional[int] = None,
-    ) -> TXPromoteResponse:
-        """
-        Promote standalone rows into linked pairs (immediate, not deferred).
-
-        For each item (id_a, id_b):
-        1. Fetch both transactions
-        2. Scan TX_TYPE_METADATA promote_from rules for a match
-        3. Validate field constraints
-        4. Mutate types to the target paired type
-        5. Generate link_uuid and set related_transaction_id
-        6. Return the updated rows
-        """
-        results: List[TXPromoteResultItem] = []
-
-        # Collect all IDs
-        all_ids: set[int] = set()
-        for item in items:
-            all_ids.add(item.id_a)
-            all_ids.add(item.id_b)
-
-        existing = await self.get_by_ids(list(all_ids))
-        by_id = {tx.id: tx for tx in existing}
-
-        # Access check
-        touched_brokers: set[int] = {tx.broker_id for tx in by_id.values()}
-        await self._enforce_batch_access(touched_brokers, user_id, min_role=UserRole.EDITOR)
-
-        for item in items:
-            tx_a = by_id.get(item.id_a)
-            tx_b = by_id.get(item.id_b)
-
-            if tx_a is None:
-                raise HTTPException(status_code=422, detail=f"Transaction {item.id_a} not found")
-            if tx_b is None:
-                raise HTTPException(status_code=422, detail=f"Transaction {item.id_b} not found")
-
-            if tx_a.related_transaction_id is not None:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Transaction {item.id_a} is already linked to {tx_a.related_transaction_id}",
-                )
-            if tx_b.related_transaction_id is not None:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Transaction {item.id_b} is already linked to {tx_b.related_transaction_id}",
-                )
-
-            # Find matching promote rule
-            target_type: TransactionType | None = None
-            for pair_type, meta in TX_TYPE_METADATA.items():
-                if meta.promote_from is None:
-                    continue
-                for rule in meta.promote_from:
-                    # Check type match (either order)
-                    if (tx_a.type.value == rule.type_a and tx_b.type.value == rule.type_b) or (
-                        tx_a.type.value == rule.type_b and tx_b.type.value == rule.type_a
-                    ):
-                        # Check field constraints
-                        if self._check_promote_constraints(tx_a, tx_b, rule.field_constraints):
-                            target_type = pair_type
-                            break
-                if target_type is not None:
-                    break
-
-            if target_type is None:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"No matching promote rule for {tx_a.type.value} + {tx_b.type.value}",
-                )
-
-            # Mutate types
-            tx_a.type = target_type
-            tx_b.type = target_type
-
-            # Set bidirectional link
-            tx_a.related_transaction_id = tx_b.id
-            tx_b.related_transaction_id = tx_a.id
-
-            tx_a.updated_at = utcnow()
-            tx_b.updated_at = utcnow()
-
-            results.append(
-                TXPromoteResultItem(
-                    pair_a=TXReadItem.from_db_model(tx_a),
-                    pair_b=TXReadItem.from_db_model(tx_b),
-                )
-            )
-
-        await self.session.flush()
-        return TXPromoteResponse(results=results)
+        if id_val is not None and id_val > 0:
+            return existing_by_id.get(id_val)
+        if link_uuid_val:
+            entries = link_uuid_map.get(link_uuid_val, [])
+            if entries:
+                return entries[0][1]  # (idx, Transaction) → Transaction
+        return None
 
     @staticmethod
     def _check_promote_constraints(
@@ -974,6 +813,89 @@ class TransactionService:
                     return False
         return True
 
+    async def promote_suggest_bulk(
+        self,
+        inputs: List,
+        tolerance_days: int,
+        user_id: int,
+    ) -> TXPromoteSuggestResponse:
+        """For each input TX, find DB transactions compatible for promote."""
+        accessible = await self._get_accessible_broker_ids(user_id)
+        if not accessible:
+            return TXPromoteSuggestResponse(results={})
+
+        # Collect all positive IDs from inputs to exclude self-match
+        input_positive_ids: set[int] = {inp.id for inp in inputs if inp.id > 0}
+
+        results: Dict[int, List[TXPromoteSuggestCandidate]] = {}
+
+        for inp in inputs:
+            # Determine complementary types from promote_from rules
+            complementary: list[tuple[TransactionType, list]] = []
+            for pair_type, meta in TX_TYPE_METADATA.items():
+                if meta.promote_from is None:
+                    continue
+                for rule in meta.promote_from:
+                    if inp.type.value == rule.type_a:
+                        comp_type = TransactionType(rule.type_b)
+                        complementary.append((comp_type, rule.field_constraints))
+                    elif inp.type.value == rule.type_b:
+                        comp_type = TransactionType(rule.type_a)
+                        complementary.append((comp_type, rule.field_constraints))
+
+            if not complementary:
+                results[inp.id] = []
+                continue
+
+            # Query DB: standalone TX with complementary type, date ±tolerance, accessible broker
+            comp_types = list({ct for ct, _ in complementary})
+            lo = inp.date - timedelta(days=tolerance_days)
+            hi = inp.date + timedelta(days=tolerance_days)
+
+            stmt = (
+                select(Transaction)
+                .where(Transaction.type.in_(comp_types))
+                .where(Transaction.related_transaction_id.is_(None))
+                .where(Transaction.date >= lo)
+                .where(Transaction.date <= hi)
+                .where(Transaction.broker_id.in_(accessible))
+            )
+            if input_positive_ids:
+                stmt = stmt.where(Transaction.id.notin_(input_positive_ids))
+
+            rows = (await self.session.execute(stmt)).scalars().all()
+
+            # Build input as _PromoteCandidate for constraint checking
+            inp_candidate = _PromoteCandidate(
+                broker_id=inp.broker_id,
+                asset_id=inp.asset_id,
+                currency=inp.currency,
+                amount=inp.amount or Decimal("0"),
+                quantity=inp.quantity or Decimal("0"),
+            )
+
+            candidates: list[TXPromoteSuggestCandidate] = []
+            for row in rows:
+                matched = False
+                for comp_type, constraints in complementary:
+                    if row.type == comp_type:
+                        if self._check_promote_constraints(inp_candidate, row, constraints):
+                            matched = True
+                            break
+                if matched:
+                    candidates.append(TXPromoteSuggestCandidate(
+                        id=row.id,
+                        broker_id=row.broker_id,
+                        date=row.date,
+                        type=row.type.value,
+                        currency=row.currency,
+                        asset_id=row.asset_id,
+                    ))
+
+            results[inp.id] = candidates
+
+        return TXPromoteSuggestResponse(results=results)
+
     # =========================================================================
     # UNIFIED BATCH PIPELINE (replaces separate create/update/delete bulk)
     # =========================================================================
@@ -983,6 +905,8 @@ class TransactionService:
         creates_raw: List[dict],
         updates_raw: List[dict],
         deletes: List[int],
+        splits_raw: List[dict] | None = None,
+        promotes_raw: List[dict] | None = None,
         user_id: Optional[int] = None,
         commit: bool = False,
     ) -> TXBatchResponse:
@@ -999,23 +923,46 @@ class TransactionService:
         # 1. Lenient per-row parse
         parsed_creates, create_issues = _parse_lenient(creates_raw, TXCreateItem, "create")
         parsed_updates, update_issues = _parse_lenient(updates_raw, TXUpdateItem, "update")
+        parsed_splits, split_issues = _parse_lenient(splits_raw or [], TXSplitBatchItem, "split")
+        parsed_promotes, promote_issues = _parse_lenient(promotes_raw or [], TXPromoteBatchItem, "promote")
         issues.extend(create_issues)
         issues.extend(update_issues)
+        issues.extend(split_issues)
+        issues.extend(promote_issues)
 
         # 2. Determine touched brokers for access check
         touched_brokers: Set[int] = set()
         for _, item in parsed_creates:
             touched_brokers.add(item.broker_id)
 
-        # Lookup existing TXs for updates and deletes
+        # Lookup existing TXs for updates, deletes, splits, and promotes
         ids_to_lookup: Set[int] = set(deletes)
         for _, item in parsed_updates:
             ids_to_lookup.add(item.id)
+        for _, item in parsed_splits:
+            ids_to_lookup.add(item.id)
+        for _, item in parsed_promotes:
+            if item.id_a is not None:
+                ids_to_lookup.add(item.id_a)
+            if item.id_b is not None:
+                ids_to_lookup.add(item.id_b)
         existing_by_id: Dict[int, Transaction] = {}
         if ids_to_lookup:
             existing_txs = await self.get_by_ids(list(ids_to_lookup))
             existing_by_id = {tx.id: tx for tx in existing_txs}
             touched_brokers |= {tx.broker_id for tx in existing_txs}
+
+        # Fetch split partners
+        split_partner_ids: set[int] = set()
+        for _, item in parsed_splits:
+            tx = existing_by_id.get(item.id)
+            if tx and tx.related_transaction_id and tx.related_transaction_id not in existing_by_id:
+                split_partner_ids.add(tx.related_transaction_id)
+        if split_partner_ids:
+            partners = await self.get_by_ids(list(split_partner_ids))
+            for tx in partners:
+                existing_by_id[tx.id] = tx
+            touched_brokers |= {tx.broker_id for tx in partners}
 
         # Access check (EDITOR) — report as issues, not HTTPException
         if user_id is not None:
@@ -1168,8 +1115,156 @@ class TransactionService:
             except Exception as e:  # noqa: BLE001
                 issues.append(TXValidationIssue(operation="create", index=orig_idx, ref_id=None, error=str(e)))
 
+        # 5b. Apply splits (only saved paired TXs)
+        for orig_idx, item in parsed_splits:
+            tx = existing_by_id.get(item.id)
+            if tx is None:
+                issues.append(TXValidationIssue(
+                    operation="split", index=orig_idx, ref_id=item.id,
+                    error=f"Transaction {item.id} not found", code="txNotFound",
+                ))
+                continue
+            if tx.related_transaction_id is None:
+                issues.append(TXValidationIssue(
+                    operation="split", index=orig_idx, ref_id=item.id,
+                    error=f"Transaction {item.id} has no pair", code="noPairToSplit",
+                ))
+                continue
+            partner = existing_by_id.get(tx.related_transaction_id)
+            if partner is None:
+                partner = await self.session.get(Transaction, tx.related_transaction_id)
+            if partner is None:
+                issues.append(TXValidationIssue(
+                    operation="split", index=orig_idx, ref_id=item.id,
+                    error=f"Partner {tx.related_transaction_id} not found", code="partnerNotFound",
+                ))
+                continue
+            split_types = self.SPLIT_TYPE_MAP.get(tx.type)
+            if split_types is None:
+                issues.append(TXValidationIssue(
+                    operation="split", index=orig_idx, ref_id=item.id,
+                    error=f"Type {tx.type.value} cannot be split", code="typeCannotSplit",
+                ))
+                continue
+
+            from_type, to_type = split_types
+
+            # Determine from/to by value signs
+            if tx.type == TransactionType.TRANSFER:
+                if tx.quantity < Decimal("0"):
+                    tx_from, tx_to = tx, partner
+                else:
+                    tx_from, tx_to = partner, tx
+            else:
+                if tx.amount < Decimal("0"):
+                    tx_from, tx_to = tx, partner
+                else:
+                    tx_from, tx_to = partner, tx
+
+            # Mutate types
+            tx_from.type = from_type
+            tx_to.type = to_type
+
+            # Remove link
+            tx_from.related_transaction_id = None
+            tx_to.related_transaction_id = None
+
+            # TRANSFER→ADJUSTMENT: keep asset+qty. CASH→WITHDRAWAL/DEPOSIT: clear asset
+            if split_types != (TransactionType.ADJUSTMENT, TransactionType.ADJUSTMENT):
+                tx_from.asset_id = None
+                tx_to.asset_id = None
+
+            tx_from.updated_at = utcnow()
+            tx_to.updated_at = utcnow()
+
+            for t in (tx_from, tx_to):
+                prev = earliest_date_by_broker.get(t.broker_id)
+                earliest_date_by_broker[t.broker_id] = t.date if prev is None else min(prev, t.date)
+
+            results.append(TXBatchResultItem(operation="split", index=orig_idx, id=item.id, status="success"))
+
+        # 5c. Apply promotes
+        consumed_link_uuids: Set[str] = set()
+
+        for orig_idx, item in parsed_promotes:
+            tx_a = self._resolve_promote_ref(item.id_a, item.link_uuid_a, existing_by_id, link_uuid_map)
+            tx_b = self._resolve_promote_ref(item.id_b, item.link_uuid_b, existing_by_id, link_uuid_map)
+
+            if tx_a is None:
+                issues.append(TXValidationIssue(
+                    operation="promote", index=orig_idx,
+                    error="Cannot resolve TX A reference", code="promoteRefNotFound",
+                ))
+                continue
+            if tx_b is None:
+                issues.append(TXValidationIssue(
+                    operation="promote", index=orig_idx,
+                    error="Cannot resolve TX B reference", code="promoteRefNotFound",
+                ))
+                continue
+            if tx_a.related_transaction_id is not None:
+                issues.append(TXValidationIssue(
+                    operation="promote", index=orig_idx, ref_id=getattr(tx_a, 'id', None),
+                    error=f"TX A ({tx_a.id}) already paired", code="alreadyPaired",
+                ))
+                continue
+            if tx_b.related_transaction_id is not None:
+                issues.append(TXValidationIssue(
+                    operation="promote", index=orig_idx, ref_id=getattr(tx_b, 'id', None),
+                    error=f"TX B ({tx_b.id}) already paired", code="alreadyPaired",
+                ))
+                continue
+
+            target_type = self._find_promote_rule_match(tx_a, tx_b)
+            if target_type is None:
+                issues.append(TXValidationIssue(
+                    operation="promote", index=orig_idx,
+                    error=f"No promote rule for {tx_a.type.value}+{tx_b.type.value}", code="noPromoteRule",
+                ))
+                continue
+
+            # Mutate types + set bidirectional link
+            tx_a.type = target_type
+            tx_b.type = target_type
+            tx_a.related_transaction_id = tx_b.id
+            tx_b.related_transaction_id = tx_a.id
+
+            # Apply resolved_fields
+            if item.resolved_fields:
+                for field_name in ("description", "cost_basis_override"):
+                    if field_name in item.resolved_fields:
+                        val = item.resolved_fields[field_name]
+                        setattr(tx_a, field_name, val)
+                        setattr(tx_b, field_name, val)
+                if "tags" in item.resolved_fields:
+                    csv_tags = tags_to_csv(item.resolved_fields["tags"])
+                    tx_a.tags = csv_tags
+                    tx_b.tags = csv_tags
+                if "date" in item.resolved_fields:
+                    from backend.app.utils.datetime_utils import parse_ISO_date
+                    resolved_date = parse_ISO_date(item.resolved_fields["date"])
+                    tx_a.date = resolved_date
+                    tx_b.date = resolved_date
+
+            tx_a.updated_at = utcnow()
+            tx_b.updated_at = utcnow()
+
+            for t in (tx_a, tx_b):
+                prev = earliest_date_by_broker.get(t.broker_id)
+                earliest_date_by_broker[t.broker_id] = t.date if prev is None else min(prev, t.date)
+
+            # Track consumed link_uuids so Step 6 doesn't re-process them
+            if item.link_uuid_a:
+                consumed_link_uuids.add(item.link_uuid_a)
+            if item.link_uuid_b:
+                consumed_link_uuids.add(item.link_uuid_b)
+
+            results.append(TXBatchResultItem(operation="promote", index=orig_idx, id=tx_a.id, status="success"))
+
         # 6. Link resolution
         for link_uuid, pairs in link_uuid_map.items():
+            if link_uuid in consumed_link_uuids:
+                continue  # Already consumed by a promote in Step 5c
             if len(pairs) == 2:
                 pair_result = self._validate_linked_pair(pairs[0][1], pairs[1][1])
                 if pair_result is not None:

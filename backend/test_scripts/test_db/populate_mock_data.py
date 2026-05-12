@@ -1360,6 +1360,49 @@ def populate_transactions(session: Session):
     session.commit()
     print(f"  🗑️🔗 delete-safe TRANSFER ETH IB↔Coinbase (#{tx_del_pair_out.id} ↔ #{tx_del_pair_in.id})")
 
+    # --- Standalone transactions for promote-suggest E2E tests ---
+    # Tagged 'promote-test' so tests can locate them.
+
+    # CASH_TRANSFER promote candidate pair (same currency, diff broker, opposite amounts)
+    tx_prom_withdrawal = Transaction(
+        broker_id=degiro.id, asset_id=None,
+        type=TransactionType.WITHDRAWAL,
+        date=today - timedelta(days=10),
+        quantity=Decimal("0"), amount=Decimal("-500.00"), currency="EUR",
+        description="[promote-test] Withdrawal for cash transfer test",
+        tags="promote-test",
+    )
+    tx_prom_deposit = Transaction(
+        broker_id=ib.id, asset_id=None,
+        type=TransactionType.DEPOSIT,
+        date=today - timedelta(days=10),
+        quantity=Decimal("0"), amount=Decimal("500.00"), currency="EUR",
+        description="[promote-test] Deposit for cash transfer test",
+        tags="promote-test",
+    )
+
+    # TRANSFER promote candidate pair (same asset, diff broker, opposite qty)
+    tx_prom_adj_out = Transaction(
+        broker_id=ib.id, asset_id=apple.id,
+        type=TransactionType.ADJUSTMENT,
+        date=today - timedelta(days=8),
+        quantity=Decimal("-2"), amount=Decimal("0"), currency="USD",
+        description="[promote-test] Adjustment out for transfer test",
+        tags="promote-test",
+    )
+    tx_prom_adj_in = Transaction(
+        broker_id=directa.id, asset_id=apple.id,
+        type=TransactionType.ADJUSTMENT,
+        date=today - timedelta(days=8),
+        quantity=Decimal("2"), amount=Decimal("0"), currency="USD",
+        description="[promote-test] Adjustment in for transfer test",
+        tags="promote-test",
+    )
+
+    session.add_all([tx_prom_withdrawal, tx_prom_deposit, tx_prom_adj_out, tx_prom_adj_in])
+    session.commit()
+    print(f"  💡 promote-test standalone: W#{tx_prom_withdrawal.id}, D#{tx_prom_deposit.id}, Adj-#{tx_prom_adj_out.id}, Adj+#{tx_prom_adj_in.id}")
+
 
 def populate_price_history(session: Session):
     """Create price history for market-priced assets."""
