@@ -203,7 +203,7 @@ async def test_post_transactions_single(test_server, test_broker_id):
         data = response.json()
         assert data["committed"] is True
         assert data["results"][0]["status"] == "success"
-        assert data["results"][0]["id"] is not None
+        assert data["results"][0]["ids"][0] is not None
 
         print_success("✓ Created 1 transaction successfully")
 
@@ -574,7 +574,7 @@ async def test_get_transaction_by_id(test_server, test_broker_id):
             json={"creates": payload},
             timeout=TIMEOUT,
         )
-        tx_id = create_resp.json()["results"][0]["id"]
+        tx_id = create_resp.json()["results"][0]["ids"][0]
 
         # Get by ID via ?ids=N
         response = await client.get(
@@ -711,7 +711,7 @@ async def test_patch_transactions(test_server, test_broker_id):
             json={"creates": payload},
             timeout=TIMEOUT,
         )
-        tx_id = create_resp.json()["results"][0]["id"]
+        tx_id = create_resp.json()["results"][0]["ids"][0]
 
         # Update it
         update_payload = [
@@ -806,7 +806,7 @@ async def test_delete_transactions(test_server, test_broker_id):
             json={"creates": payload},
             timeout=TIMEOUT,
         )
-        tx_ids = [r["id"] for r in create_resp.json()["results"]]
+        tx_ids = [r["ids"][0] for r in create_resp.json()["results"]]
 
         # Delete them
         response = await client.post(
@@ -907,7 +907,7 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
             json={"creates": transfer_payload},
             timeout=TIMEOUT,
         )
-        tx_ids = [r["id"] for r in create_resp.json()["results"]]
+        tx_ids = [r["ids"][0] for r in create_resp.json()["results"]]
 
         # Try to delete only the first one
         response = await client.post(
@@ -1007,7 +1007,7 @@ async def test_get_transactions_partner_broker_id(test_server):
         )
         assert create_resp.status_code == 200
         assert create_resp.json()["committed"] is True
-        tx_ids = [r["id"] for r in create_resp.json()["results"]]
+        tx_ids = [r["ids"][0] for r in create_resp.json()["results"]]
         assert len(tx_ids) == 2
 
         # GET /transactions with ids filter
@@ -1148,7 +1148,7 @@ class TestPairDescriptionTagsValidation:
             create_resp = await client.post(f"{API_BASE}/transactions/commit", json=payload, timeout=TIMEOUT)
             assert create_resp.status_code == 200
             assert create_resp.json()["committed"] is True
-            created_ids = [r["id"] for r in create_resp.json()["results"] if r["operation"] == "create"]
+            created_ids = [r["ids"][0] for r in create_resp.json()["results"] if r["operation"] == "create"]
             assert len(created_ids) == 2
 
             # Update only one side → should be rejected

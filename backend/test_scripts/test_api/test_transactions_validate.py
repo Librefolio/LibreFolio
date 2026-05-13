@@ -107,7 +107,7 @@ async def _post_tx(client: httpx.AsyncClient, items: list[dict]) -> list[int]:
     ids: list[int] = []
     for r in body.get("results", []):
         assert r.get("status") == "success", f"create failed: {r}"
-        ids.append(r["id"])
+        ids.append(r["ids"][0])
     return ids
 
 

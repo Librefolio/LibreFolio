@@ -138,7 +138,7 @@ async def create_transfer_pair(client: httpx.AsyncClient, broker_a_id: int, brok
     assert resp.status_code == 200, f"Create pair failed: {resp.text}"
     data = resp.json()
     assert data["committed"] is True, f"Pair not committed: {data}"
-    return [r["id"] for r in data["results"] if r["operation"] == "create"]
+    return [r["ids"][0] for r in data["results"] if r["operation"] == "create"]
 
 
 async def create_cash_transfer_pair(client: httpx.AsyncClient, broker_a_id: int, broker_b_id: int, amount: str = "1000", currency: str = "EUR") -> list[int]:
@@ -171,7 +171,7 @@ async def create_cash_transfer_pair(client: httpx.AsyncClient, broker_a_id: int,
     assert resp.status_code == 200, f"Create cash pair failed: {resp.text}"
     data = resp.json()
     assert data["committed"] is True, f"Cash pair not committed: {data}"
-    return [r["id"] for r in data["results"] if r["operation"] == "create"]
+    return [r["ids"][0] for r in data["results"] if r["operation"] == "create"]
 
 
 async def create_standalone_tx(
@@ -204,7 +204,7 @@ async def create_standalone_tx(
     assert resp.status_code == 200, f"Create standalone failed: {resp.text}"
     data = resp.json()
     assert data["committed"] is True, f"Standalone not committed: {data}"
-    return data["results"][0]["id"]
+    return data["results"][0]["ids"][0]
 
 
 # ============================================================================
@@ -499,7 +499,7 @@ class TestBatchPromote:
 
             # Verify: both are TRANSFER with bidirectional link
             create_results = [r for r in data["results"] if r["operation"] == "create"]
-            tx_ids = [r["id"] for r in create_results]
+            tx_ids = [r["ids"][0] for r in create_results]
             assert len(tx_ids) == 2
 
             resp2 = await client.get(
@@ -556,7 +556,7 @@ class TestBatchPromote:
 
             # Get the new deposit ID
             create_results = [r for r in data["results"] if r["operation"] == "create"]
-            new_d_id = create_results[0]["id"]
+            new_d_id = create_results[0]["ids"][0]
 
             # Verify both are CASH_TRANSFER with bidirectional link
             resp2 = await client.get(
