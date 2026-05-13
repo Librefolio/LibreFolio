@@ -488,10 +488,12 @@
     "split": {
       "confirmTitle": "Unlink this pair?",
       "confirmMessage": "The 2 transactions will become independent rows.",
-      "success": "Pair unlinked successfully"
+      "success": "Pair unlinked successfully",
+      "fromType": "Will become: {type}"
     },
     "promote": {
       "mergeTitle": "Promote to {type}",
+      "mergeSubtitle": "Resolve divergent fields:",
       "mergeConfirm": "Confirm promotion",
       "fieldDescription": "Description",
       "fieldTags": "Tags",
@@ -499,12 +501,18 @@
       "fieldCostBasis": "Cost basis",
       "useLeft": "Use left",
       "useMerge": "Merge",
-      "useRight": "Use right"
+      "useRight": "Use right",
+      "allLeft": "All left",
+      "allMerge": "All merge",
+      "allRight": "All right",
+      "concat": "Concatenate",
+      "union": "Union"
     },
     "promoteSuggest": {
       "banner": "Row {a} and Row {b} are compatible — promote to {type}",
       "bannerMore": "and {n} more...",
-      "dbMatch": "Match found in DB: {type} on {broker} ({date})"
+      "dbMatch": "Match found in DB: {type} on {broker} ({date})",
+      "bannerDetailed": "On {date}, Row #{a} and Row #{b} could become {type}"
     },
     "types": {
       "BUY": "Buy",
@@ -611,6 +619,7 @@
       "skippedViewerOnly": "{n} transactions excluded: Editor access required",
       "allViewerOnly": "No editable transactions in selection",
       "resetSelected": "Reset selected",
+      "splitQueued": "{n} split queued",
       "stateNew": "new",
       "stateEdit": "edit",
       "stateDel": "del"
@@ -782,7 +791,10 @@
       "created": "created",
       "updated": "updated",
       "deleted": "deleted",
-      "assetCreatedHint": "Asset created. To add price history, go to the asset page and sync after finishing your transactions."
+      "assetCreatedHint": "Asset created. To add price history, go to the asset page and sync after finishing your transactions.",
+      "commitSummary": "Saved {n} transactions",
+      "splitCount": "{n} split",
+      "promoteCount": "{n} promoted"
     }
   },
   "fx": {

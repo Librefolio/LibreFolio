@@ -1267,16 +1267,24 @@ def populate_transactions(session: Session):
 
     # (a) IB (OWNER) ↔ Directa (EDITOR) → full access (min=EDITOR)
     tx_asym_a_out = Transaction(
-        broker_id=ib.id, asset_id=apple.id, type=TransactionType.TRANSFER,
-        date=today - timedelta(days=5), quantity=Decimal("-3"),
-        amount=Decimal("0"), currency="USD",
+        broker_id=ib.id,
+        asset_id=apple.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=5),
+        quantity=Decimal("-3"),
+        amount=Decimal("0"),
+        currency="USD",
         description="[Asym-a] AAPL IB ↔ Directa (OWNER↔EDITOR=full)",
         tags="access-test",
     )
     tx_asym_a_in = Transaction(
-        broker_id=directa.id, asset_id=apple.id, type=TransactionType.TRANSFER,
-        date=today - timedelta(days=5), quantity=Decimal("3"),
-        amount=Decimal("0"), currency="USD",
+        broker_id=directa.id,
+        asset_id=apple.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=5),
+        quantity=Decimal("3"),
+        amount=Decimal("0"),
+        currency="USD",
         description="[Asym-a] AAPL IB ↔ Directa (OWNER↔EDITOR=full)",
         tags="access-test",
     )
@@ -1290,16 +1298,24 @@ def populate_transactions(session: Session):
 
     # (b) IB (OWNER) ↔ Coinbase (EDITOR) → full access (min=EDITOR)
     tx_asym_b_out = Transaction(
-        broker_id=ib.id, asset_id=btc.id, type=TransactionType.TRANSFER,
-        date=today - timedelta(days=4), quantity=Decimal("-0.05"),
-        amount=Decimal("0"), currency="USD",
+        broker_id=ib.id,
+        asset_id=btc.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=4),
+        quantity=Decimal("-0.05"),
+        amount=Decimal("0"),
+        currency="USD",
         description="[Asym-b] BTC IB ↔ Coinbase (OWNER↔EDITOR=full)",
         tags="access-test",
     )
     tx_asym_b_in = Transaction(
-        broker_id=coinbase.id, asset_id=btc.id, type=TransactionType.TRANSFER,
-        date=today - timedelta(days=4), quantity=Decimal("0.05"),
-        amount=Decimal("0"), currency="USD",
+        broker_id=coinbase.id,
+        asset_id=btc.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=4),
+        quantity=Decimal("0.05"),
+        amount=Decimal("0"),
+        currency="USD",
         description="[Asym-b] BTC IB ↔ Coinbase (OWNER↔EDITOR=full)",
         tags="access-test",
     )
@@ -1313,16 +1329,24 @@ def populate_transactions(session: Session):
 
     # (c) IB (OWNER) ↔ DEGIRO (VIEWER) → viewer only (min=VIEWER)
     tx_asym_c_out = Transaction(
-        broker_id=ib.id, asset_id=msft.id, type=TransactionType.TRANSFER,
-        date=today - timedelta(days=3), quantity=Decimal("-2"),
-        amount=Decimal("0"), currency="USD",
+        broker_id=ib.id,
+        asset_id=msft.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=3),
+        quantity=Decimal("-2"),
+        amount=Decimal("0"),
+        currency="USD",
         description="[Asym-c] MSFT IB ↔ DEGIRO (OWNER↔VIEWER=view-only)",
         tags="access-test",
     )
     tx_asym_c_in = Transaction(
-        broker_id=degiro.id, asset_id=msft.id, type=TransactionType.TRANSFER,
-        date=today - timedelta(days=3), quantity=Decimal("2"),
-        amount=Decimal("0"), currency="USD",
+        broker_id=degiro.id,
+        asset_id=msft.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=3),
+        quantity=Decimal("2"),
+        amount=Decimal("0"),
+        currency="USD",
         description="[Asym-c] MSFT IB ↔ DEGIRO (OWNER↔VIEWER=view-only)",
         tags="access-test",
     )
@@ -1339,16 +1363,24 @@ def populate_transactions(session: Session):
     # 9b. delete-safe TRANSFER pair: Coinbase (EDITOR) → IB (OWNER) — both editable
     # Coinbase has 0.802 ETH from BUY+INTEREST, so sending 0.001 out is safe.
     tx_del_pair_out = Transaction(
-        broker_id=coinbase.id, asset_id=eth.id, type=TransactionType.TRANSFER,
-        date=today - timedelta(days=1), quantity=Decimal("-0.001"),
-        amount=Decimal("0"), currency="USD",
+        broker_id=coinbase.id,
+        asset_id=eth.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=1),
+        quantity=Decimal("-0.001"),
+        amount=Decimal("0"),
+        currency="USD",
         description="[delete-safe] ETH Coinbase ↔ IB",
         tags="delete-safe,access-test",
     )
     tx_del_pair_in = Transaction(
-        broker_id=ib.id, asset_id=eth.id, type=TransactionType.TRANSFER,
-        date=today - timedelta(days=1), quantity=Decimal("0.001"),
-        amount=Decimal("0"), currency="USD",
+        broker_id=ib.id,
+        asset_id=eth.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=1),
+        quantity=Decimal("0.001"),
+        amount=Decimal("0"),
+        currency="USD",
         description="[delete-safe] ETH Coinbase ↔ IB",
         tags="delete-safe,access-test",
     )
@@ -1360,41 +1392,71 @@ def populate_transactions(session: Session):
     session.commit()
     print(f"  🗑️🔗 delete-safe TRANSFER ETH IB↔Coinbase (#{tx_del_pair_out.id} ↔ #{tx_del_pair_in.id})")
 
+    # --- Balance-safe BUY to cover promote-test ADJUSTMENT qty on Apple/IB ---
+    # Without this, the promote-test ADJUSTMENT qty=-2 causes Apple to go
+    # negative on IB (BUY+15 - SELL5 - TRANSFER5 - Asym-a3 - Asym-d1 - ADJ2 = -1).
+    tx_balance_safe_buy = Transaction(
+        broker_id=ib.id,
+        asset_id=apple.id,
+        type=TransactionType.BUY,
+        date=today - timedelta(days=9),
+        quantity=Decimal("5"),
+        amount=Decimal("-900.00"),
+        currency="USD",
+        description="[balance-safe] Extra AAPL buy to cover promote-test adjustments",
+        tags="balance-safe,core",
+    )
+    session.add(tx_balance_safe_buy)
+    session.commit()
+    print(f"  🛡️ balance-safe BUY AAPL #{tx_balance_safe_buy.id} (qty=+5 on IB, day -9)")
+
     # --- Standalone transactions for promote-suggest E2E tests ---
     # Tagged 'promote-test' so tests can locate them.
 
     # CASH_TRANSFER promote candidate pair (same currency, diff broker, opposite amounts)
     tx_prom_withdrawal = Transaction(
-        broker_id=degiro.id, asset_id=None,
+        broker_id=degiro.id,
+        asset_id=None,
         type=TransactionType.WITHDRAWAL,
         date=today - timedelta(days=10),
-        quantity=Decimal("0"), amount=Decimal("-500.00"), currency="EUR",
+        quantity=Decimal("0"),
+        amount=Decimal("-500.00"),
+        currency="EUR",
         description="[promote-test] Withdrawal for cash transfer test",
         tags="promote-test",
     )
     tx_prom_deposit = Transaction(
-        broker_id=ib.id, asset_id=None,
+        broker_id=ib.id,
+        asset_id=None,
         type=TransactionType.DEPOSIT,
         date=today - timedelta(days=10),
-        quantity=Decimal("0"), amount=Decimal("500.00"), currency="EUR",
+        quantity=Decimal("0"),
+        amount=Decimal("500.00"),
+        currency="EUR",
         description="[promote-test] Deposit for cash transfer test",
         tags="promote-test",
     )
 
     # TRANSFER promote candidate pair (same asset, diff broker, opposite qty)
     tx_prom_adj_out = Transaction(
-        broker_id=ib.id, asset_id=apple.id,
+        broker_id=ib.id,
+        asset_id=apple.id,
         type=TransactionType.ADJUSTMENT,
         date=today - timedelta(days=8),
-        quantity=Decimal("-2"), amount=Decimal("0"), currency="USD",
+        quantity=Decimal("-2"),
+        amount=Decimal("0"),
+        currency="USD",
         description="[promote-test] Adjustment out for transfer test",
         tags="promote-test",
     )
     tx_prom_adj_in = Transaction(
-        broker_id=directa.id, asset_id=apple.id,
+        broker_id=directa.id,
+        asset_id=apple.id,
         type=TransactionType.ADJUSTMENT,
         date=today - timedelta(days=8),
-        quantity=Decimal("2"), amount=Decimal("0"), currency="USD",
+        quantity=Decimal("2"),
+        amount=Decimal("0"),
+        currency="USD",
         description="[promote-test] Adjustment in for transfer test",
         tags="promote-test",
     )
@@ -1728,16 +1790,24 @@ def link_transactions_to_events(session: Session):
     apple_for_asym = session.exec(select(Asset).where(Asset.display_name == "Apple Inc.")).first()
     if ib and apple_for_asym:
         tx_asym_d_out = Transaction(
-            broker_id=ib.id, asset_id=apple_for_asym.id, type=TransactionType.TRANSFER,
-            date=today - timedelta(days=2), quantity=Decimal("-1"),
-            amount=Decimal("0"), currency="USD",
+            broker_id=ib.id,
+            asset_id=apple_for_asym.id,
+            type=TransactionType.TRANSFER,
+            date=today - timedelta(days=2),
+            quantity=Decimal("-1"),
+            amount=Decimal("0"),
+            currency="USD",
             description="[Asym-d] AAPL IB ↔ HiddenBroker (OWNER↔none=locked)",
             tags="access-test",
         )
         tx_asym_d_in = Transaction(
-            broker_id=hidden_broker.id, asset_id=apple_for_asym.id, type=TransactionType.TRANSFER,
-            date=today - timedelta(days=2), quantity=Decimal("1"),
-            amount=Decimal("0"), currency="USD",
+            broker_id=hidden_broker.id,
+            asset_id=apple_for_asym.id,
+            type=TransactionType.TRANSFER,
+            date=today - timedelta(days=2),
+            quantity=Decimal("1"),
+            amount=Decimal("0"),
+            currency="USD",
             description="[Asym-d] AAPL IB ↔ HiddenBroker (OWNER↔none=locked)",
             tags="access-test",
         )

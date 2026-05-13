@@ -285,28 +285,96 @@ export interface PromoteMatch {
     targetLabel: string;
 }
 
+/** Optional context for constraint checking in findPromoteMatch (F4). */
+export interface PromoteContext {
+    brokerA?: number;
+    brokerB?: number;
+    currencyA?: string;
+    currencyB?: string;
+    assetA?: number | null;
+    assetB?: number | null;
+    qtyA?: number;
+    qtyB?: number;
+}
+
 /**
  * Given 2 selected transaction rows, check if any paired type's `promote_from` rules
  * match their types. Returns the first match or null.
  *
- * The matching considers both orderings (rowA is type_a + rowB is type_b, or vice versa).
+ * When `context` is provided, also checks `field_constraints` (broker/currency/asset)
+ * to return the correct target type (e.g. CASH_TRANSFER vs FX_CONVERSION).
+ * Without context, returns the first type-matching rule (backward compat).
  */
-export function findPromoteMatch(typeA: string, typeB: string, t: (key: string) => string): PromoteMatch | null {
+export function findPromoteMatch(
+    typeA: string,
+    typeB: string,
+    t: (key: string) => string,
+    context?: PromoteContext,
+): PromoteMatch | null {
     if (!_cache) return null;
+    /** Check if a single constraint is satisfied given the context. */
+    function checkConstraint(c: {field: string; relation: string}, isForward: boolean): boolean | null {
+        const ctx = context;
+        if (!ctx) return null; // no context → cannot check
+        switch (c.field) {
+            case 'broker_id':
+                if (ctx.brokerA == null || ctx.brokerB == null) return null;
+                if (c.relation === 'equal') return ctx.brokerA === ctx.brokerB;
+                if (c.relation === 'different') return ctx.brokerA !== ctx.brokerB;
+                return null;
+            case 'cash_currency':
+                if (!ctx.currencyA || !ctx.currencyB) return null;
+                if (c.relation === 'equal') return ctx.currencyA === ctx.currencyB;
+                if (c.relation === 'different') return ctx.currencyA !== ctx.currencyB;
+                return null;
+            case 'asset_id': {
+                const aA = isForward ? ctx.assetA : ctx.assetB;
+                const aB = isForward ? ctx.assetB : ctx.assetA;
+                if (aA == null || aB == null) return null;
+                if (c.relation === 'equal') return aA === aB;
+                if (c.relation === 'different') return aA !== aB;
+                return null;
+            }
+            case 'quantity': {
+                const qA = isForward ? ctx.qtyA : ctx.qtyB;
+                const qB = isForward ? ctx.qtyB : ctx.qtyA;
+                if (qA == null || qB == null) return null;
+                if (c.relation === 'opposite') return (qA > 0 && qB < 0) || (qA < 0 && qB > 0);
+                return null;
+            }
+            default:
+                return null; // unknown field → skip
+        }
+    }
+
     for (const st of _cache.transaction_types) {
         const promoteRules = st.promote_from;
         if (!promoteRules || !Array.isArray(promoteRules)) continue;
         for (const rule of promoteRules) {
             if (!rule || typeof rule !== 'object' || Array.isArray(rule)) continue;
-            const r = rule as {type_a: string; type_b: string};
+            const r = rule as {type_a: string; type_b: string; field_constraints?: Array<{field: string; relation: string}>};
             const matchForward = typeA === r.type_a && typeB === r.type_b;
             const matchReverse = typeA === r.type_b && typeB === r.type_a;
-            if (matchForward || matchReverse) {
-                return {
-                    targetType: st.code,
-                    targetLabel: t(`transactions.types.${st.code}`) || st.code,
-                };
+            if (!matchForward && !matchReverse) continue;
+
+            // Type matches — now check field_constraints if context provided
+            if (context && r.field_constraints && r.field_constraints.length > 0) {
+                let allPassed = true;
+                for (const c of r.field_constraints) {
+                    const result = checkConstraint(c, matchForward);
+                    if (result === false) {
+                        allPassed = false;
+                        break;
+                    }
+                    // result === null → cannot verify → skip (don't reject)
+                }
+                if (!allPassed) continue; // constraint failed → try next rule
             }
+
+            return {
+                targetType: st.code,
+                targetLabel: t(`transactions.types.${st.code}`) || st.code,
+            };
         }
     }
     return null;

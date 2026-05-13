@@ -42,7 +42,7 @@
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/brokerStore';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded} from '$lib/stores/transactionTypeStore';
-    import {findPromoteMatch} from '$lib/stores/transactionTypeStore';
+    import {findPromoteMatch, type PromoteContext} from '$lib/stores/transactionTypeStore';
     import PromoteMergeModal from './PromoteMergeModal.svelte';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
     import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
@@ -522,6 +522,32 @@
         return result;
     }
 
+    /** Collapse two standalone ops into one paired row (main + hidden partner).
+     *  Used post-promote (DD-BF2). Returns the main op (visible) and the tempId to remove.
+     *  "from" = negative cash or negative qty. The "to" op is hidden (removed from grid). */
+    function collapseIntoPaired(opA: PendingOp, opB: PendingOp): {main: PendingOp; removeTempId: string} {
+        const cashA = Number(opA.fields.cash?.amount ?? 0);
+        const cashB = Number(opB.fields.cash?.amount ?? 0);
+        const qtyA = Number(opA.fields.quantity ?? 0);
+        const qtyB = Number(opB.fields.quantity ?? 0);
+        let from = opA,
+            to = opB;
+        if (cashA > 0 && cashB <= 0) {
+            from = opB;
+            to = opA;
+        } else if (cashA === 0 && cashB === 0 && qtyA > 0) {
+            from = opB;
+            to = opA;
+        }
+        // Set partner display on "from" (the main visible row)
+        from.partnerId = opTxId(to);
+        from.partnerBrokerId = to.fields.broker_id;
+        from.partnerCash = to.fields.cash;
+        from.partnerDate = to.fields.date;
+        from.partnerPayload = opToTxFields(to) as unknown as TxFields;
+        return {main: from, removeTempId: to.tempId};
+    }
+
     /** Apply the form-collected payload to a brand-new draft row. */
     function addRowFromForm(payload: Record<string, unknown>) {
         const next = createOpEmpty();
@@ -605,27 +631,13 @@
     }
 
     /** Split a paired row in the BulkModal.
-     *  Saved paired → accumulate in pendingSplits for batch commit.
+     *  Saved paired → remove from batch + accumulate in pendingSplits (DD-BF1).
      *  New paired (link_uuid shared) → local transformation only. */
     function handleSplitRow(row: PendingOp) {
         if (row.op === 'edit' && row.partnerId != null) {
-            // Case A: Saved paired → backend split
-            const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
-            if (!splitTypes) return;
+            // Case A: Saved paired → backend split (DD-BF1: remove from batch)
             pendingSplits = [...pendingSplits, {id: (row as any).txId}];
-            const [fromType, toType] = splitTypes;
-            // Determine from/to by sign
-            const cashAmt = Number(row.fields.cash?.amount ?? 0);
-            const qty = Number(row.fields.quantity ?? 0);
-            const isFrom = row.fields.type === 'TRANSFER' ? qty < 0 : cashAmt < 0;
-            row.fields.type = (isFrom ? fromType : toType) as TransactionTypeCode;
-            // Clear partner display
-            row.partnerId = undefined;
-            row.partnerBrokerId = undefined;
-            row.partnerCash = undefined;
-            row.partnerDate = undefined;
-            row.partnerPayload = undefined;
-            ops = [...ops];
+            removeRow(row.tempId);
         } else if (row.op === 'create' && row.link_uuid) {
             // Case B: New paired (link_uuid shared) → local transformation
             const partner = ops.find((o) => o !== row && o.op === 'create' && (o as any).link_uuid === row.link_uuid);
@@ -1572,6 +1584,20 @@
     /** Rows currently selected in the bulk DataTable (for inline toolbar). */
     let bulkTableSelectedRows = $state<PendingOp[]>([]);
 
+    /** Build PromoteContext from two PendingOps for constraint checking (F4). */
+    function buildPromoteCtx(a: PendingOp, b: PendingOp): PromoteContext {
+        return {
+            brokerA: a.fields.broker_id,
+            brokerB: b.fields.broker_id,
+            currencyA: a.fields.cash?.code,
+            currencyB: b.fields.cash?.code,
+            assetA: a.fields.asset_id,
+            assetB: b.fields.asset_id,
+            qtyA: Number(a.fields.quantity ?? 0),
+            qtyB: Number(b.fields.quantity ?? 0),
+        };
+    }
+
     /** Selection-based promote detection — 2 standalone rows with matching promote rule. */
     let selectedForPromote = $derived.by(() => {
         if (bulkTableSelectedRows.length !== 2) return null;
@@ -1581,7 +1607,7 @@
         if (a.partnerPayload != null || b.partnerPayload != null) return null;
         // Check markedDelete
         if ((a.op === 'edit' && a.markedDelete) || (b.op === 'edit' && b.markedDelete)) return null;
-        const match = findPromoteMatch(a.fields.type, b.fields.type, $t);
+        const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
         if (!match) return null;
         return {...match, opA: a, opB: b};
     });
@@ -1618,8 +1644,15 @@
 
     /** Execute a promote between two ops. */
     function executePromote(opA: PendingOp, opB: PendingOp, resolved: Record<string, unknown>) {
-        const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t);
+        const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB));
         if (!match) return;
+
+        // Apply resolved fields (from MergeModal) to opA before collapsing
+        if (resolved.description != null) opA.fields.description = resolved.description as string;
+        if (resolved.tags != null) opA.fields.tags = resolved.tags as string[];
+        if (resolved.date != null) opA.fields.date = resolved.date as string;
+        if (resolved.cost_basis_override != null) opA.fields.cost_basis_override = resolved.cost_basis_override as string;
+
         if (opA.op === 'edit' && opB.op === 'edit') {
             // 2 saved → batch promotes
             pendingPromotes = [
@@ -1630,13 +1663,8 @@
                     ...(Object.keys(resolved).length > 0 ? {resolved_fields: resolved} : {}),
                 },
             ];
-            // Update display: set partner metadata
             opA.fields.type = match.targetType as TransactionTypeCode;
             opB.fields.type = match.targetType as TransactionTypeCode;
-            opA.partnerId = (opB as any).txId;
-            opA.partnerBrokerId = opB.fields.broker_id;
-            opA.partnerCash = opB.fields.cash;
-            opA.partnerDate = opB.fields.date;
         } else if (opA.op === 'create' && opB.op === 'create') {
             // 2 new → local transformation (assign shared link_uuid)
             const sharedUuid = generateUUID();
@@ -1644,9 +1672,6 @@
             (opB as any).link_uuid = sharedUuid;
             opA.fields.type = match.targetType as TransactionTypeCode;
             opB.fields.type = match.targetType as TransactionTypeCode;
-            opA.partnerBrokerId = opB.fields.broker_id;
-            opA.partnerCash = opB.fields.cash;
-            opA.partnerDate = opB.fields.date;
         } else {
             // 1 saved + 1 new (mixed)
             const savedOp = opA.op === 'edit' ? opA : opB;
@@ -1662,11 +1687,12 @@
             ];
             savedOp.fields.type = match.targetType as TransactionTypeCode;
             newOp.fields.type = match.targetType as TransactionTypeCode;
-            savedOp.partnerBrokerId = newOp.fields.broker_id;
-            savedOp.partnerCash = newOp.fields.cash;
-            savedOp.partnerDate = newOp.fields.date;
         }
-        ops = [...ops];
+
+        // F5: Collapse into paired row (DD-BF2) — removes opB from grid, sets partner display on opA
+        const {removeTempId} = collapseIntoPaired(opA, opB);
+        ops = ops.filter((o) => o.tempId !== removeTempId);
+        ops = [...ops]; // trigger reactivity
     }
 
     /** Promote merge modal confirm handler. */
@@ -1723,7 +1749,7 @@
         const results: Array<{tempIdA: string; tempIdB: string; labelA: string; labelB: string; targetLabel: string}> = [];
         for (let i = 0; i < newStandalone.length; i++) {
             for (let j = i + 1; j < newStandalone.length; j++) {
-                const match = findPromoteMatch(newStandalone[i].fields.type, newStandalone[j].fields.type, $t);
+                const match = findPromoteMatch(newStandalone[i].fields.type, newStandalone[j].fields.type, $t, buildPromoteCtx(newStandalone[i], newStandalone[j]));
                 if (match) {
                     results.push({
                         tempIdA: newStandalone[i].tempId,
@@ -1746,7 +1772,11 @@
             const op = ops.find((o) => o.op === 'edit' && (o as any).txId === txId);
             if (!op || !candidates.length) continue;
             const best = candidates[0];
-            const match = findPromoteMatch(op.fields.type, best.type, $t);
+            const match = findPromoteMatch(op.fields.type, best.type, $t, {
+                brokerA: op.fields.broker_id,
+                brokerB: best.broker_id,
+                currencyA: op.fields.cash?.code,
+            });
             if (!match) continue;
             combined.push({
                 tempIdA: op.tempId,
@@ -1775,7 +1805,7 @@
             const opB = ops.find((o) => o.tempId === sug.tempIdB);
             if (!opA || !opB) return;
             // Directly execute promote (no need to simulate DataTable selection)
-            const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t);
+            const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB));
             if (!match) return;
             // Check divergence
             const descA = opA.fields.description,
@@ -1812,7 +1842,7 @@
                 opB = editOpFromTx(sug.dbCandidateId, {addedViaPicker: true});
                 ops = [...ops, opB];
             }
-            const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t);
+            const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB));
             if (!match) return;
             const descA = opA.fields.description,
                 descB = opB.fields.description;
@@ -1868,7 +1898,8 @@
                             ·
                         {/if}{#if editedCount > 0}<span class="text-amber-600 dark:text-amber-400">{editedCount} {$t('transactions.bulk.stateEdit')}</span>{/if}{#if editedCount > 0 && deleteCount > 0}
                             ·
-                        {/if}{#if deleteCount > 0}<span class="text-red-600 dark:text-red-400">{deleteCount} {$t('transactions.bulk.stateDel')}</span>{/if})
+                        {/if}{#if deleteCount > 0}<span class="text-red-600 dark:text-red-400">{deleteCount} {$t('transactions.bulk.stateDel')}</span>{/if}{#if pendingSplits.length > 0}
+                            · <span class="text-purple-600 dark:text-purple-400" data-testid="split-queued-badge">⚡ {$t('transactions.bulk.splitQueued', {values: {n: pendingSplits.length}})}</span>{/if})
                     </span>
                 {/if}
             </h2>
@@ -2179,6 +2210,7 @@
     txA={promoteMergeData?.txA}
     txB={promoteMergeData?.txB}
     targetTypeLabel={promoteMergeData?.targetTypeLabel ?? ''}
+    availableTags={availableTags}
     onConfirm={onBulkPromoteMergeConfirm}
     onCancel={() => {
         promoteMergeOpen = false;
