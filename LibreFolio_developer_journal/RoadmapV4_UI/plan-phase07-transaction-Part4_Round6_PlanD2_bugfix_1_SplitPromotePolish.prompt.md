@@ -644,5 +644,6 @@ test('NR-1: BulkModal renders paired correctly after page refresh', async ({page
 - **Parent (D2)**: [`plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md)
 - **D1 Backend**: [`plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md)
 - **Parent plan (D)**: [`plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md)
+- **Next (Bugfix 2)**: [`plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_2_PayloadSplitPreviewUX.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_2_PayloadSplitPreviewUX.prompt.md)
 - **Next (D3 E2E)**: Embedded in this plan as Step F14
 

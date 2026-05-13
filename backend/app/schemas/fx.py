@@ -45,9 +45,8 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     SafeDecimal,
-    )
+)
 from backend.app.utils.datetime_utils import parse_ISO_date
-
 
 # ============================================================================
 # PROVIDER MODELS
@@ -90,7 +89,7 @@ class FXConversionRequest(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         str_strip_whitespace=True,
-        )
+    )
 
     from_amount: Currency = Field(..., description="Amount to convert with source currency")
     to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
@@ -118,7 +117,7 @@ class FXConversionResult(BaseModel):
     backward_fill_info: Optional[BackwardFillInfo] = Field(
         None,
         description="Backward-fill info (only present if rate from a different date was used). " "If null, rate_date = conversion_date",
-        )
+    )
 
     @field_validator("conversion_date", mode="before")
     @classmethod
@@ -149,7 +148,7 @@ class FXUpsertItem(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         str_strip_whitespace=True,
-        )
+    )
 
     rate_date: date_type = Field(..., description="Date of the rate (ISO format)", alias="date")
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217)")
@@ -215,7 +214,7 @@ class FXDeleteItem(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         str_strip_whitespace=True,
-        )
+    )
 
     from_currency: str = Field(..., alias="from", min_length=3, max_length=3, description="Source currency (ISO 4217)")
     to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
@@ -268,7 +267,7 @@ def validate_chain_steps(
     steps: list,  # list[FXRouteStep] or list[dict] with from/to keys
     base: str,
     quote: str,
-    ) -> None:
+) -> None:
     """
     Validate the coherence of a chain_steps list.
 

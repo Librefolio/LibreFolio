@@ -604,28 +604,22 @@ class TestFXFallbackWithMockProviders:
             await create_user_and_login(client)
             try:
                 # Route 1: MOCKFX_FAIL (priority=1), Route 2: MOCKFX (priority=2)
-                await self._create_routes(client, [
-                    _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX_FAIL", priority=1),
-                    _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX", priority=2),
-                ])
+                await self._create_routes(
+                    client,
+                    [
+                        _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX_FAIL", priority=1),
+                        _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX", priority=2),
+                    ],
+                )
 
                 result = await self._sync_pair(client)
 
                 assert result["status"] == "ok", f"Expected OK, got {result['status']}"
-                assert "MOCKFX" in (result.get("provider_used") or ""), (
-                    f"Expected MOCKFX as provider_used, got: {result.get('provider_used')}"
-                )
-                assert len(result.get("errors", [])) > 0, (
-                    f"Expected errors from route 1, got none: {result}"
-                )
+                assert "MOCKFX" in (result.get("provider_used") or ""), f"Expected MOCKFX as provider_used, got: {result.get('provider_used')}"
+                assert len(result.get("errors", [])) > 0, f"Expected errors from route 1, got none: {result}"
                 # Verify the error message matches MOCKFX_FAIL's distinctive message
-                assert any(_MOCKFX_FAIL_MSG in e for e in result["errors"]), (
-                    f"Expected MOCKFX_FAIL error message in errors, got: {result['errors']}"
-                )
-                print_success(
-                    f"✓ Fallback worked: provider_used={result['provider_used']}, "
-                    f"errors={result['errors']}"
-                )
+                assert any(_MOCKFX_FAIL_MSG in e for e in result["errors"]), f"Expected MOCKFX_FAIL error message in errors, got: {result['errors']}"
+                print_success(f"✓ Fallback worked: provider_used={result['provider_used']}, " f"errors={result['errors']}")
             finally:
                 await self._delete_routes(client)
 
@@ -637,23 +631,22 @@ class TestFXFallbackWithMockProviders:
         async with httpx.AsyncClient() as client:
             await create_user_and_login(client)
             try:
-                await self._create_routes(client, [
-                    _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX_FAIL", priority=1),
-                    _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX_FAIL", priority=2),
-                ])
+                await self._create_routes(
+                    client,
+                    [
+                        _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX_FAIL", priority=1),
+                        _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX_FAIL", priority=2),
+                    ],
+                )
 
                 result = await self._sync_pair(client)
 
                 assert result["status"] == "failed", f"Expected FAILED, got {result['status']}"
                 errors = result.get("errors", [])
-                assert len(errors) >= 2, (
-                    f"Expected errors from both routes, got {len(errors)}: {errors}"
-                )
+                assert len(errors) >= 2, f"Expected errors from both routes, got {len(errors)}: {errors}"
                 # Both errors should contain the distinctive MOCKFX_FAIL message
                 fail_errors = [e for e in errors if _MOCKFX_FAIL_MSG in e]
-                assert len(fail_errors) >= 2, (
-                    f"Expected both errors to contain MOCKFX_FAIL message, got: {errors}"
-                )
+                assert len(fail_errors) >= 2, f"Expected both errors to contain MOCKFX_FAIL message, got: {errors}"
                 print_success(f"✓ All routes failed correctly: {len(errors)} error(s)")
             finally:
                 await self._delete_routes(client)
@@ -666,9 +659,12 @@ class TestFXFallbackWithMockProviders:
         async with httpx.AsyncClient() as client:
             await create_user_and_login(client)
             try:
-                await self._create_routes(client, [
-                    _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX", priority=1),
-                ])
+                await self._create_routes(
+                    client,
+                    [
+                        _route_json(self.PAIR_BASE, self.PAIR_QUOTE, "MOCKFX", priority=1),
+                    ],
+                )
 
                 result = await self._sync_pair(client)
 
@@ -676,9 +672,6 @@ class TestFXFallbackWithMockProviders:
                 assert result.get("points_fetched", 0) > 0, "Expected points_fetched > 0"
                 errors = result.get("errors", [])
                 assert len(errors) == 0, f"Expected no errors, got: {errors}"
-                print_success(
-                    f"✓ Direct MOCKFX sync OK: {result['points_fetched']} points fetched"
-                )
+                print_success(f"✓ Direct MOCKFX sync OK: {result['points_fetched']} points fetched")
             finally:
                 await self._delete_routes(client)
-

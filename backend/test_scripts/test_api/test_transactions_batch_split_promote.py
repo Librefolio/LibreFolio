@@ -322,7 +322,9 @@ class TestBatchSplit:
             broker = await create_broker(client, "SplitStandalone")
 
             tx_id = await create_standalone_tx(
-                client, broker, "DEPOSIT",
+                client,
+                broker,
+                "DEPOSIT",
                 cash={"code": "EUR", "amount": "100"},
             )
 
@@ -398,11 +400,15 @@ class TestBatchPromote:
             broker_b = await create_broker(client, "PromSavedB")
 
             w_id = await create_standalone_tx(
-                client, broker_a, "WITHDRAWAL",
+                client,
+                broker_a,
+                "WITHDRAWAL",
                 cash={"code": "EUR", "amount": "-800"},
             )
             d_id = await create_standalone_tx(
-                client, broker_b, "DEPOSIT",
+                client,
+                broker_b,
+                "DEPOSIT",
                 cash={"code": "EUR", "amount": "800"},
             )
 
@@ -517,7 +523,9 @@ class TestBatchPromote:
 
             # Create saved WITHDRAWAL
             w_id = await create_standalone_tx(
-                client, broker_a, "WITHDRAWAL",
+                client,
+                broker_a,
+                "WITHDRAWAL",
                 cash={"code": "EUR", "amount": "-300"},
                 tx_date="2026-03-01",
             )
@@ -571,13 +579,17 @@ class TestBatchPromote:
             asset_id = await get_or_create_asset(client)
 
             buy_id = await create_standalone_tx(
-                client, broker, "BUY",
+                client,
+                broker,
+                "BUY",
                 asset_id=asset_id,
                 quantity="10",
                 cash={"code": "USD", "amount": "-500"},
             )
             sell_id = await create_standalone_tx(
-                client, broker, "SELL",
+                client,
+                broker,
+                "SELL",
                 asset_id=asset_id,
                 quantity="-5",
                 cash={"code": "USD", "amount": "250"},
@@ -608,7 +620,9 @@ class TestBatchPromote:
 
             # Try to promote one of the paired TXs with a new standalone
             standalone_id = await create_standalone_tx(
-                client, broker_a, "ADJUSTMENT",
+                client,
+                broker_a,
+                "ADJUSTMENT",
                 asset_id=asset_id,
                 quantity="1",
             )
@@ -633,25 +647,31 @@ class TestBatchPromote:
             broker_b = await create_broker(client, "PromResB")
 
             w_id = await create_standalone_tx(
-                client, broker_a, "WITHDRAWAL",
+                client,
+                broker_a,
+                "WITHDRAWAL",
                 cash={"code": "EUR", "amount": "-200"},
             )
             d_id = await create_standalone_tx(
-                client, broker_b, "DEPOSIT",
+                client,
+                broker_b,
+                "DEPOSIT",
                 cash={"code": "EUR", "amount": "200"},
             )
 
             resp = await client.post(
                 f"{API_BASE}/transactions/commit",
                 json={
-                    "promotes": [{
-                        "id_a": w_id,
-                        "id_b": d_id,
-                        "resolved_fields": {
-                            "description": "Merged transfer description",
-                            "tags": ["alpha", "beta"],
-                        },
-                    }],
+                    "promotes": [
+                        {
+                            "id_a": w_id,
+                            "id_b": d_id,
+                            "resolved_fields": {
+                                "description": "Merged transfer description",
+                                "tags": ["alpha", "beta"],
+                            },
+                        }
+                    ],
                 },
                 timeout=TIMEOUT,
             )
@@ -678,11 +698,15 @@ class TestBatchPromote:
             broker = await create_broker(client, "PromSameBroker")
 
             w_id = await create_standalone_tx(
-                client, broker, "WITHDRAWAL",
+                client,
+                broker,
+                "WITHDRAWAL",
                 cash={"code": "EUR", "amount": "-100"},
             )
             d_id = await create_standalone_tx(
-                client, broker, "DEPOSIT",
+                client,
+                broker,
+                "DEPOSIT",
                 cash={"code": "EUR", "amount": "100"},
             )
 
@@ -721,7 +745,9 @@ class TestPromoteSuggest:
 
             # Create a standalone WITHDRAWAL
             w_id = await create_standalone_tx(
-                client, broker_a, "WITHDRAWAL",
+                client,
+                broker_a,
+                "WITHDRAWAL",
                 cash={"code": "EUR", "amount": "-600"},
                 tx_date="2026-04-01",
             )
@@ -759,7 +785,9 @@ class TestPromoteSuggest:
 
             # Create WITHDRAWAL 30 days ago
             await create_standalone_tx(
-                client, broker_a, "WITHDRAWAL",
+                client,
+                broker_a,
+                "WITHDRAWAL",
                 cash={"code": "EUR", "amount": "-100"},
                 tx_date="2026-01-01",
             )
@@ -830,7 +858,9 @@ class TestPromoteSuggest:
 
             # Create standalone WITHDRAWAL
             w_id = await create_standalone_tx(
-                client, broker_a, "WITHDRAWAL",
+                client,
+                broker_a,
+                "WITHDRAWAL",
                 cash={"code": "EUR", "amount": "-100"},
                 tx_date="2026-04-15",
             )
@@ -910,14 +940,3 @@ class TestPromoteSuggest:
             data = resp.json()
             assert "-1" in data["results"], f"Expected key '-1' in results: {data['results'].keys()}"
             print_success("Suggest fake ID → keyed by -1 ✓")
-
-
-
-
-
-
-
-
-
-
-
