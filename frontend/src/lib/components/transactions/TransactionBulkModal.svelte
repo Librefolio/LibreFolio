@@ -316,25 +316,45 @@
             // uses related_transaction_id (not getTypeRule().requiresPair).
             next = collapsePairedOps(next);
 
-            ops = next;
-            initialOpsKey = serializeOps(next);
-
-            // Schedule auto-open if types already loaded; otherwise defer.
+            // B4-fix: Build ops eagerly but only assign after types are loaded,
+            // because getTypeRule() returns FALLBACK_RULE (requiresPair=false)
+            // until _ruleMap is populated → paired rows render as singles.
             if (isTypesLoaded()) {
+                // Fast path: types already cached → assign + auto-open immediately.
+                ops = next;
+                initialOpsKey = serializeOps(next);
                 scheduleAutoOpen(autoForm, next);
-            } else if (rows.length === 0) {
-                queueMicrotask(() => {
-                    formOpen = true;
-                    formMode = 'create';
-                    formInitial = null;
-                    formPartnerRow = null;
-                    formEditingTempId = null;
-                });
+            } else {
+                // Slow path: keep ops empty so DataTable doesn't render
+                // with FALLBACK_RULE. Ops will be assigned after Promise.all.
+                ops = [];
+                initialOpsKey = '';
+                if (rows.length === 0) {
+                    queueMicrotask(() => {
+                        formOpen = true;
+                        formMode = 'create';
+                        formInitial = null;
+                        formPartnerRow = null;
+                        formEditingTempId = null;
+                    });
+                }
             }
         });
         void (async () => {
             await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded(), ensureTypesLoaded()]);
             untrack(() => {
+                // B4-fix: if ops was deferred (slow path), rebuild + assign now.
+                if (ops.length === 0 && rows.length > 0) {
+                    let next2: PendingOp[] = [];
+                    if (initSt === 'delete') {
+                        next2 = rows.filter((r) => r.id > 0).map((r) => editOpFromTx(r.id, {markedDelete: true}));
+                    } else {
+                        next2 = rows.map((r) => (r.id > 0 ? editOpFromTx(r.id) : createOpFromClone(r, (r as any).link_uuid)));
+                    }
+                    next2 = collapsePairedOps(next2);
+                    ops = next2;
+                    initialOpsKey = serializeOps(next2);
+                }
                 if (!formOpen) {
                     scheduleAutoOpen(autoForm, ops);
                 }
