@@ -31,6 +31,7 @@
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import TransactionResultBanner from './TransactionResultBanner.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
@@ -41,7 +42,7 @@
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/brokerStore';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
-    import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded} from '$lib/stores/transactionTypeStore';
+    import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
     import {findPromoteMatch, type PromoteContext} from '$lib/stores/transactionTypeStore';
     import PromoteMergeModal from './PromoteMergeModal.svelte';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
@@ -631,13 +632,47 @@
     }
 
     /** Split a paired row in the BulkModal.
-     *  Saved paired → remove from batch + accumulate in pendingSplits (DD-BF1).
+     *  Saved paired → backend split + 2 editable preview rows (DD-R2.1).
      *  New paired (link_uuid shared) → local transformation only. */
     function handleSplitRow(row: PendingOp) {
         if (row.op === 'edit' && row.partnerId != null) {
-            // Case A: Saved paired → backend split (DD-BF1: remove from batch)
-            pendingSplits = [...pendingSplits, {id: (row as any).txId}];
-            removeRow(row.tempId);
+            // Case A: Saved paired → backend split + preview editable (DD-R2.1)
+            const txId = (row as any).txId as number;
+            const partnerId = row.partnerId!;
+            pendingSplits = [...pendingSplits, {id: txId}];
+
+            // Determine split types
+            const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
+            if (!splitTypes) return;
+            const [fromType, toType] = splitTypes;
+
+            // Determine from/to by sign
+            const cashAmt = Number(row.fields.cash?.amount ?? 0);
+            const qty = Number(row.fields.quantity ?? 0);
+            const isFrom = row.fields.type === 'TRANSFER' ? qty < 0 : cashAmt < 0;
+
+            // Mutate the main row to standalone post-split type
+            row.fields.type = (isFrom ? fromType : toType) as TransactionTypeCode;
+            row.partnerId = undefined;
+            row.partnerBrokerId = undefined;
+            row.partnerCash = undefined;
+            row.partnerDate = undefined;
+            row.partnerPayload = undefined;
+
+            // Create edit op for the partner TX (add as new visible row)
+            const partnerTx = txStoreGet(partnerId);
+            if (partnerTx) {
+                const partnerOp = editOpFromTx(partnerId);
+                partnerOp.fields.type = (isFrom ? toType : fromType) as TransactionTypeCode;
+                partnerOp.partnerId = undefined;
+                partnerOp.partnerBrokerId = undefined;
+                partnerOp.partnerCash = undefined;
+                partnerOp.partnerDate = undefined;
+                partnerOp.partnerPayload = undefined;
+                ops = [...ops, partnerOp];
+            }
+
+            ops = [...ops]; // trigger reactivity
         } else if (row.op === 'create' && row.link_uuid) {
             // Case B: New paired (link_uuid shared) → local transformation
             const partner = ops.find((o) => o !== row && o.op === 'create' && (o as any).link_uuid === row.link_uuid);
@@ -702,7 +737,11 @@
             const st = deriveStatus(d);
             if (st === 'new') {
                 creates.push(collectCreate(d));
-                if (d.partnerPayload) creates.push(d.partnerPayload as unknown as Record<string, unknown>);
+                if (d.partnerPayload) {
+                    const partnerFields = d.partnerPayload as unknown as TxFields;
+                    const partnerRule = getTypeRule(partnerFields.type as TransactionTypeCode);
+                    creates.push(buildCreatePayload(partnerFields, partnerRule));
+                }
             } else if (st === 'edited') {
                 const upd = collectUpdate(d);
                 if (upd && Object.keys(upd).length > 1) updates.push(upd);
@@ -920,7 +959,11 @@
                 const st = deriveStatus(d);
                 if (st === 'new') {
                     creates.push(collectCreate(d));
-                    if (d.partnerPayload) creates.push(d.partnerPayload as unknown as Record<string, unknown>);
+                    if (d.partnerPayload) {
+                        const partnerFields = d.partnerPayload as unknown as TxFields;
+                        const partnerRule = getTypeRule(partnerFields.type as TransactionTypeCode);
+                        creates.push(buildCreatePayload(partnerFields, partnerRule));
+                    }
                 } else if (st === 'edited') {
                     const upd = collectUpdate(d);
                     if (upd && Object.keys(upd).length > 1) updates.push(upd);
@@ -1746,7 +1789,7 @@
     /** Local promote suggestions: match new standalone ops against each other. */
     let localSuggestions = $derived.by(() => {
         const newStandalone = ops.filter((o) => o.op === 'create' && !(o as any).link_uuid && !o.partnerId && !o.partnerPayload);
-        const results: Array<{tempIdA: string; tempIdB: string; labelA: string; labelB: string; targetLabel: string}> = [];
+        const results: Array<{tempIdA: string; tempIdB: string; labelA: string; labelB: string; targetLabel: string; typeA: string; typeB: string; targetType: string}> = [];
         for (let i = 0; i < newStandalone.length; i++) {
             for (let j = i + 1; j < newStandalone.length; j++) {
                 const match = findPromoteMatch(newStandalone[i].fields.type, newStandalone[j].fields.type, $t, buildPromoteCtx(newStandalone[i], newStandalone[j]));
@@ -1757,6 +1800,9 @@
                         labelA: `${newStandalone[i].fields.type}`,
                         labelB: `${newStandalone[j].fields.type}`,
                         targetLabel: match.targetLabel,
+                        typeA: newStandalone[i].fields.type,
+                        typeB: newStandalone[j].fields.type,
+                        targetType: match.targetType,
                     });
                 }
             }
@@ -1766,7 +1812,7 @@
 
     /** Combined promote suggestions (local new+new + DB edit→candidate). */
     let allSuggestions = $derived.by(() => {
-        const combined: Array<{tempIdA: string; tempIdB: string; labelA: string; labelB: string; targetLabel: string; isDB?: boolean; dbCandidateId?: number}> = [];
+        const combined: Array<{tempIdA: string; tempIdB: string; labelA: string; labelB: string; targetLabel: string; typeA: string; typeB: string; targetType: string; isDB?: boolean; dbCandidateId?: number}> = [];
         for (const s of localSuggestions) combined.push(s);
         for (const [txId, candidates] of suggestFromDB) {
             const op = ops.find((o) => o.op === 'edit' && (o as any).txId === txId);
@@ -1784,6 +1830,9 @@
                 labelA: `#${txId} ${op.fields.type}`,
                 labelB: `DB #${best.id} ${best.type}`,
                 targetLabel: match.targetLabel,
+                typeA: op.fields.type,
+                typeB: best.type,
+                targetType: match.targetType,
                 isDB: true,
                 dbCandidateId: best.id,
             });
@@ -2002,15 +2051,35 @@
                 </InfoBanner>
             {/if}
             {#if allSuggestions.length > 0}
-                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-2 text-xs space-y-0.5" data-testid="promote-suggest-banner">
+                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-2 text-xs space-y-1" data-testid="promote-suggest-banner">
                     {#each allSuggestions.slice(0, 5) as sug, idx}
-                        <div class="flex items-center gap-1 flex-wrap" data-testid="promote-suggest-item-{idx}">
-                            <span>💡</span>
-                            <button type="button" class="underline text-green-700 dark:text-green-300" onclick={() => scrollToSuggestRow(sug.tempIdA)}>{sug.labelA}</button>
-                            <span>&amp;</span>
-                            <button type="button" class="underline text-green-700 dark:text-green-300" onclick={() => scrollToSuggestRow(sug.tempIdB)}>{sug.labelB}</button>
-                            <span>→ {sug.targetLabel}</span>
-                            <button type="button" class="text-green-600 font-bold hover:text-green-800 dark:text-green-400 dark:hover:text-green-200" onclick={() => triggerPromoteFromSuggestion(sug)} data-testid="promote-suggest-link-{idx}">🔗</button>
+                        <div class="flex items-center gap-1.5 flex-wrap" data-testid="promote-suggest-item-{idx}">
+                            <button type="button" class="underline text-green-700 dark:text-green-300 font-medium" onclick={() => scrollToSuggestRow(sug.tempIdA)}>
+                                {sug.labelA}
+                            </button>
+                            <Tooltip text={$t(`transactions.types.${sug.typeA}`)}>
+                                <img src={getTransactionTypeIconUrl(sug.typeA)} alt="" class="w-4 h-4 inline" />
+                            </Tooltip>
+                            <span class="text-gray-500">{$t('common.and')}</span>
+                            <button type="button" class="underline text-green-700 dark:text-green-300 font-medium" onclick={() => scrollToSuggestRow(sug.tempIdB)}>
+                                {sug.labelB}
+                            </button>
+                            <Tooltip text={$t(`transactions.types.${sug.typeB}`)}>
+                                <img src={getTransactionTypeIconUrl(sug.typeB)} alt="" class="w-4 h-4 inline" />
+                            </Tooltip>
+                            <span class="text-gray-500">→</span>
+                            <Tooltip text={sug.targetLabel}>
+                                <img src={getTransactionTypeIconUrl(sug.targetType)} alt="" class="w-4 h-4 inline" />
+                            </Tooltip>
+                            <button
+                                type="button"
+                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-100 dark:bg-green-800/30 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-700/40 font-medium"
+                                onclick={() => triggerPromoteFromSuggestion(sug)}
+                                data-testid="promote-suggest-link-{idx}"
+                            >
+                                <Link2 size={12} />
+                                {$t('transactions.promoteSuggest.merge')}
+                            </button>
                         </div>
                     {/each}
                     {#if allSuggestions.length > 5}

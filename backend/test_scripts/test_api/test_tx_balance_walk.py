@@ -217,7 +217,7 @@ class TestBalanceWalk:
             )
             assert resp["committed"] is True
 
-            deposit_id = resp["results"][0]["id"]
+            deposit_id = resp["results"][0]["ids"][0]
 
             # Now move deposit to day3 (AFTER the BUY) → BUY on day2 has no cash
             resp2 = await _commit(
@@ -254,7 +254,7 @@ class TestBalanceWalk:
                 },
             )
             assert resp["committed"] is True
-            deposit_id = resp["results"][0]["id"]
+            deposit_id = resp["results"][0]["ids"][0]
 
             # Delete deposit → BUY on day2 has no cash
             resp2 = await _commit(client, {"deletes": [deposit_id]})

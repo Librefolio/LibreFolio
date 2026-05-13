@@ -637,7 +637,7 @@ class TXBatchResultItem(BaseModel):
 
     operation: TXBatchOperation
     index: int
-    id: Optional[int] = None
+    ids: List[int] = Field(default_factory=list, description="IDs of affected transactions. Split/promote return both IDs.")
     link_uuid: Optional[str] = None
     status: TXItemStatus
 

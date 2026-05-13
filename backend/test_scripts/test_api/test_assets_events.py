@@ -306,7 +306,7 @@ async def test_delete_event_bulk_in_use_returns_breakdown(test_server):
         assert tx_resp.status_code == 200, tx_resp.text
         tx_body = tx_resp.json()
         assert tx_body["committed"] is True, tx_body
-        tx_id = tx_body["results"][0]["id"]
+        tx_id = tx_body["results"][0]["ids"][0]
 
         # Delete: event should now be in_use.
         del_resp = await client.delete(

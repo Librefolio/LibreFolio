@@ -81,7 +81,8 @@
     "next": "Suivant",
     "created": "Créé",
     "updated": "Mis à jour",
-    "createNew": "Créer nouveau"
+    "createNew": "Créer nouveau",
+    "and": "et"
   },
   "table": {
     "columns": "Colonnes",
@@ -473,28 +474,12 @@
       "success": "Paire dissociée",
       "fromType": "Deviendra : {type}"
     },
-    "promote": {
-      "mergeTitle": "Promouvoir en {type}",
-      "mergeSubtitle": "Résoudre les champs divergents :",
-      "mergeConfirm": "Confirmer la promotion",
-      "fieldDescription": "Description",
-      "fieldTags": "Tags",
-      "fieldDate": "Date",
-      "fieldCostBasis": "Coût de base",
-      "useLeft": "Utiliser gauche",
-      "useMerge": "Fusionner",
-      "useRight": "Utiliser droite",
-      "allLeft": "Tout à gauche",
-      "allMerge": "Tout fusionner",
-      "allRight": "Tout à droite",
-      "concat": "Concaténer",
-      "union": "Union"
-    },
     "promoteSuggest": {
       "banner": "Ligne {a} et Ligne {b} sont compatibles — promouvoir en {type}",
       "bannerMore": "et {n} de plus...",
       "dbMatch": "Correspondance en BDD : {type} sur {broker} ({date})",
-      "bannerDetailed": "Le {date}, la ligne #{a} et la ligne #{b} pourraient devenir {type}"
+      "bannerDetailed": "Le {date}, la ligne #{a} et la ligne #{b} pourraient devenir {type}",
+      "merge": "Fusionner"
     },
     "empty": "Aucune transaction",
     "ghost": {
@@ -651,7 +636,23 @@
       "commit": "Promouvoir",
       "failed": "Échec de la promotion",
       "rolledBack": "Liaison annulée — aucune modification effectuée.",
-      "rolledBackTitle": "Annulé"
+      "rolledBackTitle": "Annulé",
+      "mergeTitle": "Promouvoir en {type}",
+      "mergeSubtitle": "Résoudre les champs divergents :",
+      "mergeConfirm": "Confirmer la promotion",
+      "fieldDescription": "Description",
+      "fieldTags": "Tags",
+      "fieldDate": "Date",
+      "fieldCostBasis": "Coût de base",
+      "useLeft": "Utiliser gauche",
+      "useMerge": "Fusionner",
+      "useRight": "Utiliser droite",
+      "allLeft": "Tout à gauche",
+      "allMerge": "Tout fusionner",
+      "allRight": "Tout à droite",
+      "concat": "Concaténer",
+      "union": "Union",
+      "clickToSelect": "Cliquer pour sélectionner"
     },
     "bulkDelete": {
       "title": "Supprimer des transactions",

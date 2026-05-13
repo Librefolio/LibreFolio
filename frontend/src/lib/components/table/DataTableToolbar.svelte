@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
 
     interface BulkActionInfo {
         id: string;
@@ -40,9 +41,11 @@
             </button>
             <div class="bulk-actions">
                 {#each bulkActions as action}
-                    <button type="button" class="bulk-btn" class:danger={action.variant === 'danger'} onclick={action.onClick} title={getActionLabel(action)} disabled={action.disabled} data-testid="toolbar-action-{action.id}">
-                        <action.icon size={16} class={action.iconClass || ''} />
-                    </button>
+                    <Tooltip text={getActionLabel(action)}>
+                        <button type="button" class="bulk-btn" class:danger={action.variant === 'danger'} onclick={action.onClick} disabled={action.disabled} data-testid="toolbar-action-{action.id}">
+                            <action.icon size={16} class={action.iconClass || ''} />
+                        </button>
+                    </Tooltip>
                 {/each}
             </div>
         {/if}
