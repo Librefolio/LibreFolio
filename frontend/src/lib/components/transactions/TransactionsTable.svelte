@@ -969,6 +969,7 @@
         enableColumnFilters={true}
         enableSorting={true}
         stickyActions={false}
+        actionsColumnWidth="160px"
         emptyMessage={$t('transactions.empty') || 'No transactions yet'}
         {getRowClass}
         {getRowStyle}

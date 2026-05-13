@@ -48,6 +48,7 @@ from backend.app.schemas.transactions import (
     TXTransferPromoteRequest,
     TXTransferPromoteResponse,
     TXUpdateItem,
+    TXValidationCode,
     TXValidationIssue,
     get_swap_group,
     tags_to_csv,
@@ -458,7 +459,7 @@ class TransactionService:
                             currency_or_asset=currency,
                             balance=balance,
                             message=f"Cash balance for {currency} goes negative ({balance}) on {current_date} for broker {broker_id}",
-                            code="balanceCashNegative",
+                            code=TXValidationCode.BALANCE_CASH_NEGATIVE.value,
                             params={"brokerId": broker_id, "currency": currency, "balance": str(balance), "date": str(current_date)},
                         )
 
@@ -471,7 +472,7 @@ class TransactionService:
                             currency_or_asset=f"asset:{asset_id}",
                             balance=balance,
                             message=f"Asset {asset_id} quantity goes negative ({balance}) on {current_date} for broker {broker_id}",
-                            code="balanceAssetNegative",
+                            code=TXValidationCode.BALANCE_ASSET_NEGATIVE.value,
                             params={"brokerId": broker_id, "assetId": asset_id, "balance": str(balance), "date": str(current_date)},
                         )
 
@@ -670,7 +671,7 @@ class TransactionService:
                 "asset_id": req.asset_id,
                 "type": TransactionType.TRANSFER.value,
                 "date": from_date.isoformat(),
-                "quantity": format(-abs(qty), 'f'),
+                "quantity": format(-abs(qty), "f"),
                 "link_uuid": link_uuid,
                 "tags": from_tags,
                 "description": from_description,
@@ -680,11 +681,11 @@ class TransactionService:
                 "asset_id": req.asset_id,
                 "type": TransactionType.TRANSFER.value,
                 "date": to_date.isoformat(),
-                "quantity": format(abs(qty), 'f'),
+                "quantity": format(abs(qty), "f"),
                 "link_uuid": link_uuid,
                 "tags": to_tags,
                 "description": to_description,
-                "cost_basis_override": format(req.cost_basis_override, 'f') if req.cost_basis_override is not None else None,
+                "cost_basis_override": format(req.cost_basis_override, "f") if req.cost_basis_override is not None else None,
             }
         else:  # FX_CONVERSION
             if from_currency is None or to_currency is None:
@@ -693,7 +694,7 @@ class TransactionService:
                 "broker_id": from_broker_id,
                 "type": TransactionType.FX_CONVERSION.value,
                 "date": from_date.isoformat(),
-                "cash": {"code": from_currency, "amount": format(from_amount, 'f')},
+                "cash": {"code": from_currency, "amount": format(from_amount, "f")},
                 "link_uuid": link_uuid,
                 "tags": from_tags,
                 "description": from_description,
@@ -702,7 +703,7 @@ class TransactionService:
                 "broker_id": to_broker_id,
                 "type": TransactionType.FX_CONVERSION.value,
                 "date": to_date.isoformat(),
-                "cash": {"code": to_currency, "amount": format(to_amount, 'f')},
+                "cash": {"code": to_currency, "amount": format(to_amount, "f")},
                 "link_uuid": link_uuid,
                 "tags": to_tags,
                 "description": to_description,
@@ -754,9 +755,7 @@ class TransactionService:
             if meta.promote_from is None:
                 continue
             for rule in meta.promote_from:
-                if (tx_a.type.value == rule.type_a and tx_b.type.value == rule.type_b) or (
-                    tx_a.type.value == rule.type_b and tx_b.type.value == rule.type_a
-                ):
+                if (tx_a.type.value == rule.type_a and tx_b.type.value == rule.type_b) or (tx_a.type.value == rule.type_b and tx_b.type.value == rule.type_a):
                     if TransactionService._check_promote_constraints(tx_a, tx_b, rule.field_constraints):
                         return pair_type
         return None
@@ -782,9 +781,7 @@ class TransactionService:
         return None
 
     @staticmethod
-    def _check_promote_constraints(
-        tx_a: Transaction, tx_b: Transaction, constraints: list
-    ) -> bool:
+    def _check_promote_constraints(tx_a: Transaction, tx_b: Transaction, constraints: list) -> bool:
         """Check if two transactions satisfy promote field constraints."""
         from backend.app.schemas.transactions import PairFieldConstraint
 
@@ -852,14 +849,7 @@ class TransactionService:
             lo = inp.date - timedelta(days=tolerance_days)
             hi = inp.date + timedelta(days=tolerance_days)
 
-            stmt = (
-                select(Transaction)
-                .where(Transaction.type.in_(comp_types))
-                .where(Transaction.related_transaction_id.is_(None))
-                .where(Transaction.date >= lo)
-                .where(Transaction.date <= hi)
-                .where(Transaction.broker_id.in_(accessible))
-            )
+            stmt = select(Transaction).where(Transaction.type.in_(comp_types)).where(Transaction.related_transaction_id.is_(None)).where(Transaction.date >= lo).where(Transaction.date <= hi).where(Transaction.broker_id.in_(accessible))
             if input_positive_ids:
                 stmt = stmt.where(Transaction.id.notin_(input_positive_ids))
 
@@ -883,14 +873,16 @@ class TransactionService:
                             matched = True
                             break
                 if matched:
-                    candidates.append(TXPromoteSuggestCandidate(
-                        id=row.id,
-                        broker_id=row.broker_id,
-                        date=row.date,
-                        type=row.type.value,
-                        currency=row.currency,
-                        asset_id=row.asset_id,
-                    ))
+                    candidates.append(
+                        TXPromoteSuggestCandidate(
+                            id=row.id,
+                            broker_id=row.broker_id,
+                            date=row.date,
+                            type=row.type.value,
+                            currency=row.currency,
+                            asset_id=row.asset_id,
+                        )
+                    )
 
             results[inp.id] = candidates
 
@@ -975,7 +967,7 @@ class TransactionService:
                             index=0,
                             ref_id=None,
                             error=f"Access denied: EDITOR required for broker {broker_id}",
-                            code="accessDenied",
+                            code=TXValidationCode.ACCESS_DENIED.value,
                             params={"brokerId": broker_id},
                         )
                     )
@@ -991,7 +983,7 @@ class TransactionService:
         for idx, tx_id in enumerate(deletes):
             tx = existing_by_id.get(tx_id)
             if tx is None:
-                issues.append(TXValidationIssue(operation="delete", index=idx, ref_id=tx_id, error=f"Transaction {tx_id} not found", code="txNotFound", params={"id": tx_id}))
+                issues.append(TXValidationIssue(operation="delete", index=idx, ref_id=tx_id, error=f"Transaction {tx_id} not found", code=TXValidationCode.TX_NOT_FOUND.value, params={"id": tx_id}))
                 continue
             # Linked-pair integrity check
             if tx.related_transaction_id and tx.related_transaction_id not in id_set_deletes:
@@ -1018,7 +1010,7 @@ class TransactionService:
         for orig_idx, item in parsed_updates:
             tx = existing_by_id.get(item.id)
             if tx is None:
-                issues.append(TXValidationIssue(operation="update", index=orig_idx, ref_id=item.id, error=f"Transaction {item.id} not found", code="txNotFound", params={"id": item.id}))
+                issues.append(TXValidationIssue(operation="update", index=orig_idx, ref_id=item.id, error=f"Transaction {item.id} not found", code=TXValidationCode.TX_NOT_FOUND.value, params={"id": item.id}))
                 continue
             try:
                 check_date = tx.date
@@ -1026,10 +1018,7 @@ class TransactionService:
                 if item.type is not None and item.type != tx.type:
                     allowed = get_swap_group(tx.type)
                     if item.type not in allowed:
-                        raise ValueError(
-                            f"Cannot change type from {tx.type.value} to {item.type.value} "
-                            f"(allowed swaps: {', '.join(t.value for t in allowed)})"
-                        )
+                        raise ValueError(f"Cannot change type from {tx.type.value} to {item.type.value} " f"(allowed swaps: {', '.join(t.value for t in allowed)})")
                     tx.type = item.type
                 if item.date is not None:
                     check_date = min(check_date, item.date)
@@ -1074,10 +1063,16 @@ class TransactionService:
                 desc_result = self._validate_pair_description_tags(tx, partner)
                 if desc_result is not None:
                     err_msg, err_code, err_params = desc_result
-                    issues.append(TXValidationIssue(
-                        operation="update", index=orig_idx, ref_id=item.id,
-                        error=err_msg, code=err_code, params=err_params,
-                    ))
+                    issues.append(
+                        TXValidationIssue(
+                            operation="update",
+                            index=orig_idx,
+                            ref_id=item.id,
+                            error=err_msg,
+                            code=err_code,
+                            params=err_params,
+                        )
+                    )
 
         # 5. Apply creates (only successfully-parsed rows)
         link_uuid_map: Dict[str, List[Tuple[int, Transaction]]] = defaultdict(list)
@@ -1119,32 +1114,52 @@ class TransactionService:
         for orig_idx, item in parsed_splits:
             tx = existing_by_id.get(item.id)
             if tx is None:
-                issues.append(TXValidationIssue(
-                    operation="split", index=orig_idx, ref_id=item.id,
-                    error=f"Transaction {item.id} not found", code="txNotFound",
-                ))
+                issues.append(
+                    TXValidationIssue(
+                        operation="split",
+                        index=orig_idx,
+                        ref_id=item.id,
+                        error=f"Transaction {item.id} not found",
+                        code=TXValidationCode.TX_NOT_FOUND.value,
+                    )
+                )
                 continue
             if tx.related_transaction_id is None:
-                issues.append(TXValidationIssue(
-                    operation="split", index=orig_idx, ref_id=item.id,
-                    error=f"Transaction {item.id} has no pair", code="noPairToSplit",
-                ))
+                issues.append(
+                    TXValidationIssue(
+                        operation="split",
+                        index=orig_idx,
+                        ref_id=item.id,
+                        error=f"Transaction {item.id} has no pair",
+                        code=TXValidationCode.NO_PAIR_TO_SPLIT.value,
+                    )
+                )
                 continue
             partner = existing_by_id.get(tx.related_transaction_id)
             if partner is None:
                 partner = await self.session.get(Transaction, tx.related_transaction_id)
             if partner is None:
-                issues.append(TXValidationIssue(
-                    operation="split", index=orig_idx, ref_id=item.id,
-                    error=f"Partner {tx.related_transaction_id} not found", code="partnerNotFound",
-                ))
+                issues.append(
+                    TXValidationIssue(
+                        operation="split",
+                        index=orig_idx,
+                        ref_id=item.id,
+                        error=f"Partner {tx.related_transaction_id} not found",
+                        code=TXValidationCode.PARTNER_NOT_FOUND.value,
+                    )
+                )
                 continue
             split_types = self.SPLIT_TYPE_MAP.get(tx.type)
             if split_types is None:
-                issues.append(TXValidationIssue(
-                    operation="split", index=orig_idx, ref_id=item.id,
-                    error=f"Type {tx.type.value} cannot be split", code="typeCannotSplit",
-                ))
+                issues.append(
+                    TXValidationIssue(
+                        operation="split",
+                        index=orig_idx,
+                        ref_id=item.id,
+                        error=f"Type {tx.type.value} cannot be split",
+                        code=TXValidationCode.TYPE_CANNOT_SPLIT.value,
+                    )
+                )
                 continue
 
             from_type, to_type = split_types
@@ -1191,36 +1206,58 @@ class TransactionService:
             tx_b = self._resolve_promote_ref(item.id_b, item.link_uuid_b, existing_by_id, link_uuid_map)
 
             if tx_a is None:
-                issues.append(TXValidationIssue(
-                    operation="promote", index=orig_idx,
-                    error="Cannot resolve TX A reference", code="promoteRefNotFound",
-                ))
+                issues.append(
+                    TXValidationIssue(
+                        operation="promote",
+                        index=orig_idx,
+                        error="Cannot resolve TX A reference",
+                        code=TXValidationCode.PROMOTE_REF_NOT_FOUND.value,
+                    )
+                )
                 continue
             if tx_b is None:
-                issues.append(TXValidationIssue(
-                    operation="promote", index=orig_idx,
-                    error="Cannot resolve TX B reference", code="promoteRefNotFound",
-                ))
+                issues.append(
+                    TXValidationIssue(
+                        operation="promote",
+                        index=orig_idx,
+                        error="Cannot resolve TX B reference",
+                        code=TXValidationCode.PROMOTE_REF_NOT_FOUND.value,
+                    )
+                )
                 continue
             if tx_a.related_transaction_id is not None:
-                issues.append(TXValidationIssue(
-                    operation="promote", index=orig_idx, ref_id=getattr(tx_a, 'id', None),
-                    error=f"TX A ({tx_a.id}) already paired", code="alreadyPaired",
-                ))
+                issues.append(
+                    TXValidationIssue(
+                        operation="promote",
+                        index=orig_idx,
+                        ref_id=getattr(tx_a, "id", None),
+                        error=f"TX A ({tx_a.id}) already paired",
+                        code=TXValidationCode.ALREADY_PAIRED.value,
+                    )
+                )
                 continue
             if tx_b.related_transaction_id is not None:
-                issues.append(TXValidationIssue(
-                    operation="promote", index=orig_idx, ref_id=getattr(tx_b, 'id', None),
-                    error=f"TX B ({tx_b.id}) already paired", code="alreadyPaired",
-                ))
+                issues.append(
+                    TXValidationIssue(
+                        operation="promote",
+                        index=orig_idx,
+                        ref_id=getattr(tx_b, "id", None),
+                        error=f"TX B ({tx_b.id}) already paired",
+                        code=TXValidationCode.ALREADY_PAIRED.value,
+                    )
+                )
                 continue
 
             target_type = self._find_promote_rule_match(tx_a, tx_b)
             if target_type is None:
-                issues.append(TXValidationIssue(
-                    operation="promote", index=orig_idx,
-                    error=f"No promote rule for {tx_a.type.value}+{tx_b.type.value}", code="noPromoteRule",
-                ))
+                issues.append(
+                    TXValidationIssue(
+                        operation="promote",
+                        index=orig_idx,
+                        error=f"No promote rule for {tx_a.type.value}+{tx_b.type.value}",
+                        code=TXValidationCode.NO_PROMOTE_RULE.value,
+                    )
+                )
                 continue
 
             # Mutate types + set bidirectional link
@@ -1242,6 +1279,7 @@ class TransactionService:
                     tx_b.tags = csv_tags
                 if "date" in item.resolved_fields:
                     from backend.app.utils.datetime_utils import parse_ISO_date
+
                     resolved_date = parse_ISO_date(item.resolved_fields["date"])
                     tx_a.date = resolved_date
                     tx_b.date = resolved_date
@@ -1286,7 +1324,7 @@ class TransactionService:
                         index=pairs[0][0] if pairs else 0,
                         ref_id=None,
                         error=f"link_uuid '{link_uuid}' has {len(pairs)} creates (expected 2)",
-                        code="linkUuidPairCount",
+                        code=TXValidationCode.LINK_UUID_PAIR_COUNT.value,
                         params={"linkUuid": link_uuid, "count": len(pairs)},
                     )
                 )
@@ -1310,4 +1348,3 @@ class TransactionService:
         else:
             # Commit: caller (router) will session.commit()
             return TXBatchResponse(committed=True, issues=[], results=results)
-

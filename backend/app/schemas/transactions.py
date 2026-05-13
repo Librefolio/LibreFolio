@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
+from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -652,6 +653,49 @@ class TXBatchResponse(BaseModel):
 
 
 # =============================================================================
+# VALIDATION CODES (F13 — centralized enum)
+# =============================================================================
+
+
+class TXValidationCode(str, Enum):
+    """Centralized validation error codes for transaction operations.
+
+    Frontend maps these to i18n keys via `transactions.errors.{code}`.
+    Exposed in GET /transactions/types → validation_codes.
+    """
+
+    BALANCE_ASSET_NEGATIVE = "balanceAssetNegative"
+    BALANCE_CASH_NEGATIVE = "balanceCashNegative"
+    TX_NOT_FOUND = "txNotFound"
+    NO_PAIR_TO_SPLIT = "noPairToSplit"
+    PARTNER_NOT_FOUND = "partnerNotFound"
+    TYPE_CANNOT_SPLIT = "typeCannotSplit"
+    PROMOTE_REF_NOT_FOUND = "promoteRefNotFound"
+    ALREADY_PAIRED = "alreadyPaired"
+    NO_PROMOTE_RULE = "noPromoteRule"
+    ACCESS_DENIED = "accessDenied"
+    PARSE_ERROR = "parseError"
+    TYPE_SWAP_FORBIDDEN = "typeSwapForbidden"
+    EXTRA_FORBIDDEN = "extra_forbidden"
+    LINK_UUID_PAIR_COUNT = "linkUuidPairCount"
+    INDEX_ASSET_FORBIDDEN = "indexAssetForbidden"
+
+
+class TXValidationCodeInfo(BaseModel):
+    """Metadata for a validation code — exposed in GET /transactions/types."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(..., description="Validation code identifier")
+    description: str = Field(..., description="Human-readable description")
+    severity: Literal["error", "warning"] = Field("error", description="Issue severity")
+
+
+# Precomputed list of all validation codes for the types endpoint.
+VALIDATION_CODE_METADATA: list[TXValidationCodeInfo] = [TXValidationCodeInfo(code=c.value, description=c.name.replace("_", " ").title(), severity="error") for c in TXValidationCode]
+
+
+# =============================================================================
 # VALIDATION ISSUE
 # =============================================================================
 
@@ -863,7 +907,10 @@ class PairFieldConstraint(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     field: Literal["broker_id", "asset_id", "cash_currency", "cash_amount", "quantity"] = Field(..., description="Transaction field name")
-    relation: PairFieldRelation = Field(...,description="Constraint: equal (same value), opposite (negated), different (must differ)",)
+    relation: PairFieldRelation = Field(
+        ...,
+        description="Constraint: equal (same value), opposite (negated), different (must differ)",
+    )
 
 
 class SplitMeta(BaseModel):
@@ -920,15 +967,22 @@ class TXTypeMetadata(BaseModel):
     # None = standard single form. Set for types that are inherently paired.
     pair_form_layout: PairFormLayout | None = Field(
         None,
-        description="Dual-form layout: 'fx' (2 currencies, 1 broker), "
-        "'transfer_asset' (2 brokers, 1 asset), 'transfer_cash' (2 brokers, 1 currency). "
-        "None = standard single form.",
+        description="Dual-form layout: 'fx' (2 currencies, 1 broker), " "'transfer_asset' (2 brokers, 1 asset), 'transfer_cash' (2 brokers, 1 currency). " "None = standard single form.",
     )
 
     # Split/Promote server-driven metadata (only for paired types, None for standalone)
-    split_into: SplitMeta | None = Field(None,description="How this paired type splits into 2 standalone types. None for standalone types.",)
-    promote_from: list[PromoteRule] | None = Field(None,description="Rules for promoting 2 standalone types into this paired type. None for standalone types.",)
-    pair_field_constraints: list[PairFieldConstraint] | None = Field(None,description="Field equivalence constraints between the two halves of a pair. None for standalone types.",)
+    split_into: SplitMeta | None = Field(
+        None,
+        description="How this paired type splits into 2 standalone types. None for standalone types.",
+    )
+    promote_from: list[PromoteRule] | None = Field(
+        None,
+        description="Rules for promoting 2 standalone types into this paired type. None for standalone types.",
+    )
+    pair_field_constraints: list[PairFieldConstraint] | None = Field(
+        None,
+        description="Field equivalence constraints between the two halves of a pair. None for standalone types.",
+    )
 
     # Swap group — types this type can be "flipped" to (including itself).
     # Singleton = [self] (no swap partners). Frontend uses this directly.
@@ -1190,6 +1244,10 @@ class TXTypesResponse(BaseModel):
 
     transaction_types: list[TXTypeMetadata]
     event_types: list[EventTypeMetadata]
+    validation_codes: list[TXValidationCodeInfo] = Field(
+        default_factory=lambda: VALIDATION_CODE_METADATA,
+        description="All known validation error codes with descriptions",
+    )
 
 
 # Precomputed metadata for all event types

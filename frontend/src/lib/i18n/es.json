@@ -470,10 +470,12 @@
     "split": {
       "confirmTitle": "¿Desvincular este par?",
       "confirmMessage": "Las 2 transacciones se convertirán en filas independientes.",
-      "success": "Par desvinculado"
+      "success": "Par desvinculado",
+      "fromType": "Se convertirá en: {type}"
     },
     "promote": {
       "mergeTitle": "Promover a {type}",
+      "mergeSubtitle": "Resolver campos divergentes:",
       "mergeConfirm": "Confirmar promoción",
       "fieldDescription": "Descripción",
       "fieldTags": "Etiquetas",
@@ -481,12 +483,18 @@
       "fieldCostBasis": "Costo base",
       "useLeft": "Usar izquierda",
       "useMerge": "Combinar",
-      "useRight": "Usar derecha"
+      "useRight": "Usar derecha",
+      "allLeft": "Todo izquierda",
+      "allMerge": "Combinar todo",
+      "allRight": "Todo derecha",
+      "concat": "Concatenar",
+      "union": "Unión"
     },
     "promoteSuggest": {
       "banner": "Fila {a} y Fila {b} son compatibles — promover a {type}",
       "bannerMore": "y {n} más...",
-      "dbMatch": "Coincidencia en BD: {type} en {broker} ({date})"
+      "dbMatch": "Coincidencia en BD: {type} en {broker} ({date})",
+      "bannerDetailed": "El {date}, la fila #{a} y la fila #{b} podrían convertirse en {type}"
     },
     "empty": "Sin transacciones",
     "ghost": {
@@ -611,6 +619,7 @@
       "skippedViewerOnly": "{n} transacciones excluidas: acceso Editor requerido",
       "allViewerOnly": "No hay transacciones editables en la selección",
       "resetSelected": "Restablecer seleccionados",
+      "splitQueued": "{n} separaciones en cola",
       "stateNew": "nueva",
       "stateEdit": "editar",
       "stateDel": "eliminar"
@@ -782,7 +791,10 @@
       "created": "creadas",
       "updated": "actualizadas",
       "deleted": "eliminadas",
-      "assetCreatedHint": "Activo creado. Para agregar el historial de precios, ve a la página del activo y sincroniza al terminar de ingresar las transacciones."
+      "assetCreatedHint": "Activo creado. Para agregar el historial de precios, ve a la página del activo y sincroniza al terminar de ingresar las transacciones.",
+      "commitSummary": "{n} transacciones guardadas",
+      "splitCount": "{n} separados",
+      "promoteCount": "{n} promocionados"
     }
   },
   "fx": {

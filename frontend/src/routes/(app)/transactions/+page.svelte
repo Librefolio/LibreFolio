@@ -494,18 +494,24 @@
     }
     function handleBulkCommitted(resp: unknown) {
         bulkOpen = false;
-        // B4-fix: show toast with operation summary
+        // F11: improved toast with localized summary
         const r = resp as {results?: Array<{operation: string; status: string}>};
         if (r?.results) {
             const created = r.results.filter((x) => x.operation === 'create' && x.status === 'success').length;
             const updated = r.results.filter((x) => x.operation === 'update' && x.status === 'success').length;
             const deleted = r.results.filter((x) => x.operation === 'delete' && x.status === 'success').length;
-            const parts: string[] = [];
-            if (created) parts.push(`${created} ${$_('transactions.toast.created') || 'created'}`);
-            if (updated) parts.push(`${updated} ${$_('transactions.toast.updated') || 'updated'}`);
-            if (deleted) parts.push(`${deleted} ${$_('transactions.toast.deleted') || 'deleted'}`);
-            if (parts.length > 0) {
-                toasts.success(`✅ ${parts.join(', ')}`);
+            const split = r.results.filter((x) => x.operation === 'split' && x.status === 'success').length;
+            const promoted = r.results.filter((x) => x.operation === 'promote' && x.status === 'success').length;
+            const total = created + updated + deleted + split + promoted;
+            if (total > 0) {
+                const mainMsg = $_('transactions.toast.commitSummary', {values: {n: total}}) || `Saved ${total} transactions`;
+                const details: string[] = [];
+                if (created) details.push(`${created} ${$_('transactions.toast.created') || 'created'}`);
+                if (updated) details.push(`${updated} ${$_('transactions.toast.updated') || 'updated'}`);
+                if (deleted) details.push(`${deleted} ${$_('transactions.toast.deleted') || 'deleted'}`);
+                if (split) details.push($_('transactions.toast.splitCount', {values: {n: split}}) || `${split} split`);
+                if (promoted) details.push($_('transactions.toast.promoteCount', {values: {n: promoted}}) || `${promoted} promoted`);
+                toasts.success(`✅ ${mainMsg}${details.length > 0 ? ` (${details.join(', ')})` : ''}`);
             }
         }
         void reload({soft: true});
@@ -539,7 +545,16 @@
         const [a, b] = selectedRows;
         // Both must be unpaired DB rows
         if (a.related_transaction_id != null || b.related_transaction_id != null) return null;
-        return findPromoteMatch(a.type, b.type, $_);
+        return findPromoteMatch(a.type, b.type, $_, {
+            brokerA: a.broker_id,
+            brokerB: b.broker_id,
+            currencyA: a.cash?.code,
+            currencyB: b.cash?.code,
+            assetA: a.asset_id,
+            assetB: b.asset_id,
+            qtyA: Number(a.quantity ?? 0),
+            qtyB: Number(b.quantity ?? 0),
+        });
     });
 
     function onPromotePair() {
@@ -1041,6 +1056,7 @@
     txA={promoteMergeData?.txA}
     txB={promoteMergeData?.txB}
     targetTypeLabel={promoteMergeData?.targetTypeLabel ?? ''}
+    availableTags={availableTags}
     onConfirm={onPromoteMergeConfirm}
     onCancel={() => {
         promoteMergeOpen = false;

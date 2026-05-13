@@ -470,10 +470,12 @@
     "split": {
       "confirmTitle": "Dissocier cette paire ?",
       "confirmMessage": "Les 2 transactions deviendront des lignes indépendantes.",
-      "success": "Paire dissociée"
+      "success": "Paire dissociée",
+      "fromType": "Deviendra : {type}"
     },
     "promote": {
       "mergeTitle": "Promouvoir en {type}",
+      "mergeSubtitle": "Résoudre les champs divergents :",
       "mergeConfirm": "Confirmer la promotion",
       "fieldDescription": "Description",
       "fieldTags": "Tags",
@@ -481,12 +483,18 @@
       "fieldCostBasis": "Coût de base",
       "useLeft": "Utiliser gauche",
       "useMerge": "Fusionner",
-      "useRight": "Utiliser droite"
+      "useRight": "Utiliser droite",
+      "allLeft": "Tout à gauche",
+      "allMerge": "Tout fusionner",
+      "allRight": "Tout à droite",
+      "concat": "Concaténer",
+      "union": "Union"
     },
     "promoteSuggest": {
       "banner": "Ligne {a} et Ligne {b} sont compatibles — promouvoir en {type}",
       "bannerMore": "et {n} de plus...",
-      "dbMatch": "Correspondance en BDD : {type} sur {broker} ({date})"
+      "dbMatch": "Correspondance en BDD : {type} sur {broker} ({date})",
+      "bannerDetailed": "Le {date}, la ligne #{a} et la ligne #{b} pourraient devenir {type}"
     },
     "empty": "Aucune transaction",
     "ghost": {
@@ -611,6 +619,7 @@
       "skippedViewerOnly": "{n} transactions exclues : accès Éditeur requis",
       "allViewerOnly": "Aucune transaction modifiable dans la sélection",
       "resetSelected": "Réinitialiser la sélection",
+      "splitQueued": "{n} dissociations en file",
       "stateNew": "nouveau",
       "stateEdit": "modif.",
       "stateDel": "suppr."
@@ -782,7 +791,10 @@
       "created": "créées",
       "updated": "mises à jour",
       "deleted": "supprimées",
-      "assetCreatedHint": "Actif créé. Pour ajouter l'historique des prix, accédez à la page de l'actif et synchronisez après avoir terminé vos transactions."
+      "assetCreatedHint": "Actif créé. Pour ajouter l'historique des prix, accédez à la page de l'actif et synchronisez après avoir terminé vos transactions.",
+      "commitSummary": "{n} transactions enregistrées",
+      "splitCount": "{n} dissociés",
+      "promoteCount": "{n} promus"
     }
   },
   "fx": {

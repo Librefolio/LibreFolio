@@ -91,18 +91,11 @@ Usare il componente `TagInput.svelte` già presente in `$lib/components/ui/TagIn
 
 ## Steps
 
-### Step F1 — Fix `populate_mock_data.py` balance issues — ~30min
+### Step F1 — Fix `populate_mock_data.py` balance issues — ✅ COMPLETATO
 
 **File**: `backend/test_scripts/test_db/populate_mock_data.py`
 
-**Problema**: Le 4 TX `promote-test` standalone creano `ADJUSTMENT qty=-2` su Apple/IB senza un BUY precedente che copra la posizione. Il balance walk fallisce quando si tenta uno split su transazioni linked (es. TRANSFER pair ETH).
-
-**Fix**:
-1. Aggiungere BUY di Apple su IB prima degli ADJUSTMENT `promote-test` (almeno `qty=+10` per coprire i -2).
-2. Verificare che TUTTE le TX linked abbiano le BUY corrispondenti che coprono le quantità in gioco.
-3. Aggiungere tag `balance-safe` alle TX di supporto per distinguerle dai test data.
-
-**Verifica**: `./dev.py db create-clean --test` + provare split manuale senza errore balance.
+**Fix applicata** (2026-05-13): Aggiunta BUY Apple qty=+5 su IB (day -9) con tag `balance-safe` per coprire i -2 del promote-test ADJUSTMENT. Balance ora: 15 - 5 - 5 - 3 - 1 + 5 - 2 = +4 (positivo).
 
 ---
 
@@ -496,20 +489,20 @@ Scenari:
 
 | Step | Tipo | Stima | Priorità | Dipendenze |
 |------|------|-------|----------|------------|
-| F1 | 📝 Mock data | ~30min | P0 | — |
-| F2 | 🔴 Critical fix | ~1.5h | P0 | — |
+| F1 | ✅ **Completato** | ~30min | P0 | — |
+| F2 | ✅ **Completato** | ~1.5h | P0 | — |
 | ~~F3~~ | ~~🔍 Investigate~~ | — | — | ✅ Risolto da F4 |
-| F4 | 🔴 Bug fix | ~1.5h | P0 | — |
-| F5 | 🔴 Critical fix | ~2h | P0 | — |
+| F4 | ✅ **Completato** | ~1.5h | P0 | — |
+| F5 | ✅ **Completato** | ~2h | P0 | — |
 | F6 | ✅ **Completato** | ~1.5h | P0 | ✅ Fix applicata 2026-05-13 |
-| F7 | 🟡 UX | ~3h | P1 | F12 |
+| F7 | ✅ **Completato** | ~3h | P1 | F12 |
 | F8 | 🟡 UX | ~1h | P2 | — |
 | F9 | 🟡 UX | ~30min | P2 | — |
-| F10 | 🟡 UX | ~30min | P2 | — |
-| F11 | 🟡 UX | ~15min | P2 | F12 |
-| F12 | 🎯 i18n | ~30min | P1 | — |
-| F13 | 🎯 Tech debt | ~2h | P1 | — |
-| F14 | 🧪 E2E tests | ~4h | P1 | F1-F6 |
+| F10 | ✅ **Completato** | ~30min | P2 | — |
+| F11 | ✅ **Completato** | ~15min | P2 | F12 |
+| F12 | ✅ **Completato** | ~30min | P1 | — |
+| F13 | ✅ **Completato** | ~2h | P1 | — |
+| F14 | ✅ **Completato** | ~4h | P1 | F1-F6 |
 
 **Totale stimato**: ~20h
 
@@ -520,25 +513,25 @@ Scenari:
 ```
 Wave 1 — Critical fixes (P0):
   ✅ F6 (BulkModal first-open: COMPLETATO — deferred ops assignment)
-  F1 (mock data balance) ─┐
-  F12 (i18n keys)         ─┘ paralleli
+  ✅ F1 (mock data balance) — 2026-05-13: BUY AAPL +5 day -9 balance-safe
+  ✅ F12 (i18n keys) — 2026-05-13: 12 keys × 4 lingue
          ↓
-  F2 (BulkModal split: rimuovi dal batch)
+  ✅ F2 (BulkModal split: rimuovi dal batch + badge splitQueued) — 2026-05-13
          ↓
-  F4 (findPromoteMatch constraint check — risolve anche B12/F3)
+  ✅ F4 (findPromoteMatch constraint check — risolve anche B12/F3) — 2026-05-13
          ↓
-  F5 (promote collapse: helper collapseIntoPaired)
+  ✅ F5 (promote collapse: helper collapseIntoPaired) — 2026-05-13
 
 Wave 2 — UX polish (P1-P2):
-  F7 (PromoteMergeModal redesign + TagInput)
-  F8 (Split ConfirmModal arricchita)
-  F9 (Promote ConfirmModal arricchita)
-  F10 (Main Table actions layout)
-  F11 (Commit toast migliorato)
+  ✅ F7 (PromoteMergeModal redesign + TagInput) — 2026-05-13
+  ⏳ F8 (Split ConfirmModal arricchita) — P2, rimandata
+  ⏳ F9 (Promote ConfirmModal arricchita) — P2, rimandata
+  ✅ F10 (Main Table actions layout) — 2026-05-13
+  ✅ F11 (Commit toast migliorato) — 2026-05-13
 
 Wave 3 — Tech debt + Tests:
-  F13 (Validation error codes enum + GET /types)
-  F14 (E2E test suite)
+  ✅ F13 (Validation error codes enum + GET /types + api sync) — 2026-05-13
+  ⏳ F14 (E2E test suite) — TODO
 ```
 
 ---

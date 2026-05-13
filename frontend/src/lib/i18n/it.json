@@ -470,10 +470,12 @@
     "split": {
       "confirmTitle": "Scollegare questa coppia?",
       "confirmMessage": "Le 2 transazioni diventeranno righe indipendenti.",
-      "success": "Coppia scollegata"
+      "success": "Coppia scollegata",
+      "fromType": "Diventerà: {type}"
     },
     "promote": {
       "mergeTitle": "Promuovi a {type}",
+      "mergeSubtitle": "Risolvi i campi divergenti:",
       "mergeConfirm": "Conferma promozione",
       "fieldDescription": "Descrizione",
       "fieldTags": "Tag",
@@ -481,12 +483,18 @@
       "fieldCostBasis": "Costo base",
       "useLeft": "Usa sinistra",
       "useMerge": "Unisci",
-      "useRight": "Usa destra"
+      "useRight": "Usa destra",
+      "allLeft": "Tutti sinistra",
+      "allMerge": "Unisci tutti",
+      "allRight": "Tutti destra",
+      "concat": "Concatena",
+      "union": "Unione"
     },
     "promoteSuggest": {
       "banner": "Riga {a} e Riga {b} sono compatibili — promuovi a {type}",
       "bannerMore": "e altri {n}...",
-      "dbMatch": "Match nel DB: {type} su {broker} ({date})"
+      "dbMatch": "Match nel DB: {type} su {broker} ({date})",
+      "bannerDetailed": "In data {date}, la riga #{a} e la riga #{b} potrebbero diventare {type}"
     },
     "empty": "Nessuna transazione",
     "ghost": {
@@ -611,6 +619,7 @@
       "skippedViewerOnly": "{n} transazioni escluse: accesso Editor richiesto",
       "allViewerOnly": "Nessuna transazione modificabile nella selezione",
       "resetSelected": "Reimposta selezionati",
+      "splitQueued": "{n} split in coda",
       "stateNew": "nuova",
       "stateEdit": "modifica",
       "stateDel": "elimina"
@@ -782,7 +791,10 @@
       "created": "create",
       "updated": "aggiornate",
       "deleted": "eliminate",
-      "assetCreatedHint": "Asset creato. Per aggiungere lo storico prezzi, vai nella pagina dell'asset e sincronizza al termine dell'inserimento delle transazioni."
+      "assetCreatedHint": "Asset creato. Per aggiungere lo storico prezzi, vai nella pagina dell'asset e sincronizza al termine dell'inserimento delle transazioni.",
+      "commitSummary": "Salvate {n} transazioni",
+      "splitCount": "{n} scollegati",
+      "promoteCount": "{n} promossi"
     }
   },
   "fx": {
