@@ -163,7 +163,7 @@ class BrokerService:
                                     "broker_id": broker.id,
                                     "type": "DEPOSIT",
                                     "date": today_date().isoformat(),
-                                    "cash": {"code": currency_obj.code, "amount": format(currency_obj.amount, 'f')},
+                                    "cash": {"code": currency_obj.code, "amount": format(currency_obj.amount, "f")},
                                 }
                             )
 

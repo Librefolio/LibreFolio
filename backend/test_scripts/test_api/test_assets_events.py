@@ -351,16 +351,18 @@ async def test_delete_event_bulk_partial_success(test_server):
         broker_id = br_resp.json()["results"][0]["broker_id"]
         await client.post(
             f"{API_BASE}/transactions/commit",
-            json={"creates": [
-                {
-                    "broker_id": broker_id,
-                    "asset_id": asset_id,
-                    "type": "DIVIDEND",
-                    "date": date.today().isoformat(),
-                    "cash": {"code": "USD", "amount": "1.00"},
-                    "asset_event_id": blocked_id,
-                }
-            ]},
+            json={
+                "creates": [
+                    {
+                        "broker_id": broker_id,
+                        "asset_id": asset_id,
+                        "type": "DIVIDEND",
+                        "date": date.today().isoformat(),
+                        "cash": {"code": "USD", "amount": "1.00"},
+                        "asset_event_id": blocked_id,
+                    }
+                ]
+            },
             timeout=TIMEOUT,
         )
 
@@ -404,16 +406,18 @@ async def test_delete_event_bulk_no_partial_rollback(test_server):
         broker_id = br_resp.json()["results"][0]["broker_id"]
         await client.post(
             f"{API_BASE}/transactions/commit",
-            json={"creates": [
-                {
-                    "broker_id": broker_id,
-                    "asset_id": asset_id,
-                    "type": "INTEREST",
-                    "date": date.today().isoformat(),
-                    "cash": {"code": "USD", "amount": "1.00"},
-                    "asset_event_id": blocked_id,
-                }
-            ]},
+            json={
+                "creates": [
+                    {
+                        "broker_id": broker_id,
+                        "asset_id": asset_id,
+                        "type": "INTEREST",
+                        "date": date.today().isoformat(),
+                        "cash": {"code": "USD", "amount": "1.00"},
+                        "asset_event_id": blocked_id,
+                    }
+                ]
+            },
             timeout=TIMEOUT,
         )
 

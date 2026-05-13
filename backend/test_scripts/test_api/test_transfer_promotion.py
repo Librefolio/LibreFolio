@@ -174,26 +174,28 @@ async def test_query_amount_abs_range_filter(test_server):
 
         await client.post(
             f"{API_BASE}/transactions/commit",
-            json={"creates": [
-                {
-                    "broker_id": broker_id,
-                    "type": "DEPOSIT",
-                    "date": date.today().isoformat(),
-                    "cash": {"code": "EUR", "amount": "100"},
-                },
-                {
-                    "broker_id": broker_id,
-                    "type": "DEPOSIT",
-                    "date": date.today().isoformat(),
-                    "cash": {"code": "EUR", "amount": "500"},
-                },
-                {
-                    "broker_id": broker_id,
-                    "type": "DEPOSIT",
-                    "date": date.today().isoformat(),
-                    "cash": {"code": "EUR", "amount": "2000"},
-                },
-            ]},
+            json={
+                "creates": [
+                    {
+                        "broker_id": broker_id,
+                        "type": "DEPOSIT",
+                        "date": date.today().isoformat(),
+                        "cash": {"code": "EUR", "amount": "100"},
+                    },
+                    {
+                        "broker_id": broker_id,
+                        "type": "DEPOSIT",
+                        "date": date.today().isoformat(),
+                        "cash": {"code": "EUR", "amount": "500"},
+                    },
+                    {
+                        "broker_id": broker_id,
+                        "type": "DEPOSIT",
+                        "date": date.today().isoformat(),
+                        "cash": {"code": "EUR", "amount": "2000"},
+                    },
+                ]
+            },
             timeout=TIMEOUT,
         )
 

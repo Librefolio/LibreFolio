@@ -30,7 +30,7 @@ async def create_bulk(
 
     # Build per-index result map from resp.results
     result_by_idx = {}
-    for r in (resp.results or []):
+    for r in resp.results or []:
         result_by_idx[r.index] = r
 
     # Build per-index issue map
@@ -44,25 +44,45 @@ async def create_bulk(
         r = result_by_idx.get(idx)
         iss = issue_by_idx.get(idx)
         if r and r.status == "success" and not resp.issues:
-            legacy_results.append(SimpleNamespace(
-                success=True, status="success",
-                transaction_id=r.id, link_uuid=r.link_uuid, error=None,
-            ))
+            legacy_results.append(
+                SimpleNamespace(
+                    success=True,
+                    status="success",
+                    transaction_id=r.id,
+                    link_uuid=r.link_uuid,
+                    error=None,
+                )
+            )
         elif iss:
-            legacy_results.append(SimpleNamespace(
-                success=False, status="failed",
-                transaction_id=None, link_uuid=item_orig.link_uuid, error=iss.error,
-            ))
+            legacy_results.append(
+                SimpleNamespace(
+                    success=False,
+                    status="failed",
+                    transaction_id=None,
+                    link_uuid=item_orig.link_uuid,
+                    error=iss.error,
+                )
+            )
         elif r:
-            legacy_results.append(SimpleNamespace(
-                success=False, status="simulated",
-                transaction_id=r.id, link_uuid=r.link_uuid, error=None,
-            ))
+            legacy_results.append(
+                SimpleNamespace(
+                    success=False,
+                    status="simulated",
+                    transaction_id=r.id,
+                    link_uuid=r.link_uuid,
+                    error=None,
+                )
+            )
         else:
-            legacy_results.append(SimpleNamespace(
-                success=False, status="not_attempted",
-                transaction_id=None, link_uuid=getattr(item_orig, "link_uuid", None), error=None,
-            ))
+            legacy_results.append(
+                SimpleNamespace(
+                    success=False,
+                    status="not_attempted",
+                    transaction_id=None,
+                    link_uuid=getattr(item_orig, "link_uuid", None),
+                    error=None,
+                )
+            )
 
     return SimpleNamespace(
         success_count=sum(1 for r in legacy_results if r.success),
@@ -88,7 +108,7 @@ async def update_bulk(
     )
 
     result_by_idx = {}
-    for r in (resp.results or []):
+    for r in resp.results or []:
         result_by_idx[r.index] = r
 
     issue_by_idx = {}
@@ -101,21 +121,41 @@ async def update_bulk(
         r = result_by_idx.get(idx)
         iss = issue_by_idx.get(idx)
         if r and r.status == "success" and not resp.issues:
-            legacy_results.append(SimpleNamespace(
-                id=r.id or item_orig.id, success=True, status="success", error=None,
-            ))
+            legacy_results.append(
+                SimpleNamespace(
+                    id=r.id or item_orig.id,
+                    success=True,
+                    status="success",
+                    error=None,
+                )
+            )
         elif iss:
-            legacy_results.append(SimpleNamespace(
-                id=item_orig.id, success=False, status="failed", error=iss.error,
-            ))
+            legacy_results.append(
+                SimpleNamespace(
+                    id=item_orig.id,
+                    success=False,
+                    status="failed",
+                    error=iss.error,
+                )
+            )
         elif r:
-            legacy_results.append(SimpleNamespace(
-                id=r.id or item_orig.id, success=False, status="simulated", error=None,
-            ))
+            legacy_results.append(
+                SimpleNamespace(
+                    id=r.id or item_orig.id,
+                    success=False,
+                    status="simulated",
+                    error=None,
+                )
+            )
         else:
-            legacy_results.append(SimpleNamespace(
-                id=item_orig.id, success=False, status="not_attempted", error=None,
-            ))
+            legacy_results.append(
+                SimpleNamespace(
+                    id=item_orig.id,
+                    success=False,
+                    status="not_attempted",
+                    error=None,
+                )
+            )
 
     return SimpleNamespace(
         success_count=sum(1 for r in legacy_results if r.success),
@@ -140,7 +180,7 @@ async def delete_bulk(
     )
 
     result_by_idx = {}
-    for r in (resp.results or []):
+    for r in resp.results or []:
         result_by_idx[r.index] = r
 
     issue_by_idx = {}
@@ -153,17 +193,35 @@ async def delete_bulk(
         r = result_by_idx.get(idx)
         iss = issue_by_idx.get(idx)
         if r and r.status == "success" and not resp.issues:
-            legacy_results.append(SimpleNamespace(
-                id=r.id or tx_id, success=True, deleted_count=1, status="success", message=None,
-            ))
+            legacy_results.append(
+                SimpleNamespace(
+                    id=r.id or tx_id,
+                    success=True,
+                    deleted_count=1,
+                    status="success",
+                    message=None,
+                )
+            )
         elif iss:
-            legacy_results.append(SimpleNamespace(
-                id=tx_id, success=False, deleted_count=0, status="failed", message=iss.error,
-            ))
+            legacy_results.append(
+                SimpleNamespace(
+                    id=tx_id,
+                    success=False,
+                    deleted_count=0,
+                    status="failed",
+                    message=iss.error,
+                )
+            )
         else:
-            legacy_results.append(SimpleNamespace(
-                id=tx_id, success=False, deleted_count=0, status="not_attempted", message=None,
-            ))
+            legacy_results.append(
+                SimpleNamespace(
+                    id=tx_id,
+                    success=False,
+                    deleted_count=0,
+                    status="not_attempted",
+                    message=None,
+                )
+            )
 
     success_count = sum(1 for r in legacy_results if r.success)
     return SimpleNamespace(
@@ -173,4 +231,3 @@ async def delete_bulk(
         errors=[iss.error for iss in resp.issues],
         rolled_back=bool(resp.issues),
     )
-
