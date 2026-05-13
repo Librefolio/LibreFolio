@@ -81,7 +81,8 @@
     "next": "Avanti",
     "created": "Creato",
     "updated": "Aggiornato",
-    "createNew": "Crea nuovo"
+    "createNew": "Crea nuovo",
+    "and": "e"
   },
   "table": {
     "columns": "Colonne",
@@ -473,28 +474,12 @@
       "success": "Coppia scollegata",
       "fromType": "Diventerà: {type}"
     },
-    "promote": {
-      "mergeTitle": "Promuovi a {type}",
-      "mergeSubtitle": "Risolvi i campi divergenti:",
-      "mergeConfirm": "Conferma promozione",
-      "fieldDescription": "Descrizione",
-      "fieldTags": "Tag",
-      "fieldDate": "Data",
-      "fieldCostBasis": "Costo base",
-      "useLeft": "Usa sinistra",
-      "useMerge": "Unisci",
-      "useRight": "Usa destra",
-      "allLeft": "Tutti sinistra",
-      "allMerge": "Unisci tutti",
-      "allRight": "Tutti destra",
-      "concat": "Concatena",
-      "union": "Unione"
-    },
     "promoteSuggest": {
       "banner": "Riga {a} e Riga {b} sono compatibili — promuovi a {type}",
       "bannerMore": "e altri {n}...",
       "dbMatch": "Match nel DB: {type} su {broker} ({date})",
-      "bannerDetailed": "In data {date}, la riga #{a} e la riga #{b} potrebbero diventare {type}"
+      "bannerDetailed": "In data {date}, la riga #{a} e la riga #{b} potrebbero diventare {type}",
+      "merge": "Unisci"
     },
     "empty": "Nessuna transazione",
     "ghost": {
@@ -651,7 +636,23 @@
       "commit": "Promuovi",
       "failed": "Promote fallito",
       "rolledBack": "Collegamento annullato — nulla è stato modificato.",
-      "rolledBackTitle": "Annullato"
+      "rolledBackTitle": "Annullato",
+      "mergeTitle": "Promuovi a {type}",
+      "mergeSubtitle": "Risolvi i campi divergenti:",
+      "mergeConfirm": "Conferma promozione",
+      "fieldDescription": "Descrizione",
+      "fieldTags": "Tag",
+      "fieldDate": "Data",
+      "fieldCostBasis": "Costo base",
+      "useLeft": "Usa sinistra",
+      "useMerge": "Unisci",
+      "useRight": "Usa destra",
+      "allLeft": "Tutti sinistra",
+      "allMerge": "Unisci tutti",
+      "allRight": "Tutti destra",
+      "concat": "Concatena",
+      "union": "Unione",
+      "clickToSelect": "Clicca per selezionare"
     },
     "bulkDelete": {
       "title": "Elimina transazioni",

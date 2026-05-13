@@ -723,7 +723,7 @@ class TransactionService:
             return TXTransferPromoteResponse(rolled_back=True, errors=err_msgs)
 
         # Extract IDs of the two created transactions.
-        new_ids = [r.id for r in (resp.results or []) if r.operation == "create"]
+        new_ids = [r.ids[0] for r in (resp.results or []) if r.operation == "create" and r.ids]
         return TXTransferPromoteResponse(
             rolled_back=False,
             new_from_tx_id=new_ids[0] if len(new_ids) > 0 else None,
@@ -1002,115 +1002,11 @@ class TransactionService:
                 prev = earliest_date_by_broker.get(tx.broker_id)
                 earliest_date_by_broker[tx.broker_id] = tx.date if prev is None else min(prev, tx.date)
                 await self.session.delete(tx)
-                results.append(TXBatchResultItem(operation="delete", index=idx, id=tx_id, status="success"))
+                results.append(TXBatchResultItem(operation="delete", index=idx, ids=[tx_id], status="success"))
             except Exception as e:  # noqa: BLE001
                 issues.append(TXValidationIssue(operation="delete", index=idx, ref_id=tx_id, error=str(e)))
 
-        # 4. Apply updates (only successfully-parsed rows)
-        for orig_idx, item in parsed_updates:
-            tx = existing_by_id.get(item.id)
-            if tx is None:
-                issues.append(TXValidationIssue(operation="update", index=orig_idx, ref_id=item.id, error=f"Transaction {item.id} not found", code=TXValidationCode.TX_NOT_FOUND.value, params={"id": item.id}))
-                continue
-            try:
-                check_date = tx.date
-                # Step 15 (C5): type swap within swap group
-                if item.type is not None and item.type != tx.type:
-                    allowed = get_swap_group(tx.type)
-                    if item.type not in allowed:
-                        raise ValueError(f"Cannot change type from {tx.type.value} to {item.type.value} " f"(allowed swaps: {', '.join(t.value for t in allowed)})")
-                    tx.type = item.type
-                if item.date is not None:
-                    check_date = min(check_date, item.date)
-                    tx.date = item.date
-                if item.quantity is not None:
-                    tx.quantity = item.quantity
-                if item.cash is not None:
-                    tx.amount = item.cash.amount
-                    tx.currency = item.cash.code
-                if item.tags is not None:
-                    tx.tags = tags_to_csv(item.tags)
-                if item.description is not None:
-                    tx.description = item.description
-                if item.cost_basis_override is not None:
-                    tx.cost_basis_override = item.cost_basis_override
-                if item.asset_event_id is not None:
-                    if item.asset_event_id == 0:
-                        tx.asset_event_id = None
-                    else:
-                        if tx.asset_id is None:
-                            raise ValueError("Cannot link asset_event_id: transaction has no asset_id")
-                        await self._validate_asset_event_link(item.asset_event_id, tx.asset_id)
-                        tx.asset_event_id = item.asset_event_id
-                tx.updated_at = utcnow()
-                prev = earliest_date_by_broker.get(tx.broker_id)
-                earliest_date_by_broker[tx.broker_id] = check_date if prev is None else min(prev, check_date)
-                results.append(TXBatchResultItem(operation="update", index=orig_idx, id=item.id, status="success"))
-            except Exception as e:  # noqa: BLE001
-                issues.append(TXValidationIssue(operation="update", index=orig_idx, ref_id=item.id, error=str(e)))
-
-        # 4b. Validate pair desc/tags consistency for updated linked TXs
-        for orig_idx, item in parsed_updates:
-            if item.tags is None and item.description is None:
-                continue
-            tx = existing_by_id.get(item.id)
-            if not tx or not tx.related_transaction_id:
-                continue
-            partner = existing_by_id.get(tx.related_transaction_id)
-            if partner is None:
-                partner = await self.session.get(Transaction, tx.related_transaction_id)
-            if partner is not None:
-                desc_result = self._validate_pair_description_tags(tx, partner)
-                if desc_result is not None:
-                    err_msg, err_code, err_params = desc_result
-                    issues.append(
-                        TXValidationIssue(
-                            operation="update",
-                            index=orig_idx,
-                            ref_id=item.id,
-                            error=err_msg,
-                            code=err_code,
-                            params=err_params,
-                        )
-                    )
-
-        # 5. Apply creates (only successfully-parsed rows)
-        link_uuid_map: Dict[str, List[Tuple[int, Transaction]]] = defaultdict(list)
-        for orig_idx, item in parsed_creates:
-            try:
-                if item.asset_id is not None:
-                    asset_result = await self.session.execute(select(Asset.asset_type).where(Asset.id == item.asset_id))
-                    if asset_result.scalar_one_or_none() == AssetType.INDEX:
-                        raise ValueError("Cannot create transactions for INDEX assets")
-                if item.asset_event_id is not None:
-                    assert item.asset_id is not None
-                    await self._validate_asset_event_link(item.asset_event_id, item.asset_id)
-                tx = Transaction(
-                    broker_id=item.broker_id,
-                    asset_id=item.asset_id,
-                    type=item.type,
-                    date=item.date,
-                    quantity=item.quantity,
-                    amount=item.get_amount(),
-                    currency=item.get_currency(),
-                    tags=item.get_tags_csv(),
-                    description=item.description,
-                    cost_basis_override=item.cost_basis_override,
-                    asset_event_id=item.asset_event_id,
-                    created_at=utcnow(),
-                    updated_at=utcnow(),
-                )
-                self.session.add(tx)
-                await self.session.flush()
-                prev = earliest_date_by_broker.get(tx.broker_id)
-                earliest_date_by_broker[tx.broker_id] = tx.date if prev is None else min(prev, tx.date)
-                if item.link_uuid:
-                    link_uuid_map[item.link_uuid].append((orig_idx, tx))
-                results.append(TXBatchResultItem(operation="create", index=orig_idx, id=tx.id, link_uuid=item.link_uuid, status="success"))
-            except Exception as e:  # noqa: BLE001
-                issues.append(TXValidationIssue(operation="create", index=orig_idx, ref_id=None, error=str(e)))
-
-        # 5b. Apply splits (only saved paired TXs)
+        # 3b. Apply splits (must run before updates so post-split edits apply correctly)
         for orig_idx, item in parsed_splits:
             tx = existing_by_id.get(item.id)
             if tx is None:
@@ -1196,7 +1092,112 @@ class TransactionService:
                 prev = earliest_date_by_broker.get(t.broker_id)
                 earliest_date_by_broker[t.broker_id] = t.date if prev is None else min(prev, t.date)
 
-            results.append(TXBatchResultItem(operation="split", index=orig_idx, id=item.id, status="success"))
+            results.append(TXBatchResultItem(operation="split", index=orig_idx, ids=[tx_from.id, tx_to.id], status="success"))
+
+        # 4. Apply updates (only successfully-parsed rows)
+        for orig_idx, item in parsed_updates:
+            tx = existing_by_id.get(item.id)
+            if tx is None:
+                issues.append(TXValidationIssue(operation="update", index=orig_idx, ref_id=item.id, error=f"Transaction {item.id} not found", code=TXValidationCode.TX_NOT_FOUND.value, params={"id": item.id}))
+                continue
+            try:
+                check_date = tx.date
+                # Step 15 (C5): type swap within swap group
+                if item.type is not None and item.type != tx.type:
+                    allowed = get_swap_group(tx.type)
+                    if item.type not in allowed:
+                        raise ValueError(f"Cannot change type from {tx.type.value} to {item.type.value} " f"(allowed swaps: {', '.join(t.value for t in allowed)})")
+                    tx.type = item.type
+                if item.date is not None:
+                    check_date = min(check_date, item.date)
+                    tx.date = item.date
+                if item.quantity is not None:
+                    tx.quantity = item.quantity
+                if item.cash is not None:
+                    tx.amount = item.cash.amount
+                    tx.currency = item.cash.code
+                if item.tags is not None:
+                    tx.tags = tags_to_csv(item.tags)
+                if item.description is not None:
+                    tx.description = item.description
+                if item.cost_basis_override is not None:
+                    tx.cost_basis_override = item.cost_basis_override
+                if item.asset_event_id is not None:
+                    if item.asset_event_id == 0:
+                        tx.asset_event_id = None
+                    else:
+                        if tx.asset_id is None:
+                            raise ValueError("Cannot link asset_event_id: transaction has no asset_id")
+                        await self._validate_asset_event_link(item.asset_event_id, tx.asset_id)
+                        tx.asset_event_id = item.asset_event_id
+                tx.updated_at = utcnow()
+                prev = earliest_date_by_broker.get(tx.broker_id)
+                earliest_date_by_broker[tx.broker_id] = check_date if prev is None else min(prev, check_date)
+                results.append(TXBatchResultItem(operation="update", index=orig_idx, ids=[item.id], status="success"))
+            except Exception as e:  # noqa: BLE001
+                issues.append(TXValidationIssue(operation="update", index=orig_idx, ref_id=item.id, error=str(e)))
+
+        # 4b. Validate pair desc/tags consistency for updated linked TXs
+        for orig_idx, item in parsed_updates:
+            if item.tags is None and item.description is None:
+                continue
+            tx = existing_by_id.get(item.id)
+            if not tx or not tx.related_transaction_id:
+                continue
+            partner = existing_by_id.get(tx.related_transaction_id)
+            if partner is None:
+                partner = await self.session.get(Transaction, tx.related_transaction_id)
+            if partner is not None:
+                desc_result = self._validate_pair_description_tags(tx, partner)
+                if desc_result is not None:
+                    err_msg, err_code, err_params = desc_result
+                    issues.append(
+                        TXValidationIssue(
+                            operation="update",
+                            index=orig_idx,
+                            ref_id=item.id,
+                            error=err_msg,
+                            code=err_code,
+                            params=err_params,
+                        )
+                    )
+
+        # 5. Apply creates (only successfully-parsed rows)
+        link_uuid_map: Dict[str, List[Tuple[int, Transaction]]] = defaultdict(list)
+        for orig_idx, item in parsed_creates:
+            try:
+                if item.asset_id is not None:
+                    asset_result = await self.session.execute(select(Asset.asset_type).where(Asset.id == item.asset_id))
+                    if asset_result.scalar_one_or_none() == AssetType.INDEX:
+                        raise ValueError("Cannot create transactions for INDEX assets")
+                if item.asset_event_id is not None:
+                    assert item.asset_id is not None
+                    await self._validate_asset_event_link(item.asset_event_id, item.asset_id)
+                tx = Transaction(
+                    broker_id=item.broker_id,
+                    asset_id=item.asset_id,
+                    type=item.type,
+                    date=item.date,
+                    quantity=item.quantity,
+                    amount=item.get_amount(),
+                    currency=item.get_currency(),
+                    tags=item.get_tags_csv(),
+                    description=item.description,
+                    cost_basis_override=item.cost_basis_override,
+                    asset_event_id=item.asset_event_id,
+                    created_at=utcnow(),
+                    updated_at=utcnow(),
+                )
+                self.session.add(tx)
+                await self.session.flush()
+                prev = earliest_date_by_broker.get(tx.broker_id)
+                earliest_date_by_broker[tx.broker_id] = tx.date if prev is None else min(prev, tx.date)
+                if item.link_uuid:
+                    link_uuid_map[item.link_uuid].append((orig_idx, tx))
+                results.append(TXBatchResultItem(operation="create", index=orig_idx, ids=[tx.id], link_uuid=item.link_uuid, status="success"))
+            except Exception as e:  # noqa: BLE001
+                issues.append(TXValidationIssue(operation="create", index=orig_idx, ref_id=None, error=str(e)))
+
 
         # 5c. Apply promotes
         consumed_link_uuids: Set[str] = set()
@@ -1297,7 +1298,7 @@ class TransactionService:
             if item.link_uuid_b:
                 consumed_link_uuids.add(item.link_uuid_b)
 
-            results.append(TXBatchResultItem(operation="promote", index=orig_idx, id=tx_a.id, status="success"))
+            results.append(TXBatchResultItem(operation="promote", index=orig_idx, ids=[tx_a.id, tx_b.id], status="success"))
 
         # 6. Link resolution
         for link_uuid, pairs in link_uuid_map.items():

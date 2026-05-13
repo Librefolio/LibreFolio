@@ -326,7 +326,7 @@ class TestMultiUserRoles:
             ]
             post_resp = await owner_client.post(f"{API_BASE}/transactions/commit", json={"creates": tx_payload}, timeout=TIMEOUT)
             assert post_resp.status_code == 200, post_resp.text
-            tx_id = post_resp.json()["results"][0]["id"]
+            tx_id = post_resp.json()["results"][0]["ids"][0]
 
             # Viewer is granted access then attempts update via commit.
             viewer_id, _ = await create_user_and_login(viewer_client)
@@ -363,7 +363,7 @@ class TestMultiUserRoles:
             ]
             post_resp = await owner_client.post(f"{API_BASE}/transactions/commit", json={"creates": tx_payload}, timeout=TIMEOUT)
             assert post_resp.status_code == 200, post_resp.text
-            tx_id = post_resp.json()["results"][0]["id"]
+            tx_id = post_resp.json()["results"][0]["ids"][0]
 
             viewer_id, _ = await create_user_and_login(viewer_client)
             await add_access(owner_client, broker_id, viewer_id, "VIEWER")

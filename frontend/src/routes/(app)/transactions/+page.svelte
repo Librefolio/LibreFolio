@@ -22,6 +22,7 @@
     import TransactionFormModal from '$lib/components/transactions/TransactionFormModal.svelte';
     import TransactionBulkModal from '$lib/components/transactions/TransactionBulkModal.svelte';
     import TransactionDeleteModal from '$lib/components/transactions/TransactionDeleteModal.svelte';
+    import TransactionActionModal from '$lib/components/transactions/TransactionActionModal.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import PromoteMergeModal from '$lib/components/transactions/PromoteMergeModal.svelte';
     import {getBrokerInfo, getPairedAccessLevel, canEditBroker, canEditPaired} from '$lib/stores/brokerStore';
@@ -447,6 +448,7 @@
     // Split state
     let splitConfirmOpen = $state(false);
     let splitConfirmTx = $state<TXReadItem | null>(null);
+    let splitConfirmPartner = $state<TXReadItem | null>(null);
     let splitting = $state(false);
 
     function handleSelectionChange(rows: TXReadItem[]) {
@@ -545,6 +547,8 @@
         const [a, b] = selectedRows;
         // Both must be unpaired DB rows
         if (a.related_transaction_id != null || b.related_transaction_id != null) return null;
+        // Access guard: both brokers must be EDITOR+
+        if (!canEditBroker(a.broker_id) || !canEditBroker(b.broker_id)) return null;
         return findPromoteMatch(a.type, b.type, $_, {
             brokerA: a.broker_id,
             brokerB: b.broker_id,
@@ -622,6 +626,7 @@
 
     function handleSplitRow(row: TXReadItem) {
         splitConfirmTx = row;
+        splitConfirmPartner = row.related_transaction_id ? (txStoreGet(row.related_transaction_id) as TXReadItem | null) ?? null : null;
         splitConfirmOpen = true;
     }
 
@@ -634,6 +639,7 @@
                 toasts.success($_('transactions.split.success') || 'Pair unlinked successfully');
                 splitConfirmOpen = false;
                 splitConfirmTx = null;
+                splitConfirmPartner = null;
                 selectedRows = [];
                 await reload({soft: true});
             } else {
@@ -1063,16 +1069,16 @@
         promoteMergeData = null;
     }}
 />
-<ConfirmModal
+<TransactionActionModal
     open={splitConfirmOpen}
-    title={`✂️ ${$_('transactions.split.confirmTitle') || 'Unlink this pair?'}`}
-    message={$_('transactions.split.confirmMessage') || 'The 2 transactions will become independent rows.'}
-    confirmText={splitting ? $_('common.saving') || 'Saving...' : `✂️ ${$_('transactions.split.confirmTitle') || 'Split'}`}
-    cancelText={$_('common.cancel')}
-    warning
+    mode="split"
+    transaction={splitConfirmTx}
+    partner={splitConfirmPartner}
+    loading={splitting}
     onConfirm={confirmSplit}
     onCancel={() => {
         splitConfirmOpen = false;
         splitConfirmTx = null;
+        splitConfirmPartner = null;
     }}
 />

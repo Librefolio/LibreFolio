@@ -81,7 +81,8 @@
     "next": "Next",
     "created": "Created",
     "updated": "Updated",
-    "createNew": "Create new"
+    "createNew": "Create new",
+    "and": "and"
   },
   "table": {
     "columns": "Columns",
@@ -491,28 +492,12 @@
       "success": "Pair unlinked successfully",
       "fromType": "Will become: {type}"
     },
-    "promote": {
-      "mergeTitle": "Promote to {type}",
-      "mergeSubtitle": "Resolve divergent fields:",
-      "mergeConfirm": "Confirm promotion",
-      "fieldDescription": "Description",
-      "fieldTags": "Tags",
-      "fieldDate": "Date",
-      "fieldCostBasis": "Cost basis",
-      "useLeft": "Use left",
-      "useMerge": "Merge",
-      "useRight": "Use right",
-      "allLeft": "All left",
-      "allMerge": "All merge",
-      "allRight": "All right",
-      "concat": "Concatenate",
-      "union": "Union"
-    },
     "promoteSuggest": {
       "banner": "Row {a} and Row {b} are compatible — promote to {type}",
       "bannerMore": "and {n} more...",
       "dbMatch": "Match found in DB: {type} on {broker} ({date})",
-      "bannerDetailed": "On {date}, Row #{a} and Row #{b} could become {type}"
+      "bannerDetailed": "On {date}, Row #{a} and Row #{b} could become {type}",
+      "merge": "Merge"
     },
     "types": {
       "BUY": "Buy",
@@ -651,7 +636,23 @@
       "commit": "Promote",
       "failed": "Promote failed",
       "rolledBack": "Link was cancelled — no changes were made.",
-      "rolledBackTitle": "Cancelled"
+      "rolledBackTitle": "Cancelled",
+      "mergeTitle": "Promote to {type}",
+      "mergeSubtitle": "Resolve divergent fields:",
+      "mergeConfirm": "Confirm promotion",
+      "fieldDescription": "Description",
+      "fieldTags": "Tags",
+      "fieldDate": "Date",
+      "fieldCostBasis": "Cost basis",
+      "useLeft": "Use left",
+      "useMerge": "Merge",
+      "useRight": "Use right",
+      "allLeft": "All left",
+      "allMerge": "All merge",
+      "allRight": "All right",
+      "concat": "Concatenate",
+      "union": "Union",
+      "clickToSelect": "Click to select"
     },
     "bulkDelete": {
       "title": "Delete transactions",

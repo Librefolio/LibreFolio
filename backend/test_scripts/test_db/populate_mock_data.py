@@ -1414,8 +1414,9 @@ def populate_transactions(session: Session):
     # Tagged 'promote-test' so tests can locate them.
 
     # CASH_TRANSFER promote candidate pair (same currency, diff broker, opposite amounts)
+    # Both brokers must be EDITOR+ for e2e_test_user: Coinbase (EDITOR) + IB (OWNER)
     tx_prom_withdrawal = Transaction(
-        broker_id=degiro.id,
+        broker_id=coinbase.id,
         asset_id=None,
         type=TransactionType.WITHDRAWAL,
         date=today - timedelta(days=10),
@@ -1463,7 +1464,35 @@ def populate_transactions(session: Session):
 
     session.add_all([tx_prom_withdrawal, tx_prom_deposit, tx_prom_adj_out, tx_prom_adj_in])
     session.commit()
-    print(f"  💡 promote-test standalone: W#{tx_prom_withdrawal.id}, D#{tx_prom_deposit.id}, Adj-#{tx_prom_adj_out.id}, Adj+#{tx_prom_adj_in.id}")
+    print(f"  💡 promote-test standalone: W#{tx_prom_withdrawal.id} (Coinbase/EDITOR), D#{tx_prom_deposit.id} (IB/OWNER), Adj-#{tx_prom_adj_out.id}, Adj+#{tx_prom_adj_in.id}")
+
+    # --- Promote-test-access-fail: pair that SHOULD FAIL for e2e_test_user ---
+    # Directa (EDITOR for test_user) + DEGIRO (VIEWER for test_user) → promote hidden
+    tx_access_fail_w = Transaction(
+        broker_id=directa.id,
+        asset_id=None,
+        type=TransactionType.WITHDRAWAL,
+        date=today - timedelta(days=9),
+        quantity=Decimal("0"),
+        amount=Decimal("-200.00"),
+        currency="EUR",
+        description="[promote-test-access-fail] Withdrawal on EDITOR broker",
+        tags="promote-test-access-fail",
+    )
+    tx_access_fail_d = Transaction(
+        broker_id=degiro.id,
+        asset_id=None,
+        type=TransactionType.DEPOSIT,
+        date=today - timedelta(days=9),
+        quantity=Decimal("0"),
+        amount=Decimal("200.00"),
+        currency="EUR",
+        description="[promote-test-access-fail] Deposit on VIEWER broker",
+        tags="promote-test-access-fail",
+    )
+    session.add_all([tx_access_fail_w, tx_access_fail_d])
+    session.commit()
+    print(f"  🚫 promote-test-access-fail: W#{tx_access_fail_w.id} (Directa/EDITOR), D#{tx_access_fail_d.id} (DEGIRO/VIEWER)")
 
 
 def populate_price_history(session: Session):

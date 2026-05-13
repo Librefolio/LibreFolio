@@ -1060,7 +1060,7 @@
                         commitFailed = true;
                         return;
                     }
-                    onCommitted?.({transaction_id: resp.results?.[0]?.id ?? null});
+                    onCommitted?.({transaction_id: resp.results?.[0]?.ids?.[0] ?? null});
                     onClose();
                 } else {
                     const payload = {creates: collectDualCreates()};
@@ -1076,7 +1076,7 @@
                         commitFailed = true;
                         return;
                     }
-                    onCommitted?.({transaction_id: resp.results?.[0]?.id ?? null});
+                    onCommitted?.({transaction_id: resp.results?.[0]?.ids?.[0] ?? null});
                     onClose();
                 }
             } else if (mode === 'edit') {
@@ -1093,7 +1093,7 @@
                     commitFailed = true;
                     return;
                 }
-                onCommitted?.({transaction_id: resp.results?.[0]?.id ?? null});
+                onCommitted?.({transaction_id: resp.results?.[0]?.ids?.[0] ?? null});
                 onClose();
             } else {
                 // create / duplicate
@@ -1110,7 +1110,7 @@
                     commitFailed = true;
                     return;
                 }
-                onCommitted?.({transaction_id: resp.results?.[0]?.id ?? null});
+                onCommitted?.({transaction_id: resp.results?.[0]?.ids?.[0] ?? null});
                 onClose();
             }
         } finally {

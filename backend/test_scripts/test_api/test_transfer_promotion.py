@@ -77,7 +77,7 @@ async def _create_cash_pair(client: httpx.AsyncClient, broker_a: int, broker_b: 
     assert r.status_code == 200, r.text
     data = r.json()
     assert data["committed"] is True, data
-    return data["results"][0]["id"], data["results"][1]["id"]
+    return data["results"][0]["ids"][0], data["results"][1]["ids"][0]
 
 
 @pytest.mark.asyncio

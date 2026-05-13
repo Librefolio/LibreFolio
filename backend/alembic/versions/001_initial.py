@@ -5,7 +5,6 @@ Revises:
 Create Date: 2025-12-22
 
 REFACTORED for unified Transaction model.
-Removed: cash_accounts, cash_movements
 Added: users, user_settings, broker_user_access
 Updated: transactions (unified), brokers (new flags)
 """
@@ -297,7 +296,6 @@ def upgrade() -> None:
     print("📊 Created 12 tables with all indexes and constraints")
     print("🆕 New: users, user_settings, global_settings, broker_user_access, asset_events")
     print("🔄 Updated: brokers (flags), transactions (unified)")
-    print("🗑️  Removed: cash_accounts, cash_movements")
 
 
 def downgrade() -> None:
