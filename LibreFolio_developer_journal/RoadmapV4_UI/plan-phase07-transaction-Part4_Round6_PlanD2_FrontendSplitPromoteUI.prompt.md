@@ -668,5 +668,6 @@ C2 (Main Table promote)    C4 (BulkModal promote)
 
 - **Parent plan**: [`plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md)
 - **Predecessor (D1)**: [`plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md)
-- **Next (D3)**: `plan-phase07-transaction-Part4_Round6_PlanD3_E2ETests.prompt.md` (⏳ planned)
+- **Bugfix 1**: [`plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_1_SplitPromotePolish.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_1_SplitPromotePolish.prompt.md) — 21 bug, UX polish, E2E tests
+- **Next (D3)**: Embedded in Bugfix 1 as Step F14
 
