@@ -988,10 +988,7 @@ async def sync_pairs_bulk(
                 # If fallback was used, log it
                 if route_idx > 0 and result.status in (SyncStatus.OK, SyncStatus.PARTIAL):
                     providers_used = [s["provider"] for s in steps if s["provider"].upper() != "MANUAL"]
-                    logger.info(
-                        f"Pair {pair_slug}: primary route failed, used fallback route {route_idx + 1} "
-                        f"(providers: {', '.join(providers_used)})"
-                    )
+                    logger.info(f"Pair {pair_slug}: primary route failed, used fallback route {route_idx + 1} " f"(providers: {', '.join(providers_used)})")
 
                 return result
 

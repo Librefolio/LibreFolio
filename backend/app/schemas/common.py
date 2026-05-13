@@ -30,10 +30,10 @@ from pydantic.functional_serializers import PlainSerializer
 
 from backend.app.utils.datetime_utils import parse_ISO_date
 
-
 # =============================================================================
 # SAFE DECIMAL — no scientific notation in JSON output
 # =============================================================================
+
 
 def _decimal_fixed_point(v: Decimal) -> str:
     """Serialize Decimal to fixed-point string (never scientific notation).
@@ -44,12 +44,12 @@ def _decimal_fixed_point(v: Decimal) -> str:
     """
     if not isinstance(v, Decimal):
         return str(v)
-    return format(v, 'f')
+    return format(v, "f")
 
 
 SafeDecimal = Annotated[
     Decimal,
-    PlainSerializer(_decimal_fixed_point, return_type=str, when_used='json'),
+    PlainSerializer(_decimal_fixed_point, return_type=str, when_used="json"),
 ]
 """Use instead of ``Decimal`` in **response** schemas to guarantee
 no scientific notation reaches the frontend.
@@ -297,7 +297,7 @@ class Currency(BaseModel):
 
     def to_dict(self) -> dict:
         """Serialize to dict for JSON responses."""
-        return {"currency": self.code, "amount": format(self.amount, 'f')}  # Decimal → fixed-point string
+        return {"currency": self.code, "amount": format(self.amount, "f")}  # Decimal → fixed-point string
 
     @classmethod
     def zero(cls, code: str) -> Currency:

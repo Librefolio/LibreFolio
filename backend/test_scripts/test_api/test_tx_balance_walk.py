@@ -104,10 +104,15 @@ class TestBalanceWalk:
             broker_id, asset_id = await _setup(client)
             today = str(date.today())
 
-            resp = await _commit(client, {"creates": [
-                {"broker_id": broker_id, "type": "DEPOSIT", "date": today, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
-                {"broker_id": broker_id, "type": "BUY", "date": today, "quantity": "5", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-500"}},
-            ]})
+            resp = await _commit(
+                client,
+                {
+                    "creates": [
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": today, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                        {"broker_id": broker_id, "type": "BUY", "date": today, "quantity": "5", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-500"}},
+                    ]
+                },
+            )
 
             assert resp["committed"] is True, f"Expected committed=True, got {resp}"
             assert len(resp.get("issues", [])) == 0
@@ -123,10 +128,15 @@ class TestBalanceWalk:
             today = str(date.today())
 
             # BUY first in array, DEPOSIT second — order should NOT matter
-            resp = await _commit(client, {"creates": [
-                {"broker_id": broker_id, "type": "BUY", "date": today, "quantity": "5", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-500"}},
-                {"broker_id": broker_id, "type": "DEPOSIT", "date": today, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
-            ]})
+            resp = await _commit(
+                client,
+                {
+                    "creates": [
+                        {"broker_id": broker_id, "type": "BUY", "date": today, "quantity": "5", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-500"}},
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": today, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                    ]
+                },
+            )
 
             assert resp["committed"] is True, f"Expected committed=True (EOD check), got {resp}"
             assert len(resp.get("issues", [])) == 0
@@ -141,10 +151,15 @@ class TestBalanceWalk:
             broker_id, asset_id = await _setup(client)
             today = str(date.today())
 
-            resp = await _commit(client, {"creates": [
-                {"broker_id": broker_id, "type": "DEPOSIT", "date": today, "quantity": "0", "cash": {"code": "EUR", "amount": "100"}},
-                {"broker_id": broker_id, "type": "BUY", "date": today, "quantity": "5", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-200"}},
-            ]})
+            resp = await _commit(
+                client,
+                {
+                    "creates": [
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": today, "quantity": "0", "cash": {"code": "EUR", "amount": "100"}},
+                        {"broker_id": broker_id, "type": "BUY", "date": today, "quantity": "5", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-200"}},
+                    ]
+                },
+            )
 
             assert resp["committed"] is False
             issues = resp.get("issues", [])
@@ -163,11 +178,16 @@ class TestBalanceWalk:
             d2 = str(date.today() - timedelta(days=5))
             d3 = str(date.today())
 
-            resp = await _commit(client, {"creates": [
-                {"broker_id": broker_id, "type": "DEPOSIT", "date": d1, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
-                {"broker_id": broker_id, "type": "BUY", "date": d2, "quantity": "5", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-500"}},
-                {"broker_id": broker_id, "type": "BUY", "date": d3, "quantity": "6", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-600"}},
-            ]})
+            resp = await _commit(
+                client,
+                {
+                    "creates": [
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": d1, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                        {"broker_id": broker_id, "type": "BUY", "date": d2, "quantity": "5", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-500"}},
+                        {"broker_id": broker_id, "type": "BUY", "date": d3, "quantity": "6", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-600"}},
+                    ]
+                },
+            )
 
             assert resp["committed"] is False
             issues = resp.get("issues", [])
@@ -186,18 +206,28 @@ class TestBalanceWalk:
             d3 = str(date.today())
 
             # First commit: DEPOSIT day1, BUY day2 → OK
-            resp = await _commit(client, {"creates": [
-                {"broker_id": broker_id, "type": "DEPOSIT", "date": d1, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
-                {"broker_id": broker_id, "type": "BUY", "date": d2, "quantity": "5", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-500"}},
-            ]})
+            resp = await _commit(
+                client,
+                {
+                    "creates": [
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": d1, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                        {"broker_id": broker_id, "type": "BUY", "date": d2, "quantity": "5", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-500"}},
+                    ]
+                },
+            )
             assert resp["committed"] is True
 
             deposit_id = resp["results"][0]["id"]
 
             # Now move deposit to day3 (AFTER the BUY) → BUY on day2 has no cash
-            resp2 = await _commit(client, {"updates": [
-                {"id": deposit_id, "date": d3},
-            ]})
+            resp2 = await _commit(
+                client,
+                {
+                    "updates": [
+                        {"id": deposit_id, "date": d3},
+                    ]
+                },
+            )
 
             assert resp2["committed"] is False
             issues = resp2.get("issues", [])
@@ -214,10 +244,15 @@ class TestBalanceWalk:
             d1 = str(date.today() - timedelta(days=10))
             d2 = str(date.today() - timedelta(days=5))
 
-            resp = await _commit(client, {"creates": [
-                {"broker_id": broker_id, "type": "DEPOSIT", "date": d1, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
-                {"broker_id": broker_id, "type": "BUY", "date": d2, "quantity": "5", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-500"}},
-            ]})
+            resp = await _commit(
+                client,
+                {
+                    "creates": [
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": d1, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                        {"broker_id": broker_id, "type": "BUY", "date": d2, "quantity": "5", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-500"}},
+                    ]
+                },
+            )
             assert resp["committed"] is True
             deposit_id = resp["results"][0]["id"]
 
@@ -237,12 +272,17 @@ class TestBalanceWalk:
             broker_id, asset_id = await _setup(client)
             today = str(date.today())
 
-            resp = await _commit(client, {"creates": [
-                {"broker_id": broker_id, "type": "DEPOSIT", "date": today, "quantity": "0", "cash": {"code": "EUR", "amount": "500"}},
-                {"broker_id": broker_id, "type": "BUY", "date": today, "quantity": "3", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-300"}},
-                {"broker_id": broker_id, "type": "SELL", "date": today, "quantity": "-2", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "200"}},
-                {"broker_id": broker_id, "type": "WITHDRAWAL", "date": today, "quantity": "0", "cash": {"code": "EUR", "amount": "-400"}},
-            ]})
+            resp = await _commit(
+                client,
+                {
+                    "creates": [
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": today, "quantity": "0", "cash": {"code": "EUR", "amount": "500"}},
+                        {"broker_id": broker_id, "type": "BUY", "date": today, "quantity": "3", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "-300"}},
+                        {"broker_id": broker_id, "type": "SELL", "date": today, "quantity": "-2", "asset_id": asset_id, "cash": {"code": "EUR", "amount": "200"}},
+                        {"broker_id": broker_id, "type": "WITHDRAWAL", "date": today, "quantity": "0", "cash": {"code": "EUR", "amount": "-400"}},
+                    ]
+                },
+            )
 
             # Net cash: +500 -300 +200 -400 = 0 (OK)
             # Net asset: +3 -2 = 1 (OK)
@@ -272,5 +312,3 @@ class TestBalanceWalk:
             assert len(resp_batch.get("issues", [])) == 0, f"Batch should pass: {resp_batch}"
 
             print_success("Single BUY → fail. BUY+DEPOSIT batch → pass. Context matters!")
-
-

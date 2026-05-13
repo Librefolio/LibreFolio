@@ -274,10 +274,7 @@ async def test_assign_does_not_modify_metadata(asset_ids: list[int]):
         assert result.success, f"Assignment failed: {result.message}"
 
         await session.refresh(test_asset)
-        assert test_asset.classification_params is None, (
-            f"classification_params should be None after assign (no auto-populate), "
-            f"got: {test_asset.classification_params}"
-        )
+        assert test_asset.classification_params is None, f"classification_params should be None after assign (no auto-populate), " f"got: {test_asset.classification_params}"
         print_success("✓ Assignment does not auto-populate metadata")
 
 
@@ -287,11 +284,13 @@ async def test_assign_preserves_existing_metadata(asset_ids: list[int]):
     print_section("Test 6b: Assign Preserves Existing Metadata")
 
     timestamp = int(time.time() * 1000)
-    pre_existing = json.dumps({
-        "sector_area": {"distribution": {"Healthcare": 1.0}},
-        "geographic_area": {"distribution": {"DEU": 0.5, "FRA": 0.5}},
-        "short_description": "Pre-existing description",
-    })
+    pre_existing = json.dumps(
+        {
+            "sector_area": {"distribution": {"Healthcare": 1.0}},
+            "geographic_area": {"distribution": {"DEU": 0.5, "FRA": 0.5}},
+            "short_description": "Pre-existing description",
+        }
+    )
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         test_asset = Asset(
@@ -317,9 +316,7 @@ async def test_assign_preserves_existing_metadata(asset_ids: list[int]):
         assert results[0].success
 
         await session.refresh(test_asset)
-        assert test_asset.classification_params == pre_existing, (
-            "classification_params should be unchanged after assign"
-        )
+        assert test_asset.classification_params == pre_existing, "classification_params should be unchanged after assign"
         metadata = json.loads(test_asset.classification_params)
         assert "Healthcare" in metadata["sector_area"]["distribution"]
         assert "DEU" in metadata["geographic_area"]["distribution"]
@@ -409,9 +406,7 @@ async def test_refresh_returns_metadata_fields(asset_ids: list[int]):
         assert r.fields_detail is not None, "fields_detail should be present"
 
         refreshed_names = [f.info for f in r.fields_detail.refreshed_fields]
-        assert "classification_params" in refreshed_names, (
-            f"classification_params should be in refreshed_fields, got: {refreshed_names}"
-        )
+        assert "classification_params" in refreshed_names, f"classification_params should be in refreshed_fields, got: {refreshed_names}"
         print_success(f"✓ Refresh returned fields_detail with refreshed_fields: {refreshed_names}")
 
 
@@ -468,10 +463,12 @@ async def test_refresh_overwrites_user_set_fields(asset_ids: list[int]):
     timestamp = int(time.time() * 1000)
 
     # Start with user-set geographic_area different from mockprov
-    user_params = json.dumps({
-        "geographic_area": {"distribution": {"JPN": 1.0}},
-        "short_description": "User description",
-    })
+    user_params = json.dumps(
+        {
+            "geographic_area": {"distribution": {"JPN": 1.0}},
+            "short_description": "User description",
+        }
+    )
 
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         test_asset = Asset(
