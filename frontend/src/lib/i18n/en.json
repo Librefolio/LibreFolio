@@ -42,6 +42,8 @@
     "continue": "Continue",
     "discardAndClose": "Discard & Close",
     "continueEditing": "Continue Editing",
+    "before": "Before",
+    "after": "After",
     "aesthetics": "Aesthetics",
     "swapDirection": "Swap direction",
     "saveConfiguration": "Save Configuration",
@@ -490,9 +492,12 @@
       "confirmTitle": "Unlink this pair?",
       "confirmMessage": "The 2 transactions will become independent rows.",
       "success": "Pair unlinked successfully",
-      "fromType": "Will become: {type}"
+      "fromType": "Will become: {type}",
+      "paired": "paired",
+      "standalone": "standalone"
     },
     "promoteSuggest": {
+      "detected": "Complementary transactions detected:",
       "banner": "Row {a} and Row {b} are compatible — promote to {type}",
       "bannerMore": "and {n} more...",
       "dbMatch": "Match found in DB: {type} on {broker} ({date})",
@@ -652,7 +657,9 @@
       "allRight": "All right",
       "concat": "Concatenate",
       "union": "Union",
-      "clickToSelect": "Click to select"
+      "clickToSelect": "Click to select",
+      "promoteSubtitle": "2 standalone → 1 paired",
+      "target": "Target"
     },
     "bulkDelete": {
       "title": "Delete transactions",
@@ -711,11 +718,15 @@
       "balanceAssetNegative": "Saving would cause <strong>{assetName}</strong> holdings to go negative (<strong>{balance}</strong>) on {date} at <strong>{brokerName}</strong>",
       "accessDenied": "Access denied: EDITOR role required for {brokerName}",
       "txNotFound": "Transaction {id} not found",
-      "indexAssetForbidden": "Cannot create transactions for INDEX assets",
       "linkUuidPairCount": "Link group has {count} items (expected 2)",
       "pairTypeMismatch": "Linked pair must share the same type (found {typeA} and {typeB})",
       "pairSameBroker": "Transfer requires distinct brokers (both assigned to {brokerName})",
-      "cannotLinkEventNoAsset": "Cannot link an asset event without an asset"
+      "cannotLinkEventNoAsset": "Cannot link an asset event without an asset",
+      "typeCannotSplit": "This transaction type cannot be split",
+      "splitIdsMismatch": "The two transactions are not a linked pair",
+      "promoteRefNotFound": "Transaction referenced for promotion not found",
+      "alreadyPaired": "Transaction is already linked to another transaction",
+      "noPromoteRule": "No promotion rule matches these two transaction types"
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",

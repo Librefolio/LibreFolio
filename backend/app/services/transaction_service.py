@@ -932,7 +932,8 @@ class TransactionService:
         for _, item in parsed_updates:
             ids_to_lookup.add(item.id)
         for _, item in parsed_splits:
-            ids_to_lookup.add(item.id)
+            ids_to_lookup.add(item.id_a)
+            ids_to_lookup.add(item.id_b)
         for _, item in parsed_promotes:
             if item.id_a is not None:
                 ids_to_lookup.add(item.id_a)
@@ -944,14 +945,15 @@ class TransactionService:
             existing_by_id = {tx.id: tx for tx in existing_txs}
             touched_brokers |= {tx.broker_id for tx in existing_txs}
 
-        # Fetch split partners
-        split_partner_ids: set[int] = set()
+        # Fetch split partners (both IDs now provided explicitly in id_a/id_b)
         for _, item in parsed_splits:
-            tx = existing_by_id.get(item.id)
-            if tx and tx.related_transaction_id and tx.related_transaction_id not in existing_by_id:
-                split_partner_ids.add(tx.related_transaction_id)
-        if split_partner_ids:
-            partners = await self.get_by_ids(list(split_partner_ids))
+            for sid in (item.id_a, item.id_b):
+                if sid not in existing_by_id:
+                    ids_to_lookup.add(sid)
+        # Re-fetch any missing IDs for splits
+        missing_split_ids = {sid for _, item in parsed_splits for sid in (item.id_a, item.id_b) if sid not in existing_by_id}
+        if missing_split_ids:
+            partners = await self.get_by_ids(list(missing_split_ids))
             for tx in partners:
                 existing_by_id[tx.id] = tx
             touched_brokers |= {tx.broker_id for tx in partners}
@@ -1008,50 +1010,42 @@ class TransactionService:
 
         # 3b. Apply splits (must run before updates so post-split edits apply correctly)
         for orig_idx, item in parsed_splits:
-            tx = existing_by_id.get(item.id)
-            if tx is None:
+            tx_a = existing_by_id.get(item.id_a)
+            tx_b = existing_by_id.get(item.id_b)
+            if tx_a is None or tx_b is None:
+                missing_id = item.id_a if tx_a is None else item.id_b
                 issues.append(
                     TXValidationIssue(
                         operation="split",
                         index=orig_idx,
-                        ref_id=item.id,
-                        error=f"Transaction {item.id} not found",
+                        ref_id=missing_id,
+                        error=f"Transaction {missing_id} not found",
                         code=TXValidationCode.TX_NOT_FOUND.value,
                     )
                 )
                 continue
-            if tx.related_transaction_id is None:
+            # Validate they are actually a linked pair
+            if tx_a.related_transaction_id != item.id_b or tx_b.related_transaction_id != item.id_a:
                 issues.append(
                     TXValidationIssue(
                         operation="split",
                         index=orig_idx,
-                        ref_id=item.id,
-                        error=f"Transaction {item.id} has no pair",
-                        code=TXValidationCode.NO_PAIR_TO_SPLIT.value,
+                        ref_id=item.id_a,
+                        error=f"Transactions {item.id_a} and {item.id_b} are not a linked pair",
+                        code=TXValidationCode.SPLIT_IDS_MISMATCH.value,
                     )
                 )
                 continue
-            partner = existing_by_id.get(tx.related_transaction_id)
-            if partner is None:
-                partner = await self.session.get(Transaction, tx.related_transaction_id)
-            if partner is None:
-                issues.append(
-                    TXValidationIssue(
-                        operation="split",
-                        index=orig_idx,
-                        ref_id=item.id,
-                        error=f"Partner {tx.related_transaction_id} not found",
-                        code=TXValidationCode.PARTNER_NOT_FOUND.value,
-                    )
-                )
-                continue
+            # Use tx_a as the reference for type
+            tx = tx_a
+            partner = tx_b
             split_types = self.SPLIT_TYPE_MAP.get(tx.type)
             if split_types is None:
                 issues.append(
                     TXValidationIssue(
                         operation="split",
                         index=orig_idx,
-                        ref_id=item.id,
+                        ref_id=item.id_a,
                         error=f"Type {tx.type.value} cannot be split",
                         code=TXValidationCode.TYPE_CANNOT_SPLIT.value,
                     )

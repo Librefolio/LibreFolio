@@ -242,7 +242,7 @@ class TestBatchSplit:
             # Split via commit
             resp = await client.post(
                 f"{API_BASE}/transactions/commit",
-                json={"splits": [{"id": tx_ids[0]}]},
+                json={"splits": [{"id_a": tx_ids[0], "id_b": tx_ids[1]}]},
                 timeout=TIMEOUT,
             )
             assert resp.status_code == 200
@@ -277,7 +277,7 @@ class TestBatchSplit:
 
             resp = await client.post(
                 f"{API_BASE}/transactions/commit",
-                json={"splits": [{"id": tx_ids[0]}]},
+                json={"splits": [{"id_a": tx_ids[0], "id_b": tx_ids[1]}]},
                 timeout=TIMEOUT,
             )
             assert resp.status_code == 200
@@ -305,7 +305,7 @@ class TestBatchSplit:
 
             resp = await client.post(
                 f"{API_BASE}/transactions/commit",
-                json={"splits": [{"id": 999999}]},
+                json={"splits": [{"id_a": 999999, "id_b": 999998}]},
                 timeout=TIMEOUT,
             )
             assert resp.status_code == 200
@@ -315,29 +315,35 @@ class TestBatchSplit:
             print_success("Split not found → txNotFound issue ✓")
 
     async def test_split_standalone_fails(self):
-        """Split a standalone TX (no pair) → issue with code noPairToSplit."""
+        """Split two standalone TXs (not a pair) → issue with code splitIdsMismatch."""
         print_section("B1.4 — Split standalone fails")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             broker = await create_broker(client, "SplitStandalone")
 
-            tx_id = await create_standalone_tx(
+            tx_id_a = await create_standalone_tx(
                 client,
                 broker,
                 "DEPOSIT",
                 cash={"code": "EUR", "amount": "100"},
             )
+            tx_id_b = await create_standalone_tx(
+                client,
+                broker,
+                "DEPOSIT",
+                cash={"code": "EUR", "amount": "200"},
+            )
 
             resp = await client.post(
                 f"{API_BASE}/transactions/commit",
-                json={"splits": [{"id": tx_id}]},
+                json={"splits": [{"id_a": tx_id_a, "id_b": tx_id_b}]},
                 timeout=TIMEOUT,
             )
             assert resp.status_code == 200
             data = resp.json()
             assert data["committed"] is False
-            assert any(i["code"] == "noPairToSplit" for i in data["issues"]), f"Expected noPairToSplit: {data['issues']}"
-            print_success("Split standalone → noPairToSplit issue ✓")
+            assert any(i["code"] == "splitIdsMismatch" for i in data["issues"]), f"Expected splitIdsMismatch: {data['issues']}"
+            print_success("Split standalone → splitIdsMismatch issue ✓")
 
     async def test_split_in_mixed_batch(self):
         """Creates + updates + splits in the same commit batch."""
@@ -364,7 +370,7 @@ class TestBatchSplit:
                             "cash": {"code": "EUR", "amount": "500"},
                         }
                     ],
-                    "splits": [{"id": tx_ids[0]}],
+                    "splits": [{"id_a": tx_ids[0], "id_b": tx_ids[1]}],
                 },
                 timeout=TIMEOUT,
             )
