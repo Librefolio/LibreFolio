@@ -864,8 +864,8 @@
         // Bug14-fix: reuse existing link_uuid in edit mode so BulkModal can
         // match the hidden partner draft; only generate a new UUID for create.
         const linkUuid = draft.link_uuid || generateUUID();
-        const sharedTags = draft.tags.length > 0 ? draft.tags : undefined;
-        const sharedDesc = draft.description.trim() || undefined;
+        const sharedTags = draft.tags && draft.tags.length > 0 ? draft.tags : undefined;
+        const sharedDesc = (draft.description ?? '').trim() || undefined;
 
         if (pairLayout === 'fx') {
             // FX_CONVERSION: both sides qty=0, different currencies
@@ -1053,7 +1053,7 @@
                         formError = result.message;
                         return;
                     }
-                    const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{id?: number}>};
+                    const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{ids?: number[]}>};
                     if (!resp.committed) {
                         issues = resp.issues ?? [];
                         issuesDismissed = false;
@@ -1069,7 +1069,7 @@
                         formError = result.message;
                         return;
                     }
-                    const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{id?: number | null}>};
+                    const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{ids?: number[]}>};
                     if (!resp.committed) {
                         issues = resp.issues ?? [];
                         issuesDismissed = false;
@@ -1086,7 +1086,7 @@
                     formError = result.message;
                     return;
                 }
-                const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{id?: number}>};
+                const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{ids?: number[]}>};
                 if (!resp.committed) {
                     issues = resp.issues ?? [];
                     issuesDismissed = false;
@@ -1103,7 +1103,7 @@
                     formError = result.message;
                     return;
                 }
-                const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{id?: number | null}>};
+                const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{ids?: number[]}>};
                 if (!resp.committed) {
                     issues = resp.issues ?? [];
                     issuesDismissed = false;
@@ -1173,8 +1173,8 @@
     function addTag(raw: string) {
         const v = raw.trim();
         if (!v) return;
-        if (draft.tags.includes(v)) return;
-        draft = {...draft, tags: [...draft.tags, v]};
+        if ((draft.tags ?? []).includes(v)) return;
+        draft = {...draft, tags: [...(draft.tags ?? []), v]};
     }
     function unlinkEvent() {
         draft = {...draft, asset_event_id: null};
@@ -1431,7 +1431,7 @@
                                     <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
                                 </div>
                             {:else}
-                                <BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} />
+                                <BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
                             {/if}
                         </div>
                     {/if}
@@ -1495,7 +1495,7 @@
                                 <!-- transfer_asset / transfer_cash: broker from -->
                                 <div class="flex flex-col gap-1">
                                     <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</span>
-                                    <BrokerSearchSelect brokers={brokersForFrom} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} disabled={isReadonly} />
+                                    <BrokerSearchSelect brokers={brokersForFrom} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} disabled={isReadonly} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
                                 </div>
                             {/if}
                         </div>
@@ -1605,7 +1605,7 @@
                                             {/if}
                                         </div>
                                     {:else}
-                                        <BrokerSearchSelect brokers={brokersForTo} value={brokerToIdValue} onchange={(id) => setBrokerTo(id ?? 0)} disabled={isReadonly} />
+                                        <BrokerSearchSelect brokers={brokersForTo} value={brokerToIdValue} onchange={(id) => setBrokerTo(id ?? 0)} disabled={isReadonly} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
                                     {/if}
                                 </div>
                             {/if}
@@ -1812,7 +1812,7 @@
             {/if}
 
             <!-- Optional disclosure -->
-            {#if !isReadonly || draft.tags.length > 0 || draft.description.trim()}
+            {#if !isReadonly || (draft.tags && draft.tags.length > 0) || (draft.description ?? '').trim()}
                 <details class="border border-gray-200 dark:border-slate-700 rounded-lg" bind:open={optionalOpen}>
                     <summary class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-4 py-3 cursor-pointer select-none" data-testid="tx-form-optional-toggle">{$t('transactions.form.sectionOptional')}</summary>
                     <div class="px-4 pb-4 space-y-3 text-sm">

@@ -48,7 +48,7 @@ async def create_bulk(
                 SimpleNamespace(
                     success=True,
                     status="success",
-                    transaction_id=r.id,
+                    transaction_id=r.ids[0] if r.ids else None,
                     link_uuid=r.link_uuid,
                     error=None,
                 )
@@ -68,7 +68,7 @@ async def create_bulk(
                 SimpleNamespace(
                     success=False,
                     status="simulated",
-                    transaction_id=r.id,
+                    transaction_id=r.ids[0] if r.ids else None,
                     link_uuid=r.link_uuid,
                     error=None,
                 )
@@ -123,7 +123,7 @@ async def update_bulk(
         if r and r.status == "success" and not resp.issues:
             legacy_results.append(
                 SimpleNamespace(
-                    id=r.id or item_orig.id,
+                    id=(r.ids[0] if r.ids else None) or item_orig.id,
                     success=True,
                     status="success",
                     error=None,
@@ -141,7 +141,7 @@ async def update_bulk(
         elif r:
             legacy_results.append(
                 SimpleNamespace(
-                    id=r.id or item_orig.id,
+                    id=(r.ids[0] if r.ids else None) or item_orig.id,
                     success=False,
                     status="simulated",
                     error=None,
@@ -195,7 +195,7 @@ async def delete_bulk(
         if r and r.status == "success" and not resp.issues:
             legacy_results.append(
                 SimpleNamespace(
-                    id=r.id or tx_id,
+                    id=(r.ids[0] if r.ids else None) or tx_id,
                     success=True,
                     deleted_count=1,
                     status="success",

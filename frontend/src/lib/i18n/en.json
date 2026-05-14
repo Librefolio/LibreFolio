@@ -502,7 +502,9 @@
       "bannerMore": "and {n} more...",
       "dbMatch": "Match found in DB: {type} on {broker} ({date})",
       "bannerDetailed": "On {date}, Row #{a} and Row #{b} could become {type}",
-      "merge": "Merge"
+      "merge": "Merge",
+      "deltaLabel": "Max Δ days",
+      "deltaGG": "d"
     },
     "types": {
       "BUY": "Buy",

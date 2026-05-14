@@ -117,6 +117,19 @@
     // Helpers
     // =========================================================================
 
+    // R3-B5: delta-days filter for suggest banner (persisted in sessionStorage)
+    let maxDeltaDays = $state(Number(sessionStorage.getItem('lf-suggest-delta-days') ?? '3'));
+    $effect(() => {
+        sessionStorage.setItem('lf-suggest-delta-days', String(maxDeltaDays));
+    });
+
+    /** Compute the absolute difference in days between two ISO date strings. */
+    function daysDiff(a: string, b: string): number {
+        const da = new Date(a);
+        const db = new Date(b);
+        return Math.round(Math.abs(da.getTime() - db.getTime()) / 86400000);
+    }
+
     function todayIso(): string {
         return new Date().toISOString().slice(0, 10);
     }
@@ -676,27 +689,74 @@
         } else if (row.op === 'create' && row.link_uuid) {
             // Case B: New paired (link_uuid shared) → local transformation
             const partner = ops.find((o) => o !== row && o.op === 'create' && (o as any).link_uuid === row.link_uuid);
-            if (!partner) return;
+            if (!partner) {
+                // Case B fallback: link_uuid exists but no matching partner row found.
+                // This happens when pairs were created via dual-form (single row + partnerPayload).
+                // Fall through to Case C.
+            } else {
+                const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
+                if (!splitTypes) return;
+                const [fromType, toType] = splitTypes;
+                const cashAmt = Number(row.fields.cash?.amount ?? 0);
+                const qty = Number(row.fields.quantity ?? 0);
+                const isFrom = row.fields.type === 'TRANSFER' ? qty < 0 : cashAmt < 0;
+                row.fields.type = (isFrom ? fromType : toType) as TransactionTypeCode;
+                partner.fields.type = (isFrom ? toType : fromType) as TransactionTypeCode;
+                (row as any).link_uuid = null;
+                (partner as any).link_uuid = null;
+                for (const o of [row, partner]) {
+                    o.partnerId = undefined;
+                    o.partnerBrokerId = undefined;
+                    o.partnerCash = undefined;
+                    o.partnerDate = undefined;
+                    o.partnerPayload = undefined;
+                }
+                ops = [...ops];
+                return;
+            }
+        }
+        // Case C: New paired (dual form — single row with hidden partner data) → local split.
+        // The partner is stored inside the row (partnerPayload / partnerBrokerId etc.)
+        // but may not be directly accessible due to Svelte 5 proxy behavior.
+        // Use the type as discriminant instead.
+        if (row.op === 'create') {
             const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
             if (!splitTypes) return;
             const [fromType, toType] = splitTypes;
-            // Determine from/to by sign
             const cashAmt = Number(row.fields.cash?.amount ?? 0);
             const qty = Number(row.fields.quantity ?? 0);
-            const isFrom = row.fields.type === 'TRANSFER' ? qty < 0 : cashAmt < 0;
+            const isFrom = row.fields.type === 'TRANSFER' ? qty < 0 || qty === 0 : cashAmt < 0 || cashAmt === 0;
+            // Main row → standalone type
             row.fields.type = (isFrom ? fromType : toType) as TransactionTypeCode;
-            partner.fields.type = (isFrom ? toType : fromType) as TransactionTypeCode;
             (row as any).link_uuid = null;
-            (partner as any).link_uuid = null;
-            // Clear partner display on both
-            for (const o of [row, partner]) {
-                o.partnerId = undefined;
-                o.partnerBrokerId = undefined;
-                o.partnerCash = undefined;
-                o.partnerDate = undefined;
-                o.partnerPayload = undefined;
+            // Materialize partner as new visible row
+            const partnerOp = createOpEmpty();
+            // Try to use partnerPayload for field data; fallback to copying from current row
+            const pp = row.partnerPayload;
+            if (pp) {
+                applyFormPayload(partnerOp.fields, pp as unknown as Record<string, unknown>);
+            } else {
+                // Fallback: copy from current row with partner display data
+                partnerOp.fields.date = row.partnerDate ?? row.fields.date;
+                partnerOp.fields.broker_id = row.partnerBrokerId ?? row.fields.broker_id;
+                partnerOp.fields.asset_id = row.fields.asset_id;
+                if (row.partnerCash) {
+                    partnerOp.fields.cash = {...row.partnerCash};
+                } else if (row.fields.cash) {
+                    // Flip the sign for partner cash
+                    partnerOp.fields.cash = {code: row.fields.cash.code, amount: String(-Number(row.fields.cash.amount))};
+                }
+                partnerOp.fields.quantity = row.fields.quantity ? String(-Number(row.fields.quantity)) : '0';
             }
-            ops = [...ops];
+            partnerOp.fields.type = (isFrom ? toType : fromType) as TransactionTypeCode;
+            (partnerOp as any).link_uuid = null;
+            // Clear partner display on main row
+            row.partnerId = undefined;
+            row.partnerBrokerId = undefined;
+            row.partnerCash = undefined;
+            row.partnerDate = undefined;
+            row.partnerPayload = undefined;
+            ops = [...ops, partnerOp];
         }
     }
 
@@ -1374,9 +1434,12 @@
             visible: (row: PendingOp) => {
                 // Saved paired → backend split
                 if (row.op === 'edit' && row.partnerId != null) return true;
-                // New paired (link_uuid shared) → local split
-                if (row.op === 'create' && row.link_uuid != null) {
-                    return ops.some((o) => o !== row && o.op === 'create' && (o as any).link_uuid === row.link_uuid);
+                // New paired (any kind: link_uuid shared or dual-form partnerPayload)
+                if (row.op === 'create') {
+                    // Type-based check: if the type is a paired type (SPLIT_TYPE_MAP),
+                    // show split action so user can undo an accidental pair creation.
+                    const t = row.fields.type;
+                    if (t === 'TRANSFER' || t === 'CASH_TRANSFER' || t === 'FX_CONVERSION') return true;
                 }
                 return false;
             },
@@ -1557,6 +1620,8 @@
         }
         formOpen = false;
         formEditingTempId = null;
+        // R3-B2: trigger validation after FormModal pushes a draft
+        scheduler.trigger('change');
     }
 
     /** Add a paired draft row: single visible draft with partner payload stored. */
@@ -1798,9 +1863,13 @@
     /** Local promote suggestions: match new standalone ops against each other. */
     let localSuggestions = $derived.by(() => {
         const newStandalone = ops.filter((o) => o.op === 'create' && !(o as any).link_uuid && !o.partnerId && !o.partnerPayload);
-        const results: Array<{tempIdA: string; tempIdB: string; labelA: string; labelB: string; targetLabel: string; typeA: string; typeB: string; targetType: string}> = [];
+        const results: Array<{tempIdA: string; tempIdB: string; labelA: string; labelB: string; targetLabel: string; typeA: string; typeB: string; targetType: string; dateA: string; dateB: string; deltaDays: number}> = [];
         for (let i = 0; i < newStandalone.length; i++) {
             for (let j = i + 1; j < newStandalone.length; j++) {
+                const dA = newStandalone[i].fields.date;
+                const dB = newStandalone[j].fields.date;
+                const delta = daysDiff(dA, dB);
+                if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(newStandalone[i].fields.type, newStandalone[j].fields.type, $t, buildPromoteCtx(newStandalone[i], newStandalone[j]));
                 if (match) {
                     results.push({
@@ -1812,6 +1881,9 @@
                         typeA: newStandalone[i].fields.type,
                         typeB: newStandalone[j].fields.type,
                         targetType: match.targetType,
+                        dateA: dA,
+                        dateB: dB,
+                        deltaDays: delta,
                     });
                 }
             }
@@ -1821,12 +1893,16 @@
 
     /** Combined promote suggestions (local new+new + DB edit→candidate). */
     let allSuggestions = $derived.by(() => {
-        const combined: Array<{tempIdA: string; tempIdB: string; labelA: string; labelB: string; targetLabel: string; typeA: string; typeB: string; targetType: string; isDB?: boolean; dbCandidateId?: number}> = [];
+        const combined: Array<{tempIdA: string; tempIdB: string; labelA: string; labelB: string; targetLabel: string; typeA: string; typeB: string; targetType: string; dateA: string; dateB: string; deltaDays: number; isDB?: boolean; dbCandidateId?: number}> = [];
         for (const s of localSuggestions) combined.push(s);
         for (const [txId, candidates] of suggestFromDB) {
             const op = ops.find((o) => o.op === 'edit' && (o as any).txId === txId);
             if (!op || !candidates.length) continue;
             const best = candidates[0];
+            const dA = op.fields.date;
+            const dB = best.date ?? dA;
+            const delta = daysDiff(dA, dB);
+            if (delta > maxDeltaDays) continue;
             const match = findPromoteMatch(op.fields.type, best.type, $t, {
                 brokerA: op.fields.broker_id,
                 brokerB: best.broker_id,
@@ -1842,6 +1918,9 @@
                 typeA: op.fields.type,
                 typeB: best.type,
                 targetType: match.targetType,
+                dateA: dA,
+                dateB: dB,
+                deltaDays: delta,
                 isDB: true,
                 dbCandidateId: best.id,
             });
@@ -2086,6 +2165,9 @@
                             <Tooltip text={sug.targetLabel}>
                                 <img src={getTransactionTypeIconUrl(sug.targetType)} alt="" class="w-4 h-4 inline object-contain" />
                             </Tooltip>
+                            {#if sug.deltaDays > 0}
+                                <span class="text-gray-400">(Δ {sug.deltaDays}{$t('transactions.promoteSuggest.deltaGG', {values: {n: sug.deltaDays}}) || `${sug.deltaDays}d`})</span>
+                            {/if}
                         </div>
                     {/each}
                     {#if allSuggestions.length > 5}
@@ -2114,6 +2196,15 @@
                     🔍 <span class="hidden sm:inline">{$t('transactions.picker.searchAdd') || 'Search & add'}</span>
                 </button>
             {/if}
+
+            <!-- R3-B5: Delta-days filter for promote suggestions -->
+            <div class="inline-flex items-center gap-1 text-[11px] text-gray-500 dark:text-gray-400">
+                <span class="hidden sm:inline">{$t('transactions.promoteSuggest.deltaLabel') || 'Max Δ days'}</span>
+                <input type="number" min="0" max="30" step="1"
+                    class="w-12 px-1 py-0.5 text-[11px] rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-center"
+                    bind:value={maxDeltaDays}
+                    data-testid="promote-suggest-delta-input" />
+            </div>
 
             <!-- Inline selection toolbar (when rows selected in DataTable) -->
             {#if bulkTableSelectedRows.length > 0}
