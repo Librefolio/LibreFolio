@@ -1,13 +1,13 @@
 <!--
   TransactionActionModal.svelte — Rich confirmation for split and promote actions.
-  Generalizes confirmations beyond the simple ConfirmModal:
-  - mode='split': shows before→after (paired → 2 standalone) preview
+  Uses tabular layout (From/To columns) matching TransactionDeleteModal style.
+  - mode='split': shows BEFORE (paired) → AFTER (2 standalone) preview
   - mode='promote': shows 2 standalone → paired target preview
-  Plan D2 Bugfix 2 Step 9 (2026-05-13).
+  Plan D2 Bugfix 3 Step 4 — tabular redesign (2026-05-14).
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {Unlink, Link2, ArrowRight} from 'lucide-svelte';
+    import {Unlink, Link2, ArrowDown} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import BrokerBadge from '$lib/components/ui/BrokerBadge.svelte';
     import {getBrokerInfo, getAllBrokers, getBrokerRole} from '$lib/stores/brokerStore';
@@ -62,13 +62,16 @@
         return formatCurrencyAmountPlain(Number(cash.amount), cash.code, {showSign: true});
     }
 
+    function typeLabel(typeCode: string): string {
+        return $t(`transactions.types.${typeCode}`) || typeCode;
+    }
+
     // Split: compute post-split types
     let splitTypes = $derived.by(() => {
         if (mode !== 'split' || !transaction) return null;
         const mapping = SPLIT_TYPE_MAP[transaction.type];
         if (!mapping) return null;
         const [fromType, toType] = mapping;
-        // Determine from/to by sign
         const cashAmt = Number(transaction.cash?.amount ?? 0);
         const qty = Number(transaction.quantity ?? 0);
         const isFrom = transaction.type === 'TRANSFER' ? qty < 0 : cashAmt < 0;
@@ -78,11 +81,12 @@
         };
     });
 
-    let title = $derived(mode === 'split' ? `✂️ ${$t('transactions.split.confirmTitle') || 'Unlink this pair?'}` : `🔗 ${$t('transactions.actions.promotePair') || 'Promote pair'}`);
+    let title = $derived(mode === 'split' ? `✂️ ${$t('transactions.split.confirmTitle') || 'Unlink this pair?'}` : `🔗 ${$t('transactions.actions.promotePair') || 'Link as pair'}`);
     let confirmLabel = $derived(mode === 'split' ? `✂️ ${$t('transactions.split.confirmTitle') || 'Split'}` : `🔗 ${$t('transactions.promote.commit') || 'Promote'}`);
+    let borderColor = $derived(mode === 'split' ? 'border-amber-200 dark:border-amber-800' : 'border-green-200 dark:border-green-800');
 </script>
 
-<ModalBase {open} maxWidth="lg" onRequestClose={onCancel} testId="tx-action-modal">
+<ModalBase {open} maxWidth="xl" onRequestClose={onCancel} testId="tx-action-modal">
     <div class="p-6 space-y-4" data-testid="tx-action-modal-content">
         <!-- Header -->
         <div class="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-gray-100">
@@ -96,117 +100,174 @@
 
         {#if transaction}
             {#if mode === 'split'}
-                <!-- Split preview: before → after -->
+                <!-- Split: BEFORE (paired) → AFTER (2 standalone) -->
                 <p class="text-sm text-gray-600 dark:text-gray-400">
                     {$t('transactions.split.confirmMessage') || 'The 2 transactions will become independent rows.'}
                 </p>
 
-                <div class="grid grid-cols-[1fr_auto_1fr] gap-3 items-start">
-                    <!-- Before: paired -->
-                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-2" data-testid="tx-action-before">
-                        <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Before</div>
-                        <div class="flex items-center gap-2">
-                            {#if getTransactionTypeIconUrl(transaction.type)}
-                                <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5" />
-                            {/if}
-                            <span class="text-sm font-medium">{$t(`transactions.types.${transaction.type}`) || transaction.type}</span>
-                        </div>
-                        <div class="text-xs text-gray-500">
-                            <div>{transaction.date}</div>
-                            <div>{fC(transaction.cash)}</div>
-                            <div class="mt-1"><BrokerBadge broker={bLike(transaction.broker_id)} brokers={brkrs} showRole role={getBrokerRole(transaction.broker_id)} /></div>
-                        </div>
-                        {#if partner}
-                            <div class="border-t border-gray-100 dark:border-gray-700 pt-2 mt-2 text-xs text-gray-500">
-                                <div class="flex items-center gap-1">
-                                    <span>↔</span>
-                                    <BrokerBadge broker={bLike(partner.broker_id)} brokers={brkrs} showRole role={getBrokerRole(partner.broker_id)} />
-                                </div>
-                                <div>{fC(partner.cash)}</div>
-                            </div>
-                        {/if}
-                    </div>
-
-                    <!-- Arrow -->
-                    <div class="flex items-center justify-center pt-8">
-                        <ArrowRight size={24} class="text-gray-400" />
-                    </div>
-
-                    <!-- After: 2 standalone -->
-                    <div class="space-y-2" data-testid="tx-action-after">
-                        <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">After</div>
-                        <!-- TX 1 -->
-                        <div class="border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20 rounded-lg p-2">
-                            <div class="flex items-center gap-2">
-                                {#if splitTypes && getTransactionTypeIconUrl(splitTypes.txType)}
-                                    <img src={getTransactionTypeIconUrl(splitTypes.txType)} alt="" class="w-4 h-4" />
-                                {/if}
-                                <span class="text-xs font-medium">{splitTypes ? ($t(`transactions.types.${splitTypes.txType}`) || splitTypes.txType) : '?'}</span>
-                            </div>
-                            <div class="text-[11px] text-gray-500 mt-1"><BrokerBadge broker={bLike(transaction.broker_id)} brokers={brkrs} /></div>
-                        </div>
-                        <!-- TX 2 -->
-                        {#if partner}
-                            <div class="border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20 rounded-lg p-2">
-                                <div class="flex items-center gap-2">
-                                    {#if splitTypes && getTransactionTypeIconUrl(splitTypes.partnerType)}
-                                        <img src={getTransactionTypeIconUrl(splitTypes.partnerType)} alt="" class="w-4 h-4" />
+                <!-- BEFORE table -->
+                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{$t('common.before') || 'Before'} ({$t('transactions.split.paired') || 'paired'})</div>
+                <div class="border {borderColor} rounded-lg overflow-hidden" data-testid="tx-action-before">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium w-24"></th>
+                                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('transactions.deleteModal.from') || 'From'}</th>
+                                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('transactions.deleteModal.to') || 'To'}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</td>
+                                <td class="px-3 py-2">{transaction.date}</td>
+                                <td class="px-3 py-2">{partner?.date ?? '—'}</td>
+                            </tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</td>
+                                <td class="px-3 py-2 flex items-center gap-2" colspan="2">
+                                    {#if getTransactionTypeIconUrl(transaction.type)}
+                                        <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5" />
                                     {/if}
-                                    <span class="text-xs font-medium">{splitTypes ? ($t(`transactions.types.${splitTypes.partnerType}`) || splitTypes.partnerType) : '?'}</span>
-                                </div>
-                                <div class="text-[11px] text-gray-500 mt-1"><BrokerBadge broker={bLike(partner.broker_id)} brokers={brkrs} /></div>
-                            </div>
-                        {/if}
-                    </div>
+                                    {typeLabel(transaction.type)}
+                                </td>
+                            </tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}</td>
+                                <td class="px-3 py-2">{fC(transaction.cash)}</td>
+                                <td class="px-3 py-2">{fC(partner?.cash)}</td>
+                            </tr>
+                            <tr>
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</td>
+                                <td class="px-3 py-2"><BrokerBadge broker={bLike(transaction.broker_id)} brokers={brkrs} /></td>
+                                <td class="px-3 py-2">{#if partner}<BrokerBadge broker={bLike(partner.broker_id)} brokers={brkrs} />{:else}—{/if}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Arrow down -->
+                <div class="flex justify-center"><ArrowDown size={20} class="text-gray-400" /></div>
+
+                <!-- AFTER table -->
+                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{$t('common.after') || 'After'} (2 {$t('transactions.split.standalone') || 'standalone'})</div>
+                <div class="border {borderColor} rounded-lg overflow-hidden" data-testid="tx-action-after">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium w-24"></th>
+                                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">TX #{transaction.id}</th>
+                                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">TX #{partner?.id ?? '?'}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</td>
+                                <td class="px-3 py-2 flex items-center gap-2">
+                                    {#if splitTypes && getTransactionTypeIconUrl(splitTypes.txType)}
+                                        <img src={getTransactionTypeIconUrl(splitTypes.txType)} alt="" class="w-4 h-4" />
+                                    {/if}
+                                    {splitTypes ? typeLabel(splitTypes.txType) : '?'}
+                                </td>
+                                <td class="px-3 py-2">
+                                    <span class="inline-flex items-center gap-2">
+                                        {#if splitTypes && getTransactionTypeIconUrl(splitTypes.partnerType)}
+                                            <img src={getTransactionTypeIconUrl(splitTypes.partnerType)} alt="" class="w-4 h-4" />
+                                        {/if}
+                                        {splitTypes ? typeLabel(splitTypes.partnerType) : '?'}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}</td>
+                                <td class="px-3 py-2">{fC(transaction.cash)}</td>
+                                <td class="px-3 py-2">{fC(partner?.cash)}</td>
+                            </tr>
+                            <tr>
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</td>
+                                <td class="px-3 py-2"><BrokerBadge broker={bLike(transaction.broker_id)} brokers={brkrs} /></td>
+                                <td class="px-3 py-2">{#if partner}<BrokerBadge broker={bLike(partner.broker_id)} brokers={brkrs} />{:else}—{/if}</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             {:else}
-                <!-- Promote preview: 2 standalone → paired target -->
-                <div class="grid grid-cols-[1fr_auto_1fr] gap-3 items-start">
-                    <!-- TX A -->
-                    <div class="border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 rounded-lg p-3 space-y-2" data-testid="tx-action-promote-a">
-                        <div class="flex items-center gap-2">
-                            {#if getTransactionTypeIconUrl(transaction.type)}
-                                <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5" />
-                            {/if}
-                            <span class="text-sm font-medium">{$t(`transactions.types.${transaction.type}`) || transaction.type}</span>
-                        </div>
-                        <div class="text-xs text-gray-500">
-                            <div>{transaction.date}</div>
-                            <div>{fC(transaction.cash)}</div>
-                            <div class="mt-1"><BrokerBadge broker={bLike(transaction.broker_id)} brokers={brkrs} showRole role={getBrokerRole(transaction.broker_id)} /></div>
-                        </div>
-                    </div>
+                <!-- Promote: 2 standalone → paired target -->
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                    {$t('transactions.promote.promoteSubtitle') || '2 standalone → 1 paired'}
+                </p>
 
-                    <!-- Arrow + target -->
-                    <div class="flex flex-col items-center justify-center gap-2 pt-4">
-                        <ArrowRight size={24} class="text-green-500 rotate-0" />
-                        {#if targetType && getTransactionTypeIconUrl(targetType)}
-                            <img src={getTransactionTypeIconUrl(targetType)} alt="" class="w-6 h-6" />
-                        {/if}
-                        <span class="text-xs font-semibold text-green-700 dark:text-green-300">{targetTypeLabel}</span>
-                    </div>
+                <!-- Source table -->
+                <div class="border {borderColor} rounded-lg overflow-hidden" data-testid="tx-action-promote-source">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium w-24"></th>
+                                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">TX #{transaction.id}</th>
+                                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">TX #{partner?.id ?? '?'}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</td>
+                                <td class="px-3 py-2">{transaction.date}</td>
+                                <td class="px-3 py-2">{partner?.date ?? '—'}</td>
+                            </tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</td>
+                                <td class="px-3 py-2 flex items-center gap-2">
+                                    {#if getTransactionTypeIconUrl(transaction.type)}
+                                        <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5" />
+                                    {/if}
+                                    {typeLabel(transaction.type)}
+                                </td>
+                                <td class="px-3 py-2">
+                                    {#if partner}
+                                        <span class="inline-flex items-center gap-2">
+                                            {#if getTransactionTypeIconUrl(partner.type)}
+                                                <img src={getTransactionTypeIconUrl(partner.type)} alt="" class="w-5 h-5" />
+                                            {/if}
+                                            {typeLabel(partner.type)}
+                                        </span>
+                                    {:else}—{/if}
+                                </td>
+                            </tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}</td>
+                                <td class="px-3 py-2">{fC(transaction.cash)}</td>
+                                <td class="px-3 py-2">{fC(partner?.cash)}</td>
+                            </tr>
+                            <tr>
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</td>
+                                <td class="px-3 py-2"><BrokerBadge broker={bLike(transaction.broker_id)} brokers={brkrs} /></td>
+                                <td class="px-3 py-2">{#if partner}<BrokerBadge broker={bLike(partner.broker_id)} brokers={brkrs} />{:else}—{/if}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
 
-                    <!-- TX B -->
-                    {#if partner}
-                        <div class="border border-pink-200 dark:border-pink-800 bg-pink-50/50 dark:bg-pink-950/20 rounded-lg p-3 space-y-2" data-testid="tx-action-promote-b">
-                            <div class="flex items-center gap-2">
-                                {#if getTransactionTypeIconUrl(partner.type)}
-                                    <img src={getTransactionTypeIconUrl(partner.type)} alt="" class="w-5 h-5" />
-                                {/if}
-                                <span class="text-sm font-medium">{$t(`transactions.types.${partner.type}`) || partner.type}</span>
-                            </div>
-                            <div class="text-xs text-gray-500">
-                                <div>{partner.date}</div>
-                                <div>{fC(partner.cash)}</div>
-                                <div class="mt-1"><BrokerBadge broker={bLike(partner.broker_id)} brokers={brkrs} showRole role={getBrokerRole(partner.broker_id)} /></div>
-                            </div>
-                        </div>
-                    {/if}
+                <!-- Arrow down -->
+                <div class="flex justify-center"><ArrowDown size={20} class="text-gray-400" /></div>
+
+                <!-- Target -->
+                <div class="border {borderColor} rounded-lg overflow-hidden" data-testid="tx-action-promote-target">
+                    <table class="w-full text-sm">
+                        <tbody>
+                            <tr>
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400 w-24">{$t('transactions.promote.target') || 'Target'}</td>
+                                <td class="px-3 py-2 flex items-center gap-2">
+                                    {#if targetType && getTransactionTypeIconUrl(targetType)}
+                                        <img src={getTransactionTypeIconUrl(targetType)} alt="" class="w-5 h-5" />
+                                    {/if}
+                                    <span class="font-semibold text-green-700 dark:text-green-300">{targetTypeLabel}</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
 
                 <p class="text-xs text-gray-500 dark:text-gray-400 flex items-start gap-1.5">
                     <span>⚠️</span>
-                    <span>{$t('transactions.promote.atomicWarning') || 'This will DELETE both source rows and CREATE 2 linked rows atomically.'}</span>
+                    <span>{$t('transactions.promote.atomicWarning') || 'Both source rows will be re-typed atomically.'}</span>
                 </p>
             {/if}
         {/if}
@@ -238,5 +299,4 @@
         </div>
     </div>
 </ModalBase>
-
 

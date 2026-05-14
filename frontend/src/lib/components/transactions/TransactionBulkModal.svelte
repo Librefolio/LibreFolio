@@ -202,7 +202,7 @@
     const COMMIT_ANTI_BOUNCE_MS = 10000;
     let tableRef = $state<DataTable<PendingOp> | undefined>(undefined);
     /** Accumulated splits for saved paired TXs (sent in batch.splits). */
-    let pendingSplits = $state<{id: number}[]>([]);
+    let pendingSplits = $state<{id_a: number; id_b: number}[]>([]);
     /** Accumulated promotes for saved TXs (sent in batch.promotes). */
     let pendingPromotes = $state<{id_a?: number; id_b?: number; link_uuid_a?: string; link_uuid_b?: string; resolved_fields?: Record<string, unknown>}[]>([]);
     /** Promote merge modal state. */
@@ -639,7 +639,7 @@
             // Case A: Saved paired → backend split + preview editable (DD-R2.1)
             const txId = (row as any).txId as number;
             const partnerId = row.partnerId!;
-            pendingSplits = [...pendingSplits, {id: txId}];
+            pendingSplits = [...pendingSplits, {id_a: txId, id_b: partnerId}];
 
             // Determine split types
             const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
@@ -808,7 +808,11 @@
                 const st = deriveStatus(d);
                 if (st === 'new') {
                     creates.push(collectCreate(d));
-                    if (d.partnerPayload) creates.push(d.partnerPayload as unknown as Record<string, unknown>);
+                    if (d.partnerPayload) {
+                        const partnerFields = d.partnerPayload as unknown as TxFields;
+                        const partnerRule = getTypeRule(partnerFields.type as TransactionTypeCode);
+                        creates.push(buildCreatePayload(partnerFields, partnerRule));
+                    }
                 } else if (st === 'edited') {
                     const upd = collectUpdate(d);
                     if (upd && Object.keys(upd).length > 1) updates.push(upd);
@@ -1220,11 +1224,16 @@
                     if (rule.cashField === 'forbidden') {
                         return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
                     }
+                    // Reconstruct display sign: form stores abs, column shows actual sign
+                    let displayCash = row.fields.cash;
+                    if (displayCash && rule.cashSign === 'negative') {
+                        displayCash = {code: displayCash.code, amount: String(-Math.abs(Number(displayCash.amount)))};
+                    }
                     // Paired row → show Da:/A: dual cash lines
                     if (rule.requiresPair && row.partnerCash !== undefined && row.partnerBrokerId != null) {
-                        return {type: 'html', html: renderDualHtml(formatCashText(row.fields.cash), formatCashText(row.partnerCash))};
+                        return {type: 'html', html: renderDualHtml(formatCashText(displayCash), formatCashText(row.partnerCash))};
                     }
-                    return {type: 'html', html: `<span class="text-sm">${formatCashText(row.fields.cash)}</span>`};
+                    return {type: 'html', html: `<span class="text-sm">${formatCashText(displayCash)}</span>`};
                 },
             },
             {
@@ -2051,35 +2060,32 @@
                 </InfoBanner>
             {/if}
             {#if allSuggestions.length > 0}
-                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-2 text-xs space-y-1" data-testid="promote-suggest-banner">
+                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-xs space-y-1.5" data-testid="promote-suggest-banner">
+                    <div class="font-medium text-green-800 dark:text-green-200 mb-1">{$t('transactions.promoteSuggest.detected')}</div>
                     {#each allSuggestions.slice(0, 5) as sug, idx}
                         <div class="flex items-center gap-1.5 flex-wrap" data-testid="promote-suggest-item-{idx}">
-                            <button type="button" class="underline text-green-700 dark:text-green-300 font-medium" onclick={() => scrollToSuggestRow(sug.tempIdA)}>
-                                {sug.labelA}
-                            </button>
-                            <Tooltip text={$t(`transactions.types.${sug.typeA}`)}>
-                                <img src={getTransactionTypeIconUrl(sug.typeA)} alt="" class="w-4 h-4 inline" />
-                            </Tooltip>
-                            <span class="text-gray-500">{$t('common.and')}</span>
-                            <button type="button" class="underline text-green-700 dark:text-green-300 font-medium" onclick={() => scrollToSuggestRow(sug.tempIdB)}>
-                                {sug.labelB}
-                            </button>
-                            <Tooltip text={$t(`transactions.types.${sug.typeB}`)}>
-                                <img src={getTransactionTypeIconUrl(sug.typeB)} alt="" class="w-4 h-4 inline" />
-                            </Tooltip>
-                            <span class="text-gray-500">→</span>
-                            <Tooltip text={sug.targetLabel}>
-                                <img src={getTransactionTypeIconUrl(sug.targetType)} alt="" class="w-4 h-4 inline" />
-                            </Tooltip>
                             <button
                                 type="button"
-                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-100 dark:bg-green-800/30 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-700/40 font-medium"
+                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-800/30 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-700/40 font-medium"
                                 onclick={() => triggerPromoteFromSuggestion(sug)}
                                 data-testid="promote-suggest-link-{idx}"
                             >
                                 <Link2 size={12} />
                                 {$t('transactions.promoteSuggest.merge')}
                             </button>
+                            <button type="button" class="underline text-gray-700 dark:text-gray-300" onclick={() => scrollToSuggestRow(sug.tempIdA)}>{sug.labelA}</button>
+                            <Tooltip text={$t(`transactions.types.${sug.typeA}`)}>
+                                <img src={getTransactionTypeIconUrl(sug.typeA)} alt="" class="w-4 h-4 inline object-contain" />
+                            </Tooltip>
+                            <span class="text-gray-500">{$t('common.and')}</span>
+                            <button type="button" class="underline text-gray-700 dark:text-gray-300" onclick={() => scrollToSuggestRow(sug.tempIdB)}>{sug.labelB}</button>
+                            <Tooltip text={$t(`transactions.types.${sug.typeB}`)}>
+                                <img src={getTransactionTypeIconUrl(sug.typeB)} alt="" class="w-4 h-4 inline object-contain" />
+                            </Tooltip>
+                            <span class="text-gray-500">→</span>
+                            <Tooltip text={sug.targetLabel}>
+                                <img src={getTransactionTypeIconUrl(sug.targetType)} alt="" class="w-4 h-4 inline object-contain" />
+                            </Tooltip>
                         </div>
                     {/each}
                     {#if allSuggestions.length > 5}

@@ -667,18 +667,13 @@ class TXValidationCode(str, Enum):
     BALANCE_ASSET_NEGATIVE = "balanceAssetNegative"
     BALANCE_CASH_NEGATIVE = "balanceCashNegative"
     TX_NOT_FOUND = "txNotFound"
-    NO_PAIR_TO_SPLIT = "noPairToSplit"
-    PARTNER_NOT_FOUND = "partnerNotFound"
     TYPE_CANNOT_SPLIT = "typeCannotSplit"
+    SPLIT_IDS_MISMATCH = "splitIdsMismatch"
     PROMOTE_REF_NOT_FOUND = "promoteRefNotFound"
     ALREADY_PAIRED = "alreadyPaired"
     NO_PROMOTE_RULE = "noPromoteRule"
     ACCESS_DENIED = "accessDenied"
-    PARSE_ERROR = "parseError"
-    TYPE_SWAP_FORBIDDEN = "typeSwapForbidden"
-    EXTRA_FORBIDDEN = "extra_forbidden"
     LINK_UUID_PAIR_COUNT = "linkUuidPairCount"
-    INDEX_ASSET_FORBIDDEN = "indexAssetForbidden"
 
 
 class TXValidationCodeInfo(BaseModel):
@@ -808,11 +803,18 @@ class TXTransferPromoteResponse(BaseModel):
 
 
 class TXSplitBatchItem(BaseModel):
-    """Single split within a batch. Only for saved paired TXs."""
+    """Single split within a batch. Both IDs of the pair must be provided."""
 
     model_config = ConfigDict(extra="forbid")
 
-    id: int = Field(..., gt=0, description="ID of one half of the pair to split")
+    id_a: int = Field(..., gt=0, description="ID of one half of the pair")
+    id_b: int = Field(..., gt=0, description="ID of the other half of the pair")
+
+    @model_validator(mode="after")
+    def ids_must_differ(self) -> "TXSplitBatchItem":
+        if self.id_a == self.id_b:
+            raise ValueError("id_a and id_b must be different transactions")
+        return self
 
 
 class TXPromoteBatchItem(BaseModel):

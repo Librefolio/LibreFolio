@@ -535,6 +535,7 @@ Wave 3 — Schema + Tests:
 - **D2 Frontend**: [`plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md)
 - **D1 Backend**: [`plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md)
 - **Parent plan (D)**: [`plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md)
+- **Child (Bugfix 3)**: [`plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_3_UXModalPayloadSuggestE2E.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_3_UXModalPayloadSuggestE2E.prompt.md)
 
 ---
 

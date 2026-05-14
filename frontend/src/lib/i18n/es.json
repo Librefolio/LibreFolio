@@ -82,7 +82,9 @@
     "created": "Creado",
     "updated": "Actualizado",
     "createNew": "Crear nuevo",
-    "and": "y"
+    "and": "y",
+    "before": "Antes",
+    "after": "Después"
   },
   "table": {
     "columns": "Columnas",
@@ -472,9 +474,12 @@
       "confirmTitle": "¿Desvincular este par?",
       "confirmMessage": "Las 2 transacciones se convertirán en filas independientes.",
       "success": "Par desvinculado",
-      "fromType": "Se convertirá en: {type}"
+      "fromType": "Se convertirá en: {type}",
+      "paired": "Emparejada",
+      "standalone": "Independiente"
     },
     "promoteSuggest": {
+      "detected": "Transacciones complementarias detectadas:",
       "banner": "Fila {a} y Fila {b} son compatibles — promover a {type}",
       "bannerMore": "y {n} más...",
       "dbMatch": "Coincidencia en BD: {type} en {broker} ({date})",
@@ -652,7 +657,9 @@
       "allRight": "Todo derecha",
       "concat": "Concatenar",
       "union": "Unión",
-      "clickToSelect": "Haz clic para seleccionar"
+      "clickToSelect": "Haz clic para seleccionar",
+      "promoteSubtitle": "Seleccione la transacción de destino",
+      "target": "Destino"
     },
     "bulkDelete": {
       "title": "Eliminar transacciones",
@@ -711,11 +718,15 @@
       "balanceAssetNegative": "Guardar haría que las posiciones de <strong>{assetName}</strong> sean negativas (<strong>{balance}</strong>) el {date} en <strong>{brokerName}</strong>",
       "accessDenied": "Acceso denegado: se requiere rol EDITOR para {brokerName}",
       "txNotFound": "Transacción {id} no encontrada",
-      "indexAssetForbidden": "No se pueden crear transacciones para activos de tipo INDEX",
       "linkUuidPairCount": "El grupo de enlace tiene {count} elementos (se esperan 2)",
       "pairTypeMismatch": "El par enlazado debe compartir el mismo tipo (encontrados {typeA} y {typeB})",
       "pairSameBroker": "La transferencia requiere brokers distintos (ambos en {brokerName})",
-      "cannotLinkEventNoAsset": "No se puede vincular un evento sin un activo"
+      "cannotLinkEventNoAsset": "No se puede vincular un evento sin un activo",
+      "typeCannotSplit": "Este tipo de transacción no se puede separar",
+      "splitIdsMismatch": "Las dos transacciones no son un par vinculado",
+      "promoteRefNotFound": "Transacción referenciada para la promoción no encontrada",
+      "alreadyPaired": "La transacción ya está vinculada a otra transacción",
+      "noPromoteRule": "Ninguna regla de promoción corresponde a estos dos tipos de transacción"
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",

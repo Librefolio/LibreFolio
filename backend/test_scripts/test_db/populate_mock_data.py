@@ -31,18 +31,21 @@ setup_test_database()
 
 # Get database path from config
 import argparse
+import asyncio
 import json
 import random
+import shutil
 import traceback
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
 from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 from sqlmodel import Session, delete, select
 
-from backend.app.config import get_data_dir, get_settings
+from backend.app.config import PROJECT_ROOT, get_data_dir, get_settings
 from backend.app.db import (
     Asset,
     AssetEvent,
@@ -64,8 +67,10 @@ from backend.app.db import (
     UserSettings,
 )
 from backend.app.services.auth_service import hash_password
+from backend.app.services.brim_provider import save_uploaded_file
 from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
 from backend.app.services.static_uploads import get_uploads_dir, seed_default_avatars
+from backend.app.services.transaction_service import BalanceValidationError, TransactionService
 
 # Create engine AFTER setup_test_database() has set DATABASE_URL
 # This ensures we use the test database, not the production one
@@ -1413,6 +1418,22 @@ def populate_transactions(session: Session):
     # --- Standalone transactions for promote-suggest E2E tests ---
     # Tagged 'promote-test' so tests can locate them.
 
+    # Pre-fund Coinbase with EUR to cover the WITHDRAWAL below (avoid balance violation)
+    tx_coinbase_prefund = Transaction(
+        broker_id=coinbase.id,
+        asset_id=None,
+        type=TransactionType.DEPOSIT,
+        date=today - timedelta(days=15),
+        quantity=Decimal("0"),
+        amount=Decimal("1000.00"),
+        currency="EUR",
+        description="[balance-safe] Pre-fund Coinbase EUR for promote-test withdrawals",
+        tags="balance-safe,promote-test",
+    )
+    session.add(tx_coinbase_prefund)
+    session.commit()
+    print(f"  🛡️ balance-safe DEPOSIT EUR #{tx_coinbase_prefund.id} (Coinbase, day -15)")
+
     # CASH_TRANSFER promote candidate pair (same currency, diff broker, opposite amounts)
     # Both brokers must be EDITOR+ for e2e_test_user: Coinbase (EDITOR) + IB (OWNER)
     tx_prom_withdrawal = Transaction(
@@ -2177,8 +2198,6 @@ def configure_user_avatars(session: Session):
 
 def clean_data_dirs():
     """Remove all files from custom-uploads and broker_reports subdirs."""
-    import shutil  # noqa: PLC0415 — test setup — imports after sys.path/db config
-
     data_dir = get_data_dir()
     dirs_to_clean = [
         data_dir / "custom-uploads",
@@ -2232,9 +2251,6 @@ def upload_broker_reports(session: Session):
         broker_reports/uploaded/broker_{id}/{uuid}.csv   (data file)
         broker_reports/uploaded/broker_{id}/{uuid}.json  (metadata sidecar)
     """
-    from backend.app.config import PROJECT_ROOT  # noqa: PLC0415 — test setup — imports after sys.path/db config
-    from backend.app.services.brim_provider import save_uploaded_file  # noqa: PLC0415 — test setup — imports after sys.path/db config
-
     print("\n📄 Uploading broker report samples...")
     print("-" * 60)
 
@@ -2278,6 +2294,42 @@ def upload_broker_reports(session: Session):
             broker_id=broker.id,
         )
         print(f"  ✅ {broker.name} → {sample_filename} (id: {file_info.file_id[:8]}…)")
+
+
+async def validate_all_balances_async() -> int:
+    """Validate cash and asset balances using the real TransactionService.
+
+    Opens an async session against the same DB and runs
+    TransactionService._validate_broker_balances for each broker.
+    Respects broker flags (allow_cash_overdraft, allow_asset_shorting).
+    """
+    settings = get_settings()
+    async_url = settings.DATABASE_URL.replace("sqlite:///", "sqlite+aiosqlite:///")
+    async_eng = create_async_engine(async_url, echo=False, poolclass=NullPool)
+
+    violations: list[str] = []
+
+    async with AsyncSession(async_eng, expire_on_commit=False) as session:
+        result = await session.execute(select(Broker))
+        brokers = list(result.scalars().all())
+
+        for broker in brokers:
+            svc = TransactionService(session)
+            try:
+                await svc._validate_broker_balances(broker.id)
+            except BalanceValidationError as e:
+                violations.append(f"[broker_id={e.broker_id}] {e}")
+
+    await async_eng.dispose()
+
+    if violations:
+        print(f"\n  ⚠️  {len(violations)} balance violations found:")
+        for v in violations:
+            print(f"    ❌ {v}")
+    else:
+        print(f"  ✅ 0 balance violations — all {len(brokers)} brokers pass balance walk")
+
+    return len(violations)
 
 
 def main():
@@ -2369,6 +2421,12 @@ def main():
             print("\n💾 Committing all data to database...")
             session.commit()
             print("✅ Data committed successfully")
+
+            # Balance validation via service layer (async)
+            print("\n📊 Running balance validation on all brokers...")
+            violation_count = asyncio.run(validate_all_balances_async())
+            if violation_count > 0:
+                print(f"  💡 Fix the {violation_count} violations above before running E2E tests")
 
             print("\n" + "=" * 60)
             print("✅ Mock data population completed successfully!")
