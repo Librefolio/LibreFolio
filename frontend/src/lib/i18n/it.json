@@ -484,7 +484,9 @@
       "bannerMore": "e altri {n}...",
       "dbMatch": "Match nel DB: {type} su {broker} ({date})",
       "bannerDetailed": "In data {date}, la riga #{a} e la riga #{b} potrebbero diventare {type}",
-      "merge": "Unisci"
+      "merge": "Unisci",
+      "deltaLabel": "Max Δ giorni",
+      "deltaGG": "gg"
     },
     "empty": "Nessuna transazione",
     "ghost": {
