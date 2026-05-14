@@ -484,7 +484,9 @@
       "bannerMore": "et {n} de plus...",
       "dbMatch": "Correspondance en BDD : {type} sur {broker} ({date})",
       "bannerDetailed": "Le {date}, la ligne #{a} et la ligne #{b} pourraient devenir {type}",
-      "merge": "Fusionner"
+      "merge": "Fusionner",
+      "deltaLabel": "Max Δ jours",
+      "deltaGG": "j"
     },
     "empty": "Aucune transaction",
     "ghost": {

@@ -131,10 +131,13 @@ export function buildCreatePayload(fields: TxFields, rule: TypeRule): Record<str
     };
     if (fields.asset_id != null && rule.assetField !== 'forbidden') out.asset_id = fields.asset_id;
     if (signedCash && rule.cashField !== 'forbidden') out.cash = signedCash;
-    if (fields.tags.length > 0) out.tags = fields.tags;
-    if (fields.description.trim()) out.description = fields.description.trim();
+    const tags = fields.tags ?? [];
+    if (tags.length > 0) out.tags = tags;
+    const desc = (fields.description ?? '').trim();
+    if (desc) out.description = desc;
     if (fields.asset_event_id != null && rule.eventLinkable) out.asset_event_id = fields.asset_event_id;
-    if (fields.cost_basis_override.trim()) out.cost_basis_override = fields.cost_basis_override.trim();
+    const cbo = (fields.cost_basis_override ?? '').trim();
+    if (cbo) out.cost_basis_override = cbo;
     if (fields.link_uuid && rule.requiresPair) out.link_uuid = fields.link_uuid;
     return out;
 }

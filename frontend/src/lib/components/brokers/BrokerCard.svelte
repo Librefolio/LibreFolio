@@ -150,10 +150,10 @@
     <!-- Footer Stats -->
     <div class="px-4 py-3 bg-gray-50 dark:bg-slate-700/50 border-t border-gray-100 dark:border-slate-700 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
         <span>
-            {$_('brokers.assets', {values: {count: broker.holdings?.length ?? 0}})}
+            {$_('brokers.assets', {values: {n: broker.holdings?.length ?? 0}})}
         </span>
         <span>
-            {$_('brokers.currencies', {values: {count: broker.cash_balances?.length ?? 0}})}
+            {$_('brokers.currencies', {values: {n: broker.cash_balances?.length ?? 0}})}
         </span>
     </div>
 </div>

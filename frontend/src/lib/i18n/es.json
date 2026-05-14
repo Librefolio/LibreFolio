@@ -484,7 +484,9 @@
       "bannerMore": "y {n} más...",
       "dbMatch": "Coincidencia en BD: {type} en {broker} ({date})",
       "bannerDetailed": "El {date}, la fila #{a} y la fila #{b} podrían convertirse en {type}",
-      "merge": "Combinar"
+      "merge": "Combinar",
+      "deltaLabel": "Máx Δ días",
+      "deltaGG": "d"
     },
     "empty": "Sin transacciones",
     "ghost": {
