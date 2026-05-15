@@ -85,4 +85,4 @@ CSS target: `tr.tx-row-highlight > td` (animation on `<td>`, not `<tr>` — `box
 |------|------|
 | TransactionsTable (algorithm) | `frontend/src/lib/components/transactions/TransactionsTable.svelte` |
 | +page.svelte (pulse handler) | `frontend/src/routes/(app)/transactions/+page.svelte` |
-| Plan where designed | `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4.prompt.md` (Step 5) |
+| Plan where designed | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md` (Step 5) |

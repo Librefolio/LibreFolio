@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 5 Bugfix 1 — Dual Form & Unified BulkModal Fixes
 category: source
 source_type: plan
 date_ingested: 2026-05-28
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round5_Bugfix1_DualFormAndBulkFixes.prompt.md
 tags: [phase07, transactions, dual-form, bulkModal, cash-transfer, split, promote, paired-row]
 related:
   - sources/phase07-part4-round5-server-type-rules

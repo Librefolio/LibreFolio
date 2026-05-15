@@ -82,7 +82,7 @@ The question: how should the form modal handle paired transactions — open two 
 | i18n IT | `frontend/src/lib/i18n/it.json` |
 | i18n FR | `frontend/src/lib/i18n/fr.json` |
 | i18n ES | `frontend/src/lib/i18n/es.json` |
-| Plan file | `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md` |
+| Plan file | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md` |
 
 ## Links
 

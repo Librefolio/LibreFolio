@@ -4,6 +4,37 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-05-31] ingest | Phase 07 Part 4 Round 6 — Plan B23 (registry backfill) + Plan D chain (7 files: split/promote full stack)
+
+Ingested 8 source files: PlanB23 (registry backfill only, source page already existed), PlanD master @ `b0e223c0`, PlanD1 @ `666059b5`, PlanD2 @ `db7264ce`, D2-bugfix1 @ `fdf00d4b`, D2-bugfix2 @ `eb9b8ae2`, D2-bugfix3 @ `78f44497`, D2-bugfix4 @ `ce7344a1`.
+
+**Created** (7 source pages):
+- [[sources/phase07-part4-round6-pland-split-promote-master]] — Master plan: split/promote full stack integration into batch pipeline; D1✅ D2✅ bf1-4✅ D2-round2⏳; D3 absorbed into D2-bf3
+- [[sources/phase07-part4-round6-pland1-backend-batch-suggest]] — Backend: TXMixedBatch + splits[]/promotes[], endpoint elimination (DD2), promote-suggest, consumed_link_uuids (DD4), _PromoteCandidate, 18 tests
+- [[sources/phase07-part4-round6-pland2-frontend-split-promote]] — Frontend: PromoteMergeModal 3-column diff, BulkModal split/promote actions, Main Table promote migration to batch, suggest green banner
+- [[sources/phase07-part4-round6-pland2-bugfix1]] — 21 bugs: BulkModal first-open race (getTypeRule FALLBACK_RULE), promote toolbar not appearing, findPromoteMatch constraint enrichment, collapse post-promote
+- [[sources/phase07-part4-round6-pland2-bugfix2]] — Split preview editability (corrects DD-BF1), pipeline reorder (splits before updates), TXBatchResultItem.id→ids[], payload fixes
+- [[sources/phase07-part4-round6-pland2-bugfix3]] — Biggest round: split schema {id_a,id_b}, suggest banner redesign, E2E (absorbed D3 scope), TransactionActionModal unification, cash sign fix
+- [[sources/phase07-part4-round6-pland2-bugfix4]] — PMC auto-calc (compute_weighted_avg_cost), cost_basis_override only on receiver, promote-suggest constraint fix (None amount/qty), link_uuid sync, delta-days slider
+
+**Updated** (1 decision):
+- [[decisions/cash-transfer-split-promote]] — MAJOR: standalone `/split` and `/promote` endpoints eliminated (DD2); split/promote now exclusively via batch pipeline `splits[]+promotes[]`; added promote-suggest, consumed_link_uuids, PMC auto-calc
+
+**Updated** (3 feature/connection pages):
+- [[features/F-048]] — title updated (now "Form / Bulk / Delete / Promote / Split"), layer changed to fullstack, 8 new status history entries (D1→D2→bf1→bf2→bf3→bf4), PromoteMergeModal section, Split/Promote in BulkModal section, PMC Auto-Calc section, 10 new source files
+- [[features/registry]] — F-048 title + layer updated
+- [[connections/transactions-connections]] — header updated with Plan D completion status
+
+**Registry**: 8 entries added to `raw/ingest-registry.md` (PlanB23 as `uncommitted` backfill, 7 PlanD files with commit hashes)
+**Index**: 7 source pages + 1 decision summary updated in `index.md`
+
+Key architectural insights documented:
+1. **Endpoint elimination** (DD2): `/split` and `/promote` never used in production → removed entirely. All mutations go through unified `execute_batch` pipeline.
+2. **consumed_link_uuids** (DD4): prevents Step 6 link resolution from re-processing link_uuids already consumed by promotes in Step 5c. Critical for atomic batch promote-and-create flows.
+3. **Pipeline reorder** (DD-R2.2): `deletes(3) → splits(3b) → updates(4) → creates(5) → promotes(5c) → links(6) → balance(7)` — splits before updates enables "split + edit post-split" in same batch.
+4. **PMC auto-calc**: `compute_weighted_avg_cost()` auto-fills `cost_basis_override` on TRANSFER receiver when null. Weighted average of BUY prices + incoming TRANSFER cost_basis at source broker.
+5. **D3 absorbed**: E2E test scope originally planned as separate D3 sub-plan was absorbed into D2-bugfix3.
+
 ## [2026-05-30] ingest | Phase 07 Part 4 Round 6 Plans C2 + C2R2 — Bugfix, Pair Validation, MockFX, Contextual Validate
 
 Ingested 2 new plan files (C2 @ `6aac0dce`, C2R2 @ `f9f3bec2`). Verified 8 already-ingested plans from the same batch — no re-ingest needed; existing pages accurate.
@@ -30,19 +61,19 @@ Ingested 2 new plan files (C2 @ `6aac0dce`, C2R2 @ `f9f3bec2`). Verified 8 alrea
 Key architectural progression documented: C2 (bugfix + pair validation + infrastructure) → C2R2 (MockFX + auto-populate removal + contextual validate + balance confirmation) → C3 (PendingOp tagged union).
 
 ## [2026-05-30] ingest | Phase 07 Part 4 Round 6 Plan C3 — PendingOp Refactor
-Ingested from `RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanC3_PendingOpRefactor.prompt.md`.
+Ingested from `RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC3_PendingOpRefactor.prompt.md`.
 **Created**: [[sources/phase07-part4-round6-planc3-pendingop-refactor]], [[decisions/pendingop-tagged-union]].
 **Updated**: [[features/F-048]] (PendingOp tagged union, factory functions, 3 new E2E tests, data-action-id), [[concepts/txstore-pattern]] (PendingOp model updated to final implementation), [[concepts/e2e-data-testid-rule]] (data-action-id pattern).
 Key insight: DraftRow→PendingOp completes 80%→100% of txStore architecture. Zero-copy originals + tagged discriminator + derived status make Plan D (Split/Promote) trivial (~10 LOC per action). `data-action-id` establishes i18n-resilient E2E selectors for DataTable row actions.
 
 ## [2026-05-29] ingest | Phase 07 Part 4 Round 6 Plan C — txStore Refactor
-Ingested from `RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md`.
+Ingested from `RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md`.
 **Created**: [[sources/phase07-part4-round6-planc-txstore-refactor]], [[concepts/txstore-pattern]], [[decisions/txstore-single-source-of-truth]].
 **Updated**: [[features/F-048]] (txStore as single source of truth, WorkspaceIntent pattern, PendingOp model, interface deduplication in types.ts, -30% LOC).
 Key insight: 5 recurring bug categories (17+ instances) all rooted in 3-copy prop cascade; eliminated structurally by centralized store. Piano D (Split/Promote) now trivial.
 
 ## [2026-05-29] ingest | Phase 07 Part 4 Round 6 Plan B23 Appendix 1 — UI Polish
-Ingested from `RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanB23_Appendix1_UIPolish.prompt.md`.
+Ingested from `RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanB23_Appendix1_UIPolish.prompt.md`.
 **Created**: [[sources/phase07-part4-round6-planb23-appendix1-ui-polish]].
 **Updated**: [[features/F-048]] (structured delete toast, responsive footer buttons, row background tints, viewer-only guard on bulk actions, conditional "Reset all", "Reset selected" toolbar button).
 Note: Execution order in master plan updated — old Piano C (Split/Promote) renamed Piano D; txStore refactor inserted as Piano C prerequisite.

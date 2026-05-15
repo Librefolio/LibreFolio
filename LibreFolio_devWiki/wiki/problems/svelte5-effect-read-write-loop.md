@@ -70,4 +70,4 @@ $effect(() => {
 ## Source
 
 W1/C1 documented in:
-`LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round1-tableRefactorBugfix.prompt.md`, sub-round 1.2.
+`LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round1-3/plan-phase07-transaction-Part4_Round1-tableRefactorBugfix.prompt.md`, sub-round 1.2.

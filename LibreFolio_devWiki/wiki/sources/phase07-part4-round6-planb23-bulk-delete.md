@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 6 — Plan B23: Bulk Delete via BulkModal + Mode R
 category: source
 source_type: plan
 date_ingested: 2026-05-27
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanB23_BulkDeleteViaBulkModal.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanB23_BulkDeleteViaBulkModal.prompt.md
 tags: [phase07, transactions, bulkModal, deleteModal, mode-removal, bulk-delete, picker-guard, e2e]
 related:
   - sources/phase07-part4-round3-staging-rewrite

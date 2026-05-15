@@ -3,7 +3,7 @@ title: "Phase 7 Part 4 Round 3 Bugfix 2 — i18n Validation Errors"
 category: source
 source_type: plan
 date_ingested: 2026-05-25
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round3_Bugfix2-i18nValidationErrors.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round1-3/plan-phase07-transaction-Part4_Round3_Bugfix2-i18nValidationErrors.prompt.md
 tags: [phase07, transactions, backend, frontend, i18n, validation, pydantic, structured-errors]
 related: [sources/phase07-part4-round3-bugfix1, features/F-048, concepts/resolve-validation-message-pattern, decisions/unified-batch-pipeline]
 ---

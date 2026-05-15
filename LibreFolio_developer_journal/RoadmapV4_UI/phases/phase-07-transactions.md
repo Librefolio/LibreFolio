@@ -98,7 +98,7 @@ auto-linking massivo degli eventi retroattivi.
 | **1** | Backend DB & Schema Realignment | models, schemas, migration | Link `Transaction ↔ AssetEvent`, access control uniforme | 1g | ✅ Completato |
 | **2** | BRIM come parser puro (Revisione 2) | `BRIMProvider` base + refactor 11 plugin | Plugin emettono solo TX + preview metadata; `plugin_version` per cache | 2g v1 + 0.5g revisione | ✅ Completato |
 | **3** | API Consolidation — bulk atomic per-broker | endpoints, service, pytest | `POST/PATCH/DELETE /brokers/{id}/transactions/bulk` atomic, `validate` dry-run, `events/suggest`, test ≥85% | 2g | **Dettagliato** |
-| **4** | Frontend — Pagina `/transactions` | route, DataTable, filtri colonna | Lista utente con filtri header, GoTo linked pair, bulk actions | 2g | **✅ COMPLETATO** → [`plan-phase07-transaction-Part4.prompt.md`](../plan-phase07-transaction-Part4.prompt.md) (10 steps + 11 rounds: R1–R6) |
+| **4** | Frontend — Pagina `/transactions` | route, DataTable, filtri colonna | Lista utente con filtri header, GoTo linked pair, bulk actions | 2g | **✅ COMPLETATO** → [`plan-phase07-transaction-Part4.prompt.md`](./phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md) (10 steps + 11 rounds: R1–R6) |
 | **4b** | Frontend — File Preview System | backend service + modale multi-tipo | Preview inline (image/text/table/markdown/code) su Files page + BRIM files | 1g | **Alto livello** |
 | **5** | Frontend — Staging Modal | modale unificata, asset resolver | Manual + BRIM + Clone, grouping colorato, tolerance slider 0-7, commit via /brokers/{id}/tx/bulk atomic | 3g | **Alto livello** |
 
@@ -133,7 +133,7 @@ Migrazione applicata, schema coerente, test pre-esistenti verdi, nuovo campo pro
 
 ### 📌 Deferred from Part 1 (implementato con `ondelete=RESTRICT`, non SET NULL)
 
-Punti **rinviati** durante l'esecuzione di Part 1 (vedi [`plan-phase07-transaction-Part1.md`](../plan-phase07-transaction-Part1.md)). Riportarli a galla nelle parti indicate:
+Punti **rinviati** durante l'esecuzione di Part 1 (vedi [`plan-phase07-transaction-Part1.md`](./phase-07-subplan/Parte1/plan-phase07-transaction-Part1.md)). Riportarli a galla nelle parti indicate:
 
 - **→ Parte 3 (API Consolidation)** — aggiungere chiavi i18n dedicate per il nuovo flow di delete eventi. In Part 1 i toast del frontend (`AssetDataEditorSection.svelte`) usano stringhe letterali coerenti con il pattern `Asset data: ...`. Da centralizzare:
     - `events.deleteBlocked` (+ varianti EN/IT/FR/ES) con placeholder `{count}`, `{accessible}`, `{hidden}`.
@@ -157,7 +157,7 @@ Punti **rinviati** durante l'esecuzione di Part 1 (vedi [`plan-phase07-transacti
 > Metadata") si era introdotto un endpoint `POST /brokers/import/commit`
 > atomico, il dispatcher `BRIMCapabilities`, e l'emissione di `asset_events`
 > dai plugin. Una rilettura critica ha portato al smantellamento di queste
-> astrazioni (vedi [plan-phase07-transaction-Part2.prompt.md §Revisione 2](../plan-phase07-transaction-Part2.prompt.md)).
+> astrazioni (vedi [plan-phase07-transaction-Part2.prompt.md §Revisione 2](./phase-07-subplan/Parte2/plan-phase07-transaction-Part2.prompt.md)).
 > Il blocco che segue descrive lo **stato finale post-Revisione 2**.
 
 ### Situazione di partenza (dopo v1 smantellata)
@@ -213,7 +213,7 @@ Tracciamento dei sub-plan che servono ma non sono ancora stati redatti:
 | Parte 1 | `plan-phase07-transaction-Part1.md` | ✅ scritto ed eseguito | — |
 | Parte 2 | `plan-phase07-transaction-Part2.prompt.md` (Revisione 2) | ✅ completato | Parte 1 |
 | Parte 3 (include 3b) | `plan-phase07-transaction-Part3.md` (API consolidation atomic per-broker + events/suggest + deferred da Part 1 §8/§9) | ✅ completato | Parte 1, Parte 2 |
-| Parte 4 | [`plan-phase07-transaction-Part4.prompt.md`](../plan-phase07-transaction-Part4.prompt.md) (10 steps + 11 rounds) | ✅ completato (Round 6 ⏳ in corso) | Parte 3 |
+| Parte 4 | [`plan-phase07-transaction-Part4.prompt.md`](./phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md) (10 steps + 11 rounds) | ✅ completato (Round 6 ⏳ in corso) | Parte 3 |
 | Parte 4b | (TBD — File Preview System) | ⏳ da scrivere | autonomo |
 | Parte 5 | `plan-phase07-transaction-Part5-staging-modal.md` (Staging Modal frontend: BRIM mode, resolve fake_id, event matching, TransactionPickerModal, Promote/Split in BulkModal) | ⏳ **da scrivere** | Parte 2, Parte 3, Parte 4 |
 
@@ -276,7 +276,7 @@ e `/brokers/{id}/summary`.
    - `events.deleteBlocked` (placeholder `{count}`, `{accessible}`, `{hidden}`),
    - `events.deleteNotFound`,
    - `events.deletePartial`.
-   Sostituire i letterali nel componente. Vedi [plan-phase07-transaction-Part1.md](../plan-phase07-transaction-Part1.md) §Deferred.
+   Sostituire i letterali nel componente. Vedi [plan-phase07-transaction-Part1.md](./phase-07-subplan/Parte1/plan-phase07-transaction-Part1.md) §Deferred.
 8. **[deferred da Part 1] populate_mock_data**: aggiungere 1–2 transazioni (DIVIDEND / INTEREST) con `asset_event_id` valorizzato in `backend/test_scripts/test_db/populate_mock_data.py`, così da coprire `validate` dry-run, `events/suggest` e il rendering ●evt (Part 4) senza fixture ad-hoc. ✅ **Fatto in Part 1 testing** — funzione `link_transactions_to_events()` linka la tx DIVIDEND di Apple al primo `AssetEvent` manuale Apple e stampa testing tip. Da espandere qui con almeno una INTEREST e (se serve in Part 4 per testare il caso "hidden") una tx su un broker non accessibile dall'utente di test.
 9. **[deferred da Part 1] Validazione coerenza valuta nei prezzi**: oggi `upsert_prices_bulk` accetta righe con `currency` qualsiasi, anche diversa da `Asset.currency`. Una serie storica con valute miste produce un grafico semanticamente sbagliato e **non triggera** alcun banner FX (il sistema non sa che è un errore). Aggiungere in Parte 3 (è il punto in cui consolidiamo le validazioni server-side):
    - **Backend — esposizione raw currency per-point (sempre)**: `FAPricePoint.original_currency` deve essere **sempre** popolato (anche quando non c'è conversione, nel qual caso = `currency`). `FAPricePoint.backward_fill_info` resta **Optional**: è `None` nel caso "tutto ok" (95%+ dei data-point, niente stale, niente FX, niente errori), popolato solo quando c'è qualcosa da comunicare — la sola presenza dell'oggetto è il segnale "attenzione" per il frontend.
@@ -381,14 +381,14 @@ API bulk coerenti, niente endpoint singolari, suite test green, endpoint di supp
 - **Import menu**:
   - "From broker file…" → apre `BrokerImportFilesModal` esistente. Dopo parse successful → auto-apre Staging in modalità BRIM.
   - "Manual entry…" → apre Staging vuota.
-- **[deferred da Part 1] Spec E2E `frontend/e2e/asset-event-delete.spec.ts`**: naturale da introdurre qui insieme al badge ●evt (evidenzia collegamento transazione↔evento). Copre 4 scenari: (1) delete evento non referenziato → riga scompare + toast success; (2) delete evento referenziato da tx accessibile → toast warning con `accessible_transactions`, riga resta; (3) delete evento referenziato solo da tx di altri utenti → toast warning con `hidden_transactions_count`, riga resta; (4) delete bulk misto (deleted + in_use + not_found) → sparisce solo la riga `deleted`. Vedi [plan-phase07-transaction-Part1.md](../plan-phase07-transaction-Part1.md) §Deferred.
+- **[deferred da Part 1] Spec E2E `frontend/e2e/asset-event-delete.spec.ts`**: naturale da introdurre qui insieme al badge ●evt (evidenzia collegamento transazione↔evento). Copre 4 scenari: (1) delete evento non referenziato → riga scompare + toast success; (2) delete evento referenziato da tx accessibile → toast warning con `accessible_transactions`, riga resta; (3) delete evento referenziato solo da tx di altri utenti → toast warning con `hidden_transactions_count`, riga resta; (4) delete bulk misto (deleted + in_use + not_found) → sparisce solo la riga `deleted`. Vedi [plan-phase07-transaction-Part1.md](./phase-07-subplan/Parte1/plan-phase07-transaction-Part1.md) §Deferred.
 
 ### Deliverable
 Pagina funzionante con visualizzazione + filtri + delete/edit/clone via Staging Modal.
 
 ### ✅ Parte 4 — Implementation Summary (2026-04-25 → 2026-05-05)
 
-Parte 4 è completata con 10 step originali + 11 round di bugfix/polish. Il piano di dettaglio e tutti i round sono in [`plan-phase07-transaction-Part4.prompt.md`](../plan-phase07-transaction-Part4.prompt.md).
+Parte 4 è completata con 10 step originali + 11 round di bugfix/polish. Il piano di dettaglio e tutti i round sono in [`plan-phase07-transaction-Part4.prompt.md`](./phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md).
 
 **Componenti prodotti** (stato finale):
 | Componente | Ruolo |
@@ -411,14 +411,14 @@ Parte 4 è completata con 10 step originali + 11 round di bugfix/polish. Il pian
 | Transaction types | 10 types | 12 types (+CASH_TRANSFER, with split/promote rules) |
 | Decimal serialization | `str()` with scientific notation risk | `SafeDecimal` Pydantic type across all schemas |
 
-**Round timeline**: see [`plan-phase07-transaction-Part4.prompt.md` §Post-Implementation Rounds](../plan-phase07-transaction-Part4.prompt.md).
+**Round timeline**: see [`plan-phase07-transaction-Part4.prompt.md` §Post-Implementation Rounds](./phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md).
 
 **Still open (Round 6 ⏳)**:
 - ContextMenu, TransactionDeleteModal, R7-C1/H1/H2 bug fix, TagInput polish
 - **TransactionPickerModal** (search & add existing TX to BulkModal)
 - **Backend `POST /split` + `POST /promote` endpoints** (schemas exist but API never implemented — erroneously marked done in Bugfix 1 B1-16)
 - **Promote/Split UI** in BulkModal and Main Table (depends on above endpoints)
-→ [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](../plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md)
+→ [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](./phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md)
 
 ---
 
@@ -534,8 +534,8 @@ Sistema preview funzionante in 3 punti di accesso (Files Static, Files BRIM, Bro
 > - Main Table promote/split quick actions — R6-B.7
 > - Entry point wiring + flow integration — R6-B.8
 > - Import ▾ menu with broker picker from `/transactions`
-> - See [`plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md`](../plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md) §R6-B checklist
-> - **Description/Tags merge su Promote** *(aggiunto Part 4 Round 7)*: quando la Staging Modal propone il promote di due TX standalone in coppia, le description possono differire. Il backend rifiuterà il commit se description/tags non sono identici (`pairDescriptionMismatch`). La UX dovrà offrire una **modale di diff a 3 vie** (description lato A, description lato B, risultato merged editabile) dove l'utente sceglie o compone il testo finale. Per i tags: proporre l'**union** dei due set con checkbox per deselezionare quelli indesiderati. Solo dopo l'allineamento l'utente può committare il promote. Vedi `TransactionService._validate_pair_description_tags()`, introdotto in [`plan-phase07Part4Round7-C2BugfixAndPairValidation.prompt.md`](../../plan-phase07Part4Round7-C2BugfixAndPairValidation.prompt.md).
+> - See [`plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md`](./phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md) §R6-B checklist
+> - **Description/Tags merge su Promote** *(aggiunto Part 4 Round 7)*: quando la Staging Modal propone il promote di due TX standalone in coppia, le description possono differire. Il backend rifiuterà il commit se description/tags non sono identici (`pairDescriptionMismatch`). La UX dovrà offrire una **modale di diff a 3 vie** (description lato A, description lato B, risultato merged editabile) dove l'utente sceglie o compone il testo finale. Per i tags: proporre l'**union** dei due set con checkbox per deselezionare quelli indesiderati. Solo dopo l'allineamento l'utente può committare il promote. Vedi `TransactionService._validate_pair_description_tags()`, introdotto in [`plan-phase07-transaction-Part4_Round6_PlanC2_BugfixAndPairValidation.prompt.md`](./phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC2_BugfixAndPairValidation.prompt.md).
 
 ### Flusso BRIM completo (post-Revisione 2)
 
@@ -782,27 +782,27 @@ Modale unificata che copre i 4 ingressi, riusa `AssetModal` / `AssetMatchingWiza
 ```
 phases/phase-07-subplan/
 ├── README.md
-├── plan-phase07-transaction-Part1.md                       (Parte 1 — ✅ completata)
-├── plan-phase07-transaction-Part2.prompt.md                (Parte 2 — ✅ completata, Revisione 2)
-├── plan-phase07-transaction-Part3.md                       (Parte 3 — ✅ completata)
-├── plan-phase07-transaction-Part4.prompt.md                (Parte 4 — ✅ completata, 10 steps + 11 rounds)
-│   ├── Round1-tableRefactorBugfix.prompt.md
-│   ├── Round2-tableRefactorBugfix.prompt.md
-│   ├── Round3-stagingModalRewrite.prompt.md
-│   ├── Round3_Bugfix1-formModalRedesign.prompt.md
-│   ├── Round3_Bugfix2-i18nValidationErrors.prompt.md
-│   ├── Round4_UnifiedBatchPipeline.prompt.md
-│   ├── Round5_ServerDrivenTypeRules.prompt.md
-│   ├── Round5_Bugfix1_DualFormAndBulkFixes.prompt.md
-│   ├── Round5_Bugfix2_PostTestWalkOverhaul.prompt.md
-│   ├── Round5_Bugfix3_TestWalkFixes.prompt.md
-│   └── Round6_ContextMenuDeletePolish.prompt.md            (⏳ in corso)
-├── plan-phase07-transaction-Part4b-filePreview.md          (Parte 4b — ⏳ da scrivere)
-└── plan-phase07-transaction-Part5-staging-modal.md         (Parte 5 — ⏳ da scrivere)
+├── Parte1/
+│   └── plan-phase07-transaction-Part1.md                       (✅ completata)
+├── Parte2/
+│   └── plan-phase07-transaction-Part2.prompt.md                (✅ completata, Revisione 2)
+├── Parte3/
+│   ├── plan-phase07-transaction-Part3.md                       (✅ completata)
+│   ├── plan-phase07-transaction-Part3_1_Closure.md
+│   ├── plan-phase07-transaction-Part3_1_Closure_2.prompt.md
+│   └── ...                                                     (+ Batch4d, BlockG)
+├── Parte4/
+│   ├── plan-phase07-transaction-Part4.prompt.md                (✅ completata, 10 steps + 11 rounds)
+│   ├── Round1-3/                                               (5 piani: R1, R2, R3, R3-Bugfix1, R3-Bugfix2)
+│   ├── Round4-5/                                               (5 piani: R4, R5, R5-Bugfix1..3)
+│   └── Round6/                                                 (10 piani: PlanA..D)
+├── Parte4b/
+│   └── (⏳ da scrivere — File Preview System)
+└── Parte5/
+    └── (⏳ da scrivere — Staging Modal unificata)
 ```
 
 ---
 
-**Prossimo passo**: completare **Round 6** di Parte 4 (ContextMenu, TransactionDeleteModal, bug fix R7-C1/H1/H2, TagInput polish) → vedi [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](../plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md).
-Poi passare a **Parte 5** — Staging Modal full (BRIM import, TransactionPickerModal, Promote/Split in BulkModal) o **Parte 4b** (File Preview) in parallelo.
+**Prossimo passo**: **Parte 5** — Staging Modal full (BRIM import, TransactionPickerModal, Promote/Split in BulkModal) o **Parte 4b** (File Preview) in parallelo.
 Parti 1–4 completate.

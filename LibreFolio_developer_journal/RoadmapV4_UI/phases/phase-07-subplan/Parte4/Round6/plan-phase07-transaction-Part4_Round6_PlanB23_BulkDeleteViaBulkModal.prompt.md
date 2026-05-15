@@ -204,7 +204,7 @@ Chiavi nuove:
 
 ### Step 12 — Nota forward-link nel piano C (Split/Promote) ✅ (~5min)
 
-**File**: [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md)
+**File**: [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md)
 
 Aggiungere nella sezione "Piani di dettaglio" (L.738-744), sotto la riga Piano C, una nota:
 

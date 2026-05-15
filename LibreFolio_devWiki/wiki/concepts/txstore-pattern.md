@@ -139,5 +139,5 @@ All components import from this single file instead of declaring local duplicate
 | Page (populates store) | `frontend/src/routes/(app)/transactions/+page.svelte` |
 | Picker (reads from store) | `frontend/src/lib/components/transactions/TransactionPickerModal.svelte` |
 | Bulk modal (reads + PendingOp) | `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` |
-| Plan (designed here) | `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md` |
+| Plan (designed here) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md` |
 

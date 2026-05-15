@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 1 — Table refactor + 14 sub-round bugfixes"
 category: source
 source_type: plan
 date_ingested: 2026-04-28
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round1-tableRefactorBugfix.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round1-3/plan-phase07-transaction-Part4_Round1-tableRefactorBugfix.prompt.md
 tags: [phase07, transactions, frontend, bugfix, datatable, filters, currency-stack, multi-enum, event-tooltip]
 related:
   - features/F-047

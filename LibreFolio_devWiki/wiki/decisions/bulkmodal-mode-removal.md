@@ -51,5 +51,5 @@ Option 2: remove `mode` entirely. The inference pattern `tx.id > 0` is more prec
 |------|------|
 | BulkModal | `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` |
 | Transactions page | `frontend/src/routes/(app)/transactions/+page.svelte` |
-| Plan | `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanB23_BulkDeleteViaBulkModal.prompt.md` |
+| Plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanB23_BulkDeleteViaBulkModal.prompt.md` |
 

@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 2 — Cache factory + DataTable polish + slider bu
 category: source
 source_type: plan
 date_ingested: 2026-04-28
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round1-3/plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md
 tags: [phase07, transactions, frontend, cache, entityStore, brokerStore, assetStore, slider, datatable, tooltip]
 related:
   - features/F-047

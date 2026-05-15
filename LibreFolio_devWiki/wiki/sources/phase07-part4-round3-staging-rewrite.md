@@ -3,7 +3,7 @@ title: "Phase 7 Part 4 Round 3 — Staging Modal Greenfield Rewrite"
 category: source
 source_type: plan
 date_ingested: 2026-05-25
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round3-stagingModalRewrite.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round1-3/plan-phase07-transaction-Part4_Round3-stagingModalRewrite.prompt.md
 tags: [phase07, transactions, frontend, formModal, bulkModal, promoteWizard, validate-scheduler, CompactCashCell, transactionTypeRules]
 related: [sources/phase07-part4-transactions-ui, features/F-048, concepts/validate-scheduler-pattern, concepts/editbuffer-pattern]
 ---

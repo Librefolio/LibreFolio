@@ -1,11 +1,11 @@
 # Plan — Phase 07 · Part 4 · Round 6 · Plan D — Split/Promote Full Stack
 
 **Date**: 2026-05-12
-**Status**: 🔄 IN PROGRESS (D1 ✅, D2 ⏳, D3 ⏳)
+**Status**: 🔄 IN PROGRESS (D1 ✅, D2 ✅ + bugfix1-4 ✅, D2-round2 ⏳ planning, D3 merged in D2-bugfix3)
 **Priority**: P1 (feature completion)
 **Estimated effort**: ~5-6 days
 
-**Parent**: [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](./plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md)
+**Parent**: [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](./phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md)
 **Predecessor**: Piano C3 ✅ (PendingOp refactor)
 
 ---
@@ -42,15 +42,19 @@ Integrare split/promote nella pipeline batch unificata (validate/commit), aggiun
 - BulkModal: `WorkspaceIntent` API, `PendingOp` tagged union, txStore SSoT
 - Split hint banner in BulkModal (passive, info-only)
 
-### Cosa manca (D2 + D3)
+### Cosa manca (D2-round2)
 - ~~Split/promote NON sono nella pipeline batch~~ ✅ D1
 - ~~Nessun promote-suggest endpoint~~ ✅ D1
-- Migrare Main Table promote da vecchio `/promote` a batch `{promotes: [...]}`
-- Split come row action non esiste (né Main Table né BulkModal)
-- Promote tra new rows (locale) non supportato
-- Promote tra saved+new (mixed) non supportato
-- Nessun PromoteMergeModal per campi divergenti
-- Nessun auto-detect banner per coppie compatibili
+- ~~Migrare Main Table promote da vecchio `/promote` a batch `{promotes: [...]}`~~ ✅ D2
+- ~~Split come row action non esiste (né Main Table né BulkModal)~~ ✅ D2
+- ~~Promote tra new rows (locale) non supportato~~ ✅ D2
+- ~~Promote tra saved+new (mixed) non supportato~~ ✅ D2
+- ~~Nessun PromoteMergeModal per campi divergenti~~ ✅ D2
+- ~~Nessun auto-detect banner per coppie compatibili~~ ✅ D2+bugfix3
+- ~~E2E tests split/promote~~ ✅ D2-bugfix3 (absorbed D3 scope)
+- cost_basis con valuta+FX ⏳ D2-round2
+- AssetEvent picker riusando DataEditor ⏳ D2-round2
+- Paired TX store-first pattern ⏳ D2-round2
 
 ---
 
@@ -719,8 +723,8 @@ Phase 4: E2E
 
 ## 🔗 Cross-links
 
-- **Parent plan**: [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](./plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md)
-- **Piano C3 (predecessor)**: [`plan-phase07-transaction-Part4_Round6_PlanC3_PendingOpRefactor.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanC3_PendingOpRefactor.prompt.md)
+- **Parent plan**: [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](./phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md)
+- **Piano C3 (predecessor)**: [`plan-phase07-transaction-Part4_Round6_PlanC3_PendingOpRefactor.prompt.md`](./phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC3_PendingOpRefactor.prompt.md)
 - **devWiki decision**: `LibreFolio_devWiki/wiki/decisions/pendingop-tagged-union.md`
 - **Feature page**: `LibreFolio_devWiki/wiki/features/F-048.md`
 
@@ -755,17 +759,30 @@ Phase 4: E2E
 | Sotto-piano | Steps inclusi | Focus | Stima | File | Status |
 |------------|---------------|-------|-------|------|--------|
 | **D1** — Backend: Batch Pipeline + Suggest | E1, E2, A1, A2, A3, A4, A5, B1, B2, B3 | Schema estesi, pipeline execute_batch con split/promote, eliminazione endpoint /split e /promote (mai usati), endpoint promote-suggest, mock data, tutti i test backend | ~9h | [`PlanD1_BackendBatchSuggest`](./plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md) | ✅ |
-| **D2** — Frontend: Split/Promote UI + Suggest Banner | C5, C3, C4, C1, C2, C6, C7 | PromoteMergeModal, BulkModal split/promote, Main Table split/promote, suggest banner verde, i18n | ~12h | [`PlanD2_FrontendSplitPromoteUI`](./plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md) | ⏳ piano creato |
-| **D3** — E2E Tests | D1, D2 | tx-split-promote.spec.ts, runner registration, 10 scenari | ~3h | [`PlanD3_E2ETests`](./plan-phase07-transaction-Part4_Round6_PlanD3_E2ETests.prompt.md) | ⏳ |
+| **D2** — Frontend: Split/Promote UI + Suggest Banner | C5, C3, C4, C1, C2, C6, C7 | PromoteMergeModal, BulkModal split/promote, Main Table split/promote, suggest banner verde, i18n | ~12h | [`PlanD2_FrontendSplitPromoteUI`](./plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md) | ✅ |
+| **D2-bugfix1** — Split/Promote Polish | Post-D2 | UX polish, edge cases, test fixes | — | [`PlanD2_bugfix_1`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_1_SplitPromotePolish.prompt.md) | ✅ |
+| **D2-bugfix2** — Payload + Split Preview UX | Post-bugfix1 | Commit payload alignments, split preview rendering | — | [`PlanD2_bugfix_2`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_2_PayloadSplitPreviewUX.prompt.md) | ✅ |
+| **D2-bugfix3** — UX Modal + Payload + Suggest + E2E | Post-bugfix2 | PromoteMergeModal polish, payload fixes, suggest banner UX, E2E tests (absorbed D3 scope) | — | [`PlanD2_bugfix_3`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_3_UXModalPayloadSuggestE2E.prompt.md) | ✅ |
+| **D2-bugfix4** — Split Suggest + PMC Override UX | Post-bugfix3 | Split suggest logic, PromoteMergeCandidate override, UX edge cases | — | [`PlanD2_bugfix_4`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_4_SplitSuggestPmcOverrideUx.prompt.md) | ✅ |
+| **D2-round2** — Walktest Feedback Round | Post-bugfix4 | cost_basis con valuta+FX, AssetEvent picker, paired TX store-first, 18 step in 5 sotto-piani | — | [`PlanD2_round2`](./plan-phase07-transaction-Part4_Round6_PlanD2_round2_WalktestFeedbackRound.prompt.md) | ⏳ planning |
+| ~~**D3** — E2E Tests~~ | ~~D1, D2~~ | ~~tx-split-promote.spec.ts~~ | ~~3h~~ | — | ⛔ merged in D2-bugfix3 |
 
 ### Ordine di esecuzione
 
 ```
-D1 (backend + test backend + mock data)
+D1 (backend + test backend + mock data) ✅
   ↓
-D2 (frontend — dipende da api sync di D1)
+D2 (frontend — dipende da api sync di D1) ✅
   ↓
-D3 (E2E — dipende da D1 + D2 completi)
+D2-bugfix1 (polish) ✅
+  ↓
+D2-bugfix2 (payload + split preview) ✅
+  ↓
+D2-bugfix3 (UX modal + suggest + E2E — absorbed D3 scope) ✅
+  ↓
+D2-bugfix4 (split suggest + PMC override) ✅
+  ↓
+D2-round2 (walktest feedback — 18 step, 5 sotto-piani) ⏳ NEXT
 ```
 
 ---
