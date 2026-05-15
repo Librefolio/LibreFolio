@@ -16,7 +16,7 @@ Atomic multi-broker semantics (Part 3):
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -30,9 +30,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, UserRole
 from backend.app.schemas.common import Currency
+from backend.app.services.fx import convert_bulk
 from backend.app.schemas.transactions import (
     EVENT_COMPATIBLE_TYPES,
     TX_TYPE_METADATA,
+    PairFieldConstraint,
     TXBatchResponse,
     TXBatchResultItem,
     TXCreateItem,
@@ -50,10 +52,12 @@ from backend.app.schemas.transactions import (
     TXUpdateItem,
     TXValidationCode,
     TXValidationIssue,
+    WACConversionInfo,
+    WACResult,
     get_swap_group,
     tags_to_csv,
 )
-from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.datetime_utils import parse_ISO_date, utcnow
 
 
 async def compute_weighted_avg_cost(
@@ -61,13 +65,24 @@ async def compute_weighted_avg_cost(
     broker_id: int,
     asset_id: int,
     as_of_date: date_type,
-) -> Decimal | None:
+    asset_currency: str,
+) -> WACResult:
     """Compute weighted average cost of an asset at a broker up to a given date.
 
-    Considers BUY transactions (unit_price = abs(amount)/quantity) and incoming
-    TRANSFERs with cost_basis_override set.
-    Returns None if no qualifying transactions or total quantity is zero.
+    FX-aware: converts BUY/TRANSFER costs to a common target currency using
+    convert_bulk(). Returns WACResult with conversion details and missing pairs.
+
+    Target currency selection:
+    1. Most frequent currency among qualifying TXs.
+    2. On tie: asset_currency if it's among the tied currencies.
+    3. Otherwise: first alphabetically.
+
+    Edge cases:
+    - No qualifying TXs or total_qty == 0 without FX errors →
+      WACResult(wac=Currency(code=target, amount="0"))
+    - Any FX conversion fails → WACResult(wac=None, missing_pairs=[...])
     """
+    # 1. Query qualifying transactions: BUY + incoming TRANSFER (qty > 0)
     stmt = select(Transaction).where(
         Transaction.broker_id == broker_id,
         Transaction.asset_id == asset_id,
@@ -77,32 +92,107 @@ async def compute_weighted_avg_cost(
             and_(
                 Transaction.type == TransactionType.TRANSFER,
                 Transaction.quantity > 0,
-                Transaction.cost_basis_override.isnot(None),
             ),
         ),
     )
     rows = (await session.execute(stmt)).scalars().all()
 
-    total_qty = Decimal("0")
-    total_cost = Decimal("0")
+    if not rows:
+        return WACResult(wac=Currency(code=asset_currency, amount=Decimal("0")))
+
+    # 2. Build per-row (qty, cost, currency, tx_id) tuples
+    row_data: list[tuple[Decimal, Decimal, str, int, date_type]] = []
     for row in rows:
         if row.type == TransactionType.BUY:
             qty = abs(row.quantity) if row.quantity else Decimal("0")
             if qty == 0:
                 continue
             unit_price = abs(row.amount) / qty if row.amount else Decimal("0")
+            ccy = row.currency or asset_currency
+            row_data.append((qty, qty * unit_price, ccy, row.id, row.date))
         else:
-            # TRANSFER with cost_basis_override
+            # TRANSFER receiver
             qty = row.quantity if row.quantity else Decimal("0")
-            if qty == 0:
+            if qty <= 0:
                 continue
-            unit_price = row.cost_basis_override  # type: ignore[assignment]
-        total_qty += qty
-        total_cost += qty * unit_price
+            if row.cost_basis_override is not None and row.cost_basis_currency is not None:
+                # Has frozen cost basis
+                cost = qty * row.cost_basis_override
+                ccy = row.cost_basis_currency
+            elif row.cost_basis_override is not None:
+                # Legacy: override without currency — use asset_currency
+                cost = qty * row.cost_basis_override
+                ccy = asset_currency
+            else:
+                # No cost basis override — skip (cannot contribute to WAC)
+                continue
+            row_data.append((qty, cost, ccy, row.id, row.date))
+
+    if not row_data:
+        return WACResult(wac=Currency(code=asset_currency, amount=Decimal("0")))
+
+    # 3. Determine target_currency
+    ccy_counter = Counter(ccy for _, _, ccy, _, _ in row_data)
+    max_count = max(ccy_counter.values())
+    top_ccys = sorted(c for c, n in ccy_counter.items() if n == max_count)
+    if len(top_ccys) == 1:
+        target_currency = top_ccys[0]
+    elif asset_currency in top_ccys:
+        target_currency = asset_currency
+    else:
+        target_currency = top_ccys[0]  # first alphabetically
+
+    # 4. Build conversion list for non-target currencies
+    fx_needed: list[tuple[int, Currency, str, date_type, int]] = []  # (row_idx, amount_ccy, to_ccy, date, tx_id)
+    for i, (qty, cost, ccy, tx_id, tx_date) in enumerate(row_data):
+        if ccy != target_currency:
+            fx_needed.append((i, Currency(code=ccy, amount=cost), target_currency, tx_date, tx_id))
+
+    conversions_info: list[WACConversionInfo] = []
+    missing_pairs: list[str] = []
+
+    # Convert all non-target costs in one batch
+    if fx_needed:
+        bulk_input = [(amt_ccy, to_ccy, dt) for _, amt_ccy, to_ccy, dt, _ in fx_needed]
+        fx_results, fx_errors = await convert_bulk(session, bulk_input, raise_on_error=False)
+
+        for j, (row_idx, amt_ccy, to_ccy, dt, tx_id) in enumerate(fx_needed):
+            result = fx_results[j] if j < len(fx_results) else None
+            if result is None:
+                # FX conversion failed
+                pair_key = f"{amt_ccy.code}/{to_ccy}"
+                if pair_key not in missing_pairs:
+                    missing_pairs.append(pair_key)
+            else:
+                converted, rate_date, _bf = result
+                stale_days = (dt - rate_date).days if rate_date < dt else 0
+                # Figure out the rate: converted.amount / amt_ccy.amount
+                rate = converted.amount / amt_ccy.amount if amt_ccy.amount != 0 else Decimal("0")
+                conversions_info.append(WACConversionInfo(
+                    tx_id=tx_id,
+                    from_currency=amt_ccy.code,
+                    to_currency=target_currency,
+                    rate=rate,
+                    rate_date=rate_date,
+                    stale_days=stale_days,
+                ))
+                # Replace cost with converted amount
+                qty_orig = row_data[row_idx][0]
+                row_data[row_idx] = (qty_orig, converted.amount, target_currency, tx_id, dt)
+
+    # 5. If any conversion failed → wac=None
+    if missing_pairs:
+        return WACResult(wac=None, conversions=conversions_info, missing_pairs=missing_pairs)
+
+    # 6. Sum up
+    total_qty = sum(rd[0] for rd in row_data)
+    total_cost = sum(rd[1] for rd in row_data)
 
     if total_qty == 0:
-        return None
-    return total_cost / total_qty
+        return WACResult(wac=Currency(code=target_currency, amount=Decimal("0")), conversions=conversions_info)
+
+    wac_amount = total_cost / total_qty
+    return WACResult(wac=Currency(code=target_currency, amount=wac_amount), conversions=conversions_info)
 
 
 class BalanceValidationError(Exception):
@@ -715,6 +805,9 @@ class TransactionService:
         if req.new_type == TransactionType.TRANSFER:
             qty = req.quantity
             assert qty is not None
+            # Raw dicts (not TXCreateItem) because they go into execute_batch(creates_raw=...)
+            # which does per-row model_validate() in try/except, collecting ALL errors
+            # in one response instead of failing on the first one.
             create_from_dict = {
                 "broker_id": from_broker_id,
                 "asset_id": req.asset_id,
@@ -734,11 +827,12 @@ class TransactionService:
                 "link_uuid": link_uuid,
                 "tags": to_tags,
                 "description": to_description,
-                "cost_basis_override": format(req.cost_basis_override, "f") if req.cost_basis_override is not None else None,
+                "cost_basis_override": {"code": req.cost_basis_override.code, "amount": format(req.cost_basis_override.amount, "f")} if req.cost_basis_override is not None else None,
             }
         else:  # FX_CONVERSION
             if from_currency is None or to_currency is None:
                 return TXTransferPromoteResponse(rolled_back=True, errors=["FX_CONVERSION requires both sides to have a currency"])
+            # Raw dicts — same rationale: execute_batch collects all errors in bulk.
             create_from_dict = {
                 "broker_id": from_broker_id,
                 "type": TransactionType.FX_CONVERSION.value,
@@ -832,8 +926,6 @@ class TransactionService:
     @staticmethod
     def _check_promote_constraints(tx_a: Transaction, tx_b: Transaction, constraints: list) -> bool:
         """Check if two transactions satisfy promote field constraints."""
-        from backend.app.schemas.transactions import PairFieldConstraint
-
         for c in constraints:
             assert isinstance(c, PairFieldConstraint)
             if c.field == "broker_id":
@@ -1170,7 +1262,8 @@ class TransactionService:
                 if item.description is not None:
                     tx.description = item.description
                 if item.cost_basis_override is not None:
-                    tx.cost_basis_override = item.cost_basis_override
+                    tx.cost_basis_override = item.cost_basis_override.amount
+                    tx.cost_basis_currency = item.cost_basis_override.code
                 if item.asset_event_id is not None:
                     if item.asset_event_id == 0:
                         tx.asset_event_id = None
@@ -1232,7 +1325,8 @@ class TransactionService:
                     currency=item.get_currency(),
                     tags=item.get_tags_csv(),
                     description=item.description,
-                    cost_basis_override=item.cost_basis_override,
+                    cost_basis_override=item.cost_basis_override.amount if item.cost_basis_override else None,
+                    cost_basis_currency=item.cost_basis_override.code if item.cost_basis_override else None,
                     asset_event_id=item.asset_event_id,
                     created_at=utcnow(),
                     updated_at=utcnow(),
@@ -1324,25 +1418,37 @@ class TransactionService:
                         setattr(tx_a, field_name, val)
                         setattr(tx_b, field_name, val)
                 if "cost_basis_override" in item.resolved_fields:
-                    cbo_val = item.resolved_fields["cost_basis_override"]
+                    cbo_raw = item.resolved_fields["cost_basis_override"]
+                    if cbo_raw is not None:
+                        # Parse as Currency dict {code, amount}
+                        cbo_currency = Currency.model_validate(cbo_raw)
+                        cbo_amount = cbo_currency.amount
+                        cbo_code = cbo_currency.code
+                    else:
+                        cbo_amount = None
+                        cbo_code = None
                     # Only apply to receiver (qty > 0); force null on sender
                     if tx_a.quantity and tx_a.quantity > 0:
-                        tx_a.cost_basis_override = cbo_val
+                        tx_a.cost_basis_override = cbo_amount
+                        tx_a.cost_basis_currency = cbo_code
                         tx_b.cost_basis_override = None
+                        tx_b.cost_basis_currency = None
                     elif tx_b.quantity and tx_b.quantity > 0:
-                        tx_b.cost_basis_override = cbo_val
+                        tx_b.cost_basis_override = cbo_amount
+                        tx_b.cost_basis_currency = cbo_code
                         tx_a.cost_basis_override = None
+                        tx_a.cost_basis_currency = None
                     else:
                         # Fallback: apply to both (non-TRANSFER promote)
-                        tx_a.cost_basis_override = cbo_val
-                        tx_b.cost_basis_override = cbo_val
+                        tx_a.cost_basis_override = cbo_amount
+                        tx_a.cost_basis_currency = cbo_code
+                        tx_b.cost_basis_override = cbo_amount
+                        tx_b.cost_basis_currency = cbo_code
                 if "tags" in item.resolved_fields:
                     csv_tags = tags_to_csv(item.resolved_fields["tags"])
                     tx_a.tags = csv_tags
                     tx_b.tags = csv_tags
                 if "date" in item.resolved_fields:
-                    from backend.app.utils.datetime_utils import parse_ISO_date
-
                     resolved_date = parse_ISO_date(item.resolved_fields["date"])
                     tx_a.date = resolved_date
                     tx_b.date = resolved_date
@@ -1351,18 +1457,25 @@ class TransactionService:
             tx_b.updated_at = utcnow()
 
             # Auto-calc cost_basis_override for TRANSFER receiver if not set
+            wac_result_for_promote: WACResult | None = None
             if target_type == TransactionType.TRANSFER:
                 receiver = tx_a if (tx_a.quantity and tx_a.quantity > 0) else tx_b if (tx_b.quantity and tx_b.quantity > 0) else None
                 sender = tx_b if receiver is tx_a else tx_a
                 if receiver and receiver.cost_basis_override is None and sender.broker_id:
-                    wac = await compute_weighted_avg_cost(
-                        self.session, sender.broker_id, receiver.asset_id, receiver.date
-                    )
-                    if wac is not None:
-                        receiver.cost_basis_override = wac
+                    # Fetch asset currency for target_currency determination
+                    asset_row = await self.session.execute(select(Asset.currency).where(Asset.id == receiver.asset_id))
+                    asset_ccy = asset_row.scalar_one_or_none() or ""
+                    wac_result_for_promote = await compute_weighted_avg_cost(self.session, sender.broker_id, receiver.asset_id, receiver.date, asset_ccy)
+                    if wac_result_for_promote.wac is not None:
+                        receiver.cost_basis_override = wac_result_for_promote.wac.amount
+                        receiver.cost_basis_currency = wac_result_for_promote.wac.code
+                    else:
+                        receiver.cost_basis_override = None
+                        receiver.cost_basis_currency = None
                 # Force sender override to null
                 if sender:
                     sender.cost_basis_override = None
+                    sender.cost_basis_currency = None
 
             for t in (tx_a, tx_b):
                 prev = earliest_date_by_broker.get(t.broker_id)
@@ -1374,7 +1487,7 @@ class TransactionService:
             if item.link_uuid_b:
                 consumed_link_uuids.add(item.link_uuid_b)
 
-            results.append(TXBatchResultItem(operation="promote", index=orig_idx, ids=[tx_a.id, tx_b.id], status="success"))
+            results.append(TXBatchResultItem(operation="promote", index=orig_idx, ids=[tx_a.id, tx_b.id], status="success", wac_info=wac_result_for_promote))
 
         # 6. Link resolution
         for link_uuid, pairs in link_uuid_map.items():
@@ -1417,11 +1530,18 @@ class TransactionService:
                     # Find partner (the sender) in same link_uuid pair
                     partner = next((t for _, t in pairs if t.id != tx.id), None)
                     if partner and partner.broker_id:
-                        wac = await compute_weighted_avg_cost(
-                            self.session, partner.broker_id, tx.asset_id, tx.date
-                        )
-                        if wac is not None:
-                            tx.cost_basis_override = wac
+                        # Fetch asset currency
+                        asset_row = await self.session.execute(select(Asset.currency).where(Asset.id == tx.asset_id))
+                        asset_ccy = asset_row.scalar_one_or_none() or ""
+                        wac_result = await compute_weighted_avg_cost(self.session, partner.broker_id, tx.asset_id, tx.date, asset_ccy)
+                        if wac_result.wac is not None:
+                            tx.cost_basis_override = wac_result.wac.amount
+                            tx.cost_basis_currency = wac_result.wac.code
+                        # Propagate wac_info to the corresponding result item
+                        for r in results:
+                            if r.link_uuid == link_uuid and r.operation == "create":
+                                r.wac_info = wac_result
+                                break
 
         # 7. Balance walk per affected broker
         try:
