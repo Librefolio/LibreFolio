@@ -19,10 +19,12 @@ from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
-from backend.app.db.models import TransactionType, User
+from backend.app.db.models import Asset, Transaction, TransactionType, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
@@ -45,8 +47,9 @@ from backend.app.schemas.transactions import (
     TXTypeMetadata,
     TXTypesResponse,
     TXUpdateItem,
+    WACResult,
 )
-from backend.app.services.transaction_service import TransactionService
+from backend.app.services.transaction_service import TransactionService, compute_weighted_avg_cost
 from backend.app.utils.datetime_utils import parse_ISO_date
 
 logger = get_logger(__name__)
@@ -347,3 +350,127 @@ async def promote_transfer(
         logger.warning("Promote transfer rolled back: %s", response.errors, user_id=user_id)
 
     return response
+
+
+# =============================================================================
+# WAC RECALCULATION (TODO: future analytics/ category)
+# =============================================================================
+
+
+class RecalcWACRequest(BaseModel):
+    """Request body for POST /transactions/recalc-wac."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tx_ids: List[int] = Field(..., min_length=1, max_length=100, description="Transaction IDs to recalculate WAC for")
+
+
+class RecalcWACResponseItem(BaseModel):
+    """Per-TX result of WAC recalculation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tx_id: int
+    wac_result: WACResult
+    updated: bool = Field(..., description="Whether the TX cost_basis was actually updated")
+
+
+class RecalcWACResponse(BaseModel):
+    """Response for POST /transactions/recalc-wac."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    results: List[RecalcWACResponseItem]
+
+
+@tx_router.post("/recalc-wac", response_model=RecalcWACResponse)
+async def recalc_wac(
+    body: RecalcWACRequest,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> RecalcWACResponse:
+    """Recalculate WAC for a set of TRANSFER receiver transactions.
+
+    All TXs must refer to the same asset. Non-TRANSFER or sender TXs are
+    skipped (updated=False). The user must have EDITOR access on every
+    broker involved.
+    """
+    user_id = current_user.id
+    service = TransactionService(session)
+
+    # 1. Fetch all requested transactions
+    txs = []
+    for tx_id in body.tx_ids:
+        tx = await session.get(Transaction, tx_id)
+        if tx is None:
+            raise HTTPException(status_code=404, detail=f"Transaction {tx_id} not found")
+        txs.append(tx)
+
+    # 2. Validate same asset_id
+    asset_ids = {tx.asset_id for tx in txs if tx.asset_id is not None}
+    if len(asset_ids) > 1:
+        raise HTTPException(status_code=400, detail="All transactions must refer to the same asset")
+    if not asset_ids:
+        raise HTTPException(status_code=400, detail="No transactions with asset_id found")
+    asset_id = asset_ids.pop()
+
+    # 3. Check EDITOR access on all brokers
+    broker_ids = {tx.broker_id for tx in txs}
+    for bid in broker_ids:
+        await service._check_broker_access_or_raise(bid, user_id)
+
+    # 4. Fetch asset currency
+    asset_row = await session.execute(select(Asset.currency).where(Asset.id == asset_id))
+    asset_ccy = asset_row.scalar_one_or_none() or ""
+
+    # 5. Process each TX
+    results: List[RecalcWACResponseItem] = []
+    for tx in txs:
+        # Only recalc for TRANSFER receivers (qty > 0)
+        if tx.type != TransactionType.TRANSFER or not tx.quantity or tx.quantity <= 0:
+            results.append(RecalcWACResponseItem(
+                tx_id=tx.id,
+                wac_result=WACResult(),
+                updated=False,
+            ))
+            continue
+
+        # Find sender via related_transaction_id
+        sender_broker_id = None
+        if tx.related_transaction_id:
+            partner = await session.get(Transaction, tx.related_transaction_id)
+            if partner:
+                sender_broker_id = partner.broker_id
+
+        if sender_broker_id is None:
+            # Cannot determine sender → skip
+            results.append(RecalcWACResponseItem(
+                tx_id=tx.id,
+                wac_result=WACResult(),
+                updated=False,
+            ))
+            continue
+
+        wac_result = await compute_weighted_avg_cost(
+            session, sender_broker_id, asset_id, tx.date, asset_ccy
+        )
+
+        if wac_result.wac is not None:
+            tx.cost_basis_override = wac_result.wac.amount
+            tx.cost_basis_currency = wac_result.wac.code
+            updated = True
+        else:
+            tx.cost_basis_override = None
+            tx.cost_basis_currency = None
+            updated = True  # Still "updated" — cleared to None
+
+        results.append(RecalcWACResponseItem(
+            tx_id=tx.id,
+            wac_result=wac_result,
+            updated=updated,
+        ))
+
+    await session.commit()
+    return RecalcWACResponse(results=results)
+
+

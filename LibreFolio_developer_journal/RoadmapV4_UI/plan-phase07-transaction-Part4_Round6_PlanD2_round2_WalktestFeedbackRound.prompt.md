@@ -237,13 +237,13 @@ In `fetchPartner()`: `txStoreGet` prima, GET in parallelo con entrambi gli id, u
   └──────────────────────────────┘
 ```
 
-| SP | Steps | Tipo | Stima | Dipende da |
-|----|-------|------|-------|------------|
-| **SP-A** | 1-5 | 🔴 DETAILED | ~10h | — |
-| **SP-B** | 6 + updates + mock | 🟡 GROUPED | ~4h | SP-A |
-| **SP-C** | 7-12, 17 | 🔴 DETAILED | ~10h | api sync |
-| **SP-D** | 13-16, 18 | 🔴 DETAILED | ~12h | SP-C |
-| **SP-E** | E2E tests | 🟡 GROUPED | ~6h | SP-D |
+| SP | Steps | Tipo | Stima | Dipende da | Detailed Plan |
+|----|-------|------|-------|------------|---------------|
+| **SP-A** | 1-5 | 🔴 DETAILED | ~10h | — | [`plan-R2-SP-A-CostBasisWAC`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-A-CostBasisWAC.prompt.md) |
+| **SP-B** | 6 + updates + mock | 🟡 GROUPED | ~4h | SP-A | [`plan-R2-SP-B-BackendTests`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-B-BackendTests.prompt.md) |
+| **SP-C** | 7-12, 17 | 🔴 DETAILED | ~10h | api sync | — |
+| **SP-D** | 13-16, 18 | 🔴 DETAILED | ~12h | SP-C | — |
+| **SP-E** | E2E tests | 🟡 GROUPED | ~6h | SP-D | — |
 
 **Totale**: ~42h (~8-9 giorni)
 

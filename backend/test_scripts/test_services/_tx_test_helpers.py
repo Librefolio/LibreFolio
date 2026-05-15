@@ -19,6 +19,8 @@ async def create_bulk(
     user_id: Optional[int] = None,
 ) -> SimpleNamespace:
     """Wrap execute_batch for create-only calls, returning legacy-compatible response."""
+    # model_dump → raw dict: execute_batch(creates_raw=...) re-validates per-row
+    # inside try/except, collecting ALL errors instead of failing on the first.
     raw = [item.model_dump(mode="json") for item in items]
     resp = await service.execute_batch(
         creates_raw=raw,
@@ -98,6 +100,7 @@ async def update_bulk(
     user_id: Optional[int] = None,
 ) -> SimpleNamespace:
     """Wrap execute_batch for update-only calls, returning legacy-compatible response."""
+    # model_dump → raw dict: same rationale as create_bulk (batch error collection).
     raw = [item.model_dump(mode="json") for item in items]
     resp = await service.execute_batch(
         creates_raw=[],
