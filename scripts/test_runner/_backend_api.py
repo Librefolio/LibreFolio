@@ -213,6 +213,17 @@ def api_batch_split_promote(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Batch split/promote tests", verbose=verbose)
 
 
+def api_transactions_wac(verbose: bool = False, test_names: list = None) -> bool:
+    """Run WAC (Weighted Average Cost) API tests."""
+    print_section("WAC Cost Basis API Tests")
+    print_info("Testing cost_basis_override Currency, auto-calc WAC, recalc-wac endpoint")
+    print_info("Tests: WAC-1→13 (override, auto-calc, cross-FX, missing, recalc, validation, promote)")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_transactions_wac.py", test_names)
+    return run_command(cmd, "WAC cost basis tests", verbose=verbose)
+
+
 def api_ohlc_sentinel(verbose: bool = False, test_names: list = None) -> bool:
     """Run OHLC sentinel semantics tests."""
     print_section("OHLC Sentinel (F.4) API Tests")
@@ -482,6 +493,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "tx-balance-walk", api_tx_balance_walk, name="TX Balance Walk", desc="Same-day ordering, cascade, end-of-day")
     add_test(api, "events-suggest", api_events_suggest, name="Events Suggest", desc="Candidate events within tolerance")
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
+    add_test(api, "transactions-wac", api_transactions_wac, name="WAC Cost Basis", desc="cost_basis_override Currency, auto-calc WAC, recalc-wac")
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="Sentinel rules on POST /assets/prices")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")
     add_test(api, "prices-currency-coherence", api_prices_currency_coherence, name="Prices Currency Coherence", desc="Hard-400 on currency mismatch")

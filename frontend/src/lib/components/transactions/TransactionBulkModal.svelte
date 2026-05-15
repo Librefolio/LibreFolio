@@ -1397,7 +1397,7 @@
                 cell: (row): CellContent => {
                     if (row.partnerId != null) return {type: 'html', html: `<code class="text-[10px] font-mono text-gray-400">↔ #${row.partnerId}</code>`};
                     if (row.partnerPayload != null) return {type: 'html', html: '<code class="text-[10px] font-mono text-indigo-400">↔ new</code>'};
-                    if (row.op === 'create' && row.link_uuid) return {type: 'html', html: `<code class="text-[10px] font-mono text-gray-400">${row.op === 'create' ? row.link_uuid?.slice(0, 8) : ''}…</code>`};
+                    if (row.op === 'create' && row.link_uuid) return {type: 'html', html: `<code class="text-[10px] font-mono text-gray-400">${row.link_uuid.slice(0, 8)}…</code>`};
                     return {type: 'html', html: '—'};
                 },
             },
