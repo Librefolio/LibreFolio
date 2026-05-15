@@ -408,3 +408,7 @@ Chiavi nuove in EN/IT/FR/ES:
 | W14 | Toast errore | Provocare errore commit → toast generico visibile |
 | W15 | Slider delta | Slider 0-14, valore visibile, persiste in sessionStorage |
 | W16 | Warning UI ADJUSTMENT | Edit ADJUSTMENT qty>0 senza override → warning UI giallo non bloccante |
+
+---
+
+**Next**: [`plan-phase07-transaction-Part4_Round6_PlanD2_round2_WalktestFeedbackRound.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_round2_WalktestFeedbackRound.prompt.md)
