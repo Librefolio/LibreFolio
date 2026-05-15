@@ -133,10 +133,8 @@ class TXCreateItem(BaseModel):
     description: Optional[str] = Field(default=None, max_length=500, description="Transaction notes")
 
     # Frozen cost basis for TRANSFER_IN - snapshot of PMC at transfer time
-    cost_basis_override: Optional[SafeDecimal] = Field(
-        default=None,
-        description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",
-    )
+    # Object {code, amount} — e.g. {"code": "EUR", "amount": "42.50"}
+    cost_basis_override: Optional[Currency] = Field(default=None,description="Frozen cost basis for TRANSFER_IN. Object {code, amount}.",)
 
     # Link to AssetEvent (realization of a global asset event in this portfolio).
     # Only valid for event-compatible types (see EVENT_COMPATIBLE_TYPES).
@@ -369,7 +367,8 @@ class TXReadItem(BaseModel):
     description: Optional[str] = None
 
     # Frozen cost basis for TRANSFER_IN (None for normal transactions)
-    cost_basis_override: Optional[SafeDecimal] = None
+    # Object {code, amount} when set.
+    cost_basis_override: Optional[Currency] = None
 
     # Link to the AssetEvent realized by this transaction (None = stand-alone)
     asset_event_id: Optional[int] = None
@@ -401,6 +400,11 @@ class TXReadItem(BaseModel):
         if tx.tags:
             tags = [t.strip() for t in tx.tags.split(",") if t.strip()]
 
+        # Build Currency from cost_basis DB fields
+        cost_basis = None
+        if tx.cost_basis_override is not None and tx.cost_basis_currency is not None:
+            cost_basis = Currency(code=tx.cost_basis_currency, amount=tx.cost_basis_override)
+
         return cls(
             id=tx.id,
             broker_id=tx.broker_id,
@@ -412,7 +416,7 @@ class TXReadItem(BaseModel):
             related_transaction_id=tx.related_transaction_id,
             tags=tags,
             description=tx.description,
-            cost_basis_override=tx.cost_basis_override,
+            cost_basis_override=cost_basis,
             asset_event_id=tx.asset_event_id,
             created_at=tx.created_at,
             updated_at=tx.updated_at,
@@ -485,11 +489,8 @@ class TXUpdateItem(BaseModel):
     tags: Optional[List[str]] = Field(default=None, description="New tags (replaces existing)")
     description: Optional[str] = Field(default=None, max_length=500, description="New description")
 
-    # Frozen cost basis override (for TRANSFER_IN)
-    cost_basis_override: Optional[SafeDecimal] = Field(
-        default=None,
-        description="Frozen cost basis for TRANSFER_IN. Set to override calculated cost basis.",
-    )
+    # Frozen cost basis override (for TRANSFER_IN) — object {code, amount}
+    cost_basis_override: Optional[Currency] = Field(default=None,description="Frozen cost basis for TRANSFER_IN. Object {code, amount}.",)
 
     # Link/unlink to AssetEvent:
     # - None   -> leave asset_event_id unchanged
@@ -630,6 +631,38 @@ class TXMixedBatch(BaseModel):
     promotes: List[dict] = Field(default_factory=list, max_length=100)
 
 
+# =============================================================================
+# WAC (WEIGHTED AVERAGE COST) — FX-aware calculation results
+# =============================================================================
+
+
+class WACConversionInfo(BaseModel):
+    """Single FX conversion applied during WAC calculation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tx_id: int = Field(..., description="Transaction ID that needed conversion")
+    from_currency: str = Field(..., description="Original currency of the transaction")
+    to_currency: str = Field(..., description="Target currency for WAC")
+    rate: SafeDecimal = Field(..., description="FX rate applied")
+    rate_date: date_type = Field(..., description="Actual date of the FX rate used")
+    stale_days: int = Field(0, ge=0, description="Days between TX date and rate date (0 = fresh)")
+
+
+class WACResult(BaseModel):
+    """Result of weighted average cost calculation with FX details.
+
+    - wac is None when at least one FX conversion failed (see missing_pairs).
+    - wac is Currency(code=target, amount="0") when total_qty == 0 without FX errors.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    wac: Optional[Currency] = Field(None, description="Calculated WAC. None if FX conversion failed.")
+    conversions: List[WACConversionInfo] = Field(default_factory=list, description="FX conversions applied")
+    missing_pairs: List[str] = Field(default_factory=list, description="FX pairs that could not be resolved (e.g. 'CHF/EUR')")
+
+
 class TXBatchResultItem(BaseModel):
     """Per-item result for committed rows."""
 
@@ -640,6 +673,7 @@ class TXBatchResultItem(BaseModel):
     ids: List[int] = Field(default_factory=list, description="IDs of affected transactions. Split/promote return both IDs.")
     link_uuid: Optional[str] = None
     status: TXItemStatus
+    wac_info: Optional[WACResult] = Field(default=None, description="WAC calculation details for TRANSFER auto-calc")
 
 
 class TXBatchResponse(BaseModel):
@@ -783,7 +817,8 @@ class TXTransferPromoteRequest(BaseModel):
     quantity: Optional[SafeDecimal] = Field(default=None, description="Asset quantity for TRANSFER")
     # Optional override for cost_basis_override propagated on the TRANSFER
     # destination item; if None the service will not set it.
-    cost_basis_override: Optional[SafeDecimal] = None
+    # Object {code, amount} — e.g. {"code": "EUR", "amount": "42.50"}
+    cost_basis_override: Optional[Currency] = None
 
 
 class TXTransferPromoteResponse(BaseModel):

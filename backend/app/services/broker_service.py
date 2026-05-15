@@ -158,6 +158,10 @@ class BrokerService:
                     deposit_dicts = []
                     for currency_obj in item.initial_balances:
                         if currency_obj.is_positive():
+                            # Raw dict (not TXCreateItem) because it goes into
+                            # execute_batch(creates_raw=...) which does per-row
+                            # model_validate() in try/except, collecting ALL
+                            # errors in one response instead of failing on the first.
                             deposit_dicts.append(
                                 {
                                     "broker_id": broker.id,

@@ -272,6 +272,7 @@ def upgrade() -> None:
                    tags                   TEXT,
                    description            TEXT,
                    cost_basis_override    NUMERIC(18, 6),
+                   cost_basis_currency    VARCHAR(3),
                    asset_event_id         INTEGER,
                    created_at             DATETIME       NOT NULL,
                    updated_at             DATETIME       NOT NULL,
