@@ -83,7 +83,7 @@
 
     let title = $derived(mode === 'split' ? `✂️ ${$t('transactions.split.confirmTitle') || 'Unlink this pair?'}` : `🔗 ${$t('transactions.actions.promotePair') || 'Link as pair'}`);
     let confirmLabel = $derived(mode === 'split' ? `✂️ ${$t('transactions.split.confirmTitle') || 'Split'}` : `🔗 ${$t('transactions.promote.commit') || 'Promote'}`);
-    let borderColor = $derived(mode === 'split' ? 'border-amber-200 dark:border-amber-800' : 'border-green-200 dark:border-green-800');
+    let borderColor = $derived('border-gray-200 dark:border-gray-700');
 </script>
 
 <ModalBase {open} maxWidth="xl" onRequestClose={onCancel} testId="tx-action-modal">
@@ -124,23 +124,44 @@
                             </tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700">
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</td>
-                                <td class="px-3 py-2 flex items-center gap-2" colspan="2">
-                                    {#if getTransactionTypeIconUrl(transaction.type)}
-                                        <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5" />
-                                    {/if}
-                                    {typeLabel(transaction.type)}
+                                <td class="px-3 py-2 text-center" colspan="2">
+                                    <span class="inline-flex items-center gap-2">
+                                        {#if getTransactionTypeIconUrl(transaction.type)}
+                                            <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5" />
+                                        {/if}
+                                        {typeLabel(transaction.type)}
+                                    </span>
                                 </td>
+                            </tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.quantity')}</td>
+                                <td class="px-3 py-2">{transaction.quantity ?? '—'}</td>
+                                <td class="px-3 py-2">{partner?.quantity ?? '—'}</td>
                             </tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700">
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}</td>
                                 <td class="px-3 py-2">{fC(transaction.cash)}</td>
                                 <td class="px-3 py-2">{fC(partner?.cash)}</td>
                             </tr>
-                            <tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</td>
                                 <td class="px-3 py-2"><BrokerBadge broker={bLike(transaction.broker_id)} brokers={brkrs} /></td>
                                 <td class="px-3 py-2">{#if partner}<BrokerBadge broker={bLike(partner.broker_id)} brokers={brkrs} />{:else}—{/if}</td>
                             </tr>
+                            {#if transaction.tags?.length || partner?.tags?.length}
+                                <tr class="border-b border-gray-100 dark:border-gray-700">
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">Tags</td>
+                                    <td class="px-3 py-2">{transaction.tags?.join(', ') ?? '—'}</td>
+                                    <td class="px-3 py-2">{partner?.tags?.join(', ') ?? '—'}</td>
+                                </tr>
+                            {/if}
+                            {#if transaction.description || partner?.description}
+                                <tr>
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">Desc</td>
+                                    <td class="px-3 py-2 text-xs truncate max-w-[160px]">{transaction.description ?? '—'}</td>
+                                    <td class="px-3 py-2 text-xs truncate max-w-[160px]">{partner?.description ?? '—'}</td>
+                                </tr>
+                            {/if}
                         </tbody>
                     </table>
                 </div>

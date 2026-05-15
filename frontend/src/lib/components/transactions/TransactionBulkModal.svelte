@@ -56,6 +56,7 @@
     import TransactionFormModal from './TransactionFormModal.svelte';
     import TransactionPickerModal from './TransactionPickerModal.svelte';
     import {txStoreGet, txStoreCount} from '$lib/stores/txStore.svelte';
+    import {toasts} from '$lib/stores/toastStore.svelte';
     import type {TXReadItem, ValidationIssue} from './types';
 
     // =========================================================================
@@ -216,6 +217,8 @@
     let tableRef = $state<DataTable<PendingOp> | undefined>(undefined);
     /** Accumulated splits for saved paired TXs (sent in batch.splits). */
     let pendingSplits = $state<{id_a: number; id_b: number}[]>([]);
+    /** Derived set of all split-queued TX IDs for quick lookup. */
+    let splitTxIdsSet = $derived(new Set(pendingSplits.flatMap(s => [s.id_a, s.id_b])));
     /** Accumulated promotes for saved TXs (sent in batch.promotes). */
     let pendingPromotes = $state<{id_a?: number; id_b?: number; link_uuid_a?: string; link_uuid_b?: string; resolved_fields?: Record<string, unknown>}[]>([]);
     /** Promote merge modal state. */
@@ -654,18 +657,7 @@
             const partnerId = row.partnerId!;
             pendingSplits = [...pendingSplits, {id_a: txId, id_b: partnerId}];
 
-            // Determine split types
-            const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
-            if (!splitTypes) return;
-            const [fromType, toType] = splitTypes;
-
-            // Determine from/to by sign
-            const cashAmt = Number(row.fields.cash?.amount ?? 0);
-            const qty = Number(row.fields.quantity ?? 0);
-            const isFrom = row.fields.type === 'TRANSFER' ? qty < 0 : cashAmt < 0;
-
-            // Mutate the main row to standalone post-split type
-            row.fields.type = (isFrom ? fromType : toType) as TransactionTypeCode;
+            // Clear paired display on main row (don't mutate type — backend handles it)
             row.partnerId = undefined;
             row.partnerBrokerId = undefined;
             row.partnerCash = undefined;
@@ -676,7 +668,6 @@
             const partnerTx = txStoreGet(partnerId);
             if (partnerTx) {
                 const partnerOp = editOpFromTx(partnerId);
-                partnerOp.fields.type = (isFrom ? toType : fromType) as TransactionTypeCode;
                 partnerOp.partnerId = undefined;
                 partnerOp.partnerBrokerId = undefined;
                 partnerOp.partnerCash = undefined;
@@ -686,6 +677,7 @@
             }
 
             ops = [...ops]; // trigger reactivity
+            lastSuggestKey = '';  // B9: invalidate suggest
         } else if (row.op === 'create' && row.link_uuid) {
             // Case B: New paired (link_uuid shared) → local transformation
             const partner = ops.find((o) => o !== row && o.op === 'create' && (o as any).link_uuid === row.link_uuid);
@@ -864,7 +856,10 @@
             const creates: Record<string, unknown>[] = [];
             const updates: Record<string, unknown>[] = [];
             const deletes: number[] = [];
+            const valSplitTxIds = new Set(pendingSplits.flatMap(s => [s.id_a, s.id_b]));
             for (const d of ops) {
+                // Skip split-queued edit rows
+                if (d.op === 'edit' && valSplitTxIds.has((d as any).txId)) continue;
                 const st = deriveStatus(d);
                 if (st === 'new') {
                     creates.push(collectCreate(d));
@@ -1019,8 +1014,15 @@
             const updates: Record<string, unknown>[] = [];
             const deletes: number[] = [];
 
+            // B5: skip split-queued rows from updates/deletes (backend handles via splits[])
+            const splitTxIds = new Set(pendingSplits.flatMap(s => [s.id_a, s.id_b]));
+
             for (const d of ops) {
                 const st = deriveStatus(d);
+
+                // Skip split-queued edit rows — backend handles them
+                if (d.op === 'edit' && splitTxIds.has((d as any).txId)) continue;
+
                 if (st === 'new') {
                     creates.push(collectCreate(d));
                     if (d.partnerPayload) {
@@ -1061,6 +1063,7 @@
             const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.bulk.saveFailed'), toast: false});
             if (result.status === 'error') {
                 formError = result.message;
+                toasts.error($t('transactions.commit.serverError') || 'Save failed — server error');
                 return;
             }
             const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]};
@@ -1180,6 +1183,10 @@
                 hiddenByDefault: false,
                 cell: (row): CellContent => {
                     const st = deriveStatus(row);
+                    // B5: split-queued badge takes priority
+                    if (row.op === 'edit' && splitTxIdsSet.has((row as any).txId)) {
+                        return {type: 'html', html: '<span class="px-1.5 py-0.5 text-[10px] rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">✂️ split</span>'};
+                    }
                     return {
                         type: 'html',
                         html:
@@ -1233,7 +1240,15 @@
                 width: 155,
                 sortable: false,
                 filterable: false,
-                cell: (row): CellContent => ({type: 'html', html: renderTypeHtml(row.fields.type)}),
+                cell: (row): CellContent => {
+                    // B5: show type transition preview for split-queued rows
+                    if (row.op === 'edit' && splitTxIdsSet.has((row as any).txId)) {
+                        const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
+                        const targetType = splitTypes ? splitTypes[0] : 'ADJUSTMENT';
+                        return {type: 'html', html: `<span class="text-[11px]">${renderTypeHtml(row.fields.type)} → <span class="text-purple-600 dark:text-purple-400">✂️ ${targetType}</span></span>`};
+                    }
+                    return {type: 'html', html: renderTypeHtml(row.fields.type)};
+                },
             },
             {
                 id: 'asset',
@@ -1432,6 +1447,8 @@
             label: () => $t('transactions.actions.split') || 'Split pair',
             onClick: (row: PendingOp) => handleSplitRow(row),
             visible: (row: PendingOp) => {
+                // Hide if already split-queued
+                if (row.op === 'edit' && splitTxIdsSet.has((row as any).txId)) return false;
                 // Saved paired → backend split
                 if (row.op === 'edit' && row.partnerId != null) return true;
                 // New paired (any kind: link_uuid shared or dual-form partnerPayload)
@@ -1443,6 +1460,32 @@
                 }
                 return false;
             },
+        },
+        {
+            id: 'undo-split',
+            icon: Undo2,
+            label: () => $t('transactions.bulk.undoSplit') || 'Undo split',
+            onClick: (row: PendingOp) => {
+                const txId = (row as any).txId as number;
+                const splitEntry = pendingSplits.find(s => s.id_a === txId || s.id_b === txId);
+                if (!splitEntry) return;
+                const partnerId = splitEntry.id_a === txId ? splitEntry.id_b : splitEntry.id_a;
+                // Remove from pendingSplits
+                pendingSplits = pendingSplits.filter(s => s !== splitEntry);
+                // Remove partner row from ops (added during split — no addedViaPicker flag)
+                ops = ops.filter(o => !((o as any).txId === partnerId && !(o as any).addedViaPicker));
+                // Restore paired display on the main row
+                const partnerTx = txStoreGet(partnerId);
+                if (partnerTx) {
+                    row.partnerId = partnerId;
+                    row.partnerBrokerId = (partnerTx as any).broker_id;
+                    row.partnerCash = (partnerTx as any).cash ?? null;
+                    row.partnerDate = (partnerTx as any).date;
+                }
+                ops = [...ops]; // reactivity
+                lastSuggestKey = '';  // B9: invalidate suggest
+            },
+            visible: (row: PendingOp) => row.op === 'edit' && splitTxIdsSet.has((row as any).txId),
         },
         {
             id: 'mark-delete',
@@ -1622,6 +1665,7 @@
         formEditingTempId = null;
         // R3-B2: trigger validation after FormModal pushes a draft
         scheduler.trigger('change');
+        lastSuggestKey = '';  // B9: invalidate suggest after form push
     }
 
     /** Add a paired draft row: single visible draft with partner payload stored. */
@@ -1660,6 +1704,12 @@
             merged.partnerCash = (items[1].cash as DraftFields['cash']) ?? null;
             merged.partnerDate = (items[1].date as string) ?? merged.fields.date;
             merged.partnerPayload = items[1] as unknown as TxFields;
+            // B6: sync link_uuid across both sides
+            const sharedUuid = (items[0].link_uuid as string) ?? (items[1].link_uuid as string) ?? (d as any).link_uuid;
+            if (sharedUuid) {
+                if (d.op === 'create') (merged as any).link_uuid = sharedUuid;
+                if (merged.partnerPayload) (merged.partnerPayload as any).link_uuid = sharedUuid;
+            }
             return merged;
         });
     }
@@ -1810,6 +1860,7 @@
         const {removeTempId} = collapseIntoPaired(opA, opB);
         ops = ops.filter((o) => o.tempId !== removeTempId);
         ops = [...ops]; // trigger reactivity
+        lastSuggestKey = '';  // B9: invalidate suggest after promote
     }
 
     /** Promote merge modal confirm handler. */
@@ -1842,6 +1893,8 @@
             date: o.fields.date,
             currency: o.fields.cash?.code ?? null,
             asset_id: o.fields.asset_id,
+            amount: Number(o.fields.cash?.amount ?? 0) || null,
+            quantity: Number(o.fields.quantity ?? 0) || null,
         }));
         const key = JSON.stringify(inputs);
         untrack(() => {
@@ -1849,7 +1902,7 @@
             if (suggestTimer) clearTimeout(suggestTimer);
             suggestTimer = setTimeout(async () => {
                 try {
-                    const resp = await zodiosApi.promote_suggest_api_v1_transactions_promote_suggest_post(inputs as never, {queries: {tolerance_days: 7}});
+                    const resp = await zodiosApi.promote_suggest_api_v1_transactions_promote_suggest_post(inputs as never, {queries: {tolerance_days: maxDeltaDays}});
                     const raw = (resp as any).results ?? {};
                     suggestFromDB = new Map(Object.entries(raw).map(([k, v]) => [Number(k), v as Array<{id: number; broker_id: number; date: string; type: string}>]));
                     lastSuggestKey = key;
@@ -2139,39 +2192,36 @@
                 </InfoBanner>
             {/if}
             {#if allSuggestions.length > 0}
-                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-xs space-y-1.5" data-testid="promote-suggest-banner">
-                    <div class="font-medium text-green-800 dark:text-green-200 mb-1">{$t('transactions.promoteSuggest.detected')}</div>
-                    {#each allSuggestions.slice(0, 5) as sug, idx}
-                        <div class="flex items-center gap-1.5 flex-wrap" data-testid="promote-suggest-item-{idx}">
-                            <button
-                                type="button"
-                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-800/30 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-700/40 font-medium"
-                                onclick={() => triggerPromoteFromSuggestion(sug)}
-                                data-testid="promote-suggest-link-{idx}"
-                            >
-                                <Link2 size={12} />
-                                {$t('transactions.promoteSuggest.merge')}
-                            </button>
-                            <button type="button" class="underline text-gray-700 dark:text-gray-300" onclick={() => scrollToSuggestRow(sug.tempIdA)}>{sug.labelA}</button>
-                            <Tooltip text={$t(`transactions.types.${sug.typeA}`)}>
+                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-xs" data-testid="promote-suggest-banner">
+                    <div class="font-medium text-green-800 dark:text-green-200 mb-1.5">{$t('transactions.promoteSuggest.detected')}</div>
+                    <ul class="list-disc list-inside space-y-1.5">
+                        {#each allSuggestions.slice(0, 5) as sug, idx}
+                            <li class="flex items-center gap-1.5 flex-wrap" data-testid="promote-suggest-item-{idx}">
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-800/30 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-700/40 font-medium"
+                                    onclick={() => triggerPromoteFromSuggestion(sug)}
+                                    data-testid="promote-suggest-link-{idx}"
+                                >
+                                    <Link2 size={12} />
+                                    {$t('transactions.promoteSuggest.merge')}
+                                </button>
+                                <span class="text-gray-700 dark:text-gray-300">{$t(`transactions.types.${sug.typeA}`)}</span>
                                 <img src={getTransactionTypeIconUrl(sug.typeA)} alt="" class="w-4 h-4 inline object-contain" />
-                            </Tooltip>
-                            <span class="text-gray-500">{$t('common.and')}</span>
-                            <button type="button" class="underline text-gray-700 dark:text-gray-300" onclick={() => scrollToSuggestRow(sug.tempIdB)}>{sug.labelB}</button>
-                            <Tooltip text={$t(`transactions.types.${sug.typeB}`)}>
+                                <span class="text-gray-500">{$t('common.and')}</span>
+                                <span class="text-gray-700 dark:text-gray-300">{$t(`transactions.types.${sug.typeB}`)}</span>
                                 <img src={getTransactionTypeIconUrl(sug.typeB)} alt="" class="w-4 h-4 inline object-contain" />
-                            </Tooltip>
-                            <span class="text-gray-500">→</span>
-                            <Tooltip text={sug.targetLabel}>
+                                <span class="text-gray-500">→</span>
+                                <span class="font-medium text-green-700 dark:text-green-300">{sug.targetLabel}</span>
                                 <img src={getTransactionTypeIconUrl(sug.targetType)} alt="" class="w-4 h-4 inline object-contain" />
-                            </Tooltip>
-                            {#if sug.deltaDays > 0}
-                                <span class="text-gray-400">(Δ {sug.deltaDays}{$t('transactions.promoteSuggest.deltaGG', {values: {n: sug.deltaDays}}) || `${sug.deltaDays}d`})</span>
-                            {/if}
-                        </div>
-                    {/each}
+                                {#if sug.deltaDays > 0}
+                                    <span class="text-gray-400">(Δ{sug.deltaDays}d)</span>
+                                {/if}
+                            </li>
+                        {/each}
+                    </ul>
                     {#if allSuggestions.length > 5}
-                        <span class="text-gray-500 text-[11px]">{$t('transactions.promoteSuggest.bannerMore', {values: {n: allSuggestions.length - 5}})}</span>
+                        <span class="text-gray-500 text-[11px] mt-1">{$t('transactions.promoteSuggest.bannerMore', {values: {n: allSuggestions.length - 5}})}</span>
                     {/if}
                 </div>
             {/if}
@@ -2198,12 +2248,14 @@
             {/if}
 
             <!-- R3-B5: Delta-days filter for promote suggestions -->
-            <div class="inline-flex items-center gap-1 text-[11px] text-gray-500 dark:text-gray-400">
+            <div class="inline-flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
                 <span class="hidden sm:inline">{$t('transactions.promoteSuggest.deltaLabel') || 'Max Δ days'}</span>
-                <input type="number" min="0" max="30" step="1"
-                    class="w-12 px-1 py-0.5 text-[11px] rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-center"
+                <span class="sm:hidden" title="Max delta days">Δ</span>
+                <input type="range" min="0" max="14" step="1"
+                    class="w-20 accent-libre-green"
                     bind:value={maxDeltaDays}
                     data-testid="promote-suggest-delta-input" />
+                <span class="text-[11px] font-mono w-5 text-center">{maxDeltaDays}</span>
             </div>
 
             <!-- Inline selection toolbar (when rows selected in DataTable) -->

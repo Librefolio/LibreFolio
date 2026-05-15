@@ -5,6 +5,15 @@ I TODO completati sono in `TODO_Completati.md`.
 
 ---
 
+## 🔗 Multi-Merge Promote Suggest
+
+**Data aggiunta**: 14 Maggio 2026
+**Priority**: P3
+
+Currently, promote-suggest shows at most one candidate per standalone TX. A future improvement would be to handle N-way merge suggestions (e.g. 3+ standalone rows that can be grouped into multiple pairs) and present a UI for the user to pick which pair to merge first before proceeding with the next.
+
+---
+
 ## 📦 TanStack Table v9 Migration
 
 **Data aggiunta**: 22 Gennaio 2026  

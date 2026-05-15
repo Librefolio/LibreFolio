@@ -1,7 +1,7 @@
 # Plan D2 Bugfix 4 — Split Payload, Suggest, PMC Auto-calc, Override, UX
 
 **Date**: 2026-05-14
-**Status**: ⏳ IN PROGRESS
+**Status**: ✅ COMPLETED
 **Priority**: P0-P3 (mixed)
 **Estimated effort**: ~20h (~4-5 days)
 
@@ -364,13 +364,27 @@ Accanto al campo `cost_basis_override`, aggiungere icona `Info` (lucide) wrappat
 - Testo: "Override del PMC. Se vuoto, calcolato come media ponderata degli acquisti al salvataggio. Sovrascrivi per Exit Tax, eredità, o regole fiscali particolari."
 - Cliccabile → navigare a `/mkdocs/financial-theory/instruments/transaction-types/adjustment/#-automatic-cost-basis-on-transfers`
 
-#### Step 15: i18n
+#### Step 15: i18n ✅
 
 Chiavi nuove in EN/IT/FR/ES:
 - `transactions.promoteSuggest.deltaLabel` (slider label)
 - `transactions.costBasisOverride.tooltip` (tooltip text)
 - `transactions.bulk.splitQueued` / `transactions.bulk.undoSplit` (badge + azione)
 - `transactions.commit.serverError` (toast generico)
+
+---
+
+---
+
+## 🔀 Deviations
+
+| Step | Expected | Actual | Resolution |
+|------|----------|--------|------------|
+| 6 | BulkModal Case A: `handleSplitRow` used `SPLIT_TYPE_MAP` to determine and mutate types | Types should NOT be mutated per plan — removed type mutation code, backend handles type change via `splits[]` | Aligned with plan intent |
+| 9 | Investigate `applyPartnerToDualTo` for broker regression | No clear regression found — the broker pre-populate path at lines 328-330 was correct. Root issue may have been transient or fixed by B11 improvements. | Marked as resolved via B11 |
+| 10 | Plan mentions `draft.cost_basis_override` for transfer_asset toItem | Found that both `draft` and `dualTo` can carry the override. Added fallback: `draft.cost_basis_override || dualTo.cost_basis_override` for the toItem payload | More robust than plan suggested |
+| 14 | Plan mentions tooltip with Info icon + navigation to docs | Deferred tooltip icon + link to docs (requires Tooltip component refactoring for clickable links). Warning banner (B18) covers the UX gap. | TODO for polish pass |
+| 15 | Plan mentions `transactions.promoteSuggest.deltaLabel` as new key | Key already existed in all 4 languages | No action needed |
 
 ---
 

@@ -474,6 +474,7 @@
       "confirmTitle": "¿Desvincular este par?",
       "confirmMessage": "Las 2 transacciones se convertirán en filas independientes.",
       "success": "Par desvinculado",
+      "noPartner": "No se puede separar: socio no encontrado",
       "fromType": "Se convertirá en: {type}",
       "paired": "Emparejada",
       "standalone": "Independiente"
@@ -612,9 +613,17 @@
       "allViewerOnly": "No hay transacciones editables en la selección",
       "resetSelected": "Restablecer seleccionados",
       "splitQueued": "{n} separaciones en cola",
+      "undoSplit": "Deshacer separación",
       "stateNew": "nueva",
       "stateEdit": "editar",
       "stateDel": "eliminar"
+    },
+    "commit": {
+      "serverError": "Guardado imposible — error del servidor"
+    },
+    "costBasisOverride": {
+      "tooltip": "Override del coste medio ponderado. Si está vacío, se calcula automáticamente de las compras al guardar. Sustituir por Exit Tax, herencia o reglas fiscales especiales.",
+      "warningAdjustment": "No se ha definido coste base — el lote se creará con coste cero. Establezca un valor si no se trata de un split o regalo."
     },
     "promote": {
       "title": "Promocionar par",

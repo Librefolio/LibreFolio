@@ -474,6 +474,7 @@
       "confirmTitle": "Dissocier cette paire ?",
       "confirmMessage": "Les 2 transactions deviendront des lignes indépendantes.",
       "success": "Paire dissociée",
+      "noPartner": "Impossible de dissocier : partenaire introuvable",
       "fromType": "Deviendra : {type}",
       "paired": "Appariée",
       "standalone": "Indépendante"
@@ -612,9 +613,17 @@
       "allViewerOnly": "Aucune transaction modifiable dans la sélection",
       "resetSelected": "Réinitialiser la sélection",
       "splitQueued": "{n} dissociations en file",
+      "undoSplit": "Annuler la dissociation",
       "stateNew": "nouveau",
       "stateEdit": "modif.",
       "stateDel": "suppr."
+    },
+    "commit": {
+      "serverError": "Sauvegarde impossible — erreur serveur"
+    },
+    "costBasisOverride": {
+      "tooltip": "Override du coût moyen pondéré. Si vide, calculé automatiquement à partir des achats lors de la sauvegarde. Remplacer pour Exit Tax, héritage ou règles fiscales particulières.",
+      "warningAdjustment": "Aucun coût de base défini — le lot sera créé avec un coût nul. Définissez une valeur s'il ne s'agit pas d'un fractionnement ou d'un don."
     },
     "promote": {
       "title": "Promouvoir la paire",

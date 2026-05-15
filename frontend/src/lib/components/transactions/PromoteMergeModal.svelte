@@ -132,21 +132,21 @@
                 {$t('transactions.promote.mergeSubtitle')}
             </p>
 
-            <!-- Global actions — TOP, colored buttons -->
+            <!-- Global actions — colored buttons -->
             <div class="flex justify-center gap-2">
                 <Tooltip text={$t('transactions.promote.allLeft')}>
                     <button type="button" class="px-3 py-1.5 text-xs rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/40" onclick={allLeft} data-testid="promote-merge-all-left">
-                        ◀ {$t('transactions.promote.allLeft')}
+                        {$t('transactions.promote.allLeft')} ▶
                     </button>
                 </Tooltip>
                 <Tooltip text={$t('transactions.promote.allMerge')}>
                     <button type="button" class="px-3 py-1.5 text-xs rounded-lg bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800/40" onclick={allMerge} data-testid="promote-merge-all-merge">
-                        ⟷ {$t('transactions.promote.allMerge')}
+                        ⟷
                     </button>
                 </Tooltip>
                 <Tooltip text={$t('transactions.promote.allRight')}>
                     <button type="button" class="px-3 py-1.5 text-xs rounded-lg bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300 hover:bg-pink-200 dark:hover:bg-pink-800/40" onclick={allRight} data-testid="promote-merge-all-right">
-                        {$t('transactions.promote.allRight')} ▶
+                        ◀ {$t('transactions.promote.allRight')}
                     </button>
                 </Tooltip>
             </div>
@@ -172,7 +172,7 @@
                                 {txB.description || '—'}
                             </button>
                         </div>
-                        <textarea rows={3} class="w-full text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 resize-none max-h-32 overflow-y-auto" style="white-space: pre-wrap" bind:value={resDescription} data-testid="promote-merge-desc-input"></textarea>
+                        <textarea rows={2} class="w-full text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 resize-none overflow-y-auto" style="field-sizing: content; max-height: 8rem; white-space: pre-wrap" bind:value={resDescription} data-testid="promote-merge-desc-input"></textarea>
                     </div>
                 {/if}
 
