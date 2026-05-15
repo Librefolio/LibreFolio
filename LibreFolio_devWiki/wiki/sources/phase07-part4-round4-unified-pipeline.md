@@ -3,7 +3,7 @@ title: "Phase 7 Part 4 Round 4 — Unified Batch Pipeline"
 category: source
 source_type: plan
 date_ingested: 2026-05-25
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round4_UnifiedBatchPipeline.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round4_UnifiedBatchPipeline.prompt.md
 tags: [phase07, transactions, backend, frontend, architecture, pipeline, api, breaking-change, lenient-parse]
 related: [sources/phase07-part4-round3-bugfix2, features/F-046, features/F-048, decisions/unified-batch-pipeline]
 ---

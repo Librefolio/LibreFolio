@@ -1,9 +1,10 @@
 # Transaction Feature Connections
 
-> Status: Phase 7 — **Parts 1✅, 2✅, 3✅ DONE (2026-04-25), Part 4✅ DONE (Rounds 1–6 complete, 2026-05-07)**.
-> Frontend `/transactions` page fully implemented. F-047 implemented. F-048 modals rewritten (FormModal + BulkModal + PromoteWizard + DeleteModal) with unified batch pipeline, server-driven type rules, dual-transaction form, i18n validation errors.
-> Round 5 Bugfix 1-3: CASH_TRANSFER first-class type ([[decisions/cash-transfer-split-promote]]), split/promote architecture (endpoints planned, not yet built), PATCHABLE_FIELDS allowlist, backend type swap, TagInput.svelte, txPayloadHelpers.ts shared utility.
-> Round 6: ContextMenu default-on ([[decisions/context-menu-all-tables]]), broker access min(role_A, role_B) ([[decisions/broker-access-min-paired]]), TransactionDeleteModal 3 layouts (A/B/C), TransactionPickerModal, partner_broker_id, GET /brokers LEFT JOIN, 48+ E2E tests. BulkModal now mode-less ([[decisions/bulkmodal-mode-removal]]). BRIM mode + Split/Promote full stack deferred to Part 5.
+> Status: Phase 7 — **Parts 1✅, 2✅, 3✅ DONE (2026-04-25), Part 4✅ DONE (Rounds 1–6 complete, 2026-05-14)**.
+> Frontend `/transactions` page fully implemented. F-047 implemented. F-048 modals rewritten (FormModal + BulkModal + PromoteWizard + DeleteModal + PromoteMergeModal) with unified batch pipeline, server-driven type rules, dual-transaction form, i18n validation errors.
+> Round 5 Bugfix 1-3: CASH_TRANSFER first-class type ([[decisions/cash-transfer-split-promote]]), PATCHABLE_FIELDS allowlist, backend type swap, TagInput.svelte, txPayloadHelpers.ts.
+> Round 6: ContextMenu default-on, broker access min(A,B), 3-layout DeleteModal, PickerModal, mode-less BulkModal, txStore SSoT, PendingOp tagged union.
+> Round 6 Plan D: Split/promote integrated into batch pipeline (`splits[]` + `promotes[]` in TXMixedBatch); standalone endpoints eliminated; `POST /transactions/promote-suggest` for DB candidate matching; PromoteMergeModal for divergent field resolution; PMC auto-calc on TRANSFER receiver; 18 backend + 10 E2E tests. D2-round2 ⏳.
 > See [[connections/dependency-graph]] for the full project view.
 
 ---

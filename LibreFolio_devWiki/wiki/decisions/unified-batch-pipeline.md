@@ -48,5 +48,5 @@ Internal pipeline: `_parse_lenient()` does per-row `Model.model_validate(raw)` i
 | Pipeline implementation | `backend/app/services/transaction_service.py` |
 | Endpoint definitions | `backend/app/api/v1/transactions.py` |
 | Schema definitions | `backend/app/schemas/transactions.py` |
-| Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round4_UnifiedBatchPipeline.prompt.md` |
+| Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round4_UnifiedBatchPipeline.prompt.md` |
 

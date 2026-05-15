@@ -60,7 +60,7 @@ graph TD
 Phase 7 Parts 1+2+3 closed (2026-04-25). Phase 7 Part 4 Rounds 1–6 closed (2026-05-07). Remaining items:
 
 - **F-048** BRIM mode (`create-brim`) for modals not yet built — Part 5 work.
-- **F-048** R6-B.6-7: Promote & Split within BulkModal and main table — in progress.
+- **F-048** R6 Plan D: Split/promote integrated into batch pipeline ✅ (D1 backend + D2 frontend + bugfix1-4 done); standalone `/split`+`/promote` endpoints eliminated; `POST /transactions/promote-suggest` added; PromoteMergeModal for divergent field resolution; PMC auto-calc on TRANSFER receiver. D2-round2 ⏳ planning.
 - **F-048** `BulkDeleteLinkedPairModal` eliminated in Round 6; bulk delete now via BulkModal with `initialStatus: 'delete'`
 - **F-048** BulkModal is now **mode-less**: `mode` prop removed, each row infers create/edit from `tx.id > 0` ([[decisions/bulkmodal-mode-removal]])
 - **F-050** File Preview System still planned (Part 5+).

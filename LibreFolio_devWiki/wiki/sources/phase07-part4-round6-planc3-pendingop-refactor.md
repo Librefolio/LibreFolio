@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 6 Plan C3 — PendingOp Refactor (DraftRow → Pen
 category: source
 source_type: plan
 date_ingested: 2026-05-30
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanC3_PendingOpRefactor.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC3_PendingOpRefactor.prompt.md
 tags: [phase07, transactions, bulkModal, pendingOp, tagged-union, refactor, e2e, data-action-id]
 related:
   - sources/phase07-part4-round6-planc-txstore-refactor

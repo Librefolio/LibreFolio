@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 6 Plan C — txStore Refactor"
 category: source
 source_type: plan
 date_ingested: 2026-05-29
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md
 tags: [phase07, transactions, txStore, refactor, frontend, svelte5, single-source-of-truth]
 related:
   - sources/phase07-part4-round6-planb23-bulk-delete

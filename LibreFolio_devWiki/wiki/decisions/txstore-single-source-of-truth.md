@@ -48,5 +48,5 @@ After Round 6 Plans A/B/B1/B23, the transactions frontend had accumulated 5 cate
 
 - [[concepts/txstore-pattern]]
 - [[concepts/entity-store-pattern]]
-- Source: `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md`
+- Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md`
 

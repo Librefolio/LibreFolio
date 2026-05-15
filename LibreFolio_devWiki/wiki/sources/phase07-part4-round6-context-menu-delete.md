@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 6 — Context Menu, Delete, Polish"
 category: source
 source_type: plan
 date_ingested: 2026-05-28
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md
 tags: [phase07, transactions, context-menu, delete-modal, picker-modal, split, promote, broker-access, url-filters]
 related:
   - sources/phase07-part4-round6-plana-context-menu-bugfix

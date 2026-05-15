@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 6 Plan C2 Round 2 — Fix Regressions + MockFX + A
 category: source
 source_type: plan
 date_ingested: 2026-05-30
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanC2Round2_FixRegressionsAndMockFX.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC2Round2_FixRegressionsAndMockFX.prompt.md
 tags: [phase07, transactions, mockfx, auto-populate, fx-fallback, distribution-editor, balance-walk, contextual-validate, docker, e2e, testing]
 related:
   - sources/phase07-part4-round6-planc2-bugfix-pair-validation

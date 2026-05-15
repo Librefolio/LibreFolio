@@ -59,4 +59,4 @@ Early cells in the TransactionsTable used `title="..."` HTML attributes for tool
 ## Source
 
 R2-2 decision documented in:
-`LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md`, Round 2 Step 2.
+`LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round1-3/plan-phase07-transaction-Part4_Round2-tableRefactorBugfix.prompt.md`, Round 2 Step 2.

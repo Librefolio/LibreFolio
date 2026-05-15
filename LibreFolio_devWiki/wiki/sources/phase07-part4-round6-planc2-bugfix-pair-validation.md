@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 6 Plan C2 — Bugfix + Pair Desc/Tags Validation +
 category: source
 source_type: plan
 date_ingested: 2026-05-30
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanC2_BugfixAndPairValidation.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC2_BugfixAndPairValidation.prompt.md
 tags: [phase07, transactions, bugfix, pair-validation, clone, picker, toast, docker, fx-fallback, mock-data, e2e]
 related:
   - sources/phase07-part4-round6-planc-txstore-refactor

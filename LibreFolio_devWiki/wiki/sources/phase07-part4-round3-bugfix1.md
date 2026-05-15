@@ -3,7 +3,7 @@ title: "Phase 7 Part 4 Round 3 Bugfix 1 — Form/Bulk Modal Redesign"
 category: source
 source_type: plan
 date_ingested: 2026-05-25
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round3_Bugfix1-formModalRedesign.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round1-3/plan-phase07-transaction-Part4_Round3_Bugfix1-formModalRedesign.prompt.md
 tags: [phase07, transactions, frontend, bugfix, formModal, bulkModal, UX, autofill, unsaved-changes, tags-autocomplete, dual-form]
 related: [sources/phase07-part4-round3-staging-rewrite, features/F-048, problems/browser-autofill-numeric-fields]
 ---

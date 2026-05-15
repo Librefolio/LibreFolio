@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 5 — Server-Driven Type Rules + Dual-Transaction 
 category: source
 source_type: plan
 date_ingested: 2026-05-25
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md
 tags: [phase07, transactions, backend, frontend, type-rules, auto-sign, dual-form, transactionTypeStore, pair-form-layout, unified-bulk]
 related: [sources/phase07-part4-round4-pipeline, decisions/server-driven-type-rules, decisions/dual-transaction-form-design, features/F-046, features/F-047, features/F-048]
 ---

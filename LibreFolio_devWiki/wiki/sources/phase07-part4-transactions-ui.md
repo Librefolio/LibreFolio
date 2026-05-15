@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 — /transactions page + manual staging + promote"
 category: source
 source_type: plan
 date_ingested: 2026-04-28
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md
 tags: [phase07, transactions, frontend, datatable, staging, promote, transfer, assetStore]
 related:
   - features/F-047

@@ -44,7 +44,7 @@
 | [[features/F-039]] | RSI Signal | Signals | implemented |
 | [[features/F-042]] | FX Pair Comparison Signal | Signals | implemented |
 | [[features/F-047]] | Transaction List Page (DataTable, always-pair-adjacent, client-side filters) | Transactions | implemented |
-| [[features/F-048]] | Transaction Modals (Form / Bulk / Delete / Promote — mode-less, Round 6 done) | Transactions | in-progress |
+| [[features/F-048]] | Transaction Modals (Form / Bulk / Delete / Promote / Split — mode-less, Round 6 Plan D done) | Transactions | in-progress |
 | [[features/F-059]] | Provider Registry Pattern | Infrastructure | implemented |
 | [[features/F-060]] | Thread Isolation for Providers | Infrastructure | implemented |
 | [[features/F-061]] | 5-layer Provider Cache | Infrastructure | implemented |
@@ -94,7 +94,7 @@
 | [[decisions/txstore-single-source-of-truth]] | txStore replaces prop cascade — single Map<id,TXReadItem> eliminates 5 bug categories; -30% LOC | 2026-05-08 | frontend, transactions, stores, architecture, refactor |
 | [[decisions/pendingop-tagged-union]] | PendingOp tagged union (create\|edit) replaces DraftRow — zero-copy originals, derived status, type-safe branching | 2026-05-11 | frontend, transactions, bulkModal, architecture, type-safety |
 | [[decisions/bulkmodal-mode-removal]] | BulkModal mode-less: no mode prop, each row infers create/edit from tx.id > 0 | 2026-05-07 | frontend, transactions, bulkModal, architecture |
-| [[decisions/cash-transfer-split-promote]] | CASH_TRANSFER first-class enum + split/promote immediate endpoints | 2026-04-30 | frontend, backend, transactions, transfer, enum |
+| [[decisions/cash-transfer-split-promote]] | CASH_TRANSFER first-class enum + split/promote via batch pipeline (standalone endpoints eliminated) | 2026-04-30 | frontend, backend, transactions, transfer, enum, batch-pipeline |
 | [[decisions/context-menu-all-tables]] | ContextMenu default ON on all DataTables (right-click + mobile long-press) | 2026-05-05 | frontend, datatable, ux, context-menu |
 | [[decisions/broker-access-min-paired]] | Paired access = min(role_A, role_B) + 3-layout delete + partner_broker_id | 2026-05-05 | frontend, transactions, broker-access, paired |
 | [[decisions/pair-description-tags-validation]] | Linked transaction pairs must have identical description and tags — backend validates with pairDescriptionMismatch/pairTagsMismatch | 2026-05-10 | backend, transactions, validation, pair |

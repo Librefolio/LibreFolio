@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 6 Plan B + B1 — Delete, Picker, Broker Access"
 category: source
 source_type: plan
 date_ingested: 2026-05-28
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanB_DeletePickerAccess.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanB_DeletePickerAccess.prompt.md
 tags: [phase07, transactions, delete-modal, picker-modal, broker-access, partner-broker-id, role-icon, paired-access]
 related:
   - sources/phase07-part4-round6-context-menu-delete
