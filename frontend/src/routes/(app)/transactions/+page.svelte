@@ -632,9 +632,13 @@
 
     async function confirmSplit() {
         if (!splitConfirmTx) return;
+        if (!splitConfirmPartner) {
+            toasts.error($_('transactions.split.noPartner') || 'Cannot split: partner not found');
+            return;
+        }
         splitting = true;
         try {
-            const resp = (await zodiosApi.commit_transactions_api_v1_transactions_commit_post({splits: [{id: splitConfirmTx.id}]} as never)) as {committed?: boolean; issues?: unknown[]};
+            const resp = (await zodiosApi.commit_transactions_api_v1_transactions_commit_post({splits: [{id_a: splitConfirmTx.id, id_b: splitConfirmPartner.id}]} as never)) as {committed?: boolean; issues?: unknown[]};
             if (resp?.committed) {
                 toasts.success($_('transactions.split.success') || 'Pair unlinked successfully');
                 splitConfirmOpen = false;

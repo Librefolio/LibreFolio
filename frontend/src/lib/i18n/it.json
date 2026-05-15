@@ -474,6 +474,7 @@
       "confirmTitle": "Scollegare questa coppia?",
       "confirmMessage": "Le 2 transazioni diventeranno righe indipendenti.",
       "success": "Coppia scollegata",
+      "noPartner": "Impossibile separare: partner non trovato",
       "fromType": "Diventerà: {type}",
       "paired": "Accoppiata",
       "standalone": "Indipendente"
@@ -612,9 +613,17 @@
       "allViewerOnly": "Nessuna transazione modificabile nella selezione",
       "resetSelected": "Reimposta selezionati",
       "splitQueued": "{n} split in coda",
+      "undoSplit": "Annulla split",
       "stateNew": "nuova",
       "stateEdit": "modifica",
       "stateDel": "elimina"
+    },
+    "commit": {
+      "serverError": "Salvataggio impossibile — errore del server"
+    },
+    "costBasisOverride": {
+      "tooltip": "Override del prezzo medio di carico. Se vuoto, calcolato automaticamente dagli acquisti al salvataggio. Sovrascrivi per Exit Tax, eredità o regole fiscali particolari.",
+      "warningAdjustment": "Nessun costo base impostato — il lotto sarà creato con costo zero. Imposta un valore se non si tratta di un frazionamento o regalo."
     },
     "promote": {
       "title": "Promuovi coppia",

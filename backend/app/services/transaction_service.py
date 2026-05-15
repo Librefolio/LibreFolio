@@ -56,6 +56,55 @@ from backend.app.schemas.transactions import (
 from backend.app.utils.datetime_utils import utcnow
 
 
+async def compute_weighted_avg_cost(
+    session: AsyncSession,
+    broker_id: int,
+    asset_id: int,
+    as_of_date: date_type,
+) -> Decimal | None:
+    """Compute weighted average cost of an asset at a broker up to a given date.
+
+    Considers BUY transactions (unit_price = abs(amount)/quantity) and incoming
+    TRANSFERs with cost_basis_override set.
+    Returns None if no qualifying transactions or total quantity is zero.
+    """
+    stmt = select(Transaction).where(
+        Transaction.broker_id == broker_id,
+        Transaction.asset_id == asset_id,
+        Transaction.date <= as_of_date,
+        or_(
+            Transaction.type == TransactionType.BUY,
+            and_(
+                Transaction.type == TransactionType.TRANSFER,
+                Transaction.quantity > 0,
+                Transaction.cost_basis_override.isnot(None),
+            ),
+        ),
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+
+    total_qty = Decimal("0")
+    total_cost = Decimal("0")
+    for row in rows:
+        if row.type == TransactionType.BUY:
+            qty = abs(row.quantity) if row.quantity else Decimal("0")
+            if qty == 0:
+                continue
+            unit_price = abs(row.amount) / qty if row.amount else Decimal("0")
+        else:
+            # TRANSFER with cost_basis_override
+            qty = row.quantity if row.quantity else Decimal("0")
+            if qty == 0:
+                continue
+            unit_price = row.cost_basis_override  # type: ignore[assignment]
+        total_qty += qty
+        total_cost += qty * unit_price
+
+    if total_qty == 0:
+        return None
+    return total_cost / total_qty
+
+
 class BalanceValidationError(Exception):
     """Raised when a balance validation fails."""
 
@@ -95,8 +144,8 @@ class _PromoteCandidate:
     broker_id: int
     asset_id: Optional[int]
     currency: Optional[str]
-    amount: Decimal
-    quantity: Decimal
+    amount: Optional[Decimal]
+    quantity: Optional[Decimal]
 
 
 def _loc_to_field(loc: tuple | list) -> Optional[str]:
@@ -803,11 +852,17 @@ class TransactionService:
                 if c.relation == "different" and tx_a.currency == tx_b.currency:
                     return False
             elif c.field == "cash_amount":
-                if c.relation == "opposite" and tx_a.amount != -tx_b.amount:
-                    return False
+                if c.relation == "opposite":
+                    if tx_a.amount is None or tx_b.amount is None:
+                        continue  # Cannot verify — skip constraint
+                    if tx_a.amount != -tx_b.amount:
+                        return False
             elif c.field == "quantity":
-                if c.relation == "opposite" and tx_a.quantity != -tx_b.quantity:
-                    return False
+                if c.relation == "opposite":
+                    if tx_a.quantity is None or tx_b.quantity is None:
+                        continue  # Cannot verify — skip constraint
+                    if tx_a.quantity != -tx_b.quantity:
+                        return False
         return True
 
     async def promote_suggest_bulk(
@@ -860,8 +915,8 @@ class TransactionService:
                 broker_id=inp.broker_id,
                 asset_id=inp.asset_id,
                 currency=inp.currency,
-                amount=inp.amount or Decimal("0"),
-                quantity=inp.quantity or Decimal("0"),
+                amount=inp.amount,
+                quantity=inp.quantity,
             )
 
             candidates: list[TXPromoteSuggestCandidate] = []
@@ -1263,11 +1318,24 @@ class TransactionService:
 
             # Apply resolved_fields
             if item.resolved_fields:
-                for field_name in ("description", "cost_basis_override"):
+                for field_name in ("description",):
                     if field_name in item.resolved_fields:
                         val = item.resolved_fields[field_name]
                         setattr(tx_a, field_name, val)
                         setattr(tx_b, field_name, val)
+                if "cost_basis_override" in item.resolved_fields:
+                    cbo_val = item.resolved_fields["cost_basis_override"]
+                    # Only apply to receiver (qty > 0); force null on sender
+                    if tx_a.quantity and tx_a.quantity > 0:
+                        tx_a.cost_basis_override = cbo_val
+                        tx_b.cost_basis_override = None
+                    elif tx_b.quantity and tx_b.quantity > 0:
+                        tx_b.cost_basis_override = cbo_val
+                        tx_a.cost_basis_override = None
+                    else:
+                        # Fallback: apply to both (non-TRANSFER promote)
+                        tx_a.cost_basis_override = cbo_val
+                        tx_b.cost_basis_override = cbo_val
                 if "tags" in item.resolved_fields:
                     csv_tags = tags_to_csv(item.resolved_fields["tags"])
                     tx_a.tags = csv_tags
@@ -1281,6 +1349,20 @@ class TransactionService:
 
             tx_a.updated_at = utcnow()
             tx_b.updated_at = utcnow()
+
+            # Auto-calc cost_basis_override for TRANSFER receiver if not set
+            if target_type == TransactionType.TRANSFER:
+                receiver = tx_a if (tx_a.quantity and tx_a.quantity > 0) else tx_b if (tx_b.quantity and tx_b.quantity > 0) else None
+                sender = tx_b if receiver is tx_a else tx_a
+                if receiver and receiver.cost_basis_override is None and sender.broker_id:
+                    wac = await compute_weighted_avg_cost(
+                        self.session, sender.broker_id, receiver.asset_id, receiver.date
+                    )
+                    if wac is not None:
+                        receiver.cost_basis_override = wac
+                # Force sender override to null
+                if sender:
+                    sender.cost_basis_override = None
 
             for t in (tx_a, tx_b):
                 prev = earliest_date_by_broker.get(t.broker_id)
@@ -1323,6 +1405,23 @@ class TransactionService:
                         params={"linkUuid": link_uuid, "count": len(pairs)},
                     )
                 )
+
+        # 6b. Auto-calc cost_basis_override on TRANSFER receivers
+        for link_uuid, pairs in link_uuid_map.items():
+            if link_uuid in consumed_link_uuids:
+                continue
+            if len(pairs) != 2:
+                continue
+            for _, tx in pairs:
+                if tx.type == TransactionType.TRANSFER and tx.quantity and tx.quantity > 0 and tx.cost_basis_override is None:
+                    # Find partner (the sender) in same link_uuid pair
+                    partner = next((t for _, t in pairs if t.id != tx.id), None)
+                    if partner and partner.broker_id:
+                        wac = await compute_weighted_avg_cost(
+                            self.session, partner.broker_id, tx.asset_id, tx.date
+                        )
+                        if wac is not None:
+                            tx.cost_basis_override = wac
 
         # 7. Balance walk per affected broker
         try:

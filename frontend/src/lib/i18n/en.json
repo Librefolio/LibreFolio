@@ -492,6 +492,7 @@
       "confirmTitle": "Unlink this pair?",
       "confirmMessage": "The 2 transactions will become independent rows.",
       "success": "Pair unlinked successfully",
+      "noPartner": "Cannot split: partner not found",
       "fromType": "Will become: {type}",
       "paired": "paired",
       "standalone": "standalone"
@@ -612,9 +613,17 @@
       "allViewerOnly": "No editable transactions in selection",
       "resetSelected": "Reset selected",
       "splitQueued": "{n} split queued",
+      "undoSplit": "Undo split",
       "stateNew": "new",
       "stateEdit": "edit",
       "stateDel": "del"
+    },
+    "commit": {
+      "serverError": "Save failed — server error"
+    },
+    "costBasisOverride": {
+      "tooltip": "Override of the weighted avg cost. If empty, auto-calculated from purchases at save. Override for Exit Tax, inheritance, or special fiscal rules.",
+      "warningAdjustment": "No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift."
     },
     "promote": {
       "title": "Promote pair",

@@ -173,6 +173,8 @@
         cash: {code: string; amount: string} | null;
         /** "To" side date — may differ from "From" side (e.g. wire transfer arrival). */
         date: string;
+        /** Cost basis override for the receiver (transfer_asset only). */
+        cost_basis_override?: string;
     }
 
     function todayIso(): string {
@@ -444,11 +446,15 @@
         } else if (layout === 'transfer_asset') {
             const myQty = Number(row.quantity);
             if (myQty > 0) {
+                // row is receiver (qty>0), partner is sender (qty<0)
                 draft = fromTx(partner);
-                dualTo = {broker_id: row.broker_id, cash: null, date: row.date};
+                dualTo = {broker_id: row.broker_id, cash: null, date: row.date, cost_basis_override: row.cost_basis_override ?? ''};
             } else {
-                dualTo = {broker_id: partner.broker_id, cash: null, date: partner.date};
+                // row is sender (qty<0), partner is receiver (qty>0)
+                dualTo = {broker_id: partner.broker_id, cash: null, date: partner.date, cost_basis_override: partner.cost_basis_override ?? ''};
             }
+            // Sender draft must have empty cost_basis_override
+            draft = {...draft, cost_basis_override: ''};
             // Dual form always shows absolute qty — sign is determined by From/To sides
             if (Number(draft.quantity) < 0) {
                 draft = {...draft, quantity: String(Math.abs(Number(draft.quantity)))};
@@ -920,6 +926,7 @@
                 toItem.asset_id = draft.asset_id;
             }
             if (draft.cost_basis_override.trim()) toItem.cost_basis_override = draft.cost_basis_override.trim();
+            else if (dualTo.cost_basis_override?.trim()) toItem.cost_basis_override = dualTo.cost_basis_override.trim();
             if (sharedTags) {
                 fromItem.tags = sharedTags;
                 toItem.tags = sharedTags;
@@ -1892,6 +1899,11 @@
                                     data-testid="tx-form-cost-basis"
                                 />
                             </label>
+                            {#if draft.type === 'ADJUSTMENT' && Number(draft.quantity) > 0 && !draft.cost_basis_override.trim()}
+                                <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-[136px]" data-testid="tx-form-cost-basis-warning">
+                                    {$t('transactions.costBasisOverride.warningAdjustment') || 'No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift.'}
+                                </p>
+                            {/if}
                         {/if}
 
                         <!-- link_uuid (readonly) -->

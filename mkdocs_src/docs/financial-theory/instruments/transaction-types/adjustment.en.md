@@ -34,10 +34,47 @@ Adjustments are used when no other transaction type fits:
 
 ## 📐 Impact on Cost Basis
 
-Adjustments with positive quantity **increase** the lot count (FIFO). The cost basis for adjustment-created lots depends on whether a `cost_basis_override` is provided:
+Adjustments with positive quantity **increase** the lot count (FIFO). The cost basis
+for adjustment-created lots depends on whether a **Cost Basis Override** is provided:
 
-- **With override**: the specified amount is used as the lot cost
-- **Without override**: the lot is created with zero cost (free acquisition)
+- **With override**: the specified value is used as the **per-unit acquisition cost** (PMC — Prezzo Medio di Carico)
+- **Without override**: the lot is created with zero cost (free acquisition — e.g. gifts, airdrops)
+
+!!! info "Per-unit value"
+
+    The Cost Basis Override is the average cost **per single unit** of the asset.
+    To get the total cost of the transferred block, multiply by the quantity:
+
+    $$\text{Total cost} = \text{PMC} \times \text{quantity}$$
+
+### 🏦 Automatic Cost Basis on Transfers
+
+When transferring assets between brokers, LibreFolio **automatically computes** the
+Cost Basis Override on the receiving side. The formula is the Weighted Average Cost (WAC):
+
+$$WAC = \frac{\sum_{i} q_i \times p_i}{\sum_{i} q_i}$$
+
+where $q_i$ is the quantity and $p_i$ is the per-unit cost of each acquisition lot
+at the **source broker** (from BUY transactions and previous incoming transfers).
+
+### ✏️ When to Override Manually
+
+The automatic formula works for the standard case (same fiscal regime, no tax events
+at transfer). In the following scenarios the user must set the value manually:
+
+| Scenario | What to set |
+|----------|------------|
+| **Normal transfer** | Leave empty — auto-calculated |
+| **Exit Tax** | Market value at transfer date (jurisdiction-specific) |
+| **Inheritance** | Fair market value at date of death (or stepped-up basis) |
+| **Gift** | Donor's original cost basis (carryover basis) |
+| **Corporate action** | Adjusted basis per corporate action terms |
+
+!!! warning "User Responsibility"
+
+    When manually overriding the cost basis, the user is responsible for the
+    correctness of the value. LibreFolio does not validate override amounts
+    against tax rules — consult a tax advisor for jurisdiction-specific guidance.
 
 ---
 
