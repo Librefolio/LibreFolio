@@ -35,10 +35,11 @@
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/language';
-    import {X, ArrowRight, ArrowDown, Check, Pencil, Save} from 'lucide-svelte';
+    import {X, ArrowRight, ArrowDown, Check, Pencil, Save, Info} from 'lucide-svelte';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/brokerRoleHelpers';
 
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import BrokerSearchSelect from '$lib/components/ui/select/BrokerSearchSelect.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
@@ -63,6 +64,8 @@
     import {generateUUID} from '$lib/utils/uuid';
     import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
     import {buildCreatePayload, buildUpdateDiff, diffDualItem, type TxFields, type TxOriginal} from '$lib/utils/txPayloadHelpers';
+    import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/fxConversionHelper';
 
     // =========================================================================
     // Types (mirror schemas/transactions.py — kept local to avoid pulling Zod)
@@ -625,6 +628,36 @@
 
     // Pair partner chip (only when editing an existing linked tx — non-dual mode).
     let pairPartnerId = $derived(pairLayout ? null : (initialRow?.related_transaction_id ?? null));
+
+    // =========================================================================
+    // FX Implied Rate — market rate lookup for FX conversion form
+    // =========================================================================
+
+    let fxMarketPoint = $state<FxDataPoint | null | undefined>(undefined);
+    let fxLookupKey = $state('');
+
+    $effect(() => {
+        if (pairLayout !== 'fx') {
+            fxMarketPoint = undefined;
+            return;
+        }
+        const fromCode = draft.cash?.code;
+        const toCode = dualTo.cash?.code;
+        const fromDate = draft.date;
+        if (!fromCode || !toCode || fromCode === toCode || !fromDate) {
+            fxMarketPoint = undefined;
+            return;
+        }
+        const key = `${fromCode}-${toCode}-${fromDate}`;
+        if (key === fxLookupKey) return;
+        fxLookupKey = key;
+        fxMarketPoint = undefined;
+        lookupFxRate(fromCode, toCode, fromDate).then((result) => {
+            if (`${fromCode}-${toCode}-${fromDate}` === fxLookupKey) {
+                fxMarketPoint = result;
+            }
+        });
+    });
 
     // =========================================================================
     // Dual-form title
@@ -1628,6 +1661,25 @@
                             {/if}
                         </div>
                     </div>
+
+                    <!-- FX Implied Rate info marker -->
+                    {#if pairLayout === 'fx' && draft.cash?.amount && dualTo.cash?.amount && draft.cash.code !== dualTo.cash?.code}
+                        {@const fxInfo = computeFxConversionInfo(Number(draft.cash.amount), draft.cash.code, Number(dualTo.cash.amount), dualTo.cash.code)}
+                        {#if fxInfo}
+                            {@const tooltipData = buildFxTooltipData(fxInfo, fxMarketPoint)}
+                            <div class="flex justify-center mt-2" data-testid="tx-form-fx-info">
+                                <Tooltip html={buildFxTooltipHtml(tooltipData, $t)} position="bottom">
+                                    <span class="inline-flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 cursor-help px-2 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20">
+                                        <Info size={12} />
+                                        <span class="font-mono">{fxInfo.impliedRate.toFixed(4)}</span>
+                                        {#if tooltipData.staleDays != null && tooltipData.staleDays > 0}
+                                            <span class="text-amber-500">⚠️</span>
+                                        {/if}
+                                    </span>
+                                </Tooltip>
+                            </div>
+                        {/if}
+                    {/if}
 
                     <!-- Cost basis override for transfer_asset -->
                     {#if pairLayout === 'transfer_asset'}

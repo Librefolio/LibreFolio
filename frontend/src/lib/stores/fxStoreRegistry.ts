@@ -14,6 +14,7 @@
 import type {TimeSeriesPoint} from './TimeSeriesStore';
 import {TimeSeriesStore} from './TimeSeriesStore';
 import type {ChainStep} from '$lib/utils/currencyGraph';
+import {zodiosApi} from '$lib/api';
 
 // Re-export ChainStep for consumers that import from fxStoreRegistry
 export type {ChainStep};
@@ -170,4 +171,58 @@ export function apiResultToFxDataPoint(result: {
               }
             : null,
     };
+}
+
+// ============================================================================
+// SPOT LOOKUPS
+// ============================================================================
+
+/**
+ * Synchronous cache-only lookup. Returns the FxDataPoint if already cached,
+ * undefined otherwise. Use for instant reads without triggering fetches.
+ */
+export function lookupFxRateSync(base: string, quote: string, date: string): FxDataPoint | undefined {
+    const slug = createPairSlug(base, quote);
+    const store = fxStores.get(slug);
+    if (!store) return undefined;
+    const point = store.get(date);
+    if (!point) return undefined;
+    const {base: canonBase} = parsePairSlug(slug);
+    if (canonBase === base.toUpperCase()) return point;
+    // Invert: stored is canonBase→canonQuote, we need base→quote where base != canonBase
+    return {...point, rate: point.rate !== 0 ? 1 / point.rate : 0};
+}
+
+/**
+ * Async lookup with auto-fetch. Checks cache first, fetches from backend if miss.
+ * Result is merged into TimeSeriesStore for future cache hits.
+ * Returns null if the pair is not configured (404) or fetch fails.
+ */
+export async function lookupFxRate(base: string, quote: string, date: string): Promise<FxDataPoint | null> {
+    const cached = lookupFxRateSync(base, quote, date);
+    if (cached) return cached;
+
+    const slug = createPairSlug(base, quote);
+    const {base: canonBase, quote: canonQuote} = parsePairSlug(slug);
+    try {
+        const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([
+            {
+                from_amount: {code: canonBase, amount: '1'},
+                to: canonQuote,
+                date_range: {start: date, end: date},
+            },
+        ]);
+        const results = (response as any)?.results || [];
+        if (results.length === 0) return null;
+        const point = apiResultToFxDataPoint(results[0]);
+        if (point.rate === 0) return null;
+        // Merge into cache
+        const store = getFxStore(slug);
+        store.merge([point]);
+        // Return in requested direction
+        if (canonBase === base.toUpperCase()) return point;
+        return {...point, rate: point.rate !== 0 ? 1 / point.rate : 0};
+    } catch {
+        return null;
+    }
 }
