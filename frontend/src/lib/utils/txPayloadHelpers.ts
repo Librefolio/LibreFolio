@@ -29,7 +29,7 @@ export interface TxFields {
     cash?: CashValue | null;
     tags: string[];
     description: string;
-    cost_basis_override: string;
+    cost_basis_override: {code: string; amount: string} | null;
     asset_event_id?: number | null;
     link_uuid?: string | null;
 }
@@ -45,7 +45,7 @@ export interface TxOriginal {
     cash?: CashValue | null;
     tags?: string[] | null;
     description?: string | null;
-    cost_basis_override?: string | null;
+    cost_basis_override?: {code: string; amount: string} | null;
     asset_event_id?: number | null;
     link_uuid?: string | null;
 }
@@ -136,8 +136,7 @@ export function buildCreatePayload(fields: TxFields, rule: TypeRule): Record<str
     const desc = (fields.description ?? '').trim();
     if (desc) out.description = desc;
     if (fields.asset_event_id != null && rule.eventLinkable) out.asset_event_id = fields.asset_event_id;
-    const cbo = (fields.cost_basis_override ?? '').trim();
-    if (cbo) out.cost_basis_override = cbo;
+    if (fields.cost_basis_override) out.cost_basis_override = fields.cost_basis_override;
     if (fields.link_uuid && rule.requiresPair) out.link_uuid = fields.link_uuid;
     return out;
 }

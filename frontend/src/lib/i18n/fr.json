@@ -487,7 +487,8 @@
       "bannerDetailed": "Le {date}, la ligne #{a} et la ligne #{b} pourraient devenir {type}",
       "merge": "Fusionner",
       "deltaLabel": "Max Δ jours",
-      "deltaGG": "j"
+      "deltaGG": "j",
+      "rowRef": "Ligne #{n}"
     },
     "empty": "Aucune transaction",
     "ghost": {
@@ -613,10 +614,11 @@
       "allViewerOnly": "Aucune transaction modifiable dans la sélection",
       "resetSelected": "Réinitialiser la sélection",
       "splitQueued": "{n} dissociations en file",
-      "undoSplit": "Annuler la dissociation",
+      "undoSplit": "Annuler",
       "stateNew": "nouveau",
       "stateEdit": "modif.",
-      "stateDel": "suppr."
+      "stateDel": "suppr.",
+      "suggestLightbulb": "Afficher suggestion"
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
