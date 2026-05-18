@@ -39,7 +39,7 @@ async function selectRow(page: Page, rowId: string) {
     await page.waitForTimeout(200);
 }
 
-/** Get row IDs of first N editable (non-DEGIRO, non-viewer) rows. */
+/** Get row IDs of first N editable (non-DEGIRO, non-viewer, non-paired) rows. */
 async function getEditableRowIds(page: Page, n: number): Promise<string[]> {
     const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
     const count = await rows.count();
@@ -51,6 +51,12 @@ async function getEditableRowIds(page: Page, n: number): Promise<string[]> {
         const text = (await row.textContent()) ?? '';
         // Skip DEGIRO (viewer) rows
         if (text.includes('DEGIRO')) continue;
+        // Skip paired types — editing these triggers balance or pair validation
+        const pairedTypeImg = row.locator('img[alt="Asset Transfer"], img[alt="Currency Exchange"]');
+        if ((await pairedTypeImg.count()) > 0) continue;
+        // Skip rows without Edit button (view-only access)
+        const editBtn = row.getByRole('button', {name: 'Edit'});
+        if ((await editBtn.count()) === 0) continue;
         const rowId = await row.getAttribute('data-row-id');
         if (rowId) ids.push(rowId);
     }
@@ -313,23 +319,23 @@ test.describe('Transaction Bulk Operations', () => {
         await page.waitForTimeout(500);
 
         // Now intercept commit
-        const commitPromise = page.waitForRequest((req) => req.url().includes('/transactions/commit') && req.method() === 'POST', {timeout: 10_000});
+        const commitPromise = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 10_000});
 
         const commitBtn = page.getByTestId('tx-bulk-commit');
         await expect(commitBtn).toBeEnabled({timeout: 8_000});
         await commitBtn.click();
 
-        const req = await commitPromise;
-        const payload = req.postDataJSON();
+        const resp = await commitPromise;
+        const payload = resp.request().postDataJSON();
 
         // Payload should have updates
         expect(payload.updates?.length || 0).toBeGreaterThanOrEqual(1);
 
-        // Wait for response and toast
-        await page.waitForTimeout(2_000);
+        // Wait for toast to appear after response is processed
+        await page.waitForTimeout(1_000);
 
         // Toast should appear with success message
-        const toast = page.locator('.bg-emerald-600, [class*="bg-emerald"]').first();
+        const toast = page.locator('[data-testid="toast-success"]').first();
         await expect(toast).toBeVisible({timeout: 5_000});
     });
 

@@ -1520,6 +1520,21 @@ def populate_transactions(session: Session):
     # (via tag filtering or manual selection). The backend suggest should find the other.
     # Tagged 'suggest-discover' for easy identification.
 
+    # Balance-safe: Coinbase needs Apple shares to cover Pair B's ADJUSTMENT qty=-1.5
+    tx_disc_balance_apple_coinbase = Transaction(
+        broker_id=coinbase.id,
+        asset_id=apple.id,
+        type=TransactionType.BUY,
+        date=today - timedelta(days=15),
+        quantity=Decimal("3"),
+        amount=Decimal("-540.00"),
+        currency="USD",
+        description="[balance-safe] Apple buy on Coinbase for suggest-discover Adj",
+        tags="balance-safe,suggest-discover",
+    )
+    session.add(tx_disc_balance_apple_coinbase)
+    session.flush()
+
     # Pair A: Cash Transfer discoverable — user loads the WITHDRAWAL, backend finds DEPOSIT
     tx_disc_w = Transaction(
         broker_id=ib.id,
@@ -2523,7 +2538,9 @@ def main():
             print("\n📊 Running balance validation on all brokers...")
             violation_count = asyncio.run(validate_all_balances_async())
             if violation_count > 0:
-                print(f"  💡 Fix the {violation_count} violations above before running E2E tests")
+                print(f"\n❌ FATAL: {violation_count} balance violations found!")
+                print("   Fix populate_mock_data.py before running E2E tests.")
+                return 1
 
             print("\n" + "=" * 60)
             print("✅ Mock data population completed successfully!")

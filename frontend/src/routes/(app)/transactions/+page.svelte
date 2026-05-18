@@ -13,7 +13,7 @@
     import {ensurePluginIconsLoaded} from '$lib/utils/brokerHelpers';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
-    import {findPromoteMatch} from '$lib/stores/transactionTypeStore';
+    import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/stores/transactionTypeStore';
     import type {BrokerLike} from '$lib/utils/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
     import TransactionsTable from '$lib/components/transactions/TransactionsTable.svelte';
@@ -387,7 +387,7 @@
         // tooltip) render with the proper "$ 🇺🇸 USD" format instead of the
         // bare-code fallback. `$currencyStoreVersion` is referenced inside
         // the cell builders so they re-render once data arrives.
-        await Promise.all([ensureTxTypesLoaded(), loadBrokers(), ensureCurrenciesLoaded($currentLanguage)]);
+        await Promise.all([ensureTxTypesLoaded(), ensureTypesLoaded(), loadBrokers(), ensureCurrenciesLoaded($currentLanguage)]);
         await reload();
         urlInitialized = true;
     });
@@ -543,6 +543,7 @@
      */
     // B1-17: Selection-based promote — uses server-driven promote_from metadata.
     let promoteMatch = $derived.by(() => {
+        void $typesVersion; // re-evaluate when type cache is populated
         if (selectedRows.length !== 2) return null;
         const [a, b] = selectedRows;
         // Both must be unpaired DB rows

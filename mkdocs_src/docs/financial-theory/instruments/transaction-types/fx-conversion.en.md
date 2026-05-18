@@ -41,6 +41,37 @@ FX conversions may be:
 
 ---
 
+## 📈 Implied Rate & Broker Spread
+
+LibreFolio automatically computes the **implied exchange rate** from the two linked amounts:
+
+$$
+\text{Implied Rate} = \frac{\lvert\text{Amount}_{target}\rvert}{\lvert\text{Amount}_{source}\rvert}
+$$
+
+This is compared with the **market rate** from the FX subsystem at the transaction date. The difference is the **broker spread** — the markup applied by the broker for the conversion:
+
+$$
+\text{Spread} = \text{Implied Rate} - \text{Market Rate}
+$$
+
+$$
+\text{Spread \%} = \frac{\text{Spread}}{\text{Market Rate}} \times 100
+$$
+
+!!! info "Where you'll see this"
+
+    - **Bulk Edit banner**: when two standalone transactions are detected as a potential FX conversion, the implied rate and spread are shown inline with a tooltip for details.
+    - **Transaction Form**: when creating or editing an FX conversion, an info marker between the two sides shows the implied rate vs. market rate.
+
+!!! warning "Market Rate Availability"
+
+    The market rate comparison requires the relevant FX pair to be configured in LibreFolio's FX system. If the pair is not configured or no rate exists for the transaction date, only the implied rate is shown (the spread cannot be computed).
+
+    When a rate from a different date is used (backward-fill), a ⚠️ stale indicator shows how many days old the rate is.
+
+---
+
 ## 🔀 Split & Promote
 
 | Operation | Result |

@@ -50,8 +50,10 @@
     import {buildCreatePayload, buildUpdateDiff, diffDualItem, applySignRules, type TxFields, type TxOriginal} from '$lib/utils/txPayloadHelpers';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/uuid';
-    import {formatCurrencyAmountHtml} from '$lib/utils/currencyFormat';
+    import {formatCurrencyAmountHtml, formatCurrencyCodeHtml} from '$lib/utils/currencyFormat';
     import {getStringColor} from '$lib/utils/colors';
+    import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/fxConversionHelper';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import TransactionFormModal from './TransactionFormModal.svelte';
     import TransactionPickerModal from './TransactionPickerModal.svelte';
@@ -470,7 +472,7 @@
             related_transaction_id: d.partnerId ?? (d.partnerBrokerId != null ? -1 : null),
             tags: d.fields.tags,
             description: d.fields.description,
-            cost_basis_override: d.fields.cost_basis_override || null,
+            cost_basis_override: (d.fields.cost_basis_override || null) as any,
             asset_event_id: d.fields.asset_event_id,
             created_at: orig?.created_at,
             updated_at: orig?.updated_at,
@@ -842,6 +844,10 @@
         // For existing rows: check whether fields differ from txStore original
         if (d.op !== 'edit') return 'original';
         const diff = collectUpdate(d);
+        // For split-queued rows, type change is handled by split — ignore it in diff
+        if (diff && pendingSplits.some(s => s.id_a === (d as any).txId || s.id_b === (d as any).txId)) {
+            delete diff.type;
+        }
         if (diff && Object.keys(diff).length > 1) return 'edited';
         // Also check partner changes
         if (d.partnerPayload && d.partnerId != null) {
@@ -886,6 +892,8 @@
                     }
                 } else if (st === 'edited') {
                     const upd = collectUpdate(d);
+                    // For split-queued rows, strip type (split handles type change)
+                    if (upd && valSplitTxIds.has((d as any).txId)) delete upd.type;
                     if (upd && Object.keys(upd).length > 1) updates.push(upd);
                     // Partner update from dual-form edits
                     if (d.partnerPayload && d.partnerId != null) {
@@ -904,6 +912,7 @@
             if (creates.length > 0) payload.creates = creates;
             if (updates.length > 0) payload.updates = updates;
             if (deletes.length > 0) payload.deletes = deletes;
+            if (pendingSplits.length > 0) payload.splits = pendingSplits.map(s => ({id_a: s.id_a, id_b: s.id_b}));
             // Snapshot the key at the moment we *send* the payload — so when
             // the response comes back we know whether the drafts have drifted.
             const sentKey = lastDraftKey;
@@ -1049,6 +1058,8 @@
                     }
                 } else if (st === 'edited') {
                     const upd = collectUpdate(d);
+                    // For split-queued rows, strip type (split handles type change)
+                    if (upd && splitTxIds.has((d as any).txId)) delete upd.type;
                     if (upd && Object.keys(upd).length > 1) updates.push(upd);
                     // Partner update from dual-form edits
                     if (d.partnerPayload && d.partnerId != null) {
@@ -1311,7 +1322,9 @@
                         const toQty = `+${absVal} 📈`;
                         return {type: 'html', html: renderDualHtml(fromQty, toQty)};
                     }
-                    return {type: 'html', html: `<span class="font-mono text-sm">${qty}</span>`};
+                    // Format with trailing zeros removal
+                    const fmtQty = (() => { const n = parseFloat(qty); return isNaN(n) ? qty : n.toString(); })();
+                    return {type: 'html', html: `<span class="font-mono text-sm">${fmtQty}</span>`};
                 },
             },
             {
@@ -1632,9 +1645,6 @@
 
     // BUG-C7: Suggest picker — opens PickerModal filtered to importable candidates
     let suggestPickerOpen = $state(false);
-    let suggestPickerIncludeIds = $derived(
-        new Set(importableSuggestions.flatMap(s => s.candidates.map(c => c.id)))
-    );
     function openSuggestPicker() { suggestPickerOpen = true; }
 
     function openPicker() {
@@ -1898,7 +1908,7 @@
         if (resolved.description != null) opA.fields.description = resolved.description as string;
         if (resolved.tags != null) opA.fields.tags = resolved.tags as string[];
         if (resolved.date != null) opA.fields.date = resolved.date as string;
-        if (resolved.cost_basis_override != null) opA.fields.cost_basis_override = resolved.cost_basis_override as string;
+        if (resolved.cost_basis_override != null) opA.fields.cost_basis_override = resolved.cost_basis_override as any;
 
         if (opA.op === 'edit' && opB.op === 'edit') {
             // 2 saved → batch promotes
@@ -2003,7 +2013,7 @@
     /** Local promote suggestions: match new standalone ops against each other. */
     let localSuggestions = $derived.by(() => {
         const newStandalone = ops.filter((o) => o.op === 'create' && !(o as any).link_uuid && !o.partnerId && !o.partnerPayload);
-        const results: Array<{tempIdA: string; tempIdB: string; labelA: string; labelB: string; targetLabel: string; typeA: string; typeB: string; targetType: string; dateA: string; dateB: string; deltaDays: number}> = [];
+        const results: SuggestEntry[] = [];
         for (let i = 0; i < newStandalone.length; i++) {
             for (let j = i + 1; j < newStandalone.length; j++) {
                 const dA = newStandalone[i].fields.date;
@@ -2015,15 +2025,7 @@
                     results.push({
                         tempIdA: newStandalone[i].tempId,
                         tempIdB: newStandalone[j].tempId,
-                        labelA: `${newStandalone[i].fields.type}`,
-                        labelB: `${newStandalone[j].fields.type}`,
-                        targetLabel: match.targetLabel,
-                        typeA: newStandalone[i].fields.type,
-                        typeB: newStandalone[j].fields.type,
                         targetType: match.targetType,
-                        dateA: dA,
-                        dateB: dB,
-                        deltaDays: delta,
                     });
                 }
             }
@@ -2031,8 +2033,9 @@
         return results;
     });
 
-    /** type alias for suggest entries */
-    type SuggestEntry = {tempIdA: string; tempIdB: string; labelA: string; labelB: string; targetLabel: string; typeA: string; typeB: string; targetType: string; dateA: string; dateB: string; deltaDays: number; isDB?: boolean; dbCandidateId?: number};
+    /** Minimal suggest entry — all display data is read live from ops[].
+     *  This is future-proof: if fields change in ops, suggestions auto-update. */
+    type SuggestEntry = {tempIdA: string; tempIdB: string; targetType: string; isDB?: boolean; dbCandidateId?: number};
 
     /** Banner suggestions: only pairs where BOTH TX are already in ops[] (local↔local or local↔imported-DB) */
     let bannerSuggestions = $derived.by(() => {
@@ -2057,15 +2060,7 @@
                 combined.push({
                     tempIdA: a.tempId,
                     tempIdB: b.tempId,
-                    labelA: `#${(a as any).txId} ${a.fields.type}`,
-                    labelB: `#${(b as any).txId} ${b.fields.type}`,
-                    targetLabel: match.targetLabel,
-                    typeA: a.fields.type,
-                    typeB: b.fields.type,
                     targetType: match.targetType,
-                    dateA: dA,
-                    dateB: dB,
-                    deltaDays: delta,
                     isDB: true,
                     dbCandidateId: (b as any).txId,
                 });
@@ -2088,6 +2083,47 @@
             }
         }
         return result;
+    });
+
+    let suggestPickerIncludeIds = $derived(
+        new Set(importableSuggestions.flatMap(s => s.candidates.map(c => c.id)))
+    );
+
+    // =========================================================================
+    // FX Implied Rate — reactive market cache for FX_CONVERSION suggestions
+    // =========================================================================
+
+    /** Reactive bridge for async FX market rates. Key: "BASE-QUOTE-DATE" */
+    let fxMarketCache = $state<Map<string, FxDataPoint | null>>(new Map());
+    let fxFetchGeneration = 0;
+
+    $effect(() => {
+        const currentGen = ++fxFetchGeneration;
+        const fxEntries = bannerSuggestions.filter((s) => s.targetType === 'FX_CONVERSION');
+
+        for (const entry of fxEntries) {
+            const opA = ops.find((o) => o.tempId === entry.tempIdA);
+            const opB = ops.find((o) => o.tempId === entry.tempIdB);
+            if (!opA?.fields.cash || !opB?.fields.cash) continue;
+
+            const aAmt = Number(opA.fields.cash.amount);
+            const [fromOp, toOp] = aAmt < 0 ? [opA, opB] : [opB, opA];
+            if (!fromOp.fields.cash || !toOp.fields.cash) continue;
+            const base = fromOp.fields.cash.code;
+            const quote = toOp.fields.cash.code;
+            const date = fromOp.fields.date;
+            if (!base || !quote || base === quote || !date) continue;
+            const cacheKey = `${base}-${quote}-${date}`;
+
+            if (untrack(() => fxMarketCache.has(cacheKey))) continue;
+            fxMarketCache.set(cacheKey, null); // mark pending
+
+            lookupFxRate(base, quote, date).then((result) => {
+                if (currentGen !== fxFetchGeneration) return;
+                if (!bannerSuggestions.some((s) => s.tempIdA === entry.tempIdA && s.tempIdB === entry.tempIdB)) return;
+                fxMarketCache = new Map(fxMarketCache).set(cacheKey, result);
+            });
+        }
     });
 
     /** Combined for backward compat with triggerPromoteFromSuggestion */
@@ -2116,9 +2152,11 @@
                 tagsB = opB.fields.tags;
             const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB);
             if (diverges) {
+                const labelA = opA.fields.type;
+                const labelB = opB.fields.type;
                 promoteMergeData = {
-                    txA: {label: sug.labelA, description: descA, tags: tagsA, date: opA.fields.date, cost_basis_override: opA.fields.cost_basis_override},
-                    txB: {label: sug.labelB, description: descB, tags: tagsB, date: opB.fields.date, cost_basis_override: opB.fields.cost_basis_override},
+                    txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date, cost_basis_override: opA.fields.cost_basis_override},
+                    txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date, cost_basis_override: opB.fields.cost_basis_override},
                     targetTypeLabel: match.targetLabel,
                     opA,
                     opB,
@@ -2148,9 +2186,11 @@
                 tagsB = opB.fields.tags;
             const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB);
             if (diverges) {
+                const labelA = `#${(opA as any).txId ?? ''} ${opA.fields.type}`;
+                const labelB = `#${(opB as any).txId ?? ''} ${opB.fields.type}`;
                 promoteMergeData = {
-                    txA: {label: sug.labelA, description: descA, tags: tagsA, date: opA.fields.date, cost_basis_override: opA.fields.cost_basis_override},
-                    txB: {label: sug.labelB, description: descB, tags: tagsB, date: opB.fields.date, cost_basis_override: opB.fields.cost_basis_override},
+                    txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date, cost_basis_override: opA.fields.cost_basis_override},
+                    txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date, cost_basis_override: opB.fields.cost_basis_override},
                     targetTypeLabel: match.targetLabel,
                     opA,
                     opB,
@@ -2298,11 +2338,22 @@
             {#if bannerSuggestions.length > 0}
                 <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-xs" data-testid="promote-suggest-banner">
                     <div class="font-medium text-green-800 dark:text-green-200 mb-1.5">{$t('transactions.promoteSuggest.detected')}</div>
-                    <ul class="list-disc list-inside space-y-1.5">
+                    <ul class="space-y-1.5">
                         {#each bannerSuggestions.slice(0, 5) as sug, idx}
-                            {@const rowIdxA = ops.findIndex(o => o.tempId === sug.tempIdA)}
-                            {@const rowIdxB = sug.isDB ? ops.findIndex(o => o.op === 'edit' && (o as any).txId === sug.dbCandidateId) : ops.findIndex(o => o.tempId === sug.tempIdB)}
-                            <li class="flex items-center gap-1.5 flex-wrap" data-testid="promote-suggest-item-{idx}">
+                            {@const rawA = ops.find(o => o.tempId === sug.tempIdA)}
+                            {@const rawB = ops.find(o => o.tempId === sug.tempIdB)}
+                            <!-- Semantic order: "from" (negative cash) first, "to" (positive) second -->
+                            {@const needSwap = rawA && rawB && rawA.fields.cash && rawB.fields.cash && Number(rawA.fields.cash.amount) > 0 && Number(rawB.fields.cash.amount) < 0}
+                            {@const opA = needSwap ? rawB : rawA}
+                            {@const opB = needSwap ? rawA : rawB}
+                            {@const rowIdxA = opA ? ops.indexOf(opA) : -1}
+                            {@const rowIdxB = sug.isDB ? ops.findIndex(o => o.op === 'edit' && (o as any).txId === sug.dbCandidateId) : (opB ? ops.indexOf(opB) : -1)}
+                            {@const typeA = opA?.fields.type ?? ''}
+                            {@const typeB = opB?.fields.type ?? ''}
+                            {@const deltaDays = opA && opB ? Math.round((new Date(opB.fields.date).getTime() - new Date(opA.fields.date).getTime()) / 86400000) : 0}
+                            {@const targetLabel = $t('transactions.types.' + sug.targetType) || sug.targetType}
+                            <li class="relative pl-3 flex items-center gap-1.5 flex-wrap" data-testid="promote-suggest-item-{idx}">
+                                <span class="absolute left-0 top-1 text-green-800 dark:text-green-200">•</span>
                                 <button
                                     type="button"
                                     class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-800/30 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-700/40 font-medium"
@@ -2312,11 +2363,11 @@
                                     <Link2 size={12} />
                                     {$t('transactions.promoteSuggest.merge')}
                                 </button>
-                                <!-- Row A reference (clickable) -->
-                                <button type="button" class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600" onclick={() => scrollToSuggestRow(sug.tempIdA)}>
-                                    {rowIdxA >= 0 ? $t('transactions.promoteSuggest.rowRef', {values: {n: rowIdxA + 1}}) : sug.labelA}
+                                <!-- Row A reference (clickable — "from" / negative side) -->
+                                <button type="button" class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600" onclick={() => { if (opA) tableRef?.navigateToRowId(opA.tempId); }}>
+                                    {rowIdxA >= 0 ? $t('transactions.promoteSuggest.rowRef', {values: {n: rowIdxA + 1}}) : typeA}
                                 </button>
-                                <img src={getTransactionTypeIconUrl(sug.typeA)} alt="" class="w-4 h-4 inline object-contain" />
+                                <img src={getTransactionTypeIconUrl(typeA)} alt="" class="w-4 h-4 inline object-contain" />
                                 <span class="text-gray-500">{$t('common.and')}</span>
                                 <!-- Row B reference -->
                                 {#if sug.isDB}
@@ -2324,17 +2375,42 @@
                                         {rowIdxB >= 0 ? $t('transactions.promoteSuggest.rowRef', {values: {n: rowIdxB + 1}}) : `#${sug.dbCandidateId}`}
                                     </button>
                                 {:else}
-                                    <button type="button" class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600" onclick={() => scrollToSuggestRow(sug.tempIdB)}>
-                                        {rowIdxB >= 0 ? $t('transactions.promoteSuggest.rowRef', {values: {n: rowIdxB + 1}}) : sug.labelB}
+                                    <button type="button" class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600" onclick={() => { if (opB) tableRef?.navigateToRowId(opB.tempId); }}>
+                                        {rowIdxB >= 0 ? $t('transactions.promoteSuggest.rowRef', {values: {n: rowIdxB + 1}}) : typeB}
                                     </button>
                                 {/if}
-                                <img src={getTransactionTypeIconUrl(sug.typeB)} alt="" class="w-4 h-4 inline object-contain" />
+                                <img src={getTransactionTypeIconUrl(typeB)} alt="" class="w-4 h-4 inline object-contain" />
                                 <span class="text-gray-500">→</span>
-                                <span class="font-medium text-green-700 dark:text-green-300">{sug.targetLabel}</span>
+                                <span class="font-medium text-green-700 dark:text-green-300">{targetLabel}</span>
                                 <img src={getTransactionTypeIconUrl(sug.targetType)} alt="" class="w-4 h-4 inline object-contain" />
-                                {#if sug.deltaDays > 0}
-                                    <span class="text-gray-400">(Δ{sug.deltaDays}d)</span>
+                                {#if deltaDays !== 0}
+                                    <span class="text-gray-400">(Δ{deltaDays > 0 ? '+' : ''}{deltaDays}d)</span>
                                 {/if}
+                                {#if sug.targetType === 'FX_CONVERSION' && opA?.fields.cash && opB?.fields.cash}
+                                    {@const aAmtFx = Number(opA.fields.cash.amount)}
+                                    {@const fromOpFx = aAmtFx < 0 ? opA : opB}
+                                    {@const toOpFx = aAmtFx < 0 ? opB : opA}
+                                    {#if fromOpFx.fields.cash && toOpFx.fields.cash && fromOpFx.fields.cash.code !== toOpFx.fields.cash.code}
+                                            {@const fxInfo = computeFxConversionInfo(Number(fromOpFx.fields.cash.amount), fromOpFx.fields.cash.code, Number(toOpFx.fields.cash.amount), toOpFx.fields.cash.code)}
+                                            {#if fxInfo}
+                                                {@const cacheKey = `${fxInfo.base}-${fxInfo.quote}-${fromOpFx.fields.date}`}
+                                                {@const fxPoint = fxMarketCache.get(cacheKey)}
+                                                {@const tooltipData = buildFxTooltipData(fxInfo, fxPoint)}
+                                                <span class="text-gray-400 mx-0.5">·</span>
+                                                <Tooltip html={buildFxTooltipHtml(tooltipData, $t)} position="bottom">
+                                                    <span class="inline-flex items-center gap-0.5 text-xs text-violet-600 dark:text-violet-400 cursor-help" data-testid="promote-suggest-fx-info-{idx}">
+                                                        {@html formatCurrencyCodeHtml(fxInfo.base)}
+                                                        <span>→</span>
+                                                        {@html formatCurrencyCodeHtml(fxInfo.quote)}
+                                                        <span class="font-mono">@ {fxInfo.impliedRate.toFixed(4)}</span>
+                                                        {#if tooltipData.staleDays != null && tooltipData.staleDays > 0}
+                                                            <span class="text-amber-500">⚠️</span>
+                                                        {/if}
+                                                    </span>
+                                                </Tooltip>
+                                            {/if}
+                                        {/if}
+                                    {/if}
                             </li>
                         {/each}
                     </ul>

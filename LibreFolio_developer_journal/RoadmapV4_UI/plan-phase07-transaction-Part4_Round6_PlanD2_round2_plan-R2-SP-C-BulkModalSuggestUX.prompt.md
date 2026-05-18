@@ -248,6 +248,7 @@ Verificare con `./dev.py i18n audit` alla fine per assicurarsi che non ci siano 
 - [x] `./dev.py test front-transaction tx-split-promote` → verde (NR) ✅ 4 passed, 1 skipped
 - [x] `./dev.py test front-transaction tx-bulk-operations` → verde (NR) ✅ 10 passed
 - [x] `./dev.py test front-transaction tx-bulk-suggest-ux` → verde (new) ✅ 3 passed
+- [x] All 14 transaction E2E suites green (2026-05-18) — includes fixes to tx-bulk-operations + tx-commit-all-types (Coinbase balance issue, CompactCashCell testid, paired row filters)
 
 ## Deviations from plan
 

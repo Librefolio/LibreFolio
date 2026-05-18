@@ -28,7 +28,7 @@ interface CommitPayload {
 
 /** Broker names from populate_mock_data.py that the test user has OWNER/EDITOR access to. */
 const BROKER_OWNER_A = 'Interactive Brokers'; // OWNER
-const BROKER_OWNER_B = 'Coinbase'; // OWNER
+const BROKER_OWNER_B = 'Directa SIM'; // EDITOR (avoid Coinbase — has pre-existing asset balance issues)
 const BROKER_EDITOR = 'Directa SIM'; // EDITOR
 
 // ---------------------------------------------------------------------------
@@ -138,6 +138,23 @@ async function pickFirstAsset(page: Page) {
     // (BUY/SELL use small qty, DIVIDEND/ADJUSTMENT are cash/qty only)
     const option = page.locator('[data-testid^="search-select-option-"]').first();
     await expect(option).toBeVisible({timeout: 2_000});
+    await option.click();
+    await page.waitForTimeout(300);
+}
+
+/** Pick a specific asset by searching for its name (e.g. "Apple"). */
+async function pickAssetByName(page: Page, name: string) {
+    const assetWrap = page.getByTestId('tx-form-asset-wrap');
+    await assetWrap.locator('button, [role="combobox"]').first().click();
+    await page.waitForTimeout(300);
+    // Type to filter
+    const searchInput = page.locator('[data-testid="tx-form-asset-wrap"] input[type="text"], [data-testid="tx-form-asset-wrap"] input[role="combobox"]').first();
+    if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
+        await searchInput.fill(name);
+        await page.waitForTimeout(500);
+    }
+    const option = page.locator('[data-testid^="search-select-option-"]').first();
+    await expect(option).toBeVisible({timeout: 3_000});
     await option.click();
     await page.waitForTimeout(300);
 }
@@ -367,8 +384,8 @@ test.describe('Create + Commit — Paired Types', () => {
         await pickBrokerInPanel(page, 'tx-form-dual-from', BROKER_OWNER_A);
         await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_OWNER_B);
 
-        // Fill shared asset + quantity
-        await pickFirstAsset(page);
+        // Fill shared asset + quantity (use Apple — known to be held at IB)
+        await pickAssetByName(page, 'Apple');
         await fillQuantity(page, '1');
 
         await applyFormModal(page);
@@ -609,11 +626,11 @@ test.describe('Cost Basis Override', () => {
         await pickBrokerInPanel(page, 'tx-form-dual-from', BROKER_OWNER_A);
         await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_OWNER_B);
 
-        await pickFirstAsset(page);
+        await pickAssetByName(page, 'Apple');
         await fillQuantity(page, '1');
 
-        // Fill cost_basis_override (visible in the TRANSFER form)
-        const cbInput = page.getByTestId('tx-form-cost-basis');
+        // Fill cost_basis_override (CompactCashCell — target the amount input inside)
+        const cbInput = page.getByTestId('tx-form-cost-basis-amount');
         await expect(cbInput).toBeVisible({timeout: 2_000});
         await cbInput.fill(costBasis);
         await page.waitForTimeout(200);

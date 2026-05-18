@@ -583,22 +583,26 @@ With the addition of `lookupFxRate()` (Step 1 of FX Implied Rate feature), the p
 
 ## Execution Checklist
 
-- [ ] Step 1: `lookupFxRate()` + `lookupFxRateSync()` in fxStoreRegistry.ts
-- [ ] Step 2: `fxConversionHelper.ts` (computeFxConversionInfo, computeSpread, buildFxTooltipData)
-- [ ] Step 3: Reduce SuggestEntry to {tempIdA, tempIdB, targetType}
-- [ ] Step 4a: fxMarketCache $state + generation counter in BulkModal
-- [ ] Step 4b: $effect for FX lookups with generation guard
-- [ ] Step 4c: Template suffix + Tooltip in banner
-- [ ] Step 4d: buildFxTooltipHtml function (shared)
-- [ ] Step 5a: FormModal state + $effect for FX lookup
-- [ ] Step 5b: Template info marker with Tooltip
-- [ ] Step 6: i18n keys (6 keys × 4 languages)
-- [ ] Step 7: Doc financial-theory (fx-conversion.en.md)
-- [ ] Step 8: Doc developer (brokers_transactions.md)
-- [ ] Step 9: TODO_FUTURI entry (FX Store centralize)
-- [ ] `./dev.py i18n audit` → no missing keys
-- [ ] Existing E2E tests pass
+- [x] Step 1: `lookupFxRate()` + `lookupFxRateSync()` in fxStoreRegistry.ts
+- [x] Step 2: `fxConversionHelper.ts` (computeFxConversionInfo, computeSpread, buildFxTooltipData)
+- [x] Step 3: Reduce SuggestEntry to `{tempIdA, tempIdB, targetType, isDB?, dbCandidateId?}` — all display data read live from ops[]
+- [x] Step 4a: fxMarketCache $state + generation counter in BulkModal
+- [x] Step 4b: $effect for FX lookups with generation guard (+ untrack for cache reads)
+- [x] Step 4c: Template suffix + Tooltip in banner
+- [x] Step 4d: buildFxTooltipHtml function (shared — in fxConversionHelper.ts)
+- [x] Step 5a: FormModal state + $effect for FX lookup
+- [x] Step 5b: Template info marker with Tooltip
+- [x] Step 6: i18n keys (6 keys × 4 languages)
+- [x] Step 7: Doc financial-theory (fx-conversion.en.md)
+- [x] Step 8: Doc developer (brokers_transactions.md)
+- [x] Step 9: TODO_FUTURI entry (FX Store centralize)
+- [x] `./dev.py i18n audit` → 0 incomplete keys ✅
+- [x] Existing E2E tests pass ✅ (2026-05-18: all 14 transaction test suites green)
 - [ ] Manual walktest: banner shows FX suffix + tooltip, FormModal shows info marker
+
+### Step 3 Implementation Note
+
+Kept `isDB` and `dbCandidateId` as optional fields because they represent **structural flow control** (DB-candidate import flow), not display data. All other fields (`labelA`, `labelB`, `targetLabel`, `typeA`, `typeB`, `dateA`, `dateB`, `deltaDays`) removed. Template reads live from ops[] via `{@const}`. `triggerPromoteFromSuggestion` computes labels inline from ops[]. `targetLabel` derived via `$t('transactions.types.' + sug.targetType)` in template.
 
 ## Resolved Considerations
 

@@ -462,10 +462,11 @@ Sugli `<input type="number">` e `<input type="range">`:
 - [x] Step 7: BUG-C11 — DataTableColumnFilter integer step
 - [x] Step 8: BUG-C12 — promote-suggest $effect applySignRules (P0)
 - [ ] Walktest finale: verificare tutti i 12 bug risolti
-- [ ] Backend suggest: verified working (see debug test `/tmp/libreFolio_test_suggest_debug.py`)
-- [ ] `./dev.py test front-transaction tx-bulk-suggest-ux` → verde
-- [ ] `./dev.py test front-transaction tx-split-promote` → verde (NR)
-- [ ] `./dev.py test front-transaction tx-bulk-operations` → verde (NR)
+- [x] Backend suggest: verified working (see debug test `/tmp/libreFolio_test_suggest_debug.py`)
+- [x] `./dev.py test front-transaction tx-bulk-suggest-ux` → verde ✅ (2026-05-18)
+- [x] `./dev.py test front-transaction tx-split-promote` → verde (NR) ✅ (2026-05-18)
+- [x] `./dev.py test front-transaction tx-bulk-operations` → verde (NR) ✅ (2026-05-18)
+- [x] All 14 transaction E2E suites green (2026-05-18) — FxImpliedRateSpread child plan also passes
 
 ## Deviations from plan
 
@@ -498,7 +499,190 @@ Sugli `<input type="number">` e `<input type="range">`:
 
 8. **BUG-C12 (P0): promote-suggest $effect sent unsigned amount/quantity** — `fieldsFromTx()` strips the sign from `cash.amount` for UX editing (WITHDRAWAL -500 → displays as 500). But the `$effect` sent `fields.cash.amount` raw (positive 500) to the backend. The `cash_amount=opposite` constraint then failed: `500 != -(+500)`. Fix: use `applySignRules()` in the $effect to re-apply sign rules before sending. This also fixes quantity for SELL type (quantityRule='negative'). Import added: `applySignRules` from `txPayloadHelpers.ts`.
 
+9. **WT-C3 walktest discovered deeper BUG-C3 root cause** — The original Step 1 fix (skip split-queued only if `st !== 'edited'`) was incomplete. Three issues found:
+   - **`type` leak in update**: `collectUpdate()` diffs `fields.type` (ADJUSTMENT, set by FormModal) vs original (TRANSFER), always producing a `type` diff. Backend rejects with "Cannot change type from TRANSFER to ADJUSTMENT" because type-change should come from split, not update.
+   - **`deriveStatus` always returned 'edited'**: Since `fields.type` was always different for split-queued rows, they were NEVER skipped (even when user made no real edits).
+   - **Validate payload missing splits**: The validate function didn't include `splits` in its payload, so backend couldn't execute split before checking the update.
+   
+   **Fix** (3 parts):
+   1. `deriveStatus`: after computing diff, if row is in `pendingSplits` → `delete diff.type` before checking length
+   2. Validate + commit loops: after `collectUpdate(d)`, if row is split-queued → `delete upd.type`
+   3. Validate payload: add `if (pendingSplits.length > 0) payload.splits = ...` (same as commit)
+   
+   **E2E test added**: `tx-split-promote.spec.ts` now has "C3: Split + edit quantity → commit payload has splits + updates without type" — verifies payload structure and absence of "Cannot change type" error.
+   
+   **Quantity column trailing zeros**: also fixed BulkModal quantity column (was showing `-0.001000`, now shows `-0.001`) using `parseFloat(qty).toString()`.
+
+10. **BUG-C3b: Mock data balance issue** — The `delete-safe` TX pair (Asset Transfer on Coinbase, broker 5) causes `balanceAssetNegative` when split is committed because Coinbase doesn't have enough Apple Inc. shares to cover the split. The split splits a TRANSFER into two ADJUSTMENT rows, but the balance walk fails. Fix: add a covering BUY TX for Apple on Coinbase in `populate_mock_data.py` before the delete-safe pair date.
+
+11. **PromoteMergeModal tag badges not colored** — Tag badges in the left/right selection buttons had CSS custom properties set (via `getStringBadgeStyle`) but no CSS rule consuming them (unlike `TagInput` which has `.tag-chip` scoped style). Fix: added `.merge-tag-badge` class + `<style>` block in `PromoteMergeModal.svelte`. Also improved `hashString()` in `colors.ts` (djb2 + XOR-fold) to produce more distinct hues for strings with shared prefixes (e.g. `suggest-discover-hidden` vs `suggest-discover-loaded`).
+
+12. **Promote button missing from main table toolbar** — `findPromoteMatch()` uses `_cache` from `transactionTypeStore`, which was only loaded inside BulkModal/FormModal (`ensureTypesLoaded()`). The page never called it, so `_cache` was always null → `promoteMatch` always null → button never shown. Fix: added `ensureTypesLoaded()` to page's `onMount` Promise.all + `void $typesVersion` dependency in `$derived.by` to re-evaluate when cache populates.
+
+## Walktest Protocol (2026-05-18)
+
+Prerequisiti: `./dev.py server --test --force` attivo su porta 8001. Login come `e2e_test_user`. Navigare a Transactions.
+
+---
+
+### WT-C3: Edits su righe split-queued persistono nel commit (P0)
+
+**Precondizione**: avere una TX paired (es. Asset Transfer) nella tabella.
+
+| # | Azione | Verifica |
+|---|--------|----------|
+| 1 | Seleziona una TX paired (Asset Transfer) → click **Edit** (toolbar) | BulkModal si apre con la riga |
+| 2 | Click **✂️ Split** sulla riga | Badge `✂️ split` appare; partner row appare sotto (adiacente) |
+| 3 | Click **Edit** (pencil) sulla riga main (split-queued) | FormModal si apre con tipo target (es. ADJUSTMENT) |
+| 4 | Cambia **description** → "WT-C3 test edit" → Salva | FormModal si chiude, riga mostra status `edited` (indicatore giallo) |
+| 5 | Click **Validate** (se presente) o direttamente **Commit** | Il payload inviato deve includere BOTH `splits: [{id_a, id_b}]` AND `updates: [{id: ..., description: "WT-C3 test edit"}]` |
+| 6 | Verifica risposta commit: `committed: true` | Toast success ✅ |
+| 7 | Riapri la TX nella tabella → verifica description = "WT-C3 test edit" | Persiste ✅ |
+
+**Pass criteria**: step 5-7 tutti verdi. Il commit NON deve restituire solo `splits` senza `updates`.
+
+---
+
+### WT-C12: Promote-suggest $effect segno corretto (P0)
+
+| # | Azione | Verifica |
+|---|--------|----------|
+| 1 | Seleziona 2+ TX standalone compatibili per Cash Transfer (es. WITHDRAWAL + DEPOSIT, stesso broker, stesse date ±tolerance) → Edit | BulkModal si apre |
+| 2 | Attendi 1-2s per il suggest $effect | Banner **"Promote to pair"** appare con le 2 TX |
+| 3 | Click **🔗 Merge** nel banner | ActionModal o PromoteMergeModal si apre |
+| 4 | Conferma promote | Nessun errore `cash_amount=opposite` — la constraint passa |
+| 5 | Commit | `committed: true`, toast success |
+| 6 | Verifica nella tabella: le 2 TX sono ora linked (icona link nella colonna pair) | Pair creato ✅ |
+
+**Pass criteria**: step 4 non rigetta con errore di segno.
+
+---
+
+### WT-C7: Suggest mostra solo coppie in-grid + 💡 per import (P1)
+
+| # | Azione | Verifica |
+|---|--------|----------|
+| 1 | Filtra tabella per tag `suggest-discover-loaded` → seleziona tutte → Edit | BulkModal con TX standalone |
+| 2 | Attendi suggest | Banner suggest **NON** mostra candidati DB (es. "DB #50") — solo coppie dove ENTRAMBE le TX sono nella griglia |
+| 3 | Verifica: se solo 1 TX di una coppia è in griglia, appare il bottone **💡** (lightbulb) nella toolbar o per-row | 💡 visibile con conteggio candidati |
+| 4 | Click 💡 | PickerModal si apre, filtrato ai soli candidati suggeriti (es. mostra solo TX #50, #52, #54) |
+| 5 | Importa una TX dal picker (es. #50) | TX aggiunta alla griglia; banner si aggiorna mostrando la coppia (#49 ↔ #50) |
+| 6 | Verifica che il 💡 conteggio diminuisce (o scompare se era l'ultimo) | Aggiornamento ✅ |
+
+**Pass criteria**: banner = solo local; 💡 = DB candidates; import → banner update.
+
+---
+
+### WT-C10: Suggest rileva coppia dopo edit locale (P1)
+
+| # | Azione | Verifica |
+|---|--------|----------|
+| 1 | Importa 2 TX standalone nello stesso batch che NON sono compatibili (es. date distanti > tolerance) | Nessun banner suggest |
+| 2 | Edita (FormModal) una TX: cambia la **data** per portarla entro il tolerance dell'altra | Banner suggest **appare** dopo il salvataggio FormModal |
+| 3 | Inverso: edita per allontanare la data | Banner suggest **scompare** |
+
+**Pass criteria**: il suggest è reattivo ai dati correnti, non solo ai valori originali.
+
+---
+
+### WT-C1: Partner row adiacente (P2)
+
+| # | Azione | Verifica |
+|---|--------|----------|
+| 1 | BulkModal → seleziona TX paired → Split | Partner row appare **subito sotto** la riga main (non in fondo alla lista) |
+
+---
+
+### WT-C2: Reset All annulla split (P2)
+
+| # | Azione | Verifica |
+|---|--------|----------|
+| 1 | Split una riga → badge `✂️` appare + partner row aggiunta | — |
+| 2 | Verifica: bottone **"Reimposta tutto"** è visibile | Visibile ✅ |
+| 3 | Click Reset All | Badge split sparisce, partner row rimossa, `pendingSplits` vuoto |
+
+---
+
+### WT-C4: Preview tipo partner dopo edit (P2)
+
+| # | Azione | Verifica |
+|---|--------|----------|
+| 1 | Split una TX paired (es. TRANSFER) → ottieni 2 righe con tipo preview corretto | `[icona TRANSFER] → [icona ADJUSTMENT + label]` |
+| 2 | Edita la riga main via FormModal (cambia description) → salva | — |
+| 3 | Verifica colonna Type della riga main: ancora preview corretta | NON mostra "undefined" o tipo post-edit grezzo |
+| 4 | Verifica colonna Type della partner row: stessa preview corretta (lato opposto) | ✅ |
+
+---
+
+### WT-C5: ActionModal scrolla (P2)
+
+| # | Azione | Verifica |
+|---|--------|----------|
+| 1 | Apri ActionModal (Split o Promote) su una TX con tags + description lunghi | — |
+| 2 | Se il contenuto eccede il viewport | Modale **scrolla** verticalmente, footer sempre raggiungibile |
+
+---
+
+### WT-C6: Numeri formattati in ActionModal (P2)
+
+| # | Azione | Verifica |
+|---|--------|----------|
+| 1 | Apri ActionModal su una TX con quantity `10.000000` o `0.050000` | Mostra `10` e `0.05` (no trailing zeros) |
+
+---
+
+### WT-C8: Frecce PromoteMergeModal (P2)
+
+| # | Azione | Verifica |
+|---|--------|----------|
+| 1 | Promote 2 TX con campi divergenti (description diversa) → MergeModal si apre | — |
+| 2 | Layout bottoni: `[▶ All Left]   [↔]   [All Right ◀]` | Frecce puntano verso il centro; ↔ senza testo; layout justify-between |
+
+---
+
+### WT-C9: cost_basis_override come Currency nel FormModal (P2)
+
+| # | Azione | Verifica |
+|---|--------|----------|
+| 1 | Crea o edita una TX BUY | Campo **Cost Basis** visibile |
+| 2 | Verifica: ha input numerico + codice valuta (readonly, ereditato dalla valuta TX) | Format CompactCashCell ✅ |
+| 3 | Inserisci valore (es. 42.50) → Commit | Toast success |
+| 4 | Riapri la TX → cost basis = 42.50 + codice valuta | Persistito ✅ |
+| 5 | Svuota cost basis → Commit → riapri | Mostra "auto" o vuoto (backend calcola WAC) |
+
+---
+
+### WT-C11: Filtro colonna ID solo interi (P3)
+
+| # | Azione | Verifica |
+|---|--------|----------|
+| 1 | Tabella transazioni → apri filtro colonna ID | — |
+| 2 | Input numerico ha `step=1` | Non permette decimali (42.5 impossibile) |
+| 3 | Slider produce solo valori interi | ✅ |
+
+---
+
+### Walktest Results
+
+| Bug | Status | Note |
+|-----|--------|------|
+| C3 | ✅ | Fixed: type stripped from split-queued updates, splits added to validate. E2E test added + mock data balanced. |
+| C12 | ✅ | Merge modal worked, promote committed successfully. Minor fix: description concat button label + ⟷ symbol uniformed. |
+| C7 | ⏳ | — |
+| C10 | ⏳ | — |
+| C1 | ⏳ | — |
+| C2 | ⏳ | — |
+| C4 | ⏳ | — |
+| C5 | ⏳ | — |
+| C6 | ⏳ | — |
+| C8 | ✅ | Fixed during C12 walktest: description field shows `⟷ Concatenate` label (like tags shows `⟷ Union`). Global ⟷ button uses same symbol. Removed unused `allMerge` i18n key. Tag badges in MergeModal now colored (added `.merge-tag-badge` scoped style consuming CSS custom properties). Hash function improved (djb2 + XOR-fold) for better color separation on similar-prefix strings. |
+| C9 | ⏳ | — |
+| C11 | ⏳ | — |
+
+---
+
 ## Follow-up Plans
 
 → [`plan-R2-SP-C-FxImpliedRateSpread`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-FxImpliedRateSpread.prompt.md) — FX Implied Rate & Market Spread UX (banner suffix + FormModal info marker). Triggered by BUG-C12 fix revealing FX_CONVERSION suggestions in the suggest banner.
 
+→ `plan-R2-SP-C-BugfixRound2` (se necessario) — eventuali regressioni o nuovi bug scoperti durante il walktest finale.

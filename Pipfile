@@ -31,7 +31,7 @@ uvicorn = "*"
 starlette = "*"
 mergedeep = "*"
 websocket-client = "*"
-justetf-scraping = {git = "https://github.com/Alfystar/justetf-scraping.git", ref = "main"}
+justetf-scraping = {git = "https://github.com/Librefolio/justetf-scraping.git", ref = "main"}
 python-multipart = "*"
 babel = "*"
 theine = "*"

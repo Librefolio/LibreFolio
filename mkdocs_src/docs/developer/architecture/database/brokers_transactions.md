@@ -161,6 +161,21 @@ The dotted line in the ER diagram represents a **logical relationship**, not a r
 
     Currencies are an international standard (ISO 4217) with a fixed, well-known list. Storing them as strings avoids unnecessary joins while keeping validation strict at the application layer.
 
+### Implied FX Rate Derivation
+
+For `FX_CONVERSION` paired transactions, the effective exchange rate applied by the broker can be derived from the two linked rows:
+
+```
+implied_rate = |amount_to| / |amount_from|
+```
+
+The frontend compares this with the market rate obtained via `POST /fx/currencies/convert` (amount=1, single date). The rate is cached in the `fxStoreRegistry` TimeSeriesStore — subsequent lookups for the same pair+date are instant.
+
+This comparison is displayed in:
+
+- The promote-suggest banner (BulkModal) — when two standalone TX are detected as a potential FX conversion
+- The FX conversion form — as an info tooltip between the "From" and "To" panels
+
 ---
 
 ## 🔗 Related Documentation

@@ -240,6 +240,115 @@ test.describe('Split & Promote', () => {
 		}
 		await expect(promoteBtn).toBeVisible();
 	});
+
+	// -----------------------------------------------------------------------
+	// C3 REGRESSION: Split + Edit → commit includes splits AND updates (no type in update)
+	// -----------------------------------------------------------------------
+
+	test('C3: Split + edit quantity → commit payload has splits + updates without type', async ({page}) => {
+		await goToTransactions(page);
+
+		// Find a paired "delete-safe" row (Asset Transfer)
+		const pairedRowId = await findRowId(page, ['delete-safe'], []);
+		if (!pairedRowId) {
+			test.skip(true, 'No delete-safe paired TX for C3 test');
+			return;
+		}
+
+		// Select the row and open BulkModal via Edit toolbar
+		await selectRow(page, pairedRowId);
+		const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
+		await expect(editBtn).toBeVisible({timeout: 2_000});
+		await editBtn.click();
+		await page.waitForTimeout(500);
+
+		// BulkModal should be open
+		const bulkModal = page.locator('[data-testid="tx-bulk-modal"]');
+		await expect(bulkModal).toBeVisible({timeout: 3_000});
+
+		// Dismiss FormModal if it auto-opened (single row selection triggers it)
+		const formModalInit = page.locator('[data-testid="tx-form-modal"]');
+		if (await formModalInit.isVisible({timeout: 1_000}).catch(() => false)) {
+			await page.keyboard.press('Escape');
+			await expect(formModalInit).not.toBeVisible({timeout: 2_000});
+			await page.waitForTimeout(300);
+		}
+
+		// Click Split on the row — need to hover to reveal row actions
+		const bulkRow = bulkModal.locator('tr[data-row-id]').first();
+		await bulkRow.hover();
+		await page.waitForTimeout(300);
+		const splitBtn = bulkModal.locator('button[data-action-id="split"]').first();
+		if (!(await splitBtn.isVisible({timeout: 2_000}).catch(() => false))) {
+			test.skip(true, 'Split action not available in BulkModal (no edit access on paired TX)');
+			return;
+		}
+		await splitBtn.click();
+		await page.waitForTimeout(500);
+
+		// Verify split-queued badge appears in the header summary
+		const splitBadge = bulkModal.locator('[data-testid="split-queued-badge"]');
+		await expect(splitBadge).toBeVisible({timeout: 2_000});
+
+		// Double-click first row to open FormModal (triggers handleEditRowClick)
+		const firstRow = bulkModal.locator('tr[data-row-id]').first();
+		await firstRow.dblclick();
+		await page.waitForTimeout(500);
+
+		// FormModal should open
+		const formModal = page.locator('[data-testid="tx-form-modal"]');
+		await expect(formModal).toBeVisible({timeout: 3_000});
+
+		// Change quantity value in the FormModal
+		const qtyInput = formModal.getByTestId('tx-form-quantity');
+		await expect(qtyInput).toBeVisible({timeout: 2_000});
+		await qtyInput.fill('0.123');
+		await page.waitForTimeout(200);
+
+		// Save the FormModal
+		const saveBtn = formModal.locator('button[data-testid="tx-form-save"], button:has-text("Save"), button:has-text("Apply")').first();
+		await saveBtn.click();
+		await page.waitForTimeout(500);
+
+		// FormModal should close
+		await expect(formModal).not.toBeVisible({timeout: 2_000});
+
+		// Now intercept the commit request and verify payload
+		const commitPromise = page.waitForResponse(
+			(res) => res.url().includes('/api/v1/transactions/commit') && res.request().method() === 'POST',
+			{timeout: 10_000},
+		);
+
+		// Click Commit
+		const commitBtn = bulkModal.getByTestId('tx-bulk-commit');
+		await expect(commitBtn).toBeVisible({timeout: 2_000});
+		await commitBtn.click();
+
+		const response = await commitPromise;
+		const requestBody = JSON.parse(response.request().postData() ?? '{}');
+		const responseBody = await response.json();
+
+		// CRITICAL ASSERTIONS:
+		// 1. Payload must include splits
+		expect(requestBody.splits, 'Payload must include splits[]').toBeDefined();
+		expect(requestBody.splits.length).toBeGreaterThan(0);
+
+		// 2. Payload must include updates with description change
+		expect(requestBody.updates, 'Payload must include updates[]').toBeDefined();
+		expect(requestBody.updates.length).toBeGreaterThan(0);
+
+		// 3. Updates must NOT include 'type' field (split handles type change)
+		for (const upd of requestBody.updates) {
+			expect(upd.type, `Update for id=${upd.id} must NOT have type — split handles it`).toBeUndefined();
+		}
+
+		// 4. Update should contain the quantity we set
+		const qtyUpdate = requestBody.updates.find((u: any) => u.quantity != null);
+		expect(qtyUpdate, 'Should find our quantity update').toBeTruthy();
+
+		// 5. Backend should accept it (no type error, no balance error with fixed mock data)
+		expect(responseBody.committed, `Commit should succeed. Issues: ${JSON.stringify(responseBody.issues)}`).toBe(true);
+	});
 });
 
 
