@@ -666,7 +666,6 @@
       "useMerge": "Merge",
       "useRight": "Use right",
       "allLeft": "All left",
-      "allMerge": "All merge",
       "allRight": "All right",
       "concat": "Concatenate",
       "union": "Union",
@@ -820,6 +819,14 @@
       "commitSummary": "Saved {n} transactions",
       "splitCount": "{n} split",
       "promoteCount": "{n} promoted"
+    },
+    "fxInfo": {
+      "impliedRate": "Implied rate",
+      "marketRate": "Market rate",
+      "spread": "Spread",
+      "stale": "stale {days}d",
+      "marketNotAvailable": "Market rate not available",
+      "pairNotConfigured": "FX pair not configured"
     }
   },
   "fx": {

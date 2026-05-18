@@ -31,7 +31,7 @@
     <div class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 max-w-sm pointer-events-none">
         {#each toasts.items as toast (toast.id)}
             {@const Icon = variantIcons[toast.variant]}
-            <div class="pointer-events-auto relative rounded-lg shadow-lg overflow-hidden {variantStyles[toast.variant]}" transition:fly={{y: -30, duration: 250}}>
+            <div class="pointer-events-auto relative rounded-lg shadow-lg overflow-hidden {variantStyles[toast.variant]}" data-testid="toast-{toast.variant}" transition:fly={{y: -30, duration: 250}}>
                 <div class="flex flex-col items-center gap-1 px-4 py-3 text-sm leading-snug text-center">
                     <div class="flex items-start gap-1.5">
                         <Icon size={15} class="shrink-0 mt-0.5" />

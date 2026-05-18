@@ -1088,6 +1088,7 @@ def cmd_remove(args) -> int:
     """Remove a translation key from all languages."""
     _check_deps()
     key = args.key
+    dry_run = getattr(args, 'dry_run', False)
 
     # Check current values
     current_values = {}
@@ -1099,6 +1100,17 @@ def cmd_remove(args) -> int:
 
     if not current_values:
         print(f"\n⚠️  Key '{key}' was not found in any language")
+        return 0
+
+    if dry_run:
+        # Show what would be removed and exit
+        print(f"\n🔍 [DRY RUN] Would remove '{key}':\n")
+        row = [key]
+        for lang in LANGUAGES:
+            row.append(current_values.get(lang, "—"))
+        headers = ["Key"] + [lang.upper() for lang in LANGUAGES]
+        print(tabulate([row], headers=headers, tablefmt="simple"))
+        print("\n  (no changes made)")
         return 0
 
     if not args.force:
@@ -1194,7 +1206,6 @@ def cmd_update(args) -> int:
     print(f"\n✅ Updated key '{key}':\n")
     headers = ["Key"] + [lang.upper() for lang in LANGUAGES]
     print(tabulate([result_row], headers=headers, tablefmt="simple", maxcolwidths=[40, 30, 30, 30, 30]))
-    return 0
     return 0
 
 
@@ -1395,7 +1406,8 @@ def register_subparser(subparsers) -> None:
     # Remove command
     remove_p = i18n_sub.add_parser("remove", help="Remove a translation key from all languages")
     remove_p.add_argument("key", help="Translation key to remove")
-    remove_p.add_argument("-f", "--force", action="store_true", help="Skip confirmation prompt")
+    remove_p.add_argument("-f", "--force", "--yes", "-y", action="store_true", help="Skip confirmation prompt")
+    remove_p.add_argument("--dry-run", action="store_true", help="Show what would be removed without making changes")
     remove_p.set_defaults(func=cmd_remove)
 
     # Update command

@@ -121,6 +121,15 @@ def front_tx_bulk_suggest_ux(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("transactions/tx-bulk-suggest-ux.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_fx_implied_rate(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run FX Implied Rate & Spread E2E tests (banner suffix, FormModal marker, semantic ordering)."""
+    print_section("Frontend TX FX Implied Rate Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("transactions/tx-fx-implied-rate.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Transaction E2E tests."""
     return _run_test_suite(
@@ -139,6 +148,7 @@ def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool 
             ("TX CRUD Full", lambda: front_tx_crud_full(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Commit All Types", lambda: front_tx_commit_all_types(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Bulk Suggest UX", lambda: front_tx_bulk_suggest_ux(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX FX Implied Rate", lambda: front_tx_fx_implied_rate(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
         ],
         verbose=verbose,
         header_msg="All Transaction Tests (E2E)",
@@ -166,5 +176,6 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-crud-full", front_tx_crud_full, name="TX CRUD Full Lifecycle Tests", desc="Full CRUD lifecycle: standalone, paired, split, promote, bulk, suggest, cash sign", tests="transactions/tx-crud-full.spec.ts")
     add_test(cat, "tx-commit-all-types", front_tx_commit_all_types, name="TX Commit All Types Tests", desc="End-to-end commit for every TX type: standalone + paired create, edit, delete", tests="transactions/tx-commit-all-types.spec.ts")
     add_test(cat, "tx-bulk-suggest-ux", front_tx_bulk_suggest_ux, name="TX Bulk Suggest UX Tests", desc="Split badge, type preview, undo split, suggest banner, ActionModal AFTER rows", tests="transactions/tx-bulk-suggest-ux.spec.ts")
+    add_test(cat, "tx-fx-implied-rate", front_tx_fx_implied_rate, name="TX FX Implied Rate Tests", desc="FX implied rate in banner suffix + FormModal marker + semantic ordering", tests="transactions/tx-fx-implied-rate.spec.ts")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

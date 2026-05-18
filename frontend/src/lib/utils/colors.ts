@@ -140,10 +140,12 @@ export function hslToHex(h: number, s: number, l: number): string {
  * `getIndexColor()`.
  */
 function hashString(s: string): number {
-    let h = 0;
+    let h = 5381;
     for (let i = 0; i < s.length; i++) {
-        h = (h * 31 + s.charCodeAt(i)) | 0;
+        h = ((h << 5) + h + s.charCodeAt(i)) | 0; // djb2
     }
+    // XOR-fold to spread similar-suffix strings apart
+    h = ((h >>> 16) ^ h) | 0;
     return Math.abs(h);
 }
 

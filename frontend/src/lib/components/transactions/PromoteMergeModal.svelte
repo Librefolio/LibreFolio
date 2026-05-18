@@ -126,7 +126,7 @@
                         <div class="flex items-center justify-between mb-2">
                             <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">{$t('transactions.promote.fieldDescription')}</div>
                             <Tooltip text={$t('transactions.promote.concat')}>
-                                <button type="button" class="px-1.5 py-0.5 text-[10px] rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50" onclick={() => (resDescription = mergeStrings(txA?.description ?? '', txB?.description ?? ''))}>↔</button>
+                                <button type="button" class="px-1.5 py-0.5 text-[10px] rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50" onclick={() => (resDescription = mergeStrings(txA?.description ?? '', txB?.description ?? ''))}>↔ {$t('transactions.promote.concat')}</button>
                             </Tooltip>
                         </div>
                         <!-- 2 readonly boxes side by side — clickable to select -->
@@ -150,7 +150,7 @@
                         <div class="flex items-center justify-between mb-2">
                             <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">{$t('transactions.promote.fieldTags')}</div>
                             <Tooltip text={$t('transactions.promote.union')}>
-                                <button type="button" class="px-1.5 py-0.5 text-[10px] rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50" onclick={() => (resTags = mergeTagSets(txA?.tags ?? [], txB?.tags ?? []))}>⟷ {$t('transactions.promote.union')}</button>
+                                <button type="button" class="px-1.5 py-0.5 text-[10px] rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50" onclick={() => (resTags = mergeTagSets(txA?.tags ?? [], txB?.tags ?? []))}>↔ {$t('transactions.promote.union')}</button>
                             </Tooltip>
                         </div>
                         <!-- 2 readonly tag boxes — clickable to select -->
@@ -158,7 +158,7 @@
                             <button type="button" class="w-full text-left text-xs text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-2 min-h-[2.5rem] hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-600 transition-all" onclick={() => (resTags = [...(txA?.tags ?? [])])} data-testid="promote-merge-tags-left">
                                 <span class="text-[10px] text-gray-400 block mb-0.5">Transaction {txA.label}</span>
                                 {#if (txA.tags ?? []).length > 0}
-                                    <span class="flex flex-wrap gap-1">{#each txA.tags as tag}<span class="inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}</span>
+                                    <span class="flex flex-wrap gap-1">{#each txA.tags as tag}<span class="merge-tag-badge inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}</span>
                                 {:else}
                                     —
                                 {/if}
@@ -166,7 +166,7 @@
                             <button type="button" class="w-full text-left text-xs text-gray-600 dark:text-gray-300 bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800 rounded p-2 min-h-[2.5rem] hover:ring-2 hover:ring-pink-300 dark:hover:ring-pink-600 transition-all" onclick={() => (resTags = [...(txB?.tags ?? [])])} data-testid="promote-merge-tags-right">
                                 <span class="text-[10px] text-gray-400 block mb-0.5">Transaction {txB.label}</span>
                                 {#if (txB.tags ?? []).length > 0}
-                                    <span class="flex flex-wrap gap-1">{#each txB.tags as tag}<span class="inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}</span>
+                                    <span class="flex flex-wrap gap-1">{#each txB.tags as tag}<span class="merge-tag-badge inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}</span>
                                 {:else}
                                     —
                                 {/if}
@@ -181,17 +181,17 @@
             <div class="flex justify-between gap-2">
                 <Tooltip text={$t('transactions.promote.allLeft')}>
                     <button type="button" class="px-3 py-1.5 text-xs rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/40" onclick={allLeft} data-testid="promote-merge-all-left">
-                        ▶ {$t('transactions.promote.allLeft')}
+                        {$t('transactions.promote.allLeft')} ▶
                     </button>
                 </Tooltip>
-                <Tooltip text={$t('transactions.promote.allMerge')}>
+                <Tooltip text={$t('transactions.promote.concat')}>
                     <button type="button" class="px-3 py-1.5 text-xs rounded-lg bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800/40" onclick={allMerge} data-testid="promote-merge-all-merge">
                         ↔
                     </button>
                 </Tooltip>
                 <Tooltip text={$t('transactions.promote.allRight')}>
                     <button type="button" class="px-3 py-1.5 text-xs rounded-lg bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300 hover:bg-pink-200 dark:hover:bg-pink-800/40" onclick={allRight} data-testid="promote-merge-all-right">
-                        {$t('transactions.promote.allRight')} ◀
+                        ◀ {$t('transactions.promote.allRight')}
                     </button>
                 </Tooltip>
             </div>
@@ -222,3 +222,15 @@
     onConfirm={() => { showDiscardConfirm = false; onCancel(); }}
     onCancel={() => { showDiscardConfirm = false; }}
 />
+
+<style>
+    .merge-tag-badge {
+        background: var(--badge-bg, #e2e8f0);
+        color: var(--badge-text, #334155);
+    }
+    :global(html.dark) .merge-tag-badge {
+        background: var(--badge-dark-bg, #334155);
+        color: var(--badge-dark-text, #e2e8f0);
+    }
+</style>
+

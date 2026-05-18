@@ -666,7 +666,6 @@
       "useMerge": "Fusionner",
       "useRight": "Utiliser droite",
       "allLeft": "Tout à gauche",
-      "allMerge": "Tout fusionner",
       "allRight": "Tout à droite",
       "concat": "Concaténer",
       "union": "Union",
@@ -820,6 +819,14 @@
       "commitSummary": "{n} transactions enregistrées",
       "splitCount": "{n} dissociés",
       "promoteCount": "{n} promus"
+    },
+    "fxInfo": {
+      "impliedRate": "Taux implicite",
+      "marketRate": "Taux de marché",
+      "spread": "Spread",
+      "stale": "obsolète {days}j",
+      "marketNotAvailable": "Taux de marché non disponible",
+      "pairNotConfigured": "Paire FX non configurée"
     }
   },
   "fx": {
