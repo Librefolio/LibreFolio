@@ -24,11 +24,13 @@
         open: boolean;
         /** IDs already in BulkModal — hidden from picker */
         excludeIds: Set<number>;
+        /** When set, show ONLY these IDs (intersection filter for suggest import) */
+        includeIds?: Set<number>;
         onAdd: (rows: TXReadItem[]) => void;
         onClose: () => void;
     }
 
-    let {open = $bindable(false), excludeIds = new Set(), onAdd, onClose}: Props = $props();
+    let {open = $bindable(false), excludeIds = new Set(), includeIds, onAdd, onClose}: Props = $props();
 
     let selectedRows = $state<TXReadItem[]>([]);
     let pickerPage = $state(1);
@@ -40,8 +42,8 @@
     /** Brokers from store (for TransactionsTable compatibility). */
     let brokers = $derived(getAllBrokers() as BrokerLike[]);
 
-    /** Filtered rows: exclude IDs already in BulkModal */
-    let filteredMain = $derived(allRows.filter((r) => !excludeIds.has(r.id)));
+    /** Filtered rows: exclude IDs already in BulkModal, optionally include only specific IDs */
+    let filteredMain = $derived(allRows.filter((r) => !excludeIds.has(r.id) && (includeIds == null || includeIds.has(r.id))));
     /** Partners not needed separately since txStore merges main+partners. */
     let filteredPartners = $derived<TXReadItem[]>([]);
 

@@ -487,7 +487,8 @@
       "bannerDetailed": "El {date}, la fila #{a} y la fila #{b} podrían convertirse en {type}",
       "merge": "Combinar",
       "deltaLabel": "Máx Δ días",
-      "deltaGG": "d"
+      "deltaGG": "d",
+      "rowRef": "Fila #{n}"
     },
     "empty": "Sin transacciones",
     "ghost": {
@@ -613,10 +614,11 @@
       "allViewerOnly": "No hay transacciones editables en la selección",
       "resetSelected": "Restablecer seleccionados",
       "splitQueued": "{n} separaciones en cola",
-      "undoSplit": "Deshacer separación",
+      "undoSplit": "Deshacer",
       "stateNew": "nueva",
       "stateEdit": "editar",
-      "stateDel": "eliminar"
+      "stateDel": "eliminar",
+      "suggestLightbulb": "Mostrar sugerencia"
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"

@@ -68,6 +68,11 @@
         })),
     );
 
+    /** BUG-C11: auto-detect integer columns — force step=1 on number inputs */
+    let isIntegerRange = $derived(
+        type === 'number' && Math.floor(numberMin) === numberMin && Math.floor(numberMax) === numberMax && (numberMax - numberMin) < 100000
+    );
+
     // Helper functions to get initial values
     function getInitialTextValue(): string {
         return initialValue?.type === 'text' ? initialValue.value : '';
@@ -681,6 +686,7 @@
                     <label class="range-label" for="number-min-input">{$t('common.min')}</label>
                     <input
                         type="number"
+                        step={isIntegerRange ? "1" : "any"}
                         class="range-input"
                         bind:value={numMin}
                         min={numberMin}
@@ -696,6 +702,7 @@
                     <label class="range-label" for="number-max-input">{$t('common.max')}</label>
                     <input
                         type="number"
+                        step={isIntegerRange ? "1" : "any"}
                         class="range-input"
                         bind:value={numMax}
                         min={numMin}

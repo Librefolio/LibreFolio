@@ -487,7 +487,8 @@
       "bannerDetailed": "In data {date}, la riga #{a} e la riga #{b} potrebbero diventare {type}",
       "merge": "Unisci",
       "deltaLabel": "Max Δ giorni",
-      "deltaGG": "gg"
+      "deltaGG": "gg",
+      "rowRef": "Riga #{n}"
     },
     "empty": "Nessuna transazione",
     "ghost": {
@@ -613,10 +614,11 @@
       "allViewerOnly": "Nessuna transazione modificabile nella selezione",
       "resetSelected": "Reimposta selezionati",
       "splitQueued": "{n} split in coda",
-      "undoSplit": "Annulla split",
+      "undoSplit": "Annulla",
       "stateNew": "nuova",
       "stateEdit": "modifica",
-      "stateDel": "elimina"
+      "stateDel": "elimina",
+      "suggestLightbulb": "Mostra suggerimento"
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"

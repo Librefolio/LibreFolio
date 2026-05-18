@@ -225,27 +225,162 @@ Verificare con `./dev.py i18n audit` alla fine per assicurarsi che non ci siano 
 
 ## Execution checklist
 
-- [ ] Leggere i file chiave per capire stato attuale DOM/componenti
-- [ ] Step 1: Toolbar alignment
-- [ ] Step 2: Split edit → ADJUSTMENT type
-- [ ] Step 3: Split type preview (icon orig → icon+label target)
-- [ ] Step 4a: Suggest filtro sottrattivo
-- [ ] Step 4b: Suggest banner human-readable
-- [ ] Step 4c: Lightbulb per-row
-- [ ] Step 4d: Banner show condition
-- [ ] Step 5a: PromoteMergeModal rimuovere date/cost_basis
-- [ ] Step 5b: Layout bottoni globali
-- [ ] Step 5c: Footer justify-between
-- [ ] Step 6a: ActionModal split BEFORE tipo su 2 colonne
-- [ ] Step 6b: ActionModal split AFTER righe mancanti
-- [ ] Step 6c: ActionModal promote source righe mancanti
-- [ ] Step 7: Fix cella link_uuid
-- [ ] Step 8a: fieldsFromTx Currency
-- [ ] Step 8b: cost_basis column display
-- [ ] Step 9: E2E test file + registrazione runner
-- [ ] Step 10: i18n keys (4 lingue)
-- [ ] `./dev.py i18n audit` → no missing keys
-- [ ] `./dev.py test front-transaction tx-split-promote` → verde (NR)
-- [ ] `./dev.py test front-transaction tx-bulk-operations` → verde (NR)
-- [ ] `./dev.py test front-transaction tx-bulk-suggest-ux` → verde (new)
+- [x] Leggere i file chiave per capire stato attuale DOM/componenti
+- [x] Step 1: Toolbar alignment
+- [x] Step 2: Split edit → ADJUSTMENT type
+- [x] Step 3: Split type preview (icon orig → icon+label target)
+- [x] Step 4a: Suggest filtro sottrattivo
+- [x] Step 4b: Suggest banner human-readable
+- [x] Step 4c: Lightbulb per-row
+- [x] Step 4d: Banner show condition
+- [x] Step 5a: PromoteMergeModal rimuovere date/cost_basis
+- [x] Step 5b: Layout bottoni globali
+- [x] Step 5c: Footer justify-between
+- [x] Step 6a: ActionModal split BEFORE tipo su 2 colonne
+- [x] Step 6b: ActionModal split AFTER righe mancanti
+- [x] Step 6c: ActionModal promote source righe mancanti
+- [x] Step 7: Fix cella link_uuid
+- [x] Step 8a: fieldsFromTx Currency
+- [x] Step 8b: cost_basis column display
+- [x] Step 9: E2E test file + registrazione runner
+- [x] Step 10: i18n keys (4 lingue)
+- [x] `./dev.py i18n audit` → no missing keys
+- [x] `./dev.py test front-transaction tx-split-promote` → verde (NR) ✅ 4 passed, 1 skipped
+- [x] `./dev.py test front-transaction tx-bulk-operations` → verde (NR) ✅ 10 passed
+- [x] `./dev.py test front-transaction tx-bulk-suggest-ux` → verde (new) ✅ 3 passed
 
+## Deviations from plan
+
+1. **Step 1 (Toolbar alignment)**: the step was about the inline selection toolbar inside `TransactionBulkModal.svelte` (not the main page toolbar nor the delta-days slider). The selection toolbar (counter + reset + delete + promote) was positioned LEFT, near the picker/slider. Fix: moved the entire `{#if bulkTableSelectedRows.length > 0}` block INSIDE the `ml-auto` right group, after `ColumnVisibilityToggle`. Now when rows are selected the selection actions appear RIGHT, next to the column filter toggle. Note: `flex-row-reverse` on the right group means visual order is reversed (leftmost in code = rightmost visually).
+
+2. **Step 5 (PromoteMergeModal)**: also needed to update the divergence checks in `BulkModal.svelte` — 3 places where `handlePromoteSelected` and `triggerPromoteFromSuggestion` compared date/cost_basis. Removed those from divergence detection (only description+tags trigger MergeModal now).
+
+3. **Step 9 (E2E tests)**: tests initially failed because:
+   - Wrong toolbar testid: used `tx-toolbar-edit` instead of correct `toolbar-action-edit`
+   - Single row selection triggers FormModal auto-open (blocking BulkModal). Fix: select 2+ rows to get grid-only view, plus dismiss FormModal if it appears.
+   - Reduced test count to 3 (C1, C4, C5) — C2/C3 patterns already covered by existing tx-split-promote.spec.ts tests.
+
+4. **i18n `transactions.promoteSuggest.rowRef`**: added and wired to the suggest banner template (replaced hardcoded `Row #N` with `$t('transactions.promoteSuggest.rowRef', {values: {n}})`).
+
+5. **"Remove from batch" action missing on initial edit rows** (post-walktest discovery): the `remove-from-batch` row action was only visible for rows added via PickerModal (`addedViaPicker === true`). Rows loaded from the initial intent (selected in main table → Edit) did **not** show the action. Root cause: visibility condition `row.op === 'edit' && row.addedViaPicker && deriveStatus(row) !== 'new'` was too restrictive. Fix: changed to `row.op === 'edit' && deriveStatus(row) !== 'delete'` — now all edit rows (both intent-loaded and picker-added) show the remove action, except those already marked for deletion. The `deriveStatus !== 'delete'` guard avoids showing "remove" on a row that's already in delete state (user should use "reset" or "undo delete" instead).
+
+6. **Actions column too narrow in BulkModal**: with the addition of lightbulb, split, undo-split, and remove-from-batch row actions, the default `100px` actions column was too narrow — icons overflowed or wrapped. Fix: passed `actionsColumnWidth="160px"` to the DataTable in BulkModal.
+
+## Walktest Results (2026-05-16)
+
+### Passed ✅
+| # | Test |
+|---|------|
+| WT-1 | Toolbar alignment (right) |
+| WT-2 | Split edit → target type (FormModal opens with correct ADJUSTMENT type) |
+| WT-10 | ActionModal promote source (quantity, tags, desc rows present) |
+| WT-11 | Link UUID cell (#self ↔ #partner) |
+| WT-13 | Remove from batch (all edit rows) |
+| WT-14 | Actions column width (160px) |
+
+### Failed / Partial ❌
+
+#### BUG-C1: Split partner row position (WT-2)
+**Observed**: la transazione splittata (partner row) viene aggiunta **in fondo** alla griglia.
+**Expected**: deve apparire subito **sotto** la riga principale (adiacente).
+**File**: `TransactionBulkModal.svelte` — dove si inserisce il partner op in `ops[]` dopo lo split.
+
+#### BUG-C2: Reset All non visibile dopo split / non annulla split (WT-2)
+**Observed**: "Reimposta tutto" non compare dopo un split (solo dopo un edit). Quando cliccato dopo un edit, annulla l'edit ma NON lo split.
+**Expected**: reset all dovrebbe resettare anche gli split pendenti (rimuovere da `pendingSplits` + rimuovere partner rows aggiunte).
+**File**: `TransactionBulkModal.svelte` — `resetAll()` function + condizione di visibilità del bottone.
+
+#### BUG-C3: Split + Edit → commit perde gli edit (WT-2) ⚠️ CRITICO
+**Observed**: dopo split + edit di una riga splittata, il validate mostra `{}` e il commit invia solo `{"splits":[...]}` senza le edits.
+**Root cause probabile**: la riga split-queued è `op === 'edit'` ma `deriveStatus()` potrebbe non marcarla come `edited` perché i suoi fields originali vengono confrontati con quelli attuali senza considerare il cambio di tipo. Oppure il `buildCommitPayload` filtra le righe split-queued in modo errato.
+**File**: `TransactionBulkModal.svelte` — `buildCommitPayload()` + `deriveStatus()` per split-queued rows.
+
+#### BUG-C4: Split type preview — seconda riga ha formato vecchio (WT-3)
+**Observed**: la prima riga mostra correttamente `[icona orig] → [icona target + label]`, ma la **seconda** riga (partner aggiunta dallo split) mostra ancora il formato vecchio: `renderTypeHtml → ✂️ ADJUSTMENT`.
+**Root cause**: il partner row viene aggiunto con un path diverso (forse senza passare per la stessa colonna cell logic, o la condizione `splitTxIdsSet.has(txId)` non rileva il partner).
+**File**: `TransactionBulkModal.svelte` — colonna `type` cell function, verificare che il partner txId sia in `splitTxIdsSet`.
+
+#### BUG-C5: ActionModal — non scrolla, footer irraggiungibile (WT-3/9)
+**Observed**: la modale ActionModal (split BEFORE/AFTER) non scrolla verticalmente. Con dati lunghi (tags, desc) il footer è tagliato.
+**Fix**: aggiungere `overflow-y-auto max-h-[80vh]` al contenuto della modale.
+**File**: `TransactionActionModal.svelte` — div wrapper interno.
+
+#### BUG-C6: Numeri non formattati (quantità/importo) in ActionModal (WT-3/9)
+**Observed**: quantità mostra `0.050000` e `-0.050000` (6 decimali inutili).
+**Expected**: usare l'helper di formattazione numeri (trailing zeros removal). Esistente nel progetto — trovare e riusare.
+**File**: `TransactionActionModal.svelte` — dove mostra `transaction.quantity`.
+
+#### BUG-C7: Suggest redesign — logica completamente sbagliata (WT-4/5/6/7) ⚠️ CRITICO
+**Observed**: il banner mostra suggerimenti dal DB (`DB #44`) per TX nella griglia. L'utente importa la gemella dal picker, ma il banner SCOMPARE invece di aggiornarsi.
+**Expected behavior (ridefinito)**:
+1. Il banner deve mostrare SOLO suggerimenti **tra righe già presenti nella BulkModal** (local↔local), MAI righe DB non caricate.
+2. Il bottone 💡 (lightbulb) **globale** (nella toolbar, tra "cerca/aggiungi" e "max Δ giorni") → apre il **PickerModal** pre-filtrato con gli ID dei candidati compatibili ottenuti dall'endpoint `promote-suggest` per le TX attualmente caricate.
+3. Il bottone 💡 per-row fa la stessa cosa ma filtrato per quella specifica riga.
+4. Una volta che l'utente importa una TX suggerita, il banner si aggiorna mostrando la coppia (poiché ora entrambe sono nella griglia).
+5. L'endpoint `promote-suggest` riceve TUTTI i campi della TX (non filtrare nel frontend — `id`, `type`, `broker_id`, `date`, `currency`, `asset_id`, `amount`, `quantity`) così il backend ha tutto per fare matching corretto.
+
+**Problema secondario**: `promote-suggest` riceve input parziali (mancano `amount`/`quantity` per alcune TX → il backend non può fare matching).
+
+#### BUG-C8: PromoteMergeModal — frecce invertite + concat non centrato (WT-8)
+**Observed**: 
+- Bottone "◀ Tutti sinistra" ha la freccia che punta via dal centro (dovrebbe puntare VERSO il centro = `▶` per sinistra)
+- Bottone "Tutti destra ▶" ha la freccia che punta via dal centro (dovrebbe puntare VERSO il centro = `◀` per destra)  
+- Il concatena (⟷) nella sezione descrizione mostra la label — deve solo mostrare il simbolo `↔`
+- I bottoni sinistra/destra devono essere sui BORDI (non centrati), solo il merge `↔` al centro → usare `justify-between`
+
+**Fix atteso**:
+```
+[▶ All Left]          [↔]          [All Right ◀]
+```
+Frecce che "puntano al centro" = indicano da dove prendono i valori.
+
+#### BUG-C9: Cost basis override — campo mancante nel FormModal (WT-12)
+**Observed**: FormModal non ha un campo per `cost_basis_override` in formato Currency `{code, amount}`. Inserendo manualmente una stringa, il backend rigetta con "Input should be a valid dictionary or instance of Currency".
+**Root cause**: il FormModal non è stato aggiornato per SP-A (Currency object). La colonna display nella griglia BulkModal funziona, ma edit/create nel FormModal è rotto.
+**Fix**: aggiungere un campo stile "importo + valuta" nel FormModal con tooltip esplicativo. **Questo è fuori scope SP-C** — va pianificato come step separato.
+
+#### BUG-C10: Suggest — non rileva coppia se una TX è stata editata localmente (WT-15)
+**Observed**: se dopo aver importato una TX nel batch la si edita (es. cambio data), il suggest non la riconosce più come coppia.
+**Root cause**: l'endpoint `promote-suggest` confronta con i dati inviati come `inputs[]`. Se s edits i dati nella BulkModal ma non si riinvia il suggest con i dati AGGIORNATI, il match fallisce.
+**Fix**: il `$effect` che chiama `promote-suggest` deve usare i **fields correnti** dalla griglia (post-edit), non i dati originali.
+
+#### BUG-C11: ID filter nel DataTable — permette decimali (minor)
+**Observed**: il filtro colonna ID (sia main table che picker) permette di inserire numeri decimali (slider/input). Gli ID sono interi.
+**Fix**: forzare `step="1"` e `type="number"` con validazione integer nel DataTableColumnFilter per colonne con tipo ID/integer.
+
+---
+
+## Analisi Classi di Problemi
+
+### Classe A — Commit/Payload Logic (CRITICO)
+**BUG-C3** (edits persi nel commit)
+
+Questo è il bug più grave. Il `buildCommitPayload` non include le edits per righe split-queued, probabilmente perché il `deriveStatus` non le segna come `edited`. Il tipo cambia (TRANSFER → ADJUSTMENT) ma questo cambio avviene solo nel FormModal overlay — molto probabilmente non viene persistito nei `fields` dell'op.
+
+### Classe B — Suggest Architecture (REDESIGN)
+**BUG-C7, BUG-C10**
+
+La suggest logic è architetturalmente sbagliata. Il flusso corretto è:
+1. Chiamare `promote-suggest` con TUTTI i dati correnti delle TX nella griglia
+2. Usare i risultati per due cose: (a) mostrare nel banner le coppie **già presenti** nella griglia, (b) offrire il bottone 💡 per importare le coppie **non ancora** nella griglia
+3. Il banner deve SOLO fare local matching; le coppie DB sono un "suggerimento per importare" via picker, non un suggerimento di azione diretta
+
+### Classe C — UX/Layout (tutti fixabili rapidamente)
+**BUG-C1** (posizione partner), **BUG-C2** (reset all + split), **BUG-C4** (preview partner), **BUG-C5** (scroll modale), **BUG-C6** (formattazione numeri), **BUG-C8** (frecce invertite), **BUG-C11** (filtro ID decimali)
+
+### Classe D — FormModal Currency (fuori scope)
+**BUG-C9** (cost_basis_override field nel FormModal)
+
+Questo richiede un redesign del campo nel FormModal — non era in scope SP-C (che lavorava solo sulla colonna display BulkModal). Va schedulato come step dedicato.
+
+### Priorità suggerita per il prossimo bugfix plan
+1. **BUG-C3** (commit perde edits) — P0, blocca l'uso reale dello split
+2. **BUG-C7** (suggest redesign) — P1, architettura da rivedere
+3. **BUG-C4** (preview partner) — P2, cosmetico ma confuso
+4. **BUG-C1, C2, C5, C6, C8** — P2, quick fixes
+5. **BUG-C9** (FormModal currency) — P3, feature incomplete ma non bloccante
+6. **BUG-C10, C11** — P3, polish
+
+## Follow-up Plan
+
+→ [`plan-R2-SP-C-BugfixRound1`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound1.prompt.md) — rientro completo per tutti gli 11 bug.

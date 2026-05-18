@@ -62,6 +62,13 @@
         return formatCurrencyAmountPlain(Number(cash.amount), cash.code, {showSign: true});
     }
 
+    /** Format quantity with trailing zeros removal */
+    function fQ(qty: string | null | undefined): string {
+        if (qty == null || qty === '') return '\u2014';
+        const n = parseFloat(qty);
+        return isNaN(n) ? qty : n.toString();
+    }
+
     function typeLabel(typeCode: string): string {
         return $t(`transactions.types.${typeCode}`) || typeCode;
     }
@@ -87,7 +94,7 @@
 </script>
 
 <ModalBase {open} maxWidth="xl" onRequestClose={onCancel} testId="tx-action-modal">
-    <div class="p-6 space-y-4" data-testid="tx-action-modal-content">
+    <div class="p-6 space-y-4 overflow-y-auto max-h-[80vh]" data-testid="tx-action-modal-content">
         <!-- Header -->
         <div class="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-gray-100">
             {#if mode === 'split'}
@@ -124,7 +131,7 @@
                             </tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700">
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</td>
-                                <td class="px-3 py-2 text-center" colspan="2">
+                                <td class="px-3 py-2">
                                     <span class="inline-flex items-center gap-2">
                                         {#if getTransactionTypeIconUrl(transaction.type)}
                                             <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5" />
@@ -132,11 +139,19 @@
                                         {typeLabel(transaction.type)}
                                     </span>
                                 </td>
+                                <td class="px-3 py-2">
+                                    <span class="inline-flex items-center gap-2">
+                                        {#if partner && getTransactionTypeIconUrl(partner.type)}
+                                            <img src={getTransactionTypeIconUrl(partner.type)} alt="" class="w-5 h-5" />
+                                        {/if}
+                                        {partner ? typeLabel(partner.type) : typeLabel(transaction.type)}
+                                    </span>
+                                </td>
                             </tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700">
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.quantity')}</td>
-                                <td class="px-3 py-2">{transaction.quantity ?? '—'}</td>
-                                <td class="px-3 py-2">{partner?.quantity ?? '—'}</td>
+                                <td class="px-3 py-2">{fQ(transaction.quantity)}</td>
+                                <td class="px-3 py-2">{fQ(partner?.quantity)}</td>
                             </tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700">
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}</td>
@@ -199,15 +214,39 @@
                                 </td>
                             </tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</td>
+                                <td class="px-3 py-2">{transaction.date}</td>
+                                <td class="px-3 py-2">{partner?.date ?? '—'}</td>
+                            </tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.quantity')}</td>
+                                <td class="px-3 py-2">{fQ(transaction.quantity)}</td>
+                                <td class="px-3 py-2">{fQ(partner?.quantity)}</td>
+                            </tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}</td>
                                 <td class="px-3 py-2">{fC(transaction.cash)}</td>
                                 <td class="px-3 py-2">{fC(partner?.cash)}</td>
                             </tr>
-                            <tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</td>
                                 <td class="px-3 py-2"><BrokerBadge broker={bLike(transaction.broker_id)} brokers={brkrs} /></td>
                                 <td class="px-3 py-2">{#if partner}<BrokerBadge broker={bLike(partner.broker_id)} brokers={brkrs} />{:else}—{/if}</td>
                             </tr>
+                            {#if transaction.tags?.length || partner?.tags?.length}
+                                <tr class="border-b border-gray-100 dark:border-gray-700">
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">Tags</td>
+                                    <td class="px-3 py-2">{transaction.tags?.join(', ') ?? '—'}</td>
+                                    <td class="px-3 py-2">{partner?.tags?.join(', ') ?? '—'}</td>
+                                </tr>
+                            {/if}
+                            {#if transaction.description || partner?.description}
+                                <tr>
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">Desc</td>
+                                    <td class="px-3 py-2 text-xs truncate max-w-[160px]">{transaction.description ?? '—'}</td>
+                                    <td class="px-3 py-2 text-xs truncate max-w-[160px]">{partner?.description ?? '—'}</td>
+                                </tr>
+                            {/if}
                         </tbody>
                     </table>
                 </div>
@@ -257,11 +296,30 @@
                                 <td class="px-3 py-2">{fC(transaction.cash)}</td>
                                 <td class="px-3 py-2">{fC(partner?.cash)}</td>
                             </tr>
-                            <tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.quantity')}</td>
+                                <td class="px-3 py-2">{fQ(transaction.quantity)}</td>
+                                <td class="px-3 py-2">{fQ(partner?.quantity)}</td>
+                            </tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.broker')}</td>
                                 <td class="px-3 py-2"><BrokerBadge broker={bLike(transaction.broker_id)} brokers={brkrs} /></td>
                                 <td class="px-3 py-2">{#if partner}<BrokerBadge broker={bLike(partner.broker_id)} brokers={brkrs} />{:else}—{/if}</td>
                             </tr>
+                            {#if transaction.tags?.length || partner?.tags?.length}
+                                <tr class="border-b border-gray-100 dark:border-gray-700">
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">Tags</td>
+                                    <td class="px-3 py-2">{transaction.tags?.join(', ') ?? '—'}</td>
+                                    <td class="px-3 py-2">{partner?.tags?.join(', ') ?? '—'}</td>
+                                </tr>
+                            {/if}
+                            {#if transaction.description || partner?.description}
+                                <tr>
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">Desc</td>
+                                    <td class="px-3 py-2 text-xs truncate max-w-[160px]">{transaction.description ?? '—'}</td>
+                                    <td class="px-3 py-2 text-xs truncate max-w-[160px]">{partner?.description ?? '—'}</td>
+                                </tr>
+                            {/if}
                         </tbody>
                     </table>
                 </div>

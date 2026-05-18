@@ -505,7 +505,8 @@
       "bannerDetailed": "On {date}, Row #{a} and Row #{b} could become {type}",
       "merge": "Merge",
       "deltaLabel": "Max Δ days",
-      "deltaGG": "d"
+      "deltaGG": "d",
+      "rowRef": "Row #{n}"
     },
     "types": {
       "BUY": "Buy",
@@ -613,10 +614,11 @@
       "allViewerOnly": "No editable transactions in selection",
       "resetSelected": "Reset selected",
       "splitQueued": "{n} split queued",
-      "undoSplit": "Undo split",
+      "undoSplit": "Undo",
       "stateNew": "new",
       "stateEdit": "edit",
-      "stateDel": "del"
+      "stateDel": "del",
+      "suggestLightbulb": "Show suggestion"
     },
     "commit": {
       "serverError": "Save failed — server error"

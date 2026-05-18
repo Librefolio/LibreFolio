@@ -80,7 +80,7 @@
         partner_broker_id?: number | null;
         tags?: string[] | null;
         description?: string | null;
-        cost_basis_override?: string | null;
+        cost_basis_override?: {code: string; amount: string} | string | null;
         asset_event_id?: number | null;
         created_at?: string;
         updated_at?: string;
@@ -161,7 +161,7 @@
         tags: string[];
         description: string;
         asset_event_id: number | null;
-        cost_basis_override: string;
+        cost_basis_override: {code: string; amount: string} | null;
         link_uuid: string | null;
     }
 
@@ -174,7 +174,7 @@
         /** "To" side date — may differ from "From" side (e.g. wire transfer arrival). */
         date: string;
         /** Cost basis override for the receiver (transfer_asset only). */
-        cost_basis_override?: string;
+        cost_basis_override?: {code: string; amount: string} | null;
     }
 
     function todayIso(): string {
@@ -197,7 +197,7 @@
             tags: [],
             description: '',
             asset_event_id: null,
-            cost_basis_override: '',
+            cost_basis_override: null,
             link_uuid: null,
         };
     }
@@ -229,7 +229,17 @@
             tags: [...(tx.tags ?? [])],
             description: tx.description ?? '',
             asset_event_id: tx.asset_event_id ?? null,
-            cost_basis_override: tx.cost_basis_override ?? '',
+            cost_basis_override: (() => {
+                const cbo = tx.cost_basis_override;
+                if (!cbo) return null;
+                if (typeof cbo === 'object' && cbo !== null) return {code: String((cbo as any).code ?? ''), amount: String((cbo as any).amount ?? '')};
+                // Legacy string "42.50" (no currency) → use TX cash code as fallback
+                const s = String(cbo).trim();
+                if (!s) return null;
+                const parts = s.split(/\s+/);
+                if (parts.length >= 2) return {amount: parts[0], code: parts[1]};
+                return {amount: parts[0], code: tx.cash?.code ?? ''};
+            })(),
             link_uuid: opts.regenerateLink ? generateUUID() : null,
         };
     }
@@ -448,13 +458,13 @@
             if (myQty > 0) {
                 // row is receiver (qty>0), partner is sender (qty<0)
                 draft = fromTx(partner);
-                dualTo = {broker_id: row.broker_id, cash: null, date: row.date, cost_basis_override: row.cost_basis_override ?? ''};
+                dualTo = {broker_id: row.broker_id, cash: null, date: row.date, cost_basis_override: row.cost_basis_override ? (typeof row.cost_basis_override === 'object' ? row.cost_basis_override as {code: string; amount: string} : null) : null};
             } else {
                 // row is sender (qty<0), partner is receiver (qty>0)
-                dualTo = {broker_id: partner.broker_id, cash: null, date: partner.date, cost_basis_override: partner.cost_basis_override ?? ''};
+                dualTo = {broker_id: partner.broker_id, cash: null, date: partner.date, cost_basis_override: partner.cost_basis_override ? (typeof partner.cost_basis_override === 'object' ? partner.cost_basis_override as {code: string; amount: string} : null) : null};
             }
             // Sender draft must have empty cost_basis_override
-            draft = {...draft, cost_basis_override: ''};
+            draft = {...draft, cost_basis_override: null};
             // Dual form always shows absolute qty — sign is determined by From/To sides
             if (Number(draft.quantity) < 0) {
                 draft = {...draft, quantity: String(Math.abs(Number(draft.quantity)))};
@@ -534,7 +544,7 @@
             // Clear linked event when no longer applicable.
             if (!r.eventLinkable && next.asset_event_id != null) next.asset_event_id = null;
             // Clear cost basis when not a TRANSFER (only meaningful there).
-            if (t !== 'TRANSFER' && next.cost_basis_override) next.cost_basis_override = '';
+            if (t !== 'TRANSFER' && next.cost_basis_override) next.cost_basis_override = null;
             draft = next;
             // Reset dualTo when switching to/from dual mode
             const newLayout = getPairFormLayout(t);
@@ -925,8 +935,8 @@
                 fromItem.asset_id = draft.asset_id;
                 toItem.asset_id = draft.asset_id;
             }
-            if (draft.cost_basis_override.trim()) toItem.cost_basis_override = draft.cost_basis_override.trim();
-            else if (dualTo.cost_basis_override?.trim()) toItem.cost_basis_override = dualTo.cost_basis_override.trim();
+            if (draft.cost_basis_override) toItem.cost_basis_override = draft.cost_basis_override;
+            else if (dualTo.cost_basis_override) toItem.cost_basis_override = dualTo.cost_basis_override;
             if (sharedTags) {
                 fromItem.tags = sharedTags;
                 toItem.tags = sharedTags;
@@ -1199,8 +1209,8 @@
         const v = (e.currentTarget as HTMLInputElement).value;
         draft = {...draft, asset_event_id: v === '' ? null : Number(v)};
     }
-    function onCostBasisInput(e: Event) {
-        draft = {...draft, cost_basis_override: (e.currentTarget as HTMLInputElement).value};
+    function onCostBasisChange(next: {code: string; amount: string} | null) {
+        draft = {...draft, cost_basis_override: next};
     }
 
     // =========================================================================
@@ -1623,18 +1633,14 @@
                     {#if pairLayout === 'transfer_asset'}
                         <div class="mt-3 flex flex-col gap-1">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.costBasis')}</span>
-                            <input
-                                type="number"
-                                step="any"
-                                inputmode="decimal"
-                                autocomplete="off"
-                                name="cb-{autocompleteNonce}"
-                                class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30 text-sm"
-                                placeholder="auto"
+                            <CompactCashCell
                                 value={draft.cost_basis_override}
+                                onChange={onCostBasisChange}
+                                signHint="positive"
+                                amountPlaceholder="auto"
+                                defaultCode={draft.cash?.code ?? 'EUR'}
                                 disabled={isReadonly}
-                                oninput={onCostBasisInput}
-                                data-testid="tx-form-cost-basis"
+                                testid="tx-form-cost-basis"
                             />
                         </div>
                     {/if}
@@ -1885,21 +1891,17 @@
                         {#if showCostBasisField}
                             <label class="flex items-center gap-2">
                                 <span class="text-xs text-gray-500 dark:text-gray-400 w-32 shrink-0">{$t('transactions.form.costBasis')}</span>
-                                <input
-                                    type="number"
-                                    step="any"
-                                    inputmode="decimal"
-                                    autocomplete="off"
-                                    name="cb-{autocompleteNonce}"
-                                    class="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg disabled:opacity-60"
-                                    placeholder="auto"
+                                <CompactCashCell
                                     value={draft.cost_basis_override}
+                                    onChange={onCostBasisChange}
+                                    signHint="positive"
+                                    amountPlaceholder="auto"
+                                    defaultCode={draft.cash?.code ?? 'EUR'}
                                     disabled={isReadonly}
-                                    oninput={onCostBasisInput}
-                                    data-testid="tx-form-cost-basis"
+                                    testid="tx-form-cost-basis"
                                 />
                             </label>
-                            {#if draft.type === 'ADJUSTMENT' && Number(draft.quantity) > 0 && !draft.cost_basis_override.trim()}
+                            {#if draft.type === 'ADJUSTMENT' && Number(draft.quantity) > 0 && !draft.cost_basis_override}
                                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-[136px]" data-testid="tx-form-cost-basis-warning">
                                     {$t('transactions.costBasisOverride.warningAdjustment') || 'No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift.'}
                                 </p>

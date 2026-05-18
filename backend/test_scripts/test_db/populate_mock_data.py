@@ -1515,6 +1515,103 @@ def populate_transactions(session: Session):
     session.commit()
     print(f"  🚫 promote-test-access-fail: W#{tx_access_fail_w.id} (Directa/EDITOR), D#{tx_access_fail_d.id} (DEGIRO/VIEWER)")
 
+    # --- Suggest-discoverable: standalone TX for backend suggest → 💡 import flow ---
+    # These are designed so that only ONE of each pair is loaded into the BulkModal grid
+    # (via tag filtering or manual selection). The backend suggest should find the other.
+    # Tagged 'suggest-discover' for easy identification.
+
+    # Pair A: Cash Transfer discoverable — user loads the WITHDRAWAL, backend finds DEPOSIT
+    tx_disc_w = Transaction(
+        broker_id=ib.id,
+        asset_id=None,
+        type=TransactionType.WITHDRAWAL,
+        date=today - timedelta(days=4),
+        quantity=Decimal("0"),
+        amount=Decimal("-750.00"),
+        currency="EUR",
+        description="[suggest-discover] Withdrawal for backend suggest test",
+        tags="suggest-discover,suggest-discover-loaded",
+    )
+    tx_disc_d = Transaction(
+        broker_id=directa.id,
+        asset_id=None,
+        type=TransactionType.DEPOSIT,
+        date=today - timedelta(days=3),
+        quantity=Decimal("0"),
+        amount=Decimal("750.00"),
+        currency="EUR",
+        description="[suggest-discover] Deposit partner (discoverable by backend)",
+        tags="suggest-discover,suggest-discover-hidden",
+    )
+
+    # Pair B: Asset Transfer discoverable — user loads ADJ-OUT, backend finds ADJ-IN
+    tx_disc_adj_out = Transaction(
+        broker_id=coinbase.id,
+        asset_id=apple.id,
+        type=TransactionType.ADJUSTMENT,
+        date=today - timedelta(days=6),
+        quantity=Decimal("-1.5"),
+        amount=Decimal("0"),
+        currency="USD",
+        description="[suggest-discover] Adj out for backend suggest test",
+        tags="suggest-discover,suggest-discover-loaded",
+    )
+    tx_disc_adj_in = Transaction(
+        broker_id=ib.id,
+        asset_id=apple.id,
+        type=TransactionType.ADJUSTMENT,
+        date=today - timedelta(days=5),
+        quantity=Decimal("1.5"),
+        amount=Decimal("0"),
+        currency="USD",
+        description="[suggest-discover] Adj in partner (discoverable by backend)",
+        tags="suggest-discover,suggest-discover-hidden",
+    )
+
+    # Pair C: FX Conversion discoverable — user loads WITHDRAWAL EUR, backend finds DEPOSIT USD (same broker, diff currency)
+    tx_disc_fx_w = Transaction(
+        broker_id=ib.id,
+        asset_id=None,
+        type=TransactionType.WITHDRAWAL,
+        date=today - timedelta(days=7),
+        quantity=Decimal("0"),
+        amount=Decimal("-1000.00"),
+        currency="EUR",
+        description="[suggest-discover] FX sell side for backend suggest test",
+        tags="suggest-discover,suggest-discover-loaded",
+    )
+    tx_disc_fx_d = Transaction(
+        broker_id=ib.id,
+        asset_id=None,
+        type=TransactionType.DEPOSIT,
+        date=today - timedelta(days=7),
+        quantity=Decimal("0"),
+        amount=Decimal("1080.00"),
+        currency="USD",
+        description="[suggest-discover] FX buy side partner (discoverable by backend)",
+        tags="suggest-discover,suggest-discover-hidden",
+    )
+
+    # Pre-fund IB with EUR to cover the FX WITHDRAWAL (avoid balance violation)
+    tx_disc_prefund = Transaction(
+        broker_id=ib.id,
+        asset_id=None,
+        type=TransactionType.DEPOSIT,
+        date=today - timedelta(days=20),
+        quantity=Decimal("0"),
+        amount=Decimal("2000.00"),
+        currency="EUR",
+        description="[balance-safe] Pre-fund IB EUR for suggest-discover tests",
+        tags="balance-safe,suggest-discover",
+    )
+
+    session.add_all([tx_disc_prefund, tx_disc_w, tx_disc_d, tx_disc_adj_out, tx_disc_adj_in, tx_disc_fx_w, tx_disc_fx_d])
+    session.commit()
+    print(f"  💡 suggest-discover pairs:")
+    print(f"      Cash Transfer: W#{tx_disc_w.id} (IB/loaded) ↔ D#{tx_disc_d.id} (Directa/hidden)")
+    print(f"      Asset Transfer: Adj-#{tx_disc_adj_out.id} (Coinbase/loaded) ↔ Adj+#{tx_disc_adj_in.id} (IB/hidden)")
+    print(f"      FX Conversion: W#{tx_disc_fx_w.id} (IB-EUR/loaded) ↔ D#{tx_disc_fx_d.id} (IB-USD/hidden)")
+
 
 def populate_price_history(session: Session):
     """Create price history for market-priced assets."""
