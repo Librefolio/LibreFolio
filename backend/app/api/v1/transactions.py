@@ -47,9 +47,11 @@ from backend.app.schemas.transactions import (
     TXTypeMetadata,
     TXTypesResponse,
     TXUpdateItem,
-    WACResult,
+    WACPreviewRequest,
+    WACPreviewResponse,
+    WACPreviewResultItem,
 )
-from backend.app.services.transaction_service import TransactionService, compute_weighted_avg_cost
+from backend.app.services.transaction_service import TransactionService, asset_price_at_date, compute_wac_iterative
 from backend.app.utils.datetime_utils import parse_ISO_date
 
 logger = get_logger(__name__)
@@ -353,124 +355,61 @@ async def promote_transfer(
 
 
 # =============================================================================
-# WAC RECALCULATION (TODO: future analytics/ category)
+# WAC PREVIEW — Explicit preview endpoint (inventory-aware WAC + asset price)
 # =============================================================================
 
 
-class RecalcWACRequest(BaseModel):
-    """Request body for POST /transactions/recalc-wac."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    tx_ids: List[int] = Field(..., min_length=1, max_length=100, description="Transaction IDs to recalculate WAC for")
-
-
-class RecalcWACResponseItem(BaseModel):
-    """Per-TX result of WAC recalculation."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    tx_id: int
-    wac_result: WACResult
-    updated: bool = Field(..., description="Whether the TX cost_basis was actually updated")
-
-
-class RecalcWACResponse(BaseModel):
-    """Response for POST /transactions/recalc-wac."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    results: List[RecalcWACResponseItem]
-
-
-@tx_router.post("/recalc-wac", response_model=RecalcWACResponse)
-async def recalc_wac(
-    body: RecalcWACRequest,
+@tx_router.post("/wac-preview", response_model=WACPreviewResponse)
+async def wac_preview(
+    body: WACPreviewRequest,
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
-) -> RecalcWACResponse:
-    """Recalculate WAC for a set of TRANSFER receiver transactions.
+) -> WACPreviewResponse:
+    """Bulk WAC preview: for each item, compute inventory-aware WAC + asset price.
 
-    All TXs must refer to the same asset. Non-TRANSFER or sender TXs are
-    skipped (updated=False). The user must have EDITOR access on every
-    broker involved.
+    This is a read-only endpoint — no DB writes. Used by the frontend to show
+    suggested cost_basis values in the form/bulk modal before commit.
+
+    Accepts pending TXs from the workspace and excluded_tx_ids for TXs deleted
+    in the workspace. Pending TXs with matching id override DB rows.
     """
-    user_id = current_user.id
-    service = TransactionService(session)
+    from backend.app.schemas.common import BackwardFillInfo
 
-    # 1. Fetch all requested transactions
-    txs = []
-    for tx_id in body.tx_ids:
-        tx = await session.get(Transaction, tx_id)
-        if tx is None:
-            raise HTTPException(status_code=404, detail=f"Transaction {tx_id} not found")
-        txs.append(tx)
+    results: list[WACPreviewResultItem] = []
 
-    # 2. Validate same asset_id
-    asset_ids = {tx.asset_id for tx in txs if tx.asset_id is not None}
-    if len(asset_ids) > 1:
-        raise HTTPException(status_code=400, detail="All transactions must refer to the same asset")
-    if not asset_ids:
-        raise HTTPException(status_code=400, detail="No transactions with asset_id found")
-    asset_id = asset_ids.pop()
+    for item in body.items:
+        # Fetch asset currency
+        asset_row = await session.execute(select(Asset.currency).where(Asset.id == item.asset_id))
+        asset_ccy = asset_row.scalar_one_or_none() or ""
 
-    # 3. Check EDITOR access on all brokers
-    broker_ids = {tx.broker_id for tx in txs}
-    for bid in broker_ids:
-        await service._check_broker_access_or_raise(bid, user_id)
-
-    # 4. Fetch asset currency
-    asset_row = await session.execute(select(Asset.currency).where(Asset.id == asset_id))
-    asset_ccy = asset_row.scalar_one_or_none() or ""
-
-    # 5. Process each TX
-    results: List[RecalcWACResponseItem] = []
-    for tx in txs:
-        # Only recalc for TRANSFER receivers (qty > 0)
-        if tx.type != TransactionType.TRANSFER or not tx.quantity or tx.quantity <= 0:
-            results.append(RecalcWACResponseItem(
-                tx_id=tx.id,
-                wac_result=WACResult(),
-                updated=False,
-            ))
-            continue
-
-        # Find sender via related_transaction_id
-        sender_broker_id = None
-        if tx.related_transaction_id:
-            partner = await session.get(Transaction, tx.related_transaction_id)
-            if partner:
-                sender_broker_id = partner.broker_id
-
-        if sender_broker_id is None:
-            # Cannot determine sender → skip
-            results.append(RecalcWACResponseItem(
-                tx_id=tx.id,
-                wac_result=WACResult(),
-                updated=False,
-            ))
-            continue
-
-        wac_result = await compute_weighted_avg_cost(
-            session, sender_broker_id, asset_id, tx.date, asset_ccy
+        # Compute iterative WAC
+        effective = item.effective_date
+        wac_result = await compute_wac_iterative(
+            session,
+            broker_id=item.sender_broker_id,
+            asset_id=item.asset_id,
+            as_of_date=effective,
+            asset_currency=asset_ccy,
+            pending_txs=body.pending_txs,
+            excluded_tx_ids=body.excluded_tx_ids,
         )
 
-        if wac_result.wac is not None:
-            tx.cost_basis_override = wac_result.wac.amount
-            tx.cost_basis_currency = wac_result.wac.code
-            updated = True
-        else:
-            tx.cost_basis_override = None
-            tx.cost_basis_currency = None
-            updated = True  # Still "updated" — cleared to None
+        # Compute asset price at date
+        price_ccy, stale_info, price_missing = await asset_price_at_date(
+            session,
+            asset_id=item.asset_id,
+            target_date=effective,
+            target_currency=asset_ccy,
+        )
 
-        results.append(RecalcWACResponseItem(
-            tx_id=tx.id,
-            wac_result=wac_result,
-            updated=updated,
+        # Merge into result
+        results.append(WACPreviewResultItem(
+            wac=wac_result.wac,
+            wac_qualifying_txs=wac_result.wac_qualifying_txs,
+            wac_missing_pairs=wac_result.wac_missing_pairs,
+            asset_price=price_ccy,
+            asset_price_stale=stale_info,
+            asset_price_missing=price_missing,
         ))
 
-    await session.commit()
-    return RecalcWACResponse(results=results)
-
-
+    return WACPreviewResponse(items=results)

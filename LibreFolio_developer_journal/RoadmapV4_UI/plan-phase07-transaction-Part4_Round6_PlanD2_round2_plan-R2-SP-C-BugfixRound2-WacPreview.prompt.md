@@ -577,11 +577,11 @@ Se FX mancante per entrambi:
 
 ## Execution Checklist
 
-- [ ] Step 1: `compute_wac_iterative()`
-- [ ] Step 2: `asset_price_at_date()`
-- [ ] Step 3: Endpoint `wac-preview`
-- [ ] Step 4: Rimuovere auto-calc al commit
-- [ ] Step 5: Eliminare `recalc-wac`
+- [x] Step 1: `compute_wac_iterative()`
+- [x] Step 2: `asset_price_at_date()`
+- [x] Step 3: Endpoint `wac-preview`
+- [x] Step 4: Rimuovere auto-calc al commit
+- [x] Step 5: Eliminare `recalc-wac`
 - [ ] Step 6: Adattare backend tests
 - [ ] Step 7: FormModal WAC state machine
 - [ ] Step 8: BulkModal celle WAC
@@ -589,4 +589,39 @@ Se FX mancante per entrambi:
 - [ ] Step 10: Error handling componente
 - [ ] Step 11: i18n + test runner
 - [ ] Step 12: E2E tests
+
+### Progress Notes
+
+**Steps 1-5 completed (2026-05-19)**: Backend fully implemented.
+- `compute_wac_iterative()` added at line ~197 of `transaction_service.py`
+- `asset_price_at_date()` added right after
+- Endpoint at `POST /transactions/wac-preview` in `transactions.py` router
+- Auto-calc removed from promote Step 5c and link resolution Step 6b
+- Old `POST /recalc-wac` endpoint + schemas deleted
+- `./dev.py api sync` run twice (after step 3 and step 5)
+- New schemas added to `backend/app/schemas/transactions.py`: `WACPreviewItem`, `WACPendingTX`, `WACPreviewRequest`, `WACQualifyingTX`, `WACPreviewResultItem`, `WACPreviewResponse`
+- Imports updated: `BackwardFillInfo`, `BaseListResponse`, `FxBackwardFillInfo` added to transactions schemas imports
+
+**Refactoring round (2026-05-19)**: Architecture feedback applied.
+- Created `backend/app/utils/financial_utils.py` — pure math: `compute_wac_from_txlist()`, `WACInputTX`, `WACCalcResult`, `determine_target_currency()`
+- `compute_wac_iterative()` refactored: preparation layer → delegates to `compute_wac_from_txlist()` for pure math
+- Same-date grouping: additions processed before reductions within same date
+- Negative qty clamp: if `new_qty < 0` → clamp to 0 (rounding tolerance)
+- Removed `wac_info` from `TXBatchResultItem` — field is obsolete (no auto-calc at commit)
+- `asset_price_at_date()` kept temporarily but marked for replacement with existing `get_prices_bulk` from `AssetSourceManager`
+- `./dev.py api sync` run after wac_info removal
+
+**Refactoring round 2 (2026-05-19)**: Deduplication + DateRange.
+- Removed `WACQualifyingEntry` dataclass from `financial_utils.py` → reuses `WACQualifyingTX` Pydantic model from schemas
+- `WACInputTX` kept as dataclass (unique: has `unit_cost_converted` post-FX field, internal to math layer)
+- `WACPreviewItem` now supports both `as_of_date` (single date) and `date_range: DateRangeModel` (future analytics)
+  - Validator ensures exactly one is provided
+  - Property `effective_date` returns the end date for both modes
+- `./dev.py api sync` run
+
+**TODO for next iteration (feedback not yet applied)**:
+- [ ] `WACPendingTX` should generalize from `TXCreateItem` (avoid parallel type)
+- [ ] Move inline imports (`from backend.app.schemas.transactions import ...`) to file top
+- [ ] Replace `asset_price_at_date` with `AssetSourceManager.get_prices_bulk` (reuse existing backward-fill logic)
+- [ ] `WACQualifyingTX` purpose: enables "Show transactions used" expandable in UI — shows user which TXs contributed to WAC and their effect (add/reduce/add_zero_cost)
 

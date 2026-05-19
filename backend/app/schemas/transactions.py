@@ -27,9 +27,12 @@ from pydantic_core import PydanticCustomError
 
 from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.common import (
+    BackwardFillInfo,
     BaseDeleteResult,
+    BaseListResponse,
     Currency,
     DateRangeModel,
+    FxBackwardFillInfo,
     SafeDecimal,
 )
 from backend.app.utils.datetime_utils import UTCDateTime
@@ -663,6 +666,107 @@ class WACResult(BaseModel):
     missing_pairs: List[str] = Field(default_factory=list, description="FX pairs that could not be resolved (e.g. 'CHF/EUR')")
 
 
+# =============================================================================
+# WAC PREVIEW — Explicit preview endpoint (replaces auto-calc at commit)
+# =============================================================================
+
+
+class WACPreviewItem(BaseModel):
+    """Single WAC preview request within a bulk call.
+
+    Supports both single-date (as_of_date) and range (date_range) modes:
+    - as_of_date: compute WAC at a specific date (used by FormModal preview)
+    - date_range: compute WAC at end of range, considering TXs in range (future: analytics)
+    Exactly one must be provided.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    sender_broker_id: int = Field(..., description="Broker ID of the source (sender) side")
+    asset_id: int = Field(..., description="Asset ID to calculate WAC for")
+    as_of_date: Optional[date_type] = Field(None, description="Single date up to which to compute WAC")
+    date_range: Optional[DateRangeModel] = Field(None, description="Date range for WAC computation (future: analytics)")
+
+    @model_validator(mode="after")
+    def _validate_date_mode(self) -> "WACPreviewItem":
+        """Exactly one of as_of_date or date_range must be set."""
+        if self.as_of_date is None and self.date_range is None:
+            raise ValueError("Either as_of_date or date_range must be provided")
+        if self.as_of_date is not None and self.date_range is not None:
+            raise ValueError("Cannot provide both as_of_date and date_range")
+        return self
+
+    @property
+    def effective_date(self) -> date_type:
+        """The effective end date for WAC computation."""
+        if self.as_of_date:
+            return self.as_of_date
+        return self.date_range.end or self.date_range.start  # type: ignore[union-attr]
+
+
+class WACPendingTX(BaseModel):
+    """A pending TX from workspace (overrides DB row if id matches, adds if id=null)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: Optional[int] = Field(None, description="DB id to override, or None for new pending TX")
+    broker_id: int
+    asset_id: int
+    type: str
+    date: date_type
+    quantity: SafeDecimal
+    amount: Optional[SafeDecimal] = None
+    currency: Optional[str] = None
+    cost_basis_override: Optional[Currency] = None
+
+
+class WACPreviewRequest(BaseModel):
+    """Bulk WAC preview request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: List[WACPreviewItem] = Field(..., min_length=1, max_length=50)
+    pending_txs: List[WACPendingTX] = Field(default_factory=list, max_length=500)
+    excluded_tx_ids: List[int] = Field(default_factory=list, max_length=500, description="DB TX ids to exclude (deleted in workspace)")
+
+
+class WACQualifyingTX(BaseModel):
+    """A TX that participated in WAC calculation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tx_id: Optional[int] = Field(None, description="DB id, or None if pending without id")
+    type: str
+    date: date_type
+    quantity: SafeDecimal
+    unit_cost: Optional[SafeDecimal] = None
+    currency: Optional[str] = None
+    effect: str = Field(..., description="add | reduce | add_zero_cost | skip_no_override")
+    fx_info: Optional[FxBackwardFillInfo] = None
+
+
+class WACPreviewResultItem(BaseModel):
+    """Result for a single WAC preview item."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # WAC inventory-aware
+    wac: Optional[Currency] = Field(None, description="Calculated WAC per unit. None if FX conversion failed.")
+    wac_qualifying_txs: List[WACQualifyingTX] = Field(default_factory=list)
+    wac_missing_pairs: List[str] = Field(default_factory=list)
+    # Asset price at date (useful for ADJUSTMENT scenario)
+    asset_price: Optional[Currency] = Field(None, description="Asset close price at as_of_date (backward-filled)")
+    asset_price_stale: Optional[BackwardFillInfo] = Field(None, description="Staleness of asset price")
+    asset_price_missing: bool = Field(False, description="True if no price data available at all")
+
+
+class WACPreviewResponse(BaseListResponse[WACPreviewResultItem]):
+    """Response for POST /transactions/wac-preview. items[i] ↔ request.items[i]."""
+
+    pass
+
+
+
 class TXBatchResultItem(BaseModel):
     """Per-item result for committed rows."""
 
@@ -673,7 +777,6 @@ class TXBatchResultItem(BaseModel):
     ids: List[int] = Field(default_factory=list, description="IDs of affected transactions. Split/promote return both IDs.")
     link_uuid: Optional[str] = None
     status: TXItemStatus
-    wac_info: Optional[WACResult] = Field(default=None, description="WAC calculation details for TRANSFER auto-calc")
 
 
 class TXBatchResponse(BaseModel):
