@@ -461,7 +461,7 @@ Sugli `<input type="number">` e `<input type="range">`:
 - [x] Step 6: BUG-C9 — FormModal cost_basis Currency (CompactCashCell)
 - [x] Step 7: BUG-C11 — DataTableColumnFilter integer step
 - [x] Step 8: BUG-C12 — promote-suggest $effect applySignRules (P0)
-- [ ] Walktest finale: verificare tutti i 12 bug risolti
+- [x] Walktest finale: tutti i 12 bug risolti ✅ (2026-05-19)
 - [x] Backend suggest: verified working (see debug test `/tmp/libreFolio_test_suggest_debug.py`)
 - [x] `./dev.py test front-transaction tx-bulk-suggest-ux` → verde ✅ (2026-05-18)
 - [x] `./dev.py test front-transaction tx-split-promote` → verde (NR) ✅ (2026-05-18)
@@ -709,3 +709,6 @@ Prerequisiti: `./dev.py server --test --force` attivo su porta 8001. Login come 
 → [`plan-R2-SP-C-FxImpliedRateSpread`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-FxImpliedRateSpread.prompt.md) — FX Implied Rate & Market Spread UX (banner suffix + FormModal info marker). Triggered by BUG-C12 fix revealing FX_CONVERSION suggestions in the suggest banner.
 
 → `plan-R2-SP-C-BugfixRound2` (se necessario) — eventuali regressioni o nuovi bug scoperti durante il walktest finale.
+
+→ [`plan-R2-SP-C-BugfixRound2-WacPreview`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md) — WAC Preview Architecture: nuovo endpoint `wac-preview`, toggle Auto/Manual nel form, rimozione auto-calc al commit, E2E W8/W9/W10. Triggered by C9 walktest gaps → architectural rethink.
+
