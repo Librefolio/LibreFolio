@@ -649,4 +649,91 @@ test.describe('Cost Basis Override', () => {
         );
         expect(hasCostBasis).toBe(true);
     });
+
+    test('ADJUSTMENT shows cost_basis field + tooltip icon visible', async ({page}) => {
+        await openCreateFlow(page);
+        await selectType(page, 'ADJUSTMENT');
+        await page.waitForTimeout(500);
+
+        // Pick broker and asset
+        await pickFirstBroker(page);
+        await pickFirstAsset(page);
+        await fillQuantity(page, '5');
+
+        // Open advanced section
+        const advancedToggle = page.getByTestId('tx-form-advanced-toggle');
+        await expect(advancedToggle).toBeVisible({timeout: 3_000});
+        await advancedToggle.click();
+        await page.waitForTimeout(300);
+
+        // Cost basis field should be visible
+        const cbInput = page.getByTestId('tx-form-cost-basis-amount');
+        await expect(cbInput).toBeVisible({timeout: 2_000});
+
+        // Tooltip icon should be present (Info icon inside Tooltip wrapper)
+        const tooltipWrapper = page.locator('[data-testid="tx-form-cost-basis"]')
+            .locator('..').locator('..').locator('.tooltip-wrapper');
+        await expect(tooltipWrapper).toBeVisible({timeout: 2_000});
+    });
+
+    test('ADJUSTMENT empty cost_basis → payload sends null (not empty object)', async ({page}) => {
+        await openCreateFlow(page);
+        await selectType(page, 'ADJUSTMENT');
+        await page.waitForTimeout(500);
+
+        await pickFirstBroker(page);
+        await pickFirstAsset(page);
+        await fillQuantity(page, '2');
+
+        // Do NOT fill cost_basis — leave empty
+        await applyFormModal(page);
+        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+
+        const {payload} = await commitBulkModal(page);
+        const creates = payload.creates as Record<string, unknown>[];
+        expect(creates?.length).toBeGreaterThanOrEqual(1);
+
+        // Verify cost_basis_override is null or absent (not {amount: "", code: "..."})
+        for (const c of creates) {
+            if (c.cost_basis_override != null) {
+                // If present, amount must NOT be empty
+                const cbo = c.cost_basis_override as {amount?: string};
+                expect(cbo.amount?.trim()).not.toBe('');
+            }
+        }
+    });
+
+    test('ADJUSTMENT with cost_basis_override → value persists in payload', async ({page}) => {
+        await openCreateFlow(page);
+        await selectType(page, 'ADJUSTMENT');
+        await page.waitForTimeout(500);
+
+        await pickFirstBroker(page);
+        await pickFirstAsset(page);
+        await fillQuantity(page, '3');
+
+        // Open advanced + fill cost basis
+        const advancedToggle = page.getByTestId('tx-form-advanced-toggle');
+        await advancedToggle.click();
+        await page.waitForTimeout(300);
+
+        const cbInput = page.getByTestId('tx-form-cost-basis-amount');
+        await expect(cbInput).toBeVisible({timeout: 2_000});
+        await cbInput.fill('99.99');
+        await page.waitForTimeout(200);
+
+        await applyFormModal(page);
+        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+
+        const {payload} = await commitBulkModal(page);
+        const creates = payload.creates as Record<string, unknown>[];
+        expect(creates?.length).toBeGreaterThanOrEqual(1);
+
+        // At least one create should have cost_basis_override with amount "99.99"
+        const hasCostBasis = creates.some((c) => {
+            const cbo = c.cost_basis_override as {amount?: string} | null;
+            return cbo != null && cbo.amount === '99.99';
+        });
+        expect(hasCostBasis).toBe(true);
+    });
 });
