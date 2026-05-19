@@ -1830,9 +1830,10 @@ class AssetSourceManager:
         price_map: dict[date_type, PriceHistory],
         start_date: date_type,
         end_date: date_type,
+        seed_price: Optional[PriceHistory] = None,
     ) -> list[FAPricePoint]:
         results: list[FAPricePoint] = []
-        last_known: Optional[PriceHistory] = None
+        last_known: Optional[PriceHistory] = seed_price
         current = start_date
         while current <= end_date:
             ph = price_map.get(current)
@@ -1917,6 +1918,28 @@ class AssetSourceManager:
             if p.asset_id in price_maps:
                 price_maps[p.asset_id][p.date] = p
 
+        # Query seed prices for assets that may need backward-fill from before the range.
+        # For each asset, find the most recent price BEFORE global_start to use as seed.
+        seed_prices: dict[int, PriceHistory] = {}
+        assets_needing_seed = [aid for aid in asset_ids if not price_maps[aid].get(asset_ranges[aid][0])]
+        if assets_needing_seed:
+            for aid in assets_needing_seed:
+                seed_stmt = (
+                    select(PriceHistory)
+                    .where(
+                        and_(
+                            PriceHistory.asset_id == aid,
+                            PriceHistory.date < asset_ranges[aid][0],
+                        )
+                    )
+                    .order_by(PriceHistory.date.desc())
+                    .limit(1)
+                )
+                seed_result = await session.execute(seed_stmt)
+                seed_row = seed_result.scalars().first()
+                if seed_row:
+                    seed_prices[aid] = seed_row
+
         # Build backward-filled series per asset (preserving request order)
         results = []
 
@@ -1956,7 +1979,8 @@ class AssetSourceManager:
             aid = req.asset_id
             start, end = asset_ranges[aid]
             price_map = price_maps.get(aid, {})
-            series = AssetSourceManager._build_backward_filled_series(price_map, start, end)
+            seed = seed_prices.get(aid)
+            series = AssetSourceManager._build_backward_filled_series(price_map, start, end, seed_price=seed)
             events = event_maps.get(aid, []) if aid in event_requests else []
             results.append(FAPriceQueryResult(asset_id=aid, prices=series, events=events))
 

@@ -53,11 +53,14 @@ from backend.app.schemas.transactions import (
     TXValidationCode,
     TXValidationIssue,
     WACConversionInfo,
+    WACPreviewResultItem,
+    WACQualifyingTX,
     WACResult,
     get_swap_group,
     tags_to_csv,
 )
 from backend.app.utils.datetime_utils import parse_ISO_date, utcnow
+from backend.app.utils.financial_utils import WACInputTX, compute_wac_from_txlist, determine_target_currency
 
 
 async def compute_weighted_avg_cost(
@@ -214,9 +217,6 @@ async def compute_wac_iterative(
     Preparation layer: queries DB, merges pending TXs, handles FX conversion,
     then delegates to compute_wac_from_txlist() for pure math.
     """
-    from backend.app.schemas.transactions import WACPreviewResultItem, WACQualifyingTX
-    from backend.app.utils.financial_utils import WACInputTX, compute_wac_from_txlist, determine_target_currency
-
     excluded = set(excluded_tx_ids or [])
     pending = pending_txs or []
 
@@ -250,7 +250,10 @@ async def compute_wac_iterative(
             if ptx.broker_id == broker_id and ptx.asset_id == asset_id and ptx.date <= as_of_date:
                 cbo_amount = ptx.cost_basis_override.amount if ptx.cost_basis_override else None
                 cbo_ccy = ptx.cost_basis_override.code if ptx.cost_basis_override else None
-                unified.append((ptx.id, ptx.type, ptx.date, ptx.quantity, ptx.amount, ptx.currency, cbo_amount, cbo_ccy, True))
+                ptx_amount = ptx.cash.amount if ptx.cash else None
+                ptx_currency = ptx.cash.code if ptx.cash else None
+                ptx_type = ptx.type.value if hasattr(ptx.type, "value") else str(ptx.type)
+                unified.append((ptx.id, ptx_type, ptx.date, ptx.quantity, ptx_amount, ptx_currency, cbo_amount, cbo_ccy, True))
         else:
             unified.append((
                 row.id, row.type.value if hasattr(row.type, "value") else str(row.type),
@@ -263,14 +266,20 @@ async def compute_wac_iterative(
         if ptx.broker_id == broker_id and ptx.asset_id == asset_id and ptx.date <= as_of_date and ptx.quantity and ptx.quantity != 0:
             cbo_amount = ptx.cost_basis_override.amount if ptx.cost_basis_override else None
             cbo_ccy = ptx.cost_basis_override.code if ptx.cost_basis_override else None
-            unified.append((ptx.id, ptx.type, ptx.date, ptx.quantity, ptx.amount, ptx.currency, cbo_amount, cbo_ccy, True))
+            ptx_amount = ptx.cash.amount if ptx.cash else None
+            ptx_currency = ptx.cash.code if ptx.cash else None
+            ptx_type = ptx.type.value if hasattr(ptx.type, "value") else str(ptx.type)
+            unified.append((ptx.id, ptx_type, ptx.date, ptx.quantity, ptx_amount, ptx_currency, cbo_amount, cbo_ccy, True))
 
     # New pending (no id)
     for ptx in pending_new:
         if ptx.broker_id == broker_id and ptx.asset_id == asset_id and ptx.date <= as_of_date and ptx.quantity and ptx.quantity != 0:
             cbo_amount = ptx.cost_basis_override.amount if ptx.cost_basis_override else None
             cbo_ccy = ptx.cost_basis_override.code if ptx.cost_basis_override else None
-            unified.append((None, ptx.type, ptx.date, ptx.quantity, ptx.amount, ptx.currency, cbo_amount, cbo_ccy, True))
+            ptx_amount = ptx.cash.amount if ptx.cash else None
+            ptx_currency = ptx.cash.code if ptx.cash else None
+            ptx_type = ptx.type.value if hasattr(ptx.type, "value") else str(ptx.type)
+            unified.append((None, ptx_type, ptx.date, ptx.quantity, ptx_amount, ptx_currency, cbo_amount, cbo_ccy, True))
 
     if not unified:
         return WACPreviewResultItem(
@@ -380,53 +389,6 @@ async def compute_wac_iterative(
         wac_missing_pairs=[],
     )
 
-
-async def asset_price_at_date(
-    session: AsyncSession,
-    asset_id: int,
-    target_date: date_type,
-    target_currency: str | None = None,
-) -> tuple[Currency | None, Any, bool]:
-    """Get asset close price at a date with backward-fill.
-
-    Returns (price_currency, stale_info, missing).
-    Uses existing PriceHistory query with backward-fill.
-    """
-    from backend.app.db.models import Asset, PriceHistory
-    from backend.app.schemas.common import BackwardFillInfo
-
-    asset_row = await session.execute(select(Asset.currency).where(Asset.id == asset_id))
-    asset_ccy = asset_row.scalar_one_or_none()
-    if not asset_ccy:
-        return None, None, True
-
-    stmt = (
-        select(PriceHistory)
-        .where(PriceHistory.asset_id == asset_id, PriceHistory.date <= target_date)
-        .order_by(PriceHistory.date.desc())
-        .limit(1)
-    )
-    row = (await session.execute(stmt)).scalars().first()
-
-    if not row or row.close is None:
-        return None, None, True
-
-    price = row.close
-    stale_info = None
-    if row.date < target_date:
-        days_back = (target_date - row.date).days
-        stale_info = BackwardFillInfo(actual_rate_date=row.date, days_back=days_back)
-
-    price_ccy = Currency(code=asset_ccy, amount=price)
-
-    if target_currency and target_currency != asset_ccy:
-        bulk_input = [(price_ccy, target_currency, target_date)]
-        fx_results, _ = await convert_bulk(session, bulk_input, raise_on_error=False)
-        if fx_results and fx_results[0] is not None:
-            converted, _, _ = fx_results[0]
-            price_ccy = converted
-
-    return price_ccy, stale_info, False
 
 
 class BalanceValidationError(Exception):

@@ -27,7 +27,8 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import Asset, Transaction, TransactionType, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.common import BackwardFillInfo, Currency, DateRangeModel
+from backend.app.schemas.prices import FAPriceQueryItem
 from backend.app.schemas.transactions import (
     EVENT_TYPE_METADATA,
     TX_TYPE_METADATA,
@@ -51,7 +52,8 @@ from backend.app.schemas.transactions import (
     WACPreviewResponse,
     WACPreviewResultItem,
 )
-from backend.app.services.transaction_service import TransactionService, asset_price_at_date, compute_wac_iterative
+from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.transaction_service import TransactionService, compute_wac_iterative
 from backend.app.utils.datetime_utils import parse_ISO_date
 
 logger = get_logger(__name__)
@@ -373,8 +375,6 @@ async def wac_preview(
     Accepts pending TXs from the workspace and excluded_tx_ids for TXs deleted
     in the workspace. Pending TXs with matching id override DB rows.
     """
-    from backend.app.schemas.common import BackwardFillInfo
-
     results: list[WACPreviewResultItem] = []
 
     for item in body.items:
@@ -383,7 +383,7 @@ async def wac_preview(
         asset_ccy = asset_row.scalar_one_or_none() or ""
 
         # Compute iterative WAC
-        effective = item.effective_date
+        effective = item.end_date
         wac_result = await compute_wac_iterative(
             session,
             broker_id=item.sender_broker_id,
@@ -394,13 +394,25 @@ async def wac_preview(
             excluded_tx_ids=body.excluded_tx_ids,
         )
 
-        # Compute asset price at date
-        price_ccy, stale_info, price_missing = await asset_price_at_date(
-            session,
+        # Compute asset price at date via get_prices_bulk (backward-fill unlimited after Step 0)
+        price_ccy = None
+        stale_info = None
+        price_missing = True
+
+        price_req = FAPriceQueryItem(
             asset_id=item.asset_id,
-            target_date=effective,
-            target_currency=asset_ccy,
+            date_range=DateRangeModel(start=effective, end=effective),
         )
+        price_results = await AssetSourceManager.get_prices_bulk([price_req], session)
+        if price_results and price_results[0].prices:
+            last_point = price_results[0].prices[-1]
+            price_ccy = Currency(code=last_point.currency, amount=last_point.close)
+            if last_point.backward_fill_info:
+                stale_info = BackwardFillInfo(
+                    actual_rate_date=last_point.backward_fill_info.actual_rate_date,
+                    days_back=last_point.backward_fill_info.days_back,
+                )
+            price_missing = False
 
         # Merge into result
         results.append(WACPreviewResultItem(
