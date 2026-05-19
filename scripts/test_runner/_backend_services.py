@@ -203,6 +203,17 @@ def services_brim_provider_base(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "BRIM provider base tests", verbose=verbose)
 
 
+def services_financial_utils(verbose: bool = False, test_names: list = None) -> bool:
+    """Test pure-math financial utilities (WAC calculation, target currency)."""
+    print_section("Services: Financial Utils (WAC)")
+    print_info("Testing: backend/app/utils/financial_utils.py")
+    print_info("Tests: compute_wac_from_txlist, determine_target_currency")
+    print_info("Pure math — no server, no DB required")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial_utils.py", test_names)
+    return run_command(cmd, "Financial utils tests", verbose=verbose)
+
+
 def services_all(verbose: bool = False) -> bool:
     """Run all backend service tests."""
     print_header("LibreFolio Backend Services Tests")
@@ -262,6 +273,7 @@ Note: No backend server required.
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base default properties")
+    add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat
 

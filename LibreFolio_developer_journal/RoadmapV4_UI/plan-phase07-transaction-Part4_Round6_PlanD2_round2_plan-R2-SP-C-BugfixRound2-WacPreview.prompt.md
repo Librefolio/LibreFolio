@@ -521,19 +521,32 @@ Se FX mancante per entrambi:
 
 - Toggle Auto/Manual (visibile solo per new TX)
 - `$effect` con debounce 500ms trailing, leading=true, AbortController
-- Per TRANSFER: chiama wac-preview con sender_broker
-- Per ADJUSTMENT+: chiama wac-preview per asset_price + WAC broker
+- Per TRANSFER: chiama `POST /transactions/wac-preview` con:
+  ```ts
+  {
+    items: [{sender_broker_id, asset_id, date_range: {start: "epoch-or-first-tx", end: txDate}}],
+    pending_txs: [/* righe workspace TXCreateItem-format con id:null per new, id:N per override */],
+    excluded_tx_ids: [/* IDs di TX DB cancellate nel workspace */]
+  }
+  ```
+  - `pending_txs` = `WACPendingTXItem` (extends `TXCreateItem` + campo `id: number|null`)
+  - TX nuove nel workspace → `id: null` (aggiunte al pool)
+  - TX editate nel workspace → `id: <db_id>` (sovrascrivono il DB row)
+- Per ADJUSTMENT+: stessa call → usa `asset_price` + `wac` dalla response
 - Rendering: gray italic (auto), black (manual/saved), red border (error)
 - [↺ Recalculate] per edit mode (on-demand)
-- Sezione espandibile "Show transactions used" con qualifying_txs
+- Sezione espandibile "Show transactions used" con `wac_qualifying_txs`
 
 ### Step 8: Frontend — WAC preview nella BulkModal
 
 **File**: `frontend/src/lib/components/transactions/TransactionBulkModal.svelte`
 
 - Celle: gray italic + 💡 per righe new in auto; nero per DB/manual
-- Bulk call: una sola POST per tutti gli items auto
-- Re-trigger quando righe rilevanti cambiano
+- Bulk call: una sola `POST /transactions/wac-preview` per tutti gli items in auto
+  - `items[]`: una entry per ogni riga TRANSFER/ADJUSTMENT+ in auto
+  - `pending_txs[]`: TUTTE le righe workspace (formato TXCreateItem + id) — il backend filtra per (broker, asset, date)
+  - `excluded_tx_ids[]`: IDs delle righe cancellate globally
+- Re-trigger quando righe rilevanti (same broker+asset) cambiano
 - [↺] per righe DB (on-hover)
 
 ### Step 9: Frontend — PromoteMergeModal con cost_basis
@@ -542,6 +555,7 @@ Se FX mancante per entrambi:
 
 - Quando target = TRANSFER → modale SEMPRE aperta
 - Sezione "Cost Basis (receiver)" con toggle Auto/Manual (se new) o [↺] (se DB)
+- Request: `sender_broker_id` = broker della TX sender (from `related_transaction_id`)
 - Qualifying TXs espandibile
 - Error state per FX mancanti con opzioni
 
@@ -551,7 +565,8 @@ Se FX mancante per entrambi:
   - [Add FX pair →] → naviga a pagina FX
   - [Sync FX rates] → trigger sync FX
   - [Sync asset prices] → trigger asset refresh
-- Shared tra FormModal, BulkModal, PromoteMergeModal (componente riusabile?)
+- Shared tra FormModal, BulkModal, PromoteMergeModal (componente riusabile `WacErrorBanner.svelte`?)
+- Campi dalla response: `wac_missing_pairs: string[]`, `asset_price_missing: bool`, `asset_price_stale: BackwardFillInfo`
 
 ### Step 11: i18n + test runner
 
@@ -566,12 +581,12 @@ Se FX mancante per entrambi:
 | Test | Cosa verifica |
 |------|--------------|
 | W8 | TRANSFER con override manuale (toggle Manual) → valore esplicito salvato sul ricevente, sender = null |
-| W9 | TRANSFER senza override (toggle Auto) → preview mostrato in corsivo → commit → valore ≈ 175.57 (±0.01) |
+| W9 | TRANSFER con toggle Auto → preview mostrato in corsivo → utente conferma → `cost_basis_override` nel payload commit = valore preview (il commit NON ricalcola, salva ciò che riceve) |
 | W10 | Tooltip info visibile + contiene link docs |
-| W-live | Aggiungi BUY nella bulk → il preview WAC nella riga TRANSFER si aggiorna |
-| W-manual | Digita → toggle diventa Manual → [Auto] riporta l'auto |
-| W-sell | SELL intermedia → WAC inventory diverso da cumulativo (valore corretto con riduzioni) |
-| W-excluded | Cancella una TX nel workspace → WAC ricalcolato senza di essa |
+| W-live | Aggiungi BUY nella bulk → il preview WAC nella riga TRANSFER si aggiorna (pending_txs in azione) |
+| W-manual | Digita → toggle diventa Manual → click [Auto] riporta corsivo + ricalcolo |
+| W-sell | SELL intermedia → WAC inventory diverso da cumulativo (verifica valore corretto con pool reduction) |
+| W-excluded | Cancella una TX nel workspace (excluded_tx_ids) → WAC ricalcolato senza di essa |
 
 ---
 
@@ -582,7 +597,7 @@ Se FX mancante per entrambi:
 - [x] Step 3: Endpoint `wac-preview`
 - [x] Step 4: Rimuovere auto-calc al commit
 - [x] Step 5: Eliminare `recalc-wac`
-- [ ] Step 6: Adattare backend tests
+- [x] Step 6: Adattare backend tests
 - [ ] Step 7: FormModal WAC state machine
 - [ ] Step 8: BulkModal celle WAC
 - [ ] Step 9: PromoteMergeModal cost_basis
@@ -619,6 +634,6 @@ Se FX mancante per entrambi:
   - Property `effective_date` returns the end date for both modes
 - `./dev.py api sync` run
 
-**TODO for next iteration (feedback not yet applied)**:
-→ [`plan-R2-SP-C-BugfixRound2-WacBackendCleanup`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacBackendCleanup.prompt.md) — Schema consolidation (rimuovere as_of_date, WACPendingTX→TXCreateItem, import cleanup, replace asset_price_at_date) + backend tests (API + unit). Al completamento, tornare qui verificare che lo **Step 6** sia coperto e continuare da **Step 7** (Frontend — FormModal WAC state machine).
+**TODO for next iteration**:
+→ [`plan-R2-SP-C-BugfixRound2-WacBackendCleanup`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacBackendCleanup.prompt.md) — ✅ **COMPLETATO** (2026-05-19). Step 6 coperto integralmente (34 test). Continuare da **Step 7** (Frontend — FormModal WAC state machine).
 
