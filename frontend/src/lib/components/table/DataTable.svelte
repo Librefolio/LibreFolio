@@ -1112,6 +1112,7 @@
                                         {currencyMinMaxByCode}
                                         numberMin={minMax.min}
                                         numberMax={minMax.max}
+                                        integerOnly={column.integerOnly ?? false}
                                         initialValue={columnFilters[column.id]}
                                         onApply={(filter) => applyColumnFilter(column.id, filter)}
                                         onClose={() => (openFilterColumnId = null)}

@@ -519,6 +519,20 @@ Sugli `<input type="number">` e `<input type="range">`:
 
 12. **Promote button missing from main table toolbar** — `findPromoteMatch()` uses `_cache` from `transactionTypeStore`, which was only loaded inside BulkModal/FormModal (`ensureTypesLoaded()`). The page never called it, so `_cache` was always null → `promoteMatch` always null → button never shown. Fix: added `ensureTypesLoaded()` to page's `onMount` Promise.all + `void $typesVersion` dependency in `$derived.by` to re-evaluate when cache populates.
 
+13. **C5/C6 walktest refinements** — Multiple UX improvements during walktest:
+    - **ActionModal sticky header/footer**: restructured from single scrollable div to `flex flex-col max-h-[80vh]` with header (shrink-0 + border-b), scrollable body (overflow-y-auto flex-1 min-h-0), sticky footer (shrink-0 + border-t).
+    - **PromoteMergeModal sticky layout + dirty guard**: same structure applied. Added `interacted` flag set by ALL per-field buttons (left/right/concat/union) and global buttons (allLeft/allMerge/allRight). `dirty = interacted || snapshot differs`. Reset on open.
+    - **AFTER table row order**: aligned BEFORE/AFTER to same order (date → type → quantity → cash → broker → tags → desc). Was type-first in AFTER.
+    - **i18n `standalone` → plural**: IT "Indipendenti", FR "Indépendantes", ES "Independientes". EN invariant.
+    - **Tag badges in ActionModal**: replaced `tags.join(', ')` (6 occurrences) with colored badge rendering via `getStringBadgeStyle` + `.action-tag-badge` scoped CSS.
+    - **Quantity emoji + zero handling**: `fQ` replaced with `formatTxQuantity` from shared helper — shows `+n 📈` / `-n 📉` / `—` for null/0.
+
+14. **Created `txDisplayHelpers.ts`** — Extracted shared formatting logic into `frontend/src/lib/components/transactions/txDisplayHelpers.ts`:
+    - `formatTxQuantity(qty)` — unified quantity display (emoji, sign, — for zero)
+    - `formatTxCash(cash)` — unified cash display (formatted with sign, — for null)
+    - Consumed by: `TransactionActionModal`, `TransactionDeleteModal`, `TransactionsTable`
+    - Eliminates 3 redundant local `fQ`/`fC`/`formatQty` implementations.
+
 ## Walktest Protocol (2026-05-18)
 
 Prerequisiti: `./dev.py server --test --force` attivo su porta 8001. Login come `e2e_test_user`. Navigare a Transactions.
@@ -668,16 +682,16 @@ Prerequisiti: `./dev.py server --test --force` attivo su porta 8001. Login come 
 |-----|--------|------|
 | C3 | ✅ | Fixed: type stripped from split-queued updates, splits added to validate. E2E test added + mock data balanced. |
 | C12 | ✅ | Merge modal worked, promote committed successfully. Minor fix: description concat button label + ⟷ symbol uniformed. |
-| C7 | ⏳ | — |
-| C10 | ⏳ | — |
-| C1 | ⏳ | — |
-| C2 | ⏳ | — |
-| C4 | ⏳ | — |
-| C5 | ⏳ | — |
-| C6 | ⏳ | — |
+| C7 | ✅ | Verified: banner shows only in-grid pairs; 💡 button shows DB candidates; import updates banner. |
+| C10 | ✅ | Verified: suggest reacts to local edits (date change triggers/removes banner). |
+| C1 | ✅ | Verified: partner row appears adjacent after split. |
+| C2 | ✅ | Verified: Reset All removes split badge + partner row. |
+| C4 | ✅ | Verified: type preview correct after edit. |
+| C5 | ✅ | Fixed: ActionModal restructured with sticky header/footer (flex-col max-h-[80vh]) + scrollable body. PromoteMergeModal same structure + `interacted` flag for discard-confirm on outside click. Row order aligned (date→type in both BEFORE/AFTER). i18n `standalone` pluralized (IT/FR/ES). Tags rendered as colored badges via `getStringBadgeStyle` + `.action-tag-badge` scoped CSS. Quantity uses `formatTxQuantity` with emoji 📈/📉 and — for zero. |
+| C6 | ✅ | Fixed: refactored into shared `txDisplayHelpers.ts` (`formatTxQuantity`, `formatTxCash`). All modal/table components use unified helpers. Zero → "—" everywhere. |
 | C8 | ✅ | Fixed during C12 walktest: description field shows `⟷ Concatenate` label (like tags shows `⟷ Union`). Global ⟷ button uses same symbol. Removed unused `allMerge` i18n key. Tag badges in MergeModal now colored (added `.merge-tag-badge` scoped style consuming CSS custom properties). Hash function improved (djb2 + XOR-fold) for better color separation on similar-prefix strings. |
 | C9 | ⏳ | — |
-| C11 | ⏳ | — |
+| C11 | ✅ | Fixed: `sliderPosToNum` now rounds to integer when `isIntegerRange`; `syncNumSlidersFromInput` also rounds on change. Slider and inputs both enforce integer-only for ID columns. |
 
 ---
 

@@ -143,6 +143,30 @@ test.describe('Split & Promote', () => {
 		// A confirmation modal should appear (TransactionActionModal testId="tx-action-modal")
 		const modal = page.locator('[data-testid="tx-action-modal"]');
 		await expect(modal.first()).toBeVisible({timeout: 3_000});
+
+		// Verify sticky structure: header, scrollable body, footer all visible
+		const content = modal.first().getByTestId('tx-action-modal-content');
+		await expect(content).toBeVisible();
+
+		// Footer buttons always visible (sticky)
+		const confirmBtn = modal.first().getByTestId('tx-action-modal-confirm');
+		const cancelBtn = modal.first().getByTestId('tx-action-modal-cancel');
+		await expect(confirmBtn).toBeVisible();
+		await expect(cancelBtn).toBeVisible();
+
+		// Quantity cells should contain emoji (📈 or 📉) or — for zero
+		const beforeTable = modal.first().getByTestId('tx-action-before');
+		const qtyText = await beforeTable.textContent();
+		const hasQtyIndicator = qtyText?.includes('📈') || qtyText?.includes('📉') || qtyText?.includes('—');
+		expect(hasQtyIndicator, 'Quantity should show emoji or — for zero').toBeTruthy();
+
+		// Tag badges should be colored (have style with --badge-bg)
+		const tagBadges = modal.first().locator('.action-tag-badge');
+		const tagCount = await tagBadges.count();
+		if (tagCount > 0) {
+			const style = await tagBadges.first().getAttribute('style');
+			expect(style, 'Tag badge should have badge-bg CSS variable').toContain('--badge-bg');
+		}
 	});
 
 	// -----------------------------------------------------------------------

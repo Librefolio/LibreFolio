@@ -278,6 +278,9 @@ export interface ColumnDef<T> {
 
     /** Optional URL — clicking the info icon navigates to this documentation page */
     headerTooltipUrl?: string | (() => string);
+
+    /** For number columns: force integer-only filter (step=1, round slider). Default: false. */
+    integerOnly?: boolean;
 }
 
 // ============ Action Types ============

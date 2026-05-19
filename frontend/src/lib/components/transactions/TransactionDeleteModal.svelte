@@ -14,8 +14,8 @@
     import {getAssetInfo} from '$lib/stores/assetStore';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {formatCurrencyAmountPlain} from '$lib/utils/currencyFormat';
     import {getStringBadgeStyle} from '$lib/utils/colors';
+    import {formatTxQuantity, formatTxCash} from './txDisplayHelpers';
     import type {BrokerLike} from '$lib/utils/brokerColors';
 
     interface TXReadItem {
@@ -72,16 +72,8 @@
         return (getBrokerInfo(brokerId) as BrokerLike) ?? ({id: brokerId, name: `#${brokerId}`} as BrokerLike);
     }
 
-    function fQ(qty: string): string {
-        const n = Number(qty);
-        const a = n < 0 ? '\uD83D\uDCC9' : n > 0 ? '\uD83D\uDCC8' : '';
-        return `${n.toLocaleString(undefined, {maximumFractionDigits: 6})} ${a}`;
-    }
-
-    function fC(cash: {code: string; amount: string} | null | undefined): string {
-        if (!cash) return '\u2014';
-        return formatCurrencyAmountPlain(Number(cash.amount), cash.code, {showSign: true});
-    }
+    const fQ = formatTxQuantity;
+    const fC = formatTxCash;
 
     function handleClose() {
         onCancel();
