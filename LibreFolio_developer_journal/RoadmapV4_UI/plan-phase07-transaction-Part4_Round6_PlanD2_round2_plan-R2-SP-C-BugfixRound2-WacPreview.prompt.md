@@ -620,8 +620,5 @@ Se FX mancante per entrambi:
 - `./dev.py api sync` run
 
 **TODO for next iteration (feedback not yet applied)**:
-- [ ] `WACPendingTX` should generalize from `TXCreateItem` (avoid parallel type)
-- [ ] Move inline imports (`from backend.app.schemas.transactions import ...`) to file top
-- [ ] Replace `asset_price_at_date` with `AssetSourceManager.get_prices_bulk` (reuse existing backward-fill logic)
-- [ ] `WACQualifyingTX` purpose: enables "Show transactions used" expandable in UI — shows user which TXs contributed to WAC and their effect (add/reduce/add_zero_cost)
+→ [`plan-R2-SP-C-BugfixRound2-WacBackendCleanup`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacBackendCleanup.prompt.md) — Schema consolidation (rimuovere as_of_date, WACPendingTX→TXCreateItem, import cleanup, replace asset_price_at_date) + backend tests (API + unit). Al completamento, tornare qui verificare che lo **Step 6** sia coperto e continuare da **Step 7** (Frontend — FormModal WAC state machine).
 
