@@ -39,9 +39,11 @@
         initialValue?: FilterValue | null;
         /** Anchor element (filter button) for fixed-position popover */
         anchorElement?: HTMLElement | null;
+        /** Force integer-only input (step=1, round on change). Default: false (decimal). */
+        integerOnly?: boolean;
     }
 
-    let {type, enumOptions = [], currencyOptions = [], currencyMinMaxByCode = new Map(), numberMin = 0, numberMax = 100, onApply, onClose, initialValue = null, anchorElement = null}: Props = $props();
+    let {type, enumOptions = [], currencyOptions = [], currencyMinMaxByCode = new Map(), numberMin = 0, numberMax = 100, onApply, onClose, initialValue = null, anchorElement = null, integerOnly = false}: Props = $props();
 
     // Sentinel: ensure formatCurrencyCodeHtml re-evaluates after currency data loads.
     void $currencyStoreVersion;
@@ -68,10 +70,8 @@
         })),
     );
 
-    /** BUG-C11: auto-detect integer columns — force step=1 on number inputs */
-    let isIntegerRange = $derived(
-        type === 'number' && Math.floor(numberMin) === numberMin && Math.floor(numberMax) === numberMax && (numberMax - numberMin) < 100000
-    );
+    /** BUG-C11: integer columns use step=1 and round slider values. Driven by `integerOnly` prop. */
+    let isIntegerRange = $derived(integerOnly && type === 'number');
 
     // Helper functions to get initial values
     function getInitialTextValue(): string {
@@ -133,6 +133,8 @@
     // LINEAR scale: number slider maps 0-100 position linearly to [numberMin, numberMax]
     function sliderPosToNum(pos: number): number {
         const raw = numberMin + (pos / 100) * (numberMax - numberMin);
+        // Integer columns always round to int
+        if (isIntegerRange) return Math.round(raw);
         // Round to reasonable precision based on range magnitude
         const range = numberMax - numberMin;
         if (range < 1) return Math.round(raw * 100000) / 100000;
@@ -189,6 +191,10 @@
     }
 
     function syncNumSlidersFromInput() {
+        if (isIntegerRange) {
+            numMin = Math.round(numMin);
+            numMax = Math.round(numMax);
+        }
         numSliderMinPos = numToSliderPos(numMin);
         numSliderMaxPos = numToSliderPos(numMax);
     }

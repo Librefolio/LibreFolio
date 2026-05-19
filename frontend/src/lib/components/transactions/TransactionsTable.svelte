@@ -34,6 +34,7 @@
     import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
     import {getStringBadgeStyle, getStringColor} from '$lib/utils/colors';
     import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currencyFormat';
+    import {formatTxQuantity} from './txDisplayHelpers';
     import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES, getEventTypeEmoji} from '$lib/stores/transactionTypeStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {getRoleSvgHtml} from '$lib/utils/brokerRoleHelpers';
@@ -474,11 +475,7 @@
     }
 
     function formatQty(q: string): string {
-        const n = Number(q);
-        if (!Number.isFinite(n) || n === 0) return '0';
-        const formatted = n.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
-        const emoji = n > 0 ? ' 📈' : ' 📉';
-        return `${n > 0 ? '+' : ''}${formatted}${emoji}`;
+        return formatTxQuantity(q);
     }
 
     function eventTooltipText(eventId: number): string {
@@ -809,6 +806,7 @@
             urlKey: 'id',
             sortable: true,
             filterable: true,
+            integerOnly: true,
             hiddenByDefault: false,
             getValue: (d) => d.tx.id,
             // TODO: filtro composito multi-range per ID (come currency-stack con range multipli)

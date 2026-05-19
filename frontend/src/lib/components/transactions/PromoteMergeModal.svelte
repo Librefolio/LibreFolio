@@ -39,6 +39,7 @@
     // Dirty guard
     let showDiscardConfirm = $state(false);
     let initialSnapshot = $state('');
+    let interacted = $state(false);
 
     // Divergence flags
     let diffDesc = $derived(txA?.description !== txB?.description);
@@ -52,13 +53,14 @@
         return JSON.stringify({resDescription, resTags});
     }
 
-    let dirty = $derived(initialSnapshot !== '' && currentSnapshot() !== initialSnapshot);
+    let dirty = $derived(interacted || (initialSnapshot !== '' && currentSnapshot() !== initialSnapshot));
 
     // Reset resolved values when modal opens
     $effect(() => {
         if (!open || !txA || !txB) return;
         resDescription = mergeStrings(txA.description, txB.description);
         resTags = mergeTagSets(txA.tags, txB.tags);
+        interacted = false;
         // Capture initial snapshot after values are set (next tick)
         setTimeout(() => {
             initialSnapshot = currentSnapshot();
@@ -78,14 +80,17 @@
 
     // Global actions
     function allLeft() {
+        interacted = true;
         if (diffDesc) resDescription = txA?.description ?? '';
         if (diffTags) resTags = [...(txA?.tags ?? [])];
     }
     function allMerge() {
+        interacted = true;
         if (diffDesc) resDescription = mergeStrings(txA?.description ?? '', txB?.description ?? '');
         if (diffTags) resTags = mergeTagSets(txA?.tags ?? [], txB?.tags ?? []);
     }
     function allRight() {
+        interacted = true;
         if (diffDesc) resDescription = txB?.description ?? '';
         if (diffTags) resTags = [...(txB?.tags ?? [])];
     }
@@ -107,12 +112,17 @@
 </script>
 
 <ModalBase {open} maxWidth="2xl" onRequestClose={handleCancel} testId="promote-merge-modal">
-    <div class="p-5 space-y-4 rounded-lg" data-testid="promote-merge-modal">
-        <!-- Header -->
-        <div class="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-gray-100">
-            <Link2 size={20} class="text-green-600 dark:text-green-400" />
-            <span>{$t('transactions.promote.mergeTitle', {values: {type: targetTypeLabel}})}</span>
+    <div class="flex flex-col max-h-[80vh] rounded-lg" data-testid="promote-merge-modal">
+        <!-- Sticky Header -->
+        <div class="p-5 pb-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
+            <div class="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-gray-100">
+                <Link2 size={20} class="text-green-600 dark:text-green-400" />
+                <span>{$t('transactions.promote.mergeTitle', {values: {type: targetTypeLabel}})}</span>
+            </div>
         </div>
+
+        <!-- Scrollable Body -->
+        <div class="p-5 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
 
         {#if hasDifferences && txA && txB}
             <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -126,16 +136,16 @@
                         <div class="flex items-center justify-between mb-2">
                             <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">{$t('transactions.promote.fieldDescription')}</div>
                             <Tooltip text={$t('transactions.promote.concat')}>
-                                <button type="button" class="px-1.5 py-0.5 text-[10px] rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50" onclick={() => (resDescription = mergeStrings(txA?.description ?? '', txB?.description ?? ''))}>↔ {$t('transactions.promote.concat')}</button>
+                                <button type="button" class="px-1.5 py-0.5 text-[10px] rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50" onclick={() => { interacted = true; resDescription = mergeStrings(txA?.description ?? '', txB?.description ?? ''); }}>↔ {$t('transactions.promote.concat')}</button>
                             </Tooltip>
                         </div>
                         <!-- 2 readonly boxes side by side — clickable to select -->
                         <div class="grid grid-cols-2 gap-2 mb-2">
-                            <button type="button" class="w-full text-left text-xs text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-2 break-words min-h-[2.5rem] hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-600 transition-all whitespace-pre-wrap" onclick={() => (resDescription = txA?.description ?? '')} data-testid="promote-merge-desc-left">
+                            <button type="button" class="w-full text-left text-xs text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-2 break-words min-h-[2.5rem] hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-600 transition-all whitespace-pre-wrap" onclick={() => { interacted = true; resDescription = txA?.description ?? ''; }} data-testid="promote-merge-desc-left">
                                 <span class="text-[10px] text-gray-400 block mb-0.5">Transaction {txA.label}</span>
                                 {txA.description || '—'}
                             </button>
-                            <button type="button" class="w-full text-left text-xs text-gray-600 dark:text-gray-300 bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800 rounded p-2 break-words min-h-[2.5rem] hover:ring-2 hover:ring-pink-300 dark:hover:ring-pink-600 transition-all whitespace-pre-wrap" onclick={() => (resDescription = txB?.description ?? '')} data-testid="promote-merge-desc-right">
+                            <button type="button" class="w-full text-left text-xs text-gray-600 dark:text-gray-300 bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800 rounded p-2 break-words min-h-[2.5rem] hover:ring-2 hover:ring-pink-300 dark:hover:ring-pink-600 transition-all whitespace-pre-wrap" onclick={() => { interacted = true; resDescription = txB?.description ?? ''; }} data-testid="promote-merge-desc-right">
                                 <span class="text-[10px] text-gray-400 block mb-0.5">Transaction {txB.label}</span>
                                 {txB.description || '—'}
                             </button>
@@ -150,12 +160,12 @@
                         <div class="flex items-center justify-between mb-2">
                             <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">{$t('transactions.promote.fieldTags')}</div>
                             <Tooltip text={$t('transactions.promote.union')}>
-                                <button type="button" class="px-1.5 py-0.5 text-[10px] rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50" onclick={() => (resTags = mergeTagSets(txA?.tags ?? [], txB?.tags ?? []))}>↔ {$t('transactions.promote.union')}</button>
+                                <button type="button" class="px-1.5 py-0.5 text-[10px] rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50" onclick={() => { interacted = true; resTags = mergeTagSets(txA?.tags ?? [], txB?.tags ?? []); }}>↔ {$t('transactions.promote.union')}</button>
                             </Tooltip>
                         </div>
                         <!-- 2 readonly tag boxes — clickable to select -->
                         <div class="grid grid-cols-2 gap-2 mb-2">
-                            <button type="button" class="w-full text-left text-xs text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-2 min-h-[2.5rem] hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-600 transition-all" onclick={() => (resTags = [...(txA?.tags ?? [])])} data-testid="promote-merge-tags-left">
+                            <button type="button" class="w-full text-left text-xs text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-2 min-h-[2.5rem] hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-600 transition-all" onclick={() => { interacted = true; resTags = [...(txA?.tags ?? [])]; }} data-testid="promote-merge-tags-left">
                                 <span class="text-[10px] text-gray-400 block mb-0.5">Transaction {txA.label}</span>
                                 {#if (txA.tags ?? []).length > 0}
                                     <span class="flex flex-wrap gap-1">{#each txA.tags as tag}<span class="merge-tag-badge inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}</span>
@@ -163,7 +173,7 @@
                                     —
                                 {/if}
                             </button>
-                            <button type="button" class="w-full text-left text-xs text-gray-600 dark:text-gray-300 bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800 rounded p-2 min-h-[2.5rem] hover:ring-2 hover:ring-pink-300 dark:hover:ring-pink-600 transition-all" onclick={() => (resTags = [...(txB?.tags ?? [])])} data-testid="promote-merge-tags-right">
+                            <button type="button" class="w-full text-left text-xs text-gray-600 dark:text-gray-300 bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800 rounded p-2 min-h-[2.5rem] hover:ring-2 hover:ring-pink-300 dark:hover:ring-pink-600 transition-all" onclick={() => { interacted = true; resTags = [...(txB?.tags ?? [])]; }} data-testid="promote-merge-tags-right">
                                 <span class="text-[10px] text-gray-400 block mb-0.5">Transaction {txB.label}</span>
                                 {#if (txB.tags ?? []).length > 0}
                                     <span class="flex flex-wrap gap-1">{#each txB.tags as tag}<span class="merge-tag-badge inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}</span>
@@ -198,16 +208,19 @@
         {:else}
             <p class="text-sm text-gray-500">{$t('transactions.promote.mergeConfirm')}</p>
         {/if}
+        </div>
 
-        <!-- Footer -->
-        <div class="flex justify-between gap-2 pt-2">
-            <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onclick={handleCancel}>
-                {$t('common.cancel')}
-            </button>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-green-600 hover:bg-green-700 inline-flex items-center gap-1.5" onclick={handleConfirm} data-testid="promote-merge-confirm">
-                <Link2 size={14} />
-                {$t('transactions.promote.mergeConfirm')}
-            </button>
+        <!-- Sticky Footer -->
+        <div class="p-5 pt-3 border-t border-gray-200 dark:border-gray-700 shrink-0">
+            <div class="flex justify-between gap-2">
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onclick={handleCancel}>
+                    {$t('common.cancel')}
+                </button>
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-green-600 hover:bg-green-700 inline-flex items-center gap-1.5" onclick={handleConfirm} data-testid="promote-merge-confirm">
+                    <Link2 size={14} />
+                    {$t('transactions.promote.mergeConfirm')}
+                </button>
+            </div>
         </div>
     </div>
 </ModalBase>

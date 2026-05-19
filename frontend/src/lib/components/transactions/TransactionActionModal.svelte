@@ -12,7 +12,8 @@
     import BrokerBadge from '$lib/components/ui/BrokerBadge.svelte';
     import {getBrokerInfo, getAllBrokers, getBrokerRole} from '$lib/stores/brokerStore';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
-    import {formatCurrencyAmountPlain} from '$lib/utils/currencyFormat';
+    import {getStringBadgeStyle} from '$lib/utils/colors';
+    import {formatTxQuantity, formatTxCash} from './txDisplayHelpers';
     import type {BrokerLike} from '$lib/utils/brokerColors';
 
     /** Client-side mirror of backend SPLIT_TYPE_MAP. */
@@ -57,17 +58,8 @@
         return (getBrokerInfo(brokerId) as BrokerLike) ?? ({id: brokerId, name: `#${brokerId}`} as BrokerLike);
     }
 
-    function fC(cash: {code: string; amount: string} | null | undefined): string {
-        if (!cash) return '\u2014';
-        return formatCurrencyAmountPlain(Number(cash.amount), cash.code, {showSign: true});
-    }
-
-    /** Format quantity with trailing zeros removal */
-    function fQ(qty: string | null | undefined): string {
-        if (qty == null || qty === '') return '\u2014';
-        const n = parseFloat(qty);
-        return isNaN(n) ? qty : n.toString();
-    }
+    const fQ = formatTxQuantity;
+    const fC = formatTxCash;
 
     function typeLabel(typeCode: string): string {
         return $t(`transactions.types.${typeCode}`) || typeCode;
@@ -94,16 +86,21 @@
 </script>
 
 <ModalBase {open} maxWidth="xl" onRequestClose={onCancel} testId="tx-action-modal">
-    <div class="p-6 space-y-4 overflow-y-auto max-h-[80vh]" data-testid="tx-action-modal-content">
-        <!-- Header -->
-        <div class="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-gray-100">
-            {#if mode === 'split'}
-                <Unlink size={20} class="text-amber-500" />
-            {:else}
-                <Link2 size={20} class="text-green-600 dark:text-green-400" />
-            {/if}
-            <span>{title}</span>
+    <div class="flex flex-col max-h-[80vh]" data-testid="tx-action-modal-content">
+        <!-- Sticky Header -->
+        <div class="p-6 pb-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
+            <div class="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-gray-100">
+                {#if mode === 'split'}
+                    <Unlink size={20} class="text-amber-500" />
+                {:else}
+                    <Link2 size={20} class="text-green-600 dark:text-green-400" />
+                {/if}
+                <span>{title}</span>
+            </div>
         </div>
+
+        <!-- Scrollable Body -->
+        <div class="p-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
 
         {#if transaction}
             {#if mode === 'split'}
@@ -134,7 +131,7 @@
                                 <td class="px-3 py-2">
                                     <span class="inline-flex items-center gap-2">
                                         {#if getTransactionTypeIconUrl(transaction.type)}
-                                            <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5" />
+                                            <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5 object-contain shrink-0" />
                                         {/if}
                                         {typeLabel(transaction.type)}
                                     </span>
@@ -142,7 +139,7 @@
                                 <td class="px-3 py-2">
                                     <span class="inline-flex items-center gap-2">
                                         {#if partner && getTransactionTypeIconUrl(partner.type)}
-                                            <img src={getTransactionTypeIconUrl(partner.type)} alt="" class="w-5 h-5" />
+                                            <img src={getTransactionTypeIconUrl(partner.type)} alt="" class="w-5 h-5 object-contain shrink-0" />
                                         {/if}
                                         {partner ? typeLabel(partner.type) : typeLabel(transaction.type)}
                                     </span>
@@ -166,8 +163,8 @@
                             {#if transaction.tags?.length || partner?.tags?.length}
                                 <tr class="border-b border-gray-100 dark:border-gray-700">
                                     <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">Tags</td>
-                                    <td class="px-3 py-2">{transaction.tags?.join(', ') ?? '—'}</td>
-                                    <td class="px-3 py-2">{partner?.tags?.join(', ') ?? '—'}</td>
+                                    <td class="px-3 py-2"><span class="flex flex-wrap gap-1">{#each transaction.tags ?? [] as tag}<span class="action-tag-badge inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}{#if !(transaction.tags?.length)}—{/if}</span></td>
+                                    <td class="px-3 py-2"><span class="flex flex-wrap gap-1">{#each partner?.tags ?? [] as tag}<span class="action-tag-badge inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}{#if !(partner?.tags?.length)}—{/if}</span></td>
                                 </tr>
                             {/if}
                             {#if transaction.description || partner?.description}
@@ -197,26 +194,26 @@
                         </thead>
                         <tbody>
                             <tr class="border-b border-gray-100 dark:border-gray-700">
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</td>
+                                <td class="px-3 py-2">{transaction.date}</td>
+                                <td class="px-3 py-2">{partner?.date ?? '—'}</td>
+                            </tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700">
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</td>
                                 <td class="px-3 py-2 flex items-center gap-2">
                                     {#if splitTypes && getTransactionTypeIconUrl(splitTypes.txType)}
-                                        <img src={getTransactionTypeIconUrl(splitTypes.txType)} alt="" class="w-4 h-4" />
+                                        <img src={getTransactionTypeIconUrl(splitTypes.txType)} alt="" class="w-4 h-4 object-contain shrink-0" />
                                     {/if}
                                     {splitTypes ? typeLabel(splitTypes.txType) : '?'}
                                 </td>
                                 <td class="px-3 py-2">
                                     <span class="inline-flex items-center gap-2">
                                         {#if splitTypes && getTransactionTypeIconUrl(splitTypes.partnerType)}
-                                            <img src={getTransactionTypeIconUrl(splitTypes.partnerType)} alt="" class="w-4 h-4" />
+                                            <img src={getTransactionTypeIconUrl(splitTypes.partnerType)} alt="" class="w-4 h-4 object-contain shrink-0" />
                                         {/if}
                                         {splitTypes ? typeLabel(splitTypes.partnerType) : '?'}
                                     </span>
                                 </td>
-                            </tr>
-                            <tr class="border-b border-gray-100 dark:border-gray-700">
-                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</td>
-                                <td class="px-3 py-2">{transaction.date}</td>
-                                <td class="px-3 py-2">{partner?.date ?? '—'}</td>
                             </tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700">
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.quantity')}</td>
@@ -236,8 +233,8 @@
                             {#if transaction.tags?.length || partner?.tags?.length}
                                 <tr class="border-b border-gray-100 dark:border-gray-700">
                                     <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">Tags</td>
-                                    <td class="px-3 py-2">{transaction.tags?.join(', ') ?? '—'}</td>
-                                    <td class="px-3 py-2">{partner?.tags?.join(', ') ?? '—'}</td>
+                                    <td class="px-3 py-2"><span class="flex flex-wrap gap-1">{#each transaction.tags ?? [] as tag}<span class="action-tag-badge inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}{#if !(transaction.tags?.length)}—{/if}</span></td>
+                                    <td class="px-3 py-2"><span class="flex flex-wrap gap-1">{#each partner?.tags ?? [] as tag}<span class="action-tag-badge inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}{#if !(partner?.tags?.length)}—{/if}</span></td>
                                 </tr>
                             {/if}
                             {#if transaction.description || partner?.description}
@@ -276,7 +273,7 @@
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</td>
                                 <td class="px-3 py-2 flex items-center gap-2">
                                     {#if getTransactionTypeIconUrl(transaction.type)}
-                                        <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5" />
+                                        <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5 object-contain shrink-0" />
                                     {/if}
                                     {typeLabel(transaction.type)}
                                 </td>
@@ -284,7 +281,7 @@
                                     {#if partner}
                                         <span class="inline-flex items-center gap-2">
                                             {#if getTransactionTypeIconUrl(partner.type)}
-                                                <img src={getTransactionTypeIconUrl(partner.type)} alt="" class="w-5 h-5" />
+                                                <img src={getTransactionTypeIconUrl(partner.type)} alt="" class="w-5 h-5 object-contain shrink-0" />
                                             {/if}
                                             {typeLabel(partner.type)}
                                         </span>
@@ -309,8 +306,8 @@
                             {#if transaction.tags?.length || partner?.tags?.length}
                                 <tr class="border-b border-gray-100 dark:border-gray-700">
                                     <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">Tags</td>
-                                    <td class="px-3 py-2">{transaction.tags?.join(', ') ?? '—'}</td>
-                                    <td class="px-3 py-2">{partner?.tags?.join(', ') ?? '—'}</td>
+                                    <td class="px-3 py-2"><span class="flex flex-wrap gap-1">{#each transaction.tags ?? [] as tag}<span class="action-tag-badge inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}{#if !(transaction.tags?.length)}—{/if}</span></td>
+                                    <td class="px-3 py-2"><span class="flex flex-wrap gap-1">{#each partner?.tags ?? [] as tag}<span class="action-tag-badge inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}{#if !(partner?.tags?.length)}—{/if}</span></td>
                                 </tr>
                             {/if}
                             {#if transaction.description || partner?.description}
@@ -335,7 +332,7 @@
                                 <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400 w-24">{$t('transactions.promote.target') || 'Target'}</td>
                                 <td class="px-3 py-2 flex items-center gap-2">
                                     {#if targetType && getTransactionTypeIconUrl(targetType)}
-                                        <img src={getTransactionTypeIconUrl(targetType)} alt="" class="w-5 h-5" />
+                                        <img src={getTransactionTypeIconUrl(targetType)} alt="" class="w-5 h-5 object-contain shrink-0" />
                                     {/if}
                                     <span class="font-semibold text-green-700 dark:text-green-300">{targetTypeLabel}</span>
                                 </td>
@@ -350,32 +347,45 @@
                 </p>
             {/if}
         {/if}
+        </div>
 
-        <!-- Footer -->
-        <div class="flex justify-end gap-3 pt-2">
-            <button
-                type="button"
-                class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition"
-                onclick={onCancel}
-                data-testid="tx-action-modal-cancel"
-            >
-                {$t('common.cancel')}
-            </button>
-            <button
-                type="button"
-                class="px-4 py-2 text-sm text-white rounded-lg transition flex items-center gap-1.5 {mode === 'split' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'}"
-                onclick={onConfirm}
-                disabled={loading}
-                data-testid="tx-action-modal-confirm"
-            >
-                {#if mode === 'split'}
-                    <Unlink size={15} />
-                {:else}
-                    <Link2 size={15} />
-                {/if}
-                <span>{loading ? ($t('common.saving') || 'Saving...') : confirmLabel}</span>
-            </button>
+        <!-- Sticky Footer -->
+        <div class="p-6 pt-3 border-t border-gray-200 dark:border-gray-700 shrink-0">
+            <div class="flex justify-end gap-3">
+                <button
+                    type="button"
+                    class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                    onclick={onCancel}
+                    data-testid="tx-action-modal-cancel"
+                >
+                    {$t('common.cancel')}
+                </button>
+                <button
+                    type="button"
+                    class="px-4 py-2 text-sm text-white rounded-lg transition flex items-center gap-1.5 {mode === 'split' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'}"
+                    onclick={onConfirm}
+                    disabled={loading}
+                    data-testid="tx-action-modal-confirm"
+                >
+                    {#if mode === 'split'}
+                        <Unlink size={15} />
+                    {:else}
+                        <Link2 size={15} />
+                    {/if}
+                    <span>{loading ? ($t('common.saving') || 'Saving...') : confirmLabel}</span>
+                </button>
+            </div>
         </div>
     </div>
 </ModalBase>
 
+<style>
+    .action-tag-badge {
+        background: var(--badge-bg, #e2e8f0);
+        color: var(--badge-text, #334155);
+    }
+    :global(html.dark) .action-tag-badge {
+        background: var(--badge-dark-bg, #334155);
+        color: var(--badge-dark-text, #e2e8f0);
+    }
+</style>

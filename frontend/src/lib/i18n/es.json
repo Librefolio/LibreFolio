@@ -477,7 +477,7 @@
       "noPartner": "No se puede separar: socio no encontrado",
       "fromType": "Se convertirá en: {type}",
       "paired": "Emparejada",
-      "standalone": "Independiente"
+      "standalone": "Independientes"
     },
     "promoteSuggest": {
       "detected": "Transacciones complementarias detectadas:",

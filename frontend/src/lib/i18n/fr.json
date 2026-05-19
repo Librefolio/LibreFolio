@@ -477,7 +477,7 @@
       "noPartner": "Impossible de dissocier : partenaire introuvable",
       "fromType": "Deviendra : {type}",
       "paired": "Appariée",
-      "standalone": "Indépendante"
+      "standalone": "Indépendantes"
     },
     "promoteSuggest": {
       "detected": "Transactions complémentaires détectées :",

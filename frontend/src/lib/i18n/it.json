@@ -477,7 +477,7 @@
       "noPartner": "Impossibile separare: partner non trovato",
       "fromType": "Diventerà: {type}",
       "paired": "Accoppiata",
-      "standalone": "Indipendente"
+      "standalone": "Indipendenti"
     },
     "promoteSuggest": {
       "detected": "Transazioni complementari rilevate:",
