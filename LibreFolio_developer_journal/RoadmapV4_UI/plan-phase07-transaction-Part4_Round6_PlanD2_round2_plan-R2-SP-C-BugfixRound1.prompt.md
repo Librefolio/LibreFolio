@@ -533,6 +533,13 @@ Sugli `<input type="number">` e `<input type="range">`:
     - Consumed by: `TransactionActionModal`, `TransactionDeleteModal`, `TransactionsTable`
     - Eliminates 3 redundant local `fQ`/`fC`/`formatQty` implementations.
 
+15. **BUG-C9 walktest fixes** — Multiple issues found during WT-C9:
+    - **ADJUSTMENT field hidden**: `showAdvancedSection` didn't include ADJUSTMENT → field was gated behind invisible `<details>`. Fix: added `|| draft.type === 'ADJUSTMENT'`.
+    - **Dual mode TRANSFER tooltip missing**: the dual-form variant of cost_basis had plain `<span>` label without info icon. Fix: added `<Tooltip>` with `costBasisOverride.tooltip` text.
+    - **Used `title` instead of `<Tooltip>`**: replaced native title attribute with proper `<Tooltip>` component for both dual and single form variants.
+    - **Empty amount sent to backend**: `cost_basis_override: {amount: "", code: "EUR"}` caused "Cannot convert '' to Decimal". Fix: `draftToTxFields()` normalizes empty amount to `null`; `collectDualCreates()` checks `amount?.trim()` before including.
+    - **`asset_event_id` still a numbox for ADJUSTMENT**: noted as future improvement (not in C9 scope). Will be tracked separately.
+
 ## Walktest Protocol (2026-05-18)
 
 Prerequisiti: `./dev.py server --test --force` attivo su porta 8001. Login come `e2e_test_user`. Navigare a Transactions.
@@ -650,7 +657,7 @@ Prerequisiti: `./dev.py server --test --force` attivo su porta 8001. Login come 
 | # | Azione | Verifica |
 |---|--------|----------|
 | 1 | Promote 2 TX con campi divergenti (description diversa) → MergeModal si apre | — |
-| 2 | Layout bottoni: `[▶ All Left]   [↔]   [All Right ◀]` | Frecce puntano verso il centro; ↔ senza testo; layout justify-between |
+| 2 | Layout bottoni: `[All Left ▶]   [↔]   [◀ All Right]` | Frecce puntano verso il centro; ↔ senza testo; layout justify-between |
 
 ---
 
@@ -658,11 +665,13 @@ Prerequisiti: `./dev.py server --test --force` attivo su porta 8001. Login come 
 
 | # | Azione | Verifica |
 |---|--------|----------|
-| 1 | Crea o edita una TX BUY | Campo **Cost Basis** visibile |
+| 1 | Crea o edita una TX **TRANSFER** | Campo **Cost Basis** visibile |
 | 2 | Verifica: ha input numerico + codice valuta (readonly, ereditato dalla valuta TX) | Format CompactCashCell ✅ |
 | 3 | Inserisci valore (es. 42.50) → Commit | Toast success |
 | 4 | Riapri la TX → cost basis = 42.50 + codice valuta | Persistito ✅ |
 | 5 | Svuota cost basis → Commit → riapri | Mostra "auto" o vuoto (backend calcola WAC) |
+| 6 | Crea/edita una TX **ADJUSTMENT** con qty positiva | Campo **Cost Basis** visibile + warning amber se vuoto |
+| 7 | Edita una TX **BUY** | Campo Cost Basis **NON** visibile (costo = price×qty) |
 
 ---
 
@@ -690,7 +699,7 @@ Prerequisiti: `./dev.py server --test --force` attivo su porta 8001. Login come 
 | C5 | ✅ | Fixed: ActionModal restructured with sticky header/footer (flex-col max-h-[80vh]) + scrollable body. PromoteMergeModal same structure + `interacted` flag for discard-confirm on outside click. Row order aligned (date→type in both BEFORE/AFTER). i18n `standalone` pluralized (IT/FR/ES). Tags rendered as colored badges via `getStringBadgeStyle` + `.action-tag-badge` scoped CSS. Quantity uses `formatTxQuantity` with emoji 📈/📉 and — for zero. |
 | C6 | ✅ | Fixed: refactored into shared `txDisplayHelpers.ts` (`formatTxQuantity`, `formatTxCash`). All modal/table components use unified helpers. Zero → "—" everywhere. |
 | C8 | ✅ | Fixed during C12 walktest: description field shows `⟷ Concatenate` label (like tags shows `⟷ Union`). Global ⟷ button uses same symbol. Removed unused `allMerge` i18n key. Tag badges in MergeModal now colored (added `.merge-tag-badge` scoped style consuming CSS custom properties). Hash function improved (djb2 + XOR-fold) for better color separation on similar-prefix strings. |
-| C9 | ⏳ | — |
+| C9 | ✅ | Fixed: cost_basis field visible for TRANSFER (dual+single) and ADJUSTMENT (single). `showAdvancedSection` expanded to include ADJUSTMENT. Tooltip uses `<Tooltip>` component (not native `title`). Payload normalizes empty amount → null (fixes "Cannot convert '' to Decimal"). Warning amber for ADJUSTMENT with positive qty and no cost basis. |
 | C11 | ✅ | Fixed: `sliderPosToNum` now rounds to integer when `isIntegerRange`; `syncNumSlidersFromInput` also rounds on change. Slider and inputs both enforce integer-only for ID columns. |
 
 ---
