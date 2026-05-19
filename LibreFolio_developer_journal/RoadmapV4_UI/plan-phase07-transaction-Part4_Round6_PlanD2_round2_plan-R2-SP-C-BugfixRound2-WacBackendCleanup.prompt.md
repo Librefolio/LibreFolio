@@ -127,19 +127,21 @@ Consolidare gli schema WAC eliminando duplicazioni, usare `DateRangeModel` come 
 
 - Rinominare `TestRecalcWAC` → `TestWACPreview`
 - WAC-6: multi-broker → `POST /transactions/wac-preview` con `date_range`
-- WAC-7: convertire a wac-preview
-- WAC-8: convertire a wac-preview
+- WAC-7: convertire a wac-preview (invalid request → 422)
+- WAC-8: convertire a wac-preview (empty asset → WAC 0)
 - Aggiungere nuovi test:
   - **WAC-P1**: BUY 10@100 + SELL 3 → WAC = 100 (invariato dalla riduzione)
   - **WAC-P2**: BUY 10@100 + BUY 5@200 → WAC = (1000+1000)/15 = 133.33
-  - **WAC-P3**: pending_txs override → WAC cambia rispetto a solo-DB
+  - **WAC-P3**: pending_txs override (new) → WAC cambia rispetto a solo-DB
   - **WAC-P4**: excluded_tx_ids → TX esclusa non contribuisce
   - **WAC-P5**: FX missing pair → `wac=null, wac_missing_pairs=["CHF/EUR"]`
   - **WAC-P6**: same-date BUY+SELL → nessun negative (additions first)
   - **WAC-P7**: date_range con end=None → usa oggi come end
+  - **WAC-P8**: pending_txs override by id → sovrascrive DB row nel calcolo WAC
+  - **WAC-P9**: pool reset (BUY + full SELL + new BUY) → WAC = nuovo prezzo
 - Verificare `TestWACCostBasis` (WAC-1 to WAC-5):
-  - TRANSFER commit senza override → cost_basis resta NULL (no auto-calc)
-  - Adattare asserzioni se prima si aspettavano auto-calc
+  - ✅ TRANSFER commit senza override → cost_basis resta NULL (no auto-calc)
+  - ✅ Asserzioni adattate per rimuovere aspettative su `wac_info` nel commit
 
 ### Step 6: Test — Unit test `financial_utils`
 
@@ -156,15 +158,35 @@ Test puri senza server:
 - **FU-8**: TRANSFER_IN senza override → add_zero_cost
 - **FU-9**: `determine_target_currency`: most frequent wins
 - **FU-10**: `determine_target_currency`: tie → asset_currency
+- **FU-11**: Pool reset (BUY, full SELL, new BUY) → WAC = nuovo prezzo
+- **FU-12**: Multiple reductions consecutive → WAC stabile
+
+**Test runner**: registrato in `scripts/test_runner/_backend_services.py` → `./dev.py test services financial-utils`
 
 ---
 
 ## Execution Checklist
 
-- [ ] Step 0: Bugfix backward-fill `get_prices_bulk`
-- [ ] Step 1: WACPreviewItem → solo DateRangeModel
-- [ ] Step 2: WACPendingTXItem estende TXCreateItem
-- [ ] Step 3: Import inline → top
-- [ ] Step 4: Eliminare asset_price_at_date → service layer
-- [ ] Step 5: Test API — TestWACPreview
-- [ ] Step 6: Test unit — financial_utils
+- [x] Step 0: Bugfix backward-fill `get_prices_bulk`
+- [x] Step 1: WACPreviewItem → solo DateRangeModel
+- [x] Step 2: WACPendingTXItem estende TXCreateItem
+- [x] Step 3: Import inline → top
+- [x] Step 4: Eliminare asset_price_at_date → service layer
+- [x] Step 5: Test API — TestWACPreview (22 test: WAC-1…P9 + validation + promote)
+- [x] Step 6: Test unit — financial_utils (12 test: FU-1…FU-12)
+
+---
+
+## Completion Notes (2026-05-19)
+
+**Additional cleanups applied post-plan**:
+- `effective_date` property renamed to `end_date` (cleaner semantics)
+- All inline imports in `wac_preview` endpoint moved to file top (`BackwardFillInfo`, `FAPriceQueryItem`, `AssetSourceManager`)
+- `./dev.py api sync` run after property rename
+- Test runner registration: `services financial-utils` added to `_backend_services.py`
+
+**Final test counts**:
+- `test_financial_utils.py`: 12 tests (FU-1…FU-12) — pure math, no server
+- `test_transactions_wac.py`: 22 tests (WAC-1…WAC-P9 + WAC-9…WAC-13) — API, with server
+
+**Parent plan Step 6 coverage**: ✅ Fully covered. All API + unit tests described in parent plan Step 6 are implemented and passing. The cleanup plan supersedes the parent's Step 6 requirements.

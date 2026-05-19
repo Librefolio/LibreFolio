@@ -674,50 +674,33 @@ class WACResult(BaseModel):
 class WACPreviewItem(BaseModel):
     """Single WAC preview request within a bulk call.
 
-    Supports both single-date (as_of_date) and range (date_range) modes:
-    - as_of_date: compute WAC at a specific date (used by FormModal preview)
-    - date_range: compute WAC at end of range, considering TXs in range (future: analytics)
-    Exactly one must be provided.
+    Uses DateRangeModel to define the computation period:
+    - start: beginning of the range (TXs from this date onward are considered)
+    - end: effective end date for WAC computation (if None → today)
     """
 
     model_config = ConfigDict(extra="forbid")
 
     sender_broker_id: int = Field(..., description="Broker ID of the source (sender) side")
     asset_id: int = Field(..., description="Asset ID to calculate WAC for")
-    as_of_date: Optional[date_type] = Field(None, description="Single date up to which to compute WAC")
-    date_range: Optional[DateRangeModel] = Field(None, description="Date range for WAC computation (future: analytics)")
-
-    @model_validator(mode="after")
-    def _validate_date_mode(self) -> "WACPreviewItem":
-        """Exactly one of as_of_date or date_range must be set."""
-        if self.as_of_date is None and self.date_range is None:
-            raise ValueError("Either as_of_date or date_range must be provided")
-        if self.as_of_date is not None and self.date_range is not None:
-            raise ValueError("Cannot provide both as_of_date and date_range")
-        return self
+    date_range: DateRangeModel = Field(..., description="Date range for WAC computation. end=None means today.")
 
     @property
-    def effective_date(self) -> date_type:
+    def end_date(self) -> date_type:
         """The effective end date for WAC computation."""
-        if self.as_of_date:
-            return self.as_of_date
-        return self.date_range.end or self.date_range.start  # type: ignore[union-attr]
+        return self.date_range.end or date_type.today()
 
 
-class WACPendingTX(BaseModel):
-    """A pending TX from workspace (overrides DB row if id matches, adds if id=null)."""
+class WACPendingTXItem(TXCreateItem):
+    """A pending TX from workspace for WAC calculation.
 
-    model_config = ConfigDict(extra="forbid")
+    Extends TXCreateItem to inherit full semantic validation.
+    Overrides: asset_id is required (WAC always needs an asset).
+    Added: id field to identify DB rows to override.
+    """
 
     id: Optional[int] = Field(None, description="DB id to override, or None for new pending TX")
-    broker_id: int
-    asset_id: int
-    type: str
-    date: date_type
-    quantity: SafeDecimal
-    amount: Optional[SafeDecimal] = None
-    currency: Optional[str] = None
-    cost_basis_override: Optional[Currency] = None
+    asset_id: int = Field(..., description="Asset ID (required for WAC calculation)")
 
 
 class WACPreviewRequest(BaseModel):
@@ -726,7 +709,7 @@ class WACPreviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: List[WACPreviewItem] = Field(..., min_length=1, max_length=50)
-    pending_txs: List[WACPendingTX] = Field(default_factory=list, max_length=500)
+    pending_txs: List[WACPendingTXItem] = Field(default_factory=list, max_length=500)
     excluded_tx_ids: List[int] = Field(default_factory=list, max_length=500, description="DB TX ids to exclude (deleted in workspace)")
 
 

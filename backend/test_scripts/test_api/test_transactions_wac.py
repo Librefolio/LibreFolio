@@ -255,9 +255,9 @@ class TestWACCostBasis:
             print_success("WAC-1: TRANSFER with Currency override verified ✓")
 
     # ------------------------------------------------------------------ WAC-2
-    async def test_wac2_auto_calc_single_currency(self):
-        """TRANSFER without override, all BUYs in same currency → auto-calc WAC."""
-        print_section("WAC-2 — Auto-calc single currency WAC")
+    async def test_wac2_transfer_without_override_no_auto_calc(self):
+        """TRANSFER without override → cost_basis_override stays NULL (no auto-calc at commit)."""
+        print_section("WAC-2 — TRANSFER without override → NULL (no auto-calc)")
         async with httpx.AsyncClient() as client:
             broker_a_id, asset_id = await create_user_broker_asset(client)
             broker_b_id = await create_broker(client, "WACBrokerB2")
@@ -293,7 +293,7 @@ class TestWACCostBasis:
             )
             assert data["committed"] is True
 
-            # TRANSFER pair without cost_basis_override → auto-calc
+            # TRANSFER pair without cost_basis_override → no auto-calc
             link = str(uuid.uuid4())
             data = await commit_batch(
                 client,
@@ -318,30 +318,22 @@ class TestWACCostBasis:
             )
             assert data["committed"] is True, f"TRANSFER not committed: {data}"
 
-            # Check wac_info from commit response
+            # No wac_info in commit response (auto-calc removed)
             create_results = [r for r in data["results"] if r["operation"] == "create"]
-            # Find the result that has wac_info
             wac_results = [r for r in create_results if r.get("wac_info")]
-            assert len(wac_results) >= 1, f"Expected wac_info in commit response: {data['results']}"
+            assert len(wac_results) == 0, f"wac_info should not be in commit response: {data['results']}"
 
-            wac_info = wac_results[0]["wac_info"]
-            assert wac_info["wac"] is not None, f"WAC should not be None: {wac_info}"
-            assert wac_info["wac"]["code"] == "EUR"
-            # WAC = (1000 + 2000) / (10 + 10) = 150
-            assert Decimal(wac_info["wac"]["amount"]) == Decimal("150"), f"Expected WAC 150, got {wac_info['wac']['amount']}"
-
-            # Also verify via GET that cost_basis_override is set
+            # Verify cost_basis_override is NULL
             all_ids = [tid for r in create_results for tid in r["ids"]]
             txs = await get_txs_by_ids(client, all_ids)
             receiver = next(tx for tx in txs if Decimal(tx["quantity"]) > 0)
-            assert receiver["cost_basis_override"] is not None
-            assert receiver["cost_basis_override"]["code"] == "EUR"
-            print_success("WAC-2: Auto-calc single currency WAC verified ✓")
+            assert receiver["cost_basis_override"] is None, f"Expected null cost_basis (no auto-calc): {receiver}"
+            print_success("WAC-2: TRANSFER without override → NULL (no auto-calc) ✓")
 
     # ------------------------------------------------------------------ WAC-3
-    async def test_wac3_auto_calc_cross_currency_with_fx(self):
-        """TRANSFER without override, BUYs in EUR+USD with FX pair → auto-calc with conversions."""
-        print_section("WAC-3 — Auto-calc cross-currency WAC with FX")
+    async def test_wac3_transfer_cross_currency_no_auto_calc(self):
+        """TRANSFER without override, BUYs in EUR+USD → cost_basis_override stays NULL (no auto-calc)."""
+        print_section("WAC-3 — TRANSFER cross-currency no auto-calc")
         async with httpx.AsyncClient() as client:
             broker_a_id, asset_id = await create_user_broker_asset(client, currency="EUR")
             broker_b_id = await create_broker(client, "WACBrokerB3")
@@ -387,7 +379,7 @@ class TestWACCostBasis:
             )
             assert data["committed"] is True, f"Setup not committed: {data}"
 
-            # TRANSFER pair without override → auto-calc with FX
+            # TRANSFER pair without override → no auto-calc
             link = str(uuid.uuid4())
             data = await commit_batch(
                 client,
@@ -412,21 +404,22 @@ class TestWACCostBasis:
             )
             assert data["committed"] is True, f"TRANSFER not committed: {data}"
 
+            # No wac_info in commit response
             create_results = [r for r in data["results"] if r["operation"] == "create"]
             wac_results = [r for r in create_results if r.get("wac_info")]
-            assert len(wac_results) >= 1, f"Expected wac_info: {data['results']}"
+            assert len(wac_results) == 0, f"wac_info should not be in commit response"
 
-            wac_info = wac_results[0]["wac_info"]
-            assert wac_info["wac"] is not None, f"WAC should be calculated: {wac_info}"
-            assert wac_info["wac"]["code"] == "EUR"
-            # Should have conversions for the USD BUY
-            assert len(wac_info["conversions"]) > 0, f"Expected conversions: {wac_info}"
-            print_success("WAC-3: Auto-calc cross-currency WAC with FX verified ✓")
+            # Verify cost_basis_override is NULL
+            all_ids = [tid for r in create_results for tid in r["ids"]]
+            txs = await get_txs_by_ids(client, all_ids)
+            receiver = next(tx for tx in txs if Decimal(tx["quantity"]) > 0)
+            assert receiver["cost_basis_override"] is None, f"Expected null cost_basis: {receiver}"
+            print_success("WAC-3: TRANSFER cross-currency → NULL (no auto-calc) ✓")
 
     # ------------------------------------------------------------------ WAC-4
-    async def test_wac4_auto_calc_missing_fx_pair(self):
-        """TRANSFER without override, BUYs in EUR+CHF but NO FX pair → wac is None, missing_pairs reported."""
-        print_section("WAC-4 — Auto-calc missing FX pair → null")
+    async def test_wac4_transfer_missing_fx_no_auto_calc(self):
+        """TRANSFER without override, BUYs in EUR+CHF but NO FX pair → cost_basis stays NULL."""
+        print_section("WAC-4 — TRANSFER missing FX → NULL (no auto-calc)")
         async with httpx.AsyncClient() as client:
             broker_a_id, asset_id = await create_user_broker_asset(client, currency="EUR")
             broker_b_id = await create_broker(client, "WACBrokerB4")
@@ -494,26 +487,18 @@ class TestWACCostBasis:
             )
             assert data["committed"] is True, f"TRANSFER not committed: {data}"
 
-            create_results = [r for r in data["results"] if r["operation"] == "create"]
-            wac_results = [r for r in create_results if r.get("wac_info")]
-
-            if wac_results:
-                wac_info = wac_results[0]["wac_info"]
-                # WAC should be None due to missing FX pair
-                assert wac_info["wac"] is None, f"WAC should be None (missing FX): {wac_info}"
-                assert len(wac_info["missing_pairs"]) > 0, f"Expected missing_pairs: {wac_info}"
-
             # Verify cost_basis_override is null via GET
+            create_results = [r for r in data["results"] if r["operation"] == "create"]
             all_ids = [tid for r in create_results for tid in r["ids"]]
             txs = await get_txs_by_ids(client, all_ids)
             receiver = next(tx for tx in txs if Decimal(tx["quantity"]) > 0)
             assert receiver["cost_basis_override"] is None, f"Expected null cost_basis: {receiver}"
-            print_success("WAC-4: Missing FX pair → null cost_basis verified ✓")
+            print_success("WAC-4: Missing FX pair → NULL cost_basis (no auto-calc) ✓")
 
     # ------------------------------------------------------------------ WAC-5
-    async def test_wac5_auto_calc_no_buys(self):
-        """TRANSFER without override, no BUY transactions → WAC = 0."""
-        print_section("WAC-5 — Auto-calc no BUY → WAC zero")
+    async def test_wac5_transfer_no_buys_no_auto_calc(self):
+        """TRANSFER without override, no BUY transactions → cost_basis stays NULL."""
+        print_section("WAC-5 — TRANSFER no BUY → NULL (no auto-calc)")
         async with httpx.AsyncClient() as client:
             broker_a_id, asset_id = await create_user_broker_asset(client)
             broker_b_id = await create_broker(client, "WACBrokerB5")
@@ -533,18 +518,7 @@ class TestWACCostBasis:
             )
             assert data["committed"] is True
 
-            # TRANSFER pair — but we need asset balance on broker_a.
-            # Since allow_cash_overdraft is True and we have no asset balance check
-            # for the sender, use a BUY first to have balance (but that defeats the test).
-            # Actually — the WAC test checks BUYs on the SENDER broker.
-            # If there are no BUYs, total_qty=0, WAC=0.
-            # But we need asset units to send. Let's do a tiny BUY to have units
-            # but the WAC test is about the cost — 0 BUY cost = 0 WAC won't work.
-            # Re-read the plan: WAC-5 says "DEPOSIT, TRANSFER pair (no BUY)".
-            # However we can't TRANSFER assets without first buying them.
-            # The test is about what WAC calculates — if qty=0 (no buys),
-            # the result should be wac={code:"EUR", amount:"0"}.
-            # We need to create balance via ADJUSTMENT.
+            # Add asset balance via ADJUSTMENT
             data = await commit_batch(
                 client,
                 creates=[
@@ -583,152 +557,186 @@ class TestWACCostBasis:
             )
             assert data["committed"] is True, f"TRANSFER not committed: {data}"
 
+            # Verify cost_basis is NULL (no auto-calc)
             create_results = [r for r in data["results"] if r["operation"] == "create"]
-            wac_results = [r for r in create_results if r.get("wac_info")]
-
-            if wac_results:
-                wac_info = wac_results[0]["wac_info"]
-                if wac_info["wac"] is not None:
-                    assert wac_info["wac"]["code"] == "EUR"
-                    assert Decimal(wac_info["wac"]["amount"]) == Decimal("0"), f"Expected WAC 0, got {wac_info['wac']['amount']}"
-
-            # Verify via GET
             all_ids = [tid for r in create_results for tid in r["ids"]]
             txs = await get_txs_by_ids(client, all_ids)
             receiver = next(tx for tx in txs if Decimal(tx["quantity"]) > 0)
-            # With no BUYs, WAC = 0 → either stored as {code, amount:"0"} or None
-            if receiver["cost_basis_override"] is not None:
-                assert Decimal(receiver["cost_basis_override"]["amount"]) == Decimal("0")
-            print_success("WAC-5: No BUY → WAC zero / null verified ✓")
+            assert receiver["cost_basis_override"] is None, f"Expected null cost_basis: {receiver}"
+            print_success("WAC-5: TRANSFER no BUY → NULL (no auto-calc) ✓")
 
 
 @pytest.mark.asyncio
-class TestRecalcWAC:
+class TestWACPreview:
     @pytest.fixture(autouse=True)
     def server(self, test_server):
         yield
 
     # ------------------------------------------------------------------ WAC-6
-    async def test_wac6_recalc_multi_broker(self):
-        """recalc-wac: 2 TRANSFER receivers on same asset, different brokers → both updated."""
-        print_section("WAC-6 — recalc-wac multi-broker")
+    async def test_wac6_preview_multi_broker(self):
+        """wac-preview: compute WAC for asset across different sender brokers."""
+        print_section("WAC-6 — wac-preview multi-broker")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
-            broker_a = await create_broker(client, "WACRecalcA")
-            broker_b = await create_broker(client, "WACRecalcB")
-            broker_c = await create_broker(client, "WACRecalcC")
+            broker_a = await create_broker(client, "WACPreviewA")
+            broker_b = await create_broker(client, "WACPreviewB")
             asset_id = await create_asset(client, currency="EUR")
 
-            # Setup: DEPOSITs, BUYs, two TRANSFER pairs
+            # Setup: DEPOSITs, BUYs
             data = await commit_batch(
                 client,
                 creates=[
                     {"broker_id": broker_a, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "20000"}},
                     {"broker_id": broker_a, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "20", "cash": {"code": "EUR", "amount": "-2000"}},
+                    {"broker_id": broker_b, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "20000"}},
+                    {"broker_id": broker_b, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1500"}},
                 ],
             )
             assert data["committed"] is True
 
-            # TRANSFER A→B
-            link1 = str(uuid.uuid4())
-            data1 = await commit_batch(
-                client,
-                creates=[
-                    {"broker_id": broker_a, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-02-01", "quantity": "-5", "link_uuid": link1},
-                    {"broker_id": broker_b, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-02-01", "quantity": "5", "link_uuid": link1},
-                ],
-            )
-            assert data1["committed"] is True
-            create_r1 = [r for r in data1["results"] if r["operation"] == "create"]
-            ids1 = [tid for r in create_r1 for tid in r["ids"]]
-
-            # TRANSFER A→C
-            link2 = str(uuid.uuid4())
-            data2 = await commit_batch(
-                client,
-                creates=[
-                    {"broker_id": broker_a, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-02-10", "quantity": "-5", "link_uuid": link2},
-                    {"broker_id": broker_c, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-02-10", "quantity": "5", "link_uuid": link2},
-                ],
-            )
-            assert data2["committed"] is True
-            create_r2 = [r for r in data2["results"] if r["operation"] == "create"]
-            ids2 = [tid for r in create_r2 for tid in r["ids"]]
-
-            # Find receiver IDs
-            txs1 = await get_txs_by_ids(client, ids1)
-            txs2 = await get_txs_by_ids(client, ids2)
-            receiver_b = next(tx for tx in txs1 if Decimal(tx["quantity"]) > 0)
-            receiver_c = next(tx for tx in txs2 if Decimal(tx["quantity"]) > 0)
-
-            # Call recalc-wac
+            # Call wac-preview for both brokers
             resp = await client.post(
-                f"{API_BASE}/transactions/recalc-wac",
-                json={"tx_ids": [receiver_b["id"], receiver_c["id"]]},
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker_a, "asset_id": asset_id, "date_range": {"start": "2026-01-01", "end": "2026-02-01"}},
+                        {"sender_broker_id": broker_b, "asset_id": asset_id, "date_range": {"start": "2026-01-01", "end": "2026-02-01"}},
+                    ],
+                    "pending_txs": [],
+                    "excluded_tx_ids": [],
+                },
                 timeout=TIMEOUT,
             )
-            assert resp.status_code == 200, f"recalc-wac failed: {resp.text}"
-            recalc = resp.json()
-            assert len(recalc["results"]) == 2
-            for r in recalc["results"]:
-                assert r["updated"] is True, f"Expected updated=True: {r}"
-            print_success("WAC-6: recalc-wac multi-broker both updated ✓")
+            assert resp.status_code == 200, f"wac-preview failed: {resp.text}"
+            result = resp.json()
+            assert len(result["items"]) == 2
+
+            # Broker A: WAC = 2000/20 = 100
+            wac_a = result["items"][0]
+            assert wac_a["wac"] is not None
+            assert wac_a["wac"]["code"] == "EUR"
+            assert Decimal(wac_a["wac"]["amount"]) == Decimal("100")
+
+            # Broker B: WAC = 1500/10 = 150
+            wac_b = result["items"][1]
+            assert wac_b["wac"] is not None
+            assert wac_b["wac"]["code"] == "EUR"
+            assert Decimal(wac_b["wac"]["amount"]) == Decimal("150")
+            print_success("WAC-6: wac-preview multi-broker ✓")
 
     # ------------------------------------------------------------------ WAC-7
-    async def test_wac7_recalc_different_assets_400(self):
-        """recalc-wac with TXs from different assets → 400."""
-        print_section("WAC-7 — recalc-wac different assets → 400")
+    async def test_wac7_preview_invalid_request(self):
+        """wac-preview with invalid date_range → 422."""
+        print_section("WAC-7 — wac-preview invalid request → 422")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
-            broker_a = await create_broker(client, "WACDiffAssetA")
-            broker_b = await create_broker(client, "WACDiffAssetB")
-            asset1 = await create_asset(client, name="WACAsset1")
-            asset2 = await create_asset(client, name="WACAsset2")
 
-            # Setup: DEPOSIT + BUY on each asset, then TRANSFER each
-            data = await commit_batch(
-                client,
-                creates=[
-                    {"broker_id": broker_a, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "20000"}},
-                    {"broker_id": broker_a, "asset_id": asset1, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
-                    {"broker_id": broker_a, "asset_id": asset2, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
-                ],
-            )
-            assert data["committed"] is True
-
-            link1 = str(uuid.uuid4())
-            link2 = str(uuid.uuid4())
-            data = await commit_batch(
-                client,
-                creates=[
-                    {"broker_id": broker_a, "asset_id": asset1, "type": "TRANSFER", "date": "2026-02-01", "quantity": "-5", "link_uuid": link1},
-                    {"broker_id": broker_b, "asset_id": asset1, "type": "TRANSFER", "date": "2026-02-01", "quantity": "5", "link_uuid": link1},
-                    {"broker_id": broker_a, "asset_id": asset2, "type": "TRANSFER", "date": "2026-02-01", "quantity": "-5", "link_uuid": link2},
-                    {"broker_id": broker_b, "asset_id": asset2, "type": "TRANSFER", "date": "2026-02-01", "quantity": "5", "link_uuid": link2},
-                ],
-            )
-            assert data["committed"] is True
-
-            # Get receiver IDs
-            create_results = [r for r in data["results"] if r["operation"] == "create"]
-            all_ids = [tid for r in create_results for tid in r["ids"]]
-            txs = await get_txs_by_ids(client, all_ids)
-            receivers = [tx for tx in txs if Decimal(tx["quantity"]) > 0]
-            assert len(receivers) == 2
-
-            # recalc-wac with different assets → should 400
+            # Missing required field date_range
             resp = await client.post(
-                f"{API_BASE}/transactions/recalc-wac",
-                json={"tx_ids": [receivers[0]["id"], receivers[1]["id"]]},
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": 1, "asset_id": 1},
+                    ],
+                },
                 timeout=TIMEOUT,
             )
-            assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
-            print_success("WAC-7: recalc-wac different assets → 400 ✓")
+            assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
+            print_success("WAC-7: wac-preview invalid request → 422 ✓")
 
     # ------------------------------------------------------------------ WAC-8
-    async def test_wac8_recalc_non_transfer_skip(self):
-        """recalc-wac with non-TRANSFER TXs → updated=False."""
-        print_section("WAC-8 — recalc-wac non-TRANSFER → skip")
+    async def test_wac8_preview_empty_asset(self):
+        """wac-preview for asset with no transactions → WAC = 0."""
+        print_section("WAC-8 — wac-preview empty asset → WAC 0")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await create_user_broker_asset(client)
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-01-01", "end": "2026-02-01"}},
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, f"wac-preview failed: {resp.text}"
+            result = resp.json()
+            wac_item = result["items"][0]
+            assert wac_item["wac"] is not None
+            assert Decimal(wac_item["wac"]["amount"]) == Decimal("0")
+            print_success("WAC-8: wac-preview empty asset → WAC 0 ✓")
+
+    # ------------------------------------------------------------------ WAC-P1
+    async def test_wacp1_buy_then_sell_wac_unchanged(self):
+        """BUY 10@100 + SELL 3 → WAC stays 100 (unchanged after reduction)."""
+        print_section("WAC-P1 — BUY + SELL → WAC unchanged")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await create_user_broker_asset(client)
+
+            data = await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2026-01-10", "quantity": "-3", "cash": {"code": "EUR", "amount": "330"}},
+                ],
+            )
+            assert data["committed"] is True
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-01-01", "end": "2026-01-15"}},
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200
+            wac_item = resp.json()["items"][0]
+            assert wac_item["wac"]["code"] == "EUR"
+            assert Decimal(wac_item["wac"]["amount"]) == Decimal("100")
+            print_success("WAC-P1: BUY 10@100 + SELL 3 → WAC = 100 ✓")
+
+    # ------------------------------------------------------------------ WAC-P2
+    async def test_wacp2_two_buys_weighted_average(self):
+        """BUY 10@100 + BUY 5@200 → WAC = (1000+1000)/15 = 133.33."""
+        print_section("WAC-P2 — Two BUYs weighted average")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await create_user_broker_asset(client)
+
+            data = await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "20000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-1000"}},
+                ],
+            )
+            assert data["committed"] is True
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-01-01", "end": "2026-01-15"}},
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200
+            wac_item = resp.json()["items"][0]
+            wac_amount = Decimal(wac_item["wac"]["amount"])
+            # (1000 + 1000) / (10 + 5) = 133.333...
+            expected = Decimal("2000") / Decimal("15")
+            assert abs(wac_amount - expected) < Decimal("0.01"), f"Expected ~133.33, got {wac_amount}"
+            print_success("WAC-P2: BUY 10@100 + BUY 5@200 → WAC ≈ 133.33 ✓")
+
+    # ------------------------------------------------------------------ WAC-P3
+    async def test_wacp3_pending_txs_override(self):
+        """pending_txs override → WAC changes vs solo-DB."""
+        print_section("WAC-P3 — pending_txs override WAC")
         async with httpx.AsyncClient() as client:
             broker_id, asset_id = await create_user_broker_asset(client)
 
@@ -741,19 +749,272 @@ class TestRecalcWAC:
             )
             assert data["committed"] is True
 
-            create_results = [r for r in data["results"] if r["operation"] == "create"]
-            all_ids = [tid for r in create_results for tid in r["ids"]]
-
-            resp = await client.post(
-                f"{API_BASE}/transactions/recalc-wac",
-                json={"tx_ids": all_ids},
+            # WAC without pending = 100
+            resp1 = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-01-01", "end": "2026-01-20"}},
+                    ],
+                },
                 timeout=TIMEOUT,
             )
-            assert resp.status_code == 200, f"recalc-wac failed: {resp.text}"
-            recalc = resp.json()
-            for r in recalc["results"]:
-                assert r["updated"] is False, f"Expected updated=False for non-TRANSFER: {r}"
-            print_success("WAC-8: recalc-wac non-TRANSFER → skip (updated=False) ✓")
+            assert resp1.status_code == 200
+            wac1 = Decimal(resp1.json()["items"][0]["wac"]["amount"])
+            assert wac1 == Decimal("100")
+
+            # WAC with pending BUY 10@200 → WAC = (1000+2000)/20 = 150
+            resp2 = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-01-01", "end": "2026-01-20"}},
+                    ],
+                    "pending_txs": [
+                        {
+                            "broker_id": broker_id,
+                            "asset_id": asset_id,
+                            "type": "BUY",
+                            "date": "2026-01-10",
+                            "quantity": "10",
+                            "cash": {"code": "EUR", "amount": "-2000"},
+                        },
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp2.status_code == 200
+            wac2 = Decimal(resp2.json()["items"][0]["wac"]["amount"])
+            assert wac2 == Decimal("150"), f"Expected WAC 150, got {wac2}"
+            print_success("WAC-P3: pending_txs override → WAC changed ✓")
+
+    # ------------------------------------------------------------------ WAC-P4
+    async def test_wacp4_excluded_tx_ids(self):
+        """excluded_tx_ids → excluded TX does not contribute to WAC."""
+        print_section("WAC-P4 — excluded_tx_ids")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await create_user_broker_asset(client)
+
+            data = await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "20000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-2000"}},
+                ],
+            )
+            assert data["committed"] is True
+
+            # Get IDs of the BUY transactions
+            create_results = [r for r in data["results"] if r["operation"] == "create"]
+            all_ids = [tid for r in create_results for tid in r["ids"]]
+            txs = await get_txs_by_ids(client, all_ids)
+            buy_txs = [tx for tx in txs if tx["type"] == "BUY"]
+            assert len(buy_txs) == 2
+
+            # Exclude the second BUY (2000/10=200) → WAC should be 100
+            second_buy_id = buy_txs[1]["id"]
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-01-01", "end": "2026-01-20"}},
+                    ],
+                    "excluded_tx_ids": [second_buy_id],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200
+            wac_item = resp.json()["items"][0]
+            assert Decimal(wac_item["wac"]["amount"]) == Decimal("100"), f"Expected 100 after excluding second BUY"
+            print_success("WAC-P4: excluded_tx_ids → excluded TX not counted ✓")
+
+    # ------------------------------------------------------------------ WAC-P5
+    async def test_wacp5_fx_missing_pair(self):
+        """wac-preview with cross-currency BUYs and missing FX pair → wac=null, missing_pairs."""
+        print_section("WAC-P5 — wac-preview FX missing pair")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await create_user_broker_asset(client, currency="EUR")
+
+            data = await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "CHF", "amount": "10000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "CHF", "amount": "-1000"}},
+                ],
+            )
+            assert data["committed"] is True
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-01-01", "end": "2026-01-20"}},
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200
+            wac_item = resp.json()["items"][0]
+            assert wac_item["wac"] is None, f"WAC should be None (missing FX): {wac_item}"
+            assert len(wac_item["wac_missing_pairs"]) > 0, f"Expected missing_pairs: {wac_item}"
+            print_success("WAC-P5: FX missing pair → wac=null, missing_pairs ✓")
+
+    # ------------------------------------------------------------------ WAC-P6
+    async def test_wacp6_same_date_buy_sell_no_negative(self):
+        """Same-date BUY+SELL → additions first, no transient negative qty."""
+        print_section("WAC-P6 — Same-date BUY+SELL no negative")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await create_user_broker_asset(client)
+
+            # BUY and SELL on same date
+            data = await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2026-01-05", "quantity": "-3", "cash": {"code": "EUR", "amount": "330"}},
+                ],
+            )
+            assert data["committed"] is True
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-01-01", "end": "2026-01-10"}},
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200
+            wac_item = resp.json()["items"][0]
+            # BUY processed first → pool=10@100, then SELL 3 → pool=7@100
+            assert wac_item["wac"] is not None
+            assert Decimal(wac_item["wac"]["amount"]) == Decimal("100")
+            print_success("WAC-P6: Same-date BUY+SELL → no negative, WAC = 100 ✓")
+
+    # ------------------------------------------------------------------ WAC-P7
+    async def test_wacp7_date_range_end_none_uses_today(self):
+        """date_range with end=None → uses today as effective date."""
+        print_section("WAC-P7 — date_range end=None → today")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await create_user_broker_asset(client)
+
+            data = await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                ],
+            )
+            assert data["committed"] is True
+
+            # end=None → should use today
+            resp = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-01-01"}},
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200
+            wac_item = resp.json()["items"][0]
+            assert wac_item["wac"] is not None
+            assert Decimal(wac_item["wac"]["amount"]) == Decimal("100")
+            print_success("WAC-P7: date_range end=None → uses today, WAC = 100 ✓")
+
+    # ------------------------------------------------------------------ WAC-P8
+    async def test_wacp8_pending_override_by_id(self):
+        """pending_txs with matching DB id → overrides that row in WAC calc."""
+        print_section("WAC-P8 — pending override by id")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await create_user_broker_asset(client)
+
+            data = await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "20000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                ],
+            )
+            assert data["committed"] is True
+
+            # Get the BUY TX id
+            create_results = [r for r in data["results"] if r["operation"] == "create"]
+            all_ids = [tid for r in create_results for tid in r["ids"]]
+            txs = await get_txs_by_ids(client, all_ids)
+            buy_tx = next(tx for tx in txs if tx["type"] == "BUY")
+
+            # Without override: WAC = 100
+            resp1 = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [{"sender_broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-01-01", "end": "2026-02-01"}}],
+                },
+                timeout=TIMEOUT,
+            )
+            assert Decimal(resp1.json()["items"][0]["wac"]["amount"]) == Decimal("100")
+
+            # Override BUY with different price: 10@200 → WAC should be 200
+            resp2 = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [{"sender_broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-01-01", "end": "2026-02-01"}}],
+                    "pending_txs": [
+                        {
+                            "id": buy_tx["id"],
+                            "broker_id": broker_id,
+                            "asset_id": asset_id,
+                            "type": "BUY",
+                            "date": "2026-01-05",
+                            "quantity": "10",
+                            "cash": {"code": "EUR", "amount": "-2000"},
+                        },
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp2.status_code == 200
+            wac2 = Decimal(resp2.json()["items"][0]["wac"]["amount"])
+            assert wac2 == Decimal("200"), f"Expected 200 after override, got {wac2}"
+            print_success("WAC-P8: pending override by id → WAC updated ✓")
+
+    # ------------------------------------------------------------------ WAC-P9
+    async def test_wacp9_pool_reset_after_full_sell(self):
+        """BUY, SELL all, BUY again → WAC resets to new price."""
+        print_section("WAC-P9 — Pool reset after full sell")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await create_user_broker_asset(client)
+
+            data = await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2026-01-10", "quantity": "-10", "cash": {"code": "EUR", "amount": "1200"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-15", "quantity": "5", "cash": {"code": "EUR", "amount": "-1500"}},
+                ],
+            )
+            assert data["committed"] is True
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [{"sender_broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-01-01", "end": "2026-01-20"}}],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200
+            wac_item = resp.json()["items"][0]
+            # After full sell pool=0, WAC resets. New BUY 5@300 → WAC = 300
+            assert Decimal(wac_item["wac"]["amount"]) == Decimal("300")
+            print_success("WAC-P9: Pool reset after full sell → WAC = 300 ✓")
 
 
 @pytest.mark.asyncio
