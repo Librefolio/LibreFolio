@@ -621,10 +621,11 @@
         return isDraftReadyForValidation(draft);
     });
 
-    // cost_basis_override is meaningful only for the receiver of a TRANSFER pair.
-    // Single-form mode rarely creates TRANSFER (uses wizard), so we expose the
-    // field whenever type=TRANSFER and let the backend enforce semantics.
-    let showCostBasisField = $derived(draft.type === 'TRANSFER');
+    // cost_basis_override is meaningful only for the receiver of a TRANSFER pair
+    // or an ADJUSTMENT (asset entering/leaving portfolio without purchase history).
+    let showCostBasisField = $derived(
+        draft.type === 'TRANSFER' || draft.type === 'ADJUSTMENT'
+    );
 
     // Pair partner chip (only when editing an existing linked tx — non-dual mode).
     let pairPartnerId = $derived(pairLayout ? null : (initialRow?.related_transaction_id ?? null));
@@ -858,7 +859,7 @@
 
     /** Show the Advanced disclosure only if at least one of its sub-fields
      *  is meaningful for the current type/state (Bugfix-1 §U6). */
-    let showAdvancedSection = $derived(!pairLayout && ((rule.eventLinkable && draft.asset_id != null) || draft.type === 'TRANSFER' || pairPartnerId != null || (mode === 'edit' && draft.link_uuid != null)));
+    let showAdvancedSection = $derived(!pairLayout && ((rule.eventLinkable && draft.asset_id != null) || draft.type === 'TRANSFER' || draft.type === 'ADJUSTMENT' || pairPartnerId != null || (mode === 'edit' && draft.link_uuid != null)));
 
     /** BrokerSearchSelect expects `BrokerSelectItem[]`; the brokerStore's
      *  `BrokerInfo` is structurally compatible (id/name/icon_url present)
@@ -886,6 +887,10 @@
 
     /** Convert the form draft to the shared TxFields interface. */
     function draftToTxFields(): TxFields {
+        // Normalize cost_basis_override: treat empty amount as null
+        const cbo = draft.cost_basis_override?.amount?.trim()
+            ? draft.cost_basis_override
+            : null;
         return {
             type: draft.type,
             broker_id: draft.broker_id,
@@ -895,7 +900,7 @@
             cash: draft.cash,
             tags: draft.tags,
             description: draft.description,
-            cost_basis_override: draft.cost_basis_override,
+            cost_basis_override: cbo,
             asset_event_id: draft.asset_event_id,
             link_uuid: draft.link_uuid,
         };
@@ -968,8 +973,8 @@
                 fromItem.asset_id = draft.asset_id;
                 toItem.asset_id = draft.asset_id;
             }
-            if (draft.cost_basis_override) toItem.cost_basis_override = draft.cost_basis_override;
-            else if (dualTo.cost_basis_override) toItem.cost_basis_override = dualTo.cost_basis_override;
+            if (draft.cost_basis_override && draft.cost_basis_override.amount?.trim()) toItem.cost_basis_override = draft.cost_basis_override;
+            else if (dualTo.cost_basis_override && dualTo.cost_basis_override.amount?.trim()) toItem.cost_basis_override = dualTo.cost_basis_override;
             if (sharedTags) {
                 fromItem.tags = sharedTags;
                 toItem.tags = sharedTags;
@@ -1684,7 +1689,12 @@
                     <!-- Cost basis override for transfer_asset -->
                     {#if pairLayout === 'transfer_asset'}
                         <div class="mt-3 flex flex-col gap-1">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.costBasis')}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                {$t('transactions.form.costBasis')}
+                                <Tooltip text={$t('transactions.costBasisOverride.tooltip')} position="top">
+                                    <Info size={12} class="text-gray-400 dark:text-gray-500" />
+                                </Tooltip>
+                            </span>
                             <CompactCashCell
                                 value={draft.cost_basis_override}
                                 onChange={onCostBasisChange}
@@ -1939,10 +1949,15 @@
                             </div>
                         {/if}
 
-                        <!-- Cost basis override (TRANSFER only) -->
+                        <!-- Cost basis override (TRANSFER / ADJUSTMENT) -->
                         {#if showCostBasisField}
                             <label class="flex items-center gap-2">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 w-32 shrink-0">{$t('transactions.form.costBasis')}</span>
+                                <span class="text-xs text-gray-500 dark:text-gray-400 w-32 shrink-0 flex items-center gap-1">
+                                    {$t('transactions.form.costBasis')}
+                                    <Tooltip text={$t('transactions.costBasisOverride.tooltip')} position="top">
+                                        <Info size={12} class="text-gray-400 dark:text-gray-500" />
+                                    </Tooltip>
+                                </span>
                                 <CompactCashCell
                                     value={draft.cost_basis_override}
                                     onChange={onCostBasisChange}
@@ -1953,7 +1968,7 @@
                                     testid="tx-form-cost-basis"
                                 />
                             </label>
-                            {#if draft.type === 'ADJUSTMENT' && Number(draft.quantity) > 0 && !draft.cost_basis_override}
+                            {#if draft.type === 'ADJUSTMENT' && Number(draft.quantity) > 0 && !draft.cost_basis_override?.amount?.trim()}
                                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-[136px]" data-testid="tx-form-cost-basis-warning">
                                     {$t('transactions.costBasisOverride.warningAdjustment') || 'No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift.'}
                                 </p>
