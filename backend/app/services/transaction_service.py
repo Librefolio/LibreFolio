@@ -195,6 +195,240 @@ async def compute_weighted_avg_cost(
     return WACResult(wac=Currency(code=target_currency, amount=wac_amount), conversions=conversions_info)
 
 
+# =============================================================================
+# WAC PREVIEW — Inventory-aware iterative WAC (replaces cumulative approach)
+# =============================================================================
+
+
+async def compute_wac_iterative(
+    session: AsyncSession,
+    broker_id: int,
+    asset_id: int,
+    as_of_date: date_type,
+    asset_currency: str,
+    pending_txs: list | None = None,
+    excluded_tx_ids: list[int] | None = None,
+) -> "WACPreviewResultItem":
+    """Compute inventory-aware WAC (PMC) for an asset at a broker up to a date.
+
+    Preparation layer: queries DB, merges pending TXs, handles FX conversion,
+    then delegates to compute_wac_from_txlist() for pure math.
+    """
+    from backend.app.schemas.transactions import WACPreviewResultItem, WACQualifyingTX
+    from backend.app.utils.financial_utils import WACInputTX, compute_wac_from_txlist, determine_target_currency
+
+    excluded = set(excluded_tx_ids or [])
+    pending = pending_txs or []
+
+    # 1. Query ALL transactions for this (broker, asset) with date <= as_of_date and qty != 0
+    stmt = select(Transaction).where(
+        Transaction.broker_id == broker_id,
+        Transaction.asset_id == asset_id,
+        Transaction.date <= as_of_date,
+        Transaction.quantity.is_not(None),
+        Transaction.quantity != 0,
+    )
+    db_rows = (await session.execute(stmt)).scalars().all()
+
+    # 2. Merge: DB rows (minus excluded, overridden by pending) + new pending
+    pending_by_id: dict[int, Any] = {}
+    pending_new: list[Any] = []
+    for ptx in pending:
+        if ptx.id is not None:
+            pending_by_id[ptx.id] = ptx
+        else:
+            pending_new.append(ptx)
+
+    # Unified row tuples: (tx_id, type_str, date, quantity, amount, currency, cbo_amount, cbo_ccy, is_pending)
+    unified: list[tuple] = []
+
+    for row in db_rows:
+        if row.id in excluded:
+            continue
+        if row.id in pending_by_id:
+            ptx = pending_by_id.pop(row.id)
+            if ptx.broker_id == broker_id and ptx.asset_id == asset_id and ptx.date <= as_of_date:
+                cbo_amount = ptx.cost_basis_override.amount if ptx.cost_basis_override else None
+                cbo_ccy = ptx.cost_basis_override.code if ptx.cost_basis_override else None
+                unified.append((ptx.id, ptx.type, ptx.date, ptx.quantity, ptx.amount, ptx.currency, cbo_amount, cbo_ccy, True))
+        else:
+            unified.append((
+                row.id, row.type.value if hasattr(row.type, "value") else str(row.type),
+                row.date, row.quantity, row.amount, row.currency,
+                row.cost_basis_override, row.cost_basis_currency, False,
+            ))
+
+    # Remaining pending overrides not found in DB
+    for _pid, ptx in pending_by_id.items():
+        if ptx.broker_id == broker_id and ptx.asset_id == asset_id and ptx.date <= as_of_date and ptx.quantity and ptx.quantity != 0:
+            cbo_amount = ptx.cost_basis_override.amount if ptx.cost_basis_override else None
+            cbo_ccy = ptx.cost_basis_override.code if ptx.cost_basis_override else None
+            unified.append((ptx.id, ptx.type, ptx.date, ptx.quantity, ptx.amount, ptx.currency, cbo_amount, cbo_ccy, True))
+
+    # New pending (no id)
+    for ptx in pending_new:
+        if ptx.broker_id == broker_id and ptx.asset_id == asset_id and ptx.date <= as_of_date and ptx.quantity and ptx.quantity != 0:
+            cbo_amount = ptx.cost_basis_override.amount if ptx.cost_basis_override else None
+            cbo_ccy = ptx.cost_basis_override.code if ptx.cost_basis_override else None
+            unified.append((None, ptx.type, ptx.date, ptx.quantity, ptx.amount, ptx.currency, cbo_amount, cbo_ccy, True))
+
+    if not unified:
+        return WACPreviewResultItem(
+            wac=Currency(code=asset_currency, amount=Decimal("0")),
+            wac_qualifying_txs=[],
+            wac_missing_pairs=[],
+        )
+
+    # 3. Build WACInputTX list and determine target_currency
+    #    First pass: determine currencies for target_currency selection
+    pre_txs: list[WACInputTX] = []
+    for (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend) in unified:
+        if qty > 0:
+            orig_ccy = ccy if ttype == "BUY" else (cbo_ccy or asset_currency)
+        else:
+            orig_ccy = ccy or asset_currency
+        pre_txs.append(WACInputTX(
+            tx_id=tid, type=ttype, date=dt, quantity=qty,
+            unit_cost_converted=None, original_currency=orig_ccy, is_pending=is_pend,
+        ))
+
+    target_currency = determine_target_currency(pre_txs, asset_currency)
+
+    # 4. FX conversion for acquisitions with different currency
+    fx_requests: list[tuple[int, Currency, str, date_type]] = []  # (idx, cost_ccy, target, date)
+
+    for i, (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend) in enumerate(unified):
+        if qty <= 0:
+            continue
+        if ttype == "BUY":
+            tx_ccy = ccy or asset_currency
+            if tx_ccy != target_currency and amount:
+                cost = abs(amount)
+                fx_requests.append((i, Currency(code=tx_ccy, amount=cost), target_currency, dt))
+        elif cbo_amt is not None:
+            tx_ccy = cbo_ccy or asset_currency
+            if tx_ccy != target_currency:
+                cost = qty * cbo_amt
+                fx_requests.append((i, Currency(code=tx_ccy, amount=cost), target_currency, dt))
+
+    fx_converted: dict[int, Decimal] = {}
+    missing_pairs: list[str] = []
+
+    if fx_requests:
+        bulk_input = [(amt, to_ccy, dt) for _, amt, to_ccy, dt in fx_requests]
+        fx_results, _fx_errors = await convert_bulk(session, bulk_input, raise_on_error=False)
+        for j, (unified_idx, amt_ccy, to_ccy, dt) in enumerate(fx_requests):
+            result = fx_results[j] if j < len(fx_results) else None
+            if result is None:
+                pair_key = f"{amt_ccy.code}/{to_ccy}"
+                if pair_key not in missing_pairs:
+                    missing_pairs.append(pair_key)
+            else:
+                converted, _rate_date, _bf = result
+                fx_converted[unified_idx] = converted.amount
+
+    if missing_pairs:
+        return WACPreviewResultItem(wac=None, wac_qualifying_txs=[], wac_missing_pairs=missing_pairs)
+
+    # 5. Build final WACInputTX list with converted costs
+    input_txs: list[WACInputTX] = []
+    for i, (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend) in enumerate(unified):
+        unit_cost: Decimal | None = None
+        orig_ccy = ccy or asset_currency
+
+        if qty > 0:
+            if ttype == "BUY":
+                if i in fx_converted:
+                    unit_cost = fx_converted[i] / qty
+                elif amount:
+                    unit_cost = abs(amount) / qty
+                else:
+                    unit_cost = Decimal("0")
+                orig_ccy = ccy or asset_currency
+            elif cbo_amt is not None:
+                if i in fx_converted:
+                    unit_cost = fx_converted[i] / qty
+                else:
+                    unit_cost = cbo_amt
+                orig_ccy = cbo_ccy or asset_currency
+            else:
+                unit_cost = None  # will be treated as zero cost
+                orig_ccy = asset_currency
+        # For reductions, unit_cost stays None — compute_wac_from_txlist uses current WAC
+
+        input_txs.append(WACInputTX(
+            tx_id=tid, type=ttype, date=dt, quantity=qty,
+            unit_cost_converted=unit_cost, original_currency=orig_ccy, is_pending=is_pend,
+        ))
+
+    # 6. Delegate to pure math function
+    calc_result = compute_wac_from_txlist(input_txs, target_currency)
+
+    # 7. Convert result to schema
+    qualifying_txs = [
+        WACQualifyingTX(
+            tx_id=q.tx_id, type=q.type, date=q.date,
+            quantity=q.quantity, unit_cost=q.unit_cost,
+            currency=q.currency, effect=q.effect,
+        )
+        for q in calc_result.qualifying
+    ]
+
+    return WACPreviewResultItem(
+        wac=Currency(code=target_currency, amount=calc_result.wac_amount) if calc_result.pool_qty >= 0 else None,
+        wac_qualifying_txs=qualifying_txs,
+        wac_missing_pairs=[],
+    )
+
+
+async def asset_price_at_date(
+    session: AsyncSession,
+    asset_id: int,
+    target_date: date_type,
+    target_currency: str | None = None,
+) -> tuple[Currency | None, Any, bool]:
+    """Get asset close price at a date with backward-fill.
+
+    Returns (price_currency, stale_info, missing).
+    Uses existing PriceHistory query with backward-fill.
+    """
+    from backend.app.db.models import Asset, PriceHistory
+    from backend.app.schemas.common import BackwardFillInfo
+
+    asset_row = await session.execute(select(Asset.currency).where(Asset.id == asset_id))
+    asset_ccy = asset_row.scalar_one_or_none()
+    if not asset_ccy:
+        return None, None, True
+
+    stmt = (
+        select(PriceHistory)
+        .where(PriceHistory.asset_id == asset_id, PriceHistory.date <= target_date)
+        .order_by(PriceHistory.date.desc())
+        .limit(1)
+    )
+    row = (await session.execute(stmt)).scalars().first()
+
+    if not row or row.close is None:
+        return None, None, True
+
+    price = row.close
+    stale_info = None
+    if row.date < target_date:
+        days_back = (target_date - row.date).days
+        stale_info = BackwardFillInfo(actual_rate_date=row.date, days_back=days_back)
+
+    price_ccy = Currency(code=asset_ccy, amount=price)
+
+    if target_currency and target_currency != asset_ccy:
+        bulk_input = [(price_ccy, target_currency, target_date)]
+        fx_results, _ = await convert_bulk(session, bulk_input, raise_on_error=False)
+        if fx_results and fx_results[0] is not None:
+            converted, _, _ = fx_results[0]
+            price_ccy = converted
+
+    return price_ccy, stale_info, False
+
+
 class BalanceValidationError(Exception):
     """Raised when a balance validation fails."""
 
@@ -1456,26 +1690,8 @@ class TransactionService:
             tx_a.updated_at = utcnow()
             tx_b.updated_at = utcnow()
 
-            # Auto-calc cost_basis_override for TRANSFER receiver if not set
-            wac_result_for_promote: WACResult | None = None
-            if target_type == TransactionType.TRANSFER:
-                receiver = tx_a if (tx_a.quantity and tx_a.quantity > 0) else tx_b if (tx_b.quantity and tx_b.quantity > 0) else None
-                sender = tx_b if receiver is tx_a else tx_a
-                if receiver and receiver.cost_basis_override is None and sender.broker_id:
-                    # Fetch asset currency for target_currency determination
-                    asset_row = await self.session.execute(select(Asset.currency).where(Asset.id == receiver.asset_id))
-                    asset_ccy = asset_row.scalar_one_or_none() or ""
-                    wac_result_for_promote = await compute_weighted_avg_cost(self.session, sender.broker_id, receiver.asset_id, receiver.date, asset_ccy)
-                    if wac_result_for_promote.wac is not None:
-                        receiver.cost_basis_override = wac_result_for_promote.wac.amount
-                        receiver.cost_basis_currency = wac_result_for_promote.wac.code
-                    else:
-                        receiver.cost_basis_override = None
-                        receiver.cost_basis_currency = None
-                # Force sender override to null
-                if sender:
-                    sender.cost_basis_override = None
-                    sender.cost_basis_currency = None
+            # Note: WAC auto-calc removed (WAC Preview Architecture v5).
+            # The frontend now computes WAC preview and sets cost_basis explicitly in the payload.
 
             for t in (tx_a, tx_b):
                 prev = earliest_date_by_broker.get(t.broker_id)
@@ -1487,7 +1703,7 @@ class TransactionService:
             if item.link_uuid_b:
                 consumed_link_uuids.add(item.link_uuid_b)
 
-            results.append(TXBatchResultItem(operation="promote", index=orig_idx, ids=[tx_a.id, tx_b.id], status="success", wac_info=wac_result_for_promote))
+            results.append(TXBatchResultItem(operation="promote", index=orig_idx, ids=[tx_a.id, tx_b.id], status="success"))
 
         # 6. Link resolution
         for link_uuid, pairs in link_uuid_map.items():
@@ -1519,29 +1735,8 @@ class TransactionService:
                     )
                 )
 
-        # 6b. Auto-calc cost_basis_override on TRANSFER receivers
-        for link_uuid, pairs in link_uuid_map.items():
-            if link_uuid in consumed_link_uuids:
-                continue
-            if len(pairs) != 2:
-                continue
-            for _, tx in pairs:
-                if tx.type == TransactionType.TRANSFER and tx.quantity and tx.quantity > 0 and tx.cost_basis_override is None:
-                    # Find partner (the sender) in same link_uuid pair
-                    partner = next((t for _, t in pairs if t.id != tx.id), None)
-                    if partner and partner.broker_id:
-                        # Fetch asset currency
-                        asset_row = await self.session.execute(select(Asset.currency).where(Asset.id == tx.asset_id))
-                        asset_ccy = asset_row.scalar_one_or_none() or ""
-                        wac_result = await compute_weighted_avg_cost(self.session, partner.broker_id, tx.asset_id, tx.date, asset_ccy)
-                        if wac_result.wac is not None:
-                            tx.cost_basis_override = wac_result.wac.amount
-                            tx.cost_basis_currency = wac_result.wac.code
-                        # Propagate wac_info to the corresponding result item
-                        for r in results:
-                            if r.link_uuid == link_uuid and r.operation == "create":
-                                r.wac_info = wac_result
-                                break
+        # 6b. WAC auto-calc removed (WAC Preview Architecture v5).
+        # The frontend now sets cost_basis_override explicitly before commit.
 
         # 7. Balance walk per affected broker
         try:
