@@ -17,6 +17,7 @@
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import TagInput from '$lib/components/ui/TagInput.svelte';
+    import WacPreviewSection from './WacPreviewSection.svelte';
     import {Link2} from 'lucide-svelte';
     import {getStringBadgeStyle} from '$lib/utils/colors';
 
@@ -26,15 +27,26 @@
         txB?: {label: string; description: string; tags: string[]; date: string; cost_basis_override: string} | null;
         targetTypeLabel: string;
         availableTags?: string[];
-        onConfirm: (resolved: {description?: string; tags?: string[]}) => void;
+        /** Whether the promote target is TRANSFER (shows cost_basis section) */
+        isTransferPromote?: boolean;
+        /** Sender broker ID for WAC calculation (from txA's broker) */
+        senderBrokerId?: number | null;
+        /** Asset ID for WAC calculation */
+        assetId?: number | null;
+        /** Date for WAC calculation */
+        promoteDate?: string | null;
+        /** Whether the receiver is a new TX (vs existing DB row) */
+        receiverIsNew?: boolean;
+        onConfirm: (resolved: {description?: string; tags?: string[]; cost_basis_override?: {code: string; amount: string} | null}) => void;
         onCancel: () => void;
     }
 
-    let {open, txA, txB, targetTypeLabel, availableTags = [], onConfirm, onCancel}: Props = $props();
+    let {open, txA, txB, targetTypeLabel, availableTags = [], isTransferPromote = false, senderBrokerId = null, assetId = null, promoteDate = null, receiverIsNew = true, onConfirm, onCancel}: Props = $props();
 
     // Resolved values (editable merge area)
     let resDescription = $state('');
     let resTags = $state<string[]>([]);
+    let resCostBasis = $state<{code: string; amount: string} | null>(null);
 
     // Dirty guard
     let showDiscardConfirm = $state(false);
@@ -99,7 +111,8 @@
         const resolved: Record<string, unknown> = {};
         if (diffDesc) resolved.description = resDescription;
         if (diffTags) resolved.tags = resTags;
-        onConfirm(resolved as {description?: string; tags?: string[]});
+        if (isTransferPromote) resolved.cost_basis_override = resCostBasis;
+        onConfirm(resolved as {description?: string; tags?: string[]; cost_basis_override?: {code: string; amount: string} | null});
     }
 
     function handleCancel() {
@@ -186,6 +199,25 @@
                     </div>
                 {/if}
             </div>
+
+            <!-- Cost Basis (receiver) — shown for TRANSFER promotes -->
+            {#if isTransferPromote}
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-3" data-testid="promote-merge-cost-basis">
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">
+                        {$t('transactions.promote.fieldCostBasis') ?? 'Cost Basis (receiver)'}
+                    </div>
+                    <WacPreviewSection
+                        value={resCostBasis}
+                        onChange={(v) => { resCostBasis = v; interacted = true; }}
+                        variant={receiverIsNew ? 'auto-new' : 'saved'}
+                        defaultCode="EUR"
+                        testid="promote-merge-wac"
+                        {senderBrokerId}
+                        {assetId}
+                        txDate={promoteDate}
+                    />
+                </div>
+            {/if}
 
             <!-- Global actions — below fields, above footer -->
             <div class="flex justify-between gap-2">

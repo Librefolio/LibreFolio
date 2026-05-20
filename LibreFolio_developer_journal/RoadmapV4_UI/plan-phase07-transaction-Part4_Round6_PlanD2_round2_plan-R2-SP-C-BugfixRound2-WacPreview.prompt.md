@@ -598,12 +598,18 @@ Se FX mancante per entrambi:
 - [x] Step 4: Rimuovere auto-calc al commit
 - [x] Step 5: Eliminare `recalc-wac`
 - [x] Step 6: Adattare backend tests
-- [ ] Step 7: FormModal WAC state machine
-- [ ] Step 8: BulkModal celle WAC
-- [ ] Step 9: PromoteMergeModal cost_basis
-- [ ] Step 10: Error handling componente
-- [ ] Step 11: i18n + test runner
-- [ ] Step 12: E2E tests
+- [x] Step 7: FormModal WAC state machine
+  ⚠️ Implementation: Created `WacPreviewSection.svelte` as reusable component (toggle, debounced fetch, qualifying TXs table, recalc panel). Integrated into FormModal replacing both dual-form and single-form cost_basis sections. Uses `variant='auto-new'|'saved'` for new vs edit modes.
+- [x] Step 8: BulkModal celle WAC
+  ⚠️ Deviation: The BulkModal column cell now shows "💡 auto" for new TRANSFER/ADJUSTMENT rows and "—" for others. The full WAC preview (with qualifying TXs, toggle) is accessible via the FormModal when clicking a row (which already has WacPreviewSection integrated). A background bulk auto-fill was deferred — the per-row FormModal approach is sufficient for the current UX.
+- [x] Step 9: PromoteMergeModal cost_basis
+  ⚠️ Implementation: Added `isTransferPromote`, `senderBrokerId`, `assetId`, `promoteDate`, `receiverIsNew` props to PromoteMergeModal. Integrated WacPreviewSection in the modal body. The `onConfirm` callback now returns `cost_basis_override` when `isTransferPromote=true`.
+- [x] Step 10: Error handling componente
+  ⚠️ Deviation: No separate `WacErrorBanner.svelte` created — the error handling (missing FX pairs with action links, loading, error state) is embedded directly in `WacPreviewSection.svelte` which is already shared across all three modals. Actions: [Add FX pair →] (link to /fx), [Sync FX rates], [Sync asset prices].
+- [x] Step 11: i18n + test runner
+  Added `transactions.wacPreview.*` keys (14 keys × 4 languages: EN/IT/FR/ES). Registered `tx-wac` in `_frontend_transaction.py` with runner function and added to `front_transaction_all` suite.
+- [x] Step 12: E2E tests
+  Created `frontend/e2e/transactions/tx-wac.spec.ts` with 7 tests (W8, W9, W10, W-live, W-manual, W-sell, W-excluded). Tests verify UI structure, toggle behavior, and DOM presence. Full integration tests (with actual WAC values) depend on mock data having TRANSFER+BUY sequences.
 
 ### Progress Notes
 
@@ -637,3 +643,209 @@ Se FX mancante per entrambi:
 **TODO for next iteration**:
 → [`plan-R2-SP-C-BugfixRound2-WacBackendCleanup`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacBackendCleanup.prompt.md) — ✅ **COMPLETATO** (2026-05-19). Step 6 coperto integralmente (34 test). Continuare da **Step 7** (Frontend — FormModal WAC state machine).
 
+---
+
+## 🧪 Walktest — Verifica manuale in ordine di dipendenza
+
+### Pre-requisiti
+
+```bash
+./dev.py db create-clean --test
+./dev.py server --test --force
+# In altro terminale:
+cd frontend && npm run dev
+```
+
+### WT-1: Backend — Endpoint funziona (base)
+
+```bash
+# Login come test user
+curl -s -c /tmp/lf_cookies.txt -X POST http://localhost:8001/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"e2e_test_user","password":"E2eTestPass123!"}' | python -m json.tool
+
+# Crea broker + asset
+curl -s -b /tmp/lf_cookies.txt -X POST http://localhost:8001/api/v1/brokers \
+  -H "Content-Type: application/json" \
+  -d '{"name":"WacTestBroker"}' | python -m json.tool
+# → annotare broker_id
+
+curl -s -b /tmp/lf_cookies.txt -X POST http://localhost:8001/api/v1/assets \
+  -H "Content-Type: application/json" \
+  -d '{"display_name":"WacTestAsset","currency":"EUR","asset_type":"STOCK"}' | python -m json.tool
+# → annotare asset_id
+
+# Commit un BUY
+curl -s -b /tmp/lf_cookies.txt -X POST http://localhost:8001/api/v1/transactions/commit \
+  -H "Content-Type: application/json" \
+  -d '{"creates":[{"broker_id":BROKER_ID,"asset_id":ASSET_ID,"type":"BUY","date":"2026-01-10","quantity":"10","cash":{"code":"EUR","amount":"-1000"}}]}' | python -m json.tool
+
+# WAC Preview
+curl -s -b /tmp/lf_cookies.txt -X POST http://localhost:8001/api/v1/transactions/wac-preview \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"sender_broker_id":BROKER_ID,"asset_id":ASSET_ID,"date_range":{"start":"2026-01-01","end":"2026-02-01"}}]}' | python -m json.tool
+```
+
+**Aspettativa**: `wac = {code: "EUR", amount: "100.000000"}`, `wac_qualifying_txs` con 1 entry (BUY, effect="add")
+
+---
+
+### WT-2: Backend — Pending TXs + Excluded IDs
+
+```bash
+# Commit un secondo BUY
+curl -s -b /tmp/lf_cookies.txt -X POST http://localhost:8001/api/v1/transactions/commit \
+  -H "Content-Type: application/json" \
+  -d '{"creates":[{"broker_id":BROKER_ID,"asset_id":ASSET_ID,"type":"BUY","date":"2026-01-15","quantity":"5","cash":{"code":"EUR","amount":"-750"}}]}' | python -m json.tool
+# → annotare tx_id del secondo BUY
+
+# WAC con entrambi: dovrebbe essere (1000+750)/15 = 116.67
+curl -s -b /tmp/lf_cookies.txt -X POST http://localhost:8001/api/v1/transactions/wac-preview \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"sender_broker_id":BROKER_ID,"asset_id":ASSET_ID,"date_range":{"start":"2026-01-01","end":"2026-02-01"}}]}' | python -m json.tool
+
+# WAC con excluded_tx_ids (escludi il secondo BUY): dovrebbe tornare a 100
+curl -s -b /tmp/lf_cookies.txt -X POST http://localhost:8001/api/v1/transactions/wac-preview \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"sender_broker_id":BROKER_ID,"asset_id":ASSET_ID,"date_range":{"start":"2026-01-01","end":"2026-02-01"}}],"excluded_tx_ids":[TX_ID_2]}' | python -m json.tool
+
+# WAC con pending_txs che sovrascrive il secondo BUY (10@200 invece di 5@150)
+curl -s -b /tmp/lf_cookies.txt -X POST http://localhost:8001/api/v1/transactions/wac-preview \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"sender_broker_id":BROKER_ID,"asset_id":ASSET_ID,"date_range":{"start":"2026-01-01","end":"2026-02-01"}}],"pending_txs":[{"id":TX_ID_2,"broker_id":BROKER_ID,"asset_id":ASSET_ID,"type":"BUY","date":"2026-01-15","quantity":"10","cash":{"code":"EUR","amount":"-2000"}}]}' | python -m json.tool
+```
+
+**Aspettative**:
+- Entrambi BUY → WAC ≈ 116.67
+- Excluded → WAC = 100
+- Override → WAC = (1000+2000)/20 = 150
+
+---
+
+### WT-3: Backend — SELL riduce pool, WAC invariato
+
+```bash
+# Commit SELL
+curl -s -b /tmp/lf_cookies.txt -X POST http://localhost:8001/api/v1/transactions/commit \
+  -H "Content-Type: application/json" \
+  -d '{"creates":[{"broker_id":BROKER_ID,"asset_id":ASSET_ID,"type":"SELL","date":"2026-01-20","quantity":"-5","cash":{"code":"EUR","amount":"700"}}]}' | python -m json.tool
+
+# WAC dopo SELL: dovrebbe essere ancora ~116.67 (SELL non cambia WAC, solo qty ridotta)
+curl -s -b /tmp/lf_cookies.txt -X POST http://localhost:8001/api/v1/transactions/wac-preview \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"sender_broker_id":BROKER_ID,"asset_id":ASSET_ID,"date_range":{"start":"2026-01-01","end":"2026-02-01"}}]}' | python -m json.tool
+```
+
+**Aspettativa**: WAC ≈ 116.67, qualifying_txs mostra 3 entries (2 add + 1 reduce)
+
+---
+
+### WT-4: Backend — Commit NON auto-calcola
+
+```bash
+# TRANSFER senza cost_basis_override → commit DEVE salvare NULL (non auto-calc)
+curl -s -b /tmp/lf_cookies.txt -X POST http://localhost:8001/api/v1/transactions/commit \
+  -H "Content-Type: application/json" \
+  -d '{"creates":[{"broker_id":BROKER_ID,"asset_id":ASSET_ID,"type":"TRANSFER","date":"2026-01-25","quantity":"3","cash":null}]}' | python -m json.tool
+
+# Leggi la TX: cost_basis_override deve essere NULL
+curl -s -b /tmp/lf_cookies.txt "http://localhost:8001/api/v1/transactions?ids=TX_ID" | python -m json.tool
+```
+
+**Aspettativa**: `cost_basis_override: null` (non auto-calcolato)
+
+---
+
+Test backend dati per assodati grazie ai test untitari scritti in pytest.
+
+Durante la preparazione dei test manuali nel frontend ci si è accorti di una mancanza architetturale nella creazione dei pacchetti di transazione,
+e abbiamo pianificato la correzione in questo piano: [`plan-phase07-transaction-Part4_Round6_1_CentralizePayloadCommit.prompt.md`](./plan-phase07-transaction-Part4_Round6_1_CentralizePayloadCommit.prompt.md)
+
+---
+
+### WT-5: Frontend — FormModal mostra WacPreviewSection per TRANSFER
+
+1. Apri `http://localhost:5173/transactions`
+2. Click **+ New**
+3. Seleziona tipo **TRANSFER**
+4. Verifica che appare la sezione "Cost basis" con toggle **Auto | Manual**
+5. Se Auto è attivo e il broker/asset/date sono compilati → aspetta 500ms → il campo dovrebbe popolassi in grigio corsivo
+6. Digita un numero → il toggle deve passare a **Manual** (nero, no corsivo)
+7. Click **Auto** → torna grigio corsivo + ricalcola
+
+---
+
+### WT-6: Frontend — FormModal edit mode (Scenario B)
+
+1. Dalla tabella transazioni, apri una TRANSFER esistente (receiver, qty > 0) in **Edit**
+2. Il campo cost_basis deve mostrare il valore salvato (nero)
+3. NON deve esserci il toggle Auto/Manual
+4. Deve esserci il bottone **↺** (Recalculate)
+5. Click ↺ → appare pannello con valore ricalcolato + [Accept] + [Keep current]
+6. Click [Accept] → il campo si aggiorna
+7. Click [Keep current] → il pannello sparisce, valore invariato
+
+---
+
+### WT-7: Frontend — BulkModal cella cost_basis
+
+1. Dalla tabella, apri la BulkModal (multi-select + edit)
+2. Aggiungi una nuova riga TRANSFER
+3. Nella colonna cost_basis (potrebbe essere nascosta → visibilità colonne → attivare):
+   - Riga nuova TRANSFER → mostra "💡 auto" grigio corsivo
+   - Riga da DB con cost_basis → mostra il valore formattato
+   - Riga nuova non-TRANSFER → mostra "—"
+4. Click sulla riga nuova TRANSFER → si apre il FormModal con WacPreviewSection
+
+---
+
+### WT-8: Frontend — PromoteMergeModal cost_basis
+
+1. Nella BulkModal, seleziona 2 transazioni standalone opposte (es. una SELL e una BUY per lo stesso asset) → promuovile a TRANSFER
+2. Se la modale di merge si apre:
+   - Deve esserci la sezione "Cost Basis (receiver)"
+   - Con toggle Auto/Manual se il receiver è nuovo
+   - Con ↺ Recalculate se il receiver è da DB
+3. Conferma → il `cost_basis_override` deve essere incluso nel payload
+
+---
+
+### WT-9: Frontend — Error banner FX mancante
+
+1. Crea un asset in valuta CHF
+2. Crea un BUY in CHF per quell'asset
+3. Crea una nuova TRANSFER per quell'asset (form o bulk)
+4. Se non esiste la coppia FX CHF/EUR:
+   - Deve apparire il banner "Cannot calculate WAC: missing FX rate"
+   - Con i bottoni: [Add FX pair →], [Sync FX rates], [Sync asset prices]
+   - Click su [Add FX pair →] → naviga a /fx
+
+---
+
+### WT-10: Frontend — Qualifying TXs espandibile
+
+1. In una nuova TRANSFER (con Auto e risultato WAC presente):
+   - Deve apparire "💡 Suggested WAC (N transactions used)"
+   - Click [Show] → si espande la tabella con colonne: #, Type, Date, Qty, Unit, Effect
+   - Pending TXs evidenziate con sfondo diverso (indigo leggero)
+   - Click [Hide] → la tabella si richiude
+
+---
+
+### WT-11: i18n — Chiavi presenti in tutte le lingue
+
+```bash
+./dev.py i18n audit
+```
+
+**Aspettativa**: nessun MISSING error per `transactions.wacPreview.*`. Le 4 chiavi "non referenziate" (adjustmentHint, assetPrice, fromBroker, stale) sono attese — verranno usate nello Scenario E completo.
+
+---
+
+### WT-12: E2E — Test runner riconosce il nuovo test
+
+```bash
+./dev.py test front-transaction tx-wac --headed
+```
+
+**Aspettativa**: Playwright si avvia e esegue 7 test del file `tx-wac.spec.ts`. I test strutturali (presenza DOM) dovrebbero passare. I test che richiedono mock data specifico (WAC effettivo con valore numerico) potrebbero fallire se il DB test non ha TRANSFER+BUY sequences.

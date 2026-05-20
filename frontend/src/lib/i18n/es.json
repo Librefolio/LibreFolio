@@ -627,6 +627,26 @@
       "tooltip": "Override del coste medio ponderado. Si está vacío, se calcula automáticamente de las compras al guardar. Sustituir por Exit Tax, herencia o reglas fiscales especiales.",
       "warningAdjustment": "No se ha definido coste base — el lote se creará con coste cero. Establezca un valor si no se trata de un split o regalo."
     },
+    "wacPreview": {
+      "calculating": "Calculando...",
+      "suggested": "CMP sugerido",
+      "txsUsed": "transacciones utilizadas",
+      "show": "Mostrar",
+      "hide": "Ocultar",
+      "recalculate": "Recalcular",
+      "recalculated": "Recalculado",
+      "accept": "Aceptar",
+      "keep": "Mantener actual",
+      "noData": "No se encontraron transacciones cualificantes",
+      "missingFx": "No se puede calcular el CMP: falta tasa FX",
+      "addFxPair": "Añadir par FX →",
+      "syncFx": "Sincronizar tasas FX",
+      "syncPrices": "Sincronizar precios de activos",
+      "fromBroker": "del bróker",
+      "assetPrice": "Precio del activo en la fecha",
+      "stale": "desactualizado",
+      "adjustmentHint": "Para regalos/herencias: use el valor al que el donante adquirió originalmente el activo."
+    },
     "promote": {
       "title": "Promocionar par",
       "stepN": "Paso {n}/{total}",

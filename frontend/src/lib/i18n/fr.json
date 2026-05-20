@@ -627,6 +627,26 @@
       "tooltip": "Override du coût moyen pondéré. Si vide, calculé automatiquement à partir des achats lors de la sauvegarde. Remplacer pour Exit Tax, héritage ou règles fiscales particulières.",
       "warningAdjustment": "Aucun coût de base défini — le lot sera créé avec un coût nul. Définissez une valeur s'il ne s'agit pas d'un fractionnement ou d'un don."
     },
+    "wacPreview": {
+      "calculating": "Calcul en cours...",
+      "suggested": "CMP suggéré",
+      "txsUsed": "transactions utilisées",
+      "show": "Afficher",
+      "hide": "Masquer",
+      "recalculate": "Recalculer",
+      "recalculated": "Recalculé",
+      "accept": "Accepter",
+      "keep": "Garder l'actuel",
+      "noData": "Aucune transaction qualifiante trouvée",
+      "missingFx": "Impossible de calculer le CMP : taux FX manquant",
+      "addFxPair": "Ajouter paire FX →",
+      "syncFx": "Synchroniser taux FX",
+      "syncPrices": "Synchroniser prix des actifs",
+      "fromBroker": "du courtier",
+      "assetPrice": "Prix de l'actif à la date",
+      "stale": "périmé",
+      "adjustmentHint": "Pour les dons/héritages : utilisez la valeur à laquelle le donateur a initialement acquis l'actif."
+    },
     "promote": {
       "title": "Promouvoir la paire",
       "stepN": "Étape {n}/{total}",
