@@ -627,6 +627,26 @@
       "tooltip": "Override del prezzo medio di carico. Se vuoto, calcolato automaticamente dagli acquisti al salvataggio. Sovrascrivi per Exit Tax, eredità o regole fiscali particolari.",
       "warningAdjustment": "Nessun costo base impostato — il lotto sarà creato con costo zero. Imposta un valore se non si tratta di un frazionamento o regalo."
     },
+    "wacPreview": {
+      "calculating": "Calcolo in corso...",
+      "suggested": "PMC suggerito",
+      "txsUsed": "transazioni utilizzate",
+      "show": "Mostra",
+      "hide": "Nascondi",
+      "recalculate": "Ricalcola",
+      "recalculated": "Ricalcolato",
+      "accept": "Accetta",
+      "keep": "Mantieni attuale",
+      "noData": "Nessuna transazione qualificante trovata",
+      "missingFx": "Impossibile calcolare il PMC: tasso FX mancante",
+      "addFxPair": "Aggiungi coppia FX →",
+      "syncFx": "Sincronizza tassi FX",
+      "syncPrices": "Sincronizza prezzi asset",
+      "fromBroker": "dal broker",
+      "assetPrice": "Prezzo asset alla data",
+      "stale": "non aggiornato",
+      "adjustmentHint": "Per regali/eredità: utilizzare il valore al quale il dante causa ha originariamente acquistato l'asset."
+    },
     "promote": {
       "title": "Promuovi coppia",
       "stepN": "Passo {n}/{total}",

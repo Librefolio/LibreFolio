@@ -49,6 +49,7 @@
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import CompactCashCell from '$lib/components/ui/CompactCashCell.svelte';
     import TransactionTypeSearchSelect from './TransactionTypeSearchSelect.svelte';
+    import WacPreviewSection from './WacPreviewSection.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
 
@@ -1688,21 +1689,17 @@
 
                     <!-- Cost basis override for transfer_asset -->
                     {#if pairLayout === 'transfer_asset'}
-                        <div class="mt-3 flex flex-col gap-1">
-                            <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                                {$t('transactions.form.costBasis')}
-                                <Tooltip text={$t('transactions.costBasisOverride.tooltip')} position="top">
-                                    <Info size={12} class="text-gray-400 dark:text-gray-500" />
-                                </Tooltip>
-                            </span>
-                            <CompactCashCell
+                        <div class="mt-3">
+                            <WacPreviewSection
                                 value={draft.cost_basis_override}
                                 onChange={onCostBasisChange}
-                                signHint="positive"
-                                amountPlaceholder="auto"
+                                variant={mode === 'create' ? 'auto-new' : 'saved'}
                                 defaultCode={draft.cash?.code ?? 'EUR'}
                                 disabled={isReadonly}
                                 testid="tx-form-cost-basis"
+                                senderBrokerId={draft.broker_id}
+                                assetId={draft.asset_id}
+                                txDate={draft.date}
                             />
                         </div>
                     {/if}
@@ -1951,23 +1948,17 @@
 
                         <!-- Cost basis override (TRANSFER / ADJUSTMENT) -->
                         {#if showCostBasisField}
-                            <label class="flex items-center gap-2">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 w-32 shrink-0 flex items-center gap-1">
-                                    {$t('transactions.form.costBasis')}
-                                    <Tooltip text={$t('transactions.costBasisOverride.tooltip')} position="top">
-                                        <Info size={12} class="text-gray-400 dark:text-gray-500" />
-                                    </Tooltip>
-                                </span>
-                                <CompactCashCell
-                                    value={draft.cost_basis_override}
-                                    onChange={onCostBasisChange}
-                                    signHint="positive"
-                                    amountPlaceholder="auto"
-                                    defaultCode={draft.cash?.code ?? 'EUR'}
-                                    disabled={isReadonly}
-                                    testid="tx-form-cost-basis"
-                                />
-                            </label>
+                            <WacPreviewSection
+                                value={draft.cost_basis_override}
+                                onChange={onCostBasisChange}
+                                variant={mode === 'create' ? 'auto-new' : 'saved'}
+                                defaultCode={draft.cash?.code ?? 'EUR'}
+                                disabled={isReadonly}
+                                testid="tx-form-cost-basis"
+                                senderBrokerId={draft.broker_id}
+                                assetId={draft.asset_id}
+                                txDate={draft.date}
+                            />
                             {#if draft.type === 'ADJUSTMENT' && Number(draft.quantity) > 0 && !draft.cost_basis_override?.amount?.trim()}
                                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-[136px]" data-testid="tx-form-cost-basis-warning">
                                     {$t('transactions.costBasisOverride.warningAdjustment') || 'No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift.'}

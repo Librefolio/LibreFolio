@@ -627,6 +627,26 @@
       "tooltip": "Override of the weighted avg cost. If empty, auto-calculated from purchases at save. Override for Exit Tax, inheritance, or special fiscal rules.",
       "warningAdjustment": "No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift."
     },
+    "wacPreview": {
+      "calculating": "Calculating...",
+      "suggested": "Suggested WAC",
+      "txsUsed": "transactions used",
+      "show": "Show",
+      "hide": "Hide",
+      "recalculate": "Recalculate",
+      "recalculated": "Recalculated",
+      "accept": "Accept",
+      "keep": "Keep current",
+      "noData": "No qualifying transactions found",
+      "missingFx": "Cannot calculate WAC: missing FX rate",
+      "addFxPair": "Add FX pair →",
+      "syncFx": "Sync FX rates",
+      "syncPrices": "Sync asset prices",
+      "fromBroker": "from broker",
+      "assetPrice": "Asset price at date",
+      "stale": "stale",
+      "adjustmentHint": "For gifts/inheritance: use the value at which the giver originally acquired the asset."
+    },
     "promote": {
       "title": "Promote pair",
       "stepN": "Step {n}/{total}",

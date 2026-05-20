@@ -1041,6 +1041,8 @@
 
             // B5: skip split-queued rows from updates/deletes (backend handles via splits[])
             const splitTxIds = new Set(pendingSplits.flatMap(s => [s.id_a, s.id_b]));
+            // Skip promote-queued rows from updates/deletes (backend handles via promotes[])
+            const promoteTxIds = new Set(pendingPromotes.flatMap(p => [p.id_a, p.id_b].filter(Boolean) as number[]));
 
             for (const d of ops) {
                 const st = deriveStatus(d);
@@ -1048,6 +1050,8 @@
                 // Skip split-queued edit rows ONLY if unchanged — edited ones need updates sent
                 // (backend executes splits at step 3b, then updates at step 4)
                 if (d.op === 'edit' && splitTxIds.has((d as any).txId) && st !== 'edited') continue;
+                // Skip promote-queued edit rows entirely — backend handles type change via promotes[]
+                if (d.op === 'edit' && promoteTxIds.has((d as any).txId)) continue;
 
                 if (st === 'new') {
                     creates.push(collectCreate(d));
@@ -1415,7 +1419,14 @@
                 filterable: false,
                 hiddenByDefault: true,
                 cell: (row): CellContent => {
-                    if (!row.fields.cost_basis_override) return {type: 'html', html: '<span class="text-gray-400 italic">auto</span>'};
+                    if (!row.fields.cost_basis_override) {
+                        const isNew = row.op === 'create';
+                        const needsWac = row.fields.type === 'TRANSFER' || row.fields.type === 'ADJUSTMENT';
+                        if (isNew && needsWac) {
+                            return {type: 'html', html: '<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto">💡 auto</span>'};
+                        }
+                        return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
+                    }
                     const cbo = row.fields.cost_basis_override;
                     return {type: 'html', html: `<span class="font-mono text-xs">${formatCurrencyAmountHtml(Number(cbo.amount), cbo.code)}</span>`};
                 },
