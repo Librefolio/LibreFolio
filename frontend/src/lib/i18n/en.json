@@ -645,7 +645,17 @@
       "fromBroker": "from broker",
       "assetPrice": "Asset price at date",
       "stale": "stale",
-      "adjustmentHint": "For gifts/inheritance: use the value at which the giver originally acquired the asset."
+      "adjustmentHint": "For gifts/inheritance: use the value at which the giver originally acquired the asset.",
+      "docsTooltip": "Learn how WAC (Weighted Average Cost) is calculated",
+      "toggleAuto": "Auto",
+      "toggleManual": "Manual",
+      "unitCost": "Unit cost",
+      "effectLabel": "Effect",
+      "effect": {
+        "add": "Weighted",
+        "reduce": "Quantity reduced",
+        "addZeroCost": "Dilution"
+      }
     },
     "promote": {
       "title": "Promote pair",

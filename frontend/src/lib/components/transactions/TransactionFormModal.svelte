@@ -14,9 +14,8 @@
 
   Sections:
    • Required: type, broker, date, asset (gated), quantity, cash
-   • Optional (collapsible): tags, description
-   • Advanced (collapsible): asset_event_id, cost_basis_override, link_uuid (RO),
-                             pair-partner chip (clickable → stack-modal)
+   • Optional (collapsible): tags, description, asset_event_id,
+     cost_basis_override, link_uuid (RO), pair-partner chip
    • Read-only footer (edit/view): id, created_at, updated_at
 
   Dual-form mode (R6-B.1–B.3):
@@ -251,7 +250,6 @@
     let lastCommitAt = $state(0);
     const COMMIT_ANTI_BOUNCE_MS = 10000;
     let optionalOpen = $state(false);
-    let advancedOpen = $state(false);
     /** Snapshot of `draft` at modal-open time, used to detect unsaved
      *  changes (Bugfix-3 §C11). */
     let initialDraftKey = $state('');
@@ -280,7 +278,6 @@
             formError = null;
             commitFailed = false;
             optionalOpen = false;
-            advancedOpen = false;
             confirmCloseOpen = false;
             inaccessiblePartnerBrokerId = null;
             partnerRow = null;
@@ -602,10 +599,18 @@
     let canShowAssetEvent = $derived(rule.eventLinkable && draft.asset_id != null);
 
     /** H4-fix: true when all required fields for the current type are filled.
-     *  Gates the auto-validate scheduler and the Apply/Save button. */
+     *  Gates the auto-validate scheduler, the ⚡ Validate button, and the Apply/Save button.
+     *  In paired mode also requires the partner side fields (broker, cash for FX). */
     let isFormComplete = $derived.by(() => {
         void $typesVersion; // re-derive when server type rules load
-        return isDraftReadyForValidation(draft);
+        if (!isDraftReadyForValidation(draft)) return false;
+        // Paired mode: partner side must also be populated
+        if (pairLayout != null) {
+            if (!dualTo.broker_id || dualTo.broker_id <= 0) return false;
+            // FX layout requires partner cash amount
+            if (pairLayout === 'fx' && (!dualTo.cash || !dualTo.cash.amount || dualTo.cash.amount.trim() === '' || dualTo.cash.amount === '0')) return false;
+        }
+        return true;
     });
 
     // cost_basis_override is meaningful only for the receiver of a TRANSFER pair
@@ -786,9 +791,7 @@
      *  open. */
     const autocompleteNonce = $derived(Math.random().toString(36).slice(2, 10));
 
-    /** Show the Advanced disclosure only if at least one of its sub-fields
-     *  is meaningful for the current type/state (Bugfix-1 §U6). */
-    let showAdvancedSection = $derived(!pairLayout && ((rule.eventLinkable && draft.asset_id != null) || draft.type === 'TRANSFER' || draft.type === 'ADJUSTMENT' || pairPartnerId != null || (mode === 'edit' && draft.link_uuid != null)));
+
 
     /** BrokerSearchSelect expects `BrokerSelectItem[]`; the brokerStore's
      *  `BrokerInfo` is structurally compatible (id/name/icon_url present)
@@ -1078,8 +1081,20 @@
      // Sign-based border coloring for quantity field (mirrors CompactCashCell pattern).
     // Colors reflect whether the VALUE AFTER AUTO-FLIP conforms to the rule.
     // Does NOT block input — purely visual guidance.
-    let qtySignHint = $derived(computeSignHint(parseFloat(draft.quantity), rule.quantityRule));
+    // In paired mode (transfer_asset/transfer_cash/fx), the form forces positive input
+    // (system balances both sides) → effective rule is 'positive', not raw type rule.
+    let effectiveQtyRule = $derived(pairLayout != null ? 'positive' : rule.quantityRule);
+    let qtySignHint = $derived(computeSignHint(parseFloat(draft.quantity), effectiveQtyRule));
     let qtyBorderColor = $derived(qtySignHint.bad ? 'oklch(0.637 0.237 25.331 / 0.7)' : qtySignHint.ok ? 'oklch(0.765 0.177 163.223 / 0.7)' : '');
+
+    // Cash sign validation — paired mode uses 'positive' (user enters positive, flip negates FROM).
+    // Single mode uses the type's cashSign rule.
+    let effectiveCashRule = $derived(pairLayout != null ? 'positive' : rule.cashSign);
+    let cashSignResult = $derived(computeSignHint(parseFloat(draft.cash?.amount ?? '0'), effectiveCashRule));
+
+    // Block submit when any sign rule is violated (red border = bad).
+    // Only active when the field has a meaningful value (not empty/NaN).
+    let hasSignViolation = $derived(qtySignHint.bad || cashSignResult.bad);
 
     // =========================================================================
     // W39: Inline broker / asset creation modals
@@ -1246,6 +1261,11 @@
                         <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
                             {#if typeImmutable}
+                                <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
+                                     readonly type as a plain inline [icon] [name]
+                                     row matching the table cell rendering — icon
+                                     enlarged (w-6 h-6) so it stays legible
+                                     alongside the other selectors. -->
                                 <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-type-readonly">
                                     <img
                                         src={getTransactionTypeIconUrl(draft.type)}
@@ -1256,7 +1276,7 @@
                                             if (el instanceof HTMLImageElement) el.style.display = 'none';
                                         }}
                                     />
-                                    <span class="font-medium">{dualTitle}</span>
+                                    <span class="font-medium">{$t(`transactions.types.${draft.type}`) || draft.type}</span>
                                 </div>
                             {:else}
                                 <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} types={allowedTypes} testid="tx-form-type" />
@@ -1671,8 +1691,30 @@
                 </fieldset>
             {/if}
 
+            <!-- Cost basis override — shown inline for ADJUSTMENT (not in Advanced) -->
+            {#if !pairLayout && draft.type === 'ADJUSTMENT' && showCostBasisField}
+                <div class="mt-3" data-testid="tx-form-cost-basis-inline">
+                    <WacPreviewSection
+                        value={draft.cost_basis_override}
+                        onChange={onCostBasisChange}
+                        variant={mode === 'create' ? 'auto-new' : 'saved'}
+                        defaultCode={draft.cash?.code ?? 'EUR'}
+                        disabled={isReadonly}
+                        testid="tx-form-cost-basis"
+                        senderBrokerId={draft.broker_id}
+                        assetId={draft.asset_id}
+                        txDate={draft.date}
+                    />
+                    {#if Number(draft.quantity) > 0 && !draft.cost_basis_override?.amount?.trim()}
+                        <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="tx-form-cost-basis-warning">
+                            {$t('transactions.costBasisOverride.warningAdjustment') || 'No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift.'}
+                        </p>
+                    {/if}
+                </div>
+            {/if}
+
             <!-- Optional disclosure -->
-            {#if !isReadonly || (draft.tags && draft.tags.length > 0) || (draft.description ?? '').trim()}
+            {#if !isReadonly || (draft.tags && draft.tags.length > 0) || (draft.description ?? '').trim() || draft.asset_event_id != null || draft.link_uuid != null || pairPartnerId != null}
                 <details class="border border-gray-200 dark:border-slate-700 rounded-lg" bind:open={optionalOpen}>
                     <summary class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-4 py-3 cursor-pointer select-none" data-testid="tx-form-optional-toggle">{$t('transactions.form.sectionOptional')}</summary>
                     <div class="px-4 pb-4 space-y-3 text-sm">
@@ -1704,15 +1746,7 @@
                                 maxlength="500"
                             ></textarea>
                         </label>
-                    </div>
-                </details>
-            {/if}
 
-            <!-- Advanced disclosure (Bugfix-1 §U6: gated) — hidden in dual mode -->
-            {#if showAdvancedSection}
-                <details class="border border-gray-200 dark:border-slate-700 rounded-lg" bind:open={advancedOpen}>
-                    <summary class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-4 py-3 cursor-pointer select-none" data-testid="tx-form-advanced-toggle">{$t('transactions.form.sectionAdvanced')}</summary>
-                    <div class="px-4 pb-4 space-y-3 text-sm">
                         <!-- Asset event link -->
                         {#if canShowAssetEvent}
                             <div class="flex items-center gap-2">
@@ -1734,8 +1768,8 @@
                             </div>
                         {/if}
 
-                        <!-- Cost basis override (TRANSFER / ADJUSTMENT) -->
-                        {#if showCostBasisField}
+                        <!-- Cost basis override (TRANSFER single-form edit — ADJUSTMENT is shown inline above) -->
+                        {#if showCostBasisField && draft.type !== 'ADJUSTMENT'}
                             <WacPreviewSection
                                 value={draft.cost_basis_override}
                                 onChange={onCostBasisChange}
@@ -1747,11 +1781,6 @@
                                 assetId={draft.asset_id}
                                 txDate={draft.date}
                             />
-                            {#if draft.type === 'ADJUSTMENT' && Number(draft.quantity) > 0 && !draft.cost_basis_override?.amount?.trim()}
-                                <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-[136px]" data-testid="tx-form-cost-basis-warning">
-                                    {$t('transactions.costBasisOverride.warningAdjustment') || 'No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift.'}
-                                </p>
-                            {/if}
                         {/if}
 
                         <!-- link_uuid (readonly) -->
@@ -1775,6 +1804,7 @@
                 </details>
             {/if}
 
+
             <!-- Read-only footer (edit/view) -->
             {#if (mode === 'edit' || mode === 'view') && initialRow}
                 <div class="text-[10px] text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-slate-800 pt-3" data-testid="tx-form-readonly-footer">
@@ -1792,7 +1822,7 @@
         <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0 text-xs">
             <div class="flex items-center gap-2 flex-wrap">
                 {#if !isReadonly}
-                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={() => scheduler.trigger('manual')} data-testid="tx-form-validate-now" title={$t('transactions.validate.now')}>
+                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed" disabled={!isFormComplete} onclick={() => scheduler.trigger('manual')} data-testid="tx-form-validate-now" title={$t('transactions.validate.now')}>
                         ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now')}</span>
                     </button>
                 {/if}
@@ -1817,7 +1847,7 @@
                     <button
                         type="button"
                         class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5"
-                        disabled={committing || loadingPartner || !!dualValidationError || (!commitOnSave && !isFormComplete)}
+                        disabled={committing || loadingPartner || !!dualValidationError || hasSignViolation || (!commitOnSave && !isFormComplete)}
                         onclick={commit}
                         data-testid="tx-form-save"
                         title={committing ? $t('common.saving') : !commitOnSave ? $t('transactions.form.apply') : $t('common.save')}

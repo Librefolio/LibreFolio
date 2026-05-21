@@ -645,7 +645,17 @@
       "fromBroker": "dal broker",
       "assetPrice": "Prezzo asset alla data",
       "stale": "non aggiornato",
-      "adjustmentHint": "Per regali/eredità: utilizzare il valore al quale il dante causa ha originariamente acquistato l'asset."
+      "adjustmentHint": "Per regali/eredità: utilizzare il valore al quale il dante causa ha originariamente acquistato l'asset.",
+      "docsTooltip": "Scopri come viene calcolato il PMC (Prezzo Medio di Carico)",
+      "toggleAuto": "Auto",
+      "toggleManual": "Manuale",
+      "unitCost": "Costo unitario",
+      "effectLabel": "Effetto",
+      "effect": {
+        "add": "Pesata",
+        "reduce": "Quantità ridotta",
+        "addZeroCost": "Diluizione"
+      }
     },
     "promote": {
       "title": "Promuovi coppia",

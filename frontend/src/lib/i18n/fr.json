@@ -645,7 +645,17 @@
       "fromBroker": "du courtier",
       "assetPrice": "Prix de l'actif à la date",
       "stale": "périmé",
-      "adjustmentHint": "Pour les dons/héritages : utilisez la valeur à laquelle le donateur a initialement acquis l'actif."
+      "adjustmentHint": "Pour les dons/héritages : utilisez la valeur à laquelle le donateur a initialement acquis l'actif.",
+      "docsTooltip": "Découvrez comment le CMP (Coût Moyen Pondéré) est calculé",
+      "toggleAuto": "Auto",
+      "toggleManual": "Manuel",
+      "unitCost": "Coût unitaire",
+      "effectLabel": "Effet",
+      "effect": {
+        "add": "Pondérée",
+        "reduce": "Quantité réduite",
+        "addZeroCost": "Dilution"
+      }
     },
     "promote": {
       "title": "Promouvoir la paire",

@@ -12,7 +12,11 @@
     import {RefreshCw, ChevronDown, ChevronRight, Lightbulb, AlertTriangle} from 'lucide-svelte';
     import CompactCashCell from '$lib/components/ui/CompactCashCell.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {zodiosApi} from '$lib/api';
+    import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
+    import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
+    import {formatCurrencyAmountPlain} from '$lib/utils/currencyFormat';
 
     // =========================================================================
     // Types
@@ -147,7 +151,7 @@
                         {
                             sender_broker_id: brokerId,
                             asset_id: assetId,
-                            date_range: {start: '2000-01-01', end: date},
+                            date_range: {end: date},
                         },
                     ],
                     pending_txs: pending as any,
@@ -196,7 +200,7 @@
                     {
                         sender_broker_id: senderBrokerId,
                         asset_id: assetId,
-                        date_range: {start: '2000-01-01', end: txDate},
+                        date_range: {end: txDate},
                     },
                 ],
                 pending_txs: pendingTxs as any,
@@ -262,7 +266,7 @@
 <div class="flex flex-col gap-1.5" data-testid={testid}>
     <!-- Label row with toggle -->
     <div class="flex items-center gap-2">
-        <span class="text-xs text-gray-500 dark:text-gray-400 w-32 shrink-0 flex items-center gap-1">
+        <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex items-center gap-1">
             {$t('transactions.form.costBasis')}
             <Tooltip text={$t('transactions.costBasisOverride.tooltip')} position="top">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 dark:text-gray-500"
@@ -273,11 +277,11 @@
 
         {#if variant === 'auto-new'}
             <!-- Toggle Auto/Manual -->
-            <div class="flex items-center gap-1 text-[10px]" data-testid="{testid}-toggle">
-                <button type="button" class="px-1.5 py-0.5 rounded {isAuto ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={setAutoMode} {disabled} data-testid="{testid}-toggle-auto">Auto</button>
+            <div class="flex items-center gap-1 text-[10px] ml-auto" data-testid="{testid}-toggle">
+                <button type="button" class="px-1.5 py-0.5 rounded {isAuto ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={setAutoMode} {disabled} data-testid="{testid}-toggle-auto">{$t('transactions.wacPreview.toggleAuto')}</button>
                 <span class="text-gray-300 dark:text-gray-600">|</span>
                 <button type="button" class="px-1.5 py-0.5 rounded {!isAuto ? 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={switchToManual} {disabled} data-testid="{testid}-toggle-manual"
-                    >Manual</button
+                    >{$t('transactions.wacPreview.toggleManual')}</button
                 >
             </div>
         {/if}
@@ -300,22 +304,23 @@
         {/if}
     </div>
 
-    <!-- Auto mode: suggestion info -->
+    <!-- Auto mode: suggestion info + foldable qualifying panel -->
     {#if variant === 'auto-new' && isAuto && previewResult && !hasMissingPairs && previewResult.wac}
-        <div class="flex items-start gap-1 text-[10px] text-gray-500 dark:text-gray-400" data-testid="{testid}-suggestion">
-            <Lightbulb size={12} class="text-amber-500 mt-0.5 shrink-0" />
-            <span>
-                {$t('transactions.wacPreview.suggested') ?? 'Suggested WAC'}
-                ({qualifyingCount}
-                {$t('transactions.wacPreview.txsUsed') ?? 'transactions used'})
-            </span>
-            <button type="button" class="ml-1 text-indigo-600 dark:text-indigo-400 hover:underline" onclick={() => (showQualifying = !showQualifying)} data-testid="{testid}-show-qualifying">
+        <div class="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400" data-testid="{testid}-suggestion">
+            <Lightbulb size={12} class="text-amber-500 shrink-0" />
+            <button type="button" class="flex items-center gap-0.5 hover:text-gray-700 dark:hover:text-gray-200" onclick={() => (showQualifying = !showQualifying)} data-testid="{testid}-show-qualifying">
                 {#if showQualifying}
-                    <ChevronDown size={10} class="inline" /> {$t('transactions.wacPreview.hide') ?? 'Hide'}
+                    <ChevronDown size={10} />
                 {:else}
-                    <ChevronRight size={10} class="inline" /> {$t('transactions.wacPreview.show') ?? 'Show'}
+                    <ChevronRight size={10} />
                 {/if}
+                <span>
+                    {$t('transactions.wacPreview.suggested') ?? 'Suggested WAC'}
+                    ({qualifyingCount}
+                    {$t('transactions.wacPreview.txsUsed') ?? 'transactions used'})
+                </span>
             </button>
+            <DocsLink path="financial-theory/portfolio-theory/weighted-average-cost/" label={$t('transactions.wacPreview.docsTooltip') ?? 'Learn how WAC (Weighted Average Cost) is calculated'} size={11} />
         </div>
     {/if}
 
@@ -352,33 +357,45 @@
 
     <!-- Qualifying TXs table (expandable) -->
     {#if showQualifying && previewResult?.qualifying_txs?.length}
-        <div class="mt-1 max-h-40 overflow-y-auto border border-gray-200 dark:border-slate-700 rounded text-[10px]" data-testid="{testid}-qualifying-table">
-            <table class="w-full">
+        <div class="mt-1 max-h-40 overflow-auto border border-gray-200 dark:border-slate-700 rounded text-[10px]" data-testid="{testid}-qualifying-table">
+            <table class="w-full min-w-[420px]">
                 <thead class="bg-gray-50 dark:bg-slate-800 sticky top-0">
                     <tr>
-                        <th class="px-2 py-1 text-left">#</th>
-                        <th class="px-2 py-1 text-left">Type</th>
-                        <th class="px-2 py-1 text-left">Date</th>
-                        <th class="px-2 py-1 text-right">Qty</th>
-                        <th class="px-2 py-1 text-right">Unit</th>
-                        <th class="px-2 py-1 text-left">Effect</th>
+                        <th class="px-2 py-1 text-left min-w-[28px]">#</th>
+                        <th class="px-2 py-1 text-left min-w-[80px]">{$t('transactions.table.type')}</th>
+                        <th class="px-2 py-1 text-left min-w-[72px]">{$t('transactions.table.date')}</th>
+                        <th class="px-2 py-1 text-right min-w-[44px]">{$t('transactions.table.quantity')}</th>
+                        <th class="px-2 py-1 text-right min-w-[100px]">{$t('transactions.wacPreview.unitCost') ?? 'Unit'}</th>
+                        <th class="px-2 py-1 text-left min-w-[64px]">{$t('transactions.wacPreview.effectLabel') ?? 'Effect'}</th>
                     </tr>
                 </thead>
                 <tbody>
                     {#each previewResult.qualifying_txs as qtx}
                         <tr class="border-t border-gray-100 dark:border-slate-800 {qtx.tx_id == null ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}">
                             <td class="px-2 py-0.5">{qtx.tx_id ?? '●'}</td>
-                            <td class="px-2 py-0.5">{qtx.type}</td>
+                            <td class="px-2 py-0.5">
+                                <span class="inline-flex items-center gap-1">
+                                    {#if getTransactionTypeIconUrl(qtx.type)}
+                                        <img src={getTransactionTypeIconUrl(qtx.type)} alt="" class="w-3 h-3 object-contain" />
+                                    {/if}
+                                    <span>{$t(`transactions.types.${qtx.type}`) ?? qtx.type}</span>
+                                </span>
+                            </td>
                             <td class="px-2 py-0.5">{qtx.date}</td>
-                            <td class="px-2 py-0.5 text-right">{qtx.quantity}</td>
-                            <td class="px-2 py-0.5 text-right">{qtx.unit_cost ?? '—'}</td>
+                            <td class="px-2 py-0.5 text-right font-mono">{formatDecimalForDisplay(qtx.quantity)}</td>
+                            <td class="px-2 py-0.5 text-right font-mono">{qtx.unit_cost && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2}) : qtx.unit_cost ? parseFloat(qtx.unit_cost).toFixed(2) : '—'}</td>
                             <td class="px-2 py-0.5">
                                 <span
                                     class="inline-block px-1 rounded text-[9px] {qtx.effect === 'add'
                                         ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400'
                                         : qtx.effect === 'reduce'
-                                          ? 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400'
-                                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}">{qtx.effect}</span
+                                          ? 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400'
+                                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}"
+                                    >{qtx.effect === 'add'
+                                        ? ($t('transactions.wacPreview.effect.add') ?? 'Weighted')
+                                        : qtx.effect === 'reduce'
+                                          ? ($t('transactions.wacPreview.effect.reduce') ?? 'Reduced')
+                                          : ($t('transactions.wacPreview.effect.addZeroCost') ?? 'Dilution')}</span
                                 >
                             </td>
                         </tr>
