@@ -31,5 +31,3 @@ export function formatTxCash(cash: {code: string; amount: string} | null | undef
     if (!cash) return '—';
     return formatCurrencyAmountPlain(Number(cash.amount), cash.code, {showSign: true});
 }
-
-

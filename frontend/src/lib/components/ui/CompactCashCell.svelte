@@ -19,6 +19,7 @@
     import type {SignRule} from '$lib/stores/transactionTypeStore';
     import CurrencySearchSelect from './select/CurrencySearchSelect.svelte';
     import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
+    import {computeSignHint} from '$lib/utils/signHintColor';
 
     interface CashValue {
         amount: string;
@@ -88,31 +89,14 @@
         emit();
     }
 
-    // Sign-hint visual state — drives `sign-ok` / `sign-bad` class binding via class: directive.
-    // When signHint === 'negative' and auto-sign is active, the user enters positive
-    // numbers (which get auto-negated on save). So positive → green, negative → red.
+    // Sign-hint visual state — drives `sign-ok` / `sign-bad` class binding.
+    // Colors reflect the VALUE AFTER AUTO-FLIP conformance to the backend rule.
     let signOk = $state(false);
     let signBad = $state(false);
     $effect(() => {
-        if (signHint !== 'positive' && signHint !== 'negative') {
-            signOk = false;
-            signBad = false;
-            return;
-        }
-        const numeric = parseFloat(amountStr);
-        if (Number.isNaN(numeric)) {
-            signOk = false;
-            signBad = false;
-            return;
-        }
-        if (signHint === 'positive') {
-            signOk = numeric > 0;
-            signBad = numeric <= 0;
-        } else {
-            // 'negative': auto-sign active — user enters positive (green)
-            signOk = numeric > 0;
-            signBad = numeric < 0;
-        }
+        const {ok, bad} = computeSignHint(parseFloat(amountStr), signHint);
+        signOk = ok;
+        signBad = bad;
     });
 </script>
 

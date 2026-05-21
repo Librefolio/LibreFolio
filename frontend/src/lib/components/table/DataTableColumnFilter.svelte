@@ -692,7 +692,7 @@
                     <label class="range-label" for="number-min-input">{$t('common.min')}</label>
                     <input
                         type="number"
-                        step={isIntegerRange ? "1" : "any"}
+                        step={isIntegerRange ? '1' : 'any'}
                         class="range-input"
                         bind:value={numMin}
                         min={numberMin}
@@ -708,7 +708,7 @@
                     <label class="range-label" for="number-max-input">{$t('common.max')}</label>
                     <input
                         type="number"
-                        step={isIntegerRange ? "1" : "any"}
+                        step={isIntegerRange ? '1' : 'any'}
                         class="range-input"
                         bind:value={numMax}
                         min={numMin}

@@ -32,7 +32,7 @@
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
-    import {saveWithRetry} from '$lib/utils/saveWithRetry';
+    import {trySave} from '$lib/utils/trySave';
     import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';
     import {generateUUID} from '$lib/utils/uuid';
     import {ensureAssetProvidersCached, isParametricProvider} from '$lib/utils/providerHelpers';
@@ -790,7 +790,7 @@
         showSaveWithoutTestConfirm = false;
 
         // I-bis #22 (Batch 4.d-part2) — route the orchestrator through
-        // ``saveWithRetry`` for uniform error extraction. Two custom
+        // ``trySave`` for uniform error extraction. Two custom
         // semantics are preserved:
         //   (a) **409 currency-change** is NOT handled here: it's intercepted
         //       deeper in ``saveEdit`` (see the patch_assets_bulk try/catch
@@ -802,7 +802,7 @@
         //       hook below.
         // ``toast: false`` because the error is rendered inline via the
         // ``data-form-error`` banner (the existing UX).
-        const result = await saveWithRetry(() => (editMode && editData?.id ? saveEdit(editData.id) : saveCreate()), {
+        const result = await trySave(() => (editMode && editData?.id ? saveEdit(editData.id) : saveCreate()), {
             toast: false,
             fallback: $t('assets.modal.saveFailed'),
             onError: (err: any) => {
