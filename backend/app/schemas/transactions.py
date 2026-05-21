@@ -33,6 +33,7 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     FxBackwardFillInfo,
+    OpenDateRangeModel,
     SafeDecimal,
 )
 from backend.app.utils.datetime_utils import UTCDateTime
@@ -674,16 +675,16 @@ class WACResult(BaseModel):
 class WACPreviewItem(BaseModel):
     """Single WAC preview request within a bulk call.
 
-    Uses DateRangeModel to define the computation period:
-    - start: beginning of the range (TXs from this date onward are considered)
-    - end: effective end date for WAC computation (if None → today)
+    Uses OpenDateRangeModel for flexible windowing:
+    - start=None → consider ALL transactions from the beginning
+    - end=None → up to today
     """
 
     model_config = ConfigDict(extra="forbid")
 
     sender_broker_id: int = Field(..., description="Broker ID of the source (sender) side")
     asset_id: int = Field(..., description="Asset ID to calculate WAC for")
-    date_range: DateRangeModel = Field(..., description="Date range for WAC computation. end=None means today.")
+    date_range: OpenDateRangeModel = Field(..., description="Date range for WAC computation. start=None → from first TX, end=None → today.")
 
     @property
     def end_date(self) -> date_type:
@@ -724,7 +725,7 @@ class WACQualifyingTX(BaseModel):
     quantity: SafeDecimal
     unit_cost: Optional[SafeDecimal] = None
     currency: Optional[str] = None
-    effect: str = Field(..., description="add | reduce | add_zero_cost | skip_no_override")
+    effect: str = Field(..., description="add | reduce | add_zero_cost")
     fx_info: Optional[FxBackwardFillInfo] = None
 
 

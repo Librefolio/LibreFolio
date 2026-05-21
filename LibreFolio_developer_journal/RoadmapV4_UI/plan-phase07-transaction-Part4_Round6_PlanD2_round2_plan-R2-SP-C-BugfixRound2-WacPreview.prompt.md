@@ -898,14 +898,13 @@ wac-preview 200 → wac-preview 200 → wac-preview 200 → ... (~10+ in pochi s
 
 ---
 
-### Bug 2 — WAC Preview: data inizio hardcoded a `2000-01-01`
+### Bug 2 — WAC Preview: data inizio hardcoded a `2000-01-01` ✅ RISOLTO
 
 **Scope**: `WacPreviewSection.svelte` → parametro `date_range.start`
 **Severità**: 🟡 Media (funzionale ma inefficiente)
+**Stato**: ✅ Risolto (2026-05-21)
 
-**Osservazione**: Il backend riceve sempre `start: "2000-01-01"`. L'utente chiede: se si lasciasse vuota, il backend potrebbe interpretarla come "tutte le date" senza che il frontend debba inventare una data arbitraria.
-
-**Proposta**: rendere `date_range.start` opzionale nello schema backend (`Optional[date] = None`). Se `None` → il backend parte dalla TX più vecchia del (broker, asset).
+**Soluzione implementata**: Creato `OpenDateRangeModel` in `common.py` (sia start che end opzionali, riusabile). `WACPreviewItem` usa `OpenDateRangeModel` come tipo per `date_range`. Frontend manda solo `{end: txDate}` senza start. Il backend computa WAC su tutte le TX con `date <= end_date`.
 
 ---
 
@@ -1017,14 +1016,26 @@ wac-preview 200 → wac-preview 200 → wac-preview 200 → ... (~10+ in pochi s
 
 ### 🟩 One-shot (fix diretti)
 
-| # | Bug | Fix stimato |
-|---|-----|-------------|
-| **2** | Data inizio hardcoded `2000-01-01` | Backend: `date_range.start` → `Optional[date] = None`, se None usa prima TX. Frontend: non mandare start. |
-| **3** | Layout label/toggle WAC | CSS: `whitespace-nowrap`, `ml-auto` sul toggle. i18n: 2 chiavi `wacPreview.auto`/`wacPreview.manual` |
-| **4** | Qualifying TXs table formattazione | `formatDecimalForDisplay()` sulla qty, icona+traduzione tipo, badge colorati per effect, chiavi i18n effect |
-| **5** | Mock data senza BUY per test WAC | Aggiungere 2-3 BUY con cash in `populate_mock_data.py` per l'asset usato nei test WAC |
-| **6** | UUID `↔ new` → `new ↔ new` | BulkModal: cambiare il testo nella cella link_uuid |
-| **7** | Colonne default tutte visibili | BulkModal: modificare `defaultVisibleColumns` (o equivalente) → includere tutte le colonne eccetto `created_at` e `updated_at` |
+| # | Bug | Fix stimato | Stato |
+|---|-----|-------------|-------|
+| **2** | Data inizio hardcoded `2000-01-01` | Backend: `OpenDateRangeModel` in `common.py` (start/end opzionali), usato in `WACPreviewItem`. Frontend: manda solo `{end: txDate}`. | ✅ Verificato |
+| **3** | Layout label/toggle WAC | CSS: `whitespace-nowrap`, `ml-auto` sul toggle. i18n: chiavi `wacPreview.toggleAuto`/`wacPreview.toggleManual` (4 lingue) | ✅ Implementato |
+| **4** | Qualifying TXs table formattazione | Icona+traduzione tipo, badge colorati per effect, `formatCurrencyAmountPlain` per costo unitario (2 decimali+valuta), colonna rinominata "Costo unitario", DocsLink alla pagina WAC, pannello foldable. Effetti rinominati: Weighted/Quantity reduced/Dilution. `skip_no_override` rimosso. | ✅ Verificato |
+| **5** | Mock data senza BUY per test WAC | 4 TX `wac-test`: DEPOSIT prefund $3000, BUY 10@$150, BUY 5@$180, ADJUSTMENT -3 override=$160 (date relative a today). Balance-safe. | ✅ Implementato |
+| **6** | UUID `↔ new` → `new ↔ new` | BulkModal: cambiato testo nella cella link_uuid | ✅ Verificato |
+| **7** | Colonne default tutte visibili | BulkModal: `hiddenByDefault: false` per tags, cost_basis, asset_event_id, link_uuid. Solo created_at/updated_at restano hidden. | ✅ Verificato |
+
+#### Fix aggiuntive implementate durante la sessione
+
+| Fix | Descrizione |
+|-----|-------------|
+| **Sign coloring paired** | `effectiveQtyRule = pairLayout ? 'positive' : rule.quantityRule` — border verde/rosso corretto per form duali |
+| **Bottone Apply disabilitato su sign violation** | `hasSignViolation` (qty o cash con segno sbagliato) blocca Apply/Save |
+| **isFormComplete esteso per paired** | Richiede `dualTo.broker_id` + cash FX prima di abilitare validate/submit |
+| **Bottone ⚡ Validate gateato** | Disabilitato quando `!isFormComplete` (evita errori premature "manca broker") |
+| **Pagina doc WAC** | `portfolio-theory/weighted-average-cost.en.md` con formula, effetti, esempi foldabili, multi-currency |
+| **MkDocs nav** | Transaction types divise in Single + Composite; WAC in portfolio-theory |
+| **Admonition checker** | Fix falso positivo: skip fenced code blocks |
 
 ### 🟧 Richiedono studio architettura
 

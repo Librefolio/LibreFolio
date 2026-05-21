@@ -196,9 +196,9 @@ test.describe('TransactionDeleteModal', () => {
     // === committed:false → error banner ===
 
     test('A1-error: delete failure shows error banner in modal', async ({page}) => {
-        // Delete a BUY that causes negative balance
-        const row = await findRow(page, 'Initial AAPL');
-        expect(row, 'AAPL BUY row not found — check populate_mock_data.py').toBeTruthy();
+        // Delete a BUY that causes negative balance (MSFT BUY 10 - Asym-c TRANSFER 2 = 8; without BUY → -2)
+        const row = await findRow(page, 'Diversification into MSFT');
+        expect(row, 'MSFT BUY row not found — check populate_mock_data.py').toBeTruthy();
 
         await clickDeleteOnRow(row!);
         const modal = page.getByTestId('tx-delete-modal');

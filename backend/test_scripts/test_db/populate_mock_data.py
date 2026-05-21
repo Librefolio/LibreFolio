@@ -1628,6 +1628,93 @@ def populate_transactions(session: Session):
     print(f"      FX Conversion: W#{tx_disc_fx_w.id} (IB-EUR/loaded) ↔ D#{tx_disc_fx_d.id} (IB-USD/hidden)")
 
 
+def populate_wac_test_transactions(session: Session):
+    """Create transactions that produce a meaningful WAC for E2E testing.
+
+    Scenario: Apple on Interactive Brokers
+    - BUY 10 @ $150 (2026-04-01) → cost $1500
+    - BUY 5 @ $180 (2026-04-15) → cost $900
+    - TRANSFER 3 with cost_basis_override $160 (2026-05-01)
+
+    Expected WAC at 2026-05-01 = (1500 + 900) / 15 = $160/share
+    The TRANSFER uses this as override, demonstrating both auto and manual WAC.
+    """
+    print("\n📊 Creating WAC Test Transactions...")
+    print("-" * 60)
+
+    ib = session.exec(select(Broker).where(Broker.name == "Interactive Brokers")).first()
+    apple = session.exec(select(Asset).where(Asset.display_name == "Apple Inc.")).first()
+
+    if not ib or not apple:
+        print("  ⚠️  IB or Apple not found — skipping WAC test data")
+        return
+
+    today = date.today()
+
+    # Balance-safe: ensure IB has enough USD cash before the BUYs
+    tx_wac_prefund = Transaction(
+        broker_id=ib.id,
+        asset_id=None,
+        type=TransactionType.DEPOSIT,
+        date=today - timedelta(days=60),
+        quantity=Decimal("0"),
+        amount=Decimal("3000.00"),
+        currency="USD",
+        description="[balance-safe] Pre-fund IB USD for WAC test buys",
+        tags="balance-safe,wac-test",
+    )
+    session.add(tx_wac_prefund)
+    session.commit()
+
+    # BUY 10 shares @ $150
+    tx_wac_buy1 = Transaction(
+        broker_id=ib.id,
+        asset_id=apple.id,
+        type=TransactionType.BUY,
+        date=today - timedelta(days=50),
+        quantity=Decimal("10"),
+        amount=Decimal("-1500.00"),
+        currency="USD",
+        description="[wac-test] BUY AAPL 10@150",
+        tags="wac-test",
+    )
+
+    # BUY 5 shares @ $180
+    tx_wac_buy2 = Transaction(
+        broker_id=ib.id,
+        asset_id=apple.id,
+        type=TransactionType.BUY,
+        date=today - timedelta(days=36),
+        quantity=Decimal("5"),
+        amount=Decimal("-900.00"),
+        currency="USD",
+        description="[wac-test] BUY AAPL 5@180",
+        tags="wac-test",
+    )
+
+    # ADJUSTMENT -3 shares with cost_basis_override (simulates internal transfer)
+    tx_wac_transfer = Transaction(
+        broker_id=ib.id,
+        asset_id=apple.id,
+        type=TransactionType.ADJUSTMENT,
+        date=today - timedelta(days=20),
+        quantity=Decimal("-3"),
+        amount=Decimal("0"),
+        currency="USD",
+        cost_basis_override=Decimal("160.00"),
+        cost_basis_currency="USD",
+        description="[wac-test] ADJUSTMENT AAPL -3 with override $160",
+        tags="wac-test",
+    )
+
+    session.add_all([tx_wac_buy1, tx_wac_buy2, tx_wac_transfer])
+    session.commit()
+    print(f"  🛡️ WAC prefund DEPOSIT #{tx_wac_prefund.id}: +$3000 USD (day -60)")
+    print(f"  📈 WAC test BUY #{tx_wac_buy1.id}: 10@$150 (day -50)")
+    print(f"  📈 WAC test BUY #{tx_wac_buy2.id}: 5@$180 (day -36)")
+    print(f"  📈 WAC test ADJ #{tx_wac_transfer.id}: -3 override=$160 (day -20)")
+
+
 def populate_price_history(session: Session):
     """Create price history for market-priced assets."""
     print("\n📈 Creating Price History...")
@@ -2515,6 +2602,7 @@ def main():
             populate_assets(session)
             populate_asset_provider_assignments(session)
             populate_transactions(session)
+            populate_wac_test_transactions(session)
             populate_price_history(session)
             populate_asset_events(session)
             link_transactions_to_events(session)

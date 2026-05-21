@@ -550,14 +550,23 @@ def _check_admonition_empty_lines():
 
     Without the empty line, Prettier removes the 4-space body indentation,
     breaking the MkDocs admonition rendering.
+    Skips content inside fenced code blocks (``` or ~~~).
     """
     docs_dir = PROJECT_ROOT / "mkdocs_src" / "docs"
     adm_re = re.compile(r'^(?:!!!|[?]{3})\s+\w+')
+    fence_re = re.compile(r'^(`{3,}|~{3,})')
     bad_files = []
 
     for md_file in sorted(docs_dir.rglob("*.md")):
         lines = md_file.read_text().splitlines()
+        in_fence = False
         for i, line in enumerate(lines):
+            # Track fenced code blocks
+            if fence_re.match(line.strip()):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
             if adm_re.match(line):
                 if i + 1 < len(lines) and lines[i + 1].strip() != '':
                     if lines[i + 1].startswith('    '):
