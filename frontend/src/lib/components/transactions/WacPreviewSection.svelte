@@ -69,26 +69,18 @@
         excludedTxIds?: number[];
     }
 
-    let {
-        value,
-        onChange,
-        variant,
-        defaultCode = 'EUR',
-        disabled = false,
-        testid = 'wac-preview',
-        senderBrokerId = null,
-        assetId = null,
-        txDate = null,
-        pendingTxs = [],
-        excludedTxIds = [],
-    }: Props = $props();
+    let {value, onChange, variant, defaultCode = 'EUR', disabled = false, testid = 'wac-preview', senderBrokerId = null, assetId = null, txDate = null, pendingTxs = [], excludedTxIds = []}: Props = $props();
 
     // =========================================================================
     // State
     // =========================================================================
 
-    let mode = $state<WacMode>(variant === 'auto-new' ? 'auto' : 'manual');
+    let mode = $state<WacMode>(initialMode());
     let loading = $state(false);
+
+    function initialMode(): WacMode {
+        return variant === 'auto-new' ? 'auto' : 'manual';
+    }
     let previewResult = $state<WacPreviewResult | null>(null);
     let error = $state<string | null>(null);
     let showQualifying = $state(false);
@@ -140,13 +132,7 @@
     // Fetch WAC Preview
     // =========================================================================
 
-    async function fetchWacPreview(
-        brokerId: number,
-        assetId: number,
-        date: string,
-        pending: Array<Record<string, any>>,
-        excluded: number[],
-    ) {
+    async function fetchWacPreview(brokerId: number, assetId: number, date: string, pending: Array<Record<string, any>>, excluded: number[]) {
         // Cancel previous request
         if (abortController) abortController.abort();
         abortController = new AbortController();
@@ -157,11 +143,13 @@
         try {
             const resp = await zodiosApi.wac_preview_api_v1_transactions_wac_preview_post(
                 {
-                    items: [{
-                        sender_broker_id: brokerId,
-                        asset_id: assetId,
-                        date_range: {start: '2000-01-01', end: date},
-                    }],
+                    items: [
+                        {
+                            sender_broker_id: brokerId,
+                            asset_id: assetId,
+                            date_range: {start: '2000-01-01', end: date},
+                        },
+                    ],
                     pending_txs: pending as any,
                     excluded_tx_ids: excluded,
                 },
@@ -204,11 +192,13 @@
 
         try {
             const resp = await zodiosApi.wac_preview_api_v1_transactions_wac_preview_post({
-                items: [{
-                    sender_broker_id: senderBrokerId,
-                    asset_id: assetId,
-                    date_range: {start: '2000-01-01', end: txDate},
-                }],
+                items: [
+                    {
+                        sender_broker_id: senderBrokerId,
+                        asset_id: assetId,
+                        date_range: {start: '2000-01-01', end: txDate},
+                    },
+                ],
                 pending_txs: pendingTxs as any,
                 excluded_tx_ids: excludedTxIds,
             });
@@ -275,52 +265,30 @@
         <span class="text-xs text-gray-500 dark:text-gray-400 w-32 shrink-0 flex items-center gap-1">
             {$t('transactions.form.costBasis')}
             <Tooltip text={$t('transactions.costBasisOverride.tooltip')} position="top">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 dark:text-gray-500"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 dark:text-gray-500"
+                    ><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg
+                >
             </Tooltip>
         </span>
 
         {#if variant === 'auto-new'}
             <!-- Toggle Auto/Manual -->
             <div class="flex items-center gap-1 text-[10px]" data-testid="{testid}-toggle">
-                <button
-                    type="button"
-                    class="px-1.5 py-0.5 rounded {isAuto ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
-                    onclick={setAutoMode}
-                    {disabled}
-                    data-testid="{testid}-toggle-auto"
-                >Auto</button>
+                <button type="button" class="px-1.5 py-0.5 rounded {isAuto ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={setAutoMode} {disabled} data-testid="{testid}-toggle-auto">Auto</button>
                 <span class="text-gray-300 dark:text-gray-600">|</span>
-                <button
-                    type="button"
-                    class="px-1.5 py-0.5 rounded {!isAuto ? 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
-                    onclick={switchToManual}
-                    {disabled}
-                    data-testid="{testid}-toggle-manual"
-                >Manual</button>
+                <button type="button" class="px-1.5 py-0.5 rounded {!isAuto ? 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={switchToManual} {disabled} data-testid="{testid}-toggle-manual"
+                    >Manual</button
+                >
             </div>
         {/if}
     </div>
 
     <!-- Input field -->
     <div class="flex items-center gap-2 {isAuto && previewResult?.wac ? 'opacity-60 italic' : ''}">
-        <CompactCashCell
-            {value}
-            onChange={handleValueChange}
-            signHint="positive"
-            amountPlaceholder={isAuto ? 'auto' : '0.00'}
-            {defaultCode}
-            {disabled}
-            testid="{testid}-input"
-        />
+        <CompactCashCell {value} onChange={handleValueChange} signHint="positive" amountPlaceholder={isAuto ? 'auto' : '0.00'} {defaultCode} {disabled} testid="{testid}-input" />
 
         {#if variant === 'saved' && !disabled}
-            <button
-                type="button"
-                class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                onclick={handleRecalculate}
-                title={$t('transactions.wacPreview.recalculate') ?? 'Recalculate'}
-                data-testid="{testid}-recalculate"
-            >
+            <button type="button" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" onclick={handleRecalculate} title={$t('transactions.wacPreview.recalculate') ?? 'Recalculate'} data-testid="{testid}-recalculate">
                 <RefreshCw size={14} class={loading ? 'animate-spin' : ''} />
             </button>
         {/if}
@@ -338,14 +306,10 @@
             <Lightbulb size={12} class="text-amber-500 mt-0.5 shrink-0" />
             <span>
                 {$t('transactions.wacPreview.suggested') ?? 'Suggested WAC'}
-                ({qualifyingCount} {$t('transactions.wacPreview.txsUsed') ?? 'transactions used'})
+                ({qualifyingCount}
+                {$t('transactions.wacPreview.txsUsed') ?? 'transactions used'})
             </span>
-            <button
-                type="button"
-                class="ml-1 text-indigo-600 dark:text-indigo-400 hover:underline"
-                onclick={() => showQualifying = !showQualifying}
-                data-testid="{testid}-show-qualifying"
-            >
+            <button type="button" class="ml-1 text-indigo-600 dark:text-indigo-400 hover:underline" onclick={() => (showQualifying = !showQualifying)} data-testid="{testid}-show-qualifying">
                 {#if showQualifying}
                     <ChevronDown size={10} class="inline" /> {$t('transactions.wacPreview.hide') ?? 'Hide'}
                 {:else}
@@ -409,11 +373,13 @@
                             <td class="px-2 py-0.5 text-right">{qtx.quantity}</td>
                             <td class="px-2 py-0.5 text-right">{qtx.unit_cost ?? '—'}</td>
                             <td class="px-2 py-0.5">
-                                <span class="inline-block px-1 rounded text-[9px] {
-                                    qtx.effect === 'add' ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400' :
-                                    qtx.effect === 'reduce' ? 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400' :
-                                    'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                                }">{qtx.effect}</span>
+                                <span
+                                    class="inline-block px-1 rounded text-[9px] {qtx.effect === 'add'
+                                        ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                                        : qtx.effect === 'reduce'
+                                          ? 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+                                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}">{qtx.effect}</span
+                                >
                             </td>
                         </tr>
                     {/each}
@@ -427,24 +393,15 @@
         <div class="mt-1 p-2 border border-indigo-200 dark:border-indigo-800 rounded bg-indigo-50/50 dark:bg-indigo-900/10 text-[10px]" data-testid="{testid}-recalc-panel">
             {#if recalcResult.wac}
                 <p class="font-medium text-indigo-700 dark:text-indigo-300">
-                    📊 {$t('transactions.wacPreview.recalculated') ?? 'Recalculated'}: {recalcResult.wac.amount} {recalcResult.wac.code}
+                    📊 {$t('transactions.wacPreview.recalculated') ?? 'Recalculated'}: {recalcResult.wac.amount}
+                    {recalcResult.wac.code}
                     {#if value}
                         <span class="text-gray-400">(was: {value.amount} {value.code})</span>
                     {/if}
                 </p>
                 <div class="flex gap-2 mt-1">
-                    <button
-                        type="button"
-                        class="px-2 py-0.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 text-[10px]"
-                        onclick={acceptRecalculated}
-                        data-testid="{testid}-accept-recalc"
-                    >{$t('transactions.wacPreview.accept') ?? 'Accept'} {recalcResult.wac.amount}</button>
-                    <button
-                        type="button"
-                        class="px-2 py-0.5 rounded bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 text-[10px]"
-                        onclick={dismissRecalc}
-                        data-testid="{testid}-keep-current"
-                    >{$t('transactions.wacPreview.keep') ?? 'Keep current'}</button>
+                    <button type="button" class="px-2 py-0.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 text-[10px]" onclick={acceptRecalculated} data-testid="{testid}-accept-recalc">{$t('transactions.wacPreview.accept') ?? 'Accept'} {recalcResult.wac.amount}</button>
+                    <button type="button" class="px-2 py-0.5 rounded bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 text-[10px]" onclick={dismissRecalc} data-testid="{testid}-keep-current">{$t('transactions.wacPreview.keep') ?? 'Keep current'}</button>
                 </div>
             {:else if recalcResult.missing_pairs.length > 0}
                 <p class="text-amber-600 dark:text-amber-400">
@@ -457,6 +414,3 @@
         </div>
     {/if}
 </div>
-
-
-

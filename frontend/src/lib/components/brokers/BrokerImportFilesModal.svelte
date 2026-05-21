@@ -11,7 +11,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
-    import {saveWithRetry} from '$lib/utils/saveWithRetry';
+    import {trySave} from '$lib/utils/trySave';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {ExternalLink, FileUp, RefreshCw, Trash2, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
@@ -107,7 +107,7 @@
         for (const file of uploadFiles) {
             const formData = new FormData();
             formData.append('file', file);
-            const result = await saveWithRetry(
+            const result = await trySave(
                 // Use axios directly - Zodios doesn't handle FormData correctly
                 () => axiosInstance.post(`/api/v1/brokers/import/upload?broker_id=${brokerId}`, formData),
                 {toast: false, fallback: $_('uploads.uploadFailed'), prefix: file.name},
@@ -131,7 +131,7 @@
 
     async function handleDelete(fileId: string) {
         // I-bis #22 (Batch 4.d-part2) — unified error path.
-        const result = await saveWithRetry(
+        const result = await trySave(
             () =>
                 zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {
                     params: {file_id: fileId},
@@ -155,7 +155,7 @@
         let failedCount = 0;
         let lastMessage = '';
         for (const fileId of fileIds) {
-            const result = await saveWithRetry(
+            const result = await trySave(
                 () =>
                     zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {
                         params: {file_id: fileId},

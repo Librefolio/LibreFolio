@@ -641,7 +641,7 @@ Se FX mancante per entrambi:
 - `./dev.py api sync` run
 
 **TODO for next iteration**:
-→ [`plan-R2-SP-C-BugfixRound2-WacBackendCleanup`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacBackendCleanup.prompt.md) — ✅ **COMPLETATO** (2026-05-19). Step 6 coperto integralmente (34 test). Continuare da **Step 7** (Frontend — FormModal WAC state machine).
+→ [`plan-R2-SP-C-BugfixRound2-WacBackendCleanup`](plan-phase07-transaction-Part4_Round6_1_CentralizePayloadCommit.prompt.md) — ✅ **COMPLETATO** (2026-05-19). Step 6 coperto integralmente (34 test). Continuare da **Step 7** (Frontend — FormModal WAC state machine).
 
 ---
 
@@ -765,6 +765,8 @@ e abbiamo pianificato la correzione in questo piano: [`plan-phase07-transaction-
 
 ### WT-5: Frontend — FormModal mostra WacPreviewSection per TRANSFER
 
+> Verificato manualmente 2026-05-21 (walktest priorità alta #1)
+
 1. Apri `http://localhost:5173/transactions`
 2. Click **+ New**
 3. Seleziona tipo **TRANSFER**
@@ -776,6 +778,8 @@ e abbiamo pianificato la correzione in questo piano: [`plan-phase07-transaction-
 ---
 
 ### WT-6: Frontend — FormModal edit mode (Scenario B)
+
+> Verificato manualmente 2026-05-21 (walktest priorità alta #4)
 
 1. Dalla tabella transazioni, apri una TRANSFER esistente (receiver, qty > 0) in **Edit**
 2. Il campo cost_basis deve mostrare il valore salvato (nero)
@@ -789,6 +793,8 @@ e abbiamo pianificato la correzione in questo piano: [`plan-phase07-transaction-
 
 ### WT-7: Frontend — BulkModal cella cost_basis
 
+> Verificato manualmente 2026-05-21 (walktest priorità alta #5). Commit batch mixed (6 create + 2 update + 1 delete) funziona con toast formattato a elenco puntato.
+
 1. Dalla tabella, apri la BulkModal (multi-select + edit)
 2. Aggiungi una nuova riga TRANSFER
 3. Nella colonna cost_basis (potrebbe essere nascosta → visibilità colonne → attivare):
@@ -801,6 +807,8 @@ e abbiamo pianificato la correzione in questo piano: [`plan-phase07-transaction-
 
 ### WT-8: Frontend — PromoteMergeModal cost_basis
 
+> Verificato via E2E `tx-split-promote.spec.ts` (test "Promote: select 2 promote-test WITHDRAWAL+DEPOSIT rows → toolbar shows link button") + walktest priorità media #10.
+
 1. Nella BulkModal, seleziona 2 transazioni standalone opposte (es. una SELL e una BUY per lo stesso asset) → promuovile a TRANSFER
 2. Se la modale di merge si apre:
    - Deve esserci la sezione "Cost Basis (receiver)"
@@ -811,6 +819,8 @@ e abbiamo pianificato la correzione in questo piano: [`plan-phase07-transaction-
 ---
 
 ### WT-9: Frontend — Error banner FX mancante
+
+> Verificato via E2E `tx-wac.spec.ts` test "W-excluded — Missing FX shows error banner" (verifica DOM structure del testid `tx-form-cost-basis-missing-pairs`).
 
 1. Crea un asset in valuta CHF
 2. Crea un BUY in CHF per quell'asset
@@ -824,6 +834,8 @@ e abbiamo pianificato la correzione in questo piano: [`plan-phase07-transaction-
 
 ### WT-10: Frontend — Qualifying TXs espandibile
 
+> Verificato via E2E `tx-wac.spec.ts` test "W-live — Qualifying TXs expandable section" (click `tx-form-cost-basis-show-qualifying` → tabella `tx-form-cost-basis-qualifying-table` visibile).
+
 1. In una nuova TRANSFER (con Auto e risultato WAC presente):
    - Deve apparire "💡 Suggested WAC (N transactions used)"
    - Click [Show] → si espande la tabella con colonne: #, Type, Date, Qty, Unit, Effect
@@ -833,6 +845,8 @@ e abbiamo pianificato la correzione in questo piano: [`plan-phase07-transaction-
 ---
 
 ### WT-11: i18n — Chiavi presenti in tutte le lingue
+
+> Verificato: `./dev.py i18n audit` non segnala MISSING per `transactions.wacPreview.*`.
 
 ```bash
 ./dev.py i18n audit
@@ -844,8 +858,414 @@ e abbiamo pianificato la correzione in questo piano: [`plan-phase07-transaction-
 
 ### WT-12: E2E — Test runner riconosce il nuovo test
 
+> Verificato 2026-05-21: `./dev.py test front-transaction tx-wac` → 7/7 PASSED.
+> Fix applicati in sessione precedente: testid errati corretti (`tx-new-btn`→`tx-add-button`, `tx-type-option`→`search-select-option`, `42.50`→`42.5`).
+
 ```bash
 ./dev.py test front-transaction tx-wac --headed
 ```
 
-**Aspettativa**: Playwright si avvia e esegue 7 test del file `tx-wac.spec.ts`. I test strutturali (presenza DOM) dovrebbero passare. I test che richiedono mock data specifico (WAC effettivo con valore numerico) potrebbero fallire se il DB test non ha TRANSFER+BUY sequences.
+**Risultato**: 7/7 test PASSED (W8, W9, W10, W-live, W-manual, W-sell, W-excluded).
+
+---
+
+## 🐛 Osservazioni Walktest Manuale (2026-05-21)
+
+Raccolte durante i test manuali post-migrazione payload. Da risolvere in un prossimo round di bugfix.
+
+---
+
+### Bug 1 — WAC Preview: fetch infinito con valore 0 + bordo rosso
+
+**Scope**: `WacPreviewSection.svelte` + `CompactCashCell` sign hint
+**Severità**: 🔴 Alta (UX degradata, richieste infinite)
+
+**Sintomo**: Quando il WAC ritorna `amount: "0"` (perché tutte le TX qualificanti hanno `add_zero_cost`), il campo mostra bordo rosso e il componente continua a triggerare `wac-preview` ripetutamente (loop `$effect`).
+
+**Causa probabile**: il valore `0` soddisfa `signBad` per la regola `nonzero` → coloring rosso. Il loop suggerisce che l'`$effect` ricalcola quando il valore cambia da `""` a `"0"` → ri-trigger il debounce → loop.
+
+**Log rete osservato** (senza toccare nulla):
+```
+wac-preview 200 → wac-preview 200 → wac-preview 200 → ... (~10+ in pochi secondi)
+```
+
+**Payload**:
+```json
+{"items":[{"sender_broker_id":3,"asset_id":1,"date_range":{"start":"2000-01-01","end":"2026-05-21"}}],"pending_txs":[],"excluded_tx_ids":[]}
+```
+
+**Azione**: Fix loop `$effect` (dipendenza circolare value↔fetch), e decidere se `0` con regola `nonzero` deve essere rosso oppure neutro per il WAC auto.
+
+---
+
+### Bug 2 — WAC Preview: data inizio hardcoded a `2000-01-01`
+
+**Scope**: `WacPreviewSection.svelte` → parametro `date_range.start`
+**Severità**: 🟡 Media (funzionale ma inefficiente)
+
+**Osservazione**: Il backend riceve sempre `start: "2000-01-01"`. L'utente chiede: se si lasciasse vuota, il backend potrebbe interpretarla come "tutte le date" senza che il frontend debba inventare una data arbitraria.
+
+**Proposta**: rendere `date_range.start` opzionale nello schema backend (`Optional[date] = None`). Se `None` → il backend parte dalla TX più vecchia del (broker, asset).
+
+---
+
+### Bug 3 — WacPreviewSection: layout label e toggle
+
+**Scope**: `WacPreviewSection.svelte` → layout CSS
+**Severità**: 🟢 Cosmetica
+
+**Problemi osservati**:
+1. La label "Override costo medio" va a capo nonostante ci sia spazio sufficiente (causa: `w-32 shrink-0` troppo ristretto per il testo tradotto in IT)
+2. Il toggle Auto|Manual dovrebbe essere allineato a destra (flex spacer tra label e toggle)
+3. Le label "Auto" e "Manual" sono in inglese anche quando la lingua è italiana
+
+**Fix**: rimuovere `w-32` → usare `whitespace-nowrap` sulla label; aggiungere `ml-auto` al toggle; tradurre "Auto"/"Manual" con chiavi i18n.
+
+---
+
+### Bug 4 — Qualifying TXs table: formattazione e traduzione
+
+**Scope**: `WacPreviewSection.svelte` → tabella qualifying
+**Severità**: 🟢 Cosmetica
+
+**Problemi osservati**:
+1. **Tipo**: mostra codice raw (`ADJUSTMENT`, `TRANSFER`) → dovrebbe mostrare icona + nome tradotto
+2. **Quantità**: mostra 6 decimali (`2.000000`) → formattare con `formatDecimalForDisplay()` (rimuove zeri trailing)
+3. **Effect badge**: il colore è uniforme grigio → colorare in base al tipo (`add` = verde, `reduce` = ambra, `add_zero_cost` = grigio, `skip` = rosso)
+4. **Effect testo**: mostra codice raw (`add_zero_cost`) → tradurre con chiave i18n (es. "Aggiunto (costo 0)")
+
+---
+
+### Bug 5 — Mock data: mancano BUY + override cost per test WAC
+
+**Scope**: `populate_mock_data.py`
+**Severità**: 🟡 Media (test visivo impossibile)
+
+**Osservazione**: I dati mock hanno solo ADJUSTMENT e TRANSFER con `add_zero_cost` → il WAC è sempre 0. Servirebbero:
+- Almeno 1 BUY per l'asset con cash non-zero (genera WAC reale)
+- Almeno 1 TRANSFER con `cost_basis_override` popolato (mostra valore nel campo)
+
+---
+
+### Bug 6 — BulkModal: UUID linked TX mostra `↔ new`
+
+**Scope**: `TransactionBulkModal.svelte` → cella link_uuid
+**Severità**: 🟢 Cosmetica
+
+**Sintomo**: La cella mostra `↔ new` per le linked pairs nuove create nel workspace.
+
+**Proposta**: mostrare `new ↔ new` per rendere chiaro che entrambi i lati sono nuovi, non solo uno.
+
+---
+
+### Bug 7 — BulkModal: colonne di default troppo ridotte
+
+**Scope**: `TransactionBulkModal.svelte` → default visible columns
+**Severità**: 🟢 Cosmetica
+
+**Proposta**: mostrare di default TUTTE le colonne eccetto "Creato" e "Aggiornato" (timestamps). Attualmente alcune colonne utili sono nascoste.
+
+---
+
+### Bug 8 — BulkModal edit paired TX: secondo broker si perde
+
+**Scope**: `TransactionFormModal.svelte` → caricamento paired TX in edit mode
+**Severità**: 🔴 Alta (regressione funzionale)
+
+**Sintomo**: Editare una TX paired (TRANSFER titoli o CASH_TRANSFER/bonificho) nel FormModal dalla BulkModal → il secondo broker (partner side) non viene popolato nel form.
+
+**Prima di risolvere**: serve chiarimento sull'architettura — come il FormModal riceve le 2 TX quando apre una linked pair? Viene passato solo `initialRow` + `partner` come props? O deve fetchare dal backend?
+
+---
+
+### Bug 9 — BulkModal cella cost_basis: mostra solo "💡 auto" senza valore
+
+**Scope**: `TransactionBulkModal.svelte` → cella cost_basis per righe nuove
+**Severità**: 🟡 Media (informazione mancante)
+
+**Sintomo**: Le righe nuove TRANSFER in auto mostrano solo `💡 auto` (grigio corsivo) ma NON il valore numerico calcolato.
+
+**Aspettativa**: dovrebbe mostrare il valore WAC effettivo (es. `💡 175.57 USD`) in grigio corsivo.
+
+---
+
+### Bug 10 — BulkModal cella cost_basis: Manual digitato non si vede
+
+**Scope**: `TransactionBulkModal.svelte` → cella cost_basis per righe manuali
+**Severità**: 🟡 Media (dato perso visivamente)
+
+**Sintomo**: Se l'utente digita un valore manuale nel FormModal (toggle Manual), la cella nella BulkModal rimane invariata (mostra ancora `💡 auto` o vuota).
+
+**Aspettativa**: dovrebbe mostrare il valore nero formattato (es. `42.50 EUR`) come per la colonna importo.
+
+---
+
+### Bug 11 — BulkModal cella cost_basis: righe DB non mostrano valore
+
+**Scope**: `TransactionBulkModal.svelte` → cella cost_basis per righe da DB
+**Severità**: 🟡 Media
+
+**Sintomo**: Le righe da DB con `cost_basis_override` salvato mostrano `—` (trattino) invece del valore.
+
+**Nota**: per ADJUSTMENT post-split il lato con l'override si vede → la logica di rendering è condizionale sul tipo e non dovrebbe esserlo. Tutte le righe con `cost_basis_override` != null devono mostrare il valore, indipendentemente dal tipo TX.
+
+**Azione**: ripensare la logica di generazione della cella cost_basis per renderla **indipendente dal tipo** — se il campo ha un valore, mostrarlo sempre.
+
+---
+
+## 📊 Classificazione Bug per Complessità
+
+### 🟩 One-shot (fix diretti)
+
+| # | Bug | Fix stimato |
+|---|-----|-------------|
+| **2** | Data inizio hardcoded `2000-01-01` | Backend: `date_range.start` → `Optional[date] = None`, se None usa prima TX. Frontend: non mandare start. |
+| **3** | Layout label/toggle WAC | CSS: `whitespace-nowrap`, `ml-auto` sul toggle. i18n: 2 chiavi `wacPreview.auto`/`wacPreview.manual` |
+| **4** | Qualifying TXs table formattazione | `formatDecimalForDisplay()` sulla qty, icona+traduzione tipo, badge colorati per effect, chiavi i18n effect |
+| **5** | Mock data senza BUY per test WAC | Aggiungere 2-3 BUY con cash in `populate_mock_data.py` per l'asset usato nei test WAC |
+| **6** | UUID `↔ new` → `new ↔ new` | BulkModal: cambiare il testo nella cella link_uuid |
+| **7** | Colonne default tutte visibili | BulkModal: modificare `defaultVisibleColumns` (o equivalente) → includere tutte le colonne eccetto `created_at` e `updated_at` |
+
+### 🟧 Richiedono studio architettura
+
+| # | Bug | Cosa serve capire |
+|---|-----|-------------------|
+| **1** | WAC fetch loop infinito | Interazione `$effect` ↔ `onChange` ↔ `autoMode` ↔ debounce. Dipendenza circolare value↔fetch. |
+| **8** | Partner broker si perde in edit paired | Come il FormModal riceve i dati della TX partner dalla BulkModal. |
+| **9** | Cella bulk "💡 auto" senza valore numerico | Propagazione valore WAC calcolato dal FormModal → cella BulkModal. |
+| **10** | Manual digitato non si vede in cella | Come `cost_basis_override` torna al BulkModal quando FormModal chiude. |
+| **11** | Righe DB non mostrano cost_basis | Logica condizionale `renderCostBasisCell()`, tipo-dipendente → type-agnostic. |
+
+**Nota**: Bug #9, #10, #11 sono lo **stesso problema** da 3 angoli → vanno risolti insieme come task unico "Riscrittura cella cost_basis BulkModal".
+
+---
+
+## 🚀 Prompt per Agente Planner — One-shot (Bug 2, 3, 4, 5, 6, 7)
+
+> **Plan file suggerito**: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound3-WacOneShot.prompt.md`
+
+```markdown
+# Prompt: WAC Preview One-Shot Fixes (Bug 2, 3, 4, 5, 6, 7)
+
+## Contesto
+
+Stiamo lavorando su LibreFolio, un portfolio tracker self-hosted. Il piano padre è:
+`plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md`
+
+I seguenti 6 bug sono stati classificati come "one-shot" (fix diretto senza analisi architetturale).
+Crea un piano di implementazione con step numerati, file coinvolti, e ordine esecuzione.
+
+## Bug da risolvere
+
+### Bug 2 — date_range.start hardcoded a 2000-01-01
+- File backend: `backend/app/schemas/transactions.py` (WACPreviewItem)
+- File frontend: `frontend/src/lib/components/transactions/WacPreviewSection.svelte`
+- Fix: rendere `date_range.start` opzionale (`Optional[date] = None`). Se None → backend parte dalla TX più vecchia del (broker, asset). Frontend smette di mandare start.
+
+### Bug 3 — Layout label/toggle WAC
+- File: `frontend/src/lib/components/transactions/WacPreviewSection.svelte`
+- Fix:
+  1. Label: rimuovere `w-32 shrink-0` → usare `whitespace-nowrap`
+  2. Toggle: aggiungere `ml-auto` per allineamento a destra
+  3. i18n: tradurre "Auto"/"Manual" con chiavi `transactions.wacPreview.toggleAuto` / `transactions.wacPreview.toggleManual` (aggiungere in 4 lingue)
+
+### Bug 4 — Qualifying TXs table formattazione
+- File: `frontend/src/lib/components/transactions/WacPreviewSection.svelte`
+- Fix:
+  1. Colonna Type: mostrare icona (da `getTypeIconSlug()`) + nome tradotto (da type store)
+  2. Colonna Qty: usare `formatDecimalForDisplay()` (rimuove zeri trailing)
+  3. Colonna Effect badge: colorare verde (`add`), ambra (`reduce`), grigio (`add_zero_cost`), rosso (`skip_no_override`)
+  4. Colonna Effect testo: tradurre con chiavi i18n `transactions.wacPreview.effect.add`, `.reduce`, `.addZeroCost`, `.skip`
+
+### Bug 5 — Mock data senza BUY per test WAC
+- File: `backend/test_scripts/test_db/populate_mock_data.py`
+- Fix: aggiungere per l'asset Apple (id=1) + broker IB (id=3):
+  1. BUY 10 shares @ $150 (cash -$1500) data 2026-04-01
+  2. BUY 5 shares @ $180 (cash -$900) data 2026-04-15
+  3. TRANSFER 3 shares con cost_basis_override {code: "USD", amount: "160"} data 2026-05-01
+  Questo genera WAC reale (~$160) e mostra il campo override popolato.
+
+### Bug 6 — BulkModal UUID linked mostra `↔ new`
+- File: `frontend/src/lib/components/transactions/TransactionBulkModal.svelte`
+- Fix: cercare dove renderizza `↔ new` per link_uuid delle TX nuove → cambiare in `new ↔ new`
+
+### Bug 7 — BulkModal colonne default ridotte
+- File: `frontend/src/lib/components/transactions/TransactionBulkModal.svelte`
+- Fix: modificare `defaultVisibleColumns` (o equivalente) → includere tutte le colonne eccetto `created_at` e `updated_at`
+
+## Vincoli
+- Dopo modifiche backend schema: `./dev.py api sync`
+- Dopo modifiche mock data: `./dev.py db create-clean --test`
+- Dopo modifiche i18n: `./dev.py i18n audit` per verificare
+- Test: `./dev.py test front-transaction tx-wac` deve continuare a passare
+- `svelte-check`: 0 errors
+
+## Deliverable
+Piano con step numerati, ordine di esecuzione, file specifici, stima LOC modificate.
+```
+
+---
+
+## 🔬 Prompt per Agente Planner — Bug 1: WAC fetch loop infinito
+
+> **Plan file suggerito**: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound3-WacFetchLoop.prompt.md`
+
+```markdown
+# Prompt: Fix WAC Preview Infinite Fetch Loop (Bug 1)
+
+## Contesto
+
+In LibreFolio (SvelteKit 2 + Svelte 5 runes), il componente `WacPreviewSection.svelte` ha un loop infinito di fetch quando il WAC calcolato è `0`.
+
+Piano padre: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md` (sezione Bug 1)
+
+## Sintomo
+
+- Quando il backend ritorna `wac: {code: "USD", amount: "0"}`, il network tab mostra `wac-preview` chiamato ripetutamente (~10+ in pochi secondi) senza che l'utente tocchi nulla.
+- Il campo mostra bordo rosso (sign-bad per regola `nonzero`).
+
+## Analisi richiesta
+
+1. Leggere `frontend/src/lib/components/transactions/WacPreviewSection.svelte`
+2. Tracciare il flusso: quale `$effect` triggera il fetch? Quali sue dipendenze cambiano dopo che il fetch completa e setta il valore?
+3. Verificare se `CompactCashCell.onChange` viene chiamato quando il valore viene settato programmaticamente (non dall'utente) → causa re-trigger dell'$effect
+4. Verificare se il `signHint` (coloring bordo) scatena un re-render che modifica le dipendenze dell'$effect
+
+## Causa probabile
+
+Circolo: fetch → set value `"0"` → onChange emette → parent $effect vede dipendenza cambiata → ri-fetch → set value `"0"` → ...
+
+## Fix proposti (da valutare)
+
+- **Opzione A**: distinguere "set programmatico" da "set utente" nel CompactCashCell (non emettere onChange se il valore è settato via prop, solo se l'utente digita)
+- **Opzione B**: nel `$effect` di fetch, confrontare il valore corrente con il risultato — se identico, non ri-settare
+- **Opzione C**: usare un flag `isFetching` come guard nel $effect per non ri-triggerare durante il set post-fetch
+- **Decisione aggiuntiva**: il WAC auto a `0` deve mostrare bordo rosso (bad sign)? O il sign hint va disabilitato quando è in modalità Auto?
+
+## Vincoli
+
+- Svelte 5 runes (`$state`, `$derived`, `$effect`)
+- Il debounce è already implementato (500ms trailing) ma non previene il loop post-fetch
+- Test E2E `tx-wac.spec.ts` deve continuare a passare
+
+## Deliverable
+
+Piano con: (1) root cause confermata dopo lettura codice, (2) opzione scelta con rationale, (3) step implementativi, (4) test di regressione.
+```
+
+---
+
+## 🔬 Prompt per Agente Planner — Bug 8: Partner broker si perde in edit paired
+
+> **Plan file suggerito**: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound3-PairedBrokerLost.prompt.md`
+
+```markdown
+# Prompt: Fix Partner Broker Lost on Edit Paired TX (Bug 8)
+
+## Contesto
+
+In LibreFolio, editare una TX paired (TRANSFER titoli o CASH_TRANSFER) nel FormModal dalla BulkModal fa sì che il secondo broker (partner side) non venga popolato.
+
+Piano padre: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md` (sezione Bug 8)
+
+## Analisi richiesta
+
+1. Leggere `frontend/src/lib/components/transactions/TransactionFormModal.svelte` — come riceve `initialRow` e `partner` (o equivalente)
+2. Leggere `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` — come passa i dati al FormModal quando si apre una riga paired
+3. Capire il flusso:
+   - BulkModal ha le righe in `ops[]` con `partner` reference
+   - Quando utente fa double-click su una riga paired → apre FormModal
+   - Come vengono passati i dati del partner? Props? Lookup nell'array ops?
+4. Verificare: il partner esiste in `ops[]`? Viene passato al FormModal? Il FormModal lo usa per popolare `dualTo.broker_id`?
+
+## Sintomo
+
+- Apri BulkModal con TX paired (TRANSFER o CASH_TRANSFER)
+- Double-click sulla riga → FormModal si apre
+- Il campo "To broker" è vuoto
+- Il campo "From broker" è popolato correttamente
+
+## Fix proposti (da valutare dopo analisi)
+
+- Se il partner non viene passato → aggiungerlo come prop/context
+- Se viene passato ma non consumato → fix nell'inizializzazione `dualTo`
+- Se il lookup fallisce perché usa un formato diverso (id vs tempId) → normalizzare
+
+## Vincoli
+
+- E2E test `tx-paired-edit.spec.ts` verifica questo scenario (ma dal main table, non dalla BulkModal)
+- Il fix non deve rompere il flusso "new paired" (create) che funziona correttamente
+
+## Deliverable
+
+Piano con: (1) architettura documentata (diagramma flusso dati BulkModal→FormModal per paired), (2) root cause, (3) fix implementativo, (4) test aggiuntivo se necessario.
+```
+
+---
+
+## 🔬 Prompt per Agente Planner — Bug 9+10+11: Cella cost_basis BulkModal
+
+> **Plan file suggerito**: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound3-BulkCostBasisCell.prompt.md`
+
+```markdown
+# Prompt: Riscrittura Cella cost_basis nella BulkModal (Bug 9, 10, 11)
+
+## Contesto
+
+In LibreFolio, la cella `cost_basis_override` nella BulkModal (`TransactionBulkModal.svelte`) ha 3 problemi correlati che derivano dalla stessa architettura carente.
+
+Piano padre: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md` (sezione Bug 9, 10, 11)
+
+## Problemi
+
+1. **Bug 9**: Righe nuove TRANSFER in auto mostrano solo `💡 auto` senza il valore WAC calcolato
+2. **Bug 10**: Se l'utente digita un valore manual nel FormModal, la cella BulkModal resta invariata
+3. **Bug 11**: Righe da DB con `cost_basis_override` salvato mostrano `—` (dipendenza errata dal tipo TX)
+
+## Analisi richiesta
+
+1. Leggere `TransactionBulkModal.svelte` — cercare la logica che renderizza la cella cost_basis (probabile sezione `{#if}` o helper che decide cosa mostrare)
+2. Capire come il `PendingOp` memorizza il `cost_basis_override`:
+   - Per righe nuove: dove finisce il valore quando il FormModal lo popola (auto o manual)?
+   - Per righe DB: il campo `cost_basis_override` è in `op.original`? In `op.draft`?
+3. Capire il flusso ritorno FormModal → BulkModal:
+   - Il FormModal emette `onPushDraft(payload)` con `commitOnSave=false`
+   - Il payload include `cost_basis_override`? O è perso?
+4. Verificare se la cella usa una condizione `if (type === 'TRANSFER' || type === 'ADJUSTMENT')` che esclude altri tipi
+
+## Aspettativa funzionale (target)
+
+| Stato riga | Cella cost_basis |
+|-----------|------------------|
+| Nuova, auto, valore calcolato | `💡 175.57 USD` (grigio corsivo) |
+| Nuova, auto, in calcolo | `💡 …` (grigio corsivo, spinner) |
+| Nuova, manual, valore digitato | `42.50 EUR` (nero) |
+| Nuova, senza override | `—` |
+| DB, con override salvato | `160.00 USD` (nero) |
+| DB, senza override | `—` |
+| Qualsiasi tipo (TRANSFER, ADJUSTMENT, BUY, SELL...) | Se ha valore → mostrare. Tipo irrilevante. |
+
+## Vincoli
+
+- La cella deve essere **type-agnostic**: se `cost_basis_override` ha un valore, mostrarlo sempre
+- Il valore WAC auto deve essere propagato dal WacPreviewSection (dentro FormModal) → PendingOp nel BulkModal
+- Il formato deve essere coerente con la cella Cash (stesso CompactCashCell readonly style)
+- Test: `./dev.py test front-transaction all` deve passare
+
+## Deliverable
+
+Piano con: (1) architettura attuale documentata, (2) proposta nuova architettura cella, (3) step implementativi, (4) casi test.
+```
+
+---
+
+## Riepilogo file plan suggeriti
+
+| Bug | Plan file |
+|-----|-----------|
+| 2,3,4,5,6,7 (one-shot) | `plan-...-BugfixRound3-WacOneShot.prompt.md` |
+| 1 (fetch loop) | `plan-...-BugfixRound3-WacFetchLoop.prompt.md` |
+| 8 (partner broker) | `plan-...-BugfixRound3-PairedBrokerLost.prompt.md` |
+| 9+10+11 (cella bulk) | `plan-...-BugfixRound3-BulkCostBasisCell.prompt.md` |
+
+Radice comune: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound3-{Suffisso}.prompt.md`

@@ -38,7 +38,7 @@ test.setTimeout(25_000);
 // ---------------------------------------------------------------------------
 
 async function goToTransactions(page: Page) {
-    await navigateTo(page, '/transactions');
+    await navigateTo(page, '/transactions?page_size=200');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
     await page.waitForTimeout(500);
 }
@@ -84,7 +84,7 @@ test.describe('TransactionDeleteModal', () => {
 
     test('A1: standalone delete — modal shows Layout A fields, cancel keeps row', async ({page}) => {
         const row = await findRow(page, 'delete-safe', 'Small deposit');
-        test.skip(!row, 'delete-safe DEPOSIT row not found — run ./dev.py db create-clean');
+        expect(row, 'delete-safe DEPOSIT row not found — run ./dev.py db create-clean — check populate_mock_data.py').toBeTruthy();
 
         // A1.1: Open DeleteModal
         await clickDeleteOnRow(row!);
@@ -108,7 +108,7 @@ test.describe('TransactionDeleteModal', () => {
     test('A1-confirm: standalone delete — confirm removes row', async ({page}) => {
         // Use the delete-safe FEE (won't cause balance issues)
         const row = await findRow(page, 'delete-safe', 'Platform fee');
-        test.skip(!row, 'delete-safe FEE row not found');
+        expect(row, 'delete-safe FEE row not found — check populate_mock_data.py').toBeTruthy();
 
         await clickDeleteOnRow(row!);
         const modal = page.getByTestId('tx-delete-modal');
@@ -127,7 +127,7 @@ test.describe('TransactionDeleteModal', () => {
 
     test('A2: paired delete — Layout B shows From/To, split hint, cancel keeps', async ({page}) => {
         const row = await findRow(page, 'delete-safe', 'ETH');
-        test.skip(!row, 'delete-safe TRANSFER ETH row not found');
+        expect(row, 'delete-safe TRANSFER ETH row not found — check populate_mock_data.py').toBeTruthy();
 
         await clickDeleteOnRow(row!);
         const modal = page.getByTestId('tx-delete-modal');
@@ -156,7 +156,7 @@ test.describe('TransactionDeleteModal', () => {
 
     test('A2-confirm: paired delete — confirm removes both halves', async ({page}) => {
         const row = await findRow(page, 'delete-safe', 'ETH');
-        test.skip(!row, 'delete-safe TRANSFER ETH row not found');
+        expect(row, 'delete-safe TRANSFER ETH row not found — check populate_mock_data.py').toBeTruthy();
 
         await clickDeleteOnRow(row!);
         const modal = page.getByTestId('tx-delete-modal');
@@ -175,7 +175,7 @@ test.describe('TransactionDeleteModal', () => {
 
     test('A4: delete button hidden on VIEWER paired rows (Asym-c)', async ({page}) => {
         const row = await findRow(page, 'Asym-c');
-        test.skip(!row, 'Asym-c row not found');
+        expect(row, 'Asym-c row not found — check populate_mock_data.py').toBeTruthy();
 
         await row!.hover();
         await page.waitForTimeout(300);
@@ -185,7 +185,7 @@ test.describe('TransactionDeleteModal', () => {
 
     test('A5: delete button hidden on hidden broker paired rows (Asym-d)', async ({page}) => {
         const row = await findRow(page, 'Asym-d');
-        test.skip(!row, 'Asym-d row not found');
+        expect(row, 'Asym-d row not found — check populate_mock_data.py').toBeTruthy();
 
         await row!.hover();
         await page.waitForTimeout(300);
@@ -198,7 +198,7 @@ test.describe('TransactionDeleteModal', () => {
     test('A1-error: delete failure shows error banner in modal', async ({page}) => {
         // Delete a BUY that causes negative balance
         const row = await findRow(page, 'Initial AAPL');
-        test.skip(!row, 'AAPL BUY row not found');
+        expect(row, 'AAPL BUY row not found — check populate_mock_data.py').toBeTruthy();
 
         await clickDeleteOnRow(row!);
         const modal = page.getByTestId('tx-delete-modal');
@@ -231,7 +231,7 @@ test.describe('Bulk delete via BulkModal', () => {
     test('A6: toolbar 🗑 opens BulkModal with pre-delete rows', async ({page}) => {
         const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
         const count = await rows.count();
-        test.skip(count < 2, 'Not enough rows');
+        expect(count, 'Need at least 2 rows — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
 
         // Select first two selectable rows
         let selected = 0;
@@ -242,7 +242,7 @@ test.describe('Bulk delete via BulkModal', () => {
                 selected++;
             }
         }
-        test.skip(selected < 2, 'Could not select 2 rows');
+        expect(selected, 'Need 2 selectable rows — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
 
         // Click bulk delete in toolbar
         const bulkDelBtn = page.getByTestId('toolbar-action-delete');
@@ -271,35 +271,35 @@ test.describe('Action visibility by access level', () => {
 
     test('C1.1: standalone OWNER row shows 4 actions', async ({page}) => {
         const row = await findRow(page, 'Initial EUR funding');
-        test.skip(!row, 'IB DEPOSIT row not found');
+        expect(row, 'IB DEPOSIT row not found — check populate_mock_data.py').toBeTruthy();
         const cnt = await countVisibleActions(row!);
         expect(cnt).toBe(4);
     });
 
     test('C1.2: standalone VIEWER row shows only view action', async ({page}) => {
         const row = await findRow(page, 'P2P lending capital');
-        test.skip(!row, 'Recrowd DEPOSIT row not found');
+        expect(row, 'Recrowd DEPOSIT row not found — check populate_mock_data.py').toBeTruthy();
         const cnt = await countVisibleActions(row!);
         expect(cnt).toBe(1);
     });
 
     test('C1.3: paired full-access row (Asym-a) shows 5 actions (view, edit, clone, split, delete)', async ({page}) => {
         const row = await findRow(page, 'Asym-a');
-        test.skip(!row, 'Asym-a row not found');
+        expect(row, 'Asym-a row not found — check populate_mock_data.py').toBeTruthy();
         const cnt = await countVisibleActions(row!);
         expect(cnt).toBe(5);
     });
 
     test('C1.4: paired viewer row (Asym-c) shows only view', async ({page}) => {
         const row = await findRow(page, 'Asym-c');
-        test.skip(!row, 'Asym-c row not found');
+        expect(row, 'Asym-c row not found — check populate_mock_data.py').toBeTruthy();
         const cnt = await countVisibleActions(row!);
         expect(cnt).toBe(1);
     });
 
     test('C2.1: context menu on OWNER row has 4 items', async ({page}) => {
         const row = await findRow(page, 'Initial EUR funding');
-        test.skip(!row, 'IB DEPOSIT row not found');
+        expect(row, 'IB DEPOSIT row not found — check populate_mock_data.py').toBeTruthy();
 
         await row!.click({button: 'right'});
         const menu = page.locator('[data-testid="context-menu"]');
@@ -311,7 +311,7 @@ test.describe('Action visibility by access level', () => {
 
     test('C2.2: context menu on VIEWER row has 1 item', async ({page}) => {
         const row = await findRow(page, 'P2P lending capital');
-        test.skip(!row, 'Recrowd row not found');
+        expect(row, 'Recrowd row not found — check populate_mock_data.py').toBeTruthy();
 
         await row!.click({button: 'right'});
         const menu = page.locator('[data-testid="context-menu"]');
@@ -336,7 +336,7 @@ test.describe('PickerModal disabled rows', () => {
         // Need 2+ rows selected to get edit-many mode → BulkModal → Picker
         const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
         const count = await rows.count();
-        test.skip(count < 2, 'Not enough rows');
+        expect(count, 'Need at least 2 rows — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
 
         // Select first two selectable rows
         let selected = 0;
@@ -347,7 +347,7 @@ test.describe('PickerModal disabled rows', () => {
                 selected++;
             }
         }
-        test.skip(selected < 2, 'Could not select 2 rows');
+        expect(selected, 'Need 2 selectable rows — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
 
         const editBtn = page.getByTestId('toolbar-action-edit');
         await expect(editBtn).toBeVisible({timeout: 3_000});
@@ -366,7 +366,7 @@ test.describe('PickerModal disabled rows', () => {
 
         // Open picker
         const searchAddBtn = bulkModal.getByTestId('tx-bulk-picker');
-        test.skip(!(await searchAddBtn.isVisible({timeout: 2_000}).catch(() => false)), 'Search & Add not visible');
+        await expect(searchAddBtn).toBeVisible({timeout: 3_000});
         await searchAddBtn.click();
 
         const picker = page.getByTestId('tx-picker-modal');

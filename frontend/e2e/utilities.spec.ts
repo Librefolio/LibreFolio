@@ -218,13 +218,11 @@ test.describe('Utilities — UI Rendering', () => {
         await login(page, TEST_USER);
         await goToFxPage(page);
 
-        // FX cards should exist
+        // FX cards must exist (populated by mock data)
         const cards = page.locator('[data-testid^="fx-card-"]');
+        await expect(cards.first()).toBeVisible({timeout: 5_000});
         const count = await cards.count();
-        if (count === 0) {
-            test.skip(true, 'No FX pairs available');
-            return;
-        }
+        expect(count, 'FX pairs must exist — check populate_mock_data.py').toBeGreaterThan(0);
 
         // At least one card should contain a flag emoji or ISO currency code
         const firstCard = cards.first();
@@ -243,12 +241,9 @@ test.describe('Utilities — UI Rendering', () => {
         await login(page, TEST_USER);
         await goToAssetsPage(page);
 
-        // Try to open edit modal on first asset (has currency selector)
+        // Open edit modal on first asset (must exist — populated by mock data)
         const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-        if (!(await firstCard.isVisible({timeout: 5000}).catch(() => false))) {
-            test.skip(true, 'No assets available');
-            return;
-        }
+        await expect(firstCard).toBeVisible({timeout: 5_000});
         await firstCard.click();
         await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
 
@@ -263,14 +258,14 @@ test.describe('Utilities — UI Rendering', () => {
 
         // Listbox should show options with 3-letter ISO codes
         const listbox = page.locator('[role="listbox"]');
-        if (await listbox.isVisible({timeout: 3000}).catch(() => false)) {
-            const options = listbox.locator('[role="option"]');
-            const optCount = await options.count();
-            expect(optCount).toBeGreaterThan(0);
-            // First option text should contain a 3-letter code
-            const firstOptionText = await options.first().textContent();
-            expect(firstOptionText).toMatch(/[A-Z]{3}/);
-        }
+        await expect(listbox).toBeVisible({timeout: 3_000});
+        const options = listbox.locator('button');
+        await expect(options.first()).toBeVisible({timeout: 3_000});
+        const optCount = await options.count();
+        expect(optCount).toBeGreaterThan(0);
+        // First option text should contain a 3-letter code
+        const firstOptionText = await options.first().textContent();
+        expect(firstOptionText).toMatch(/[A-Z]{3}/);
 
         await page.getByTestId('asset-modal-cancel').click();
     });

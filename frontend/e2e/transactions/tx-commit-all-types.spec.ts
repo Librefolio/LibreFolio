@@ -37,10 +37,7 @@ const BROKER_EDITOR = 'Directa SIM'; // EDITOR
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    await Promise.race([
-        page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}),
-        page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000}),
-    ]).catch(() => {});
+    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
     await page.waitForTimeout(500);
 }
 
@@ -67,7 +64,7 @@ async function pickFirstBroker(page: Page) {
     await page.waitForTimeout(300);
     // Prefer a known OWNER broker by visible text; fall back to first available
     const knownOption = page.locator('[data-testid^="search-select-option-"]', {hasText: BROKER_OWNER_A});
-    if (await knownOption.count() > 0) {
+    if ((await knownOption.count()) > 0) {
         await knownOption.first().click();
     } else {
         const option = page.locator('[data-testid^="search-select-option-"]').first();
@@ -178,16 +175,16 @@ async function commitBulkModal(page: Page): Promise<{payload: CommitPayload}> {
     await expect(commitBtn).toBeEnabled({timeout: 8_000});
 
     // Set up request interception BEFORE clicking
-    const commitPromise = page.waitForRequest(
-        (req) => req.url().includes('/transactions/commit') && req.method() === 'POST',
-        {timeout: 15_000},
-    );
+    const commitPromise = page.waitForRequest((req) => req.url().includes('/transactions/commit') && req.method() === 'POST', {timeout: 15_000});
 
     await commitBtn.click();
     await page.waitForTimeout(200);
 
     // If the button is still visible and enabled, it may not have responded — retry click
-    const stillVisible = await page.getByTestId('tx-bulk-modal').isVisible({timeout: 500}).catch(() => false);
+    const stillVisible = await page
+        .getByTestId('tx-bulk-modal')
+        .isVisible({timeout: 500})
+        .catch(() => false);
     if (stillVisible) {
         const stillEnabled = await commitBtn.isEnabled({timeout: 300}).catch(() => false);
         if (stillEnabled) {
@@ -208,10 +205,7 @@ async function commitBulkModal(page: Page): Promise<{payload: CommitPayload}> {
  * Full create-and-commit flow for a standalone (non-paired) type.
  * Opens FormModal → fills fields → Apply → BulkModal → Commit → verify.
  */
-async function createAndCommitStandalone(
-    page: Page,
-    opts: {type: string; needsAsset: boolean; needsQuantity: boolean; amount?: string; quantity?: string},
-) {
+async function createAndCommitStandalone(page: Page, opts: {type: string; needsAsset: boolean; needsQuantity: boolean; amount?: string; quantity?: string}) {
     await openCreateFlow(page);
     await selectType(page, opts.type);
     await pickFirstBroker(page);
@@ -322,10 +316,7 @@ test.describe('Create + Commit — Paired Types', () => {
         await expect(commitBtn).toBeEnabled({timeout: 8_000});
 
         // Intercept the commit POST — if the click triggers it
-        const responsePromise = page.waitForResponse(
-            (resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST',
-            {timeout: 10_000},
-        ).catch(() => null);
+        const responsePromise = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 10_000}).catch(() => null);
 
         await commitBtn.click();
         const resp = await responsePromise;
@@ -586,10 +577,7 @@ test.describe('Delete + Commit', () => {
         await expect(confirmBtn).toBeVisible({timeout: 3_000});
 
         // Intercept DELETE API call
-        const deletePromise = page.waitForResponse(
-            (resp) => resp.url().includes('/transactions') && resp.request().method() === 'DELETE',
-            {timeout: 10_000},
-        ).catch(() => null);
+        const deletePromise = page.waitForResponse((resp) => resp.url().includes('/transactions') && resp.request().method() === 'DELETE', {timeout: 10_000}).catch(() => null);
 
         await confirmBtn.click();
 
@@ -630,7 +618,7 @@ test.describe('Cost Basis Override', () => {
         await fillQuantity(page, '1');
 
         // Fill cost_basis_override (CompactCashCell — target the amount input inside)
-        const cbInput = page.getByTestId('tx-form-cost-basis-amount');
+        const cbInput = page.getByTestId('tx-form-cost-basis-input-amount');
         await expect(cbInput).toBeVisible({timeout: 2_000});
         await cbInput.fill(costBasis);
         await page.waitForTimeout(200);
@@ -644,9 +632,7 @@ test.describe('Cost Basis Override', () => {
         expect(creates?.length).toBeGreaterThanOrEqual(1);
 
         // At least one create should have cost_basis_override = "42.50" (or 42.5)
-        const hasCostBasis = creates.some(
-            (c) => c.cost_basis_override !== undefined && c.cost_basis_override !== null && c.cost_basis_override !== '',
-        );
+        const hasCostBasis = creates.some((c) => c.cost_basis_override !== undefined && c.cost_basis_override !== null && c.cost_basis_override !== '');
         expect(hasCostBasis).toBe(true);
     });
 
@@ -667,12 +653,11 @@ test.describe('Cost Basis Override', () => {
         await page.waitForTimeout(300);
 
         // Cost basis field should be visible
-        const cbInput = page.getByTestId('tx-form-cost-basis-amount');
+        const cbInput = page.getByTestId('tx-form-cost-basis-input-amount');
         await expect(cbInput).toBeVisible({timeout: 2_000});
 
         // Tooltip icon should be present (Info icon inside Tooltip wrapper)
-        const tooltipWrapper = page.locator('[data-testid="tx-form-cost-basis"]')
-            .locator('..').locator('..').locator('.tooltip-wrapper');
+        const tooltipWrapper = page.locator('[data-testid="tx-form-cost-basis"]').locator('..').locator('..').locator('.tooltip-wrapper');
         await expect(tooltipWrapper).toBeVisible({timeout: 2_000});
     });
 
@@ -717,7 +702,7 @@ test.describe('Cost Basis Override', () => {
         await advancedToggle.click();
         await page.waitForTimeout(300);
 
-        const cbInput = page.getByTestId('tx-form-cost-basis-amount');
+        const cbInput = page.getByTestId('tx-form-cost-basis-input-amount');
         await expect(cbInput).toBeVisible({timeout: 2_000});
         await cbInput.fill('99.99');
         await page.waitForTimeout(200);

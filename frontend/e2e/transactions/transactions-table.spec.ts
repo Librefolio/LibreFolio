@@ -59,10 +59,7 @@ test.describe('TransactionsTable (main read-view)', () => {
     test('linked pairs render giver above receiver (always-pair-adjacent)', async ({page}) => {
         const receiverRows = page.locator('[data-testid="tx-table"] tbody tr.tx-row-receiver');
         const receiverCount = await receiverRows.count();
-        if (receiverCount === 0) {
-            test.skip(true, 'No linked pairs in mock data');
-            return;
-        }
+        expect(receiverCount, 'Linked pairs must exist — check populate_mock_data.py').toBeGreaterThan(0);
         // Each receiver row must be preceded by a non-receiver row (the giver)
         const allRows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
         const allIds: string[] = [];
@@ -80,10 +77,7 @@ test.describe('TransactionsTable (main read-view)', () => {
     test('pair direction arrows ⬇ and ⬆ both present', async ({page}) => {
         const arrows = page.locator('[data-testid="tx-table"] .tx-pair-arrow');
         const count = await arrows.count();
-        if (count < 2) {
-            test.skip(true, 'No linked pairs');
-            return;
-        }
+        expect(count, 'Pair arrows must exist — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
         const texts: string[] = [];
         for (let i = 0; i < count; i++) texts.push((await arrows.nth(i).textContent())!.trim());
         expect(texts).toContain('⬇');
@@ -134,10 +128,7 @@ test.describe('TransactionsTable (main read-view)', () => {
     test('clicking link icon triggers pulse animation on partner row', async ({page}) => {
         const links = page.locator('[data-testid="tx-table"] [data-testid^="tx-link-icon-"]');
         const linkCount = await links.count();
-        if (linkCount === 0) {
-            test.skip(true, 'No linked pairs');
-            return;
-        }
+        expect(linkCount, 'Link icons must exist — check populate_mock_data.py').toBeGreaterThan(0);
 
         // Find a link icon whose partner row is present in the table.
         // Some partners may be invisible (hidden broker). Try each link until one pulses.
@@ -207,12 +198,7 @@ test.describe('TransactionsTable (main read-view)', () => {
     // === TT11 — Tags as colored badges ===
     test('tags column shows colored badge chips', async ({page}) => {
         const badges = page.locator('[data-testid="tx-table"] .tx-tag-badge');
-        const count = await badges.count();
-        if (count === 0) {
-            test.skip(true, 'No tagged transactions');
-            return;
-        }
-        await expect(badges.first()).toBeVisible();
+        await expect(badges.first()).toBeVisible({timeout: 3_000});
         const text = await badges.first().textContent();
         expect(text!.trim().length).toBeGreaterThan(0);
     });

@@ -1,7 +1,27 @@
 """Frontend Transaction E2E tests."""
 
-from ._common import _run_test_suite, print_section
+import subprocess
+from ._common import PROJECT_ROOT, _run_test_suite, Colors, print_section, print_success, print_error
 from ._frontend_common import _ensure_frontend_build, _ensure_db_populated, _ensure_test_users, _run_playwright
+
+
+def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Transaction unit tests (Vitest) — txPayloadHelpers + txCommitApi."""
+    print_section("Frontend TX Unit Tests (Vitest)")
+    cmd = ["npx", "vitest", "run", "src/lib/utils/__tests__/txPayloadHelpers.test.ts", "src/lib/utils/__tests__/txCommitApi.test.ts"]
+    print(f"\n{Colors.BLUE}Running: TX Vitest unit tests{Colors.NC}")
+    print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
+    try:
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True)
+        if result.returncode == 0:
+            print_success("TX Vitest unit tests - PASSED")
+            return True
+        else:
+            print_error(f"TX Vitest unit tests - FAILED (exit code: {result.returncode})")
+            return False
+    except Exception as e:
+        print_error(f"Vitest error: {e}")
+        return False
 
 
 def front_transactions_modals(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -188,5 +208,6 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-bulk-suggest-ux", front_tx_bulk_suggest_ux, name="TX Bulk Suggest UX Tests", desc="Split badge, type preview, undo split, suggest banner, ActionModal AFTER rows", tests="transactions/tx-bulk-suggest-ux.spec.ts")
     add_test(cat, "tx-fx-implied-rate", front_tx_fx_implied_rate, name="TX FX Implied Rate Tests", desc="FX implied rate in banner suffix + FormModal marker + semantic ordering", tests="transactions/tx-fx-implied-rate.spec.ts")
     add_test(cat, "tx-wac", front_tx_wac, name="TX WAC Preview Tests", desc="WAC preview toggle, auto/manual, recalculate, qualifying TXs, missing FX", tests="transactions/tx-wac.spec.ts")
+    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi", tests="vitest")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

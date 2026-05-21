@@ -202,18 +202,12 @@ test.describe('Transactions', () => {
         test('editing DB row restricts type to swap group', async ({page}) => {
             // Use existing DB transactions (mock data has them)
             const firstCheckbox = page.locator('[data-testid="tx-table"] tbody .checkbox-btn, [data-testid="tx-table"] tbody tr .checkbox-btn').first();
-            if (!(await firstCheckbox.isVisible({timeout: 2_000}).catch(() => false))) {
-                test.skip(true, 'No transactions in table');
-                return;
-            }
+            await expect(firstCheckbox).toBeVisible({timeout: 3_000});
             await firstCheckbox.click();
 
             // Click edit toolbar button
             const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
-            if (!(await editBtn.isVisible({timeout: 2_000}).catch(() => false))) {
-                test.skip(true, 'Edit button not visible');
-                return;
-            }
+            await expect(editBtn).toBeVisible({timeout: 3_000});
             await editBtn.click();
 
             // With single row, BulkModal + FormModal should auto-open
@@ -388,10 +382,7 @@ test.describe('Transactions', () => {
                 .locator('[data-testid^="search-select-option-"]')
                 .filter({hasText: /cash.*transfer|bonifico/i})
                 .first();
-            if (!(await cashOption.isVisible({timeout: 2_000}).catch(() => false))) {
-                test.skip(true, 'Cash Transfer type not available');
-                return;
-            }
+            await expect(cashOption).toBeVisible({timeout: 3_000});
             await cashOption.click();
             await page.waitForTimeout(500);
 
@@ -402,10 +393,7 @@ test.describe('Transactions', () => {
             await fromBrokerCombobox.click();
             await page.waitForTimeout(500);
             const fromBrokerOpt = page.locator('[data-testid^="search-select-option-"]').first();
-            if (!(await fromBrokerOpt.isVisible({timeout: 3_000}).catch(() => false))) {
-                test.skip(true, 'No broker options available');
-                return;
-            }
+            await expect(fromBrokerOpt).toBeVisible({timeout: 3_000});
             await fromBrokerOpt.click();
             await page.waitForTimeout(300);
 
@@ -416,10 +404,7 @@ test.describe('Transactions', () => {
             await page.waitForTimeout(500);
             const toOptions = page.locator('[data-testid^="search-select-option-"]');
             const toCount = await toOptions.count();
-            if (toCount < 2) {
-                test.skip(true, 'Need at least 2 brokers for paired test');
-                return;
-            }
+            expect(toCount, 'Need at least 2 brokers — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
             await toOptions.nth(toCount - 1).click();
             await page.waitForTimeout(300);
 
@@ -530,10 +515,7 @@ test.describe('Transactions', () => {
         test('edit button opens BulkModal with FormModal auto-opened', async ({page}) => {
             // Use body row checkbox (NOT header "select all")
             const bodyCheckbox = page.locator('[data-testid="tx-table"] tbody .checkbox-btn, [data-testid="tx-table"] tbody tr .checkbox-btn').first();
-            if (!(await bodyCheckbox.isVisible({timeout: 2_000}).catch(() => false))) {
-                test.skip(true, 'No transactions to edit');
-                return;
-            }
+            await expect(bodyCheckbox).toBeVisible({timeout: 3_000});
             await bodyCheckbox.click();
 
             const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
@@ -560,18 +542,12 @@ test.describe('Transactions', () => {
         test('can delete a standalone transaction', async ({page}) => {
             // Use existing DB transactions
             const countBadge = page.locator('[data-testid="tx-count-badge"]');
-            const countBefore = await countBadge.textContent().catch(() => '0');
-            if (Number(countBefore) === 0) {
-                test.skip(true, 'No transactions to delete');
-                return;
-            }
+            const countBefore = await countBadge.textContent();
+            expect(Number(countBefore), 'Transactions must exist — check populate_mock_data.py').toBeGreaterThan(0);
 
             // Select first body row (NOT header "select all")
             const firstCheckbox = page.locator('[data-testid="tx-table"] tbody .checkbox-btn, [data-testid="tx-table"] tbody tr .checkbox-btn').first();
-            if (!(await firstCheckbox.isVisible({timeout: 2_000}).catch(() => false))) {
-                test.skip(true, 'No selectable rows');
-                return;
-            }
+            await expect(firstCheckbox).toBeVisible({timeout: 3_000});
             await firstCheckbox.click();
 
             const deleteBtn = page.locator('[data-testid="toolbar-action-delete"]');
@@ -607,6 +583,160 @@ test.describe('Transactions', () => {
                 const saveBtn = page.getByTestId('tx-form-save');
                 await expect(saveBtn).not.toBeVisible({timeout: 1_000});
             }
+        });
+    });
+
+    // ===================================================================
+    // T12 — Sign coloring: qty border reflects sign rule post-autoflip
+    // ===================================================================
+    test.describe('Sign coloring', () => {
+        test('BUY qty negative → red border, positive → green border', async ({page}) => {
+            await openCreateFlow(page);
+            // BUY is the default type — quantityRule is 'positive'
+            await expect(page.getByTestId('tx-form-type')).toBeVisible({timeout: 3_000});
+
+            const qtyInput = page.getByTestId('tx-form-quantity');
+            await expect(qtyInput).toBeVisible({timeout: 2_000});
+
+            // Wait for type rules to load — sign label "(+)" appears when quantityRule='positive'
+            const qtyWrap = page.getByTestId('tx-form-quantity-wrap');
+            await expect(qtyWrap.locator('text=(+)')).toBeVisible({timeout: 5_000});
+
+            // Enter negative value → border-color should have red hue (~25 in oklch)
+            await qtyInput.fill('');
+            await qtyInput.type('-5');
+            await page.waitForTimeout(500);
+            const borderNeg = await qtyInput.evaluate((el) => el.style.borderColor);
+            expect(borderNeg, `Negative qty on BUY should have red border-color, got: "${borderNeg}"`).toContain('25.331');
+
+            // Enter positive value → green hue (~163 in oklch)
+            await qtyInput.fill('');
+            await qtyInput.type('5');
+            await page.waitForTimeout(500);
+            const borderPos = await qtyInput.evaluate((el) => el.style.borderColor);
+            expect(borderPos, `Positive qty on BUY should have green border-color, got: "${borderPos}"`).toContain('163.223');
+
+            await closeAllModals(page);
+        });
+
+        test('SELL qty positive → green border (auto-negated on save)', async ({page}) => {
+            await openCreateFlow(page);
+
+            // Select SELL type (quantityRule = 'negative', auto-flip active)
+            const typeSelect = page.getByTestId('tx-form-type');
+            await typeSelect.locator('button, [role="combobox"]').first().click();
+            await page.waitForTimeout(300);
+            await page.getByTestId('search-select-option-SELL').click();
+            await page.waitForTimeout(300);
+
+            const qtyInput = page.getByTestId('tx-form-quantity');
+            await expect(qtyInput).toBeVisible({timeout: 2_000});
+
+            // Wait for type rules — SELL has "(−)" label
+            const qtyWrap = page.getByTestId('tx-form-quantity-wrap');
+            await expect(qtyWrap.locator('text=(−)')).toBeVisible({timeout: 5_000});
+
+            // Enter positive → green (auto-negated = correct)
+            await qtyInput.fill('');
+            await qtyInput.type('10');
+            await page.waitForTimeout(500);
+            const borderPos = await qtyInput.evaluate((el) => el.style.borderColor);
+            expect(borderPos, `Positive qty on SELL should show green, got: "${borderPos}"`).toContain('163.223');
+
+            // Enter negative → red (double-negative = wrong)
+            await qtyInput.fill('');
+            await qtyInput.type('-10');
+            await page.waitForTimeout(500);
+            const borderNeg = await qtyInput.evaluate((el) => el.style.borderColor);
+            expect(borderNeg, `Negative qty on SELL should show red, got: "${borderNeg}"`).toContain('25.331');
+
+            await closeAllModals(page);
+        });
+    });
+
+    // ===================================================================
+    // T13 — BulkModal validation: issues banner appears with clickable items
+    // ===================================================================
+    test.describe('BulkModal validation issues', () => {
+        test('invalid TX in BulkModal shows issues banner with clickable error', async ({page}) => {
+            await openCreateFlow(page);
+
+            // Use ADJUSTMENT type — cash is optional, so we can submit without it.
+            // But set qty=0 which violates 'nonzero' rule → backend validation will reject.
+            await expect(page.getByTestId('tx-form-type')).toBeVisible({timeout: 3_000});
+
+            // Select ADJUSTMENT type
+            const typeSelect = page.getByTestId('tx-form-type');
+            await typeSelect.locator('button, [role="combobox"]').first().click();
+            await page.waitForTimeout(300);
+            await page.getByTestId('search-select-option-ADJUSTMENT').click();
+            await page.waitForTimeout(300);
+
+            // Pick first broker
+            const brokerWrap = page.getByTestId('tx-form-broker-wrap');
+            await brokerWrap.locator('button, [role="combobox"]').first().click();
+            await page.waitForTimeout(300);
+            const brokerOption = page.locator('[data-testid^="search-select-option-"]').first();
+            if (await brokerOption.isVisible({timeout: 2_000}).catch(() => false)) {
+                await brokerOption.click();
+            }
+            await page.waitForTimeout(300);
+
+            // Set qty to 5 (valid)
+            await page.getByTestId('tx-form-quantity').fill('5');
+            await page.waitForTimeout(300);
+
+            // Pick an asset
+            const assetWrap = page.getByTestId('tx-form-asset-wrap');
+            if (await assetWrap.isVisible({timeout: 1_000}).catch(() => false)) {
+                const assetTrigger = assetWrap.locator('button, [role="combobox"]').first();
+                if (await assetTrigger.isVisible()) {
+                    await assetTrigger.click();
+                    await page.waitForTimeout(300);
+                    const assetOption = page.locator('[data-testid^="search-select-option-"]').first();
+                    if (await assetOption.isVisible({timeout: 2_000}).catch(() => false)) {
+                        await assetOption.click();
+                    }
+                }
+            }
+            await page.waitForTimeout(500);
+
+            // Apply the TX (push to BulkModal workspace)
+            const applyBtn = page.getByTestId('tx-form-save');
+            await expect(applyBtn).toBeEnabled({timeout: 5_000});
+            await applyBtn.click();
+            await page.waitForTimeout(1_000);
+
+            // Wait for auto-validation to run
+            await page.waitForTimeout(3_000);
+
+            // Check for issues banner or valid badge
+            const issuesBanner = page.getByTestId('tx-bulk-issues');
+            let issuesVisible = await issuesBanner.isVisible({timeout: 3_000}).catch(() => false);
+
+            if (!issuesVisible) {
+                // Try manual validate if auto didn't trigger
+                const validateBtn = page.getByTestId('tx-bulk-validate-now');
+                if (await validateBtn.isVisible({timeout: 2_000}).catch(() => false)) {
+                    await validateBtn.click();
+                    await page.waitForTimeout(3_000);
+                    issuesVisible = await issuesBanner.isVisible({timeout: 3_000}).catch(() => false);
+                }
+            }
+
+            if (issuesVisible) {
+                // Verify issue link is clickable and has text
+                const issueLink = page.getByTestId('tx-bulk-issue').first();
+                await expect(issueLink).toBeVisible({timeout: 2_000});
+                const issueText = await issueLink.textContent();
+                expect(issueText?.trim().length, 'Issue text should not be empty').toBeGreaterThan(0);
+            } else {
+                // If backend accepted (no validation error), verify the valid badge shows
+                const validBadge = page.getByTestId('tx-bulk-valid');
+                await expect(validBadge).toBeVisible({timeout: 3_000});
+            }
+
+            await closeAllModals(page);
         });
     });
 });

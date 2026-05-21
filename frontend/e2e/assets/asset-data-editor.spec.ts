@@ -38,19 +38,11 @@ test.describe('Asset Data Editor', () => {
     async function openDataEditor(page: import('@playwright/test').Page) {
         await goToAssetWithPrices(page);
         // Wait for chart to render — the edit button only appears when lineData.length > 0
-        const canvas = await page.waitForSelector('canvas', {timeout: 10_000}).catch(() => null);
-        if (!canvas) {
-            test.skip(true, 'Chart canvas not rendered — asset may have no price data');
-            return;
-        }
+        await page.waitForSelector('canvas', {timeout: 10_000});
         await page.waitForTimeout(500);
         // The edit data button is inside {:else if lineData.length > 0} — check it exists
         const editDataBtn = page.getByTestId('asset-detail-editdata-btn');
-        const hasBtn = await editDataBtn.isVisible({timeout: 5000}).catch(() => false);
-        if (!hasBtn) {
-            test.skip(true, 'Edit data button not visible — asset has no price data');
-            return;
-        }
+        await expect(editDataBtn).toBeVisible({timeout: 5_000});
         await editDataBtn.click();
         await page.waitForTimeout(300);
         await expect(page.getByTestId('asset-detail-editor-panel')).toBeVisible();

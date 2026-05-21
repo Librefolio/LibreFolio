@@ -182,8 +182,7 @@ test.describe('Asset List Page', () => {
         const totalCards = await cards.count();
 
         if (totalCards < 2) {
-            test.skip(true, 'Need at least 2 assets to test search filtering');
-            return;
+            throw new Error('Need at least 2 assets — check populate_mock_data.py');
         }
 
         // Search for a string that won't match any asset

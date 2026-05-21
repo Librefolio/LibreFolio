@@ -17,7 +17,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {saveWithRetry} from '$lib/utils/saveWithRetry';
+    import {trySave} from '$lib/utils/trySave';
     import {ArrowDownUp, ArrowLeftRight, Lock, RotateCw, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
@@ -240,10 +240,10 @@
             }
 
             // I-bis #22 (Batch 4.d-part2) — wrap the create call through
-            // ``saveWithRetry``. Auto-sync below stays in its own non-blocking
+            // ``trySave``. Auto-sync below stays in its own non-blocking
             // try/catch: a sync failure must NOT block creation success.
             // ``toast: false`` because ``error`` is rendered inline.
-            const createResult = await saveWithRetry(() => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems]), {toast: false, fallback: $_('fx.addPair.createFailed')});
+            const createResult = await trySave(() => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems]), {toast: false, fallback: $_('fx.addPair.createFailed')});
             if (createResult.status === 'error') {
                 error = createResult.message;
                 saving = false;

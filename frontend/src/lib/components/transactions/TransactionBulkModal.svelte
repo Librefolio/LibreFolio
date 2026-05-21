@@ -46,8 +46,8 @@
     import {findPromoteMatch, type PromoteContext} from '$lib/stores/transactionTypeStore';
     import PromoteMergeModal from './PromoteMergeModal.svelte';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
-    import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
-    import {buildCreatePayload, buildUpdateDiff, diffDualItem, applySignRules, type TxFields, type TxOriginal} from '$lib/utils/txPayloadHelpers';
+    import {commitTransactions, validateTransactions} from '$lib/utils/txCommitApi';
+    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, type TxFields, type TxOriginal, type ResolvedOp} from '$lib/utils/txPayloadHelpers';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/uuid';
     import {formatCurrencyAmountHtml, formatCurrencyCodeHtml} from '$lib/utils/currencyFormat';
@@ -180,9 +180,9 @@
             description: tx.description ?? '',
             asset_event_id: tx.asset_event_id ?? null,
             cost_basis_override: tx.cost_basis_override
-                ? (typeof tx.cost_basis_override === 'object' && tx.cost_basis_override !== null
+                ? typeof tx.cost_basis_override === 'object' && tx.cost_basis_override !== null
                     ? {code: String((tx.cost_basis_override as any).code ?? ''), amount: String((tx.cost_basis_override as any).amount ?? '')}
-                    : {amount: String(tx.cost_basis_override), code: tx.cash?.code ?? ''})
+                    : {amount: String(tx.cost_basis_override), code: tx.cash?.code ?? ''}
                 : null,
         };
     }
@@ -224,7 +224,7 @@
     /** Accumulated splits for saved paired TXs (sent in batch.splits). originalType is client-only for preview. */
     let pendingSplits = $state<{id_a: number; id_b: number; originalType: string}[]>([]);
     /** Derived set of all split-queued TX IDs for quick lookup. */
-    let splitTxIdsSet = $derived(new Set(pendingSplits.flatMap(s => [s.id_a, s.id_b])));
+    let splitTxIdsSet = $derived(new Set(pendingSplits.flatMap((s) => [s.id_a, s.id_b])));
     /** Accumulated promotes for saved TXs (sent in batch.promotes). */
     let pendingPromotes = $state<{id_a?: number; id_b?: number; link_uuid_a?: string; link_uuid_b?: string; resolved_fields?: Record<string, unknown>}[]>([]);
     /** Promote merge modal state. */
@@ -599,9 +599,7 @@
         target.tags = Array.isArray(p.tags) ? (p.tags as string[]) : [];
         target.description = typeof p.description === 'string' ? p.description : '';
         target.asset_event_id = (p.asset_event_id as number | null | undefined) ?? null;
-        target.cost_basis_override = (p.cost_basis_override && typeof p.cost_basis_override === 'object' && 'code' in (p.cost_basis_override as any))
-            ? p.cost_basis_override as {code: string; amount: string}
-            : null;
+        target.cost_basis_override = p.cost_basis_override && typeof p.cost_basis_override === 'object' && 'code' in (p.cost_basis_override as any) ? (p.cost_basis_override as {code: string; amount: string}) : null;
     }
 
     // =========================================================================
@@ -649,7 +647,7 @@
     function resetAll() {
         // BUG-C2: also undo pending splits
         // Remove partner rows added by split, then reset remaining edit rows
-        ops = ops.filter(d => !(d as any).addedBySplit);
+        ops = ops.filter((d) => !(d as any).addedBySplit);
         ops = ops.map((d) => {
             if (d.op !== 'edit') return d;
             const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker});
@@ -687,7 +685,7 @@
                 partnerOp.partnerPayload = undefined;
                 (partnerOp as any).addedBySplit = true;
                 // BUG-C1: Insert partner adjacent to main row (not at end)
-                const mainIdx = ops.findIndex(o => o.tempId === row.tempId);
+                const mainIdx = ops.findIndex((o) => o.tempId === row.tempId);
                 const newOps = [...ops];
                 newOps.splice(mainIdx + 1, 0, partnerOp);
                 ops = newOps;
@@ -695,7 +693,7 @@
                 ops = [...ops]; // trigger reactivity
             }
 
-            lastSuggestKey = '';  // B9: invalidate suggest
+            lastSuggestKey = ''; // B9: invalidate suggest
         } else if (row.op === 'create' && row.link_uuid) {
             // Case B: New paired (link_uuid shared) → local transformation
             const partner = ops.find((o) => o !== row && o.op === 'create' && (o as any).link_uuid === row.link_uuid);
@@ -799,35 +797,67 @@
      * all in-flight changes.
      */
     function getBulkContextExcluding(excludeTempId: string | null): {creates: Record<string, unknown>[]; updates: Record<string, unknown>[]; deletes: number[]} {
-        const creates: Record<string, unknown>[] = [];
-        const updates: Record<string, unknown>[] = [];
-        const deletes: number[] = [];
+        const resolved = resolveOps({excludeTempId});
+        const result = buildBatchPayload({ops: resolved});
+        return {
+            creates: (result.creates as Record<string, unknown>[]) ?? [],
+            updates: (result.updates as Record<string, unknown>[]) ?? [],
+            deletes: (result.deletes as number[]) ?? [],
+        };
+    }
+
+    /**
+     * Resolve all PendingOps into ResolvedOp[] for batch payload building.
+     * Handles split-queued type stripping and promote-queued row skipping.
+     */
+    function resolveOps(opts?: {excludeTempId?: string | null; splitTxIds?: Set<number>; promoteTxIds?: Set<number>}): ResolvedOp[] {
+        const excludeTempId = opts?.excludeTempId ?? null;
+        const splitTxIds = opts?.splitTxIds ?? new Set<number>();
+        const promoteTxIds = opts?.promoteTxIds ?? new Set<number>();
+        const resolved: ResolvedOp[] = [];
+
         for (const d of ops) {
             if (d.tempId === excludeTempId) continue;
             const st = deriveStatus(d);
+
+            // Skip split-queued edit rows ONLY if unchanged
+            if (d.op === 'edit' && splitTxIds.has((d as any).txId) && st !== 'edited') continue;
+            // Skip promote-queued edit rows entirely
+            if (d.op === 'edit' && promoteTxIds.has((d as any).txId)) continue;
+
             if (st === 'new') {
-                creates.push(collectCreate(d));
+                let partnerPayload: Record<string, unknown> | null = null;
                 if (d.partnerPayload) {
                     const partnerFields = d.partnerPayload as unknown as TxFields;
                     const partnerRule = getTypeRule(partnerFields.type as TransactionTypeCode);
-                    creates.push(buildCreatePayload(partnerFields, partnerRule));
+                    partnerPayload = buildCreatePayload(partnerFields, partnerRule);
                 }
+                resolved.push({intent: 'create', payload: collectCreate(d), partnerPayload});
             } else if (st === 'edited') {
                 const upd = collectUpdate(d);
-                if (upd && Object.keys(upd).length > 1) updates.push(upd);
+                // For split-queued rows, strip type (split handles type change)
+                if (upd && splitTxIds.has((d as any).txId)) delete upd.type;
+                const payload = upd && Object.keys(upd).length > 1 ? upd : undefined;
+                let partnerPayload: Record<string, unknown> | null = null;
                 if (d.partnerPayload && d.partnerId != null) {
                     const partnerOrig = txStoreGet(d.partnerId);
                     if (partnerOrig) {
                         const partnerUpd = diffDualItem(d.partnerPayload as unknown as Record<string, unknown>, partnerOrig as unknown as TxOriginal);
-                        if (Object.keys(partnerUpd).length > 1) updates.push(partnerUpd);
+                        if (Object.keys(partnerUpd).length > 1) partnerPayload = partnerUpd;
                     }
                 }
+                if (payload || partnerPayload) {
+                    resolved.push({intent: 'update', payload: payload ?? undefined, partnerPayload});
+                }
             } else if (st === 'delete' && d.op === 'edit') {
-                deletes.push((d as any).txId);
-                if (d.partnerId != null) deletes.push(d.partnerId);
+                resolved.push({
+                    intent: 'delete',
+                    deleteId: (d as any).txId,
+                    partnerDeleteId: d.partnerId ?? null,
+                });
             }
         }
-        return {creates, updates, deletes};
+        return resolved;
     }
 
     /** Convert a PendingOp to the shared TxFields interface. */
@@ -845,7 +875,7 @@
         if (d.op !== 'edit') return 'original';
         const diff = collectUpdate(d);
         // For split-queued rows, type change is handled by split — ignore it in diff
-        if (diff && pendingSplits.some(s => s.id_a === (d as any).txId || s.id_b === (d as any).txId)) {
+        if (diff && pendingSplits.some((s) => s.id_a === (d as any).txId || s.id_b === (d as any).txId)) {
             delete diff.type;
         }
         if (diff && Object.keys(diff).length > 1) return 'edited';
@@ -874,77 +904,22 @@
                 issuesDismissed = false;
                 return {issuesCount: 0};
             }
-            // R6-B.4: build mixed payload matching commit logic
-            const creates: Record<string, unknown>[] = [];
-            const updates: Record<string, unknown>[] = [];
-            const deletes: number[] = [];
-            const valSplitTxIds = new Set(pendingSplits.flatMap(s => [s.id_a, s.id_b]));
-            for (const d of ops) {
-                const st = deriveStatus(d);
-                // Skip split-queued edit rows ONLY if unchanged (edited ones need updates sent)
-                if (d.op === 'edit' && valSplitTxIds.has((d as any).txId) && st !== 'edited') continue;
-                if (st === 'new') {
-                    creates.push(collectCreate(d));
-                    if (d.partnerPayload) {
-                        const partnerFields = d.partnerPayload as unknown as TxFields;
-                        const partnerRule = getTypeRule(partnerFields.type as TransactionTypeCode);
-                        creates.push(buildCreatePayload(partnerFields, partnerRule));
-                    }
-                } else if (st === 'edited') {
-                    const upd = collectUpdate(d);
-                    // For split-queued rows, strip type (split handles type change)
-                    if (upd && valSplitTxIds.has((d as any).txId)) delete upd.type;
-                    if (upd && Object.keys(upd).length > 1) updates.push(upd);
-                    // Partner update from dual-form edits
-                    if (d.partnerPayload && d.partnerId != null) {
-                        const partnerOrig = txStoreGet(d.partnerId);
-                        if (partnerOrig) {
-                            const partnerUpd = diffDualItem(d.partnerPayload as unknown as Record<string, unknown>, partnerOrig as unknown as TxOriginal);
-                            if (Object.keys(partnerUpd).length > 1) updates.push(partnerUpd);
-                        }
-                    }
-                } else if (st === 'delete' && d.op === 'edit') {
-                    deletes.push((d as any).txId);
-                    if (d.partnerId != null) deletes.push(d.partnerId);
-                }
-            }
-            const payload: Record<string, unknown> = {};
-            if (creates.length > 0) payload.creates = creates;
-            if (updates.length > 0) payload.updates = updates;
-            if (deletes.length > 0) payload.deletes = deletes;
-            if (pendingSplits.length > 0) payload.splits = pendingSplits.map(s => ({id_a: s.id_a, id_b: s.id_b}));
-            // Snapshot the key at the moment we *send* the payload — so when
-            // the response comes back we know whether the drafts have drifted.
+            const splitTxIds = new Set(pendingSplits.flatMap((s) => [s.id_a, s.id_b]));
+            const resolved = resolveOps({splitTxIds});
+            const payload = buildBatchPayload({
+                ops: resolved,
+                splits: pendingSplits.length > 0 ? pendingSplits.map((s) => ({id_a: s.id_a, id_b: s.id_b})) : undefined,
+            });
             const sentKey = lastDraftKey;
-            try {
-                const res = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post(payload as never)) as {committed?: boolean; issues?: ValidationIssue[]};
-                issues = res?.issues ?? [];
-                lastValidatedDraftKey = sentKey;
-                issuesDismissed = false;
-                return {issuesCount: issues.length};
-            } catch (e) {
-                // 422 safety net — should rarely fire now that /validate uses List[dict].
-                const extracted = extractValidationIssues(e);
-                if (extracted.length > 0) {
-                    issues = extracted.map((iss) => {
-                        // Try to recover the row index from loc: body.{creates|updates}.<idx>.<field?>
-                        const parts = iss.loc.split('.');
-                        let idx = 0;
-                        for (let i = 0; i < parts.length; i++) {
-                            if (/^\d+$/.test(parts[i])) {
-                                idx = Number(parts[i]);
-                                break;
-                            }
-                        }
-                        return {operation: 'create' as const, index: idx, error: iss.msg, code: iss.code, params: iss.params, loc: iss.loc} as ValidationIssue;
-                    });
-                } else {
-                    issues = [{operation: 'create', index: 0, error: extractErrorMessage(e, $t('transactions.bulk.saveFailed'))}];
-                }
-                lastValidatedDraftKey = sentKey;
-                issuesDismissed = false;
-                return {issuesCount: issues.length};
+            const result = await validateTransactions(payload, {fallback: $t('transactions.bulk.saveFailed')});
+            if (result.networkError) {
+                issues = [{operation: 'create', index: 0, error: result.networkError}];
+            } else {
+                issues = result.issues as unknown as ValidationIssue[];
             }
+            lastValidatedDraftKey = sentKey;
+            issuesDismissed = false;
+            return {issuesCount: issues.length};
         },
     });
 
@@ -1034,90 +1009,34 @@
             return;
         }
         try {
-            // R6-B.4: unified mixed batch — creates + updates + deletes in one call.
-            const creates: Record<string, unknown>[] = [];
-            const updates: Record<string, unknown>[] = [];
-            const deletes: number[] = [];
+            const splitTxIds = new Set(pendingSplits.flatMap((s) => [s.id_a, s.id_b]));
+            const promoteTxIds = new Set(pendingPromotes.flatMap((p) => [p.id_a, p.id_b].filter(Boolean) as number[]));
+            const resolved = resolveOps({splitTxIds, promoteTxIds});
 
-            // B5: skip split-queued rows from updates/deletes (backend handles via splits[])
-            const splitTxIds = new Set(pendingSplits.flatMap(s => [s.id_a, s.id_b]));
-            // Skip promote-queued rows from updates/deletes (backend handles via promotes[])
-            const promoteTxIds = new Set(pendingPromotes.flatMap(p => [p.id_a, p.id_b].filter(Boolean) as number[]));
-
-            for (const d of ops) {
-                const st = deriveStatus(d);
-
-                // Skip split-queued edit rows ONLY if unchanged — edited ones need updates sent
-                // (backend executes splits at step 3b, then updates at step 4)
-                if (d.op === 'edit' && splitTxIds.has((d as any).txId) && st !== 'edited') continue;
-                // Skip promote-queued edit rows entirely — backend handles type change via promotes[]
-                if (d.op === 'edit' && promoteTxIds.has((d as any).txId)) continue;
-
-                if (st === 'new') {
-                    creates.push(collectCreate(d));
-                    if (d.partnerPayload) {
-                        const partnerFields = d.partnerPayload as unknown as TxFields;
-                        const partnerRule = getTypeRule(partnerFields.type as TransactionTypeCode);
-                        creates.push(buildCreatePayload(partnerFields, partnerRule));
-                    }
-                } else if (st === 'edited') {
-                    const upd = collectUpdate(d);
-                    // For split-queued rows, strip type (split handles type change)
-                    if (upd && splitTxIds.has((d as any).txId)) delete upd.type;
-                    if (upd && Object.keys(upd).length > 1) updates.push(upd);
-                    // Partner update from dual-form edits
-                    if (d.partnerPayload && d.partnerId != null) {
-                        const partnerOrig = txStoreGet(d.partnerId);
-                        if (partnerOrig) {
-                            const partnerUpd = diffDualItem(d.partnerPayload as unknown as Record<string, unknown>, partnerOrig as unknown as TxOriginal);
-                            if (Object.keys(partnerUpd).length > 1) updates.push(partnerUpd);
-                        }
-                    }
-                } else if (st === 'delete' && d.op === 'edit') {
-                    deletes.push((d as any).txId);
-                    if (d.partnerId != null) deletes.push(d.partnerId);
-                }
-                // 'original' rows are unchanged — skip
-            }
-
-            if (creates.length === 0 && updates.length === 0 && deletes.length === 0 && pendingSplits.length === 0 && pendingPromotes.length === 0) {
+            if (resolved.length === 0 && pendingSplits.length === 0 && pendingPromotes.length === 0) {
                 onClose();
                 return;
             }
 
-            const payload: Record<string, unknown> = {};
-            if (creates.length > 0) payload.creates = creates;
-            if (updates.length > 0) payload.updates = updates;
-            if (deletes.length > 0) payload.deletes = deletes;
-            if (pendingSplits.length > 0) payload.splits = pendingSplits.map(s => ({id_a: s.id_a, id_b: s.id_b}));
-            if (pendingPromotes.length > 0) payload.promotes = pendingPromotes;
+            const payload = buildBatchPayload({
+                ops: resolved,
+                splits: pendingSplits.length > 0 ? pendingSplits.map((s) => ({id_a: s.id_a, id_b: s.id_b})) : undefined,
+                promotes: pendingPromotes.length > 0 ? pendingPromotes : undefined,
+            });
 
-            const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.bulk.saveFailed'), toast: false});
-            if (result.status === 'error') {
-                formError = result.message;
+            const result = await commitTransactions(payload, {fallback: $t('transactions.bulk.saveFailed')});
+            if (result.networkError) {
+                formError = result.networkError;
                 toasts.error($t('transactions.commit.serverError') || 'Save failed — server error');
                 return;
             }
-            const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]};
-            if (!resp.committed) {
-                const rawIssues = resp.issues ?? [];
-                // Step 17 (M10): extra_forbidden errors are FE bugs — log and hide from user
-                const internalErrors = rawIssues.filter((i) => i.code === 'extra_forbidden');
-                if (internalErrors.length > 0) {
-                    console.error('[BulkModal] Internal extra_forbidden errors (FE bug):', internalErrors);
-                }
-                const userIssues = rawIssues.filter((i) => i.code !== 'extra_forbidden');
-                if (userIssues.length === 0 && internalErrors.length > 0) {
-                    // All errors were internal — show generic message
-                    issues = [{operation: 'update', index: 0, error: 'An internal error occurred. Please try again.'}];
-                } else {
-                    issues = userIssues;
-                }
+            if (!result.committed) {
+                issues = result.issues as unknown as ValidationIssue[];
                 issuesDismissed = false;
                 commitFailed = true;
                 return;
             }
-            onCommitted?.(resp);
+            onCommitted?.(result.rawResponse);
             pendingSplits = [];
             pendingPromotes = [];
             onClose();
@@ -1276,7 +1195,7 @@
                     // B5: show type transition preview for split-queued rows
                     if (row.op === 'edit' && splitTxIdsSet.has((row as any).txId)) {
                         // BUG-C4: use originalType from pendingSplits (fields.type may have been edited)
-                        const splitEntry = pendingSplits.find(s => s.id_a === (row as any).txId || s.id_b === (row as any).txId);
+                        const splitEntry = pendingSplits.find((s) => s.id_a === (row as any).txId || s.id_b === (row as any).txId);
                         const origType = splitEntry?.originalType ?? row.fields.type;
                         const splitTypes = SPLIT_TYPE_MAP[origType];
                         if (splitTypes) {
@@ -1285,7 +1204,10 @@
                             const isSender = origType === 'TRANSFER' ? qty < 0 || qty === 0 : cashAmt < 0 || cashAmt === 0;
                             const targetType = isSender ? splitTypes[0] : splitTypes[1];
                             const origSlug = origType.toLowerCase().replace(/_/g, '-');
-                            return {type: 'html', html: `<span class="inline-flex items-center gap-1 text-[11px]"><img src="/icons/transactions/${origSlug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/> <span class="text-gray-400">→</span> ${renderTypeHtml(targetType)}</span>`};
+                            return {
+                                type: 'html',
+                                html: `<span class="inline-flex items-center gap-1 text-[11px]"><img src="/icons/transactions/${origSlug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/> <span class="text-gray-400">→</span> ${renderTypeHtml(targetType)}</span>`,
+                            };
                         }
                         return {type: 'html', html: `<span class="text-[11px]">${renderTypeHtml(row.fields.type)} → <span class="text-purple-600 dark:text-purple-400">✂️ ADJUSTMENT</span></span>`};
                     }
@@ -1327,7 +1249,10 @@
                         return {type: 'html', html: renderDualHtml(fromQty, toQty)};
                     }
                     // Format with trailing zeros removal
-                    const fmtQty = (() => { const n = parseFloat(qty); return isNaN(n) ? qty : n.toString(); })();
+                    const fmtQty = (() => {
+                        const n = parseFloat(qty);
+                        return isNaN(n) ? qty : n.toString();
+                    })();
                     return {type: 'html', html: `<span class="font-mono text-sm">${fmtQty}</span>`};
                 },
             },
@@ -1525,13 +1450,13 @@
             label: () => $t('transactions.bulk.undoSplit') || 'Undo split',
             onClick: (row: PendingOp) => {
                 const txId = (row as any).txId as number;
-                const splitEntry = pendingSplits.find(s => s.id_a === txId || s.id_b === txId);
+                const splitEntry = pendingSplits.find((s) => s.id_a === txId || s.id_b === txId);
                 if (!splitEntry) return;
                 const partnerId = splitEntry.id_a === txId ? splitEntry.id_b : splitEntry.id_a;
                 // Remove from pendingSplits
-                pendingSplits = pendingSplits.filter(s => s !== splitEntry);
+                pendingSplits = pendingSplits.filter((s) => s !== splitEntry);
                 // Remove partner row from ops (added during split — no addedViaPicker flag)
-                ops = ops.filter(o => !((o as any).txId === partnerId && !(o as any).addedViaPicker));
+                ops = ops.filter((o) => !((o as any).txId === partnerId && !(o as any).addedViaPicker));
                 // Restore paired display on the main row
                 const partnerTx = txStoreGet(partnerId);
                 if (partnerTx) {
@@ -1541,7 +1466,7 @@
                     row.partnerDate = (partnerTx as any).date;
                 }
                 ops = [...ops]; // reactivity
-                lastSuggestKey = '';  // B9: invalidate suggest
+                lastSuggestKey = ''; // B9: invalidate suggest
             },
             visible: (row: PendingOp) => row.op === 'edit' && splitTxIdsSet.has((row as any).txId),
         },
@@ -1552,7 +1477,7 @@
             onClick: (row: PendingOp) => {
                 // BUG-C7: open suggest picker filtered to this row's importable candidates
                 const txId = (row as any).txId as number;
-                const entry = importableSuggestions.find(s => s.txId === txId);
+                const entry = importableSuggestions.find((s) => s.txId === txId);
                 if (entry && entry.candidates.length > 0) {
                     // Open picker filtered to just this row's candidates
                     suggestPickerOpen = true;
@@ -1570,7 +1495,7 @@
                 if (row.partnerId != null || row.partnerPayload != null) return false;
                 const txId = (row as any).txId;
                 // Show if this row has importable DB candidates OR is in banner suggestions
-                return importableSuggestions.some(s => s.txId === txId) || bannerSuggestions.some(s => s.tempIdA === row.tempId || s.tempIdB === row.tempId);
+                return importableSuggestions.some((s) => s.txId === txId) || bannerSuggestions.some((s) => s.tempIdA === row.tempId || s.tempIdB === row.tempId);
             },
         },
         {
@@ -1656,7 +1581,9 @@
 
     // BUG-C7: Suggest picker — opens PickerModal filtered to importable candidates
     let suggestPickerOpen = $state(false);
-    function openSuggestPicker() { suggestPickerOpen = true; }
+    function openSuggestPicker() {
+        suggestPickerOpen = true;
+    }
 
     function openPicker() {
         pickerOpen = true;
@@ -1673,7 +1600,7 @@
         ops = [...ops, ...collapsed];
         pickerOpen = false;
         suggestPickerOpen = false;
-        lastSuggestKey = '';  // BUG-C10: force re-trigger suggest after import
+        lastSuggestKey = ''; // BUG-C10: force re-trigger suggest after import
     }
 
     /** Aggregated tag suggestions: union of tags in current ops +
@@ -1727,7 +1654,7 @@
         // SP-C Step 2: if split-queued, override type with post-split target
         if (row.op === 'edit' && splitTxIdsSet.has((row as any).txId) && formInitial) {
             // BUG-C4: use originalType from pendingSplits (fields.type may have been edited already)
-            const splitEntry = pendingSplits.find(s => s.id_a === (row as any).txId || s.id_b === (row as any).txId);
+            const splitEntry = pendingSplits.find((s) => s.id_a === (row as any).txId || s.id_b === (row as any).txId);
             const origType = splitEntry?.originalType ?? row.fields.type;
             const splitTypes = SPLIT_TYPE_MAP[origType];
             if (splitTypes) {
@@ -1770,7 +1697,7 @@
         formEditingTempId = null;
         // R3-B2: trigger validation after FormModal pushes a draft
         scheduler.trigger('change');
-        lastSuggestKey = '';  // B9: invalidate suggest after form push
+        lastSuggestKey = ''; // B9: invalidate suggest after form push
     }
 
     /** Add a paired draft row: single visible draft with partner payload stored. */
@@ -1961,7 +1888,7 @@
         const {removeTempId} = collapseIntoPaired(opA, opB);
         ops = ops.filter((o) => o.tempId !== removeTempId);
         ops = [...ops]; // trigger reactivity
-        lastSuggestKey = '';  // B9: invalidate suggest after promote
+        lastSuggestKey = ''; // B9: invalidate suggest after promote
     }
 
     /** Promote merge modal confirm handler. */
@@ -2059,8 +1986,10 @@
         const seenPairs = new Set<string>(); // avoid duplicates
         for (let i = 0; i < editStandalone.length; i++) {
             for (let j = i + 1; j < editStandalone.length; j++) {
-                const a = editStandalone[i], b = editStandalone[j];
-                const dA = a.fields.date, dB = b.fields.date;
+                const a = editStandalone[i],
+                    b = editStandalone[j];
+                const dA = a.fields.date,
+                    dB = b.fields.date;
                 const delta = daysDiff(dA, dB);
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
@@ -2084,11 +2013,11 @@
     /** Importable suggestions: DB candidates NOT yet in ops (for 💡 button) */
     let importableSuggestions = $derived.by(() => {
         const result: Array<{txId: number; tempId: string; candidates: Array<{id: number; type: string; broker_id: number; date: string}>}> = [];
-        const opsEditIds = new Set(ops.filter(o => o.op === 'edit').map(o => (o as any).txId as number));
+        const opsEditIds = new Set(ops.filter((o) => o.op === 'edit').map((o) => (o as any).txId as number));
         for (const [txId, candidates] of suggestFromDB) {
             const op = ops.find((o) => o.op === 'edit' && (o as any).txId === txId);
             if (!op) continue;
-            const importable = candidates.filter(c => !opsEditIds.has(c.id));
+            const importable = candidates.filter((c) => !opsEditIds.has(c.id));
             if (importable.length > 0) {
                 result.push({txId, tempId: op.tempId, candidates: importable});
             }
@@ -2096,9 +2025,7 @@
         return result;
     });
 
-    let suggestPickerIncludeIds = $derived(
-        new Set(importableSuggestions.flatMap(s => s.candidates.map(c => c.id)))
-    );
+    let suggestPickerIncludeIds = $derived(new Set(importableSuggestions.flatMap((s) => s.candidates.map((c) => c.id))));
 
     // =========================================================================
     // FX Implied Rate — reactive market cache for FX_CONVERSION suggestions
@@ -2351,14 +2278,14 @@
                     <div class="font-medium text-green-800 dark:text-green-200 mb-1.5">{$t('transactions.promoteSuggest.detected')}</div>
                     <ul class="space-y-1.5">
                         {#each bannerSuggestions.slice(0, 5) as sug, idx}
-                            {@const rawA = ops.find(o => o.tempId === sug.tempIdA)}
-                            {@const rawB = ops.find(o => o.tempId === sug.tempIdB)}
+                            {@const rawA = ops.find((o) => o.tempId === sug.tempIdA)}
+                            {@const rawB = ops.find((o) => o.tempId === sug.tempIdB)}
                             <!-- Semantic order: "from" (negative cash) first, "to" (positive) second -->
                             {@const needSwap = rawA && rawB && rawA.fields.cash && rawB.fields.cash && Number(rawA.fields.cash.amount) > 0 && Number(rawB.fields.cash.amount) < 0}
                             {@const opA = needSwap ? rawB : rawA}
                             {@const opB = needSwap ? rawA : rawB}
                             {@const rowIdxA = opA ? ops.indexOf(opA) : -1}
-                            {@const rowIdxB = sug.isDB ? ops.findIndex(o => o.op === 'edit' && (o as any).txId === sug.dbCandidateId) : (opB ? ops.indexOf(opB) : -1)}
+                            {@const rowIdxB = sug.isDB ? ops.findIndex((o) => o.op === 'edit' && (o as any).txId === sug.dbCandidateId) : opB ? ops.indexOf(opB) : -1}
                             {@const typeA = opA?.fields.type ?? ''}
                             {@const typeB = opB?.fields.type ?? ''}
                             {@const deltaDays = opA && opB ? Math.round((new Date(opB.fields.date).getTime() - new Date(opA.fields.date).getTime()) / 86400000) : 0}
@@ -2375,18 +2302,37 @@
                                     {$t('transactions.promoteSuggest.merge')}
                                 </button>
                                 <!-- Row A reference (clickable — "from" / negative side) -->
-                                <button type="button" class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600" onclick={() => { if (opA) tableRef?.navigateToRowId(opA.tempId); }}>
+                                <button
+                                    type="button"
+                                    class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600"
+                                    onclick={() => {
+                                        if (opA) tableRef?.navigateToRowId(opA.tempId);
+                                    }}
+                                >
                                     {rowIdxA >= 0 ? $t('transactions.promoteSuggest.rowRef', {values: {n: rowIdxA + 1}}) : typeA}
                                 </button>
                                 <img src={getTransactionTypeIconUrl(typeA)} alt="" class="w-4 h-4 inline object-contain" />
                                 <span class="text-gray-500">{$t('common.and')}</span>
                                 <!-- Row B reference -->
                                 {#if sug.isDB}
-                                    <button type="button" class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600" onclick={() => { const op = ops.find(o => o.op === 'edit' && (o as any).txId === sug.dbCandidateId); if (op) tableRef?.navigateToRowId(op.tempId); }}>
+                                    <button
+                                        type="button"
+                                        class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600"
+                                        onclick={() => {
+                                            const op = ops.find((o) => o.op === 'edit' && (o as any).txId === sug.dbCandidateId);
+                                            if (op) tableRef?.navigateToRowId(op.tempId);
+                                        }}
+                                    >
                                         {rowIdxB >= 0 ? $t('transactions.promoteSuggest.rowRef', {values: {n: rowIdxB + 1}}) : `#${sug.dbCandidateId}`}
                                     </button>
                                 {:else}
-                                    <button type="button" class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600" onclick={() => { if (opB) tableRef?.navigateToRowId(opB.tempId); }}>
+                                    <button
+                                        type="button"
+                                        class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600"
+                                        onclick={() => {
+                                            if (opB) tableRef?.navigateToRowId(opB.tempId);
+                                        }}
+                                    >
                                         {rowIdxB >= 0 ? $t('transactions.promoteSuggest.rowRef', {values: {n: rowIdxB + 1}}) : typeB}
                                     </button>
                                 {/if}
@@ -2402,26 +2348,26 @@
                                     {@const fromOpFx = aAmtFx < 0 ? opA : opB}
                                     {@const toOpFx = aAmtFx < 0 ? opB : opA}
                                     {#if fromOpFx.fields.cash && toOpFx.fields.cash && fromOpFx.fields.cash.code !== toOpFx.fields.cash.code}
-                                            {@const fxInfo = computeFxConversionInfo(Number(fromOpFx.fields.cash.amount), fromOpFx.fields.cash.code, Number(toOpFx.fields.cash.amount), toOpFx.fields.cash.code)}
-                                            {#if fxInfo}
-                                                {@const cacheKey = `${fxInfo.base}-${fxInfo.quote}-${fromOpFx.fields.date}`}
-                                                {@const fxPoint = fxMarketCache.get(cacheKey)}
-                                                {@const tooltipData = buildFxTooltipData(fxInfo, fxPoint)}
-                                                <span class="text-gray-400 mx-0.5">·</span>
-                                                <Tooltip html={buildFxTooltipHtml(tooltipData, $t)} position="bottom">
-                                                    <span class="inline-flex items-center gap-0.5 text-xs text-violet-600 dark:text-violet-400 cursor-help" data-testid="promote-suggest-fx-info-{idx}">
-                                                        {@html formatCurrencyCodeHtml(fxInfo.base)}
-                                                        <span>→</span>
-                                                        {@html formatCurrencyCodeHtml(fxInfo.quote)}
-                                                        <span class="font-mono">@ {fxInfo.impliedRate.toFixed(4)}</span>
-                                                        {#if tooltipData.staleDays != null && tooltipData.staleDays > 0}
-                                                            <span class="text-amber-500">⚠️</span>
-                                                        {/if}
-                                                    </span>
-                                                </Tooltip>
-                                            {/if}
+                                        {@const fxInfo = computeFxConversionInfo(Number(fromOpFx.fields.cash.amount), fromOpFx.fields.cash.code, Number(toOpFx.fields.cash.amount), toOpFx.fields.cash.code)}
+                                        {#if fxInfo}
+                                            {@const cacheKey = `${fxInfo.base}-${fxInfo.quote}-${fromOpFx.fields.date}`}
+                                            {@const fxPoint = fxMarketCache.get(cacheKey)}
+                                            {@const tooltipData = buildFxTooltipData(fxInfo, fxPoint)}
+                                            <span class="text-gray-400 mx-0.5">·</span>
+                                            <Tooltip html={buildFxTooltipHtml(tooltipData, $t)} position="bottom">
+                                                <span class="inline-flex items-center gap-0.5 text-xs text-violet-600 dark:text-violet-400 cursor-help" data-testid="promote-suggest-fx-info-{idx}">
+                                                    {@html formatCurrencyCodeHtml(fxInfo.base)}
+                                                    <span>→</span>
+                                                    {@html formatCurrencyCodeHtml(fxInfo.quote)}
+                                                    <span class="font-mono">@ {fxInfo.impliedRate.toFixed(4)}</span>
+                                                    {#if tooltipData.staleDays != null && tooltipData.staleDays > 0}
+                                                        <span class="text-amber-500">⚠️</span>
+                                                    {/if}
+                                                </span>
+                                            </Tooltip>
                                         {/if}
                                     {/if}
+                                {/if}
                             </li>
                         {/each}
                     </ul>
@@ -2456,10 +2402,7 @@
             <div class="inline-flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
                 <span class="hidden sm:inline">{$t('transactions.promoteSuggest.deltaLabel') || 'Max Δ days'}</span>
                 <span class="sm:hidden" title="Max delta days">Δ</span>
-                <input type="range" min="0" max="14" step="1"
-                    class="w-20 accent-libre-green"
-                    bind:value={maxDeltaDays}
-                    data-testid="promote-suggest-delta-input" />
+                <input type="range" min="0" max="14" step="1" class="w-20 accent-libre-green" bind:value={maxDeltaDays} data-testid="promote-suggest-delta-input" />
                 <span class="text-[11px] font-mono w-5 text-center">{maxDeltaDays}</span>
             </div>
 
@@ -2471,7 +2414,13 @@
                     <Plus size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.addRow') || 'Add row'}</span>
                 </button>
                 {#if importableSuggestions.length > 0}
-                    <button type="button" class="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 border border-amber-200 dark:border-amber-700" onclick={openSuggestPicker} data-testid="tx-bulk-suggest-import" title={$t('transactions.bulk.suggestLightbulb') || 'Import suggested pairs'}>
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 border border-amber-200 dark:border-amber-700"
+                        onclick={openSuggestPicker}
+                        data-testid="tx-bulk-suggest-import"
+                        title={$t('transactions.bulk.suggestLightbulb') || 'Import suggested pairs'}
+                    >
                         <Lightbulb size={14} />
                         <span class="text-[10px] font-medium">{importableSuggestions.reduce((n, s) => n + s.candidates.length, 0)}</span>
                     </button>
@@ -2643,7 +2592,7 @@
     txA={promoteMergeData?.txA}
     txB={promoteMergeData?.txB}
     targetTypeLabel={promoteMergeData?.targetTypeLabel ?? ''}
-    availableTags={availableTags}
+    {availableTags}
     onConfirm={onBulkPromoteMergeConfirm}
     onCancel={() => {
         promoteMergeOpen = false;

@@ -21,16 +21,16 @@ test.setTimeout(25_000);
 // ---------------------------------------------------------------------------
 
 async function goToTransactions(page: Page) {
-    await navigateTo(page, '/transactions');
+    await navigateTo(page, '/transactions?page_size=200');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
     await page.waitForTimeout(500);
 }
 
-/** Select 2 editable rows and open the BulkModal via edit toolbar. */
-async function openBulkWithPicker(page: Page): Promise<boolean> {
+/** Select 2 editable rows and open the BulkModal via edit toolbar. Throws if fails. */
+async function openBulkWithPicker(page: Page): Promise<void> {
     const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
     const count = await rows.count();
-    if (count < 2) return false;
+    expect(count, 'Need at least 2 rows — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
 
     let selected = 0;
     for (let i = 0; i < count && selected < 2; i++) {
@@ -40,7 +40,7 @@ async function openBulkWithPicker(page: Page): Promise<boolean> {
             selected++;
         }
     }
-    if (selected < 2) return false;
+    expect(selected, 'Need 2 selectable rows — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
 
     const editBtn = page.getByTestId('toolbar-action-edit');
     await expect(editBtn).toBeVisible({timeout: 3_000});
@@ -48,20 +48,18 @@ async function openBulkWithPicker(page: Page): Promise<boolean> {
 
     const bulkModal = page.getByTestId('tx-bulk-modal');
     await expect(bulkModal).toBeVisible({timeout: 5_000});
-    return true;
 }
 
-/** Open the PickerModal from inside BulkModal. Returns false if button not visible. */
-async function openPicker(page: Page): Promise<boolean> {
+/** Open the PickerModal from inside BulkModal. Throws if button not visible. */
+async function openPicker(page: Page): Promise<void> {
     const bulkModal = page.getByTestId('tx-bulk-modal');
     const searchAddBtn = bulkModal.getByTestId('tx-bulk-picker');
-    if (!(await searchAddBtn.isVisible({timeout: 2_000}).catch(() => false))) return false;
+    await expect(searchAddBtn).toBeVisible({timeout: 3_000});
     await searchAddBtn.click();
 
     const picker = page.getByTestId('tx-picker-modal');
     await expect(picker).toBeVisible({timeout: 5_000});
     await page.waitForTimeout(500);
-    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -75,17 +73,14 @@ test.describe('PickerModal Pagination', () => {
     });
 
     test('P1-pagination: clicking next page changes visible rows', async ({page}) => {
-        const opened = await openBulkWithPicker(page);
-        test.skip(!opened, 'Could not open BulkModal');
-        const pickerOpen = await openPicker(page);
-        test.skip(!pickerOpen, 'Search & Add not visible');
+        await openBulkWithPicker(page);
+        await openPicker(page);
 
         const picker = page.getByTestId('tx-picker-modal');
 
         // Check that pagination exists (means > 20 rows available)
         const paginationContainer = picker.locator('[data-testid="data-table-pagination"]');
-        const hasPagination = await paginationContainer.isVisible({timeout: 2_000}).catch(() => false);
-        test.skip(!hasPagination, 'Not enough rows for pagination to appear');
+        await expect(paginationContainer).toBeVisible({timeout: 3_000});
 
         // Get first row text on page 1
         const firstRowPage1 = await picker.locator('tbody tr[data-row-id]').first().getAttribute('data-row-id');
@@ -105,16 +100,13 @@ test.describe('PickerModal Pagination', () => {
     });
 
     test('P1b-pageSize: changing page size shows more rows', async ({page}) => {
-        const opened = await openBulkWithPicker(page);
-        test.skip(!opened, 'Could not open BulkModal');
-        const pickerOpen = await openPicker(page);
-        test.skip(!pickerOpen, 'Search & Add not visible');
+        await openBulkWithPicker(page);
+        await openPicker(page);
 
         const picker = page.getByTestId('tx-picker-modal');
 
         const paginationContainer = picker.locator('[data-testid="data-table-pagination"]');
-        const hasPagination = await paginationContainer.isVisible({timeout: 2_000}).catch(() => false);
-        test.skip(!hasPagination, 'Not enough rows for pagination');
+        await expect(paginationContainer).toBeVisible({timeout: 3_000});
 
         // Count rows on page 1 (pageSize=20 default)
         const rowsPage1 = await picker.locator('tbody tr[data-row-id]').count();
@@ -123,16 +115,14 @@ test.describe('PickerModal Pagination', () => {
 
         // Change page size to 50 via the custom dropdown
         const pageSizeBtn = paginationContainer.locator('.page-size-btn').first();
-        const hasPageSizeBtn = await pageSizeBtn.isVisible({timeout: 1_000}).catch(() => false);
-        test.skip(!hasPageSizeBtn, 'Page size selector not visible');
+        await expect(pageSizeBtn).toBeVisible({timeout: 2_000});
 
         await pageSizeBtn.click();
         await page.waitForTimeout(300);
 
         // Select option "50" from the dropdown
         const option50 = paginationContainer.locator('.dropdown-option').filter({hasText: '50'}).first();
-        const hasOption50 = await option50.isVisible({timeout: 1_000}).catch(() => false);
-        test.skip(!hasOption50, 'Option 50 not available');
+        await expect(option50).toBeVisible({timeout: 2_000});
         await option50.click();
         await page.waitForTimeout(400);
 
@@ -142,17 +132,14 @@ test.describe('PickerModal Pagination', () => {
     });
 
     test('P2-reopen: PickerModal resets selection on reopen', async ({page}) => {
-        const opened = await openBulkWithPicker(page);
-        test.skip(!opened, 'Could not open BulkModal');
-        const pickerOpen = await openPicker(page);
-        test.skip(!pickerOpen, 'Search & Add not visible');
+        await openBulkWithPicker(page);
+        await openPicker(page);
 
         const picker = page.getByTestId('tx-picker-modal');
 
         // Select a row
         const firstCheckbox = picker.locator('tbody tr[data-row-id] .checkbox-btn').first();
-        const hasCheckbox = (await firstCheckbox.count()) > 0;
-        test.skip(!hasCheckbox, 'No selectable rows in picker');
+        await expect(firstCheckbox).toBeVisible({timeout: 2_000});
 
         await firstCheckbox.click();
         await page.waitForTimeout(200);
@@ -199,17 +186,15 @@ test.describe('PickerModal Tooltip', () => {
     });
 
     test('P3-tooltip: disabled row tooltip shows broker icon + name + role icons', async ({page}) => {
-        const opened = await openBulkWithPicker(page);
-        test.skip(!opened, 'Could not open BulkModal');
-        const pickerOpen = await openPicker(page);
-        test.skip(!pickerOpen, 'Search & Add not visible');
+        await openBulkWithPicker(page);
+        await openPicker(page);
 
         const picker = page.getByTestId('tx-picker-modal');
 
         // Find disabled row icons
         const disabledIcons = picker.locator('.disabled-select-icon');
         const disabledCount = await disabledIcons.count();
-        test.skip(disabledCount === 0, 'No disabled rows in picker (all brokers editable)');
+        expect(disabledCount, 'VIEWER broker rows must exist — check populate_mock_data.py').toBeGreaterThan(0);
 
         // Hover on the first disabled icon to trigger tooltip
         await disabledIcons.first().hover();
@@ -259,7 +244,7 @@ test.describe('Delete Validation Banner', () => {
                 break;
             }
         }
-        test.skip(!targetRow, 'No deletable TX found');
+        expect(targetRow, 'Deletable TX must exist — check populate_mock_data.py').toBeTruthy();
 
         // Open delete modal
         const deleteBtn = targetRow!.locator('button.action-btn.danger');
@@ -271,7 +256,7 @@ test.describe('Delete Validation Banner', () => {
         // Validate button should exist for non-blocked layouts
         const validateBtn = modal.getByTestId('tx-delete-validate-now');
         const hasValidateBtn = await validateBtn.isVisible({timeout: 2_000}).catch(() => false);
-        test.skip(!hasValidateBtn, 'Validate button not visible (possibly Layout C blocked)');
+        expect(hasValidateBtn, 'Validate button must be visible — check populate_mock_data.py').toBeTruthy();
 
         // Intercept the validate API call to confirm button triggers it
         const validatePromise = page.waitForRequest((req) => req.url().includes('/validate') && req.method() === 'POST', {timeout: 5_000}).catch(() => null);

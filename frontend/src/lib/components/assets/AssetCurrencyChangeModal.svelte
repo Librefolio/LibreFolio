@@ -32,7 +32,7 @@
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {_ as t} from '$lib/i18n';
     import {buildAssetSyncToast} from '$lib/utils/syncToastHelpers';
-    import {extractErrorMessage} from '$lib/utils/saveWithRetry';
+    import {extractErrorMessage} from '$lib/utils/trySave';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
 
     interface BlockerInfo {

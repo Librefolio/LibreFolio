@@ -1,5 +1,5 @@
 /**
- * saveWithRetry — unified error handler for save operations in modals.
+ * trySave — unified error handler for save operations in modals.
  *
  * **Problem solved (I-bis #22):** prior to this helper each modal handled
  * save errors inconsistently. Some closed on error, some swallowed the
@@ -19,7 +19,7 @@
  *
  * **Usage pattern:**
  * ```ts
- * const result = await saveWithRetry(
+ * const result = await trySave(
  *     () => zodiosApi.patch_broker_api_v1_brokers__broker_id__patch(payload, ...),
  *     {fallback: $t('brokers.updateFailed')},
  * );
@@ -35,10 +35,10 @@
 
 import {toasts} from '$lib/stores/toastStore.svelte';
 
-/** Result of a ``saveWithRetry`` call — discriminated union. */
+/** Result of a ``trySave`` call — discriminated union. */
 export type SaveResult<T> = {status: 'success'; data: T} | {status: 'error'; message: string; error: unknown; status_code?: number};
 
-export interface SaveWithRetryOptions {
+export interface TrySaveOptions {
     /**
      * Fallback message shown when the error payload carries no human text.
      * Pass the already-translated string from the caller (``$t(...)``) so
@@ -222,9 +222,9 @@ export function formatValidationIssues(issues: ValidationIssueExtracted[], maxIs
  * Wrap an async save call with unified error handling.
  *
  * @param call    the async function to run (typically a ``zodiosApi.xxx(...)`` call)
- * @param options see ``SaveWithRetryOptions``
+ * @param options see ``TrySaveOptions``
  */
-export async function saveWithRetry<T>(call: () => Promise<T>, options: SaveWithRetryOptions = {}): Promise<SaveResult<T>> {
+export async function trySave<T>(call: () => Promise<T>, options: TrySaveOptions = {}): Promise<SaveResult<T>> {
     const {fallback = 'Operation failed', toast: showToast = true, prefix, onError} = options;
     try {
         const data = await call();
@@ -242,7 +242,7 @@ export async function saveWithRetry<T>(call: () => Promise<T>, options: SaveWith
         // toast-only; save errors deserve a stack-trace in DevTools even
         // when the toast is suppressed.
         // eslint-disable-next-line no-console
-        console.error('[saveWithRetry]', message, err);
+        console.error('[trySave]', message, err);
         return {status: 'error', message, error: err, status_code};
     }
 }
