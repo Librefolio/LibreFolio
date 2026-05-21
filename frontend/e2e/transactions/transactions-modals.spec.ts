@@ -317,7 +317,7 @@ test.describe('Transactions', () => {
         test('validation warning banner has dismiss button', async ({page}) => {
             await openCreateFlow(page);
             // Fill partial data to trigger validation issues
-            await fillBuyTransaction(page, {qty: '0'});
+            await fillBuyTransaction(page, {qty: '-1'});
 
             const validateBtn = page.getByTestId('tx-form-validate-now');
             if (await validateBtn.isVisible({timeout: 2_000}).catch(() => false)) {

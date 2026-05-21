@@ -645,7 +645,17 @@
       "fromBroker": "del bróker",
       "assetPrice": "Precio del activo en la fecha",
       "stale": "desactualizado",
-      "adjustmentHint": "Para regalos/herencias: use el valor al que el donante adquirió originalmente el activo."
+      "adjustmentHint": "Para regalos/herencias: use el valor al que el donante adquirió originalmente el activo.",
+      "docsTooltip": "Descubre cómo se calcula el CMP (Coste Medio Ponderado)",
+      "toggleAuto": "Auto",
+      "toggleManual": "Manual",
+      "unitCost": "Coste unitario",
+      "effectLabel": "Efecto",
+      "effect": {
+        "add": "Ponderada",
+        "reduce": "Cantidad reducida",
+        "addZeroCost": "Dilución"
+      }
     },
     "promote": {
       "title": "Promocionar par",

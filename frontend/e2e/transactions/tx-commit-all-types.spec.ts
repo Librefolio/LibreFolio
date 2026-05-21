@@ -646,15 +646,9 @@ test.describe('Cost Basis Override', () => {
         await pickFirstAsset(page);
         await fillQuantity(page, '5');
 
-        // Open advanced section
-        const advancedToggle = page.getByTestId('tx-form-advanced-toggle');
-        await expect(advancedToggle).toBeVisible({timeout: 3_000});
-        await advancedToggle.click();
-        await page.waitForTimeout(300);
-
-        // Cost basis field should be visible
+        // Cost basis field should be visible inline for ADJUSTMENT (no toggle needed)
         const cbInput = page.getByTestId('tx-form-cost-basis-input-amount');
-        await expect(cbInput).toBeVisible({timeout: 2_000});
+        await expect(cbInput).toBeVisible({timeout: 3_000});
 
         // Tooltip icon should be present (Info icon inside Tooltip wrapper)
         const tooltipWrapper = page.locator('[data-testid="tx-form-cost-basis"]').locator('..').locator('..').locator('.tooltip-wrapper');
@@ -697,13 +691,9 @@ test.describe('Cost Basis Override', () => {
         await pickFirstAsset(page);
         await fillQuantity(page, '3');
 
-        // Open advanced + fill cost basis
-        const advancedToggle = page.getByTestId('tx-form-advanced-toggle');
-        await advancedToggle.click();
-        await page.waitForTimeout(300);
-
+        // Cost basis is inline for ADJUSTMENT — fill it directly
         const cbInput = page.getByTestId('tx-form-cost-basis-input-amount');
-        await expect(cbInput).toBeVisible({timeout: 2_000});
+        await expect(cbInput).toBeVisible({timeout: 3_000});
         await cbInput.fill('99.99');
         await page.waitForTimeout(200);
 

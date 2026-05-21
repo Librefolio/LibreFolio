@@ -274,10 +274,10 @@ class TransactionType(StrEnum):
     WITHDRAWAL = "WITHDRAWAL"
     FEE = "FEE"
     TAX = "TAX"
+    ADJUSTMENT = "ADJUSTMENT"
     TRANSFER = "TRANSFER"
     FX_CONVERSION = "FX_CONVERSION"
     CASH_TRANSFER = "CASH_TRANSFER"
-    ADJUSTMENT = "ADJUSTMENT"
 
 
 class UserRole(StrEnum):

@@ -437,6 +437,34 @@ class DateRangeModel(BaseModel):
         return self
 
 
+class OpenDateRangeModel(BaseModel):
+    """
+    Open-ended date range — both start and end are optional.
+
+    Unlike DateRangeModel (which requires start), this model allows
+    either or both bounds to be unset:
+    - start=None → from the beginning of time
+    - end=None → up to today / unbounded future
+    - Both None → entire history
+
+    The validator still enforces end >= start when both are provided.
+
+    Use cases: WAC computation window, flexible query filters.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    start: Optional[date_type] = Field(None, description="Start date (inclusive, None = from beginning)")
+    end: Optional[date_type] = Field(None, description="End date (inclusive, None = unbounded / today)")
+
+    @model_validator(mode="after")
+    def validate_end_after_start(self) -> OpenDateRangeModel:
+        """Ensure end >= start when both are provided."""
+        if self.start is not None and self.end is not None and self.end < self.start:
+            raise ValueError(f"end date ({self.end}) must be >= start date ({self.start})")
+        return self
+
+
 class BaseDeleteResult(BaseModel):
     """
     Standardized base class for all delete/removal operation results.

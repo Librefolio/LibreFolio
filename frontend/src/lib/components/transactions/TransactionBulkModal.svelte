@@ -1298,6 +1298,27 @@
                 },
             },
             {
+                id: 'cost_basis_override',
+                header: () => $t('transactions.form.costBasis'),
+                type: 'text',
+                width: 160,
+                sortable: false,
+                filterable: false,
+                hiddenByDefault: false,
+                cell: (row): CellContent => {
+                    if (!row.fields.cost_basis_override) {
+                        const isNew = row.op === 'create';
+                        const needsWac = row.fields.type === 'TRANSFER' || row.fields.type === 'ADJUSTMENT';
+                        if (isNew && needsWac) {
+                            return {type: 'html', html: '<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto">💡 auto</span>'};
+                        }
+                        return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
+                    }
+                    const cbo = row.fields.cost_basis_override;
+                    return {type: 'html', html: `<span class="font-mono text-xs">${formatCurrencyAmountHtml(Number(cbo.amount), cbo.code)}</span>`};
+                },
+            },
+            {
                 id: 'description',
                 header: () => $t('transactions.form.description'),
                 type: 'text',
@@ -1322,7 +1343,7 @@
                 width: 180,
                 sortable: false,
                 filterable: false,
-                hiddenByDefault: true,
+                hiddenByDefault: false,
                 cell: (row): CellContent => {
                     if (row.fields.tags.length === 0) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
                     const html = row.fields.tags
@@ -1336,34 +1357,13 @@
                 },
             },
             {
-                id: 'cost_basis_override',
-                header: () => $t('transactions.form.costBasis'),
-                type: 'text',
-                width: 160,
-                sortable: false,
-                filterable: false,
-                hiddenByDefault: true,
-                cell: (row): CellContent => {
-                    if (!row.fields.cost_basis_override) {
-                        const isNew = row.op === 'create';
-                        const needsWac = row.fields.type === 'TRANSFER' || row.fields.type === 'ADJUSTMENT';
-                        if (isNew && needsWac) {
-                            return {type: 'html', html: '<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto">💡 auto</span>'};
-                        }
-                        return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
-                    }
-                    const cbo = row.fields.cost_basis_override;
-                    return {type: 'html', html: `<span class="font-mono text-xs">${formatCurrencyAmountHtml(Number(cbo.amount), cbo.code)}</span>`};
-                },
-            },
-            {
                 id: 'asset_event_id',
                 header: () => $t('transactions.form.assetEvent'),
                 type: 'text',
                 width: 110,
                 sortable: false,
                 filterable: false,
-                hiddenByDefault: true,
+                hiddenByDefault: false,
                 cell: (row): CellContent => ({type: 'html', html: row.fields.asset_event_id != null ? `<span class="font-mono text-xs">#${row.fields.asset_event_id}</span>` : '<span class="text-gray-400">—</span>'}),
             },
             {
@@ -1373,13 +1373,13 @@
                 width: 140,
                 sortable: false,
                 filterable: false,
-                hiddenByDefault: true,
+                hiddenByDefault: false,
                 cell: (row): CellContent => {
                     if (row.partnerId != null) {
                         const selfId = opTxId(row) ?? '?';
                         return {type: 'html', html: `<code class="text-[10px] font-mono text-gray-400">#${selfId} ↔ #${row.partnerId}</code>`};
                     }
-                    if (row.partnerPayload != null) return {type: 'html', html: '<code class="text-[10px] font-mono text-indigo-400">↔ new</code>'};
+                    if (row.partnerPayload != null) return {type: 'html', html: '<code class="text-[10px] font-mono text-indigo-400">new ↔ new</code>'};
                     if (row.op === 'create' && row.link_uuid) return {type: 'html', html: `<code class="text-[10px] font-mono text-gray-400">${row.link_uuid.slice(0, 8)}…</code>`};
                     return {type: 'html', html: '—'};
                 },
