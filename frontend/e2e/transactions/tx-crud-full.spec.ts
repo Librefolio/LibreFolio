@@ -19,10 +19,7 @@ import {TEST_USER} from '../fixtures/test-users';
 /** Navigate to the Transactions page and wait for table to appear. */
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    await Promise.race([
-        page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}),
-        page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000}),
-    ]).catch(() => {});
+    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
     await page.waitForTimeout(500);
 }
 
@@ -38,7 +35,10 @@ async function fillDeposit(page: Page, amount: string = '100') {
     const typeButton = page.getByTestId('tx-form-type');
     await typeButton.click();
     await page.waitForTimeout(300);
-    const depositOption = page.locator('[data-testid^="search-select-option-"]').filter({hasText: /deposit/i}).first();
+    const depositOption = page
+        .locator('[data-testid^="search-select-option-"]')
+        .filter({hasText: /deposit/i})
+        .first();
     if (await depositOption.isVisible({timeout: 2_000}).catch(() => false)) {
         await depositOption.click();
     }
@@ -114,7 +114,10 @@ test.describe('Transaction CRUD Full Lifecycle', () => {
         const typeButton = page.getByTestId('tx-form-type');
         await typeButton.click();
         await page.waitForTimeout(300);
-        const ctOption = page.locator('[data-testid^="search-select-option-"]').filter({hasText: /cash transfer/i}).first();
+        const ctOption = page
+            .locator('[data-testid^="search-select-option-"]')
+            .filter({hasText: /cash transfer/i})
+            .first();
         if (await ctOption.isVisible({timeout: 2_000}).catch(() => false)) {
             await ctOption.click();
         }
@@ -135,7 +138,10 @@ test.describe('Transaction CRUD Full Lifecycle', () => {
         const typeButton = page.getByTestId('tx-form-type');
         await typeButton.click();
         await page.waitForTimeout(300);
-        const wOption = page.locator('[data-testid^="search-select-option-"]').filter({hasText: /withdrawal/i}).first();
+        const wOption = page
+            .locator('[data-testid^="search-select-option-"]')
+            .filter({hasText: /withdrawal/i})
+            .first();
         if (await wOption.isVisible({timeout: 2_000}).catch(() => false)) {
             await wOption.click();
         }
@@ -180,25 +186,38 @@ test.describe('Transaction CRUD Full Lifecycle', () => {
 
     // ---- Scenario 18: ActionModal split shows tabular layout ----
     test('ActionModal split shows tabular From/To layout', async ({page}) => {
-        // Navigate to transactions page and check if any paired TX exists
         const txTable = page.getByTestId('tx-table');
         await expect(txTable).toBeVisible({timeout: 5_000});
 
-        // Look for rows with a link icon (indicating paired transactions)
-        const linkedRows = txTable.locator('[data-testid^="tx-row-"]').filter({
-            has: page.locator('[data-testid="tx-link-icon"]'),
-        });
-
-        const linkedCount = await linkedRows.count();
-        if (linkedCount === 0) {
-            // No paired transactions in DB — skip gracefully
-            test.skip();
-            return;
+        // Find a paired row with delete-safe tag (guaranteed by mock)
+        const rows = txTable.locator('tbody tr[data-row-id]');
+        const count = await rows.count();
+        let pairedRow = null;
+        for (let i = 0; i < count; i++) {
+            const row = rows.nth(i);
+            const text = (await row.textContent()) ?? '';
+            if (text.includes('delete-safe') && text.includes('ETH')) {
+                pairedRow = row;
+                break;
+            }
         }
+        expect(pairedRow, 'delete-safe ETH paired row must exist — check populate_mock_data.py').toBeTruthy();
 
-        // Click the first linked row to select it, then look for split action
-        // The split button should trigger the ActionModal with tabular layout
-        // We verify the modal has the data-testid="tx-action-before" (table style)
+        // Hover to reveal actions, click split
+        await pairedRow!.hover();
+        await page.waitForTimeout(200);
+        const splitBtn = pairedRow!.locator('button[data-action-id="split"]');
+        await expect(splitBtn).toBeVisible({timeout: 2_000});
+        await splitBtn.click();
+
+        // ActionModal should show tabular layout with before/after tables
+        const modal = page.locator('[data-testid="tx-action-modal"]');
+        await expect(modal.first()).toBeVisible({timeout: 3_000});
+        const beforeTable = modal.first().getByTestId('tx-action-before');
+        await expect(beforeTable).toBeVisible();
+
+        // Cancel
+        await modal.first().getByTestId('tx-action-modal-cancel').click();
     });
 
     // ---- Scenario 17: MergeModal discard shows warning (amber) ----
@@ -259,4 +278,3 @@ test.describe('Transaction CRUD Full Lifecycle', () => {
         expect(hasErrors).toBe(false);
     });
 });
-

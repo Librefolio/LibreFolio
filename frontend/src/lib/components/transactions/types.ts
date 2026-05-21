@@ -19,7 +19,7 @@ export interface TXReadItem {
     partner_broker_id?: number | null;
     tags?: string[] | null;
     description?: string | null;
-    cost_basis_override?: string | null;
+    cost_basis_override?: {code: string; amount: string} | string | null;
     asset_event_id?: number | null;
     created_at?: string;
     updated_at?: string;

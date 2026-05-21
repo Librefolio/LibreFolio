@@ -22,22 +22,13 @@
     import {_ as t} from '$lib/i18n';
     import {AlertTriangle, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import {zodiosApi} from '$lib/api';
+    import {commitTransactions} from '$lib/utils/txCommitApi';
 
     // =========================================================================
     // Types
     // =========================================================================
 
-    export interface TXReadItem {
-        id: number;
-        broker_id: number;
-        asset_id?: number | null;
-        type: string;
-        date: string;
-        quantity: string;
-        cash?: {code: string; amount: string} | null;
-        related_transaction_id?: number | null;
-    }
+    import type {TXReadItem} from './types';
 
     export interface ProblemPair {
         /** Row currently in the user selection. */
@@ -125,17 +116,15 @@
         committing = true;
         rolledBack = null;
         try {
-            const res = (await zodiosApi.commit_transactions_api_v1_transactions_commit_post({
-                deletes: finalIds,
-            } as never)) as {committed: boolean; issues?: Array<{error: string}>};
-            if (!res.committed) {
-                rolledBack = {errors: (res.issues ?? []).map((i) => i.error)};
+            const result = await commitTransactions({deletes: finalIds}, {fallback: $t('transactions.bulkDelete.rolledBack')});
+            if (result.networkError) {
+                rolledBack = {errors: [result.networkError]};
+            } else if (!result.committed) {
+                rolledBack = {errors: result.issues.map((i) => i.error)};
             } else {
-                onCommitted?.(res);
+                onCommitted?.(result.rawResponse);
                 onClose();
             }
-        } catch (e) {
-            rolledBack = {errors: [e instanceof Error ? e.message : String(e)]};
         } finally {
             committing = false;
         }

@@ -6,7 +6,7 @@
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {saveWithRetry} from '$lib/utils/saveWithRetry';
+    import {trySave} from '$lib/utils/trySave';
     import {Check, X} from 'lucide-svelte';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
@@ -70,13 +70,13 @@
 
         isSubmitting = true;
 
-        // I-bis #22 (Batch 4.d-part2) — route through ``saveWithRetry`` for uniform
+        // I-bis #22 (Batch 4.d-part2) — route through ``trySave`` for uniform
         // error extraction. ``toast: false`` because we already render the error
         // inline via ``InfoBanner``; a toast would duplicate the message.
         // ``onError`` preserves the two semantic mappings (incorrect / different
         // password) that existed before — the extractor alone would surface the
         // raw FastAPI detail, which is less friendly.
-        const result = await saveWithRetry(
+        const result = await trySave(
             () =>
                 zodiosApi.change_password_api_v1_auth_change_password_post({
                     current_password: currentPassword,

@@ -85,10 +85,7 @@ test.describe('Asset Modal', () => {
         await goToAssetsPage(page);
         // Navigate to first asset detail
         const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-        if (!(await firstCard.isVisible({timeout: 5000}).catch(() => false))) {
-            test.skip(true, 'No assets available');
-            return;
-        }
+        await expect(firstCard).toBeVisible({timeout: 5_000});
         await firstCard.click();
         await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
 
@@ -166,10 +163,7 @@ test.describe('Asset Modal', () => {
     test('edit modal shows additional fields (currency, type)', async ({page}) => {
         await goToAssetsPage(page);
         const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-        if (!(await firstCard.isVisible({timeout: 5000}).catch(() => false))) {
-            test.skip(true, 'No assets available');
-            return;
-        }
+        await expect(firstCard).toBeVisible({timeout: 5_000});
         await firstCard.click();
         await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
 

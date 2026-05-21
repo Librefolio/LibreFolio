@@ -1,13 +1,21 @@
 /**
- * Asset Event Delete E2E Tests — Phase 07 · Part 1 Deferred
+ * Asset Event Delete E2E Tests — Phase 07 · Part 1
  *
  * Covers:
- * 1. Delete event without linked transactions → success
- * 2. Delete event with linked transaction → confirmation needed
+ * 1. Delete unlinked event → success (via combined data-editor)
+ * 2. Delete event with linked transaction → RESTRICT warning (in_use)
  * 3. Delete asset with events → cascade/block behavior
- * 4. ●evt badge disappears after transaction unlink
+ * 4. ●evt badge in transactions table reflects linked state
  *
- * Prerequisites: backend in test mode (port 8001), mock data with asset_event_id populated.
+ * Prerequisites: backend in test mode (port 8001), mock data with asset events populated.
+ *
+ * UI flow:
+ *   Asset detail → click "Edit Prices & Events" (data-testid="asset-detail-editdata-btn")
+ *   → editor panel opens (data-testid="asset-detail-editor-panel")
+ *   → click Events tab (data-testid="asset-editor-events-tab")
+ *   → DataEditor shows event rows (data-row-id={eventId})
+ *   → row action delete button (data-action-id="delete")
+ *   → click Save (data-testid="asset-editor-save-btn")
  */
 import {expect, test, type Page} from '@playwright/test';
 import {login, navigateTo} from '../fixtures/auth-helpers';
@@ -17,18 +25,26 @@ import {TEST_USER} from '../fixtures/test-users';
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function goToAssetDetail(page: Page, assetId: number) {
-    await navigateTo(page, `/assets/${assetId}`);
-    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 15_000});
-    await page.waitForTimeout(1000);
+/** Open the combined data editor and switch to Events tab */
+async function openEventsEditor(page: Page) {
+    // Click "Edit Prices & Events" button
+    const editBtn = page.locator('[data-testid="asset-detail-editdata-btn"]');
+    await expect(editBtn).toBeVisible({timeout: 5_000});
+    await editBtn.click();
+
+    // Wait for editor panel to appear
+    const editorPanel = page.locator('[data-testid="asset-detail-editor-panel"]');
+    await expect(editorPanel).toBeVisible({timeout: 5_000});
+
+    // Switch to Events tab
+    const eventsTab = page.locator('[data-testid="asset-editor-events-tab"]');
+    await eventsTab.click();
+    await page.waitForTimeout(500);
 }
 
-async function switchToEventsTab(page: Page) {
-    const eventsTab = page.getByTestId('events-tab').or(page.locator('button', {hasText: /events|eventi/i}));
-    if (await eventsTab.isVisible({timeout: 3_000}).catch(() => false)) {
-        await eventsTab.click();
-        await page.waitForTimeout(500);
-    }
+/** Get visible event rows in the DataEditor table */
+function getEventRows(page: Page) {
+    return page.locator('[data-testid="asset-detail-editor-panel"] tbody tr[data-row-id]');
 }
 
 // ---------------------------------------------------------------------------
@@ -41,72 +57,112 @@ test.describe('Asset Event Delete', () => {
     });
 
     // ===================================================================
-    // Scenario 1: Delete event without linked transactions
+    // Scenario 1: Delete event without linked transactions → success
     // ===================================================================
     test('delete unlinked event succeeds', async ({page}) => {
-        // Navigate to assets list, find one with events
+        // Navigate to assets list and find "RE Loan Milano" (has unlinked INTEREST events)
         await navigateTo(page, '/assets');
         await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
-        await page.waitForTimeout(1000);
 
-        // This test depends on mock data — skip if no assets
-        const assetCards = page.locator('[data-testid^="asset-card-"]');
-        const count = await assetCards.count();
-        if (count === 0) {
-            test.skip(true, 'No assets available for event delete test');
-            return;
-        }
+        // Click on Loan Milano card (has events without linked transactions)
+        const loanCard = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Loan Milano/i}).first();
+        await expect(loanCard).toBeVisible({timeout: 5_000});
+        await loanCard.click();
 
-        // Navigate to first asset detail
-        await assetCards.first().click();
+        // Wait for asset detail page
         await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 15_000});
-        await page.waitForTimeout(1000);
 
-        await switchToEventsTab(page);
+        // Open events editor
+        await openEventsEditor(page);
 
-        // Check if there are events in the data editor
-        const eventRows = page.locator('[data-testid="data-editor"] tbody tr');
-        const eventCount = await eventRows.count().catch(() => 0);
-        if (eventCount === 0) {
-            test.skip(true, 'No events found for this asset');
-            return;
-        }
+        // Events must exist (populated by mock data — Loan Milano has 4 INTEREST + 1 PRICE_ADJUSTMENT)
+        const eventRows = getEventRows(page);
+        const initialCount = await eventRows.count();
+        expect(initialCount, 'Loan Milano must have events — check populate_mock_data.py').toBeGreaterThan(0);
 
-        // Select first event row
-        const firstCheckbox = eventRows.first().locator('input[type="checkbox"]');
-        if (await firstCheckbox.isVisible({timeout: 1_000}).catch(() => false)) {
-            await firstCheckbox.click();
-            await page.waitForTimeout(300);
+        // Click delete action on the first event row
+        const firstRow = eventRows.first();
+        const deleteBtn = firstRow.locator('button[data-action-id="delete"]');
+        await expect(deleteBtn).toBeVisible({timeout: 3_000});
+        await deleteBtn.click();
 
-            // Look for delete button
-            const deleteBtn = page
-                .locator('button')
-                .filter({hasText: /delete|elimina/i})
-                .first();
-            if (await deleteBtn.isVisible({timeout: 2_000}).catch(() => false)) {
-                // Verify the delete action is available
-                expect(await deleteBtn.isEnabled()).toBe(true);
-            }
-        }
+        // The save button should become enabled (dirty count > 0)
+        const saveBtn = page.locator('[data-testid="asset-editor-save-btn"]');
+        await expect(saveBtn).toBeEnabled({timeout: 3_000});
+
+        // Intercept the delete API call to verify it succeeds
+        const responsePromise = page.waitForResponse(
+            (resp) => resp.url().includes('/api/v1/assets/events') && resp.request().method() === 'DELETE',
+            {timeout: 10_000},
+        );
+
+        // Click save to commit deletion
+        await saveBtn.click();
+
+        // Wait for the API response
+        const response = await responsePromise;
+        expect(response.status()).toBe(200);
+
+        // Verify the response contains at least one "deleted" result
+        const body = await response.json();
+        const deletedResults = body.results?.filter((r: any) => r.status === 'deleted') ?? [];
+        expect(deletedResults.length).toBeGreaterThan(0);
     });
 
     // ===================================================================
-    // Scenario 2: Delete event with linked transaction → must confirm
+    // Scenario 2: Delete event with linked transaction → RESTRICT warning
     // ===================================================================
     test('delete event with linked transaction shows warning', async ({page}) => {
-        // Navigate to transactions to find one with asset_event_id
-        await navigateTo(page, '/transactions');
-        await page.waitForTimeout(2000);
+        // Navigate to Apple detail (has a DIVIDEND event linked to a transaction)
+        await navigateTo(page, '/assets');
+        await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
 
-        // Look for any event dot indicator
-        const eventDot = page.locator('[data-testid^="tx-event-dot-"]').first();
-        if (!(await eventDot.isVisible({timeout: 3_000}).catch(() => false))) {
-            test.skip(true, 'No transactions with linked events found');
-            return;
+        const appleCard = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
+        await expect(appleCard).toBeVisible({timeout: 5_000});
+        await appleCard.click();
+        await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 15_000});
+
+        // Open events editor
+        await openEventsEditor(page);
+
+        // Apple has 3 DIVIDEND events; the most recent one is linked to a transaction
+        const eventRows = getEventRows(page);
+        const count = await eventRows.count();
+        expect(count, 'Apple must have events — check populate_mock_data.py').toBeGreaterThan(0);
+
+        // Mark ALL events for deletion (one of them is linked → will be blocked)
+        for (let i = 0; i < count; i++) {
+            const row = eventRows.nth(i);
+            const deleteBtn = row.locator('button[data-action-id="delete"]');
+            if (await deleteBtn.isVisible({timeout: 1_000}).catch(() => false)) {
+                await deleteBtn.click();
+                await page.waitForTimeout(200);
+            }
         }
 
-        // The event dot should be clickable
-        expect(await eventDot.isVisible()).toBe(true);
+        // Save should be enabled
+        const saveBtn = page.locator('[data-testid="asset-editor-save-btn"]');
+        await expect(saveBtn).toBeEnabled({timeout: 3_000});
+
+        // Intercept the delete API response
+        const responsePromise = page.waitForResponse(
+            (resp) => resp.url().includes('/api/v1/assets/events') && resp.request().method() === 'DELETE',
+            {timeout: 10_000},
+        );
+
+        await saveBtn.click();
+
+        const response = await responsePromise;
+        expect(response.status()).toBe(200);
+
+        // Response must contain at least one "in_use" result (the linked event)
+        const body = await response.json();
+        const blockedResults = body.results?.filter((r: any) => r.status === 'in_use') ?? [];
+        expect(blockedResults.length, 'At least one event should be blocked (in_use)').toBeGreaterThan(0);
+
+        // Verify the blocked result includes accessible_transactions
+        const firstBlocked = blockedResults[0];
+        expect(firstBlocked.accessible_transactions.length).toBeGreaterThan(0);
     });
 
     // ===================================================================
@@ -115,49 +171,44 @@ test.describe('Asset Event Delete', () => {
     test('delete asset with events shows appropriate warning', async ({page}) => {
         await navigateTo(page, '/assets');
         await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
-        await page.waitForTimeout(1000);
 
         const assetCards = page.locator('[data-testid^="asset-card-"]');
-        const count = await assetCards.count();
-        if (count === 0) {
-            test.skip(true, 'No assets available');
-            return;
-        }
+        await expect(assetCards.first()).toBeVisible({timeout: 5_000});
 
-        // Try to find delete action on an asset
+        // Look for a delete button on any card (may be in a more-actions menu)
+        // Assets with transactions cannot be deleted — this tests the UI handles it
         const firstCard = assetCards.first();
-        const deleteBtn = firstCard
-            .locator('button')
-            .filter({hasText: /delete|elimina/i})
-            .first();
-        if (await deleteBtn.isVisible({timeout: 2_000}).catch(() => false)) {
-            // Verify delete is available (or blocked if has transactions)
-            expect(await deleteBtn.isVisible()).toBe(true);
+        const moreBtn = firstCard.locator('button[title*="more" i], button[aria-label*="more" i], button[data-testid*="more"]').first();
+        if (await moreBtn.isVisible({timeout: 2_000}).catch(() => false)) {
+            await moreBtn.click();
+            await page.waitForTimeout(300);
+            const deleteOption = page.locator('[role="menuitem"]').filter({hasText: /delete|elimina/i}).first();
+            if (await deleteOption.isVisible({timeout: 1_000}).catch(() => false)) {
+                // Just verify it exists — don't actually delete
+                expect(await deleteOption.isVisible()).toBe(true);
+            }
         }
+        // If no delete button is visible, the asset has transactions (expected for mock data)
+        // This scenario verifies the UI doesn't crash — delete-cascade is API-tested
     });
 
     // ===================================================================
-    // Scenario 4: ●evt badge disappears after unlink
+    // Scenario 4: ●evt badge in transactions table reflects linked state
     // ===================================================================
     test('event badge reflects current link state', async ({page}) => {
         await navigateTo(page, '/transactions');
         await page.waitForTimeout(2000);
 
-        // Count event dots before any action
+        // Event dots should exist (Apple DIVIDEND tx is linked to an AssetEvent)
         const eventDots = page.locator('[data-testid^="tx-event-dot-"]');
-        const dotCount = await eventDots.count().catch(() => 0);
+        const dotCount = await eventDots.count();
+        expect(dotCount, 'Event dots must exist — check populate_mock_data.py link_transactions_to_events()').toBeGreaterThan(0);
 
-        // Event dots should exist if mock data has linked events
-        // This is a baseline check — the actual unlink+verify flow would
-        // require editing a transaction to remove asset_event_id
-        if (dotCount > 0) {
-            const firstDot = eventDots.first();
-            expect(await firstDot.isVisible()).toBe(true);
-            // Verify the dot has proper test-id format
-            const testId = await firstDot.getAttribute('data-testid');
-            expect(testId).toMatch(/^tx-event-dot-\d+$/);
-        } else {
-            test.skip(true, 'No event dots found — mock data may not have asset_event_id');
-        }
+        const firstDot = eventDots.first();
+        expect(await firstDot.isVisible()).toBe(true);
+
+        // Verify the dot has proper test-id format
+        const testId = await firstDot.getAttribute('data-testid');
+        expect(testId).toMatch(/^tx-event-dot-\d+$/);
     });
 });

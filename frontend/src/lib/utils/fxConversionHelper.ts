@@ -41,12 +41,7 @@ export interface FxTooltipData {
  * @param currencyTo - Currency of the "to" side
  * @returns FxConversionInfo or null if amounts are invalid (zero/missing)
  */
-export function computeFxConversionInfo(
-    amountFrom: number,
-    currencyFrom: string,
-    amountTo: number,
-    currencyTo: string,
-): FxConversionInfo | null {
+export function computeFxConversionInfo(amountFrom: number, currencyFrom: string, amountTo: number, currencyTo: string): FxConversionInfo | null {
     const absFrom = Math.abs(amountFrom);
     const absTo = Math.abs(amountTo);
     if (absFrom === 0 || absTo === 0) return null;
@@ -125,4 +120,3 @@ export function buildFxTooltipHtml(data: FxTooltipData, t: (key: string, opts?: 
     html += `</div>`;
     return html;
 }
-

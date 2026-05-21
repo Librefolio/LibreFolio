@@ -9,7 +9,7 @@
     import {zodiosApi} from '$lib/api';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
-    import {saveWithRetry} from '$lib/utils/saveWithRetry';
+    import {trySave} from '$lib/utils/trySave';
     import {mergeBrokers} from '$lib/stores/brokerStore';
 
     const dispatch = createEventDispatcher<{
@@ -63,13 +63,13 @@
         loading = true;
         error = null;
 
-        // I-bis #22 — route both create and update through ``saveWithRetry``
+        // I-bis #22 — route both create and update through ``trySave``
         // so HTTP failures (network, 4xx, 5xx) surface via a toast + keep
         // the modal open with ``formTouched`` preserved, instead of
         // closing silently with only a console.error.
         try {
             if (mode === 'create') {
-                const result = await saveWithRetry(() => zodiosApi.create_brokers_api_v1_brokers_post([event.detail]), {fallback: $_('brokers.createFailed')});
+                const result = await trySave(() => zodiosApi.create_brokers_api_v1_brokers_post([event.detail]), {fallback: $_('brokers.createFailed')});
                 if (result.status === 'error') {
                     error = result.message;
                     return;
@@ -90,7 +90,7 @@
                     error = errorMsg ?? $_('brokers.createFailed');
                 }
             } else if (brokerId) {
-                const result = await saveWithRetry(
+                const result = await trySave(
                     () =>
                         zodiosApi.update_broker_api_v1_brokers__broker_id__patch(
                             {

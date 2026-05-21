@@ -10,7 +10,7 @@
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
-    import {saveWithRetry} from '$lib/utils/saveWithRetry';
+    import {trySave} from '$lib/utils/trySave';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -71,11 +71,11 @@
         loading = true;
         error = null;
 
-        // I-bis #22 — route through ``saveWithRetry`` so HTTP failures
+        // I-bis #22 — route through ``trySave`` so HTTP failures
         // surface via a toast + keep the modal open with ``error`` banner,
         // instead of closing on success only and swallowing errors to console.
         const cashAmount = type === 'DEPOSIT' ? amount : -amount;
-        const result = await saveWithRetry(
+        const result = await trySave(
             () =>
                 zodiosApi.commit_transactions_api_v1_transactions_commit_post({
                     creates: [

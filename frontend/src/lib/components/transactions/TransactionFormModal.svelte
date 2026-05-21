@@ -60,35 +60,19 @@
     import {ensureBrokersLoaded, getAllBrokers, getEditableBrokers, brokerStoreVersion, refreshAllBrokers, getBrokerInfo, getBrokerRole, type BrokerInfo} from '$lib/stores/brokerStore';
     import {type TransactionTypeCode, type PairFormLayout, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, getSwapGroup, typesVersion} from '$lib/stores/transactionTypeStore';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
-    import {saveWithRetry, extractErrorMessage, extractValidationIssues} from '$lib/utils/saveWithRetry';
+    import {commitTransactions, validateTransactions} from '$lib/utils/txCommitApi';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/uuid';
     import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
-    import {buildCreatePayload, buildUpdateDiff, diffDualItem, type TxFields, type TxOriginal} from '$lib/utils/txPayloadHelpers';
+    import {computeSignHint} from '$lib/utils/signHintColor';
+    import {buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/txPayloadHelpers';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/fxConversionHelper';
+    import type {TXReadItem} from './types';
 
     // =========================================================================
-    // Types (mirror schemas/transactions.py — kept local to avoid pulling Zod)
+    // Types
     // =========================================================================
-
-    export interface TXReadItem {
-        id: number;
-        broker_id: number;
-        asset_id?: number | null;
-        type: string;
-        date: string;
-        quantity: string;
-        cash?: {code: string; amount: string} | null;
-        related_transaction_id?: number | null;
-        partner_broker_id?: number | null;
-        tags?: string[] | null;
-        description?: string | null;
-        cost_basis_override?: {code: string; amount: string} | string | null;
-        asset_event_id?: number | null;
-        created_at?: string;
-        updated_at?: string;
-    }
 
     interface ValidationIssue {
         operation: 'create' | 'update' | 'delete';
@@ -177,6 +161,8 @@
         cash: {code: string; amount: string} | null;
         /** "To" side date — may differ from "From" side (e.g. wire transfer arrival). */
         date: string;
+        /** Quantity for the "To" side (transfer_asset: receiver qty). */
+        quantity?: string;
         /** Cost basis override for the receiver (transfer_asset only). */
         cost_basis_override?: {code: string; amount: string} | null;
     }
@@ -462,10 +448,10 @@
             if (myQty > 0) {
                 // row is receiver (qty>0), partner is sender (qty<0)
                 draft = fromTx(partner);
-                dualTo = {broker_id: row.broker_id, cash: null, date: row.date, cost_basis_override: row.cost_basis_override ? (typeof row.cost_basis_override === 'object' ? row.cost_basis_override as {code: string; amount: string} : null) : null};
+                dualTo = {broker_id: row.broker_id, cash: null, date: row.date, cost_basis_override: row.cost_basis_override ? (typeof row.cost_basis_override === 'object' ? (row.cost_basis_override as {code: string; amount: string}) : null) : null};
             } else {
                 // row is sender (qty<0), partner is receiver (qty>0)
-                dualTo = {broker_id: partner.broker_id, cash: null, date: partner.date, cost_basis_override: partner.cost_basis_override ? (typeof partner.cost_basis_override === 'object' ? partner.cost_basis_override as {code: string; amount: string} : null) : null};
+                dualTo = {broker_id: partner.broker_id, cash: null, date: partner.date, cost_basis_override: partner.cost_basis_override ? (typeof partner.cost_basis_override === 'object' ? (partner.cost_basis_override as {code: string; amount: string}) : null) : null};
             }
             // Sender draft must have empty cost_basis_override
             draft = {...draft, cost_basis_override: null};
@@ -624,9 +610,7 @@
 
     // cost_basis_override is meaningful only for the receiver of a TRANSFER pair
     // or an ADJUSTMENT (asset entering/leaving portfolio without purchase history).
-    let showCostBasisField = $derived(
-        draft.type === 'TRANSFER' || draft.type === 'ADJUSTMENT'
-    );
+    let showCostBasisField = $derived(draft.type === 'TRANSFER' || draft.type === 'ADJUSTMENT');
 
     // Pair partner chip (only when editing an existing linked tx — non-dual mode).
     let pairPartnerId = $derived(pairLayout ? null : (initialRow?.related_transaction_id ?? null));
@@ -713,100 +697,44 @@
         draftKey: () => lastDraftKey,
         validateFn: async () => {
             if (isReadonly) return {issuesCount: 0};
-            if (pairLayout) {
-                // Dual mode: validate both sides
-                const dualPayload = mode === 'edit' ? {updates: collectDualUpdates()} : {creates: collectDualCreates()};
-                // Merge bulk context if available
-                let payload: Record<string, unknown>;
-                if (getBulkContext) {
-                    const ctx = getBulkContext();
-                    const mergedCreates = [...(ctx.creates || []), ...(dualPayload.creates || ([] as Record<string, unknown>[]))];
-                    const mergedUpdates = [...(ctx.updates || []), ...(dualPayload.updates || ([] as Record<string, unknown>[]))];
-                    payload = {};
-                    if (mergedCreates.length > 0) payload.creates = mergedCreates;
-                    if (mergedUpdates.length > 0) payload.updates = mergedUpdates;
-                    if (ctx.deletes?.length > 0) payload.deletes = ctx.deletes;
-                } else {
-                    payload = dualPayload;
-                }
-                const sentKey = lastDraftKey;
-                try {
-                    const res = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post(payload as never)) as {committed?: boolean; issues?: ValidationIssue[]};
-                    // W42: deduplicate issues by code (both halves produce the same error)
-                    issues = deduplicateIssues(res?.issues ?? []);
-                    lastValidatedDraftKey = sentKey;
-                    issuesDismissed = false;
-                    return {issuesCount: issues.length};
-                } catch (e) {
-                    const extracted = extractValidationIssues(e);
-                    if (extracted.length > 0) {
-                        issues = deduplicateIssues(
-                            extracted.map((iss) => ({
-                                operation: (mode === 'edit' ? 'update' : 'create') as 'create' | 'update',
-                                index: 0,
-                                error: iss.msg,
-                                code: iss.code,
-                                params: iss.params,
-                                loc: iss.loc,
-                            })),
-                        );
-                    } else {
-                        const msg = extractErrorMessage(e, $t('transactions.form.saveFailed'));
-                        issues = [{operation: mode === 'edit' ? 'update' : 'create', index: 0, error: msg}];
-                    }
-                    lastValidatedDraftKey = sentKey;
-                    issuesDismissed = false;
-                    return {issuesCount: issues.length};
-                }
-            }
-            const myPayload = mode === 'edit' ? {updates: [collectUpdate()]} : {creates: [collectCreate()]};
-            // Context-aware validation: merge bulk context if available
+
+            // Build my payload
+            const myPayload: Record<string, unknown> = pairLayout ? (mode === 'edit' ? {updates: collectDualUpdates()} : {creates: collectDualCreates()}) : mode === 'edit' ? {updates: [collectUpdate()]} : {creates: [collectCreate()]};
+
+            // Context-aware: merge bulk context if available
             let payload: Record<string, unknown>;
             let myOperation: 'create' | 'update' = mode === 'edit' ? 'update' : 'create';
             let myIndex: number;
             if (getBulkContext) {
                 const ctx = getBulkContext();
-                const mergedCreates = [...(ctx.creates || []), ...(myPayload.creates || ([] as Record<string, unknown>[]))];
-                const mergedUpdates = [...(ctx.updates || []), ...(myPayload.updates || ([] as Record<string, unknown>[]))];
+                const mergedCreates = [...(ctx.creates || []), ...((myPayload.creates as Record<string, unknown>[]) || [])];
+                const mergedUpdates = [...(ctx.updates || []), ...((myPayload.updates as Record<string, unknown>[]) || [])];
                 payload = {};
                 if (mergedCreates.length > 0) payload.creates = mergedCreates;
                 if (mergedUpdates.length > 0) payload.updates = mergedUpdates;
                 if (ctx.deletes?.length > 0) payload.deletes = ctx.deletes;
-                // My row is the last item in creates or updates
                 myIndex = myOperation === 'create' ? mergedCreates.length - 1 : mergedUpdates.length - 1;
             } else {
                 payload = myPayload;
                 myIndex = 0;
             }
+
             const sentKey = lastDraftKey;
-            try {
-                const res = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post(payload as never)) as {committed?: boolean; issues?: ValidationIssue[]};
-                // Filter: show only issues for my row (or global balance issues with index=-1)
-                const allIssues = res?.issues ?? [];
+            const result = await validateTransactions(payload, {fallback: $t('transactions.form.saveFailed')});
+
+            if (result.networkError) {
+                issues = [{operation: myOperation, index: 0, error: result.networkError}];
+            } else if (pairLayout) {
+                // W42: deduplicate issues by code (both halves produce the same error)
+                issues = deduplicateIssues(result.issues as unknown as ValidationIssue[]);
+            } else {
+                // Filter: show only issues for my row (or global with index=-1)
+                const allIssues = result.issues as unknown as ValidationIssue[];
                 issues = getBulkContext ? allIssues.filter((i) => (i.operation === myOperation && i.index === myIndex) || i.index === -1) : allIssues;
-                lastValidatedDraftKey = sentKey;
-                issuesDismissed = false;
-                return {issuesCount: issues.length};
-            } catch (e) {
-                // 422 safety net — should rarely fire now that /validate uses List[dict].
-                const extracted = extractValidationIssues(e);
-                if (extracted.length > 0) {
-                    issues = extracted.map((iss) => ({
-                        operation: (mode === 'edit' ? 'update' : 'create') as 'create' | 'update',
-                        index: 0,
-                        error: iss.msg,
-                        code: iss.code,
-                        params: iss.params,
-                        loc: iss.loc,
-                    }));
-                } else {
-                    const msg = extractErrorMessage(e, $t('transactions.form.saveFailed'));
-                    issues = [{operation: mode === 'edit' ? 'update' : 'create', index: 0, error: msg}];
-                }
-                lastValidatedDraftKey = sentKey;
-                issuesDismissed = false;
-                return {issuesCount: issues.length};
             }
+            lastValidatedDraftKey = sentKey;
+            issuesDismissed = false;
+            return {issuesCount: issues.length};
         },
     });
 
@@ -889,9 +817,7 @@
     /** Convert the form draft to the shared TxFields interface. */
     function draftToTxFields(): TxFields {
         // Normalize cost_basis_override: treat empty amount as null
-        const cbo = draft.cost_basis_override?.amount?.trim()
-            ? draft.cost_basis_override
-            : null;
+        const cbo = draft.cost_basis_override?.amount?.trim() ? draft.cost_basis_override : null;
         return {
             type: draft.type,
             broker_id: draft.broker_id,
@@ -919,107 +845,16 @@
         // Bug14-fix: reuse existing link_uuid in edit mode so BulkModal can
         // match the hidden partner draft; only generate a new UUID for create.
         const linkUuid = draft.link_uuid || generateUUID();
-        const sharedTags = draft.tags && draft.tags.length > 0 ? draft.tags : undefined;
-        const sharedDesc = (draft.description ?? '').trim() || undefined;
+        if (!pairLayout) return [collectCreate()];
 
-        if (pairLayout === 'fx') {
-            // FX_CONVERSION: both sides qty=0, different currencies
-            const fromCashAmt = draft.cash?.amount ? String(-Math.abs(Number(draft.cash.amount))) : '0';
-            const toCashAmt = dualTo.cash?.amount ? String(Math.abs(Number(dualTo.cash.amount))) : '0';
-            const fromItem: Record<string, unknown> = {
-                broker_id: draft.broker_id,
-                type: 'FX_CONVERSION',
-                date: draft.date,
-                quantity: '0',
-                cash: {code: draft.cash?.code ?? '', amount: fromCashAmt},
-                link_uuid: linkUuid,
-            };
-            const toItem: Record<string, unknown> = {
-                broker_id: draft.broker_id,
-                type: 'FX_CONVERSION',
-                date: dualTo.date || draft.date,
-                quantity: '0',
-                cash: {code: dualTo.cash?.code ?? '', amount: toCashAmt},
-                link_uuid: linkUuid,
-            };
-            if (sharedTags) {
-                fromItem.tags = sharedTags;
-                toItem.tags = sharedTags;
-            }
-            if (sharedDesc) {
-                fromItem.description = sharedDesc;
-                toItem.description = sharedDesc;
-            }
-            return [fromItem, toItem];
-        }
-
-        if (pairLayout === 'transfer_asset') {
-            // TRANSFER: from = negative qty, to = positive qty
-            const absQty = String(Math.abs(Number(draft.quantity)));
-            const fromItem: Record<string, unknown> = {
-                broker_id: draft.broker_id,
-                type: 'TRANSFER',
-                date: draft.date,
-                quantity: String(-Math.abs(Number(draft.quantity))),
-                link_uuid: linkUuid,
-            };
-            const toItem: Record<string, unknown> = {
-                broker_id: dualTo.broker_id,
-                type: 'TRANSFER',
-                date: dualTo.date || draft.date,
-                quantity: absQty,
-                link_uuid: linkUuid,
-            };
-            if (draft.asset_id != null) {
-                fromItem.asset_id = draft.asset_id;
-                toItem.asset_id = draft.asset_id;
-            }
-            if (draft.cost_basis_override && draft.cost_basis_override.amount?.trim()) toItem.cost_basis_override = draft.cost_basis_override;
-            else if (dualTo.cost_basis_override && dualTo.cost_basis_override.amount?.trim()) toItem.cost_basis_override = dualTo.cost_basis_override;
-            if (sharedTags) {
-                fromItem.tags = sharedTags;
-                toItem.tags = sharedTags;
-            }
-            if (sharedDesc) {
-                fromItem.description = sharedDesc;
-                toItem.description = sharedDesc;
-            }
-            return [fromItem, toItem];
-        }
-
-        if (pairLayout === 'transfer_cash') {
-            // CASH_TRANSFER pair: from (negative cash) + to (positive cash)
-            const absAmount = draft.cash?.amount ? String(Math.abs(Number(draft.cash.amount))) : '0';
-            const cashCode = draft.cash?.code ?? '';
-            const fromItem: Record<string, unknown> = {
-                broker_id: draft.broker_id,
-                type: 'CASH_TRANSFER',
-                date: draft.date,
-                quantity: '0',
-                cash: {code: cashCode, amount: String(-Math.abs(Number(absAmount)))},
-                link_uuid: linkUuid,
-            };
-            const toItem: Record<string, unknown> = {
-                broker_id: dualTo.broker_id,
-                type: 'CASH_TRANSFER',
-                date: dualTo.date || draft.date,
-                quantity: '0',
-                cash: {code: cashCode, amount: absAmount},
-                link_uuid: linkUuid,
-            };
-            if (sharedTags) {
-                fromItem.tags = sharedTags;
-                toItem.tags = sharedTags;
-            }
-            if (sharedDesc) {
-                fromItem.description = sharedDesc;
-                toItem.description = sharedDesc;
-            }
-            return [fromItem, toItem];
-        }
-
-        // Fallback — should not happen
-        return [collectCreate()];
+        const toSide: TxDualSide = {
+            broker_id: dualTo.broker_id,
+            date: dualTo.date,
+            cash: dualTo.cash,
+            quantity: dualTo.quantity,
+            cost_basis_override: dualTo.cost_basis_override,
+        };
+        return buildDualCreatePayloads(pairLayout as PayloadPairLayout, draftToTxFields(), toSide, linkUuid);
     }
 
     /**
@@ -1100,75 +935,22 @@
             return;
         }
         try {
-            if (pairLayout) {
-                // Dual-form commit — create or update 2 linked transactions
-                if (mode === 'edit' && partnerRow) {
-                    const payload = {updates: collectDualUpdates()};
-                    const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.form.saveFailed'), toast: false});
-                    if (result.status === 'error') {
-                        formError = result.message;
-                        return;
-                    }
-                    const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{ids?: number[]}>};
-                    if (!resp.committed) {
-                        issues = resp.issues ?? [];
-                        issuesDismissed = false;
-                        commitFailed = true;
-                        return;
-                    }
-                    onCommitted?.({transaction_id: resp.results?.[0]?.ids?.[0] ?? null});
-                    onClose();
-                } else {
-                    const payload = {creates: collectDualCreates()};
-                    const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.form.saveFailed'), toast: false});
-                    if (result.status === 'error') {
-                        formError = result.message;
-                        return;
-                    }
-                    const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{ids?: number[]}>};
-                    if (!resp.committed) {
-                        issues = resp.issues ?? [];
-                        issuesDismissed = false;
-                        commitFailed = true;
-                        return;
-                    }
-                    onCommitted?.({transaction_id: resp.results?.[0]?.ids?.[0] ?? null});
-                    onClose();
-                }
-            } else if (mode === 'edit') {
-                const payload = {updates: [collectUpdate()]};
-                const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.form.saveFailed'), toast: false});
-                if (result.status === 'error') {
-                    formError = result.message;
-                    return;
-                }
-                const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{ids?: number[]}>};
-                if (!resp.committed) {
-                    issues = resp.issues ?? [];
-                    issuesDismissed = false;
-                    commitFailed = true;
-                    return;
-                }
-                onCommitted?.({transaction_id: resp.results?.[0]?.ids?.[0] ?? null});
-                onClose();
-            } else {
-                // create / duplicate
-                const payload = {creates: [collectCreate()]};
-                const result = await saveWithRetry(() => zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never), {fallback: $t('transactions.form.saveFailed'), toast: false});
-                if (result.status === 'error') {
-                    formError = result.message;
-                    return;
-                }
-                const resp = result.data as {committed?: boolean; issues?: ValidationIssue[]; results?: Array<{ids?: number[]}>};
-                if (!resp.committed) {
-                    issues = resp.issues ?? [];
-                    issuesDismissed = false;
-                    commitFailed = true;
-                    return;
-                }
-                onCommitted?.({transaction_id: resp.results?.[0]?.ids?.[0] ?? null});
-                onClose();
+            // Build payload based on mode + pairLayout
+            const payload: Record<string, unknown> = pairLayout ? (mode === 'edit' && partnerRow ? {updates: collectDualUpdates()} : {creates: collectDualCreates()}) : mode === 'edit' ? {updates: [collectUpdate()]} : {creates: [collectCreate()]};
+
+            const result = await commitTransactions(payload, {fallback: $t('transactions.form.saveFailed')});
+            if (result.networkError) {
+                formError = result.networkError;
+                return;
             }
+            if (!result.committed) {
+                issues = result.issues as unknown as ValidationIssue[];
+                issuesDismissed = false;
+                commitFailed = true;
+                return;
+            }
+            onCommitted?.({transaction_id: result.results?.[0]?.ids?.[0] ?? null});
+            onClose();
         } finally {
             committing = false;
             lastCommitDraftKey = currentKey;
@@ -1292,6 +1074,12 @@
     let qtyLabel = $derived(signLabel(rule.quantityRule));
     let cashHint = $derived(signHintText(rule.cashSign));
     let cashLabel = $derived(signLabel(rule.cashSign));
+
+     // Sign-based border coloring for quantity field (mirrors CompactCashCell pattern).
+    // Colors reflect whether the VALUE AFTER AUTO-FLIP conforms to the rule.
+    // Does NOT block input — purely visual guidance.
+    let qtySignHint = $derived(computeSignHint(parseFloat(draft.quantity), rule.quantityRule));
+    let qtyBorderColor = $derived(qtySignHint.bad ? 'oklch(0.637 0.237 25.331 / 0.7)' : qtySignHint.ok ? 'oklch(0.765 0.177 163.223 / 0.7)' : '');
 
     // =========================================================================
     // W39: Inline broker / asset creation modals
@@ -1509,7 +1297,7 @@
                                 autocomplete="off"
                                 spellcheck="false"
                                 name="qty-{autocompleteNonce}"
-                                class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
+                                class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30" style:border-color={qtyBorderColor || undefined}
                                 value={qtyDisplay}
                                 disabled={isReadonly}
                                 oninput={onQuantityInput}
@@ -1775,7 +1563,7 @@
                                     autocomplete="off"
                                     spellcheck="false"
                                     name="qty-{autocompleteNonce}"
-                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
+                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30" style:border-color={qtyBorderColor || undefined}
                                     value={qtyDisplay}
                                     disabled={isReadonly}
                                     oninput={onQuantityInput}
@@ -1818,7 +1606,7 @@
                                     autocomplete="off"
                                     spellcheck="false"
                                     name="qty-{autocompleteNonce}"
-                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
+                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30" style:border-color={qtyBorderColor || undefined}
                                     value={qtyDisplay}
                                     disabled={isReadonly}
                                     oninput={onQuantityInput}

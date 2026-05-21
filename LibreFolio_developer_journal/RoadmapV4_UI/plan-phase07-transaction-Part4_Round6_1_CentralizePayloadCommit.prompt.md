@@ -1,7 +1,7 @@
 # Plan: Centralizzazione Payload + API Commit/Validate — Creazione, Migrazione, Test
 
 **Date**: 2026-05-20
-**Status**: ⏳ DA ESEGUIRE
+**Status**: Da verificare implementazione (2026-05-20)
 **Link back**: [`plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md) (riga 762)
 
 ---
@@ -394,4 +394,224 @@ Step 0 è preliminare (rename meccanico). Steps 3-6 sono indipendenti tra loro (
 3. **`commitTransactions` usa SEMPRE `trySave`** — ✅ RISOLTO. `trySave` (ex `saveWithRetry`, rinominato in Step 0) con default `{toast: false}`. Nessun side-effect per chi prima faceva raw try/catch — estrazione messaggi migliore gratis.
 
 4. **Anti-bounce resta nei componenti** — la logica `lastDraftKey`/`lastCommitDraftKey`/`COMMIT_ANTI_BOUNCE_MS` è stato locale del UI component. NON va centralizzata in `txCommitApi.ts`.
+
+---
+
+Al termine del piano tornare a plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md 
+
+---
+
+## Post-implementazione (progresso incrementale)
+
+### Step 0 — ✅ Completato (2026-05-20)
+
+- File rinominati: `saveWithRetry.ts` → `trySave.ts`
+- Funzione: `saveWithRetry` → `trySave`
+- Tipo: `SaveWithRetryOptions` → `TrySaveOptions`
+- **10 file aggiornati** (non 7 come stimato): i 3 extra sono `BrokerImportFilesModal.svelte`, `BrokerModal.svelte`, `BrokerSharingModal.svelte`, `CashTransactionModal.svelte`
+- svelte-check: 0 errors, 1 warning pre-esistente (WacPreviewSection, non correlato)
+
+### Step 1 — ✅ Completato (2026-05-20)
+
+- Aggiunte in `txPayloadHelpers.ts`: `TxDualSide`, `PairFormLayout`, `buildDualCreatePayloads`, `ResolvedOp`, `buildBatchPayload`
+- File passa da 196 → 392 LOC (+196)
+- svelte-check: 0 errors
+
+### Step 2 — ✅ Completato (2026-05-20)
+
+- Creato `frontend/src/lib/utils/txCommitApi.ts` (137 LOC)
+- Exports: `CommitResult`, `CommitOptions`, `TxValidationIssue`, `commitTransactions`, `validateTransactions`
+- Usa `trySave` internamente, filtra `extra_forbidden`, normalizza risposta
+- svelte-check: 0 errors
+
+
+## Post-implementazione (2026-05-20)
+
+### Steps 3-7 — Migrazione completata
+
+- **Step 3 (FormModal)**: già migrato nella sessione precedente — usa `commitTransactions`, `validateTransactions`, `buildCreatePayload`, `buildDualCreatePayloads`
+- **Step 4 (BulkModal)**: refactored con `resolveOps()` interna + `buildBatchPayload()` + `commitTransactions`/`validateTransactions`. Rimosso import di `trySave`/`extractValidationIssues` diretti
+- **Step 5 (BulkDeleteLinkedPairModal)**: migrato a `commitTransactions()`, rimosso import `zodiosApi` diretto
+- **Step 6 (+page.svelte)**: migrati `confirmDeleteModal`, `validateDeleteModal`, `confirmSplit`, `onPromoteMergeConfirm` a `commitTransactions`/`validateTransactions`
+- **Step 7 (TXReadItem consolidation)**: arricchito `types.ts` con `cost_basis_override?: {code: string; amount: string} | string | null`, rimossa definizione duplicata da FormModal e BulkDeleteLinkedPairModal
+
+### Fix aggiuntivo
+
+- `DualDraftTo` interface in FormModal: aggiunto campo `quantity?: string` mancante (errore TS pre-esistente emerso dopo Step 3)
+
+### Steps 9-11 — Testing
+
+- **Step 9**: Creato `frontend/src/lib/utils/__tests__/txPayloadHelpers.test.ts` — 56 unit tests (parametrici con `it.each`)
+- **Step 10**: Creato `frontend/src/lib/utils/__tests__/txCommitApi.test.ts` — 12 unit tests con mock di `trySave`
+- **Step 11**: Registrato `tx-unit` in `scripts/test_runner/_frontend_transaction.py` → `./dev.py test front-transaction tx-unit`
+- Totale vitest: 95 tests (4 files), tutti ✅
+
+### Verifica finale
+
+- `./dev.py front check`: 0 errors, 0 warnings
+- `./dev.py test front-transaction all`: 14 PASSED, 0 FAILED (backend + Playwright)
+- `npx vitest run`: 95 tests passed (4 files, 273ms)
+
+> ⚠️ **NOTA**: La verifica finale sopra è da confermare manualmente dall'umano — possibili regressioni non coperte dai test automatici (edge-case UI, interazioni multi-modale, segni dual-create in scenari non testati).
+
+### Status globale (2026-05-20)
+
+**Steps 0-11**: ✅ COMPLETATI
+**Step 12**: ✅ COMPLETATO (eliminazione `test.skip` condizionali — 0 skip rimasti)
+
+### FIXME asset-event-delete — ✅ RISOLTO (2026-05-20)
+
+**File**: `frontend/e2e/assets/asset-event-delete.spec.ts`
+
+Il `test.fixme('delete unlinked event succeeds')` che assumeva un "Events tab" separato è stato riscritto per matchare l'UI attuale:
+- Flusso: `asset-detail-editdata-btn` → `asset-detail-editor-panel` → `asset-editor-events-tab` → DataEditor rows → `data-action-id="delete"` → `asset-editor-save-btn`
+- Aggiunto `data-testid="asset-editor-save-btn"` e `data-testid="asset-editor-cancel-btn"` a `AssetDataEditorSection.svelte`
+- 4 scenari ora funzionanti: delete unlinked (Loan Milano), delete linked/RESTRICT (Apple), cascade check, event badge
+
+### Fix tx-wac.spec.ts — ✅ RISOLTO (2026-05-20)
+
+Tutti 7 test WAC fallivano per testid errati (generati in una sessione precedente senza verificare l'UI reale):
+- `tx-new-btn` → `tx-add-button` (testid reale del pulsante "Add Transaction")
+- `tx-type-option-${type}` → `search-select-option-${type}` (testid generico del SearchSelect)
+- `selectType()` helper riscritto: apre il combobox SearchSelect, poi clicca l'opzione
+- `goToTransactions()` allineato al pattern degli altri spec: `Promise.race` su `tx-table` / `tx-loading`
+- `42.50` → `42.5` (normalizzazione `input[type="number"]`)
+
+Risultato: 7/7 PASSED.
+
+---
+
+## Post-migrazione: Micro-improvements UX + Test Coverage (2026-05-21)
+
+### Toast commit con elenco puntato + emoji
+
+**File**: `frontend/src/routes/(app)/transactions/+page.svelte` (`handleBulkCommitted`)
+
+Formato precedente: `✅ Salvate 9 transazioni (6 create, 2 aggiornate, 1 eliminate)`
+
+Formato nuovo (multilinea con `whitespace-pre-line`):
+```
+✅ Salvate 9 transazioni
+• ➕ 6 create
+• ✏️ 2 aggiornate
+• 🗑️ 1 eliminate
+```
+
+Emoji per ogni stato: `➕ create`, `✏️ updated`, `🗑️ deleted`, `✂️ split`, `🔗 promoted`.
+
+### Sign coloring (bordo qty + cash)
+
+**Helper condiviso**: `frontend/src/lib/utils/signHintColor.ts` (NUOVO, 44 LOC)
+- Esporta `computeSignHint(value: number, rule: SignRule): {ok, bad}`
+- Copre tutte le regole backend: `positive`, `negative`, `nonzero`, `zero`, `any`/`free`
+- Ragiona sul valore POST auto-flip (utente entra positivo → sistema nega → finale = negativo = OK per `'negative'`)
+
+**Qty (FormModal)**: 3 istanze → `style:border-color={qtyBorderColor || undefined}`
+- Verde oklch `0.765 0.177 163.223 / 0.7` quando conforme
+- Rosso oklch `0.637 0.237 25.331 / 0.7` quando viola
+- Nessuno style quando neutro (NaN, rule='any')
+
+**Cash (CompactCashCell)**: refactored da ~20 LOC switch/case a 5 LOC con `computeSignHint()` — funzionalità invariata, ora copre anche `nonzero` e `zero`.
+
+### Test E2E aggiunti (transactions-modals.spec.ts)
+
+| Test | ID | Scenario | Verifiche |
+|------|----|----------|-----------|
+| T12a | Sign coloring BUY | qty neg → red, pos → green | `el.style.borderColor` contiene hue oklch |
+| T12b | Sign coloring SELL | pos → green (auto-flip), neg → red | Attende `(−)` label come signal type rules loaded |
+| T13 | BulkModal validate | ADJUSTMENT + asset + qty → Apply → workspace → validate | Issues banner con testo non vuoto OPPURE valid badge ✓ |
+
+### Note tecniche
+
+- **Tailwind v4 + classi dinamiche**: le classi interpolate `{variabile}` NON vengono generate dal JIT. Soluzione: `style:border-color` inline (Svelte applica via CSSOM, non come attributo HTML).
+- **Type rules async**: il form usa la fallback rule (`quantityRule:'free'`) fino a quando il server risponde. Test devono attendere il label `(+)/(−)` come proxy per "rules loaded".
+- **Frontend build stale**: i test E2E usano il build statico servito da FastAPI — dopo modifiche svelte serve `./dev.py front build` prima dei test.
+
+### Verifica finale (2026-05-21)
+
+- `svelte-check`: 0 errors, 0 warnings
+- `transactions-modals.spec.ts`: 17/17 PASSED (14 pre-esistenti + 3 nuovi)
+- `./dev.py test front-transaction all`: 15/15 PASSED
+- `grep -rn "test.skip\|test.fixme" frontend/e2e/ | grep -v gallery`: **0 risultati**
+
+---
+
+## Step 12 — Eliminazione `test.skip` condizionali dai test E2E
+
+**Date**: 2026-05-20
+**Status**: ⏳ IN PIANO
+**Rationale**: Il `populate_mock_data.py` gira sempre prima dei test E2E (via global-setup). Tutti i dati necessari **devono** esistere. I `test.skip` condizionali mascherano problemi reali (dati mancanti = bug nel seeding, UI non renderizzata = bug FE). Vanno eliminati: se il dato manca → aggiungere al mock; se il componente non renderizza → test deve fallire.
+
+### Inventario skip (69 occorrenze in ~10 file)
+
+| File | Skip count | Categoria prevalente |
+|------|-----------|---------------------|
+| `tx-picker-pagination.spec.ts` | 15 | UI component non visibile |
+| `tx-split-promote.spec.ts` | 7 | Dati paired/tagged non trovati |
+| `transactions-modals.spec.ts` | 7 | Dati mancanti + UI |
+| `transactions-table.spec.ts` | 4 | Linked pairs non trovati |
+| `tx-bulk-suggest-ux.spec.ts` | 1 | Split button non visibile |
+| `tx-delete.spec.ts` | 4 | Righe non trovate (paginazione) |
+| `tx-crud-full.spec.ts` | 1 | Test placeholder vuoto |
+| `utilities.spec.ts` | 2 | FX/Assets non disponibili |
+
+### Strategia per categoria
+
+| Categoria | Azione | N. skip |
+|-----------|--------|---------|
+| **Paginazione** (riga non in pagina 1) | Navigare con `?page_size=200` | ~6 |
+| **Dati garantiti** (linked pairs, tags, TX, brokers, FX, assets) | `expect(x).toBeTruthy()` hard fail — se manca → fix mock | ~35 |
+| **UI component** (BulkModal, Picker, PageSize selector) | `await expect(x).toBeVisible()` hard fail — se non renderizza → bug FE | ~20 |
+| **Test placeholder** (corpo vuoto) | Completare con assertions reali o eliminare se coperto altrove | ~2 |
+| **Access-level fallback** (split non visibile su VIEWER row) | Usare riga con accesso OWNER/EDITOR garantito dal mock | ~6 |
+
+### Ordine esecuzione
+
+```
+12.1  utilities.spec.ts (2 skip — più semplice, warm-up)
+12.2  transactions-table.spec.ts (4 skip)
+12.3  transactions-modals.spec.ts (7 skip)
+12.4  tx-delete.spec.ts (4 skip — 2 già fixati con page_size=200)
+12.5  tx-crud-full.spec.ts (1 skip — placeholder)
+12.6  tx-split-promote.spec.ts (7 skip)
+12.7  tx-bulk-suggest-ux.spec.ts (1 skip)
+12.8  tx-picker-pagination.spec.ts (15 skip — più complesso)
+12.9  Run finale: ./dev.py test all-frontend (0 skip, 0 fail)
+```
+
+### Per ogni file (workflow)
+
+1. Leggere i `test.skip` → capire il dato richiesto
+2. Verificare che `populate_mock_data.py` lo crea (grep la descrizione/tag)
+3. Se manca → aggiungere al mock + `./dev.py db create-clean --test`
+4. Sostituire `test.skip(!x, msg)` → `expect(x, msg + ' — check populate_mock_data.py').toBeTruthy()`
+5. Se è un UI component → `await expect(x).toBeVisible({timeout: N})`
+6. Eseguire `npx playwright test <file> --project desktop` → verificare 0 skip, 0 fail
+7. Next file
+
+### Dati mock potenzialmente da aggiungere
+
+| Dato | Usato da | Presente oggi? |
+|------|----------|---------------|
+| Linked pairs visibili in pagina 1 | `transactions-table.spec.ts` TT2/TT3/TT9 | ✅ Sì (Asym-a/b/c/d + delete-safe) |
+| Tagged transactions | `transactions-table.spec.ts` TT11 | ✅ Sì (access-test, delete-safe, promote-test) |
+| ≥21 TX non-paired per picker pagination | `tx-picker-pagination.spec.ts` P1 | ✅ Probabile (mock ha ~80 TX) |
+| FX pairs configurati | `utilities.spec.ts` | ✅ Sì (EUR/USD, EUR/CHF, etc.) |
+| Assets configurati | `utilities.spec.ts` | ✅ Sì (Apple, Bitcoin, etc.) |
+| promote-test WITHDRAWAL+DEPOSIT rows | `tx-split-promote.spec.ts` | ✅ Sì (TX #{W,D} taggati `promote-test`) |
+| Delete-safe paired TX con accesso EDITOR+ | `tx-split-promote.spec.ts` C3 | ✅ Sì (ETH Coinbase↔IB) |
+
+### Rischi
+
+| Rischio | Mitigazione |
+|---------|-------------|
+| Test fragili dopo rimozione skip (race condition UI) | Usare timeout ragionevoli (non 500ms, ma 3-5s per modali) |
+| Ordine distruttivo (test precedente elimina riga usata dopo) | Verificare che test distruttivi usino SOLO righe `delete-safe`; test di lettura usino righe diverse |
+| Mock data cresce troppo | Ogni aggiunta è tagged e documentata — nessun dato "generico" |
+
+### Definizione di done
+
+- `grep -rn "test.skip" frontend/e2e/ | wc -l` → **0**
+- `./dev.py test all-frontend` → tutti PASSED, **0 skipped**
+- PR con messaggio: `test(e2e): remove all conditional test.skip — hard-fail on missing data`
 

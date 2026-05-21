@@ -7,6 +7,7 @@
     import {Plus, Upload, Pencil, Copy, Trash2, RefreshCw, Link2, Unlink} from 'lucide-svelte';
 
     import {zodiosApi} from '$lib/api';
+    import {commitTransactions, validateTransactions} from '$lib/utils/txCommitApi';
     import {ensureTxTypesLoaded} from '$lib/stores/txTypeStore';
     import {ensureAssetsLoaded} from '$lib/stores/assetStore';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/brokerStore';
@@ -496,7 +497,7 @@
     }
     function handleBulkCommitted(resp: unknown) {
         bulkOpen = false;
-        // F11: improved toast with localized summary
+        // F11: improved toast with localized summary — bulleted list with emoji
         const r = resp as {results?: Array<{operation: string; status: string}>};
         if (r?.results) {
             const created = r.results.filter((x) => x.operation === 'create' && x.status === 'success').length;
@@ -507,13 +508,14 @@
             const total = created + updated + deleted + split + promoted;
             if (total > 0) {
                 const mainMsg = $_('transactions.toast.commitSummary', {values: {n: total}}) || `Saved ${total} transactions`;
-                const details: string[] = [];
-                if (created) details.push(`${created} ${$_('transactions.toast.created') || 'created'}`);
-                if (updated) details.push(`${updated} ${$_('transactions.toast.updated') || 'updated'}`);
-                if (deleted) details.push(`${deleted} ${$_('transactions.toast.deleted') || 'deleted'}`);
-                if (split) details.push($_('transactions.toast.splitCount', {values: {n: split}}) || `${split} split`);
-                if (promoted) details.push($_('transactions.toast.promoteCount', {values: {n: promoted}}) || `${promoted} promoted`);
-                toasts.success(`✅ ${mainMsg}${details.length > 0 ? ` (${details.join(', ')})` : ''}`);
+                const lines: string[] = [];
+                if (created) lines.push(`➕ ${created} ${$_('transactions.toast.created') || 'created'}`);
+                if (updated) lines.push(`✏️ ${updated} ${$_('transactions.toast.updated') || 'updated'}`);
+                if (deleted) lines.push(`🗑️ ${deleted} ${$_('transactions.toast.deleted') || 'deleted'}`);
+                if (split) lines.push(`✂️ ${$_('transactions.toast.splitCount', {values: {n: split}}) || `${split} split`}`);
+                if (promoted) lines.push(`🔗 ${$_('transactions.toast.promoteCount', {values: {n: promoted}}) || `${promoted} promoted`}`);
+                const body = lines.length > 0 ? `\n${lines.map((l) => `• ${l}`).join('\n')}` : '';
+                toasts.success(`✅ ${mainMsg}${body}`);
             }
         }
         void reload({soft: true});
@@ -607,8 +609,8 @@
             const payload: Record<string, unknown> = {
                 promotes: [{id_a: promoteTarget.idA, id_b: promoteTarget.idB, ...(Object.keys(resolved).length > 0 ? {resolved_fields: resolved} : {})}],
             };
-            const resp = (await zodiosApi.commit_transactions_api_v1_transactions_commit_post(payload as never)) as {committed?: boolean; issues?: unknown[]};
-            if (resp?.committed) {
+            const result = await commitTransactions(payload, {fallback: $_('transactions.promote.failed') || 'Promote failed'});
+            if (result.committed) {
                 promoteMergeOpen = false;
                 promoteConfirmOpen = false;
                 promoteTarget = null;
@@ -616,10 +618,8 @@
                 selectedRows = [];
                 await reload({soft: true});
             } else {
-                console.error('[promote] commit failed:', resp?.issues);
+                console.error('[promote] commit failed:', result.issues);
             }
-        } catch (e) {
-            console.error('[promote]', e);
         } finally {
             promoting = false;
         }
@@ -627,7 +627,7 @@
 
     function handleSplitRow(row: TXReadItem) {
         splitConfirmTx = row;
-        splitConfirmPartner = row.related_transaction_id ? (txStoreGet(row.related_transaction_id) as TXReadItem | null) ?? null : null;
+        splitConfirmPartner = row.related_transaction_id ? ((txStoreGet(row.related_transaction_id) as TXReadItem | null) ?? null) : null;
         splitConfirmOpen = true;
     }
 
@@ -639,8 +639,8 @@
         }
         splitting = true;
         try {
-            const resp = (await zodiosApi.commit_transactions_api_v1_transactions_commit_post({splits: [{id_a: splitConfirmTx.id, id_b: splitConfirmPartner.id}]} as never)) as {committed?: boolean; issues?: unknown[]};
-            if (resp?.committed) {
+            const result = await commitTransactions({splits: [{id_a: splitConfirmTx.id, id_b: splitConfirmPartner.id}]}, {fallback: $_('transactions.split.failed') || 'Split failed'});
+            if (result.committed) {
                 toasts.success($_('transactions.split.success') || 'Pair unlinked successfully');
                 splitConfirmOpen = false;
                 splitConfirmTx = null;
@@ -648,10 +648,8 @@
                 selectedRows = [];
                 await reload({soft: true});
             } else {
-                console.error('[split] commit failed:', resp?.issues);
+                console.error('[split] commit failed:', result.issues);
             }
-        } catch (e) {
-            console.error('[split]', e);
         } finally {
             splitting = false;
         }
@@ -818,8 +816,11 @@
             if (deleteModalPartner && !deleteModalPartnerInaccessible) {
                 ids.push(deleteModalPartner.id);
             }
-            const resp = (await zodiosApi.commit_transactions_api_v1_transactions_commit_post({deletes: ids} as never)) as {committed?: boolean; issues?: Array<{error: string; code?: string; params?: Record<string, any>}>};
-            if (resp?.committed) {
+            const result = await commitTransactions({deletes: ids}, {fallback: $_('transactions.deleteModal.failed') || 'Delete failed'});
+            if (result.networkError) {
+                deleteModalErrors = [result.networkError];
+                deleteModalErrorVariant = 'error';
+            } else if (result.committed) {
                 // Build rich HTML toast from cached TX data
                 const tx = deleteModalTx;
                 const typeLabel = typeHtml(tx.type);
@@ -856,7 +857,7 @@
             } else {
                 // committed: false — resolve errors with resolveIssueMessage
                 const ctx = buildResolverCtx();
-                deleteModalErrors = (resp?.issues ?? []).map((i) => resolveIssueMessage(i, $_, ctx));
+                deleteModalErrors = (result.issues ?? []).map((i) => resolveIssueMessage(i, $_, ctx));
                 deleteModalErrorVariant = 'error';
             }
         } catch (e) {
@@ -876,16 +877,16 @@
             if (deleteModalPartner && !deleteModalPartnerInaccessible) {
                 ids.push(deleteModalPartner.id);
             }
-            const resp = (await zodiosApi.validate_transactions_api_v1_transactions_validate_post({deletes: ids} as never)) as {committed?: boolean; issues?: Array<{error: string; code?: string; params?: Record<string, any>}>};
-            if (!resp?.issues || resp.issues.length === 0) {
+            const result = await validateTransactions({deletes: ids}, {fallback: $_('transactions.deleteModal.validateFailed') || 'Validation failed'});
+            if (result.networkError) {
+                deleteModalErrors = [result.networkError];
+            } else if (!result.issues || result.issues.length === 0) {
                 deleteModalValidated = true;
             } else {
                 const ctx = buildResolverCtx();
-                deleteModalErrors = (resp?.issues ?? []).map((i) => resolveIssueMessage(i, $_, ctx));
+                deleteModalErrors = result.issues.map((i) => resolveIssueMessage(i, $_, ctx));
                 deleteModalErrorVariant = 'warning';
             }
-        } catch (e) {
-            deleteModalErrors = [e instanceof Error ? e.message : String(e)];
         } finally {
             deleteModalValidating = false;
         }
@@ -1067,7 +1068,7 @@
     txA={promoteMergeData?.txA}
     txB={promoteMergeData?.txB}
     targetTypeLabel={promoteMergeData?.targetTypeLabel ?? ''}
-    availableTags={availableTags}
+    {availableTags}
     onConfirm={onPromoteMergeConfirm}
     onCancel={() => {
         promoteMergeOpen = false;

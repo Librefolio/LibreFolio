@@ -193,3 +193,180 @@ export function diffDualItem(item: Record<string, unknown>, orig: TxOriginal): R
     }
     return out;
 }
+
+// =============================================================================
+//  Dual-form payload builder — centralizes paired CREATE logic
+// =============================================================================
+
+/** Minimal fields for the "to" side of a dual-form transaction. */
+export interface TxDualSide {
+    broker_id: number;
+    date?: string;
+    cash?: CashValue | null;
+    quantity?: string;
+    cost_basis_override?: CashValue | null;
+}
+
+export type PairFormLayout = 'fx' | 'transfer_asset' | 'transfer_cash';
+
+/**
+ * Build 2 TXCreateItem payloads for a paired (dual-form) transaction.
+ * Returns [fromItem, toItem] with shared link_uuid and correct signs per layout.
+ *
+ * Layout semantics:
+ * - 'fx': FX_CONVERSION — qty=0 both sides, cash with opposite signs, different currencies
+ * - 'transfer_asset': TRANSFER — qty with opposite signs, no cash, shared asset
+ * - 'transfer_cash': CASH_TRANSFER — qty=0, cash with opposite signs, same currency
+ */
+export function buildDualCreatePayloads(layout: PairFormLayout, from: TxFields, to: TxDualSide, linkUuid: string): [Record<string, unknown>, Record<string, unknown>] {
+    const sharedTags = from.tags && from.tags.length > 0 ? from.tags : undefined;
+    const sharedDesc = (from.description ?? '').trim() || undefined;
+
+    if (layout === 'fx') {
+        const fromCashAmt = from.cash?.amount ? String(-Math.abs(Number(from.cash.amount))) : '0';
+        const toCashAmt = to.cash?.amount ? String(Math.abs(Number(to.cash.amount))) : '0';
+        const fromItem: Record<string, unknown> = {
+            broker_id: from.broker_id,
+            type: 'FX_CONVERSION',
+            date: from.date,
+            quantity: '0',
+            cash: {code: from.cash?.code ?? '', amount: fromCashAmt},
+            link_uuid: linkUuid,
+        };
+        const toItem: Record<string, unknown> = {
+            broker_id: from.broker_id,
+            type: 'FX_CONVERSION',
+            date: to.date || from.date,
+            quantity: '0',
+            cash: {code: to.cash?.code ?? '', amount: toCashAmt},
+            link_uuid: linkUuid,
+        };
+        if (sharedTags) {
+            fromItem.tags = sharedTags;
+            toItem.tags = sharedTags;
+        }
+        if (sharedDesc) {
+            fromItem.description = sharedDesc;
+            toItem.description = sharedDesc;
+        }
+        return [fromItem, toItem];
+    }
+
+    if (layout === 'transfer_asset') {
+        const absQty = String(Math.abs(Number(from.quantity)));
+        const fromItem: Record<string, unknown> = {
+            broker_id: from.broker_id,
+            type: 'TRANSFER',
+            date: from.date,
+            quantity: String(-Math.abs(Number(from.quantity))),
+            link_uuid: linkUuid,
+        };
+        const toItem: Record<string, unknown> = {
+            broker_id: to.broker_id,
+            type: 'TRANSFER',
+            date: to.date || from.date,
+            quantity: absQty,
+            link_uuid: linkUuid,
+        };
+        if (from.asset_id != null) {
+            fromItem.asset_id = from.asset_id;
+            toItem.asset_id = from.asset_id;
+        }
+        if (from.cost_basis_override && (from.cost_basis_override as CashValue).amount?.trim()) {
+            toItem.cost_basis_override = from.cost_basis_override;
+        } else if (to.cost_basis_override && to.cost_basis_override.amount?.trim()) {
+            toItem.cost_basis_override = to.cost_basis_override;
+        }
+        if (sharedTags) {
+            fromItem.tags = sharedTags;
+            toItem.tags = sharedTags;
+        }
+        if (sharedDesc) {
+            fromItem.description = sharedDesc;
+            toItem.description = sharedDesc;
+        }
+        return [fromItem, toItem];
+    }
+
+    // layout === 'transfer_cash'
+    const absAmount = from.cash?.amount ? String(Math.abs(Number(from.cash.amount))) : '0';
+    const cashCode = from.cash?.code ?? '';
+    const fromItem: Record<string, unknown> = {
+        broker_id: from.broker_id,
+        type: 'CASH_TRANSFER',
+        date: from.date,
+        quantity: '0',
+        cash: {code: cashCode, amount: String(-Math.abs(Number(absAmount)))},
+        link_uuid: linkUuid,
+    };
+    const toItem: Record<string, unknown> = {
+        broker_id: to.broker_id,
+        type: 'CASH_TRANSFER',
+        date: to.date || from.date,
+        quantity: '0',
+        cash: {code: cashCode, amount: absAmount},
+        link_uuid: linkUuid,
+    };
+    if (sharedTags) {
+        fromItem.tags = sharedTags;
+        toItem.tags = sharedTags;
+    }
+    if (sharedDesc) {
+        fromItem.description = sharedDesc;
+        toItem.description = sharedDesc;
+    }
+    return [fromItem, toItem];
+}
+
+// =============================================================================
+//  Batch payload assembly — pure aggregation of resolved ops
+// =============================================================================
+
+/** A single resolved CUD operation — result of iterating PendingOps and diffing. */
+export interface ResolvedOp {
+    intent: 'create' | 'update' | 'delete';
+    /** CREATE or UPDATE payload (Record with fields to send). */
+    payload?: Record<string, unknown>;
+    /** For delete: the transaction ID to delete. */
+    deleteId?: number;
+    /** Partner CREATE/UPDATE payload (for paired dual-form edits/creates). */
+    partnerPayload?: Record<string, unknown> | null;
+    /** Partner ID to delete (for paired deletes). */
+    partnerDeleteId?: number | null;
+}
+
+/**
+ * Assemble the final batch API payload from resolved CUD ops + atomic commands.
+ *
+ * Splits/promotes are first-class inputs because they affect how edits are resolved
+ * (split-queued rows have type stripped, promote-queued rows are skipped).
+ * The resolveOps() caller has already applied these rules — this function just assembles.
+ *
+ * Omits empty arrays from the output (e.g. no `creates` key if none exist).
+ */
+export function buildBatchPayload(input: {ops: ResolvedOp[]; splits?: {id_a: number; id_b: number}[]; promotes?: Record<string, unknown>[]}): Record<string, unknown> {
+    const creates: Record<string, unknown>[] = [];
+    const updates: Record<string, unknown>[] = [];
+    const deletes: number[] = [];
+
+    for (const op of input.ops) {
+        if (op.intent === 'create') {
+            if (op.payload) creates.push(op.payload);
+            if (op.partnerPayload) creates.push(op.partnerPayload);
+        } else if (op.intent === 'update') {
+            if (op.payload) updates.push(op.payload);
+            if (op.partnerPayload) updates.push(op.partnerPayload);
+        } else if (op.intent === 'delete') {
+            if (op.deleteId != null) deletes.push(op.deleteId);
+            if (op.partnerDeleteId != null) deletes.push(op.partnerDeleteId);
+        }
+    }
+
+    const out: Record<string, unknown> = {};
+    if (creates.length > 0) out.creates = creates;
+    if (updates.length > 0) out.updates = updates;
+    if (deletes.length > 0) out.deletes = deletes;
+    if (input.splits && input.splits.length > 0) out.splits = input.splits;
+    if (input.promotes && input.promotes.length > 0) out.promotes = input.promotes;
+    return out;
+}

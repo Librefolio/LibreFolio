@@ -24,13 +24,10 @@ test.describe('Asset Detail Page', () => {
     async function goToFirstAssetDetail(page: import('@playwright/test').Page) {
         await goToAssetsPage(page);
         const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-        if (await firstCard.isVisible({timeout: 5000}).catch(() => false)) {
-            await firstCard.click();
-            await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
-            await page.waitForTimeout(1000);
-        } else {
-            test.skip(true, 'No assets available in test DB');
-        }
+        await expect(firstCard).toBeVisible({timeout: 5_000});
+        await firstCard.click();
+        await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
+        await page.waitForTimeout(1000);
     }
 
     // ========================================================================

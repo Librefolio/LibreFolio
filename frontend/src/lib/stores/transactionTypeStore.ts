@@ -305,12 +305,7 @@ export interface PromoteContext {
  * to return the correct target type (e.g. CASH_TRANSFER vs FX_CONVERSION).
  * Without context, returns the first type-matching rule (backward compat).
  */
-export function findPromoteMatch(
-    typeA: string,
-    typeB: string,
-    t: (key: string) => string,
-    context?: PromoteContext,
-): PromoteMatch | null {
+export function findPromoteMatch(typeA: string, typeB: string, t: (key: string) => string, context?: PromoteContext): PromoteMatch | null {
     if (!_cache) return null;
     /** Check if a single constraint is satisfied given the context. */
     function checkConstraint(c: {field: string; relation: string}, isForward: boolean): boolean | null {
