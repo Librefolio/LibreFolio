@@ -41,7 +41,7 @@ Solo i rendimenti **al di sotto** della soglia contribuiscono alla deviazione al
 
     $$So = \frac{0.12 - 0.03}{0.10} = 0.90$$
 
-    Confronto con Sharpe (se $\sigma$ totale = 15%): $S = 0.60$. Il Sortino è più alto perché la volatilità positiva è esclusa.
+    Confronto con Sharpe (se σ totale = 15%): $S = 0.60$. Il Sortino è più alto perché la volatilità positiva è esclusa.
 
 ---
 

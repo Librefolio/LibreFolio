@@ -44,8 +44,8 @@ dove $t$ rappresenta gli anni trascorsi e $T$ è il tempo rimanente fino alla da
 
 ### 📉 La Logica
 
-- **Gli investitori giovani** hanno un orizzonte temporale lungo $\rightarrow$ possono tollerare la volatilità a breve termine $\rightarrow$ dovrebbero detenere più azioni
-- **Gli investitori prossimi al pensionamento** necessitano della preservazione del capitale $\rightarrow$ dovrebbero detenere più obbligazioni
+- **Gli investitori giovani** hanno un orizzonte temporale lungo → possono tollerare la volatilità a breve termine → dovrebbero detenere più azioni
+- **Gli investitori prossimi al pensionamento** necessitano della preservazione del capitale → dovrebbero detenere più obbligazioni
 - Il glide path automatizza questa transizione
 
 ---

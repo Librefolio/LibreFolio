@@ -19,7 +19,7 @@ LibreFolio proporciona cuatro indicadores técnicos como indicadores superpuesto
 | **EMA** | Dirección de la tendencia | Detección de cruces dorados/de la muerte | [📖](ema.md) |
 | **MACD** | Impulso / aceleración de la tendencia | Cruces alcistas/bajistas | [📖](macd.md) |
 | **RSI** | Sobrecompra / sobreventa | Configuraciones de reversión a la media | [📖](rsi.md) |
-| **Bandas de Bollinger** | Envolvente de volatilidad | Detección de compresión $\rightarrow$ ruptura | [📖](bollinger-bands.md) |
+| **Bandas de Bollinger** | Envolvente de volatilidad | Detección de compresión → ruptura | [📖](bollinger-bands.md) |
 
 ---
 

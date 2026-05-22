@@ -29,7 +29,7 @@ Benchmarks matemáticos superpuestos en los gráficos para su comparación. A di
 
 En finanzas, *rápido* y *lento* se refieren a la **constante de tiempo** ($\tau$) del filtro subyacente.
 
-| Propiedad | Rápido (N pequeño) | Lento (N grande) |
+| Propiedad | Rápido ($N$ pequeño) | Lento ($N$ grande) |
 |---|---|---|
 | Frecuencia de corte $f_c$ | Más alta | Más baja |
 | Rechazo de ruido | Pobre — deja pasar HF | Bueno — suavizado fuerte |

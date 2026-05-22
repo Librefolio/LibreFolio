@@ -1,6 +1,6 @@
 # ![](../../../static/icons/transactions/cash-transfer.png){: width="32" style="vertical-align: middle;" } Cash Transfer
 
-**Cash transfers** (wire transfers / bonifici) move money between broker accounts. In LibreFolio, this is a **paired transaction** — each transfer creates two linked rows: a "from" side (negative cash) and a "to" side (positive cash).
+**Cash transfers** (wire transfers / bonifici) move money between broker accounts. The balance decreases at the source and increases at the destination — no assets are involved.
 
 ---
 
@@ -13,14 +13,13 @@
 | **Asset effect** | — | — |
 | **Broker** | Source broker | Destination broker |
 | **Currency** | Same on both sides | Same on both sides |
-| **Paired** | ✅ Yes (linked via `link_uuid`) | ✅ Yes |
 | **Tax event** | No | No |
 
 ---
 
 ## 📊 How It Works
 
-Both halves share the same currency and `link_uuid`. The cash amount is mirrored: one side is negative (outgoing), the other is positive (incoming). The two sides may have **different dates** — e.g., a wire sent on Monday may arrive on Wednesday.
+A cash transfer records **two entries**: one withdrawal at the source broker and one deposit at the destination. Both share the same currency with mirrored amounts. The two sides may have **different dates** — e.g., a wire sent on Monday may arrive on Wednesday.
 
 Common scenarios:
 
@@ -30,16 +29,18 @@ Common scenarios:
 
 !!! note "Different dates"
 
-    Unlike asset transfers where both sides typically settle on the same date, wire transfers may span multiple days. LibreFolio supports separate dates for each half of the pair.
+    Unlike asset transfers where both sides typically settle on the same date, wire transfers may span multiple days. LibreFolio supports separate dates for each side.
 
 ---
 
-## 🔀 Split & Promote
+## 🔀 Relationship with Deposits/Withdrawals
+
+Under the hood, a Cash Transfer is composed of a Withdrawal and a Deposit. LibreFolio supports:
 
 | Operation | Result |
 |-----------|--------|
-| **Split** (unlink pair) | "From" → `WITHDRAWAL`, "To" → `DEPOSIT` |
-| **Promote** (link W+D) | `WITHDRAWAL` + `DEPOSIT` → `CASH_TRANSFER` pair |
+| **Split** (unlink) | Cash Transfer → independent Withdrawal + Deposit |
+| **Promote** (link) | Withdrawal + Deposit → Cash Transfer |
 
 **Promote constraints**: same currency, different brokers, opposite cash amounts.
 
@@ -50,4 +51,3 @@ Common scenarios:
 - 🔄 **[Asset Transfer](transfer.md)** — Moving securities (not cash)
 - 💵 **[Deposit & Withdrawal](deposit-withdrawal.md)** — Single-sided cash movements
 - 💱 **[FX Conversion](fx-conversion.md)** — Currency exchange
-

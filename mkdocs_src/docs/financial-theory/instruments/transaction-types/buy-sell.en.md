@@ -41,24 +41,9 @@ $$
 
 ---
 
-## 📐 Cost Basis
-
-The cost basis of your holdings is the total amount you've paid, including fees:
-
-$$
-\text{Cost Basis} = \sum_{i} (Q_i \times P_i + F_i)
-$$
-
-This is used to compute unrealized P&L at any point:
-
-$$
-\text{Unrealized P\\&L} = \text{Current Value} - \text{Cost Basis}
-$$
-
----
-
 ## 🔗 Related
 
+- 📊 **[Weighted Average Cost (WAC)](../../portfolio-theory/weighted-average-cost.md)** — Average cost per unit across multiple buys
 - 💰 **[Taxation](../../fundamentals/taxation.md)** — Capital gains, matching methods, loss carry-forward
 - 📈 **[Returns](../../fundamentals/returns.md)** — Measuring investment performance
 

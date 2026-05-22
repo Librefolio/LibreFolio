@@ -2,7 +2,9 @@
 
 LibreFolio records every financial event as a transaction. Understanding these types is crucial for accurate portfolio tracking and tax reporting.
 
-## 📋 Supported Transactions
+## 📋 Single Transactions
+
+These operate independently on a single broker account.
 
 | | Type | Code | Description | Cash | Asset | |
 |:---:|:---|:---|---|:---:|:---:|:---:|
@@ -11,10 +13,17 @@ LibreFolio records every financial event as a transaction. Understanding these t
 | ![](../../../static/icons/transactions/dividend.png){: width="32" } | **Dividend** | `DIVIDEND` | Cash payment from a stock or ETF holding. | ⬆️ | — | [📖](dividend.md) |
 | ![](../../../static/icons/transactions/fee.png){: width="32" } | **Fee / Tax** | `FEE` / `TAX` | Costs associated with trades, account maintenance, or taxes. | ⬇️ | — | [📖](fee.md) |
 | ![](../../../static/icons/transactions/interest.png){: width="32" } | **Interest** | `INTEREST` | Interest received from cash, bonds, or P2P loans. | ⬆️ | — | [📖](interest.md) |
-| ![](../../../static/icons/transactions/transfer.png){: width="32" } | **Asset Transfer** | `TRANSFER` | Moving securities between brokers (paired). | — | ⬆️⬇️ | [📖](transfer.md) |
-| ![](../../../static/icons/transactions/cash-transfer.png){: width="32" } | **Cash Transfer** | `CASH_TRANSFER` | Wire transfer / bonifico between brokers (paired). | ⬆️⬇️ | — | [📖](cash-transfer.md) |
-| ![](../../../static/icons/transactions/fx-conversion.png){: width="32" } | **FX Conversion** | `FX_CONVERSION` | Currency exchange within a broker (paired). | ⬆️⬇️ | — | [📖](fx-conversion.md) |
 | ![](../../../static/icons/transactions/adjustment.png){: width="32" } | **Adjustment** | `ADJUSTMENT` | Manual correction to balances. | ± | ± | [📖](adjustment.md) |
+
+## 🔀 Composite Transactions
+
+These represent movements **between** accounts or currencies. They produce two linked entries that balance each other.
+
+| | Type | Code | Description | Cash | Asset | |
+|:---:|:---|:---|---|:---:|:---:|:---:|
+| ![](../../../static/icons/transactions/transfer.png){: width="32" } | **Asset Transfer** | `TRANSFER` | Moving securities between brokers. | — | ⬆️⬇️ | [📖](transfer.md) |
+| ![](../../../static/icons/transactions/cash-transfer.png){: width="32" } | **Cash Transfer** | `CASH_TRANSFER` | Wire transfer between brokers. | ⬆️⬇️ | — | [📖](cash-transfer.md) |
+| ![](../../../static/icons/transactions/fx-conversion.png){: width="32" } | **FX Conversion** | `FX_CONVERSION` | Currency exchange within a broker. | ⬆️⬇️ | — | [📖](fx-conversion.md) |
 
 ---
 

@@ -1,10 +1,10 @@
 # ![](../../../static/icons/transactions/interest.png){: width="32" style="vertical-align: middle;" } Interessi (Transazione)
 
-Una **transazione di interessi** registra gli interessi ricevuti da obbligazioni, conti di risparmio, prestiti P2P o altri strumenti a reddito fisso. Rappresenta l'impatto a livello di portafoglio di un [evento di interesse](../asset-events/interest.md).
+Una **transazione di interesse** registra il reddito da interessi ricevuto da obbligazioni, conti di risparmio, prestiti P2P o altri strumenti a reddito fisso. Rappresenta l'impatto a livello di portafoglio di un [evento legato agli interessi](../asset-events/interest.md).
 
 ---
 
-## 🔑 Proprietà Chiave
+## 🔑 Proprietà Principali
 
 | Proprietà | Dettaglio |
 |----------|--------|
@@ -15,41 +15,36 @@ Una **transazione di interessi** registra gli interessi ricevuti da obbligazioni
 
 ---
 
-## 📊 Fonti di Interesse
+## 📊 Fonti di Interessi
 
 | Fonte | Descrizione | Frequenza |
 |--------|-------------|-----------|
 | **Cedole obbligazionarie** | Pagamenti a tasso fisso o variabile | Semestrale / Annuale |
-| **Interessi sui conti deposito** | Interessi su depositi di liquidità | Mensile / Trimestrale |
+| **Interessi sui risparmi** | Interessi su depositi di liquidità | Mensile / Trimestrale |
 | **Pagamenti prestiti P2P** | Quota interessi dei rimborsi del prestito | Mensile |
-| **Rendimenti del crowdfunding** | Rendimenti a tasso fisso su progetti | Variabile |
+| **Rendimenti Crowdfunding** | Rendimenti a tasso fisso su progetti | Variabile |
 
 ---
 
-## 📐 Interesse Semplice vs Composto
+## 💡 Quando Usarlo
 
-### 📏 Interesse Semplice
+Utilizza una transazione `INTEREST` quando la liquidità perviene sul tuo conto broker come reddito da interessi. Questo è distinto da:
 
-Interesse calcolato solo sul capitale originale:
+- **Dividendo** — reddito da equity (azioni, ETF a distribuzione)
+- **Regolamento a scadenza** — restituzione del capitale alla scadenza dell'obbligazione
 
-$$
-I = P \times r \times t
-$$
+!!! tip "Theory & formulas"
 
-### 📈 Interesse Composto
+    Per la matematica della maturazione degli interessi (semplice vs composto, convenzioni di conteggio dei giorni, metriche di rendimento), vedi:
 
-Interesse calcolato sul capitale + interessi accumulati:
-
-$$
-A = P \times (1 + r)^t
-$$
-
-La differenza tra interesse semplice e composto è la base del confronto tra i benchmark [Linear vs Compound Growth](../../technical-analysis/synthetic-benchmarks/index.md).
+    - **[📈 Eventi di Interesse](../asset-events/interest.md)** — Meccanismi di maturazione e impatto sul prezzo
+    - **[📅 Convenzioni di Conteggio dei Giorni](../../fundamentals/day-count.md)** — Come vengono calcolati i periodi di interesse
 
 ---
 
 ## 🔗 Correlati
 
-- 📈 **[Eventi di Interesse](../asset-events/interest.md)** — Meccaniche di maturazione e cedole
+- 📈 **[Eventi di Interesse](../asset-events/interest.md)** — Meccanismi di maturazione e cedole
 - 🏛️ **[Obbligazioni](../asset-types/bonds.md)** — Il principale asset che genera interessi
+- 📈 **[Rendimenti e Tassi di Crescita](../../fundamentals/returns.md)** — Misurazione del rendimento da reddito
 - 📅 **[Convenzioni di Conteggio dei Giorni](../../fundamentals/day-count.md)** — Come vengono calcolati i periodi di interesse

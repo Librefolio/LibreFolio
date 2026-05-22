@@ -42,7 +42,7 @@ Par exemple, $N = 14 \implies \alpha = 2/15 \approx 0,133$.
 
 | Paramètre | Clé | Valeur par défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 14 | Fenêtre d'observation en jours. Plus élevée $\rightarrow$ lissage accru, réactivité moindre. |
+| Période ($N$) | `period` | 14 | Fenêtre d'observation en jours. Plus élevée → lissage accru, réactivité moindre. |
 | Décalage | `offset` | 0 | Décalage vertical en % de la valeur de base. |
 
 ---

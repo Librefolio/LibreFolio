@@ -16,8 +16,8 @@ $$
 \text{Plus-value} = P_{vente} - P_{achat} - \text{Frais}
 $$
 
-- **Plus-value** ($> 0$) : Vous avez vendu plus cher que vous n'avez acheté $\rightarrow$ événement imposable dans la plupart des juridictions.
-- **Moins-value** ($< 0$) : Vous avez vendu moins cher que vous n'avez acheté $\rightarrow$ peut compenser des gains futurs.
+- **Plus-value** ($> 0$) : Vous avez vendu plus cher que vous n'avez acheté → événement imposable dans la plupart des juridictions.
+- **Moins-value** ($< 0$) : Vous avez vendu moins cher que vous n'avez acheté → peut compenser des gains futurs.
 
 ### 🔄 Réalisé vs Non réalisé
 

@@ -1,101 +1,101 @@
 # :heart: Soutenir LibreFolio
 
-LibreFolio est un projet **open-source**, distribué sous licence AGPL-3.0. Le code source est librement disponible, et toute personne disposant des compétences et de l'infrastructure nécessaires peut l'installer et l'utiliser de manière autonome — c'est la beauté de l'open source.
+LibreFolio est un projet **open-source**, sous licence AGPL-3.0. Le code source est librement disponible, et toute personne disposant des compétences et de l'infrastructure nécessaires peut l'installer et l'exécuter de manière indépendante — c'est toute la beauté de l'open source.
 
-Si vous utilisez LibreFolio et le trouvez utile, nous serions ravis de votre soutien — que ce soit par du **code**, des **idées** ou un **petit don**. Chaque contribution alimente la croissance du projet.
-
----
-
-## :coffee: Offrez-moi un Café
-
-Si LibreFolio vous aide à mieux gérer vos investissements, pensez à soutenir le développement avec un café :
-
-<a href="https://www.buymeacoffee.com/librefolio" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Offrez-moi un Café" style="height: 60px !important;width: 217px !important;" ></a>
-
-Chaque don — aussi petit soit-il — aide à couvrir les outils de développement, l'infrastructure de test, et motive l'amélioration continue.
+Si vous utilisez LibreFolio et que vous le trouvez utile, nous apprécierions votre soutien — que ce soit par du **code**, des **idées** ou un **petit don**. Chaque contribution alimente la croissance du projet.
 
 ---
 
-## :rocket: Contributions à Fort Impact
+## :coffee: Offrez-moi un café
 
-Pour nous, **une bonne idée ou une contribution de code a autant de valeur qu'un don**. Voici les domaines où votre aide peut faire la plus grande différence :
+Si LibreFolio vous aide à mieux gérer vos investissements, envisagez de soutenir le développement en offrant un café :
+
+<a href="https://www.buymeacoffee.com/librefolio" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Offrez-moi un café" style="height: 60px !important;width: 217px !important;" ></a>
+
+Chaque don — aussi petit soit-il — aide à couvrir les outils de développement, l'infrastructure de test et motive l'amélioration continue.
+
+---
+
+## :rocket: Contributions à fort impact
+
+Pour nous, **une excellente idée ou une contribution de code est tout aussi précieuse qu'un don**. Voici les domaines où votre aide peut faire la plus grande différence :
 
 ### :electric_plug: Nouveaux Plugins
 
-LibreFolio utilise un [Système Registry & Plugin](../developer/architecture/patterns/registry_pattern.md) avec auto-découverte. Ajouter un nouveau plugin est l'une des contributions les plus impactantes :
+LibreFolio utilise un [Système de Registre & Plugins](../developer/architecture/patterns/registry_pattern.md) avec auto-découverte. Ajouter un nouveau plugin est l'une des contributions les plus impactantes que vous puissiez faire :
 
 | Type | Guide | Ce qu'il fait |
-|------|-------|--------------|
-| 📥 **BRIM** | [Guide Plugin BRIM](../developer/architecture/patterns/brim_plugin_guide.md) | Importer des transactions d'un nouveau courtier (CSV/Excel) |
-| 📈 **Asset** | [Guide Plugin Asset](../developer/architecture/patterns/asset_plugin_guide.md) | Récupérer des prix d'une nouvelle source de données |
+|------|-------|-------------|
+| 📥 **BRIM** | [Guide Plugin BRIM](../developer/architecture/patterns/brim_plugin_guide.md) | Importer des transactions depuis un nouveau courtier (CSV/Excel) |
+| 📈 **Actif** | [Guide Plugin Actif](../developer/architecture/patterns/asset_plugin_guide.md) | Récupérer les prix depuis une nouvelle source de données |
 | 💱 **FX** | [Guide Plugin FX](../developer/architecture/patterns/fx_plugin_guide.md) | Ajouter un nouveau fournisseur de taux de change |
-| 📊 **Signaux Graphiques** | *Guide à venir* | Nouveaux indicateurs techniques et superpositions graphiques (EMA, MACD, RSI, Bollinger…) |
+| 📊 **Chart Signals** | *Guide bientôt disponible* | Nouveaux indicateurs techniques et superpositions de graphiques (EMA, MACD, RSI, Bollinger…) |
 
 ### :art: Idées UI/UX
 
-Améliorations esthétiques, suggestions de mise en page, accessibilité — si vous voyez quelque chose qui pourrait être mieux, dites-le nous !
+Améliorations esthétiques, suggestions de mise en page, optimisations de l'accessibilité — si vous voyez quelque chose qui pourrait être plus beau ou mieux fonctionner, dites-le nous !
 
-### :bug: Signalements de Bugs
+### :bug: Rapports de bugs
 
-Trouver et signaler clairement les problèmes est incroyablement utile. Ouvrez une nouvelle [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) avec le mot-clé **`[BUG]`** au début du titre.
+Trouver et signaler clairement des problèmes est extrêmement utile. Ouvrez un nouveau [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) avec le mot-clé **`[BUG]`** au début du titre.
 
-Incluez des captures d'écran, les infos navigateur et les étapes pour reproduire — même les incohérences esthétiques comptent.
+Incluez des captures d'écran, des informations sur le navigateur et les étapes pour reproduire le problème — même les défauts esthétiques comptent.
 
 ---
 
-## :bulb: Partagez vos Idées et Demandez des Fonctionnalités
+## :bulb: Partager des idées & demander des fonctionnalités
 
-Vous avez une idée ou souhaitez une nouvelle fonctionnalité ? Ouvrez une [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) en utilisant le mot-clé approprié au début du titre :
+Vous avez une idée ou souhaitez une nouvelle fonctionnalité ? Ouvrez un [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) en utilisant le mot-clé approprié au début du titre :
 
 | Mot-clé | Quand l'utiliser |
-|---------|-----------------|
-| **`[IDEA]`** | Suggestions générales, améliorations UX, idées de workflow |
-| **`[FEATURE]`** | Demandes de fonctionnalités spécifiques avec un cas d'usage clair |
+|---------|------------|
+| **`[IDEA]`** | Suggestions générales, améliorations UX, idées de flux de travail |
+| **`[FEATURE]`** | Demandes de fonctionnalités spécifiques avec un cas d'utilisation clair |
 
-Chaque demande sera évaluée et prise en charge dès qu'il y aura la capacité de la développer. Les demandes bien décrites avec des exemples concrets sont priorisées plus rapidement.
+Chaque demande sera évaluée et prise en compte dès qu'il y aura la capacité de la développer. Les demandes bien décrites avec des exemples concrets sont prioritaires.
 
 ---
 
-## :computer: Contribuez au Code
+## :computer: Contribuer au code
 
 Si vous êtes développeur et souhaitez contribuer directement :
 
-1. **Forkez** le [dépôt](https://github.com/Alfystar/LibreFolio)
-2. **Créez une branche** pour votre fonctionnalité ou correction
-3. **Développez et testez** dans votre propre repo
-4. **Soumettez une Pull Request** avec une description claire et le mot-clé approprié dans le titre :
+1. **Créez un fork** du [dépôt](https://github.com/Alfystar/LibreFolio)
+2. **Créez une branche** pour votre fonctionnalité ou votre correction
+3. **Développez et testez** dans votre propre dépôt
+4. **Soumettez une Pull Request** avec une description claire et un préfixe de mot-clé dans le titre :
 
 | Mot-clé | Quand l'utiliser |
-|---------|-----------------|
+|---------|------------|
 | **`[FIX]`** | Corrections de bugs |
 | **`[FEAT]`** | Nouvelles fonctionnalités ou améliorations |
-| **`[PLUGIN]`** | Nouveau plugin (BRIM, Asset, FX, Signal) |
+| **`[PLUGIN]`** | Nouveau plugin (BRIM, Actif, FX, signal) |
 | **`[DOCS]`** | Améliorations de la documentation |
 
-!!! warning "Politique de merge"
+!!! warning "Merge policy"
 
-    Une PR sera mergée **uniquement si tous les tests existants continuent de passer**. Si vos modifications nécessitent des mises à jour de tests, incluez-les dans la PR — c'est parfaitement normal et attendu.
+    Une PR sera fusionnée **uniquement si tous les tests existants continuent de passer**. Si vos modifications nécessitent des mises à jour des tests, incluez-les dans la PR — c'est tout à fait normal et attendu.
 
-Consultez le [Guide Développeur](../developer/index.md) pour les détails d'architecture, les conventions et les directives de test.
+Consultez le [Manuel du Développeur](../developer/index.md) pour les détails d'architecture, les conventions de codage et les directives de test.
 
 ---
 
-## :star: Mettez une Étoile au Projet
+## :star: Mettre une étoile au projet
 
 Un moyen simple mais puissant d'aider : **mettez une étoile au dépôt** sur GitHub ! Cela augmente la visibilité et aide d'autres utilisateurs à découvrir LibreFolio.
 
-[:octicons-star-fill-24: Étoile sur GitHub](https://github.com/Alfystar/LibreFolio){ .md-button .md-button--primary }
+[:octicons-star-fill-24: Mettre une étoile sur GitHub](https://github.com/Alfystar/LibreFolio){ .md-button .md-button--primary }
 
 ---
 
-## :globe_with_meridians: Prochainement — LibreFolio Cloud
+## :globe_with_meridians: Et après — LibreFolio Cloud
 
-Pour ceux qui souhaitent utiliser LibreFolio mais n'ont pas le temps, les compétences ou l'infrastructure pour l'auto-héberger, nous planifions une **plateforme hébergée** — **LibreFolio Cloud**. Elle offrira toutes les mêmes fonctionnalités puissantes sans aucune configuration technique, plus de futures **analyses alimentées par l'IA** pour vous aider à prendre des décisions d'investissement plus éclairées.
+Pour ceux qui souhaitent utiliser LibreFolio mais n'ont pas le temps, les compétences ou l'infrastructure pour l'auto-héberger, nous prévoyons une **plateforme hébergée** — **LibreFolio Cloud**. Elle offrira toutes les mêmes fonctionnalités puissantes sans aucune configuration technique, ainsi que des **analyses basées sur l'IA** à venir pour vous aider à prendre des décisions d'investissement plus intelligentes.
 
-Pour soutenir l'infrastructure, la maintenance et le développement continu, la plateforme cloud sera proposée sous forme d'**abonnement** — le tarif sera défini ultérieurement.
+Pour soutenir l'infrastructure, la maintenance et le développement continu, la plateforme cloud sera proposée sous forme de **service d'abonnement** — le tarif sera déterminé ultérieurement.
 
 ---
 
-!!! tip "Merci !"
+!!! tip "Thank you!"
 
-    Toute forme de soutien — code, idées, signalements de bugs ou dons — est profondément appréciée. Ensemble, nous pouvons construire le meilleur portfolio tracker auto-hébergé ! :rocket:
+    Toute forme de soutien — code, idées, rapports de bugs ou dons — est profondément appréciée. Ensemble, nous pouvons construire le meilleur tracker de portefeuille auto-hébergé ! :rocket:

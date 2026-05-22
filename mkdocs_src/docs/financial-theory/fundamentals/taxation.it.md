@@ -16,8 +16,8 @@ $$
 \text{Plusvalenza} = P_{sell} - P_{buy} - \text{Commissioni}
 $$
 
-- **Plusvalenza** ($> 0$): Hai venduto a un prezzo superiore a quello pagato $\rightarrow$ evento tassabile nella maggior parte delle giurisdizioni
-- **Minusvalenza** ($< 0$): Hai venduto a un prezzo inferiore a quello pagato $\rightarrow$ può compensare plusvalenze future
+- **Plusvalenza** ($> 0$): Hai venduto a un prezzo superiore a quello pagato → evento tassabile nella maggior parte delle giurisdizioni
+- **Minusvalenza** ($< 0$): Hai venduto a un prezzo inferiore a quello pagato → può compensare plusvalenze future
 
 ### 🔄 Realizzate vs Non Realizzate
 

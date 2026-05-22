@@ -1,6 +1,6 @@
-# ![](../../../static/icons/transactions/interest.png){: width="32" style="vertical-align: middle;" } Intereses (Transacción)
+# ![](../../../static/icons/transactions/interest.png){: width="32" style="vertical-align: middle;" } Interés (Transacción)
 
-Una **transacción de intereses** registra los ingresos por intereses recibidos de bonos, cuentas de ahorro, préstamos P2P u otros instrumentos de renta fija. Representa el impacto a nivel de cartera de un [evento de interés](../asset-events/interest.md).
+Una **transacción de interés** registra los ingresos por interés recibidos de bonos, cuentas de ahorro, préstamos P2P u otros instrumentos de renta fija. Representa el impacto a nivel de cartera de un [evento de interés](../asset-events/interest.md).
 
 ---
 
@@ -9,42 +9,36 @@ Una **transacción de intereses** registra los ingresos por intereses recibidos 
 | Propiedad | Detalle |
 |----------|--------|
 | **Código** | `INTEREST` |
-| **Efecto en caja** | ⬆️ Aumenta el saldo |
-| **Efecto en el activo** | — (el capital permanece inalterado) |
+| **Efecto en efectivo** | ⬆️ Aumenta el saldo |
+| **Efecto en activo** | — (principal sin cambios) |
 | **Evento fiscal** | Sí (ingresos imponibles) |
 
 ---
 
-## 📊 Fuentes de Intereses
+## 📊 Fuentes de Interés
 
 | Fuente | Descripción | Frecuencia |
 |--------|-------------|-----------|
-| **Cupones de bonos** | Pagos de tasa fija o variable | Semestral / Anual |
-| **Intereses de ahorro** | Intereses sobre depósitos de efectivo | Mensual / Trimestral |
+| **Cupones de bonos** | Pagos de tasa fija o flotante | Semestral / Anual |
+| **Intereses de ahorro** | Intereses sobre depósitos en efectivo | Mensual / Trimestral |
 | **Pagos de préstamos P2P** | Componente de intereses de los reembolsos del préstamo | Mensual |
-| **Retornos de Crowdfunding** | Retornos de tasa fija sobre proyectos | Varía |
+| **Rendimientos de Crowdfunding** | Rendimientos de tasa fija en proyectos | Varía |
 
 ---
 
-## 📐 Interés Simple vs Compuesto
+## 💡 Cuándo usarlo
 
-### 📏 Interés Simple
+Utilice una transacción `INTEREST` cuando el efectivo llegue a su cuenta de bróker como ingresos por interés. Esto es distinto de:
 
-Interés calculado únicamente sobre el capital original:
+- **Dividendo** — ingresos por renta variable (acciones, ETF de distribución)
+- **Liquidación al Vencimiento** — devolución del principal al vencimiento del bono
 
-$$
-I = P \times r \times t
-$$
+!!! tip "Theory & formulas"
 
-### 📈 Interés Compuesto
+    Para las matemáticas del devengo de intereses (simple vs compuesto, convenciones de conteo de días, métricas de rendimiento), consulte:
 
-Interés calculado sobre el capital + los intereses acumulados:
-
-$$
-A = P \times (1 + r)^t
-$$
-
-La diferencia entre el interés simple y el compuesto es la base del benchmark de [Crecimiento Lineal vs Compuesto](../../technical-analysis/synthetic-benchmarks/index.md).
+    - **[📈 Eventos de Interés](../asset-events/interest.md)** — Mecánica de devengo e impacto en el precio
+    - **[📅 Convenciones de Conteo de Días](../../fundamentals/day-count.md)** — Cómo se calculan los períodos de interés
 
 ---
 
@@ -52,4 +46,5 @@ La diferencia entre el interés simple y el compuesto es la base del benchmark d
 
 - 📈 **[Eventos de Interés](../asset-events/interest.md)** — Mecánica de devengo y cupones
 - 🏛️ **[Bonos](../asset-types/bonds.md)** — El activo principal que genera intereses
-- 📅 **[Convenciones de conteo de días](../../fundamentals/day-count.md)** — Cómo se calculan los periodos de interés
+- 📈 **[Retornos y Tasas de Crecimiento](../../fundamentals/returns.md)** — Medición del rendimiento de los ingresos
+- 📅 **[Convenciones de Conteo de Días](../../fundamentals/day-count.md)** — Cómo se calculan los períodos de interés

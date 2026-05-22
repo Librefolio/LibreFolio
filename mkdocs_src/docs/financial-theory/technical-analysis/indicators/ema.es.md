@@ -42,7 +42,7 @@ Por ejemplo, $N = 14 \implies \alpha = 2/15 \approx 0.133$.
 
 | Parámetro | Clave | Predeterminado | Descripción |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Ventana de observación en días. Mayor $\to$ más suave, más lento. |
+| Periodo ($N$) | `period` | 14 | Ventana de observación en días. Mayor → más suave, más lento. |
 | Desplazamiento | `offset` | 0 | Desplazamiento vertical como % del valor base. |
 
 ---

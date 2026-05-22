@@ -29,7 +29,7 @@ Curve di riferimento matematiche sovrapposte ai grafici per il confronto. A diff
 
 In finanza, *veloce* e *lento* si riferiscono alla **costante di tempo** ($\tau$) del filtro sottostante.
 
-| Proprietà | Veloce (N piccolo) | Lento (N grande) |
+| Proprietà | Veloce ($N$ piccolo) | Lento ($N$ grande) |
 |---|---|---|
 | Frequenza di taglio $f_c$ | Più alta | Più bassa |
 | Reiezione del rumore | Scarsa — lascia passare le alte frequenze | Buona — forte smorzamento |

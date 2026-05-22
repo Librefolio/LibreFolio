@@ -57,7 +57,7 @@ Esto es matemáticamente equivalente a la forma cerrada $y_0(1+r)^t$, pero reemp
 !!! tip "Regla del 72"
 
     Un atajo mental rápido: una inversión que crece al $r$% por año aproximadamente
-    se duplicará en $72 / r$ años. Al 7% $\to$ ~10.3 años.
+    se duplicará en $72 / r$ años. Al 7% → ~10.3 años.
 
 ---
 

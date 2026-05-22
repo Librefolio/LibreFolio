@@ -41,7 +41,7 @@ Seuls les rendements **inférieurs** au seuil contribuent au semi-écart-type. L
 
     $$So = \frac{0.12 - 0.03}{0.10} = 0.90$$
 
-    Comparé au Sharpe (si $\sigma$ total = 15 %) : $S = 0.60$. Le Sortino est plus élevé car la volatilité positive est exclue.
+    Comparé au Sharpe (si σ total = 15 %) : $S = 0.60$. Le Sortino est plus élevé car la volatilité positive est exclue.
 
 ---
 

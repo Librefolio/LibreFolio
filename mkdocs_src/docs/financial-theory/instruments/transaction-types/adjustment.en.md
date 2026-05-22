@@ -11,7 +11,6 @@
 | **Code** | `ADJUSTMENT` |
 | **Cash effect** | Optional (± any amount) |
 | **Asset effect** | Required (± any quantity) |
-| **Paired** | ❌ No (standalone) |
 | **Tax event** | No |
 
 ---
@@ -37,7 +36,7 @@ Adjustments are used when no other transaction type fits:
 Adjustments with positive quantity **increase** the lot count (FIFO). The cost basis
 for adjustment-created lots depends on whether a **Cost Basis Override** is provided:
 
-- **With override**: the specified value is used as the **per-unit acquisition cost** (PMC — Prezzo Medio di Carico)
+- **With override**: the specified value is used as the **per-unit acquisition cost** (WAC — Weighted Average Cost)
 - **Without override**: the lot is created with zero cost (free acquisition — e.g. gifts, airdrops)
 
 !!! info "Per-unit value"
@@ -45,41 +44,43 @@ for adjustment-created lots depends on whether a **Cost Basis Override** is prov
     The Cost Basis Override is the average cost **per single unit** of the asset.
     To get the total cost of the transferred block, multiply by the quantity:
 
-    $$\text{Total cost} = \text{PMC} \times \text{quantity}$$
+    $$\text{Total cost} = \text{WAC} \times \text{quantity}$$
 
 ### 🏦 Automatic Cost Basis on Transfers
 
 When transferring assets between brokers, LibreFolio **automatically computes** the
-Cost Basis Override on the receiving side. The formula is the Weighted Average Cost (WAC):
+Cost Basis Override on the receiving side using the **Weighted Average Cost (WAC)** of
+the source broker's position.
 
-$$WAC = \frac{\sum_{i} q_i \times p_i}{\sum_{i} q_i}$$
+!!! tip "Learn more"
 
-where $q_i$ is the quantity and $p_i$ is the per-unit cost of each acquisition lot
-at the **source broker** (from BUY transactions and previous incoming transfers).
+    For the full formula, examples, and edge cases, see the dedicated page:
+    **[📊 Weighted Average Cost (WAC)](../../portfolio-theory/weighted-average-cost.md)**
 
-### ✏️ When to Override Manually
+??? note "✏️ When to Override Manually"
 
-The automatic formula works for the standard case (same fiscal regime, no tax events
-at transfer). In the following scenarios the user must set the value manually:
+    The automatic formula works for the standard case (same fiscal regime, no tax events
+    at transfer). In the following scenarios the user must set the value manually:
 
-| Scenario | What to set |
-|----------|------------|
-| **Normal transfer** | Leave empty — auto-calculated |
-| **Exit Tax** | Market value at transfer date (jurisdiction-specific) |
-| **Inheritance** | Fair market value at date of death (or stepped-up basis) |
-| **Gift** | Donor's original cost basis (carryover basis) |
-| **Corporate action** | Adjusted basis per corporate action terms |
+    | Scenario | What to set |
+    |----------|------------|
+    | **Normal transfer** | Leave empty — auto-calculated |
+    | **Exit Tax** | Market value at transfer date (jurisdiction-specific) |
+    | **Inheritance** | Fair market value at date of death (or stepped-up basis) |
+    | **Gift** | Donor's original cost basis (carryover basis) |
+    | **Corporate action** | Adjusted basis per corporate action terms |
 
-!!! warning "User Responsibility"
+    !!! warning "User Responsibility"
 
-    When manually overriding the cost basis, the user is responsible for the
-    correctness of the value. LibreFolio does not validate override amounts
-    against tax rules — consult a tax advisor for jurisdiction-specific guidance.
+        When manually overriding the cost basis, the user is responsible for the
+        correctness of the value. LibreFolio does not validate override amounts
+        against tax rules — consult a tax advisor for jurisdiction-specific guidance.
 
 ---
 
 ## 🔗 Related
 
+- 📊 **[Weighted Average Cost (WAC)](../../portfolio-theory/weighted-average-cost.md)** — How automatic cost basis is computed
 - 🔄 **[Asset Transfer](transfer.md)** — Two linked adjustments can be promoted to a transfer
 - 🛒 **[Buy & Sell](buy-sell.md)** — Standard asset transactions with cash
 - 💰 **[Fee & Tax](fee.md)** — Cash-only corrections (use Fee/Tax instead of Adjustment)

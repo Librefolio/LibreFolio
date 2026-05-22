@@ -1175,16 +1175,26 @@ def _call_step(func, *args, step_name: str, rate_limit_retries: int = DEFAULT_RA
                     f"Set APHRA_STEP_TIMEOUT in .env to increase (current: {timeout_s}s)."
                 ) from e
 
-            # ── Connection refused (Ollama not running) ──
+            # ── Connection refused / unreachable ──
             if any(term in err_str for term in ('connect', 'refused', 'unreachable', 'no route')):
-                base_url = _get_base_url() or DEFAULT_OLLAMA_URL
-                ollama_url = base_url.replace("/v1", "")
-                raise ConnectionError(
-                    f"{step_name}: cannot connect to LLM backend at {base_url}.\n"
-                    f"       Is Ollama running? Start it with:\n"
-                    f"         ollama serve\n"
-                    f"       Then verify with: curl {ollama_url}/api/tags"
-                ) from e
+                custom_url = _get_base_url()
+                if custom_url:
+                    ollama_url = custom_url.replace("/v1", "")
+                    raise ConnectionError(
+                        f"{step_name}: cannot connect to LLM backend at {custom_url}.\n"
+                        f"       Is Ollama running? Start it with:\n"
+                        f"         ollama serve\n"
+                        f"       Then verify with: curl {ollama_url}/api/tags"
+                    ) from e
+                else:
+                    raise ConnectionError(
+                        f"{step_name}: cannot connect to OpenRouter (https://openrouter.ai/api/v1).\n"
+                        f"       Check:\n"
+                        f"         1. Internet connectivity\n"
+                        f"         2. No active VPN/proxy intercepting SSL traffic\n"
+                        f"         3. OPENROUTER_API_KEY is valid in .env\n"
+                        f"       Raw error: {err_str[:200]}"
+                    ) from e
 
             # ── Other errors — re-raise as-is ──
             raise

@@ -1,6 +1,6 @@
-# ![](../../../static/icons/transactions/interest.png){: width="32" style="vertical-align: middle;" } Intérêts (Transaction)
+# ![](../../../static/icons/transactions/interest.png){: width="32" style="vertical-align: middle;" } Intérêt (Transaction)
 
-Une **transaction d'intérêts** enregistre les revenus d'intérêts reçus provenant d'obligations, de comptes d'épargne, de prêts P2P ou d'autres instruments à revenu fixe. Elle représente l'impact au niveau du portefeuille d'un [événement d'intérêts](../asset-events/interest.md).
+Une **transaction d'intérêt** enregistre les revenus d'intérêt reçus provenant d'obligations, de comptes d'épargne, de prêts P2P ou d'autres instruments à revenu fixe. Elle représente l'impact au niveau du portefeuille d'un [événement d'intérêt](../asset-events/interest.md).
 
 ---
 
@@ -10,46 +10,41 @@ Une **transaction d'intérêts** enregistre les revenus d'intérêts reçus prov
 |----------|--------|
 | **Code** | `INTEREST` |
 | **Effet sur la trésorerie** | ⬆️ Augmente le solde |
-| **Effet sur l'actif** | — (principal inchangé) |
+| **Effet sur l'actif** | — (le principal reste inchangé) |
 | **Événement fiscal** | Oui (revenu imposable) |
 
 ---
 
-## 📊 Sources d'Intérêts
+## 📊 Sources d'intérêt
 
 | Source | Description | Fréquence |
 |--------|-------------|-----------|
-| **Coupons obligataires** | Paiements à taux fixe ou variable | Semestrielle / Annuelle |
-| **Intérêts d'épargne** | Intérêts sur les dépôts de trésorerie | Mensuelle / Trimestrielle |
-| **Paiements de prêts P2P** | Partie intérêts des remboursements de prêts | Mensuelle |
-| **Rendements du crowdfunding** | Rendements à taux fixe sur des projets | Variable |
+| **Coupons obligataires** | Paiements à taux fixe ou variable | Semestriel / Annuel |
+| **Intérêt d'épargne** | Intérêt sur les dépôts de liquidités | Mensuel / Trimestriel |
+| **Paiements de prêts P2P** | Partie intérêt des remboursements de prêt | Mensuel |
+| **Rendements du Crowdfunding** | Rendements à taux fixe sur des projets | Variable |
 
 ---
 
-## 📐 Intérêt Simple vs Composé
+## 💡 Quand l'utiliser
 
-### 📏 Intérêt Simple
+Utilisez une transaction `INTEREST` lorsque des liquidités arrivent sur votre compte courtier sous forme de revenus d'intérêt. Ceci est distinct de :
 
-Intérêt calculé uniquement sur le principal d'origine :
+- **Dividende** — revenu provenant de capitaux propres (actions, ETF de distribution)
+- **Règlement à l'échéance** — remboursement du principal à l'échéance d'une obligation
 
-$$
-I = P \times r \times t
-$$
+!!! tip "Théorie & formules"
 
-### 📈 Intérêt Composé
+    Pour les mathématiques de l'accumulation d'intérêt (simple vs composé, conventions de comptage des jours, mesures de rendement), voir :
 
-Intérêt calculé sur le principal + les intérêts accumulés :
-
-$$
-A = P \times (1 + r)^t
-$$
-
-La différence entre l'intérêt simple et l'intérêt composé est le fondement du benchmark [Croissance Linéaire vs Composée](../../technical-analysis/synthetic-benchmarks/index.md).
+    - **[📈 Événements d'intérêt](../asset-events/interest.md)** — Mécanismes d'accumulation et impact sur le prix
+    - **[📅 Conventions de comptage des jours](../../fundamentals/day-count.md)** — Comment les périodes d'intérêt sont calculées
 
 ---
 
 ## 🔗 Liens connexes
 
-- 📈 **[Événements d'intérêts](../asset-events/interest.md)** — Mécanismes des intérêts courus et des coupons
-- 🏛️ **[Obligations](../asset-types/bonds.md)** — Le principal actif producteur d'intérêts
-- 📅 **[Conventions de décompte des jours](../../fundamentals/day-count.md)** — Comment les périodes d'intérêts sont calculées
+- 📈 **[Événements d'intérêt](../asset-events/interest.md)** — Mécanismes d'accumulation et de coupons
+- 🏛️ **[Obligations](../asset-types/bonds.md)** — Le principal actif producteur d'intérêt
+- 📈 **[Rendements & Taux de croissance](../../fundamentals/returns.md)** — Mesurer le rendement des revenus
+- 📅 **[Conventions de comptage des jours](../../fundamentals/day-count.md)** — Comment les périodes d'intérêt sont calculées

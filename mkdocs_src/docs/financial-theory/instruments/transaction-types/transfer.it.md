@@ -1,67 +1,55 @@
-# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Trasferimenti e Conversione FX
+# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Trasferimento di Asset
 
-I **Trasferimenti** spostano asset tra portafogli senza una vendita, mentre le **Conversioni FX** scambiano una valuta con un'altra all'interno di un portafoglio.
-
----
-
-## 🔑 Proprietà Principali
-
-| Proprietà | Trasferimento In | Trasferimento Out | Conversione FX |
-|----------|------------|-------------|---------------|
-| **Codice** | `TRANSFER_IN` | `TRANSFER_OUT` | `FX_CONVERSION` |
-| **Effetto cassa** | — | — | ⬆️⬇️ (swap) |
-| **Effetto asset** | ⬆️ Aumenta | ⬇️ Diminuisce | — |
-| **Evento fiscale** | Varia a seconda della giurisdizione | Varia | Varia |
+I **trasferimenti di asset** spostano i titoli tra conti di broker **senza una vendita**. La posizione lascia un broker e arriva a un altro: non c'è scambio di contanti e, nella maggior parte delle giurisdizioni, questo non costituisce un evento imponibile.
 
 ---
 
-## 🔄 Trasferimento In / Out
+## 🔑 Proprietà Chiave
 
-I trasferimenti rappresentano il movimento di asset tra conti di broker o portafogli **senza una vendita**. Scenari comuni:
+| Proprietà | Da (origine) | A (destinazione) |
+|----------|---------------|-------------------|
+| **Codice** | `TRANSFER` | `TRANSFER` |
+| **Effetto cassa** | — | — |
+| **Effetto asset** | ⬇️ Diminuisce | ⬆️ Aumenta |
+| **Broker** | Broker di origine | Broker di destinazione |
+| **Evento fiscale** | Varia in base alla giurisdizione | Varia |
+
+---
+
+## 📊 Come Funziona
+
+Un trasferimento di asset registra **due voci**: un addebito presso il broker di origine e un accredito presso il broker di destinazione. Entrambe fanno riferimento allo **stesso asset** con quantità speculari.
+
+Scenari comuni:
 
 - Spostamento di azioni da un broker a un altro
 - Ricezione di asset in eredità
-- Contributi in natura a un diverso tipo di conto (es. ISA, 401k)
+- Versamenti in natura in un conto di tipo diverso (es. ISA, 401k)
 
-!!! info "Preservazione del costo fiscale"
+!!! info "Preservazione del Costo di Acquisizione"
 
-    Quando si trasferiscono asset, il **costo fiscale originale** deve essere preservato. Il trasferimento in sé non è un evento tassabile nella maggior parte delle giurisdizioni (sebbene le regole varino).
+    Durante il trasferimento di asset, il **costo di acquisizione originale** deve essere preservato. Il trasferimento stesso non è un evento imponibile nella maggior parte delle giurisdizioni (sebbene le norme varino). LibreFolio consente un **override del costo di acquisizione** opzionale sul lato ricevente.
 
----
-
-## 💱 Conversione FX
-
-Scambi di valuta all'interno di un portafoglio:
-
-$$
-\text{Amount}_{target} = \text{Amount}_{source} \times \text{FX Rate} - \text{Fees}
-$$
-
-Le conversioni FX possono essere:
-
-- **Esplicite**: L'utente converte deliberatamente le valute (es. EUR → USD)
-- **Implicite**: Il broker converte automaticamente all'acquisto di un asset denominato in valuta estera
+    Consulta **[📊 Costo Medio Ponderato (WAC)](../../portfolio-theory/weighted-average-cost.md)** per scoprire come viene calcolato automaticamente il costo di acquisizione.
 
 ---
 
-## 📊 Rettifica
+## 🔀 Relazione con le Rettifiche
 
-Il tipo di transazione `ADJUSTMENT` è una categoria generica per le correzioni manuali dei saldi di cassa o degli asset. Casi d'uso:
+Sotto il cofano, un Trasferimento è composto da due voci di Rettifica. LibreFolio supporta:
 
-- Correzione di errori di importazione
-- Registrazione di operazioni societarie non coperte dai tipi standard
-- Configurazione del saldo iniziale
+| Operazione | Risultato |
+|-----------|--------|
+| **Frazionamento** (scollega) | Trasferimento → due Rettifiche indipendenti |
+| **Promote** (collega) | Due Rettifiche → Trasferimento |
+
+**Vincoli di promozione**: stesso asset, broker diversi, quantità opposte.
 
 ---
 
 ## 🔗 Correlati
 
-- 🛒 **[Acquisto e Vendita](buy-sell.md)** — Transazioni standard di asset
-- 💵 **[Deposito e Prelievo](deposit-withdrawal.md)** — Movimenti di cassa
-- 💰 **[Tassi di cambio](../../../user/fx/index.md)** — Gestione dei tassi di cambio
-
-# 🔄 Trasferimento Titoli
-
-!!! warning "Traduzione in attesa"
-
-    Questa pagina non è stata ancora tradotta. Consulta la [versione inglese](transfer.en.md).
+- 📊 **[Costo Medio Ponderato](../../portfolio-theory/weighted-average-cost.md)** — Come viene calcolato il costo di acquisizione sui trasferimenti
+- 🏦 **[Trasferimento di Liquidità](cash-transfer.md)** — Bonifici bancari (contanti, non asset)
+- 💱 **[Conversione Valutaria](fx-conversion.md)** — Cambio valuta
+- 📊 **[Rettifica](adjustment.md)** — Correzioni manuali
