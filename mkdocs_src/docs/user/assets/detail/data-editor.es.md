@@ -88,8 +88,8 @@ La barra de herramientas incluye un **interruptor de filas obsoletas** (switch).
 
 Haga **doble clic** en un punto del gráfico de precios (o mantenga presionado en móviles) para desplazarse directamente a esa fila en el editor:
 
-- Doble clic en un **punto de precio** $\rightarrow$ se desplaza a la pestaña de Precios
-- Doble clic en un **marcador de evento** $\rightarrow$ se desplaza a la pestaña de Eventos
+- Doble clic en un **punto de precio** → se desplaza a la pestaña de Precios
+- Doble clic en un **marcador de evento** → se desplaza a la pestaña de Eventos
 
 ---
 

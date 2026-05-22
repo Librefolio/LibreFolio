@@ -31,7 +31,7 @@ El proveedor CSS Scraper le permite extraer datos de precios de cualquier págin
 3. Seleccione **Inspeccionar** (o presione `F12`)
 4. En el panel Elements de las DevTools, el elemento del precio estará resaltado
 5. Haga **clic derecho** en el elemento resaltado en las DevTools
-6. Seleccione **Copiar** $\rightarrow$ **Copiar selector**
+6. Seleccione **Copiar** → **Copiar selector**
 7. Péguelo en el campo `current_css_selector`
 
 ### Paso a paso (Firefox)
@@ -40,7 +40,7 @@ El proveedor CSS Scraper le permite extraer datos de precios de cualquier págin
 2. Haga **clic derecho** sobre el valor del precio
 3. Seleccione **Inspeccionar elemento** (o presione `F12`)
 4. En el Inspector, haga **clic derecho** en el elemento resaltado
-5. Seleccione **Copiar** $\rightarrow$ **Selector CSS**
+5. Seleccione **Copiar** → **Selector CSS**
 6. Péguelo en el campo `current_css_selector`
 
 ### 💡 Ejemplo: Borsa Italiana BTP

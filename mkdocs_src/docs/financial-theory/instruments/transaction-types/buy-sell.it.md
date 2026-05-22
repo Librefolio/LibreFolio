@@ -9,7 +9,7 @@ I tipi di transazione più fondamentali: l'**acquisto** aumenta le tue posizioni
 | Proprietà | Acquisto | Vendita |
 |----------|-----|------|
 | **Codice** | `BUY` | `SELL` |
-| **Effetto liquidità** | ⬇️ Diminuisce | ⬆️ Aumenta |
+| **Effetto cassa** | ⬇️ Diminuisce | ⬆️ Aumenta |
 | **Effetto asset** | ⬆️ Aumenta le posizioni | ⬇️ Diminuisce le posizioni |
 | **Evento fiscale** | No | Sì (realizza plusvalenza/minusvalenza) |
 
@@ -29,35 +29,20 @@ Quando acquisti un asset, viene creato un **lotto** con:
 
 ### 💰 Vendita
 
-Quando vendi, LibreFolio abbina la vendita ai lotti esistenti utilizzando il metodo **FIFO** (First In, First Out) per determinare:
+Quando vendi, LibreFolio associa la vendita ai lotti esistenti utilizzando il metodo **FIFO** (First In, First Out) per determinare:
 
 $$
 \text{Plusvalenza} = (P_{sell} \times Q) - (P_{buy} \times Q) - \text{Fees}
 $$
 
-!!! info "Abbinamento FIFO"
+!!! info "Associazione FIFO"
 
-    LibreFolio calcola l'abbinamento dei lotti al **runtime** — non viene persistita nel database. Ciò consente analisi "what-if" flessibili e il potenziale supporto futuro per altri metodi di abbinamento (LIFO, identificazione specifica).
-
----
-
-## 📐 Base di Costo
-
-La base di costo delle tue posizioni è l'importo totale che hai pagato, incluse le commissioni:
-
-$$
-\text{Cost Basis} = \sum_{i} (Q_i \times P_i + F_i)
-$$
-
-Questo viene utilizzato per calcolare il P&L non realizzato in qualsiasi momento:
-
-$$
-\text{Unrealized P\\&L} = \text{Current Value} - \text{Cost Basis}
-$$
+    LibreFolio calcola l'associazione dei lotti al **runtime** — non viene persistita nel database. Ciò consente analisi ipotetiche flessibili e il potenziale supporto futuro per altri metodi di associazione (LIFO, identificazione specifica).
 
 ---
 
 ## 🔗 Correlati
 
-- 💰 **[Tassazione](../../fundamentals/taxation.md)** — Plusvalenze, metodi di abbinamento, riporto delle perdite
+- 📊 **[Costo Medio Ponderato (WAC)](../../portfolio-theory/weighted-average-cost.md)** — Costo medio per unità su più acquisti
+- 💰 **[Tassazione](../../fundamentals/taxation.md)** — Plusvalenze, metodi di associazione, riporto delle perdite
 - 📈 **[Rendimenti](../../fundamentals/returns.md)** — Misurazione delle performance dell'investimento

@@ -119,6 +119,42 @@ For more details, see [Day Count Conventions](day-count.md).
 
 ---
 
+## 💰 Portfolio Return Methods
+
+When a portfolio has **cash flows** (deposits, withdrawals), a single return formula is not enough. Two methods exist to isolate performance from cash flow effects:
+
+### ⏱️ Time-Weighted Return (TWR)
+
+Eliminates the effect of cash flows by computing sub-period returns between each flow event and chaining them:
+
+$$
+R_{TWR} = \prod_{i=1}^{n} (1 + r_i) - 1
+$$
+
+- Measures **pure portfolio performance** regardless of deposit/withdrawal timing
+- Used by fund managers for benchmarking (GIPS-compliant)
+- Not affected by investor behavior (adding money at peaks, withdrawing at lows)
+
+### 💵 Money-Weighted Return (MWR / IRR)
+
+Accounts for the **timing and size** of cash flows — the internal rate of return that sets the NPV of all flows to zero:
+
+$$
+0 = \sum_{i=0}^{n} \frac{CF_i}{(1 + r)^{t_i}}
+$$
+
+where $CF_i$ is each cash flow (deposits positive, withdrawals negative, final portfolio value positive).
+
+- Measures **investor-specific experience** (your actual return given when you added/removed cash)
+- Penalizes bad timing (depositing at highs, withdrawing at lows)
+- Used for personal portfolio performance
+
+!!! info "Which one does LibreFolio use?"
+
+    LibreFolio will compute both TWR and MWR in the portfolio analytics dashboard. TWR for benchmark comparison, MWR for personal performance assessment.
+
+---
+
 ## ⚠️ Pitfalls
 
 1. **Very short periods**: Annualizing a 3-day return can produce misleading figures (e.g., a 0.1% 3-day move → 12.5% annualized)

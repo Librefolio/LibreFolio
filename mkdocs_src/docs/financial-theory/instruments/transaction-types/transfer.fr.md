@@ -1,61 +1,55 @@
-# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Transferts & Conversion de devises
+# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Transfert d'actifs
 
-Les **Transferts** déplacent des actifs entre des portefeuilles sans vente, tandis que les **Conversions de devises** échangent une devise contre une autre au sein d'un portefeuille.
-
----
-
-## 🔑 Propriétés Clés
-
-| Propriété | Transfert Entrant | Transfert Sortant | Conversion de devises |
-|----------|------------|-------------|---------------|
-| **Code** | `TRANSFER_IN` | `TRANSFER_OUT` | `FX_CONVERSION` |
-| **Effet sur les liquidités** | — | — | ⬆️⬇️ (échange) |
-| **Effet sur l'actif** | ⬆️ Augmente | ⬇️ Diminue | — |
-| **Événement fiscal** | Varie selon la juridiction | Varie | Varie |
+Les **transferts d'actifs** déplacent des titres entre des comptes de courtage **sans vente**. La position quitte un courtier pour arriver chez un autre — aucun flux monétaire n'est échangé et, dans la plupart des juridictions, cela ne constitue pas un événement imposable.
 
 ---
 
-## 🔄 Transfert Entrant / Sortant
+## 🔑 Propriétés clés
 
-Les transferts modélisent le mouvement d'actifs entre des comptes de courtier ou des portefeuilles **sans vente**. Scénarios courants :
+| Propriété | De (source) | À (destination) |
+|----------|---------------|-------------------|
+| **Code** | `TRANSFER` | `TRANSFER` |
+| **Effet sur les liquidités** | — | — |
+| **Effet sur l'actif** | ⬇️ Diminue | ⬆️ Augmente |
+| **Courtier** | Courtier source | Courtier de destination |
+| **Événement fiscal** | Varie selon la juridiction | Varie |
 
-- Transfert d'actions d'un courtier à un autre
+---
+
+## 📊 Comment ça marche
+
+Un transfert d'actif enregistre **deux entrées** : un débit chez le courtier source et un crédit chez le courtier de destination. Les deux font référence au **même actif** avec des quantités miroirs.
+
+Scénarios courants :
+
+- Déplacement d'actions d'un courtier à un autre
 - Héritage d'actifs
-- Contributions en nature vers un type de compte différent (ex: ISA, 401k)
+- Contributions en nature vers un autre type de compte (ex: ISA, 401k)
 
-!!! info "Préservation du Prix de Revient"
+!!! info "Préservation du prix de revient"
 
-    Lors du transfert d'actifs, le **prix de revient original** doit être préservé. Le transfert lui-même n'est pas un événement imposable dans la plupart des juridictions (bien que les règles varient).
+    Lors du transfert d'actifs, le **prix de revient original** (cost basis) doit être préservé. Le transfert lui-même n'est pas un événement imposable dans la plupart des juridictions (bien que les règles varient). LibreFolio permet un **outrepassage optionnel du prix de revient** côté réception.
 
----
-
-## 💱 Conversion de devises
-
-Échanges de devises au sein d'un portefeuille :
-
-$$
-\text{Amount}_{target} = \text{Amount}_{source} \times \text{FX Rate} - \text{Fees}
-$$
-
-Les conversions de devises peuvent être :
-
-- **Explicites** : L'utilisateur convertit délibérément des devises (ex: EUR → USD)
-- **Implicites** : Le courtier convertit automatiquement lors de l'achat d'un actif libellé en devise étrangère
+    Consultez **[📊 Coût Moyen Pondéré (WAC)](../../portfolio-theory/weighted-average-cost.md)** pour savoir comment le prix de revient automatique est calculé.
 
 ---
 
-## 📊 Ajustement
+## 🔀 Relation avec les ajustements
 
-Le type de transaction `ADJUSTMENT` est un fourre-tout pour les corrections manuelles des soldes de liquidités ou d'actifs. Cas d'utilisation :
+En arrière-plan, un Transfert est composé de deux entrées d'Ajustement. LibreFolio prend en charge :
 
-- Correction d'erreurs d'importation
-- Enregistrement d'opérations sur titres non couvertes par les types standards
-- Configuration du solde initial
+| Opération | Résultat |
+|-----------|--------|
+| **Division** (délier) | Transfert → deux Ajustements indépendants |
+| **Promouvoir** (lier) | Deux Ajustements → Transfert |
+
+**Contraintes de promotion** : même actif, courtiers différents, quantités opposées.
 
 ---
 
-## 🔗 Liens Connexes
+## 🔗 Liens connexes
 
-- 🛒 **[Achat & Vente](buy-sell.md)** — Transactions d'actifs standards
-- 💵 **[Dépôt & Retrait](deposit-withdrawal.md)** — Mouvements de liquidités
-- 💰 **[Taux de change](../../../user/fx/index.md)** — Gestion des taux de change
+- 📊 **[Coût Moyen Pondéré](../../portfolio-theory/weighted-average-cost.md)** — Comment le prix de revient est calculé lors des transferts
+- 🏦 **[Transfert de fonds](cash-transfer.md)** — Virements bancaires (liquidités, pas d'actifs)
+- 💱 **[Conversion de devise](fx-conversion.md)** — Change de devises
+- 📊 **[Ajustement](adjustment.md)** — Corrections manuelles

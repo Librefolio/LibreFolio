@@ -58,8 +58,8 @@ L'interesse maturato dipende dalla [Convenzione di Conteggio dei Giorni](../../f
 
 I prezzi delle obbligazioni si muovono in modo **inverso** rispetto ai rendimenti:
 
-- Quando i tassi di interesse aumentano $\rightarrow$ i prezzi delle obbligazioni scendono
-- Quando i tassi di interesse diminuiscono $\rightarrow$ i prezzi delle obbligazioni salgono
+- Quando i tassi di interesse aumentano → i prezzi delle obbligazioni scendono
+- Quando i tassi di interesse diminuiscono → i prezzi delle obbligazioni salgono
 
 Ciò accade perché le obbligazioni esistenti con cedole più basse diventano meno attraenti rispetto alle nuove obbligazioni emesse a tassi più elevati.
 

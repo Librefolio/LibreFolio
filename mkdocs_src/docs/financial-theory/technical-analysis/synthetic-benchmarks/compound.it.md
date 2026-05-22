@@ -56,7 +56,7 @@ Questo è matematicamente equivalente alla forma chiusa $y_0(1+r)^t$ ma sostitui
 
 !!! tip "Regola del 72"
 
-    Una rapida scorciatoia mentale: un investimento che cresce al $r$% all'anno raddoppierà approssimativamente in $72 / r$ anni. Al 7% $\to$ ~10,3 anni.
+    Una rapida scorciatoia mentale: un investimento che cresce al $r$% all'anno raddoppierà approssimativamente in $72 / r$ anni. Al 7% → ~10,3 anni.
 
 ---
 

@@ -1,4 +1,4 @@
-# 📈 Rendements & Taux de croissance
+# 📈 Rendements et Taux de Croissance
 
 Cette page couvre les fondements mathématiques des **rendements d'investissement** — comment mesurer, comparer et annualiser les taux de croissance. Ces concepts sont utilisés dans l'ensemble des outils de mesure et des analyses de portefeuille de LibreFolio.
 
@@ -20,8 +20,8 @@ $$
 
 ### 📊 Propriétés
 
-- **Intuitif** : représente directement le montant gagné ou perdu
-- **Non additif** : on ne peut pas simplement sommer les rendements simples sur plusieurs périodes pour obtenir le rendement total
+- **Intuitif** : représente directement « combien vous avez gagné/perdu »
+- **Non additif** : vous ne pouvez pas simplement additionner les rendements simples sur plusieurs périodes pour obtenir le rendement total
 - **Composition** : les rendements multi-périodes doivent être **multipliés**, et non additionnés
 
 $$
@@ -59,7 +59,7 @@ $$
 
 ## 📅 Rendement Annualisé
 
-Pour comparer des rendements sur différentes périodes, nous les **annualisons** — en projetant le taux de croissance observé sur une année complète.
+Pour comparer des rendements sur différentes périodes, nous les **annualisons** — en projetant le taux de croissance observé sur une année entière.
 
 ### 📈 Taux de Croissance Annuel Composé (CAGR)
 
@@ -69,7 +69,7 @@ $$
 R_{annual} = \left(\frac{P_{end}}{P_{start}}\right)^{365/d} - 1
 $$
 
-C'est ce que l'outil [Measures](../../user/fx/detail/measures.md) de LibreFolio affiche.
+C'est ce que l' [outil de mesure](../../user/fx/detail/measures.md) de LibreFolio affiche.
 
 !!! example
 
@@ -77,7 +77,7 @@ C'est ce que l'outil [Measures](../../user/fx/detail/measures.md) de LibreFolio 
 
     $$R_{annual} = \left(\frac{1.14}{1.10}\right)^{365/90} - 1 = (1.0364)^{4.056} - 1 \approx 15.5\%$$
 
-### 📐 Rendement Logarithmique Annualisé
+### 📐 Rendement Log Annualisé
 
 Pour les rendements logarithmiques, l'annualisation est simplement une mise à l'échelle :
 
@@ -89,12 +89,12 @@ Cette linéarité est l'un des avantages clés des rendements logarithmiques en 
 
 ---
 
-## 🔄 Relation Entre Rendements Simples et Logarithmiques
+## 🔄 Relation Entre Rendements Simples et Log
 
-| Propriété | Rendement Simple $R$ | Rendement Logarithmique $r$ |
+| Propriété | Rendement Simple $R$ | Rendement Log $r$ |
 |----------|:---:|:---:|
 | **Composition** | Multiplicative : $(1+R_1)(1+R_2)$ | Additive : $r_1 + r_2$ |
-| **Symétrie** | Asymétrique : +10% puis −10% ≠ 0 | Symétrique : +10% puis −10% = 0 |
+| **Symétrie** | Asymétrique : +10 % puis −10 % ≠ 0 | Symétrique : +10 % puis −10 % = 0 |
 | **Annualisation** | $(1+R)^{365/d} - 1$ | $r \times 365/d$ |
 | **Rendements de portefeuille** | La somme pondérée fonctionne ✅ | La somme pondérée ne fonctionne pas ❌ |
 | **Séries temporelles** | Non additif ❌ | Additif ✅ |
@@ -103,7 +103,7 @@ Cette linéarité est l'un des avantages clés des rendements logarithmiques en 
 !!! tip "Lequel utiliser ?"
 
     - **Rendements simples** pour le reporting aux utilisateurs et le calcul des rendements au niveau du portefeuille
-    - **Rendements logarithmiques** pour l'analyse statistique, l'estimation de la volatilité et les modèles de séries temporelles
+    - **Rendements log** pour l'analyse statistique, l'estimation de la volatilité et les modèles de séries temporelles
 
 ---
 
@@ -115,12 +115,48 @@ Le nombre de jours $d$ peut être calculé différemment selon la convention :
 - **Actual/360** : Jours calendaires sur une année de 360 jours (courant sur les marchés monétaires)
 - **30/360** : Suppose des mois de 30 jours et une année de 360 jours
 
-Pour plus de détails, voir [Conventions de comptage des jours](day-count.md).
+Pour plus de détails, voir [Conventions de Comptage des Jours](day-count.md).
+
+---
+
+## 💰 Méthodes de Rendement de Portefeuille
+
+Lorsqu'un portefeuille comporte des **flux de trésorerie** (dépôts, retraits), une seule formule de rendement ne suffit pas. Deux méthodes existent pour isoler la performance des effets des flux de trésorerie :
+
+### ⏱️ Rendement Pondéré dans le Temps (TWR)
+
+Élimine l'effet des flux de trésorerie en calculant les rendements des sous-périodes entre chaque événement de flux et en les enchaînant :
+
+$$
+R_{TWR} = \prod_{i=1}^{n} (1 + r_i) - 1
+$$
+
+- Mesure la **performance pure du portefeuille** indépendamment du moment des dépôts/retraits
+- Utilisé par les gestionnaires de fonds pour le benchmarking (conforme aux normes GIPS)
+- Non affecté par le comportement de l'investisseur (ajouter de l'argent aux sommets, retirer aux creux)
+
+### 💵 Rendement Pondéré par l'Argent (MWR / IRR)
+
+Prend en compte le **moment et la taille** des flux de trésorerie — le taux de rendement interne qui ramène la NPV de tous les flux à zéro :
+
+$$
+0 = \sum_{i=0}^{n} \frac{CF_i}{(1 + r)^{t_i}}
+$$
+
+où $CF_i$ est chaque flux de trésorerie (dépôts positifs, retraits négatifs, valeur finale du portefeuille positive).
+
+- Mesure **l'expérience spécifique de l'investisseur** (votre rendement réel compte tenu du moment où vous avez ajouté/retiré des fonds)
+- Pénalise un mauvais timing (déposer aux plus hauts, retirer aux plus bas)
+- Utilisé pour la performance d'un portefeuille personnel
+
+!!! info "Lequel utilise LibreFolio ?"
+
+    LibreFolio calculera à la fois le TWR et le MWR dans le tableau de bord d'analyse du portefeuille. Le TWR pour la comparaison avec les benchmarks, le MWR pour l'évaluation de la performance personnelle.
 
 ---
 
 ## ⚠️ Pièges
 
-1. **Périodes très courtes** : Annualiser un rendement sur 3 jours peut produire des chiffres trompeurs (ex: une variation de 0,1 % sur 3 jours → 12,5 % annualisé)
-2. **Prix négatifs** : Les rendements logarithmiques ne sont pas définis pour les valeurs négatives — ce n'est pas un problème pour les taux de change
-3. **Fréquence de composition** : Le CAGR suppose une composition continue ; les instruments réels peuvent composer quotidiennement, mensuellement ou trimestriellement
+1. **Périodes très courtes** : Annualiser un rendement sur 3 jours peut produire des chiffres trompeurs (ex: un mouvement de 0,1 % sur 3 jours → 12,5 % annualisé)
+2. **Prix négatifs** : Les rendements log sont indéfinis pour les valeurs négatives — ce n'est pas un problème pour les taux FX
+3. **Fréquence de composition** : Le CAGR suppose une composition continue ; les instruments du monde réel peuvent composer quotidiennement, mensuellement ou trimestriellement

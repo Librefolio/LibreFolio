@@ -26,25 +26,19 @@ An **interest transaction** records interest income received from bonds, savings
 
 ---
 
-## 📐 Simple vs Compound Interest
+## 💡 When to Use
 
-### 📏 Simple Interest
+Use an `INTEREST` transaction when cash arrives in your broker account as interest income. This is distinct from:
 
-Interest calculated only on the original principal:
+- **Dividend** — income from equity (stocks, distributing ETFs)
+- **Maturity Settlement** — return of principal at bond maturity
 
-$$
-I = P \times r \times t
-$$
+!!! tip "Theory & formulas"
 
-### 📈 Compound Interest
+    For the mathematics of interest accrual (simple vs compound, day count conventions, yield metrics), see:
 
-Interest calculated on principal + accumulated interest:
-
-$$
-A = P \times (1 + r)^t
-$$
-
-The difference between simple and compound interest is the foundation of the [Linear vs Compound Growth](../../technical-analysis/synthetic-benchmarks/index.md) benchmark comparison.
+    - **[📈 Interest Events](../asset-events/interest.md)** — Accrual mechanics and price impact
+    - **[📅 Day Count Conventions](../../fundamentals/day-count.md)** — How interest periods are calculated
 
 ---
 
@@ -52,4 +46,5 @@ The difference between simple and compound interest is the foundation of the [Li
 
 - 📈 **[Interest Events](../asset-events/interest.md)** — Accrual and coupon mechanics
 - 🏛️ **[Bonds](../asset-types/bonds.md)** — The primary interest-bearing asset
+- 📈 **[Returns & Growth Rates](../../fundamentals/returns.md)** — Measuring income return
 - 📅 **[Day Count Conventions](../../fundamentals/day-count.md)** — How interest periods are calculated

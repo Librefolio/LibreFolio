@@ -1,6 +1,6 @@
-# ![](../../../static/icons/asset-types/etf.png){: width="32" style="vertical-align: middle;" } ETFs (Exchange Traded Funds)
+# ![](../../../static/icons/asset-types/etf.png){: width="32" style="vertical-align: middle;" } ETFs (Fondos Cotizados en Bolsa)
 
-Un **ETF** es una cesta de valores (acciones, bonos, materias primas o una mezcla) que cotiza en bolsa como si fuera una sola acción. Los ETFs combinan la diversificación de los fondos de inversión con la flexibilidad de negociación en tiempo real de las acciones.
+Un **ETF** es una cesta de valores (acciones, bonos, materias primas o una combinación) que cotiza en una bolsa como una sola acción. Los ETFs combinan la diversificación de los fondos mutuos con la flexibilidad de negociación en tiempo real de las acciones.
 
 ---
 
@@ -9,49 +9,49 @@ Un **ETF** es una cesta de valores (acciones, bonos, materias primas o una mezcl
 | Propiedad | Detalle |
 |----------|--------|
 | **Código en LibreFolio** | `ETF` |
-| **Precio** | Precios de bolsa en tiempo real, como las acciones |
-| **Moneda** | Denominado en la moneda de la bolsa de cotización |
+| **Cotización** | Precios de bolsa en tiempo real, como las acciones |
+| **Moneda** | Denominada en la moneda de la bolsa donde cotiza |
 | **Dividendos** | Pueden distribuir (Dist) o reinvertir internamente (Acc) |
-| **TER** | Total Expense Ratio — comisión de gestión anual deducida del NAV |
+| **TER** | Ratio de Gastos Totales — comisión anual de gestión deducida del NAV |
 | **Proveedores típicos** | Yahoo Finance, justETF, CSS Scraper |
 
 ---
 
-## 📊 Acumulación vs Distribución
+## 📊 Acumulativos vs Distributivos
 
-| Característica | Acumulación (Acc) | Distribución (Dist) |
+| Característica | Acumulativo (Acc) | Distributivo (Dist) |
 |---------|-------------------|-------------------|
 | **Dividendos** | Reinvertidos internamente | Pagados a los tenedores |
-| **Evento fiscal** | Solo al vender | En cada distribución |
-| **Interés compuesto** | Crecimiento compuesto total | Reducido por la carga fiscal |
-| **Ideal para** | Crecimiento a largo plazo | Necesidades de ingresos |
+| **Evento fiscal** | Solo en la venta | En cada distribución |
+| **Capitalización compuesta** | Crecimiento compuesto total | Reducido por el efecto fiscal |
+| **Mejor para** | Crecimiento a largo plazo | Necesidades de ingresos |
 
-La [ventaja del diferimiento fiscal](../../fundamentals/taxation.md#tax-deferral-advantage) de los ETFs de acumulación puede ser significativa en horizontes temporales largos.
+La [ventaja de diferimiento fiscal](../../fundamentals/taxation.md#tax-deferral-advantage) de los ETFs acumulativos puede ser significativa en horizontes largos.
 
 ---
 
 ## 📈 NAV vs Precio de Mercado
 
-- **NAV** (Net Asset Value): El valor real de las posiciones subyacentes ÷ participaciones en circulación. Se calcula diariamente.
-- **Precio de Mercado**: El precio al que el ETF cotiza realmente en la bolsa. Puede desviarse ligeramente del NAV.
+- **NAV** (Valor Liquidativo): El valor real de las participaciones subyacentes ÷ acciones en circulación. Calculado diariamente.
+- **Precio de Mercado**: El precio real al que se negocia el ETF en la bolsa. Puede desviarse ligeramente del NAV.
 - **Prima/Descuento**: Cuando el precio de mercado > NAV, el ETF cotiza con prima; cuando < NAV, con descuento.
 
 ---
 
-## 🔍 Seguimiento de Índices
+## 🔍 Seguimiento del Índice
 
-La mayoría de los ETFs siguen un índice benchmark (por ejemplo, S&P 500, MSCI World). El **error de seguimiento** (tracking error) mide cuánto se desvía el rendimiento del ETF respecto al benchmark:
+La mayoría de los ETFs siguen un benchmark (p. ej., S&P 500, MSCI World). El **error de seguimiento** mide cuánto se desvía el rendimiento del ETF del índice:
 
 $$
 TE = \sigma(R_{ETF} - R_{index})
 $$
 
-Menor error de seguimiento = mejor replicación del índice.
+Un error de seguimiento más bajo = mejor replicación del benchmark.
 
 ---
 
-## 🔗 Relacionado
+## 🔗 Relacionados
 
-- 💰 **[Eventos de Dividendos](../asset-events/dividend.md)** — Distribuciones de las posiciones del ETF
+- 💰 **[Eventos de Dividendos](../asset-events/dividend.md)** — Distribuciones de las participaciones del ETF
 - 📈 **[Índice y Benchmark](index-benchmark.md)** — Cómo funcionan los benchmarks
 - 💰 **[Fiscalidad](../../fundamentals/taxation.md)** — Implicaciones fiscales de Acc vs Dist

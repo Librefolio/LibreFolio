@@ -1,6 +1,6 @@
 # ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Asset Transfer
 
-**Asset transfers** move securities between broker accounts **without a sale**. In LibreFolio, this is a **paired transaction** — each transfer creates two linked rows: a "from" side (negative quantity) and a "to" side (positive quantity).
+**Asset transfers** move securities between broker accounts **without a sale**. The position leaves one broker and arrives at another — no cash changes hands, and in most jurisdictions this is not a taxable event.
 
 ---
 
@@ -12,14 +12,13 @@
 | **Cash effect** | — | — |
 | **Asset effect** | ⬇️ Decreases | ⬆️ Increases |
 | **Broker** | Source broker | Destination broker |
-| **Paired** | ✅ Yes (linked via `link_uuid`) | ✅ Yes |
 | **Tax event** | Varies by jurisdiction | Varies |
 
 ---
 
 ## 📊 How It Works
 
-Both halves reference the **same asset** and share a `link_uuid`. The quantity is mirrored: one side is negative (outgoing), the other is positive (incoming).
+An asset transfer records **two entries**: one debit at the source broker and one credit at the destination broker. Both reference the **same asset** with mirrored quantities.
 
 Common scenarios:
 
@@ -31,14 +30,18 @@ Common scenarios:
 
     When transferring assets, the **original cost basis** should be preserved. The transfer itself is not a taxable event in most jurisdictions (though rules vary). LibreFolio allows an optional **cost basis override** on the receiving side.
 
+    See **[📊 Weighted Average Cost (WAC)](../../portfolio-theory/weighted-average-cost.md)** for how the automatic cost basis is computed.
+
 ---
 
-## 🔀 Split & Promote
+## 🔀 Relationship with Adjustments
+
+Under the hood, a Transfer is composed of two Adjustment entries. LibreFolio supports:
 
 | Operation | Result |
 |-----------|--------|
-| **Split** (unlink pair) | Both halves become `ADJUSTMENT` |
-| **Promote** (link 2 adjustments) | Two `ADJUSTMENT` rows → `TRANSFER` pair |
+| **Split** (unlink) | Transfer → two independent Adjustments |
+| **Promote** (link) | Two Adjustments → Transfer |
 
 **Promote constraints**: same asset, different brokers, opposite quantities.
 
@@ -46,7 +49,7 @@ Common scenarios:
 
 ## 🔗 Related
 
+- 📊 **[Weighted Average Cost](../../portfolio-theory/weighted-average-cost.md)** — How cost basis is computed on transfers
 - 🏦 **[Cash Transfer](cash-transfer.md)** — Wire transfers (cash, not assets)
 - 💱 **[FX Conversion](fx-conversion.md)** — Currency exchange
 - 📊 **[Adjustment](adjustment.md)** — Manual corrections
-- 🛒 **[Buy & Sell](buy-sell.md)** — Standard asset transactions

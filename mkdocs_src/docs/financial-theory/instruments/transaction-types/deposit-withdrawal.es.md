@@ -1,6 +1,6 @@
 # ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Depósitos y Retiros
 
-Los **depósitos** y **retiros** registran las entradas y salidas de efectivo de una cuenta de bróker. No involucran ningún activo; solo cambia el saldo de efectivo.
+Los **depósitos** y **retiros** rastrean el movimiento de efectivo entrante y saliente de una cuenta de bróker. No involucran ningún activo; solo cambia el saldo de efectivo.
 
 ---
 
@@ -15,31 +15,22 @@ Los **depósitos** y **retiros** registran las entradas y salidas de efectivo de
 
 ---
 
-## 📊 Por Qué Son Importantes
+## 💡 Por qué son Importantes
 
-### 📐 Rentabilidad Ponderada por Dinero
+Los depósitos y retiros no cambian el valor de mercado de la cartera, pero son fundamentales para la **medición del rendimiento**:
 
-Los depósitos y retiros son críticos para calcular la **rentabilidad ponderada por dinero** (MWR / IRR). Sin el seguimiento de los flujos de efectivo, es imposible distinguir entre la rentabilidad generada por la cartera y la rentabilidad causada por la adición o eliminación de efectivo.
+- **Rentabilidad Ponderada por Dinero (MWR)**: tiene en cuenta el momento y el tamaño de los flujos de efectivo — se ve directamente afectada por los depósitos/retiros
+- **Rentabilidad Ponderada por el Tiempo (TWR)**: elimina el efecto de los flujos de efectivo para medir el rendimiento "puro" de la cartera
 
-$$
-0 = \sum_{i=0}^{n} \frac{CF_i}{(1 + r)^{t_i}}
-$$
+Sin un seguimiento preciso de los depósitos/retiros, es imposible distinguir entre la rentabilidad *generada* por la cartera y la rentabilidad *causada* por añadir o retirar efectivo.
 
-donde $CF_i$ es cada flujo de efectivo (depósitos positivos, retiros negativos, valor final positivo).
+!!! tip "Más información"
 
-### 📊 Rentabilidad Ponderada por Tiempo
-
-La **rentabilidad ponderada por tiempo** (TWR) elimina el efecto de los flujos de efectivo calculando la rentabilidad entre cada evento de flujo de efectivo y encadenándolos:
-
-$$
-R_{TWR} = \prod_{i=1}^{n} (1 + r_i) - 1
-$$
-
-Esto proporciona una medida "pura" de la rentabilidad de la cartera, independiente del momento de los depósitos o retiros.
+    Consulte **[📈 Rendimientos y Tasas de Crecimiento](../../fundamentals/returns.md)** para conocer las fórmulas y la metodología.
 
 ---
 
-## 🔗 Relacionados
+## 🔗 Relacionado
 
-- 📈 **[Rentabilidades y Tasas de Crecimiento](../../fundamentals/returns.md)** — Cálculo de TWR vs MWR
+- 📈 **[Rendimientos y Tasas de Crecimiento](../../fundamentals/returns.md)** — Cálculo de TWR vs MWR
 - 🛒 **[Compra y Venta](buy-sell.md)** — Transacciones que utilizan el efectivo depositado

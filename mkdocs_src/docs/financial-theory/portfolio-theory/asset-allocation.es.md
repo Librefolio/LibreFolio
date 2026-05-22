@@ -44,8 +44,8 @@ donde $t$ son los años transcurridos y $T$ es el tiempo hasta la fecha objetivo
 
 ### 📉 La Justificación
 
-- **Inversores jóvenes**: tienen un horizonte temporal largo $\rightarrow$ pueden tolerar la volatilidad a corto plazo $\rightarrow$ deben mantener más acciones.
-- **Inversores cercanos a la jubilación**: necesitan preservación de capital $\rightarrow$ deben mantener más bonos.
+- **Inversores jóvenes**: tienen un horizonte temporal largo → pueden tolerar la volatilidad a corto plazo → deben mantener más acciones.
+- **Inversores cercanos a la jubilación**: necesitan preservación de capital → deben mantener más bonos.
 - La trayectoria de deslizamiento automatiza esta transición.
 
 ---

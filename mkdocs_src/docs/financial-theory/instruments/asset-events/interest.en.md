@@ -22,6 +22,46 @@ Unlike dividends (which depend on company profits), interest payments are **cont
 
 ---
 
+## 🧮 Interest Formulas
+
+??? example "📏 Simple Interest"
+
+    Interest calculated only on the original principal — no compounding:
+
+    $$
+    I = P \times r \times t
+    $$
+
+    Where:
+
+    - $P$ = principal (initial investment)
+    - $r$ = annual interest rate (e.g., 0.04 for 4%)
+    - $t$ = time in years
+
+    Used for: short-term loans, some savings accounts, treasury bills.
+
+??? example "📈 Compound Interest"
+
+    Interest calculated on principal **plus** previously accumulated interest:
+
+    $$
+    A = P \times \left(1 + \frac{r}{n}\right)^{n \times t}
+    $$
+
+    Where:
+
+    - $A$ = final amount (principal + interest)
+    - $P$ = principal
+    - $r$ = annual interest rate
+    - $n$ = compounding frequency per year (12 = monthly, 4 = quarterly, 1 = annual)
+    - $t$ = time in years
+
+    The interest earned is: $I = A - P$
+
+    Used for: most bonds, savings accounts with reinvestment, P2P platforms.
+
+---
+
 ## 📉 Impact on Market Price
 
 For **coupon-bearing bonds**, interest payments cause a periodic reset of the **accrued interest** component:
@@ -30,7 +70,7 @@ For **coupon-bearing bonds**, interest payments cause a periodic reset of the **
 2. On the coupon payment date, the accrued interest resets to zero
 3. The clean price may dip slightly around the ex-coupon date
 
-!!! example "Example"
+??? example "Bond coupon cycle"
 
     A bond with face value €1,000 pays a 4% annual coupon semi-annually (€20 every 6 months).
 
@@ -41,22 +81,53 @@ For **coupon-bearing bonds**, interest payments cause a periodic reset of the **
 For **Scheduled Investment** assets in LibreFolio, interest events directly modify the calculated price:
 
 $$
-\text{price}(d) = \text{initial{\_}value} + \text{accrued{\_}interest}(d) - \sum \text{INTEREST events}
+\text{price}(d) = V_0 + I_{accrued}(d) - \sum_{k} C_k
 $$
+
+Where:
+
+- $V_0$ = initial investment value
+- $I_{accrued}(d)$ = interest accrued up to date $d$
+- $\sum_k C_k$ = sum of all interest payments (coupons) already distributed
 
 ---
 
 ## 📊 Yield Metrics
 
-### Current Yield
+??? example "📐 Current Yield"
 
-$$
-\text{Current Yield} = \frac{\text{Annual Coupon}}{\text{Current Market Price}} \times 100\%
-$$
+    The simplest yield measure — annual income relative to current price:
 
-### Yield to Maturity (YTM)
+    $$
+    \text{Current Yield} = \frac{\text{Annual Coupon}}{\text{Current Market Price}} \times 100
+    $$
 
-The total return anticipated if the bond is held until maturity, accounting for coupon payments, face value repayment, and the current market price.
+    Where:
+
+    - **Annual Coupon** = total coupon payments per year (e.g., €40 for a 4% bond with €1,000 face value)
+    - **Current Market Price** = what you'd pay to buy the bond today
+
+    Limitation: ignores capital gain/loss if held to maturity.
+
+??? example "📐 Yield to Maturity (YTM)"
+
+    The total return anticipated if the bond is held until maturity, accounting for **all** cash flows: coupon payments, face value repayment, and the difference between purchase price and par value.
+
+    YTM is the rate $y$ that satisfies:
+
+    $$
+    P = \sum_{t=1}^{T} \frac{C}{(1+y)^t} + \frac{F}{(1+y)^T}
+    $$
+
+    Where:
+
+    - $P$ = current market price
+    - $C$ = coupon payment per period
+    - $F$ = face value (returned at maturity)
+    - $T$ = number of periods to maturity
+    - $y$ = yield to maturity (per period)
+
+    YTM must be solved numerically (no closed-form solution).
 
 ---
 
@@ -77,5 +148,4 @@ For **Scheduled Investment** provider assets, interest events are generated auto
 - 📅 **[Asset Events Overview](index.md)** — All event types
 - 📆 **[Day Count Conventions](../../fundamentals/day-count.md)** — How interest accrual periods are calculated
 - 🏁 **[Maturity Settlement](maturity-settlement.md)** — Final principal return at bond maturity
-
-
+- 📈 **[Returns & Growth Rates](../../fundamentals/returns.md)** — Measuring total return

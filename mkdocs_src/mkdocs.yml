@@ -129,6 +129,8 @@ plugins:
             Cash Transfer: Bonifico
             FX Conversion: Cambio Valuta
             Adjustment: Rettifica
+            Single: Singole
+            Composite: Composite
             Technical Analysis: Analisi Tecnica
             Indicators: Indicatori
             EMA: EMA
@@ -151,6 +153,7 @@ plugins:
             Sortino Ratio: Indice di Sortino
             Max Drawdown: Massimo Drawdown
             Volatility: Volatilità
+            Weighted Average Cost: Costo Medio Ponderato
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             Gallery: Galleria
             Desktop: Desktop
@@ -222,6 +225,8 @@ plugins:
             Cash Transfer: Virement
             FX Conversion: Conversion de Devises
             Adjustment: Ajustement
+            Single: Simples
+            Composite: Composites
             Technical Analysis: Analyse Technique
             Indicators: Indicateurs
             EMA: EMA
@@ -244,6 +249,7 @@ plugins:
             Sortino Ratio: Ratio de Sortino
             Max Drawdown: Drawdown Maximum
             Volatility: Volatilité
+            Weighted Average Cost: Coût Moyen Pondéré
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             Gallery: Galerie
             Desktop: Bureau
@@ -315,6 +321,8 @@ plugins:
             Cash Transfer: Transferencia Bancaria
             FX Conversion: Conversión de Divisas
             Adjustment: Ajuste
+            Single: Individuales
+            Composite: Compuestas
             Technical Analysis: Análisis Técnico
             Indicators: Indicadores
             EMA: EMA
@@ -337,6 +345,7 @@ plugins:
             Sortino Ratio: Ratio de Sortino
             Max Drawdown: Drawdown Máximo
             Volatility: Volatilidad
+            Weighted Average Cost: Coste Medio Ponderado
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             Gallery: Galería
             Desktop: Escritorio
@@ -417,15 +426,17 @@ nav:
           - Overview: financial-theory/instruments/index.md
           - Transaction Types:
               - Overview: financial-theory/instruments/transaction-types/index.md
-              - Buy & Sell: financial-theory/instruments/transaction-types/buy-sell.md
-              - Deposit & Withdrawal: financial-theory/instruments/transaction-types/deposit-withdrawal.md
-              - Dividend: financial-theory/instruments/transaction-types/dividend.md
-              - Fee & Tax: financial-theory/instruments/transaction-types/fee.md
-              - Interest: financial-theory/instruments/transaction-types/interest.md
-              - Asset Transfer: financial-theory/instruments/transaction-types/transfer.md
-              - Cash Transfer: financial-theory/instruments/transaction-types/cash-transfer.md
-              - FX Conversion: financial-theory/instruments/transaction-types/fx-conversion.md
-              - Adjustment: financial-theory/instruments/transaction-types/adjustment.md
+              - Single:
+                  - Buy & Sell: financial-theory/instruments/transaction-types/buy-sell.md
+                  - Deposit & Withdrawal: financial-theory/instruments/transaction-types/deposit-withdrawal.md
+                  - Dividend: financial-theory/instruments/transaction-types/dividend.md
+                  - Fee & Tax: financial-theory/instruments/transaction-types/fee.md
+                  - Interest: financial-theory/instruments/transaction-types/interest.md
+                  - Adjustment: financial-theory/instruments/transaction-types/adjustment.md
+              - Composite:
+                  - Asset Transfer: financial-theory/instruments/transaction-types/transfer.md
+                  - Cash Transfer: financial-theory/instruments/transaction-types/cash-transfer.md
+                  - FX Conversion: financial-theory/instruments/transaction-types/fx-conversion.md
           - Asset Types:
               - Overview: financial-theory/instruments/asset-types/index.md
               - Stocks: financial-theory/instruments/asset-types/stocks.md
@@ -466,6 +477,7 @@ nav:
           - Overview: financial-theory/portfolio-theory/index.md
           - Diversification: financial-theory/portfolio-theory/diversification.md
           - Asset Allocation: financial-theory/portfolio-theory/asset-allocation.md
+          - Weighted Average Cost: financial-theory/portfolio-theory/weighted-average-cost.md
           - Risk Metrics:
               - Overview: financial-theory/portfolio-theory/risk-metrics/index.md
               - Sharpe Ratio: financial-theory/portfolio-theory/risk-metrics/sharpe-ratio.md

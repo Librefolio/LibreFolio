@@ -16,8 +16,8 @@ $$
 \text{Capital Gain} = P_{sell} - P_{buy} - \text{Fees}
 $$
 
-- **Plusvalía** ($> 0$): Vendió por más de lo que pagó $\rightarrow$ evento imponible en la mayoría de las jurisdicciones
-- **Pérdida de Capital** ($< 0$): Vendió por menos de lo que pagó $\rightarrow$ puede compensar plusvalías futuras
+- **Plusvalía** ($> 0$): Vendió por más de lo que pagó → evento imponible en la mayoría de las jurisdicciones
+- **Pérdida de Capital** ($< 0$): Vendió por menos de lo que pagó → puede compensar plusvalías futuras
 
 ### 🔄 Realizadas vs No Realizadas
 

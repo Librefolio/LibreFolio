@@ -1,61 +1,55 @@
-# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Transferencias y Conversión de FX
+# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Transferencia de Activos
 
-Las **Transferencias** mueven activos entre carteras sin venta, mientras que las **Conversiones de FX** intercambian una moneda por otra dentro de una cartera.
+Las **transferencias de activos** mueven valores entre cuentas de brókers **sin realizar una venta**. La posición sale de un bróker y llega a otro; no hay intercambio de efectivo y, en la mayoría de las jurisdicciones, esto no es un evento fiscal.
 
 ---
 
 ## 🔑 Propiedades Clave
 
-| Propiedad | Transferencia Entrante | Transferencia Saliente | Conversión de FX |
-|----------|------------|-------------|---------------|
-| **Código** | `TRANSFER_IN` | `TRANSFER_OUT` | `FX_CONVERSION` |
-| **Efecto en el saldo de efectivo** | — | — | ⬆️⬇️ (intercambio) |
-| **Efecto en activos** | ⬆️ Aumenta | ⬇️ Disminuye | — |
-| **Evento fiscal** | Varía según la jurisdicción | Varía | Varía |
+| Propiedad | Desde (origen) | Hacia (destino) |
+|----------|---------------|-------------------|
+| **Código** | `TRANSFER` | `TRANSFER` |
+| **Efecto en efectivo** | — | — |
+| **Efecto en activos** | ⬇️ Disminuye | ⬆️ Aumenta |
+| **Bróker** | Bróker de origen | Bróker de destino |
+| **Evento fiscal** | Varía según la jurisdicción | Varía |
 
 ---
 
-## 🔄 Transferencia Entrante / Saliente
+## 📊 Cómo Funciona
 
-Las transferencias modelan el movimiento de activos entre cuentas de bróker o carteras **sin venta**. Escenarios comunes:
+Una transferencia de activos registra **dos entradas**: un débito en el bróker de origen y un crédito en el bróker de destino. Ambas hacen referencia al **mismo activo** con cantidades espejo.
+
+Escenarios comunes:
 
 - Mover acciones de un bróker a otro
 - Heredar activos
-- Contribuciones en especie a un tipo de cuenta diferente (ej. ISA, 401k)
+- Contribuciones en especie a un tipo de cuenta diferente (por ejemplo, ISA, 401k)
 
-!!! info "Preservación de la base de costo"
+!!! info "Preservación del Costo Base"
 
-    Al transferir activos, se debe preservar la **base de costo original**. La transferencia en sí misma no es un evento imponible en la mayoría de las jurisdicciones (aunque las reglas varían).
+    Al transferir activos, se debe preservar el **costo base original**. La transferencia en sí misma no es un evento fiscal en la mayoría de las jurisdicciones (aunque las reglas varían). LibreFolio permite una **anulación del costo base** opcional en el lado receptor.
 
----
-
-## 💱 Conversión de FX
-
-Intercambios de moneda dentro de una cartera:
-
-$$
-\text{Amount}_{target} = \text{Amount}_{source} \times \text{FX Rate} - \text{Fees}
-$$
-
-Las conversiones de FX pueden ser:
-
-- **Explícitas**: El usuario convierte monedas deliberadamente (ej. EUR → USD)
-- **Implícitas**: El bróker convierte automáticamente al comprar un activo denominado en moneda extranjera
+    Consulte **[📊 Costo Promedio Ponderado (WAC)](../../portfolio-theory/weighted-average-cost.md)** para saber cómo se calcula el costo base automático.
 
 ---
 
-## 📊 Ajuste
+## 🔀 Relación con Ajustes
 
-El tipo de transacción `ADJUSTMENT` es una categoría general para correcciones manuales tanto de los saldos de efectivo como de los de activos. Casos de uso:
+Internamente, una Transferencia se compone de dos entradas de Ajuste. LibreFolio admite:
 
-- Corregir errores de importación
-- Registrar acciones corporativas no cubiertas por los tipos estándar
-- Configuración del saldo inicial
+| Operación | Resultado |
+|-----------|--------|
+| **División** (desvincular) | Transferencia → dos Ajustes independientes |
+| **Promote** (vincular) | Dos Ajustes → Transferencia |
+
+**Restricciones de Promote**: mismo activo, diferentes brókers, cantidades opuestas.
 
 ---
 
-## 🔗 Relacionado
+## 🔗 Relacionados
 
-- 🛒 **[Compra y Venta](buy-sell.md)** — Transacciones de activos estándar
-- 💵 **[Depósito y Retirada](deposit-withdrawal.md)** — Movimientos de efectivo
-- 💰 **[Tipos de cambio de FX](../../../user/fx/index.md)** — Gestión de tipos de cambio
+- 📊 **[Costo Promedio Ponderado](../../portfolio-theory/weighted-average-cost.md)** — Cómo se calcula el costo base en las transferencias
+- 🏦 **[Transferencia de Efectivo](cash-transfer.md)** — Transferencias bancarias (efectivo, no activos)
+- 💱 **[Conversión de divisa](fx-conversion.md)** — Cambio de divisas
+- 📊 **[Ajuste](adjustment.md)** — Correcciones manuales
