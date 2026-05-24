@@ -55,6 +55,7 @@ gevent = "*"
 tabulate = "*"
 openpyxl = "*"
 aphra = {git = "https://github.com/DavidLMS/aphra.git", ref = "main"}
+graphifyy = "*"
 
 [requires]
 python_version = "3.13"

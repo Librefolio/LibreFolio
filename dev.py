@@ -1035,6 +1035,116 @@ def cmd_mkdocs_check_links(args):
 
 
 # =============================================================================
+# Graph / DevWiki Commands (graphify knowledge graph)
+# =============================================================================
+
+WIKI_DIR = PROJECT_ROOT / "LibreFolio_devWiki"
+CORPUS_DIR = WIKI_DIR / "corpus"
+GRAPH_JSON = WIKI_DIR / "graphify-out" / "graph.json"
+GRAPH_REPORT = WIKI_DIR / "graphify-out" / "GRAPH_REPORT.md"
+
+
+def _graphify_cmd(args_list: list, cwd: Path = WIKI_DIR, env: dict | None = None) -> int:
+    """Run graphify via pipenv with live output from LibreFolio_devWiki/."""
+    return run_pipenv(["python", "-m", "graphify"] + args_list, cwd=cwd, env=env)
+
+
+def cmd_graph_build(args):
+    """Full knowledge-graph build: extract + cluster + report.
+
+    When graph.json already exists (default): code-only incremental update, no LLM needed.
+    With --full: full semantic re-extraction (requires an LLM API key in env, or use the
+    graphify skill through your AI assistant for semantic extraction of new doc files).
+    """
+    full = getattr(args, "full", False)
+
+    if not CORPUS_DIR.exists():
+        print_error(f"Corpus directory not found: {CORPUS_DIR}")
+        print_error("Run from project root and ensure LibreFolio_devWiki/corpus/ exists.")
+        return 1
+
+    if GRAPH_JSON.exists() and not full:
+        print_warning("graph.json exists — running incremental update (use --full for complete rebuild).")
+        return _graphify_cmd(["update", "corpus/"])
+
+    print(Colors.success("🔬 Building knowledge graph (full extract, no-viz)..."))
+    print_warning("Semantic extraction uses cache for known files. New .md files need an LLM API key")
+    print_warning("or run '/graphify corpus/' through your AI assistant for semantic extraction.")
+    backend_args = []
+    if getattr(args, "backend", None):
+        backend_args = ["--backend", args.backend]
+    return _graphify_cmd([
+        "extract", "corpus/",
+        *backend_args,
+        "--no-viz",
+        "--no-cluster",  # cluster separately; cluster-only is faster on 8k+ nodes
+        "--out", ".",     # write to LibreFolio_devWiki/graphify-out/ (corpus/graphify-out symlinks here)
+    ])
+
+
+def cmd_graph_cluster(args):
+    """Rerun clustering on existing graph.json and regenerate GRAPH_REPORT.md."""
+    if not GRAPH_JSON.exists():
+        print_error("No graph.json found. Run: ./dev.py graph build")
+        return 1
+    print(Colors.success("🔬 Reclustering graph..."))
+    return _graphify_cmd(["cluster-only", "corpus/", "--no-viz"])
+
+
+def cmd_graph_viz(args):
+    """Generate graph.html from existing graph.json (raises node limit to 15000)."""
+    if not GRAPH_JSON.exists():
+        print_error("No graph.json found. Run: ./dev.py graph build first.")
+        return 1
+    print(Colors.success("🌐 Generating graph.html (node limit raised to 15000)..."))
+    rc = _graphify_cmd(
+        ["cluster-only", "corpus/"],
+        env={"GRAPHIFY_VIZ_NODE_LIMIT": "15000"},
+    )
+    if rc == 0:
+        print(Colors.success(f"✅ graph.html → {WIKI_DIR / 'graphify-out' / 'graph.html'}"))
+    return rc
+
+
+def cmd_graph_update(args):
+    """Incremental code-only update: re-extract changed .py/.ts/.svelte (no LLM)."""
+    if not GRAPH_JSON.exists():
+        print_error("No graph.json found. Run: ./dev.py graph build first.")
+        return 1
+    print(Colors.success("🔄 Updating graph (code-only, no LLM)..."))
+    return _graphify_cmd(["update", "corpus/"])
+
+
+def cmd_graph_query(args):
+    """BFS/DFS query on the knowledge graph."""
+    if not GRAPH_JSON.exists():
+        print_error("No graph.json found. Run: ./dev.py graph build first.")
+        return 1
+    question = " ".join(args.question)
+    mode_flag = ["--dfs"] if getattr(args, "dfs", False) else []
+    budget = ["--budget", str(args.budget)] if getattr(args, "budget", None) else []
+    print(Colors.success(f"🔍 Querying: {question}"))
+    return _graphify_cmd(["query", question] + mode_flag + budget)
+
+
+def cmd_graph_path(args):
+    """Shortest path between two concepts in the graph."""
+    if not GRAPH_JSON.exists():
+        print_error("No graph.json found. Run: ./dev.py graph build first.")
+        return 1
+    return _graphify_cmd(["path", args.node_a, args.node_b])
+
+
+def cmd_graph_report(args):
+    """Print GRAPH_REPORT.md summary to stdout."""
+    if not GRAPH_REPORT.exists():
+        print_error("No GRAPH_REPORT.md found. Run: ./dev.py graph build first.")
+        return 1
+    print(GRAPH_REPORT.read_text())
+    return 0
+
+
+# =============================================================================
 # Docker Commands
 # =============================================================================
 
@@ -1786,6 +1896,49 @@ Examples:
 
     p = subparsers.add_parser("install", help="🔧 Install all dependencies")
     p.set_defaults(func=cmd_install)
+
+    # =========================================================================
+    # 🔬 Graph / DevWiki Commands (graphify knowledge graph)
+    # =========================================================================
+
+    p = subparsers.add_parser("graph", help="🔬 DevWiki knowledge graph (graphify)")
+    graph_sub = p.add_subparsers(dest="graph_cmd", metavar="action")
+
+    gp = graph_sub.add_parser("build", help="Full extraction (--full) or incremental code update")
+    gp.add_argument("--backend", default=None,
+                    choices=["claude", "openai", "kimi", "deepseek", "ollama", "gemini"],
+                    help="LLM backend for semantic extraction of new docs (optional; uses env var auto-detect if not set)")
+    gp.add_argument("--full", action="store_true",
+                    help="Force full rebuild even if graph.json already exists")
+    gp.set_defaults(func=cmd_graph_build)
+
+    gp = graph_sub.add_parser("cluster", help="Rerun clustering on existing graph.json")
+    gp.set_defaults(func=cmd_graph_cluster)
+
+    gp = graph_sub.add_parser("viz", help="Generate graph.html (raises node limit to 15000)")
+    gp.set_defaults(func=cmd_graph_viz)
+
+    gp = graph_sub.add_parser("update", help="Code-only incremental update (no LLM, fast)")
+    gp.set_defaults(func=cmd_graph_update)
+
+    gp = graph_sub.add_parser("query", help='BFS query: ./dev.py graph query "how does auth work"')
+    gp.add_argument("question", nargs="+", help="Question to ask the graph")
+    gp.add_argument("--dfs", action="store_true", help="Use DFS instead of BFS")
+    gp.add_argument("--budget", type=int, default=None, help="Token budget for answer (default: 2000)")
+    gp.set_defaults(func=cmd_graph_query)
+
+    gp = graph_sub.add_parser("path", help='Shortest path: ./dev.py graph path "Currency" "Transaction"')
+    gp.add_argument("node_a", help="Start concept")
+    gp.add_argument("node_b", help="End concept")
+    gp.set_defaults(func=cmd_graph_path)
+
+    gp = graph_sub.add_parser("report", help="Print GRAPH_REPORT.md to stdout")
+    gp.set_defaults(func=cmd_graph_report)
+
+    def _graph_help(a):
+        p.print_help()
+        return 0
+    p.set_defaults(func=_graph_help)
 
     # =========================================================================
     # Enable autocompletion and parse
