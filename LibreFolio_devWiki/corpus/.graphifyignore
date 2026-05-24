@@ -1,0 +1,61 @@
+# --- Cache / build artifacts ---
+**/__pycache__/**
+**/*.pyc
+**/*.pyo
+**/.venv/**
+**/node_modules/**
+**/dist/**
+**/build/**
+**/.mypy_cache/**
+**/.pytest_cache/**
+**/.ruff_cache/**
+
+# --- Database / runtime data ---
+**/alembic/versions/**
+**/test_data/**
+**/data/**
+**/*.db
+**/*.sqlite
+
+# --- Mkdocs: SOLO inglese (.en.md), escludi tutte le altre lingue ---
+mkdocs/**/*.it.md
+mkdocs/**/*.fr.md
+mkdocs/**/*.es.md
+mkdocs/**/*.de.md
+mkdocs/**/*.pt.md
+
+# --- Mkdocs: escludi asset non-testuali ---
+mkdocs/**/assets/**
+mkdocs/**/overrides/**
+mkdocs/**/stylesheets/**
+
+# --- Frontend: escludi build/test/generated ---
+frontend/**/*.test.ts
+frontend/**/*.spec.ts
+frontend/**/*.d.ts
+frontend/**/api/zodios/**
+
+# --- Backend: escludi test scripts e migrations ---
+backend/**/test_scripts/**
+backend/alembic/**
+
+# --- Binary / media ---
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.svg
+**/*.ico
+**/*.woff
+**/*.woff2
+**/*.ttf
+**/*.mp4
+**/*.mp3
+**/*.pdf
+
+# --- Graphify output (symlink in corpus/ → graphify-out/) — never scan self ---
+graphify-out/**
+
+# --- Hidden files ---
+**/.DS_Store
+**/.gitkeep

@@ -86,3 +86,11 @@ coverage.xml
 # Development stuff
 _backup_docs/
 release-roadmap/
+
+# graphify - generated graph outputs (rebuild with: cd LibreFolio_devWiki && graphify corpus/ --update)
+LibreFolio_devWiki/graphify-out/graph.json
+LibreFolio_devWiki/graphify-out/graph.html
+LibreFolio_devWiki/graphify-out/.graphify_*
+LibreFolio_devWiki/corpus/.graphify_*
+# corpus/graphify-out is now a symlink → ../graphify-out (tracked in git)
+# graphify-out/cache/ IS committed: enables cheap --update (no LLM re-extraction on unchanged files)
