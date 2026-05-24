@@ -970,6 +970,8 @@
     }
     function setBroker(v: number) {
         draft = {...draft, broker_id: v};
+        // FX layout: shared broker — keep dualTo in sync (constraint: broker_id equal)
+        if (pairLayout === 'fx') dualTo = {...dualTo, broker_id: v};
     }
     function setBrokerTo(v: number) {
         dualTo = {...dualTo, broker_id: v};
@@ -1713,6 +1715,23 @@
                 </div>
             {/if}
 
+            <!-- Cost basis override — TRANSFER single-form (editing existing linked pair, non-dual) -->
+            {#if !pairLayout && showCostBasisField && draft.type !== 'ADJUSTMENT'}
+                <div class="mt-3" data-testid="tx-form-cost-basis-inline">
+                    <WacPreviewSection
+                        value={draft.cost_basis_override}
+                        onChange={onCostBasisChange}
+                        variant={mode === 'create' ? 'auto-new' : 'saved'}
+                        defaultCode={draft.cash?.code ?? 'EUR'}
+                        disabled={isReadonly}
+                        testid="tx-form-cost-basis"
+                        senderBrokerId={draft.broker_id}
+                        assetId={draft.asset_id}
+                        txDate={draft.date}
+                    />
+                </div>
+            {/if}
+
             <!-- Optional disclosure -->
             {#if !isReadonly || (draft.tags && draft.tags.length > 0) || (draft.description ?? '').trim() || draft.asset_event_id != null || draft.link_uuid != null || pairPartnerId != null}
                 <details class="border border-gray-200 dark:border-slate-700 rounded-lg" bind:open={optionalOpen}>
@@ -1766,21 +1785,6 @@
                                     <button type="button" class="text-xs text-gray-500 hover:text-red-500" onclick={unlinkEvent} data-testid="tx-form-asset-event-unlink">{$t('transactions.form.unlink')}</button>
                                 {/if}
                             </div>
-                        {/if}
-
-                        <!-- Cost basis override (TRANSFER single-form edit — ADJUSTMENT is shown inline above) -->
-                        {#if showCostBasisField && draft.type !== 'ADJUSTMENT'}
-                            <WacPreviewSection
-                                value={draft.cost_basis_override}
-                                onChange={onCostBasisChange}
-                                variant={mode === 'create' ? 'auto-new' : 'saved'}
-                                defaultCode={draft.cash?.code ?? 'EUR'}
-                                disabled={isReadonly}
-                                testid="tx-form-cost-basis"
-                                senderBrokerId={draft.broker_id}
-                                assetId={draft.asset_id}
-                                txDate={draft.date}
-                            />
                         {/if}
 
                         <!-- link_uuid (readonly) -->
