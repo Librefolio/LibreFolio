@@ -255,6 +255,93 @@ Synthesized answer from 3 pages. Filed as [[concepts/fifo-runtime]].
 
 Parseable: `grep "^## \[" log.md | tail -10` gives last 10 entries.
 
+## Graphify Layer
+
+The `graphify-out/` directory contains a persistent knowledge graph built from the entire corpus:
+
+```
+LibreFolio_devWiki/
+├── corpus/                # Input corpus (symlinks)
+│   ├── wiki/              # → LibreFolio_devWiki/wiki/
+│   ├── roadmap/           # → LibreFolio_developer_journal/RoadmapV4_UI/
+│   └── mkdocs-en/         # EN-only symlinks from mkdocs_src/
+└── graphify-out/
+    ├── graph.json         # Persistent graph (948 nodes, 1292 edges, 71 communities)
+    ├── graph.html         # Interactive visualization (open in browser)
+    ├── GRAPH_REPORT.md    # Audit report: god nodes, surprises, suggested questions
+    ├── cost.json          # Cumulative token cost tracker
+    ├── manifest.json      # File manifest for --update incremental runs
+    └── cache/             # Semantic extraction cache (per-file, reused on --update)
+```
+
+### What the graph adds
+
+The graph layer complements the wiki pages by discovering:
+- **Cross-document connections** between wiki pages, plans, and docs that were never explicitly linked
+- **God nodes** — the concepts with highest betweenness centrality (system-wide hubs)
+- **Community clusters** — natural groupings: FX Provider Registry, Transaction Types & FIFO, Auth & User Management, etc.
+- **330x token compression** — a BFS query costs ~2,800 tokens vs 935K for raw corpus
+
+### Key commands (run from `LibreFolio_devWiki/`)
+
+```bash
+# Query the graph (BFS — broad context)
+$(cat graphify-out/.graphify_python) -m graphify query "how does FX rate sync work" graphify-out/graph.json
+
+# Query the graph (DFS — trace a path)
+$(cat graphify-out/.graphify_python) -m graphify query "how does FX rate sync work" graphify-out/graph.json --dfs
+
+# Shortest path between two concepts
+$(cat graphify-out/.graphify_python) -m graphify path "FX Provider Registry" "FIFO Runtime" graphify-out/graph.json
+
+# Explain a specific node
+$(cat graphify-out/.graphify_python) -m graphify explain "EditBuffer" graphify-out/graph.json
+
+# Incremental update after adding new wiki pages or ingesting new plans
+$(cat graphify-out/.graphify_python) -c "
+from graphify.detect import detect_incremental
+from pathlib import Path
+import json
+result = detect_incremental(Path('corpus/'))
+print(f'{result.get(\"new_total\", 0)} files changed')
+" && graphify corpus/ --update
+```
+
+### When to run `--update`
+
+Run `graphify corpus/ --update` (from `LibreFolio_devWiki/`) after:
+- The historian agent ingests a new plan or creates new wiki pages
+- A batch of wiki pages has been updated
+- New mkdocs-en pages are added to the corpus
+
+The `--update` only re-extracts changed files and merges into the existing graph, costing a fraction of the initial build.
+
+### Graph structure
+
+The graph was built from **526 files** (246 wiki pages, 185 roadmap plans, 95 mkdocs-en docs).
+71 communities were detected, including:
+- `FX & Asset Overview` (C0, n=52) — FX pair management, asset overview
+- `Financial Instruments` (C1, n=49) — ETF, bonds, commodities, stocks
+- `Phase 6 Provider Forms` (C2, n=48) — dynamic params_schema, provider registry UI
+- `Asset Detail & Providers` (C3, n=43) — EditBuffer, scheduled investment, charts
+- `Roadmap Plans 07-10` (C4, n=42) — transactions, scheduler, dashboard, polish
+- `FX Provider Registry` (C5, n=36) — F-015/016/017, provider autodiscovery
+- `Bugs & Problem Solutions` (C6, n=36) — all wiki/problems/ pages
+- `Auth & User Management` (C17, n=19) — JWT, admin CRUD, multi-user roles
+- `Transaction Types & FIFO` (C15, n=22) — buy/sell, FIFO at runtime, dividends
+
+### Integration with wiki skills
+
+| Graphify command | Wiki skill that uses it |
+|-----------------|------------------------|
+| `query "..."` | `wiki-search` (primary lookup), `wiki-query` (deep traversal) |
+| `path "A" "B"` | `wiki-query` (tracing relationships) |
+| `explain "X"` | `wiki-search` (quick concept lookup) |
+| `--update` | `wiki-ingest`, `wiki-file` (after adding pages) |
+| `GRAPH_REPORT.md` | `wiki-lint` (orphan detection, community analysis) |
+
+---
+
 ## Workflows
 
 ### Ingest Workflow (historian agent)

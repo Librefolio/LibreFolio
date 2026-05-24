@@ -1,0 +1,1 @@
+/Users/ea_enel/Documents/00_My/LibreFolio/mkdocs_src/docs/user/fx/detail/data-editor.en.md

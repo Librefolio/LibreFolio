@@ -276,15 +276,15 @@ def pipenv_prefix() -> list:
     return [] if _is_docker() else ["pipenv", "run"]
 
 
-def run_pipenv(args: list, cwd: Optional[Path] = None) -> int:
+def run_pipenv(args: list, cwd: Optional[Path] = None, env: Optional[dict] = None) -> int:
     """Run a pipenv command with live output.
 
     In Docker containers (where packages are installed system-wide),
     runs the command directly without pipenv.
     """
     if _is_docker():
-        return run_command_live(args, cwd=cwd)
-    return run_command_live(["pipenv", "run"] + args, cwd=cwd)
+        return run_command_live(args, cwd=cwd, env=env)
+    return run_command_live(["pipenv", "run"] + args, cwd=cwd, env=env)
 
 
 # =============================================================================

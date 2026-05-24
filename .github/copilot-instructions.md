@@ -140,6 +140,16 @@ Use the `find-skills` skill when looking for new capabilities to install (see `~
 
 **Historian agent**: for full wiki operations (ingest sources, query the wiki, health-check), invoke the `project-historian` agent — the workflows are embedded directly in that agent's instructions.
 
+### Graphify Knowledge Graph
+
+The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/graphify-out/graph.json`) — 9259 nodes, 14151 edges, 748 communities covering backend, frontend, wiki, roadmap and docs.
+
+- `wiki-search` uses graphify BFS/DFS as primary lookup (much faster than reading raw files)
+- `./dev.py graph update` — incremental code-only rebuild after code changes (no LLM, ~5s)
+- `./dev.py graph viz` — regenerate `graph.html` for browser visualization
+- `./dev.py graph query "TOPIC"` — quick BFS query from the CLI
+- Full semantic rebuild (new .md files): invoke the `graphify` skill through the AI assistant
+
 ## Test Users
 
 | Username | Password | Role |

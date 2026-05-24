@@ -1,12 +1,13 @@
 ---
 name: wiki-file
-description: "Use this skill when the main dev agent needs to preserve a discovery, decision, or solved problem into the devWiki during or after a coding session. Prevents valuable knowledge from disappearing into chat history. Use after any session where something non-obvious was learned."
+description: "Use this skill when the main dev agent needs to preserve a discovery, decision, or solved problem into the devWiki during or after a coding session. Prevents valuable knowledge from disappearing into chat history. Use after any session where something non-obvious was learned. Runs graphify --update after filing to keep the graph current."
 ---
 
 # Wiki File Skill
 
 > Files a discovery, decision, or solved problem into `LibreFolio_devWiki/`.
-> Use this at the END of a coding session or whenever something worth remembering is learned.
+> Use at the END of a coding session or whenever something worth remembering is learned.
+> **Always triggers a graphify `--update` pass** so the new page becomes queryable immediately.
 
 ## When to Use
 
@@ -56,9 +57,14 @@ tags: [relevant, tags]
 
 ## Details
 The actual content — code snippet, root cause, decision rationale, etc.
+
+## Source files
+| Role | Path |
+|------|------|
+| Implementation | `backend/app/...` or `frontend/src/...` |
 ```
 
-**Cross-referencing**: add `[[links]]` to related pages. If unsure, just add a `related:` tag in frontmatter and leave linking for a lint pass.
+**Cross-referencing**: add `[[links]]` to related pages. Every page must have a `## Source files` section.
 
 ### Step 4 — Update index.md
 Add a row in the correct section. Format:
@@ -73,15 +79,37 @@ Add a row in the correct section. Format:
 Filed: [[category/slug]].
 ```
 
+### Step 6 — Run graphify --update
+
+After filing, update the knowledge graph so the new page becomes immediately queryable:
+
+```bash
+cd /Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki
+$(cat graphify-out/.graphify_python) -c "
+from graphify.detect import detect_incremental
+from pathlib import Path
+import json
+result = detect_incremental(Path('corpus/'))
+new_total = result.get('new_total', 0)
+deleted = list(result.get('deleted_files', []))
+if new_total == 0 and not deleted:
+    print('No changes since last graph build — skipping update')
+else:
+    print(f'{new_total} changed files, {len(deleted)} deleted — run graphify corpus/ --update')
+"
+```
+
+If new files are detected, run the full `--update` pipeline (Steps 3B-3C-4-5-6-9 from the graphify skill).
+
 ## Fast-File Mode
 
 When the insight is simple and you're in the middle of a task, use fast-file:
-1. Create the minimum viable page (frontmatter + 2-4 sentences)
+1. Create the minimum viable page (frontmatter + 2-4 sentences + source files table)
 2. Add one index row
 3. Add one log entry
-4. Return to the main task
+4. Queue a graphify `--update` for the end of the session
 
-Don't let filing interrupt coding flow. A rough page that exists is better than a perfect page that was never written.
+Don't let filing interrupt coding flow. A rough page is better than no page.
 
 ## Filing After a Session
 
@@ -89,6 +117,7 @@ At the end of a dev session, review what was learned:
 1. Ask: "What did we figure out today that wasn't known before?"
 2. For each item: quick classify → fast-file → done
 3. Consider: should any completed plan be ingested via `wiki-ingest`?
+4. Run `graphify corpus/ --update` once to incorporate all new pages
 
 ## Examples
 
