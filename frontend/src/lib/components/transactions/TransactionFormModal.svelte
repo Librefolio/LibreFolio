@@ -1690,29 +1690,29 @@
                             <BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
                         {/if}
                     </div>
-                </fieldset>
-            {/if}
 
-            <!-- Cost basis override — shown inline for ADJUSTMENT (not in Advanced) -->
-            {#if !pairLayout && draft.type === 'ADJUSTMENT' && showCostBasisField}
-                <div class="mt-3" data-testid="tx-form-cost-basis-inline">
-                    <WacPreviewSection
-                        value={draft.cost_basis_override}
-                        onChange={onCostBasisChange}
-                        variant={mode === 'create' ? 'auto-new' : 'saved'}
-                        defaultCode={draft.cash?.code ?? 'EUR'}
-                        disabled={isReadonly}
-                        testid="tx-form-cost-basis"
-                        senderBrokerId={draft.broker_id}
-                        assetId={draft.asset_id}
-                        txDate={draft.date}
-                    />
-                    {#if Number(draft.quantity) > 0 && !draft.cost_basis_override?.amount?.trim()}
-                        <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="tx-form-cost-basis-warning">
-                            {$t('transactions.costBasisOverride.warningAdjustment') || 'No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift.'}
-                        </p>
+                    <!-- Cost basis override — shown inline for ADJUSTMENT (inside fieldset = mandatory section) -->
+                    {#if !pairLayout && draft.type === 'ADJUSTMENT' && showCostBasisField}
+                        <div class="mt-3" data-testid="tx-form-cost-basis-inline">
+                            <WacPreviewSection
+                                value={draft.cost_basis_override}
+                                onChange={onCostBasisChange}
+                                variant={mode === 'create' ? 'auto-new' : 'saved'}
+                                defaultCode={draft.cash?.code ?? 'EUR'}
+                                disabled={isReadonly}
+                                testid="tx-form-cost-basis"
+                                senderBrokerId={draft.broker_id}
+                                assetId={draft.asset_id}
+                                txDate={draft.date}
+                            />
+                            {#if Number(draft.quantity) > 0 && !draft.cost_basis_override?.amount?.trim()}
+                                <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="tx-form-cost-basis-warning">
+                                    {$t('transactions.costBasisOverride.warningAdjustment') || 'No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift.'}
+                                </p>
+                            {/if}
+                        </div>
                     {/if}
-                </div>
+                </fieldset>
             {/if}
 
             <!-- Cost basis override — TRANSFER single-form (editing existing linked pair, non-dual) -->
