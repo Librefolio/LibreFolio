@@ -1,5 +1,7 @@
 # Task: SP-A — Cost Basis Override con Currency + WAC Service + recalc-wac endpoint
 
+> **✅ STATUS (2026-05-24)**: COMPLETATO. Commit `92f4b1ba`.
+
 **Parent plan**: [`plan-R2-WalktestFeedbackRound`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_WalktestFeedbackRound.prompt.md)
 **Next**: [`plan-R2-SP-B-BackendTests`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-B-BackendTests.prompt.md)
 

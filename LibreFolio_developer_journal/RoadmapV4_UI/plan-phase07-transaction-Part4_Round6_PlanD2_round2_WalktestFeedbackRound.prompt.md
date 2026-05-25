@@ -237,23 +237,28 @@ In `fetchPartner()`: `txStoreGet` prima, GET in parallelo con entrambi gli id, u
   └──────────────────────────────┘
 ```
 
-| SP | Steps | Tipo | Stima | Dipende da | Detailed Plan |
-|----|-------|------|-------|------------|---------------|
-| **SP-A** | 1-5 | 🔴 DETAILED | ~10h | — | [`plan-R2-SP-A-CostBasisWAC`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-A-CostBasisWAC.prompt.md) |
-| **SP-B** | 6 + updates + mock | 🟡 GROUPED | ~4h | SP-A | [`plan-R2-SP-B-BackendTests`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-B-BackendTests.prompt.md) |
-| **SP-C** | 7-12, 17 | 🔴 DETAILED | ~10h | api sync | [`plan-R2-SP-C-BulkModalSuggestUX`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BulkModalSuggestUX.prompt.md) |
-| **SP-D** | 13-16, 18 | 🔴 DETAILED | ~12h | SP-C | — |
-| **SP-E** | E2E tests | 🟡 GROUPED | ~6h | SP-D | — |
+| SP | Steps | Tipo | Stima | Dipende da | Detailed Plan | Status |
+|----|-------|------|-------|------------|---------------|--------|
+| **SP-A** | 1-5 | 🔴 DETAILED | ~10h | — | [`plan-R2-SP-A-CostBasisWAC`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-A-CostBasisWAC.prompt.md) | ✅ DONE (commit `92f4b1ba`) |
+| **SP-B** | 6 + updates + mock | 🟡 GROUPED | ~4h | SP-A | [`plan-R2-SP-B-BackendTests`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-B-BackendTests.prompt.md) | ✅ DONE (commit `473d2611`) |
+| **SP-C** | 7-12, 17 | 🔴 DETAILED | ~10h | api sync | [`plan-R2-SP-C-BulkModalSuggestUX`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BulkModalSuggestUX.prompt.md) | ✅ DONE (commits `834028ba`..`9b908c26`) |
+| **SP-C Bugs 1-11** | walktest WAC | — | — | SP-C | _(one-shot 2-7 risolti inline; arch 1,8,9-10-11 pending)_ | ⏳ One-shot ✅ / Arch 🔲 |
+| **SP-D** | 13-16, 18 | 🔴 DETAILED | ~12h | SP-C | — | 🔲 TODO |
+| **SP-E** | E2E tests | 🟡 GROUPED | ~6h | SP-D | — | 🔲 TODO |
 
-**Totale**: ~42h (~8-9 giorni)
+**Totale**: ~42h (~8-9 giorni) — SP-A/B/C completati, restano SP-D + SP-E (~18h)
 
 ### Execution sequence
 
 ```
-Week 1 (backend):  SP-A → SP-B → db create-clean + api sync
-Week 2 (frontend): SP-C → SP-D
-Week 3 (testing):  SP-E
+✅ Week 1 (backend):  SP-A → SP-B → db create-clean + api sync         DONE
+✅ Week 2 (frontend): SP-C (+ BugfixRound1/2/3 + Round6.1 + ADJUSTMENT) DONE
+⏳ Week 3 (frontend): SP-D (FormModal features)                          NEXT
+⏳ Week 4 (testing):  SP-E (E2E)                                         TODO
 ```
+
+Al termine di questo lavoro di sviluppo, aggiornare la wiki con le nuove funzionalità, i nuovi test, e qualsiasi decisione o insight emerso durante l'implementazione. Eseguire `graphify corpus/ --update` per rendere tutto immediatamente consultabile.
+Quindi, basandosi sul report "LibreFolio_devWiki/code-reality-check.md", identificare eventuali discrepanze tra codice e wiki, e aggiornare la wiki per allinearla alla realtà del codice, seguendo le linee guida di filing e coherence analysis già illustrate.
 
 ---
 
