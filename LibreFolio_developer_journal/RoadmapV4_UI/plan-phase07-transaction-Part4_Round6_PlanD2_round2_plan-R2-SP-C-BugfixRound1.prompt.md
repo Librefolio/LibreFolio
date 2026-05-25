@@ -1,5 +1,7 @@
 # Plan: SP-C Bugfix Round 1 — Rientro 12 Bug Walktest
 
+> **✅ STATUS (2026-05-24)**: COMPLETATO (12/12).
+
 **Parent plan**: [`plan-R2-SP-C-BulkModalSuggestUX`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BulkModalSuggestUX.prompt.md)
 **Depends on**: SP-C completato (tutti gli step 1-10 eseguiti)
 **Triggered by**: Walktest 2026-05-16 — 6 passed, 11 bug identificati + 1 bug scoperto durante debug (BUG-C12)

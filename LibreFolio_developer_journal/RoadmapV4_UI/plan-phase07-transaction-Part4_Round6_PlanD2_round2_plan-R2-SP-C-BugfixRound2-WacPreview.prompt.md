@@ -1,5 +1,10 @@
 # Plan: SP-C BugfixRound2 — WAC Preview Architecture (v5 FINAL)
 
+> **⏳ STATUS (2026-05-25)**: One-shot Bug 2-7 implementati + fix aggiuntive (sign coloring, validate gate, docs WAC).
+> Bug architetturali 1, 8, 9-10-11 ancora da risolvere (prossimo round: BugfixRound3).
+> Commits implementazione: `834028ba` → `473d2611` → `49f59260` → `42a2ae73` → `9b908c26`.
+> Walktest verifica one-shot: in corso.
+
 **Parent plan**: [`plan-R2-SP-C-BugfixRound1`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound1.prompt.md)
 **Depends on**: BugfixRound1 completato (12/12)
 **Triggered by**: Walktest C9 — scoperte feature mancanti → ripensamento architetturale WAC
@@ -1018,12 +1023,12 @@ wac-preview 200 → wac-preview 200 → wac-preview 200 → ... (~10+ in pochi s
 
 | # | Bug | Fix stimato | Stato |
 |---|-----|-------------|-------|
-| **2** | Data inizio hardcoded `2000-01-01` | Backend: `OpenDateRangeModel` in `common.py` (start/end opzionali), usato in `WACPreviewItem`. Frontend: manda solo `{end: txDate}`. | ✅ Verificato |
-| **3** | Layout label/toggle WAC | CSS: `whitespace-nowrap`, `ml-auto` sul toggle. i18n: chiavi `wacPreview.toggleAuto`/`wacPreview.toggleManual` (4 lingue) | ✅ Implementato |
-| **4** | Qualifying TXs table formattazione | Icona+traduzione tipo, badge colorati per effect, `formatCurrencyAmountPlain` per costo unitario (2 decimali+valuta), colonna rinominata "Costo unitario", DocsLink alla pagina WAC, pannello foldable. Effetti rinominati: Weighted/Quantity reduced/Dilution. `skip_no_override` rimosso. | ✅ Verificato |
-| **5** | Mock data senza BUY per test WAC | 4 TX `wac-test`: DEPOSIT prefund $3000, BUY 10@$150, BUY 5@$180, ADJUSTMENT -3 override=$160 (date relative a today). Balance-safe. | ✅ Implementato |
-| **6** | UUID `↔ new` → `new ↔ new` | BulkModal: cambiato testo nella cella link_uuid | ✅ Verificato |
-| **7** | Colonne default tutte visibili | BulkModal: `hiddenByDefault: false` per tags, cost_basis, asset_event_id, link_uuid. Solo created_at/updated_at restano hidden. | ✅ Verificato |
+| **2** | Data inizio hardcoded `2000-01-01` | Backend: `OpenDateRangeModel` in `common.py` (start/end opzionali), usato in `WACPreviewItem`. Frontend: manda solo `{end: txDate}`. | ✅ Walktest 2026-05-25 |
+| **3** | Layout label/toggle WAC | CSS: `whitespace-nowrap`, `ml-auto` sul toggle. i18n: chiavi `wacPreview.toggleAuto`/`wacPreview.toggleManual` (4 lingue) | ✅ Walktest 2026-05-25 |
+| **4** | Qualifying TXs table formattazione | Icona+traduzione tipo, badge colorati per effect, `formatCurrencyAmountPlain` per costo unitario (2 decimali+valuta), colonna rinominata "Costo unitario", DocsLink alla pagina WAC, pannello foldable. Effetti rinominati: Weighted/Quantity reduced/Dilution. `skip_no_override` rimosso. | ✅ Walktest 2026-05-25 |
+| **5** | Mock data senza BUY per test WAC | 4 TX `wac-test`: DEPOSIT prefund $3000, BUY 10@$150, BUY 5@$180, ADJUSTMENT -3 override=$160 (date relative a today). Balance-safe. | ✅ Walktest 2026-05-25 |
+| **6** | UUID `↔ new` → `new ↔ new` | BulkModal: cambiato testo nella cella link_uuid | ✅ Walktest 2026-05-25 |
+| **7** | Colonne default tutte visibili | BulkModal: `hiddenByDefault: false` per tags, cost_basis, asset_event_id, link_uuid. Solo created_at/updated_at restano hidden. | ✅ Walktest 2026-05-25 |
 
 #### Fix aggiuntive implementate durante la sessione
 
@@ -1039,13 +1044,25 @@ wac-preview 200 → wac-preview 200 → wac-preview 200 → ... (~10+ in pochi s
 
 ### 🟧 Richiedono studio architettura
 
-| # | Bug | Cosa serve capire |
-|---|-----|-------------------|
-| **1** | WAC fetch loop infinito | Interazione `$effect` ↔ `onChange` ↔ `autoMode` ↔ debounce. Dipendenza circolare value↔fetch. |
-| **8** | Partner broker si perde in edit paired | Come il FormModal riceve i dati della TX partner dalla BulkModal. |
-| **9** | Cella bulk "💡 auto" senza valore numerico | Propagazione valore WAC calcolato dal FormModal → cella BulkModal. |
-| **10** | Manual digitato non si vede in cella | Come `cost_basis_override` torna al BulkModal quando FormModal chiude. |
-| **11** | Righe DB non mostrano cost_basis | Logica condizionale `renderCostBasisCell()`, tipo-dipendente → type-agnostic. |
+| # | Bug | Cosa serve capire | Stato |
+|---|-----|-------------------|-------|
+| **1** | WAC fetch loop infinito | Interazione `$effect` ↔ `onChange` ↔ `autoMode` ↔ debounce. Dipendenza circolare value↔fetch. | 🔲 TODO (non verificato nel walktest — era Bug 2 ad essere OK, non Bug 1) |
+| **8** | Partner broker si perde in edit paired | Come il FormModal riceve i dati della TX partner dalla BulkModal. | ❌ Walktest 2026-05-25: confermato ancora rotto (edit paired → secondo broker scompare) |
+| **9** | Cella bulk "💡 auto" senza valore numerico | Propagazione valore WAC calcolato dal FormModal → cella BulkModal. | 🔲 Da verificare |
+| **10** | Manual digitato non si vede in cella | Come `cost_basis_override` torna al BulkModal quando FormModal chiude. | 🔲 Da verificare |
+| **11** | Righe DB non mostrano cost_basis | Logica condizionale `renderCostBasisCell()`, tipo-dipendente → type-agnostic. | 🔲 Da verificare |
+
+#### 🆕 Bug 12 — ADJUSTMENT: cost_basis fuori dal box obbligatorio
+
+**Scope**: `TransactionFormModal.svelte` → posizionamento WacPreviewSection per ADJUSTMENT
+**Severità**: 🟡 Media (campo obbligatorio in posizione non obbligatoria)
+**Stato**: ✅ Fixato 2026-05-25 — spostato dentro `<fieldset>` (sezione obbligatoria).
+
+#### 🆕 Bug 13 — Qualifying TXs table: espansione modale su mobile
+
+**Scope**: `WacPreviewSection.svelte` → table wrapper CSS
+**Severità**: 🟡 Media (modale fuori schermo su mobile)
+**Stato**: ✅ Fixato 2026-05-25 — `w-0 min-w-full` trick per contenere la tabella, scrollbar orizzontale.
 
 **Nota**: Bug #9, #10, #11 sono lo **stesso problema** da 3 angoli → vanno risolti insieme come task unico "Riscrittura cella cost_basis BulkModal".
 
@@ -1272,11 +1289,18 @@ Piano con: (1) architettura attuale documentata, (2) proposta nuova architettura
 
 ## Riepilogo file plan suggeriti
 
-| Bug | Plan file |
-|-----|-----------|
-| 2,3,4,5,6,7 (one-shot) | `plan-...-BugfixRound3-WacOneShot.prompt.md` |
-| 1 (fetch loop) | `plan-...-BugfixRound3-WacFetchLoop.prompt.md` |
-| 8 (partner broker) | `plan-...-BugfixRound3-PairedBrokerLost.prompt.md` |
-| 9+10+11 (cella bulk) | `plan-...-BugfixRound3-BulkCostBasisCell.prompt.md` |
+> **⏳ UPDATE 2026-05-25**: Walktest completato.
+> One-shot (Bug 2-7): tutti ✅ verificati.
+> Bug 1 (fetch loop): 🔲 ancora da verificare/risolvere.
+> Bug 8 (partner broker edit): ❌ confermato rotto.
+> Bug 9-10-11 (cella cost_basis BulkModal): 🔲 da verificare.
+> Bug 12 (NEW): ADJUSTMENT cost_basis fuori dal box obbligatorio → ✅ fixato.
 
-Radice comune: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound3-{Suffisso}.prompt.md`
+| Bug | Plan file | Status |
+|-----|-----------|--------|
+| 2,3,4,5,6,7 (one-shot) | _(risolti inline, nessun plan separato)_ | ✅ Walktest 2026-05-25 |
+| 1 (fetch loop) | `plan-...-BugfixRound3-WacFetchLoop.prompt.md` | 🔲 TODO |
+| 8 (partner broker) | `plan-...-BugfixRound3-PairedBrokerLost.prompt.md` | ❌ CONFERMATO |
+| 9+10+11 (cella bulk) | `plan-...-BugfixRound3-BulkCostBasisCell.prompt.md` | 🔲 DA VERIFICARE |
+| 12 (ADJUSTMENT cost_basis position) | _(fix inline)_ | ✅ Fixato 2026-05-25 |
+| 13 (table expands modal on mobile) | _(fix inline: w-0 min-w-full)_ | ✅ Fixato 2026-05-25 |

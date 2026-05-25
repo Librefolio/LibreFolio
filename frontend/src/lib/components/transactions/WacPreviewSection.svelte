@@ -357,16 +357,16 @@
 
     <!-- Qualifying TXs table (expandable) -->
     {#if showQualifying && previewResult?.qualifying_txs?.length}
-        <div class="mt-1 max-h-40 overflow-auto border border-gray-200 dark:border-slate-700 rounded text-[10px]" data-testid="{testid}-qualifying-table">
-            <table class="w-full min-w-[420px]">
+        <div class="mt-1 max-h-40 w-0 min-w-full overflow-x-auto overflow-y-auto border border-gray-200 dark:border-slate-700 rounded text-[10px] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600" data-testid="{testid}-qualifying-table">
+            <table class="w-max min-w-full">
                 <thead class="bg-gray-50 dark:bg-slate-800 sticky top-0">
                     <tr>
                         <th class="px-2 py-1 text-left min-w-[28px]">#</th>
-                        <th class="px-2 py-1 text-left min-w-[80px]">{$t('transactions.table.type')}</th>
-                        <th class="px-2 py-1 text-left min-w-[72px]">{$t('transactions.table.date')}</th>
-                        <th class="px-2 py-1 text-right min-w-[44px]">{$t('transactions.table.quantity')}</th>
-                        <th class="px-2 py-1 text-right min-w-[100px]">{$t('transactions.wacPreview.unitCost') ?? 'Unit'}</th>
-                        <th class="px-2 py-1 text-left min-w-[64px]">{$t('transactions.wacPreview.effectLabel') ?? 'Effect'}</th>
+                        <th class="px-2 py-1 text-left min-w-[120px]">{$t('transactions.table.type')}</th>
+                        <th class="px-2 py-1 text-left min-w-[90px]">{$t('transactions.table.date')}</th>
+                        <th class="px-2 py-1 text-right min-w-[35px]">{$t('transactions.table.quantity')}</th>
+                        <th class="px-2 py-1 text-right min-w-[120px]">{$t('transactions.wacPreview.unitCost') ?? 'Unit'}</th>
+                        <th class="px-2 py-1 text-left min-w-[140px]">{$t('transactions.wacPreview.effectLabel') ?? 'Effect'}</th>
                     </tr>
                 </thead>
                 <tbody>

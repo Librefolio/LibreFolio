@@ -1,5 +1,7 @@
 # Task: SP-C — BulkModal UX Polish + Suggest Overhaul + Modal Cleanup + E2E
 
+> **✅ STATUS (2026-05-24)**: COMPLETATO. Inclusi BugfixRound1 (12/12) e BugfixRound2 (WAC Preview + 11 bug).
+
 **Parent plan**: [`plan-R2-WalktestFeedbackRound`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_WalktestFeedbackRound.prompt.md)
 **Depends on**: SP-A ✅ + SP-B ✅ + `./dev.py api sync`
 **Previous bugfix**: [`bugfix_4_SplitSuggestPmcOverrideUx`](plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_4_SplitSuggestPmcOverrideUx.prompt.md)
