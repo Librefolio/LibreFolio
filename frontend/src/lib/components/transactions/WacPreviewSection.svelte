@@ -102,10 +102,11 @@
     let qualifyingCount = $derived(previewResult?.qualifying_txs?.length ?? 0);
 
     // =========================================================================
-    // Auto-fetch WAC preview (debounced)
+    // Auto-fetch WAC preview (debounced + dedup guard)
     // =========================================================================
 
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastFetchKey = '';
 
     $effect(() => {
         // Dependencies: re-run when these change
@@ -118,8 +119,15 @@
         if (mode !== 'auto' || variant !== 'auto-new') return;
         if (!_broker || !_asset || !_date) {
             previewResult = null;
+            lastFetchKey = '';
             return;
         }
+
+        // Dedup guard: skip if params haven't actually changed
+        // (Svelte 5 may re-trigger $effect when parent re-renders due to proxy invalidation)
+        const fetchKey = `${_broker}|${_asset}|${_date}|${_pending?.length ?? 0}|${JSON.stringify(_excluded)}`;
+        if (fetchKey === lastFetchKey) return;
+        lastFetchKey = fetchKey;
 
         // Debounce: 500ms trailing
         if (debounceTimer) clearTimeout(debounceTimer);
@@ -171,9 +179,12 @@
                     asset_price_missing: result.asset_price_missing ?? false,
                 };
 
-                // Auto-fill the value if in auto mode
+                // Auto-fill the value if in auto mode (skip if unchanged — prevents loop)
                 if (mode === 'auto' && previewResult.wac) {
-                    onChange(previewResult.wac);
+                    const next = previewResult.wac;
+                    if (!value || value.code !== next.code || value.amount !== next.amount) {
+                        onChange(next);
+                    }
                 }
             }
         } catch (e: any) {
