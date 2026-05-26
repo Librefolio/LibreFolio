@@ -155,6 +155,7 @@ def compute_wac_from_txlist(
                 unit_cost=unit_cost,
                 currency=tx.original_currency,
                 effect=effect,
+                running_wac=wac,
             ))
 
     return WACCalcResult(

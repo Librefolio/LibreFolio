@@ -554,7 +554,7 @@
       "assetEvent": "Asset event",
       "assetEventNotApplicable": "Asset event link is only available for DIVIDEND, INTEREST and ADJUSTMENT after picking an asset.",
       "costBasis": "Cost basis override",
-      "linkUuid": "Link UUID",
+      "linkUuid": "Linked TX",
       "pairPartner": "Pair partner",
       "unlink": "Unlink",
       "hintSignPositive": "must be > 0",
@@ -618,7 +618,8 @@
       "stateNew": "new",
       "stateEdit": "edit",
       "stateDel": "del",
-      "suggestLightbulb": "Show suggestion"
+      "suggestLightbulb": "Show suggestion",
+      "partnerInaccessible": "Partner on inaccessible broker"
     },
     "commit": {
       "serverError": "Save failed — server error"
@@ -651,6 +652,7 @@
       "toggleManual": "Manual",
       "unitCost": "Unit cost",
       "effectLabel": "Effect",
+      "columnWac": "WAC",
       "effect": {
         "add": "Weighted",
         "reduce": "Quantity reduced",
@@ -791,7 +793,7 @@
       "cash": "Cash",
       "cash_amount": "Cash amount",
       "cash_code": "Currency",
-      "link_uuid": "Link UUID",
+      "link_uuid": "Linked TX",
       "asset_event_id": "Asset event",
       "tags": "Tags",
       "description": "Description",

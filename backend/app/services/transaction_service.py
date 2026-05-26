@@ -379,6 +379,7 @@ async def compute_wac_iterative(
             tx_id=q.tx_id, type=q.type, date=q.date,
             quantity=q.quantity, unit_cost=q.unit_cost,
             currency=q.currency, effect=q.effect,
+            running_wac=q.running_wac,
         )
         for q in calc_result.qualifying
     ]

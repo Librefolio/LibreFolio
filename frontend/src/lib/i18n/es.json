@@ -554,7 +554,7 @@
       "assetEvent": "Evento de activo",
       "assetEventNotApplicable": "El enlace de evento solo está disponible para DIVIDEND, INTEREST y ADJUSTMENT tras elegir un activo.",
       "costBasis": "Override de coste medio",
-      "linkUuid": "UUID de enlace",
+      "linkUuid": "TX Vinculada",
       "pairPartner": "Transacción vinculada",
       "unlink": "Desvincular",
       "hintSignPositive": "debe ser > 0",
@@ -618,7 +618,8 @@
       "stateNew": "nueva",
       "stateEdit": "editar",
       "stateDel": "eliminar",
-      "suggestLightbulb": "Mostrar sugerencia"
+      "suggestLightbulb": "Mostrar sugerencia",
+      "partnerInaccessible": "Contraparte en bróker inaccesible"
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
@@ -651,6 +652,7 @@
       "toggleManual": "Manual",
       "unitCost": "Coste unitario",
       "effectLabel": "Efecto",
+      "columnWac": "CMP",
       "effect": {
         "add": "Ponderada",
         "reduce": "Cantidad reducida",
@@ -791,7 +793,7 @@
       "cash": "Importe",
       "cash_amount": "Importe",
       "cash_code": "Divisa",
-      "link_uuid": "UUID de enlace",
+      "link_uuid": "TX Vinculada",
       "asset_event_id": "Evento de activo",
       "tags": "Tags",
       "description": "Descripción",
