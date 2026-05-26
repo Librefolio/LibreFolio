@@ -1,8 +1,9 @@
 # Plan: SP-C BugfixRound2 — WAC Preview Architecture (v5 FINAL)
 
-> **⏳ STATUS (2026-05-25)**: Bug 1-7 + 12 + 13 risolti. Bug 8 confermato rotto, 9-10-11 da verificare.
-> Commits implementazione: `834028ba` → `473d2611` → `49f59260` → `42a2ae73` → `9b908c26` + sessione 2026-05-25.
+> **✅ STATUS (2026-05-26)**: Bug 1-8 + 12 + 13 risolti. Bug 9-10-11 da verificare (cella cost_basis BulkModal).
+> Commits implementazione: `834028ba` → `473d2611` → `49f59260` → `42a2ae73` → `9b908c26` + sessione 2026-05-25 + sessione 2026-05-26.
 > Bug 1 (fetch loop): fix inline con dedup guard, nessun plan separato necessario.
+> Bug 8 (partner broker): risolto con Unified Partner Architecture refactor (child plan BugfixRound3).
 
 **Parent plan**: [`plan-R2-SP-C-BugfixRound1`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound1.prompt.md)
 **Depends on**: BugfixRound1 completato (12/12)
@@ -974,6 +975,7 @@ wac-preview 200 → wac-preview 200 → wac-preview 200 → ... (~10+ in pochi s
 
 **Scope**: `TransactionFormModal.svelte` → caricamento paired TX in edit mode
 **Severità**: 🔴 Alta (regressione funzionale)
+**Child plan**: [`plan-R2-SP-C-BugfixRound3-UnifiedPartnerArch`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound3-UnifiedPartnerArch.prompt.md)
 
 **Sintomo**: Editare una TX paired (TRANSFER titoli o CASH_TRANSFER/bonificho) nel FormModal dalla BulkModal → il secondo broker (partner side) non viene popolato nel form.
 
@@ -1046,7 +1048,7 @@ wac-preview 200 → wac-preview 200 → wac-preview 200 → ... (~10+ in pochi s
 | # | Bug | Cosa serve capire | Stato |
 |---|-----|-------------------|-------|
 | **1** | WAC fetch loop infinito | Interazione `$effect` ↔ `onChange` ↔ `autoMode` ↔ debounce. Dipendenza circolare value↔fetch. | ✅ Fixato 2026-05-25 (dedup guard, nessun plan separato — vedi nota sotto) |
-| **8** | Partner broker si perde in edit paired | Come il FormModal riceve i dati della TX partner dalla BulkModal. | ❌ Walktest 2026-05-25: confermato ancora rotto (edit paired → secondo broker scompare) |
+| **8** | Partner broker si perde in edit paired | Come il FormModal riceve i dati della TX partner dalla BulkModal. | ✅ Risolto 2026-05-26 — Unified Partner Architecture refactor ([child plan](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound3-UnifiedPartnerArch.prompt.md)) |
 | **9** | Cella bulk "💡 auto" senza valore numerico | Propagazione valore WAC calcolato dal FormModal → cella BulkModal. | 🔲 Da verificare |
 | **10** | Manual digitato non si vede in cella | Come `cost_basis_override` torna al BulkModal quando FormModal chiude. | 🔲 Da verificare |
 | **11** | Righe DB non mostrano cost_basis | Logica condizionale `renderCostBasisCell()`, tipo-dipendente → type-agnostic. | 🔲 Da verificare |
@@ -1298,10 +1300,10 @@ Piano con: (1) architettura attuale documentata, (2) proposta nuova architettura
 
 ## Riepilogo file plan suggeriti
 
-> **⏳ UPDATE 2026-05-25**: Walktest completato.
+> **✅ UPDATE 2026-05-26**: Walktest completato.
 > One-shot (Bug 2-7): tutti ✅ verificati.
 > Bug 1 (fetch loop): ✅ fixato (dedup guard + value equality, no plan separato).
-> Bug 8 (partner broker edit): ❌ confermato rotto.
+> Bug 8 (partner broker edit): ✅ risolto (Unified Partner Architecture + BugfixRound3b/3c).
 > Bug 9-10-11 (cella cost_basis BulkModal): 🔲 da verificare.
 > Bug 12 (NEW): ADJUSTMENT cost_basis fuori dal box obbligatorio → ✅ fixato.
 > Bug 13 (NEW): Qualifying table overflow mobile → ✅ fixato.
@@ -1309,7 +1311,7 @@ Piano con: (1) architettura attuale documentata, (2) proposta nuova architettura
 | Bug | Plan file | Status |
 |-----|-----------|--------|
 | 1,2,3,4,5,6,7 (one-shot + fetch loop) | _(risolti inline, nessun plan separato)_ | ✅ Walktest 2026-05-25 |
-| 8 (partner broker) | `plan-...-BugfixRound3-PairedBrokerLost.prompt.md` | ❌ CONFERMATO |
+| 8 (partner broker) | `plan-...-BugfixRound3-UnifiedPartnerArch.prompt.md` | ✅ Risolto 2026-05-26 |
 | 9+10+11 (cella bulk) | `plan-...-BugfixRound3-BulkCostBasisCell.prompt.md` | 🔲 DA VERIFICARE |
 | 12 (ADJUSTMENT cost_basis position) | _(fix inline)_ | ✅ Fixato 2026-05-25 |
 | 13 (table expands modal on mobile) | _(fix inline: w-0 min-w-full)_ | ✅ Fixato 2026-05-25 |

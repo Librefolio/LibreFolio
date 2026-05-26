@@ -83,19 +83,10 @@
         cost_basis_override: {code: string; amount: string} | null;
     }
 
-    /** Partner display data for paired rendering (Da:/A: columns). */
-    interface PartnerDisplay {
-        partnerId?: number;
-        partnerBrokerId?: number;
-        partnerCash?: {code: string; amount: string} | null;
-        partnerDate?: string;
-        /** Full partner payload from FormModal (TxFields for type-safe diffing). */
-        partnerPayload?: TxFields | null;
-    }
-
-    /** Pending operation — one per visible row in the BulkModal grid.
-     *  Tagged union: 'create' for new rows, 'edit' for existing DB rows. */
-    type PendingOp = ({op: 'create'; link_uuid: string | null} | {op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean}) & {tempId: string; fields: DraftFields} & PartnerDisplay;
+    /** Pending operation — one per row in the BulkModal (visible + hidden partners).
+     *  Tagged union: 'create' for new rows, 'edit' for existing DB rows.
+     *  If `pairedWith` is set, this op is the hidden partner of a paired row. */
+    type PendingOp = ({op: 'create'; link_uuid: string | null} | {op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean}) & {tempId: string; fields: DraftFields; pairedWith?: string; /** W4b: partner on inaccessible broker — read-only sentinel */ inaccessible?: boolean};
 
     interface Props {
         open: boolean;
@@ -212,6 +203,12 @@
     // =========================================================================
 
     let ops = $state<PendingOp[]>([]);
+    /** Visible ops: excludes hidden partner ops (pairedWith set). Used by DataTable. */
+    let visibleOps = $derived(ops.filter((o) => !o.pairedWith));
+    /** Find the hidden partner op for a given main op's tempId. */
+    function getPartnerOp(mainTempId: string): PendingOp | undefined {
+        return ops.find((o) => o.pairedWith === mainTempId);
+    }
     let issues = $state<ValidationIssue[]>([]);
     let formError = $state<string | null>(null);
     let commitFailed = $state(false);
@@ -458,6 +455,9 @@
     function opToTxLike(d: PendingOp): TXReadItem {
         const id = opTxId(d);
         const orig = id != null ? txStoreGet(id) : undefined;
+        // For paired main, find partner's DB id (if it's an edit op)
+        const partnerOp = d.pairedWith ? undefined : getPartnerOp(d.tempId);
+        const partnerDbId = partnerOp?.op === 'edit' ? partnerOp.txId : null;
         return {
             id: id ?? 0,
             broker_id: d.fields.broker_id,
@@ -466,10 +466,7 @@
             date: d.fields.date,
             quantity: d.fields.quantity,
             cash: d.fields.cash,
-            // C1-fix: if this is a paired row, expose the partner id so FormModal
-            // opens in dual mode. For 'new' drafts _partnerId is undefined, so we
-            // use a sentinel -1 to signal "pair present, fetch locally".
-            related_transaction_id: d.partnerId ?? (d.partnerBrokerId != null ? -1 : null),
+            related_transaction_id: partnerDbId ?? (partnerOp ? 0 : null),
             tags: d.fields.tags,
             description: d.fields.description,
             cost_basis_override: (d.fields.cost_basis_override || null) as any,
@@ -479,96 +476,112 @@
         };
     }
 
-    /** Populate partner display metadata on a draft from txStore. */
-    function populatePartnerDisplay(d: PendingOp): void {
-        const origTx = d.op === 'edit' ? txStoreGet(d.txId) : undefined;
-        const pid = origTx?.related_transaction_id ?? d.partnerId;
-        if (pid == null) return;
-        const partner = txStoreGet(pid);
-        if (!partner) return;
-        d.partnerId = partner.id;
-        d.partnerBrokerId = partner.broker_id;
-        d.partnerCash = partner.cash ?? null;
-        d.partnerDate = partner.date;
-    }
-
     /** Collapse paired drafts in an array: detect partners via
-     *  related_transaction_id, keep the "from" half, set partner metadata,
-     *  remove the "to" half. For solo drafts with a partner in txStore,
-     *  populate partner display data from the store. */
+     *  related_transaction_id, keep the "from" half as visible, make the "to"
+     *  half a hidden partner (pairedWith). For solo drafts with a partner in
+     *  txStore, create a hidden partner op from the store data. */
     function collapsePairedOps(opArr: PendingOp[]): PendingOp[] {
         const idToIdx = new Map<number, number>();
         opArr.forEach((d, i) => {
-            {
-                const _id = opTxId(d);
-                if (_id != null) idToIdx.set(_id, i);
-            }
+            const _id = opTxId(d);
+            if (_id != null) idToIdx.set(_id, i);
         });
-        const toRemove = new Set<number>();
+        const toHide = new Set<number>(); // indices that become hidden partners
         for (let i = 0; i < opArr.length; i++) {
-            if (toRemove.has(i)) continue;
+            if (toHide.has(i)) continue;
             const d = opArr[i];
             const partnerId = (d.op === 'edit' ? txStoreGet(d.txId) : undefined)?.related_transaction_id;
             if (partnerId == null) continue;
             const pIdx = idToIdx.get(partnerId);
-            if (pIdx == null || pIdx === i || toRemove.has(pIdx)) continue;
-            const partner = opArr[pIdx];
-            // Determine from/to: "from" = negative cash (giver)
+            if (pIdx == null || pIdx === i || toHide.has(pIdx)) continue;
+            // Determine from/to: "from" = negative cash or negative qty (the sender)
             const cashAmt = Number((d.op === 'edit' ? txStoreGet(d.txId) : undefined)?.cash?.amount ?? 0);
-            const partnerCashAmt = Number((partner.op === 'edit' ? txStoreGet(partner.txId) : undefined)?.cash?.amount ?? 0);
-            let fromIdx = i,
-                toIdx = pIdx;
+            const partnerCashAmt = Number((opArr[pIdx].op === 'edit' ? txStoreGet(opArr[pIdx].txId) : undefined)?.cash?.amount ?? 0);
+            let fromIdx = i, toIdx = pIdx;
             if (cashAmt > 0 && partnerCashAmt <= 0) {
-                fromIdx = pIdx;
-                toIdx = i;
+                fromIdx = pIdx; toIdx = i;
             } else if (cashAmt === 0 && partnerCashAmt === 0) {
                 if (Number((d.op === 'edit' ? txStoreGet(d.txId) : undefined)?.quantity ?? 0) > 0) {
-                    fromIdx = pIdx;
-                    toIdx = i;
+                    fromIdx = pIdx; toIdx = i;
                 }
             }
-            const fromDraft = opArr[fromIdx];
-            const toDraft = opArr[toIdx];
-            fromDraft.partnerId = opTxId(toDraft);
-            fromDraft.partnerBrokerId = toDraft.fields.broker_id;
-            fromDraft.partnerCash = toDraft.fields.cash;
-            fromDraft.partnerDate = toDraft.fields.date;
-            toRemove.add(toIdx);
+            // Mark "to" as hidden partner of "from"
+            opArr[toIdx].pairedWith = opArr[fromIdx].tempId;
+            toHide.add(toIdx);
         }
-        const result = opArr.filter((_, i) => !toRemove.has(i));
-        // For remaining drafts with partner not in batch, populate from txStore
-        for (const d of result) {
-            if ((d.op === 'edit' ? txStoreGet(d.txId) : undefined)?.related_transaction_id != null && d.partnerId == null) {
-                populatePartnerDisplay(d);
+        // For remaining edit drafts with DB partner not in batch, create hidden partner op from txStore
+        for (const d of opArr) {
+            if (d.pairedWith) continue; // already a partner
+            if (d.op !== 'edit') continue;
+            const relId = txStoreGet(d.txId)?.related_transaction_id;
+            if (relId == null) continue;
+            if (idToIdx.has(relId)) continue; // partner already in batch
+            const partnerTx = txStoreGet(relId);
+            if (!partnerTx) {
+                // W4b: partner not in txStore — likely on inaccessible broker
+                const mainTx = txStoreGet(d.txId);
+                const pBrokerId = mainTx?.partner_broker_id;
+                if (pBrokerId) {
+                    const placeholderOp: PendingOp = {
+                        op: 'edit', txId: relId, markedDelete: false,
+                        tempId: generateUUID(),
+                        fields: {type: mainTx.type, broker_id: pBrokerId, date: mainTx.date} as any,
+                        pairedWith: d.tempId,
+                        inaccessible: true,
+                    };
+                    opArr.push(placeholderOp);
+                }
+                continue;
+            }
+            // Create a hidden edit op for the partner
+            const partnerOp: PendingOp = {
+                op: 'edit', txId: relId, markedDelete: false,
+                tempId: generateUUID(), fields: fieldsFromTx(partnerTx),
+                pairedWith: d.tempId,
+            };
+            opArr.push(partnerOp);
+        }
+        // Pass 3: collapse create ops with shared link_uuid (clone path)
+        const linkUuidMap = new Map<string, number>();
+        for (let i = 0; i < opArr.length; i++) {
+            const op = opArr[i];
+            if (op.op !== 'create' || op.pairedWith) continue;
+            const uuid = (op as any).link_uuid as string | undefined;
+            if (!uuid) continue;
+            const prev = linkUuidMap.get(uuid);
+            if (prev !== undefined) {
+                // Determine from/to: negative cash or qty = sender (from)
+                const cashI = Number(op.fields.cash?.amount ?? 0);
+                const cashP = Number(opArr[prev].fields.cash?.amount ?? 0);
+                const qtyI = Number(op.fields.quantity ?? 0);
+                let fromIdx = prev, toIdx = i;
+                if (cashI < 0 || (cashI === 0 && cashP === 0 && qtyI < 0)) {
+                    fromIdx = i; toIdx = prev;
+                }
+                opArr[toIdx].pairedWith = opArr[fromIdx].tempId;
+            } else {
+                linkUuidMap.set(uuid, i);
             }
         }
-        return result;
+        return opArr;
     }
 
     /** Collapse two standalone ops into one paired row (main + hidden partner).
-     *  Used post-promote (DD-BF2). Returns the main op (visible) and the tempId to remove.
-     *  "from" = negative cash or negative qty. The "to" op is hidden (removed from grid). */
+     *  Used post-promote (DD-BF2). The "to" op becomes hidden (pairedWith set).
+     *  "from" = negative cash or negative qty. */
     function collapseIntoPaired(opA: PendingOp, opB: PendingOp): {main: PendingOp; removeTempId: string} {
         const cashA = Number(opA.fields.cash?.amount ?? 0);
         const cashB = Number(opB.fields.cash?.amount ?? 0);
         const qtyA = Number(opA.fields.quantity ?? 0);
-        const qtyB = Number(opB.fields.quantity ?? 0);
-        let from = opA,
-            to = opB;
+        let from = opA, to = opB;
         if (cashA > 0 && cashB <= 0) {
-            from = opB;
-            to = opA;
+            from = opB; to = opA;
         } else if (cashA === 0 && cashB === 0 && qtyA > 0) {
-            from = opB;
-            to = opA;
+            from = opB; to = opA;
         }
-        // Set partner display on "from" (the main visible row)
-        from.partnerId = opTxId(to);
-        from.partnerBrokerId = to.fields.broker_id;
-        from.partnerCash = to.fields.cash;
-        from.partnerDate = to.fields.date;
-        from.partnerPayload = opToTxFields(to) as unknown as TxFields;
-        return {main: from, removeTempId: to.tempId};
+        // Mark "to" as hidden partner of "from"
+        to.pairedWith = from.tempId;
+        return {main: from, removeTempId: ''}; // no removal — to stays in ops but hidden
     }
 
     /** Apply the form-collected payload to a brand-new draft row. */
@@ -628,20 +641,31 @@
             tempId: generateUUID(),
             fields: {...src.fields, date: todayIso()},
             link_uuid: src.op === 'create' && src.link_uuid ? generateUUID() : null,
-            partnerBrokerId: src.partnerBrokerId,
-            partnerCash: src.partnerCash,
-            partnerDate: src.partnerDate,
         };
-        ops = [...ops, clone];
+        // Clone hidden partner if exists
+        const srcPartner = getPartnerOp(tempId);
+        if (srcPartner) {
+            const partnerClone: PendingOp = {
+                op: 'create',
+                tempId: generateUUID(),
+                fields: {...srcPartner.fields, date: todayIso()},
+                link_uuid: clone.link_uuid, // share link_uuid
+                pairedWith: clone.tempId,
+            };
+            ops = [...ops, clone, partnerClone];
+        } else {
+            ops = [...ops, clone];
+        }
     }
 
     function resetRow(tempId: string) {
         ops = ops.map((d) => {
             if (d.tempId !== tempId || d.op !== 'edit') return d;
             const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker});
-            populatePartnerDisplay(reset);
             return reset;
         });
+        // Re-collapse pairs from txStore
+        ops = collapsePairedOps(ops);
     }
 
     function resetAll() {
@@ -651,57 +675,65 @@
         ops = ops.map((d) => {
             if (d.op !== 'edit') return d;
             const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker});
-            populatePartnerDisplay(reset);
             return reset;
         });
+        // Re-collapse pairs
+        ops = collapsePairedOps(ops);
         pendingSplits = [];
     }
 
     /** Split a paired row in the BulkModal.
      *  Saved paired → backend split + 2 editable preview rows (DD-R2.1).
-     *  New paired (link_uuid shared) → local transformation only. */
+     *  New paired (link_uuid shared or pairedWith) → local transformation only. */
     function handleSplitRow(row: PendingOp) {
-        if (row.op === 'edit' && row.partnerId != null) {
+        const partnerOp = getPartnerOp(row.tempId);
+
+        if (row.op === 'edit' && partnerOp && partnerOp.op === 'edit') {
             // Case A: Saved paired → backend split + preview editable (DD-R2.1)
-            const txId = (row as any).txId as number;
-            const partnerId = row.partnerId!;
+            const txId = row.txId;
+            const partnerId = partnerOp.txId;
             pendingSplits = [...pendingSplits, {id_a: txId, id_b: partnerId, originalType: row.fields.type}];
 
-            // Clear paired display on main row (don't mutate type — backend handles it)
-            row.partnerId = undefined;
-            row.partnerBrokerId = undefined;
-            row.partnerCash = undefined;
-            row.partnerDate = undefined;
-            row.partnerPayload = undefined;
+            // Un-pair: partner becomes visible and independent
+            partnerOp.pairedWith = undefined;
+            (partnerOp as any).addedBySplit = true;
 
-            // Create edit op for the partner TX (add as new visible row, adjacent)
-            const partnerTx = txStoreGet(partnerId);
-            if (partnerTx) {
-                const partnerOp = editOpFromTx(partnerId);
-                partnerOp.partnerId = undefined;
-                partnerOp.partnerBrokerId = undefined;
-                partnerOp.partnerCash = undefined;
-                partnerOp.partnerDate = undefined;
-                partnerOp.partnerPayload = undefined;
-                (partnerOp as any).addedBySplit = true;
-                // BUG-C1: Insert partner adjacent to main row (not at end)
-                const mainIdx = ops.findIndex((o) => o.tempId === row.tempId);
-                const newOps = [...ops];
-                newOps.splice(mainIdx + 1, 0, partnerOp);
+            // BUG-C1: Insert partner adjacent to main row (not at end)
+            const mainIdx = ops.findIndex((o) => o.tempId === row.tempId);
+            const partnerIdx = ops.findIndex((o) => o.tempId === partnerOp.tempId);
+            if (partnerIdx !== mainIdx + 1) {
+                // Move partner right after main
+                const newOps = ops.filter((o) => o.tempId !== partnerOp.tempId);
+                const insertAt = newOps.findIndex((o) => o.tempId === row.tempId) + 1;
+                newOps.splice(insertAt, 0, partnerOp);
                 ops = newOps;
             } else {
                 ops = [...ops]; // trigger reactivity
             }
-
             lastSuggestKey = ''; // B9: invalidate suggest
+        } else if (row.op === 'create' && partnerOp) {
+            // Case B/C: New paired (partner is a hidden create op) → local split
+            const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
+            if (!splitTypes) return;
+            const [fromType, toType] = splitTypes;
+            const cashAmt = Number(row.fields.cash?.amount ?? 0);
+            const qty = Number(row.fields.quantity ?? 0);
+            const isFrom = row.fields.type === 'TRANSFER' ? qty < 0 || qty === 0 : cashAmt < 0 || cashAmt === 0;
+
+            // Main row → standalone type
+            row.fields.type = (isFrom ? fromType : toType) as TransactionTypeCode;
+            (row as any).link_uuid = null;
+
+            // Partner → standalone type, becomes visible
+            partnerOp.fields.type = (isFrom ? toType : fromType) as TransactionTypeCode;
+            partnerOp.pairedWith = undefined;
+            if (partnerOp.op === 'create') (partnerOp as any).link_uuid = null;
+
+            ops = [...ops]; // trigger reactivity
         } else if (row.op === 'create' && row.link_uuid) {
-            // Case B: New paired (link_uuid shared) → local transformation
+            // Case B legacy: link_uuid shared between two visible create ops
             const partner = ops.find((o) => o !== row && o.op === 'create' && (o as any).link_uuid === row.link_uuid);
-            if (!partner) {
-                // Case B fallback: link_uuid exists but no matching partner row found.
-                // This happens when pairs were created via dual-form (single row + partnerPayload).
-                // Fall through to Case C.
-            } else {
+            if (partner) {
                 const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
                 if (!splitTypes) return;
                 const [fromType, toType] = splitTypes;
@@ -712,59 +744,8 @@
                 partner.fields.type = (isFrom ? toType : fromType) as TransactionTypeCode;
                 (row as any).link_uuid = null;
                 (partner as any).link_uuid = null;
-                for (const o of [row, partner]) {
-                    o.partnerId = undefined;
-                    o.partnerBrokerId = undefined;
-                    o.partnerCash = undefined;
-                    o.partnerDate = undefined;
-                    o.partnerPayload = undefined;
-                }
                 ops = [...ops];
-                return;
             }
-        }
-        // Case C: New paired (dual form — single row with hidden partner data) → local split.
-        // The partner is stored inside the row (partnerPayload / partnerBrokerId etc.)
-        // but may not be directly accessible due to Svelte 5 proxy behavior.
-        // Use the type as discriminant instead.
-        if (row.op === 'create') {
-            const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
-            if (!splitTypes) return;
-            const [fromType, toType] = splitTypes;
-            const cashAmt = Number(row.fields.cash?.amount ?? 0);
-            const qty = Number(row.fields.quantity ?? 0);
-            const isFrom = row.fields.type === 'TRANSFER' ? qty < 0 || qty === 0 : cashAmt < 0 || cashAmt === 0;
-            // Main row → standalone type
-            row.fields.type = (isFrom ? fromType : toType) as TransactionTypeCode;
-            (row as any).link_uuid = null;
-            // Materialize partner as new visible row
-            const partnerOp = createOpEmpty();
-            // Try to use partnerPayload for field data; fallback to copying from current row
-            const pp = row.partnerPayload;
-            if (pp) {
-                applyFormPayload(partnerOp.fields, pp as unknown as Record<string, unknown>);
-            } else {
-                // Fallback: copy from current row with partner display data
-                partnerOp.fields.date = row.partnerDate ?? row.fields.date;
-                partnerOp.fields.broker_id = row.partnerBrokerId ?? row.fields.broker_id;
-                partnerOp.fields.asset_id = row.fields.asset_id;
-                if (row.partnerCash) {
-                    partnerOp.fields.cash = {...row.partnerCash};
-                } else if (row.fields.cash) {
-                    // Flip the sign for partner cash
-                    partnerOp.fields.cash = {code: row.fields.cash.code, amount: String(-Number(row.fields.cash.amount))};
-                }
-                partnerOp.fields.quantity = row.fields.quantity ? String(-Number(row.fields.quantity)) : '0';
-            }
-            partnerOp.fields.type = (isFrom ? toType : fromType) as TransactionTypeCode;
-            (partnerOp as any).link_uuid = null;
-            // Clear partner display on main row
-            row.partnerId = undefined;
-            row.partnerBrokerId = undefined;
-            row.partnerCash = undefined;
-            row.partnerDate = undefined;
-            row.partnerPayload = undefined;
-            ops = [...ops, partnerOp];
         }
     }
 
@@ -817,6 +798,7 @@
         const resolved: ResolvedOp[] = [];
 
         for (const d of ops) {
+            if (d.pairedWith) continue; // hidden partners are handled via their main op
             if (d.tempId === excludeTempId) continue;
             const st = deriveStatus(d);
 
@@ -825,12 +807,13 @@
             // Skip promote-queued edit rows entirely
             if (d.op === 'edit' && promoteTxIds.has((d as any).txId)) continue;
 
+            const pOp = getPartnerOp(d.tempId);
+
             if (st === 'new') {
                 let partnerPayload: Record<string, unknown> | null = null;
-                if (d.partnerPayload) {
-                    const partnerFields = d.partnerPayload as unknown as TxFields;
-                    const partnerRule = getTypeRule(partnerFields.type as TransactionTypeCode);
-                    partnerPayload = buildCreatePayload(partnerFields, partnerRule);
+                if (pOp) {
+                    const partnerRule = getTypeRule(pOp.fields.type as TransactionTypeCode);
+                    partnerPayload = buildCreatePayload(opToTxFields(pOp), partnerRule);
                 }
                 resolved.push({intent: 'create', payload: collectCreate(d), partnerPayload});
             } else if (st === 'edited') {
@@ -839,10 +822,12 @@
                 if (upd && splitTxIds.has((d as any).txId)) delete upd.type;
                 const payload = upd && Object.keys(upd).length > 1 ? upd : undefined;
                 let partnerPayload: Record<string, unknown> | null = null;
-                if (d.partnerPayload && d.partnerId != null) {
-                    const partnerOrig = txStoreGet(d.partnerId);
+                if (pOp && pOp.op === 'edit') {
+                    const partnerOrig = txStoreGet(pOp.txId);
                     if (partnerOrig) {
-                        const partnerUpd = diffDualItem(d.partnerPayload as unknown as Record<string, unknown>, partnerOrig as unknown as TxOriginal);
+                        const partnerRule = getTypeRule(pOp.fields.type as TransactionTypeCode);
+                        const partnerOrigRule = getTypeRule(partnerOrig.type as TransactionTypeCode);
+                        const partnerUpd = buildUpdateDiff(opToTxFields(pOp), partnerOrig as unknown as TxOriginal, partnerRule, partnerOrigRule);
                         if (Object.keys(partnerUpd).length > 1) partnerPayload = partnerUpd;
                     }
                 }
@@ -852,8 +837,8 @@
             } else if (st === 'delete' && d.op === 'edit') {
                 resolved.push({
                     intent: 'delete',
-                    deleteId: (d as any).txId,
-                    partnerDeleteId: d.partnerId ?? null,
+                    deleteId: d.txId,
+                    partnerDeleteId: pOp?.op === 'edit' ? pOp.txId : null,
                 });
             }
         }
@@ -875,15 +860,18 @@
         if (d.op !== 'edit') return 'original';
         const diff = collectUpdate(d);
         // For split-queued rows, type change is handled by split — ignore it in diff
-        if (diff && pendingSplits.some((s) => s.id_a === (d as any).txId || s.id_b === (d as any).txId)) {
+        if (diff && pendingSplits.some((s) => s.id_a === d.txId || s.id_b === d.txId)) {
             delete diff.type;
         }
         if (diff && Object.keys(diff).length > 1) return 'edited';
         // Also check partner changes
-        if (d.partnerPayload && d.partnerId != null) {
-            const partnerOrig = txStoreGet(d.partnerId);
+        const pOp = getPartnerOp(d.tempId);
+        if (pOp && pOp.op === 'edit') {
+            const partnerOrig = txStoreGet(pOp.txId);
             if (partnerOrig) {
-                const partnerUpd = diffDualItem(d.partnerPayload as unknown as Record<string, unknown>, partnerOrig as unknown as TxOriginal);
+                const partnerRule = getTypeRule(pOp.fields.type as TransactionTypeCode);
+                const partnerOrigRule = getTypeRule(partnerOrig.type as TransactionTypeCode);
+                const partnerUpd = buildUpdateDiff(opToTxFields(pOp), partnerOrig as unknown as TxOriginal, partnerRule, partnerOrigRule);
                 if (Object.keys(partnerUpd).length > 1) return 'edited';
             }
         }
@@ -895,7 +883,14 @@
     // =========================================================================
 
     const scheduler = createValidateScheduler({
-        enabled: () => ops.length > 0 && ops.length <= AUTO_VALIDATE_THRESHOLD && ops.some((d) => deriveStatus(d) !== 'delete' && isDraftReadyForValidation(d.fields as any)),
+        enabled: () => ops.length > 0 && ops.length <= AUTO_VALIDATE_THRESHOLD && ops.some((d) => {
+            if (deriveStatus(d) === 'delete') return false;
+            if (!isDraftReadyForValidation(d.fields as any)) return false;
+            // W3-fix: for paired ops, partner must also be ready (unless inaccessible)
+            const pOp = getPartnerOp(d.tempId);
+            if (pOp && !(pOp as any).inaccessible && !isDraftReadyForValidation(pOp.fields as any)) return false;
+            return true;
+        }),
         draftKey: () => lastDraftKey,
         validateFn: async () => {
             if (ops.length === 0) {
@@ -1162,8 +1157,9 @@
                 cell: (row): CellContent => {
                     if (opTxId(row) == null) return {type: 'html', html: '—'};
                     const rule = getTypeRule(row.fields.type);
-                    if (rule.requiresPair && row.partnerId != null) {
-                        return {type: 'html', html: renderDualHtml(`#${opTxId(row)}`, `#${row.partnerId}`)};
+                    const pOp = getPartnerOp(row.tempId);
+                    if (rule.requiresPair && pOp && pOp.op === 'edit') {
+                        return {type: 'html', html: renderDualHtml(`#${opTxId(row)}`, `#${pOp.txId}`)};
                     }
                     return {type: 'html', html: `#${opTxId(row)}`};
                 },
@@ -1178,8 +1174,9 @@
                 cell: (row): CellContent => {
                     const rule = getTypeRule(row.fields.type);
                     // Paired rows with different dates → Da:/A:
-                    if (rule.requiresPair && row.partnerDate && row.partnerDate !== row.fields.date) {
-                        return {type: 'html', html: renderDualHtml(row.fields.date, row.partnerDate)};
+                    const pOp = getPartnerOp(row.tempId);
+                    if (rule.requiresPair && pOp && pOp.fields.date !== row.fields.date) {
+                        return {type: 'html', html: renderDualHtml(row.fields.date, pOp.fields.date)};
                     }
                     return {type: 'html', html: `<span class="font-mono text-sm text-gray-700 dark:text-gray-200">${row.fields.date}</span>`};
                 },
@@ -1242,7 +1239,8 @@
                     const qty = row.fields.quantity ?? '0';
                     // H2-fix: paired rows with non-zero qty → show Da:/A: with signed values + emoji
                     const rule = getTypeRule(row.fields.type);
-                    if (rule.requiresPair && row.partnerBrokerId != null && Number(qty) !== 0) {
+                    const pOp = getPartnerOp(row.tempId);
+                    if (rule.requiresPair && pOp && Number(qty) !== 0) {
                         const absVal = Math.abs(Number(qty));
                         const fromQty = `-${absVal} 📉`;
                         const toQty = `+${absVal} 📈`;
@@ -1274,8 +1272,9 @@
                         displayCash = {code: displayCash.code, amount: String(-Math.abs(Number(displayCash.amount)))};
                     }
                     // Paired row → show Da:/A: dual cash lines
-                    if (rule.requiresPair && row.partnerCash !== undefined && row.partnerBrokerId != null) {
-                        return {type: 'html', html: renderDualHtml(formatCashText(displayCash), formatCashText(row.partnerCash))};
+                    const pOp = getPartnerOp(row.tempId);
+                    if (rule.requiresPair && pOp) {
+                        return {type: 'html', html: renderDualHtml(formatCashText(displayCash), formatCashText(pOp.fields.cash))};
                     }
                     return {type: 'html', html: `<span class="text-sm">${formatCashText(displayCash)}</span>`};
                 },
@@ -1291,8 +1290,16 @@
                 cell: (row): CellContent => {
                     const rule = getTypeRule(row.fields.type);
                     // Paired row with different brokers → Da:/A:
-                    if (rule.requiresPair && row.partnerBrokerId != null && row.partnerBrokerId !== row.fields.broker_id) {
-                        return {type: 'html', html: renderDualHtml(renderBrokerHtml(row.fields.broker_id), renderBrokerHtml(row.partnerBrokerId))};
+                    const pOp = getPartnerOp(row.tempId);
+                    if (rule.requiresPair && pOp) {
+                        if (pOp.inaccessible) {
+                            // W4b: partner on inaccessible broker → show lock
+                            const lockHtml = `<span class="text-red-500 dark:text-red-400" data-testid="tx-bulk-partner-lock" title="${$t('transactions.bulk.partnerInaccessible')}">🔒</span>`;
+                            return {type: 'html', html: renderDualHtml(renderBrokerHtml(row.fields.broker_id), lockHtml)};
+                        }
+                        if (pOp.fields.broker_id !== row.fields.broker_id) {
+                            return {type: 'html', html: renderDualHtml(renderBrokerHtml(row.fields.broker_id), renderBrokerHtml(pOp.fields.broker_id))};
+                        }
                     }
                     return {type: 'html', html: renderBrokerHtml(row.fields.broker_id)};
                 },
@@ -1375,12 +1382,13 @@
                 filterable: false,
                 hiddenByDefault: false,
                 cell: (row): CellContent => {
-                    if (row.partnerId != null) {
+                    const pOp = getPartnerOp(row.tempId);
+                    if (pOp && pOp.op === 'edit') {
                         const selfId = opTxId(row) ?? '?';
-                        return {type: 'html', html: `<code class="text-[10px] font-mono text-gray-400">#${selfId} ↔ #${row.partnerId}</code>`};
+                        return {type: 'html', html: `<code class="text-xs font-mono text-gray-400">#${selfId} <span class="text-base">⇄</span> #${pOp.txId}</code>`};
                     }
-                    if (row.partnerPayload != null) return {type: 'html', html: '<code class="text-[10px] font-mono text-indigo-400">new ↔ new</code>'};
-                    if (row.op === 'create' && row.link_uuid) return {type: 'html', html: `<code class="text-[10px] font-mono text-gray-400">${row.link_uuid.slice(0, 8)}…</code>`};
+                    if (pOp && pOp.op === 'create') return {type: 'html', html: '<code class="text-xs font-mono text-indigo-400">new <span class="text-base">⇄</span> new</code>'};
+                    if (row.op === 'create' && row.link_uuid) return {type: 'html', html: `<code class="text-xs font-mono text-gray-400">${row.link_uuid.slice(0, 8)}…</code>`};
                     return {type: 'html', html: '—'};
                 },
             },
@@ -1417,6 +1425,7 @@
             icon: Pencil,
             label: () => $t('transactions.bulk.editSingle') || 'Edit row',
             onClick: (row: PendingOp) => handleEditRowClick(row),
+            disabled: (row: PendingOp) => !!getPartnerOp(row.tempId)?.inaccessible,
         },
         {
             id: 'clone',
@@ -1432,12 +1441,10 @@
             visible: (row: PendingOp) => {
                 // Hide if already split-queued
                 if (row.op === 'edit' && splitTxIdsSet.has((row as any).txId)) return false;
-                // Saved paired → backend split
-                if (row.op === 'edit' && row.partnerId != null) return true;
-                // New paired (any kind: link_uuid shared or dual-form partnerPayload)
+                // Has a hidden partner → can split
+                if (getPartnerOp(row.tempId)) return true;
+                // New paired (any kind: link_uuid shared or dual-form)
                 if (row.op === 'create') {
-                    // Type-based check: if the type is a paired type (SPLIT_TYPE_MAP),
-                    // show split action so user can undo an accidental pair creation.
                     const t = row.fields.type;
                     if (t === 'TRANSFER' || t === 'CASH_TRANSFER' || t === 'FX_CONVERSION') return true;
                 }
@@ -1455,15 +1462,11 @@
                 const partnerId = splitEntry.id_a === txId ? splitEntry.id_b : splitEntry.id_a;
                 // Remove from pendingSplits
                 pendingSplits = pendingSplits.filter((s) => s !== splitEntry);
-                // Remove partner row from ops (added during split — no addedViaPicker flag)
-                ops = ops.filter((o) => !((o as any).txId === partnerId && !(o as any).addedViaPicker));
-                // Restore paired display on the main row
-                const partnerTx = txStoreGet(partnerId);
-                if (partnerTx) {
-                    row.partnerId = partnerId;
-                    row.partnerBrokerId = (partnerTx as any).broker_id;
-                    row.partnerCash = (partnerTx as any).cash ?? null;
-                    row.partnerDate = (partnerTx as any).date;
+                // Find partner op (was made visible during split) → re-hide it
+                const partnerOp = ops.find((o) => o.op === 'edit' && (o as any).txId === partnerId);
+                if (partnerOp) {
+                    partnerOp.pairedWith = row.tempId;
+                    (partnerOp as any).addedBySplit = undefined;
                 }
                 ops = [...ops]; // reactivity
                 lastSuggestKey = ''; // B9: invalidate suggest
@@ -1492,7 +1495,7 @@
                 }
             },
             visible: (row: PendingOp) => {
-                if (row.partnerId != null || row.partnerPayload != null) return false;
+                if (getPartnerOp(row.tempId)) return false;
                 const txId = (row as any).txId;
                 // Show if this row has importable DB candidates OR is in banner suggestions
                 return importableSuggestions.some((s) => s.txId === txId) || bannerSuggestions.some((s) => s.tempIdA === row.tempId || s.tempIdB === row.tempId);
@@ -1547,14 +1550,12 @@
     // Bugfix-4 §U16: validate chip removed — banners are the single source
     // of truth. Footer keeps only an inline "Validating…" indicator.
 
-    // All ops are visible (no more _hidden partner rows)
-    let visibleOps = $derived(ops);
 
     let newCount = $derived(visibleOps.filter((d) => deriveStatus(d) === 'new').length);
     let editedCount = $derived(visibleOps.filter((d) => deriveStatus(d) === 'edited').length);
     let deleteCount = $derived(visibleOps.filter((d) => deriveStatus(d) === 'delete').length);
     /** B23: true when at least one paired row is marked for deletion — show split hint. */
-    let hasPairedDelete = $derived(visibleOps.some((d) => deriveStatus(d) === 'delete' && d.partnerId != null));
+    let hasPairedDelete = $derived(visibleOps.some((d) => deriveStatus(d) === 'delete' && getPartnerOp(d.tempId) != null));
     let actionCount = $derived(newCount + editedCount + deleteCount + pendingSplits.length + pendingPromotes.length);
     let commitDisabled = $derived(committing || ops.length === 0 || actionCount === 0);
     let commitLabel = $derived(committing ? $t('common.saving') : $t('transactions.bulk.commitAll'));
@@ -1624,6 +1625,8 @@
 
     /** B23 Step 4: intercept edit on deleted row — show confirm before restoring. */
     function handleEditRowClick(row: PendingOp) {
+        // W4b: block edit if partner is inaccessible
+        if (getPartnerOp(row.tempId)?.inaccessible) return;
         if (deriveStatus(row) === 'delete') {
             confirmEditDeleteRow = row;
             confirmEditDeleteOpen = true;
@@ -1652,9 +1655,8 @@
         formMode = deriveStatus(row) === 'new' ? 'create' : 'edit';
         formInitial = opToTxLike(row);
         // SP-C Step 2: if split-queued, override type with post-split target
-        if (row.op === 'edit' && splitTxIdsSet.has((row as any).txId) && formInitial) {
-            // BUG-C4: use originalType from pendingSplits (fields.type may have been edited already)
-            const splitEntry = pendingSplits.find((s) => s.id_a === (row as any).txId || s.id_b === (row as any).txId);
+        if (row.op === 'edit' && splitTxIdsSet.has(row.txId) && formInitial) {
+            const splitEntry = pendingSplits.find((s) => s.id_a === row.txId || s.id_b === row.txId);
             const origType = splitEntry?.originalType ?? row.fields.type;
             const splitTypes = SPLIT_TYPE_MAP[origType];
             if (splitTypes) {
@@ -1665,14 +1667,9 @@
             }
         }
         formEditingTempId = row.tempId;
-        // For paired drafts, get the partner from txStore (existing rows)
-        // or synthesize from partnerPayload (new pairs).
-        let partnerTxLike: TXReadItem | null = null;
-        if (row.partnerId != null) {
-            const p = txStoreGet(row.partnerId);
-            if (p) partnerTxLike = p;
-        }
-        formPartnerRow = partnerTxLike;
+        // Resolve partner from hidden partner op or txStore fallback
+        const pOp = getPartnerOp(row.tempId);
+        formPartnerRow = pOp ? opToTxLike(pOp) : null;
         formKey++;
         formOpen = true;
     }
@@ -1712,15 +1709,17 @@
         const fromOp = createOpEmpty();
         applyFormPayload(fromOp.fields, items[0]);
         if (typeof items[0].link_uuid === 'string' && fromOp.op === 'create') (fromOp as any).link_uuid = items[0].link_uuid;
-        fromOp.partnerBrokerId = (items[1].broker_id as number) ?? 0;
-        fromOp.partnerCash = (items[1].cash as DraftFields['cash']) ?? null;
-        fromOp.partnerDate = (items[1].date as string) ?? fromOp.fields.date;
-        fromOp.partnerPayload = items[1] as unknown as TxFields;
 
-        ops = [...ops, fromOp];
+        // "To" side — hidden partner op
+        const toOp = createOpEmpty();
+        applyFormPayload(toOp.fields, items[1]);
+        if (typeof items[1].link_uuid === 'string' && toOp.op === 'create') (toOp as any).link_uuid = items[1].link_uuid;
+        toOp.pairedWith = fromOp.tempId;
+
+        ops = [...ops, fromOp, toOp];
     }
 
-    /** Patch a paired draft row: update visible draft + store partner payload. */
+    /** Patch a paired draft row: update visible draft + hidden partner. */
     function patchDualRowFromForm(tempId: string, payload: Record<string, unknown>) {
         const items = payload._items as Record<string, unknown>[];
         if (!items || items.length < 2) {
@@ -1728,22 +1727,38 @@
             return;
         }
 
+        // Update main op
         ops = ops.map((d) => {
             if (d.tempId !== tempId) return d;
             const merged = {...d, fields: {...d.fields}};
             applyFormPayload(merged.fields, items[0]);
-            merged.partnerBrokerId = (items[1].broker_id as number) ?? 0;
-            merged.partnerCash = (items[1].cash as DraftFields['cash']) ?? null;
-            merged.partnerDate = (items[1].date as string) ?? merged.fields.date;
-            merged.partnerPayload = items[1] as unknown as TxFields;
-            // B6: sync link_uuid across both sides
+            // B6: sync link_uuid
             const sharedUuid = (items[0].link_uuid as string) ?? (items[1].link_uuid as string) ?? (d as any).link_uuid;
-            if (sharedUuid) {
-                if (d.op === 'create') (merged as any).link_uuid = sharedUuid;
-                if (merged.partnerPayload) (merged.partnerPayload as any).link_uuid = sharedUuid;
-            }
+            if (sharedUuid && d.op === 'create') (merged as any).link_uuid = sharedUuid;
             return merged;
         });
+
+        // Update or create partner op
+        let pOp = getPartnerOp(tempId);
+        if (pOp) {
+            ops = ops.map((d) => {
+                if (d.tempId !== pOp!.tempId) return d;
+                const merged = {...d, fields: {...d.fields}};
+                applyFormPayload(merged.fields, items[1]);
+                // B6: sync link_uuid on partner
+                const sharedUuid = (items[0].link_uuid as string) ?? (items[1].link_uuid as string) ?? (d as any).link_uuid;
+                if (sharedUuid && d.op === 'create') (merged as any).link_uuid = sharedUuid;
+                return merged;
+            });
+        } else {
+            // No existing partner (edge case) — create one
+            const toOp = createOpEmpty();
+            applyFormPayload(toOp.fields, items[1]);
+            toOp.pairedWith = tempId;
+            const sharedUuid = (items[0].link_uuid as string) ?? (items[1].link_uuid as string);
+            if (sharedUuid && toOp.op === 'create') (toOp as any).link_uuid = sharedUuid;
+            ops = [...ops, toOp];
+        }
     }
 
     // Cast to `never` is required because DataTable<T> is generic and Svelte 5
@@ -1801,9 +1816,8 @@
     let selectedForPromote = $derived.by(() => {
         if (bulkTableSelectedRows.length !== 2) return null;
         const [a, b] = bulkTableSelectedRows;
-        // Both must be standalone (no partnerId, no partnerPayload)
-        if (a.partnerId != null || b.partnerId != null) return null;
-        if (a.partnerPayload != null || b.partnerPayload != null) return null;
+        // Both must be standalone (no hidden partner)
+        if (getPartnerOp(a.tempId) || getPartnerOp(b.tempId)) return null;
         // Check markedDelete
         if ((a.op === 'edit' && a.markedDelete) || (b.op === 'edit' && b.markedDelete)) return null;
         const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
@@ -1907,7 +1921,7 @@
      *  standalone edit ops (saved rows without partner). */
     $effect(() => {
         if (!open) return;
-        const editStandalone = ops.filter((o) => o.op === 'edit' && !o.partnerId && !(o as any).markedDelete && !o.partnerPayload);
+        const editStandalone = ops.filter((o) => o.op === 'edit' && !o.pairedWith && !getPartnerOp(o.tempId) && !(o as any).markedDelete);
         if (editStandalone.length === 0) {
             untrack(() => {
                 suggestFromDB = new Map();
@@ -1950,7 +1964,7 @@
 
     /** Local promote suggestions: match new standalone ops against each other. */
     let localSuggestions = $derived.by(() => {
-        const newStandalone = ops.filter((o) => o.op === 'create' && !(o as any).link_uuid && !o.partnerId && !o.partnerPayload);
+        const newStandalone = ops.filter((o) => o.op === 'create' && !o.pairedWith && !getPartnerOp(o.tempId) && !(o as any).link_uuid);
         const results: SuggestEntry[] = [];
         for (let i = 0; i < newStandalone.length; i++) {
             for (let j = i + 1; j < newStandalone.length; j++) {
@@ -1982,7 +1996,7 @@
         for (const s of localSuggestions) combined.push(s);
 
         // Local edit+edit: match standalone edit ops against each other (works even after suggestFromDB is refreshed)
-        const editStandalone = ops.filter((o) => o.op === 'edit' && !o.partnerId && !(o as any).markedDelete && !o.partnerPayload);
+        const editStandalone = ops.filter((o) => o.op === 'edit' && !o.pairedWith && !getPartnerOp(o.tempId) && !(o as any).markedDelete);
         const seenPairs = new Set<string>(); // avoid duplicates
         for (let i = 0; i < editStandalone.length; i++) {
             for (let j = i + 1; j < editStandalone.length; j++) {

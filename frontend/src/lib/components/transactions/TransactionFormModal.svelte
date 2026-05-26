@@ -695,10 +695,10 @@
     // =========================================================================
 
     const scheduler = createValidateScheduler({
-        // Auto-fire only when the draft is "ready" — i.e. all required fields
-        // for its type are populated (Bugfix-2 §C5). Manual ⚡ Validate now
-        // always fires regardless.
-        enabled: () => !isReadonly && isDraftReadyForValidation(draft),
+        // Auto-fire only when the form is fully complete (both sides for paired).
+        // Bugfix-2 §C5 + W3-fix: uses isFormComplete which checks dualTo fields.
+        // Manual ⚡ Validate now always fires regardless.
+        enabled: () => !isReadonly && isFormComplete,
         draftKey: () => lastDraftKey,
         validateFn: async () => {
             if (isReadonly) return {issuesCount: 0};
@@ -1506,6 +1506,7 @@
                                 variant={mode === 'create' ? 'auto-new' : 'saved'}
                                 defaultCode={draft.cash?.code ?? 'EUR'}
                                 disabled={isReadonly}
+                                hideTable={isReadonly}
                                 testid="tx-form-cost-basis"
                                 senderBrokerId={draft.broker_id}
                                 assetId={draft.asset_id}
@@ -1700,6 +1701,7 @@
                                 variant={mode === 'create' ? 'auto-new' : 'saved'}
                                 defaultCode={draft.cash?.code ?? 'EUR'}
                                 disabled={isReadonly}
+                                hideTable={isReadonly}
                                 testid="tx-form-cost-basis"
                                 senderBrokerId={draft.broker_id}
                                 assetId={draft.asset_id}
@@ -1724,6 +1726,7 @@
                         variant={mode === 'create' ? 'auto-new' : 'saved'}
                         defaultCode={draft.cash?.code ?? 'EUR'}
                         disabled={isReadonly}
+                        hideTable={isReadonly}
                         testid="tx-form-cost-basis"
                         senderBrokerId={draft.broker_id}
                         assetId={draft.asset_id}

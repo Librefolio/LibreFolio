@@ -39,7 +39,8 @@ async function openViewByTexts(page: Page, ...substrings: string[]) {
         const row = rows.nth(i);
         const text = (await row.textContent()) ?? '';
         if (substrings.every((s) => text.includes(s))) {
-            await row.dblclick();
+            // dblclick on first td to avoid hitting asset links in center cells
+            await row.locator('td').first().dblclick();
             await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
             return;
         }

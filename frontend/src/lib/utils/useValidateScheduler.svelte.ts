@@ -99,6 +99,9 @@ export function createValidateScheduler(opts: ValidateSchedulerOptions): Validat
 
     async function runValidate(reason: ValidateReason) {
         if (disposed) return;
+        // W3-fix: re-check enabled() at execution time (debounce timer may fire
+        // after predicate flipped — e.g. paired form where partner isn't ready yet).
+        if (reason !== 'manual' && !opts.enabled()) return;
         // Anti-bounce: if draft hasn't changed since last validate and we're within the window, skip.
         if (opts.draftKey) {
             const currentKey = opts.draftKey();

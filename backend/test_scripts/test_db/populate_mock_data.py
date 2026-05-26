@@ -2068,6 +2068,70 @@ def link_transactions_to_events(session: Session):
         session.commit()
         print(f"  🔗 [Asym-d] TRANSFER AAPL IB(OWNER)→Hidden(none) = LOCKED (#{tx_asym_d_out.id} ↔ #{tx_asym_d_in.id})")
 
+    # ── Asym-e: CASH_TRANSFER IB (OWNER) → Hidden (none) — user is SENDER ──
+    if ib:
+        tx_asym_e_out = Transaction(
+            broker_id=ib.id,
+            asset_id=None,
+            type=TransactionType.CASH_TRANSFER,
+            date=today - timedelta(days=3),
+            quantity=Decimal("0"),
+            amount=Decimal("-500"),
+            currency="EUR",
+            description="[Asym-e] CASH IB→Hidden (OWNER→none=locked, sender)",
+            tags="access-test",
+        )
+        tx_asym_e_in = Transaction(
+            broker_id=hidden_broker.id,
+            asset_id=None,
+            type=TransactionType.CASH_TRANSFER,
+            date=today - timedelta(days=3),
+            quantity=Decimal("0"),
+            amount=Decimal("500"),
+            currency="EUR",
+            description="[Asym-e] CASH IB→Hidden (OWNER→none=locked, sender)",
+            tags="access-test",
+        )
+        session.add(tx_asym_e_out)
+        session.add(tx_asym_e_in)
+        session.flush()
+        tx_asym_e_out.related_transaction_id = tx_asym_e_in.id
+        tx_asym_e_in.related_transaction_id = tx_asym_e_out.id
+        session.commit()
+        print(f"  🔗 [Asym-e] CASH_TRANSFER EUR IB(OWNER)→Hidden(none) = LOCKED sender (#{tx_asym_e_out.id} ↔ #{tx_asym_e_in.id})")
+
+    # ── Asym-f: CASH_TRANSFER Hidden (none) → IB (OWNER) — user is RECEIVER ──
+    if ib:
+        tx_asym_f_in = Transaction(
+            broker_id=ib.id,
+            asset_id=None,
+            type=TransactionType.CASH_TRANSFER,
+            date=today - timedelta(days=4),
+            quantity=Decimal("0"),
+            amount=Decimal("1000"),
+            currency="EUR",
+            description="[Asym-f] CASH Hidden→IB (none→OWNER=locked, receiver)",
+            tags="access-test",
+        )
+        tx_asym_f_out = Transaction(
+            broker_id=hidden_broker.id,
+            asset_id=None,
+            type=TransactionType.CASH_TRANSFER,
+            date=today - timedelta(days=4),
+            quantity=Decimal("0"),
+            amount=Decimal("-1000"),
+            currency="EUR",
+            description="[Asym-f] CASH Hidden→IB (none→OWNER=locked, receiver)",
+            tags="access-test",
+        )
+        session.add(tx_asym_f_in)
+        session.add(tx_asym_f_out)
+        session.flush()
+        tx_asym_f_in.related_transaction_id = tx_asym_f_out.id
+        tx_asym_f_out.related_transaction_id = tx_asym_f_in.id
+        session.commit()
+        print(f"  🔗 [Asym-f] CASH_TRANSFER EUR Hidden(none)→IB(OWNER) = LOCKED receiver (#{tx_asym_f_in.id} ↔ #{tx_asym_f_out.id})")
+
 
 def populate_fx_rates(session: Session):
     """Populate FX rates for the last 30 days."""
