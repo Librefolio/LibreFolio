@@ -655,6 +655,31 @@ def populate_assets(session: Session):
                 }
             ),
         },
+        # JustETF — USD-denominated variant. Tests multi-currency provider_params flow:
+        # currency="USD" → history works, current price NOT_SUPPORTED (gettex is EUR-only).
+        {
+            "display_name": "iShares Core MSCI World UCITS ETF USD (Acc)",
+            "currency": "USD",
+            "asset_type": AssetType.ETF,
+            "identifier_isin": "IE00B4L5Y983",
+            "identifier_ticker": "IWDA",
+            "user_url": "https://www.justetf.com/it/etf-profile.html?isin=IE00B4L5Y983",
+            "classification_params": json.dumps(
+                {
+                    "short_description": "iShares Core MSCI World — global developed markets ETF, USD share class",
+                    "geographic_area": {
+                        "distribution": {
+                            "USA": 0.70,
+                            "JPN": 0.06,
+                            "GBR": 0.04,
+                            "FRA": 0.03,
+                            "DEU": 0.03,
+                        }
+                    },
+                    "sector_area": {"distribution": {"Technology": 0.25, "Financials": 0.15, "Healthcare": 0.12}},
+                }
+            ),
+        },
         # CSS Scraper — Italian government bond (BTP) from Borsa Italiana. Sourced from the
         # existing backend test (test_css_scraper_current_price). Validates the F.2/F.3
         # current-price persist flow against a provider that has no history support.
@@ -752,6 +777,15 @@ def populate_asset_provider_assignments(session: Session):
             "LU1900066033",
             ProviderInputType.ISIN,
             None,
+        ),
+        # JustETF — USD variant. Exercises multi-currency provider_params:
+        # history fetched in USD, current price NOT_SUPPORTED (EUR-only limitation).
+        (
+            "iShares Core MSCI World UCITS ETF USD (Acc)",
+            "justetf",
+            "IE00B4L5Y983",
+            ProviderInputType.ISIN,
+            {"currency": "USD"},
         ),
         # CSS Scraper — Italian BTP quote from Borsa Italiana (no history support,
         # only current price). Directly mirrors test_css_scraper_current_price so the

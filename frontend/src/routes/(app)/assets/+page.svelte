@@ -14,6 +14,7 @@
      * Svelte 5 runes throughout.
      */
     import {onMount} from 'svelte';
+    import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi, axiosInstance} from '$lib/api';
     import {BarChart3, Check, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
@@ -38,6 +39,7 @@
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
     import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
+    import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {apiResultToFxDataPoint, createPairSlug, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
 
@@ -125,16 +127,10 @@
     let filterShowActive = $state(true);
     let filterShowInactive = $state(false);
 
-    // Date range for Δ columns
-    let dateStart = $state(
-        (() => {
-            const d = new Date();
-            d.setMonth(d.getMonth() - 3);
-            return d.toISOString().slice(0, 10);
-        })(),
-    );
-    let dateEnd = $state(new Date().toISOString().slice(0, 10));
-    let activePreset: any = $state('3M');
+    // Date range — global store is source of truth; URL seeds only on fresh page load
+    let dateStart = $state(getStart());
+    let dateEnd = $state(getEnd());
+    let activePreset: any = $state(null);
 
     /** True when the date range ends today (or later) → show live prices from providers */
     let isHeadToday = $derived(dateEnd >= new Date().toISOString().slice(0, 10));
@@ -443,6 +439,12 @@
     function handleDateRangeChange(newStart: string, newEnd: string) {
         dateStart = newStart;
         dateEnd = newEnd;
+        setDateRange(newStart, newEnd);
+        // Sync URL for shareability + navigationStore tracking
+        const url = new URL(window.location.href);
+        url.searchParams.set('start', dateStart);
+        url.searchParams.set('end', dateEnd);
+        goto(`${url.pathname}${url.search}`, {replaceState: true, noScroll: true, keepFocus: true});
         fetchAllPriceData();
     }
 
@@ -1113,6 +1115,8 @@
                     livePriceDirection={livePriceMap.get(asset.id)?.direction ?? 'neutral'}
                     deltaPercent={asset.deltaPercent}
                     deltaAbs={asset.deltaAbs}
+                    {dateStart}
+                    {dateEnd}
                     {globalViewMode}
                     chartSettings={getSettingsForPair(`asset-${asset.id}`, 'assets')}
                     renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
@@ -1134,6 +1138,8 @@
             loading={false}
             {visiblePeriods}
             {livePriceMap}
+            {dateStart}
+            {dateEnd}
             onsync={handleSyncAsset}
             onrefresh={handleRefreshAsset}
             ondelete={handleDeleteAsset}

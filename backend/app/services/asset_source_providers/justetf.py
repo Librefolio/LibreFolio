@@ -154,6 +154,12 @@ class JustETFProvider(AssetSourceProvider):
         _etf_list_cache.set("etf_list", df)
         return df
 
+    def _get_currency(self, provider_params: Dict | None) -> str:
+        """Extract currency from provider_params, default EUR."""
+        if provider_params and provider_params.get("currency"):
+            return provider_params["currency"]
+        return "EUR"
+
     def _check_availability(self):
         """Raise AssetSourceError if the library is not installed."""
         if not JUSTETF_AVAILABLE:
@@ -187,16 +193,38 @@ class JustETFProvider(AssetSourceProvider):
         """Generate URL to JustETF ETF profile page."""
         return f"https://www.justetf.com/en/etf-profile.html?isin={identifier}"
 
+    # Supported currencies for JustETF chart API
+    SUPPORTED_CURRENCIES = ("EUR", "USD", "CHF", "GBP")
+    CURRENCY_FLAGS = {"EUR": "🇪🇺", "USD": "🇺🇸", "CHF": "🇨🇭", "GBP": "🇬🇧"}
+
+    @property
+    def params_schema(self) -> list[dict]:
+        return [
+            {
+                "key": "currency",
+                "type": "select",
+                "required": False,
+                "options": list(self.SUPPORTED_CURRENCIES),
+                "default": "EUR",
+                "description": "Price currency. EUR = real-time + history. USD/CHF/GBP = history only (converted by JustETF).",
+            }
+        ]
+
     @property
     def test_cases(self) -> list[dict]:
-        """Test cases with identifier and provider_params."""
+        """Test cases for the generic provider test framework.
+        
+        Only EUR is included here because the generic test expects get_current_value
+        to succeed for all cases. Non-EUR currencies only support history (no current).
+        Multi-currency is validated via the search test and manual testing.
+        """
         return [
             {
                 "identifier": "IE00B4L5Y983",  # iShares Core MSCI World UCITS ETF USD (Acc)
                 "identifier_type": IdentifierType.ISIN,
-                "provider_params": None,
-                "expected_symbol": "IE00B4L5Y983",  # JustETF uses ISIN as identifier
-            }
+                "provider_params": {"currency": "EUR"},
+                "expected_symbol": "IE00B4L5Y983",
+            },
         ]
 
     async def get_current_value(
@@ -206,18 +234,29 @@ class JustETFProvider(AssetSourceProvider):
         provider_params: Dict | None = None,
     ) -> FACurrentValue:
         """
-        Fetch current price from JustETF.
+        Fetch current price from JustETF (gettex WebSocket, EUR only).
 
         Strategy (fastest first):
         1. Check _live_quote_store (instant, no I/O — populated by background WebSocket)
         2. One-shot load_live_quote (opens WebSocket, reads first quote, closes)
         3. Both paths also ensure a persistent live-feed is running for future calls
+
+        Raises NOT_SUPPORTED if currency ≠ EUR (gettex only provides EUR quotes).
         """
         self._check_availability()
         if identifier_type != IdentifierType.ISIN:
             raise AssetSourceError(
                 f"JustETF provider only supports ISIN, got {identifier_type}",
                 "INVALID_IDENTIFIER_TYPE",
+            )
+
+        currency = self._get_currency(provider_params)
+        if currency != "EUR":
+            raise AssetSourceError(
+                f"Current price only available in EUR (gettex exchange). "
+                f"For {currency} prices, only historical data is available.",
+                "NOT_SUPPORTED",
+                {"currency": currency, "supported_for_current": "EUR"},
             )
 
         try:
@@ -290,15 +329,16 @@ class JustETFProvider(AssetSourceProvider):
             )
 
         try:
-            currency: str = "EUR"
-            add_current = end_date >= date.today()
+            currency = self._get_currency(provider_params)
+            # add_current appends today's gettex quote — only valid for EUR (gettex = EUR exchange)
+            add_current = end_date >= date.today() and currency == "EUR"
 
-            # Check cache
-            cache_key = f"chart_{identifier}_{add_current}"
+            # Check cache (keyed by currency)
+            cache_key = f"chart_{identifier}_{currency}_{add_current}"
             cached_df, ok = _chart_cache.get(cache_key)
 
             if not ok:
-                df = load_chart(identifier, "EUR", add_current)
+                df = load_chart(identifier, currency, add_current)
                 _chart_cache.set(cache_key, df)
             else:
                 df = cached_df
@@ -360,7 +400,7 @@ class JustETFProvider(AssetSourceProvider):
         return "iShares Core S&P 500"
 
     async def search(self, query: str) -> list[dict]:
-        """Search for ETFs in the cached ETF list."""
+        """Search for ETFs in the cached ETF list, returning 4 currency variants per match."""
         self._check_availability()
         try:
             df_all = JustETFProvider.etf_list()
@@ -374,16 +414,26 @@ class JustETFProvider(AssetSourceProvider):
             final_filter = mask_cols | mask_index
             # Apply the filter
             result = df_all[final_filter]
-            return [
-                {
-                    "identifier": idx,
-                    "identifier_type": IdentifierType.ISIN,  # JustETF always uses ISIN
-                    "display_name": row["name"],
-                    "currency": row["currency"],  # Currency from DataFrame
-                    "type": "ETF",
-                }
-                for idx, row in result.iterrows()
-            ]
+
+            items = []
+            for idx, row in result.iterrows():
+                fund_currency = row.get("currency", "USD")  # fundCurrency from overview
+                etf_name = row["name"]
+
+                for ccy in self.SUPPORTED_CURRENCIES:
+                    flag = self.CURRENCY_FLAGS[ccy]
+                    # 👑 marks the fund's native NAV currency
+                    crown = "👑" if ccy == fund_currency else ""
+                    items.append(
+                        {
+                            "identifier": idx,
+                            "identifier_type": IdentifierType.ISIN,
+                            "display_name": f"{flag}{crown} {etf_name}",
+                            "currency": ccy,
+                            "type": "ETF",
+                        }
+                    )
+            return items
         except Exception as e:
             raise AssetSourceError(
                 f"Search failed for '{query}' on JustETF: {e}",
@@ -392,8 +442,16 @@ class JustETFProvider(AssetSourceProvider):
             ) from e
 
     def validate_params(self, params: Dict | None) -> None:
-        """JustETF provider does not require any params."""
-        pass
+        """Validate provider_params: currency must be in SUPPORTED_CURRENCIES."""
+        if not params:
+            return
+        currency = params.get("currency")
+        if currency and currency not in self.SUPPORTED_CURRENCIES:
+            raise AssetSourceError(
+                f"Unsupported currency '{currency}'. Must be one of: {', '.join(self.SUPPORTED_CURRENCIES)}",
+                "INVALID_PARAMS",
+                {"currency": currency, "supported": list(self.SUPPORTED_CURRENCIES)},
+            )
 
     async def fetch_asset_metadata(
         self,
@@ -503,8 +561,9 @@ class JustETFProvider(AssetSourceProvider):
                 sector_area=sector_area,
             )
 
-            # Extract currency from overview
-            fund_currency = overview.get("fund_currency")
+            # Return the currency from provider_params (user's choice).
+            # fund_currency from overview is the NAV denomination (e.g. USD) — informational only.
+            selected_currency = self._get_currency(provider_params)
 
             # Extract ticker from overview (best-effort)
             ticker_val = overview.get("ticker") if "ticker" in overview else None
@@ -512,7 +571,7 @@ class JustETFProvider(AssetSourceProvider):
             return FAAssetPatchItem(
                 asset_id=0,  # Placeholder, will be set by caller
                 display_name=None,
-                currency=fund_currency,
+                currency=selected_currency,
                 asset_type=AssetType.ETF,
                 icon_url=None,
                 classification_params=classification,

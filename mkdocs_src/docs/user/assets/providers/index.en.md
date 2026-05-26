@@ -7,7 +7,7 @@ LibreFolio supports multiple pricing providers to automatically fetch current pr
 | Provider | Current Price | History | Search | Identifier | Notes |
 |----------|:---:|:---:|:---:|---|---|
 | **Yahoo Finance** | ✅ | ✅ | ✅ | Ticker (e.g., `AAPL`, `VWCE.DE`) | Best for stocks, ETFs, mutual funds |
-| **justETF** | ✅ | ✅ | ❌ | ISIN (e.g., `IE00BK5BQT80`) | European ETFs with detailed data |
+| **justETF** | ✅ (EUR) | ✅ | ✅ | ISIN (e.g., `IE00BK5BQT80`) | European ETFs, multi-currency (EUR/USD/CHF/GBP) |
 | **CSS Scraper** | ✅ | ❌ | ❌ | URL | Scrape any web page for price data |
 | **Scheduled Investment** | ✅ | ✅ | ❌ | Auto-generated | Fixed-income instruments with interest schedules |
 

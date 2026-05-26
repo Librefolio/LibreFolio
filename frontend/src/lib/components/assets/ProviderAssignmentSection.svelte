@@ -20,6 +20,8 @@
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import ScheduledInvestmentEditor from './ScheduledInvestmentEditor.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
+    import {getCurrencyInfo, currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
+    import {currentLanguage} from '$lib/stores/language';
 
     // =========================================================================
     // Types
@@ -107,6 +109,28 @@
     /** Generic fields for the params form loop (excluding meta-fields like ui_component) */
     let genericFields = $derived(paramsSchema.filter((f) => f.type !== 'ui_component'));
 
+    /** Format select options: enrich currency codes with flag + symbol.
+     *  Reactive: recomputes when currencyStoreVersion bumps (async load). */
+    let formattedFieldOptions = $derived.by<Record<string, SelectOption[]>>(() => {
+        void $currencyStoreVersion; // reactive dependency on currency data load
+        const map: Record<string, SelectOption[]> = {};
+        for (const field of genericFields) {
+            if (field.type !== 'select' || !field.options) continue;
+            const isCurrencyField = field.key?.toLowerCase().includes('currency') && field.options.every((o: string) => /^[A-Z]{3}$/.test(o));
+            map[field.key] = field.options.map((o: string) => {
+                if (isCurrencyField) {
+                    const info = getCurrencyInfo(o);
+                    const flag = info.flag_emoji && info.flag_emoji !== '🏳️' ? info.flag_emoji : '';
+                    const symbol = info.symbol && info.symbol !== o ? info.symbol : '';
+                    const parts = [flag, o, symbol].filter(Boolean);
+                    return {value: o, label: parts.join(' ')};
+                }
+                return {value: o, label: o};
+            });
+        }
+        return map;
+    });
+
     /** Provider options for SimpleSelect (excluding mockprov, no empty option) */
     let providerOptions = $derived<SelectOption[]>(
         providers
@@ -163,6 +187,11 @@
 
     $effect(() => {
         if (!providersLoaded) loadProviders();
+    });
+
+    // Ensure currency metadata is available for rich formatting
+    $effect(() => {
+        ensureCurrenciesLoaded($currentLanguage);
     });
 
     // Sync providerParams → paramsValues
@@ -267,10 +296,14 @@
 
             const items: TestResult[] = [];
 
+            // Resolve display currency: from current_price response, or from params, or empty
+            const displayCurrency = response.current_price?.currency ?? paramsValues['currency'] ?? '';
+
             // Current price
             if (response.current_price) {
                 const cp = response.current_price;
-                const detail = cp.success ? `${Number(cp.value).toFixed(2)} ${cp.currency ?? ''}${cp.as_of_date ? ` (${cp.as_of_date})` : ''}` : cp.error;
+                const ccyLabel = formatCurrencyForTooltip(cp.currency);
+                const detail = cp.success ? `${Number(cp.value).toFixed(2)} ${ccyLabel}${cp.as_of_date ? ` (${cp.as_of_date})` : ''}` : cp.error;
                 items.push({
                     success: cp.success,
                     status: cp.success ? 'success' : isNotSupportedWarning(cp.error) ? 'warning' : 'error',
@@ -287,7 +320,8 @@
             // History
             if (response.history) {
                 const h = response.history;
-                const detail = h.success ? `${h.points_count} points${h.date_range ? ` — ${h.date_range}` : ''}` : h.error;
+                const ccyLabel = formatCurrencyForTooltip(displayCurrency || undefined);
+                const detail = h.success ? `${h.points_count} points${ccyLabel ? ` (${ccyLabel})` : ''}${h.date_range ? ` — ${h.date_range}` : ''}` : h.error;
                 items.push({
                     success: h.success,
                     status: h.success ? 'success' : isNotSupportedWarning(h.error) ? 'warning' : 'error',
@@ -335,6 +369,15 @@
     // Tooltip Helpers
     // =========================================================================
 
+    /** Format a currency code with flag + symbol for tooltip display */
+    function formatCurrencyForTooltip(code: string | undefined): string {
+        if (!code) return '';
+        const info = getCurrencyInfo(code);
+        const flag = info.flag_emoji && info.flag_emoji !== '🏳️' ? info.flag_emoji : '';
+        const symbol = info.symbol && info.symbol !== code ? info.symbol : '';
+        return [flag, code, symbol].filter(Boolean).join(' ');
+    }
+
     /** Build rich HTML tooltip for a test result — uses table format for both price types */
     function buildTooltipHtml(result: TestResult): string {
         if (!result.success) return result.detail ?? 'Error';
@@ -345,18 +388,20 @@
 
         // Current Price tooltip — single-row table
         if (result.priceValue !== undefined) {
+            const ccyLabel = formatCurrencyForTooltip(result.priceCurrency);
             let html = '<table style="font-size:12px;border-collapse:collapse;">';
             html += `<tr><th style="${thStyle}">📅 ${$t('common.date')}</th><th style="${thStyle}">💰 ${$t('assets.probe.currentPrice')}</th></tr>`;
             html += `<tr><td style="${tdStyle}">${result.priceDate ?? '—'}</td>`;
-            html += `<td style="${tdRight}">${Number(result.priceValue).toFixed(2)} ${result.priceCurrency ?? ''}</td></tr>`;
+            html += `<td style="${tdRight}">${Number(result.priceValue).toFixed(2)} ${ccyLabel}</td></tr>`;
             html += '</table>';
             return html;
         }
 
         // History tooltip — multi-row table with sample prices
         if (result.samplePrices && result.samplePrices.length > 0) {
+            const ccyLabel = formatCurrencyForTooltip(result.priceCurrency);
             let html = '<table style="font-size:12px;border-collapse:collapse;">';
-            html += `<tr><th style="${thStyle}">📅 ${$t('common.date')}</th><th style="${thStyle}">💰 Close${result.priceCurrency ? ` (${result.priceCurrency})` : ''}</th></tr>`;
+            html += `<tr><th style="${thStyle}">📅 ${$t('common.date')}</th><th style="${thStyle}">💰 Close${ccyLabel ? ` (${ccyLabel})` : ''}</th></tr>`;
             for (const p of result.samplePrices) {
                 html += `<tr><td style="${tdStyle}">${p.date}</td><td style="${tdRight}">${Number(p.close).toFixed(2)}</td></tr>`;
             }
@@ -534,7 +579,7 @@
                             {#if field.required}<span class="text-red-500">*</span>{/if}
                         </label>
                         {#if field.type === 'select' && field.options}
-                            <SimpleSelect value={paramsValues[field.key] ?? field.default ?? ''} options={field.options.map((o) => ({value: o, label: o}))} disabled={disabled || readonly} dropdownPosition="auto" onchange={(v) => handleParamChange(field.key, v)} />
+                            <SimpleSelect value={paramsValues[field.key] ?? field.default ?? ''} options={formattedFieldOptions[field.key] ?? field.options.map((o: string) => ({value: o, label: o}))} disabled={disabled || readonly} dropdownPosition="auto" onchange={(v) => handleParamChange(field.key, v)} />
                         {:else if field.type === 'currency'}
                             <CurrencySearchSelect value={paramsValues[field.key] ?? field.default ?? ''} disabled={disabled || readonly} dropdownPosition="auto" placeholder={field.placeholder ?? ''} onchange={(v) => handleParamChange(field.key, v)} />
                         {:else if field.type === 'number'}
@@ -601,7 +646,7 @@
             {#if testResults.length > 0 || testStatus === 'testing'}
                 <div class="flex flex-col gap-1.5 pl-3 border-l-2 {testStatus === 'passed' ? (testResults.some((r) => r.status === 'warning') ? 'border-amber-400' : 'border-green-400') : testStatus === 'failed' ? 'border-red-400' : 'border-gray-300 dark:border-slate-600'}">
                     {#each testResults as result}
-                        <Tooltip html={buildTooltipHtml(result)} position="top">
+                        <Tooltip html={(() => { void $currencyStoreVersion; return buildTooltipHtml(result); })()} position="top">
                             <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
                                 {#if result.status === 'warning'}
                                     <AlertTriangle size={14} class="text-amber-500 shrink-0 self-center" />

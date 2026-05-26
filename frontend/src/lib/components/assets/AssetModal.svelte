@@ -518,7 +518,8 @@
         providerIdentifierType = result.identifier_type;
         providerUrl = result.provider_url ?? null;
         providerNoProvider = false;
-        providerParams = null;
+        // Pre-fill provider_params with currency from search result (for multi-currency providers)
+        providerParams = result.currency ? { currency: result.currency } : null;
 
         // Expand sections
         moreInfoExpanded = true;

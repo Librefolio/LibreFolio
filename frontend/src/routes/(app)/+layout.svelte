@@ -4,6 +4,7 @@
     import {afterNavigate, goto, preloadCode} from '$app/navigation';
     import {i18nLoading, initI18n} from '$lib/i18n';
     import {trackNavigation} from '$lib/stores/navigationStore';
+    import {seedFromUrl} from '$lib/stores/dateRangeStore.svelte';
     import {currentLanguage} from '$lib/stores/language';
     import {auth, isAuthenticated, isAuthInitialized} from '$lib/stores/auth';
     import {userSettings} from '$lib/stores/settings';
@@ -27,6 +28,10 @@
     afterNavigate((nav) => {
         const url = nav.to?.url;
         trackNavigation(nav.type, url ? url.pathname + url.search : undefined);
+        // On fresh page load (enter = bookmark/refresh/direct link), seed global date range from URL
+        if (nav.type === 'enter' && url) {
+            seedFromUrl(url.searchParams);
+        }
     });
 
     onMount(async () => {

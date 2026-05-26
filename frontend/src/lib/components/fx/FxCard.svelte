@@ -28,6 +28,10 @@
         slug: string;
         data?: FxDataPoint[];
         loading?: boolean;
+        /** Date range start (passed to detail page on navigation) */
+        dateStart?: string;
+        /** Date range end (passed to detail page on navigation) */
+        dateEnd?: string;
         /** Whether this pair has only a MANUAL sentinel provider */
         manualOnly?: boolean;
         /** Global view mode from parent */
@@ -48,7 +52,7 @@
         onsettings?: (info: {slug: string}) => void;
     }
 
-    let {base, quote, slug, data = [], loading = false, manualOnly = false, globalViewMode = 'absolute', chartSettings, renderSignals, ondelete, onrefresh, onsync, onsettings}: Props = $props();
+    let {base, quote, slug, data = [], loading = false, dateStart, dateEnd, manualOnly = false, globalViewMode = 'absolute', chartSettings, renderSignals, ondelete, onrefresh, onsync, onsettings}: Props = $props();
 
     // =========================================================================
     // State
@@ -143,7 +147,8 @@
     function handleCardClick() {
         // If inverted, navigate to the inverted URL — detail page reads direction from URL
         const target = inverted ? `${displayBase}-${displayQuote}` : slug;
-        goto(`/fx/${target}`);
+        const params = dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : '';
+        goto(`/fx/${target}${params}`);
     }
 
     function stop(e: MouseEvent) {
