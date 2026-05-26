@@ -126,6 +126,23 @@
     // Granularity short options for the compact native select (must be after granularityOptions)
     let granularitySelectOptions = $derived(granularityOptions.map((o) => ({value: o.value, label: $_(o.shortKey).toUpperCase()})));
 
+    // Auto-detect which preset matches the current start/end dates (± 1 day tolerance).
+    // This ensures badges highlight correctly even when dates come from URL params.
+    let effectivePreset = $derived.by(() => {
+        if (activePreset) return activePreset;
+        if (!start || !end) return null;
+        const today = todayISO();
+        // End must be today (presets always go "backwards from today")
+        if (end !== today) return null;
+        for (const p of presets) {
+            const expectedStart = computeStartDate(p.key);
+            // Allow ±1 day tolerance (timezone edge cases)
+            const diff = Math.abs(new Date(start).getTime() - new Date(expectedStart).getTime());
+            if (diff <= 86400000) return p.key;
+        }
+        return null;
+    });
+
     // =========================================================================
     // Helpers
     // =========================================================================
@@ -490,7 +507,7 @@
                 <button
                     type="button"
                     class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                        {activePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                        {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
                     onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
                 >
             {/each}
@@ -500,7 +517,7 @@
                     <button
                         type="button"
                         class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                            {activePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                            {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
                         onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
                     >
                 {/each}
@@ -529,8 +546,8 @@
                         <button
                             type="button"
                             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                                {activePreset === 'custom' ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
-                            onclick={(e) => toggleCustomEdit(e)}>{activePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find((o) => o.value === customGranularity)?.shortKey ?? 'common.custom').toUpperCase()}` : $_('common.custom')}</button
+                                {effectivePreset === 'custom' ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                            onclick={(e) => toggleCustomEdit(e)}>{effectivePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find((o) => o.value === customGranularity)?.shortKey ?? 'common.custom').toUpperCase()}` : $_('common.custom')}</button
                         >
                     {/if}
                 {/if}

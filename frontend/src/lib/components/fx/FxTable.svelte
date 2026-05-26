@@ -36,13 +36,17 @@
         data: FxRow[];
         loading?: boolean;
         visiblePeriods?: ReadonlyArray<{key: string; days: number}>;
+        /** Date range start (passed to detail page on row click) */
+        dateStart?: string;
+        /** Date range end (passed to detail page on row click) */
+        dateEnd?: string;
         onsync?: (info: {base: string; quote: string; slug: string}) => void;
         onrefresh?: (info: {base: string; quote: string; slug: string}) => void;
         ondelete?: (info: {base: string; quote: string; slug: string}) => void;
         onselectionchange?: (rows: FxRow[]) => void;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], onsync, onrefresh, ondelete, onselectionchange}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], dateStart, dateEnd, onsync, onrefresh, ondelete, onselectionchange}: Props = $props();
 
     ensureCurrenciesLoaded($currentLanguage);
 
@@ -260,7 +264,8 @@
     onRowClick={(row) => {
         const inv = isCardInverted(row.slug);
         const target = inv ? `${row.quote}-${row.base}` : row.slug;
-        goto(`/fx/${target}`);
+        const params = dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : '';
+        goto(`/fx/${target}${params}`);
     }}
     onSelectionChange={(ids) => onselectionchange?.(data.filter((row) => ids.includes(row.slug)))}
     rowActions={[

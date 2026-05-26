@@ -43,6 +43,10 @@
         deltaPercent?: number | null;
         /** Delta absolute (from chart data) */
         deltaAbs?: number | null;
+        /** Date range start (passed to detail page on navigation) */
+        dateStart?: string;
+        /** Date range end (passed to detail page on navigation) */
+        dateEnd?: string;
         /** Global view mode from parent: 'percentage' (default) or 'absolute' */
         globalViewMode?: 'percentage' | 'absolute';
         /** Chart settings for this card (resolved from store by parent) */
@@ -61,7 +65,7 @@
         onsettings?: (asset: AssetData) => void;
     }
 
-    let {asset, livePrice = null, livePriceDirection = 'neutral', deltaPercent = null, deltaAbs = null, globalViewMode = 'percentage', chartSettings, renderSignals, chartData = [], loading = false, syncing = false, onsync, onrefresh, ondelete, onsettings}: Props = $props();
+    let {asset, livePrice = null, livePriceDirection = 'neutral', deltaPercent = null, deltaAbs = null, dateStart, dateEnd, globalViewMode = 'percentage', chartSettings, renderSignals, chartData = [], loading = false, syncing = false, onsync, onrefresh, ondelete, onsettings}: Props = $props();
 
     // =========================================================================
     // State
@@ -117,7 +121,8 @@
     }
 
     function handleCardClick() {
-        goto(`/assets/${asset.id}`);
+        const params = dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : '';
+        goto(`/assets/${asset.id}${params}`);
     }
 
     function stop(e: MouseEvent) {

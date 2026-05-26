@@ -7,9 +7,11 @@
      * global abs/% slider toggle, Sync All, Refresh All, Add Pair.
      */
     import {onMount} from 'svelte';
+    import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
+    import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {ArrowLeftRight, Coins, Plus, RefreshCw, RotateCw, Settings, Trash2, X} from 'lucide-svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
     import type {FxRow} from '$lib/components/fx/FxTable.svelte';
@@ -56,15 +58,10 @@
     // Filters
     let filterCurrency1 = $state('');
     let filterCurrency2 = $state('');
-    let dateStart = $state(
-        (() => {
-            const d = new Date();
-            d.setMonth(d.getMonth() - 3);
-            return d.toISOString().slice(0, 10);
-        })(),
-    );
-    let dateEnd = $state(new Date().toISOString().slice(0, 10));
-    let activePreset: any = $state('3M');
+    // Date range — global store is source of truth; URL seeds only on fresh page load
+    let dateStart = $state(getStart());
+    let dateEnd = $state(getEnd());
+    let activePreset: any = $state(null);
     let globalViewMode = $state<'absolute' | 'percentage'>('absolute');
     let refreshing = $state(false);
 
@@ -482,6 +479,12 @@
     function handleDateRangeChange(newStart: string, newEnd: string) {
         dateStart = newStart;
         dateEnd = newEnd;
+        setDateRange(newStart, newEnd);
+        // Sync URL for shareability + navigationStore tracking
+        const url = new URL(window.location.href);
+        url.searchParams.set('start', dateStart);
+        url.searchParams.set('end', dateEnd);
+        goto(`${url.pathname}${url.search}`, {replaceState: true, noScroll: true, keepFocus: true});
         fetchAllPairData();
     }
 
@@ -826,6 +829,8 @@
                     slug={pair.config.slug}
                     data={pair.data}
                     loading={pair.loading}
+                    {dateStart}
+                    {dateEnd}
                     manualOnly={pair.config.providers.length === 1 && pair.config.providers[0].providerCode === 'MANUAL'}
                     {globalViewMode}
                     chartSettings={getSettingsForPair(pair.config.slug, 'fx')}
@@ -844,6 +849,8 @@
             data={fxTableRows}
             loading={false}
             {visiblePeriods}
+            {dateStart}
+            {dateEnd}
             onsync={handleSyncPair}
             onrefresh={handleRefreshPair}
             ondelete={handleDeletePair}

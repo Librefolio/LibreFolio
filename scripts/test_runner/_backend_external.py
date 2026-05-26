@@ -189,6 +189,18 @@ def external_asset_providers(verbose: bool = False, test_names: list = None,
     return run_command(cmd, "Asset providers tests", verbose=verbose)
 
 
+def external_justetf_multicurrency(verbose: bool = False, test_names: list = None) -> bool:
+    """Test JustETF multi-currency support (EUR/USD/CHF/GBP)."""
+    print_section("External: JustETF Multi-Currency Tests")
+    print_info("Testing: JustETF provider with all 4 supported currencies")
+    print_info("Tests: Current price (EUR-only), history (all 4), search (4× results), params validation")
+    print_info("⚠️  WARNING: Requires internet connection")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_justetf_multicurrency.py",
+                            test_names or None)
+    return run_command(cmd, "JustETF multi-currency tests", verbose=verbose)
+
+
 def external_brim_providers(verbose: bool = False, test_names: list = None,
                             providers: list = None, exclude_providers: list = None) -> bool:
     """Test BRIM providers."""
@@ -260,6 +272,9 @@ These tests verify external API integrations:
     add_test(cat, "asset-providers", external_asset_providers, name="Asset Providers",
              desc="Test asset pricing providers", prereq="Internet connection",
              tests="yfinance, cssscraper, etc.")
+    add_test(cat, "justetf-multicurrency", external_justetf_multicurrency, name="JustETF Multi-Currency",
+             desc="Test JustETF provider with EUR/USD/CHF/GBP currencies", prereq="Internet connection",
+             tests="Current price, history, search, params validation")
     add_test(cat, "brim-providers", external_brim_providers, name="BRIM Providers",
              desc="Test broker report import plugins", prereq="Sample files in test fixtures",
              tests="Plugin discovery, file parsing, auto-detection")

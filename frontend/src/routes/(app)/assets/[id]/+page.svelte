@@ -51,7 +51,7 @@
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
-    import {parseDateRangeFromUrl} from '$lib/utils/dateRangeFromUrl';
+    import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {fetchCurrentPrices} from '$lib/services/livePriceService';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
@@ -88,11 +88,10 @@
         return error.startsWith('_i18n:') ? $t(error.slice(6)) : error;
     });
 
-    // Date range (from query params if present, otherwise default 3M)
-    const _initRange = parseDateRangeFromUrl($page.url.searchParams);
-    let dateEnd = $state(_initRange.end);
-    let dateStart = $state(_initRange.start);
-    let activePreset: any = $state(_initRange.hasCustomRange ? null : '3M');
+    // Date range — global store is source of truth
+    let dateEnd = $state(getEnd());
+    let dateStart = $state(getStart());
+    let activePreset: any = $state(null);
 
     let viewMode: ViewMode = $state('percentage');
     let displayCurrency = $state('');
@@ -1052,7 +1051,8 @@
     async function handleDateRangeChange(newStart: string, newEnd: string) {
         dateStart = newStart;
         dateEnd = newEnd;
-        // Sync URL so browser back/forward preserves the date range
+        setDateRange(newStart, newEnd);
+        // Sync URL for shareability
         const url = new URL(window.location.href);
         url.searchParams.set('start', dateStart);
         url.searchParams.set('end', dateEnd);

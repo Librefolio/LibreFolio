@@ -10,27 +10,44 @@ The JustETF provider fetches ETF prices and metadata from [justetf.com](https://
 
 1. **Identifier**: An ISIN code (e.g., `IE00B4L5Y983` for iShares Core MSCI World).
 2. **Identifier Types**: Only `ISIN` is accepted.
-3. **No `provider_params`**: JustETF does not require any additional configuration.
+3. **`provider_params`**: `{"currency": "EUR"|"USD"|"CHF"|"GBP"}` (default: EUR).
+
+### 💱 Currency Architecture
+
+The provider supports 4 currencies via JustETF's chart API (`load_chart(isin, currency)`). JustETF performs server-side FX conversion.
+
+| Currency | Current Value | History | Notes |
+|----------|:---:|:---:|---|
+| EUR | ✅ | ✅ | Gettex live + chart |
+| USD | ❌ | ✅ | Chart only (converted) |
+| CHF | ❌ | ✅ | Chart only (converted) |
+| GBP | ❌ | ✅ | Chart only (converted) |
+
+**Key distinction**: `fundCurrency` (from overview API) = NAV denomination ≠ trading currency. A USD-denominated fund (e.g., MSCI World) trades in EUR on European exchanges.
 
 ### 💰 Current Value (`get_current_value`)
 
+- **EUR only** — raises `NOT_SUPPORTED` for other currencies.
 - Uses `get_gettex_quote(isin)` to fetch real-time data from the Gettex exchange WebSocket.
 - Extracts `last` price (or `mid` as fallback).
-- Currency defaults to `EUR` (Gettex is a European exchange).
 - Timestamp is parsed from the WebSocket response.
 
 ### 📈 Historical Data (`get_history_value`)
 
-- Uses `load_chart(isin, "EUR", add_current)` from justetf-scraping.
-- `add_current=True` if `end_date >= today` — appends today's gettex quote to the chart.
+- Uses `load_chart(isin, currency, add_current)` from justetf-scraping.
+- `currency` read from `provider_params` (default EUR).
+- `add_current=True` only if `end_date >= today` AND `currency == "EUR"` — gettex quotes are EUR-only.
 - Returns `close` prices only (no OHLV data).
 - Date range filtering is done in-memory after fetching the full chart.
+- Cache key includes currency: `chart_{isin}_{currency}_{add_current}`.
 
 ### 🔎 Search (`search`)
 
 - Searches against a **cached ETF list** (`load_overview()` DataFrame).
 - Search is performed in-memory across: `name`, `ticker`, `wkn`, and ISIN (index).
 - Case-insensitive string matching using pandas vectorized operations.
+- **Multi-currency**: emits 4 results per ETF match (EUR/USD/CHF/GBP) with flag emojis.
+- Fund's native currency marked with 👑 (e.g., `"🇺🇸👑 iShares Core MSCI World"` for a USD-denominated fund).
 - All results have `identifier_type: ISIN` and `type: "ETF"`.
 
 ### 📋 Metadata (`fetch_asset_metadata`)
@@ -40,7 +57,7 @@ The JustETF provider fetches ETF prices and metadata from [justetf.com](https://
     - **Description**: `description + TER + distribution_policy`
     - **Geographic Area**: `countries[]` → normalized to ISO 3166-1 alpha-3 codes via `normalize_country_to_iso3()`, renormalized to sum to 1.0
     - **Sector Area**: `sectors[]` → validated against `FinancialSector` enum, unknown sectors logged and mapped to "Other"
-    - **Currency**: `fund_currency`
+    - **Currency**: from `provider_params["currency"]` (user's chosen price currency)
     - **Identifiers**: `identifier_isin` (input ISIN), `identifier_ticker` (if available)
 - `asset_type` is always `ETF`.
 
