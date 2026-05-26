@@ -42,13 +42,17 @@
         visiblePeriods?: ReadonlyArray<{key: string; days: number}>;
         /** Live price data (asset_id → {value, direction}) for flash effect */
         livePriceMap?: Map<number, {value: number; direction: LivePriceDirection}>;
+        /** Date range start (passed to detail page on row click) */
+        dateStart?: string;
+        /** Date range end (passed to detail page on row click) */
+        dateEnd?: string;
         onsync?: (asset: AssetRow) => void;
         onrefresh?: (asset: AssetRow) => void;
         ondelete?: (asset: AssetRow) => void;
         onselectionchange?: (rows: AssetRow[]) => void;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), onsync, onrefresh, ondelete, onselectionchange}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onsync, onrefresh, ondelete, onselectionchange}: Props = $props();
 
     ensureCurrenciesLoaded($currentLanguage);
     ensureAssetProvidersCached();
@@ -224,7 +228,7 @@
     enableSorting={true}
     getRowId={(row) => String(row.id)}
     isLoading={loading}
-    onRowClick={(row) => goto(`/assets/${row.id}`)}
+    onRowClick={(row) => goto(`/assets/${row.id}${dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : ''}`)}
     onSelectionChange={(ids) => onselectionchange?.(data.filter((row) => ids.includes(String(row.id))))}
     rowActions={[
         {
