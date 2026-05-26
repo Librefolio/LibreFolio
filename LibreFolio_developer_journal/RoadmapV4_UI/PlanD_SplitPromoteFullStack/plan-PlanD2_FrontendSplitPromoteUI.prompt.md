@@ -5,7 +5,7 @@
 **Priority**: P1 (feature completion)
 **Estimated effort**: ~10h (~2.5 days)
 
-**Parent**: [`plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md)
+**Parent**: [`plan-phase07-PlanD_SplitPromoteFullStack.prompt.md`](../plan-phase07-PlanD_SplitPromoteFullStack.prompt.md)
 **Predecessor**: D1 ✅ (Backend Batch Pipeline + Suggest)
 **Steps covered**: C5, C3, C4, C1, C2, C6, C7
 
@@ -666,8 +666,8 @@ C2 (Main Table promote)    C4 (BulkModal promote)
 
 ## 🔗 Cross-links
 
-- **Parent plan**: [`plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md)
-- **Predecessor (D1)**: [`plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md)
-- **Bugfix 1**: [`plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_1_SplitPromotePolish.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_1_SplitPromotePolish.prompt.md) — 21 bug, UX polish, E2E tests
+- **Parent plan**: [`plan-phase07-PlanD_SplitPromoteFullStack.prompt.md`](../plan-phase07-PlanD_SplitPromoteFullStack.prompt.md)
+- **Predecessor (D1)**: [`plan-PlanD1_BackendBatchSuggest.prompt.md`](./plan-PlanD1_BackendBatchSuggest.prompt.md)
+- **Bugfix 1**: [`plan-bugfix1_SplitPromotePolish.prompt.md`](./PlanD2-bugfix/plan-bugfix1_SplitPromotePolish.prompt.md) — 21 bug, UX polish, E2E tests
 - **Next (D3)**: Embedded in Bugfix 1 as Step F14
 

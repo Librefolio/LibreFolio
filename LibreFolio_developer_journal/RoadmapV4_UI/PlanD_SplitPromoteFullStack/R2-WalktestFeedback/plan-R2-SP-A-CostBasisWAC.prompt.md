@@ -2,11 +2,11 @@
 
 > **✅ STATUS (2026-05-24)**: COMPLETATO. Commit `92f4b1ba`.
 
-**Parent plan**: [`plan-R2-WalktestFeedbackRound`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_WalktestFeedbackRound.prompt.md)
-**Next**: [`plan-R2-SP-B-BackendTests`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-B-BackendTests.prompt.md)
+**Parent plan**: [`plan-R2-WalktestFeedbackRound`](../plan-R2-WalktestFeedbackRound.prompt.md)
+**Next**: [`plan-R2-SP-B-BackendTests`](./plan-R2-SP-B-BackendTests.prompt.md)
 
 ## Context
-Leggi il piano master `plan-phase07-transaction-Part4_Round6_PlanD2_round2_WalktestFeedbackRound.prompt.md`
+Leggi il piano master `plan-R2-WalktestFeedbackRound.prompt.md`
 per il contesto completo. Leggi anche `bugfix_4_SplitSuggestPmcOverrideUx` per lo stato attuale
 del cost_basis_override (oggi SafeDecimal, domani Currency).
 

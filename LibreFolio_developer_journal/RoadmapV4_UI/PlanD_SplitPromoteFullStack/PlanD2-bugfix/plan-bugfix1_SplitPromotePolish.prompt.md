@@ -5,8 +5,8 @@
 **Priority**: P1 (critical bugs + UX polish + test coverage)
 **Estimated effort**: ~20h (~4 days)
 
-**Parent**: [`plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md)
-**Companion**: [`plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md)
+**Parent**: [`plan-PlanD2_FrontendSplitPromoteUI.prompt.md`](../plan-PlanD2_FrontendSplitPromoteUI.prompt.md)
+**Companion**: [`plan-PlanD1_BackendBatchSuggest.prompt.md`](../plan-PlanD1_BackendBatchSuggest.prompt.md)
 
 ---
 
@@ -641,9 +641,9 @@ test('NR-1: BulkModal renders paired correctly after page refresh', async ({page
 
 ## 🔗 Cross-links
 
-- **Parent (D2)**: [`plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md)
-- **D1 Backend**: [`plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md)
-- **Parent plan (D)**: [`plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md)
-- **Next (Bugfix 2)**: [`plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_2_PayloadSplitPreviewUX.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_2_PayloadSplitPreviewUX.prompt.md)
+- **Parent (D2)**: [`plan-PlanD2_FrontendSplitPromoteUI.prompt.md`](../plan-PlanD2_FrontendSplitPromoteUI.prompt.md)
+- **D1 Backend**: [`plan-PlanD1_BackendBatchSuggest.prompt.md`](../plan-PlanD1_BackendBatchSuggest.prompt.md)
+- **Parent plan (D)**: [`plan-phase07-PlanD_SplitPromoteFullStack.prompt.md`](../../plan-phase07-PlanD_SplitPromoteFullStack.prompt.md)
+- **Next (Bugfix 2)**: [`plan-bugfix2_PayloadSplitPreviewUX.prompt.md`](./plan-bugfix2_PayloadSplitPreviewUX.prompt.md)
 - **Next (D3 E2E)**: Embedded in this plan as Step F14
 

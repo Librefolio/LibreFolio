@@ -5,7 +5,7 @@
 **Priority**: P0-P3 (mixed)
 **Estimated effort**: ~20h (~4-5 days)
 
-**Parent**: [`plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_3_UXModalPayloadSuggestE2E.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_3_UXModalPayloadSuggestE2E.prompt.md)
+**Parent**: [`plan-bugfix3_UXModalPayloadSuggestE2E.prompt.md`](./plan-bugfix3_UXModalPayloadSuggestE2E.prompt.md)
 
 ---
 
@@ -411,4 +411,4 @@ Chiavi nuove in EN/IT/FR/ES:
 
 ---
 
-**Next**: [`plan-phase07-transaction-Part4_Round6_PlanD2_round2_WalktestFeedbackRound.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_round2_WalktestFeedbackRound.prompt.md)
+**Next**: [`plan-R2-WalktestFeedbackRound.prompt.md`](../plan-R2-WalktestFeedbackRound.prompt.md)

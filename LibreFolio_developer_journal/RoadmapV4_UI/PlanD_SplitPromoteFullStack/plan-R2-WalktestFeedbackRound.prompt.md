@@ -2,8 +2,8 @@
 
 Post-walktest round: fix UX + 3 feature bloccanti (cost_basis con valuta+FX, AssetEvent picker riusando DataEditor, paired TX store-first). Ordine: backend → test backend → frontend. 18 step, organizzati in 5 sotto-piani.
 
-**Parent plan**: `plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md`
-**Previous bugfix**: `plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_4_SplitSuggestPmcOverrideUx.prompt.md`
+**Parent plan**: `plan-PlanD2_FrontendSplitPromoteUI.prompt.md`
+**Previous bugfix**: `plan-bugfix4_SplitSuggestPmcOverrideUx.prompt.md`
 
 ---
 
@@ -239,9 +239,9 @@ In `fetchPartner()`: `txStoreGet` prima, GET in parallelo con entrambi gli id, u
 
 | SP | Steps | Tipo | Stima | Dipende da | Detailed Plan | Status |
 |----|-------|------|-------|------------|---------------|--------|
-| **SP-A** | 1-5 | 🔴 DETAILED | ~10h | — | [`plan-R2-SP-A-CostBasisWAC`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-A-CostBasisWAC.prompt.md) | ✅ DONE (commit `92f4b1ba`) |
-| **SP-B** | 6 + updates + mock | 🟡 GROUPED | ~4h | SP-A | [`plan-R2-SP-B-BackendTests`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-B-BackendTests.prompt.md) | ✅ DONE (commit `473d2611`) |
-| **SP-C** | 7-12, 17 | 🔴 DETAILED | ~10h | api sync | [`plan-R2-SP-C-BulkModalSuggestUX`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BulkModalSuggestUX.prompt.md) | ✅ DONE (commits `834028ba`..`9b908c26`) |
+| **SP-A** | 1-5 | 🔴 DETAILED | ~10h | — | [`plan-R2-SP-A-CostBasisWAC`](./R2-WalktestFeedback/plan-R2-SP-A-CostBasisWAC.prompt.md) | ✅ DONE (commit `92f4b1ba`) |
+| **SP-B** | 6 + updates + mock | 🟡 GROUPED | ~4h | SP-A | [`plan-R2-SP-B-BackendTests`](./R2-WalktestFeedback/plan-R2-SP-B-BackendTests.prompt.md) | ✅ DONE (commit `473d2611`) |
+| **SP-C** | 7-12, 17 | 🔴 DETAILED | ~10h | api sync | [`plan-R2-SP-C-BulkModalSuggestUX`](./R2-WalktestFeedback/plan-R2-SP-C-BulkModalSuggestUX.prompt.md) | ✅ DONE (commits `834028ba`..`9b908c26`) |
 | **SP-C Bugs 1-11** | walktest WAC | — | — | SP-C | _(one-shot 2-7 risolti inline; arch 1,8,9-10-11 pending)_ | ⏳ One-shot ✅ / Arch 🔲 |
 | **SP-D** | 13-16, 18 | 🔴 DETAILED | ~12h | SP-C | — | 🔲 TODO |
 | **SP-E** | E2E tests | 🟡 GROUPED | ~6h | SP-D | — | 🔲 TODO |
@@ -266,13 +266,13 @@ Quindi, basandosi sul report "LibreFolio_devWiki/code-reality-check.md", identif
 
 ### SP-A: Cost Basis Currency + WAC Service
 
-> **File**: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-A-CostBasisWAC.prompt.md`
+> **File**: `plan-R2-SP-A-CostBasisWAC.prompt.md`
 
 ```
 # Task: SP-A — Cost Basis Override con Currency + WAC Service + recalc-wac endpoint
 
 ## Context
-Leggi il piano master `plan-phase07-transaction-Part4_Round6_PlanD2_round2_WalktestFeedbackRound.prompt.md`
+Leggi il piano master `plan-R2-WalktestFeedbackRound.prompt.md`
 per il contesto completo. Leggi anche `bugfix_4_SplitSuggestPmcOverrideUx` per lo stato attuale
 del cost_basis_override (oggi SafeDecimal, domani Currency).
 
@@ -310,7 +310,7 @@ auto-calc adattato ai 2 call-site, nuovo endpoint recalc-wac.
 
 ### SP-B: Backend Tests + Mock Data
 
-> **File**: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-B-BackendTests.prompt.md`
+> **File**: `plan-R2-SP-B-BackendTests.prompt.md`
 
 ```
 # Task: SP-B — Backend Tests WAC + Mock Data
@@ -331,7 +331,7 @@ Leggi il piano master per la tabella WAC-1→WAC-10 e la lista test da aggiornar
 
 ### SP-C: BulkModal + Suggest + Modals UX
 
-> **File**: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BulkModalSuggestUX.prompt.md`
+> **File**: `plan-R2-SP-C-BulkModalSuggestUX.prompt.md`
 
 ```
 # Task: SP-C — BulkModal UX Polish + Suggest Overhaul + Modal Cleanup

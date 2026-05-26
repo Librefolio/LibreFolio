@@ -5,7 +5,7 @@
 **Priority**: P1
 **Estimated effort**: ~16h (~3-4 days)
 
-**Parent**: [`plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_1_SplitPromotePolish.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_1_SplitPromotePolish.prompt.md)
+**Parent**: [`plan-bugfix1_SplitPromotePolish.prompt.md`](./plan-bugfix1_SplitPromotePolish.prompt.md)
 
 ---
 
@@ -531,11 +531,11 @@ Wave 3 — Schema + Tests:
 
 ## 🔗 Cross-links
 
-- **Parent (Bugfix 1)**: [`plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_1_SplitPromotePolish.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_1_SplitPromotePolish.prompt.md)
-- **D2 Frontend**: [`plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md)
-- **D1 Backend**: [`plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md)
-- **Parent plan (D)**: [`plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md)
-- **Child (Bugfix 3)**: [`plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_3_UXModalPayloadSuggestE2E.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_3_UXModalPayloadSuggestE2E.prompt.md)
+- **Parent (Bugfix 1)**: [`plan-bugfix1_SplitPromotePolish.prompt.md`](./plan-bugfix1_SplitPromotePolish.prompt.md)
+- **D2 Frontend**: [`plan-PlanD2_FrontendSplitPromoteUI.prompt.md`](../plan-PlanD2_FrontendSplitPromoteUI.prompt.md)
+- **D1 Backend**: [`plan-PlanD1_BackendBatchSuggest.prompt.md`](../plan-PlanD1_BackendBatchSuggest.prompt.md)
+- **Parent plan (D)**: [`plan-phase07-PlanD_SplitPromoteFullStack.prompt.md`](../../plan-phase07-PlanD_SplitPromoteFullStack.prompt.md)
+- **Child (Bugfix 3)**: [`plan-bugfix3_UXModalPayloadSuggestE2E.prompt.md`](./plan-bugfix3_UXModalPayloadSuggestE2E.prompt.md)
 
 ---
 

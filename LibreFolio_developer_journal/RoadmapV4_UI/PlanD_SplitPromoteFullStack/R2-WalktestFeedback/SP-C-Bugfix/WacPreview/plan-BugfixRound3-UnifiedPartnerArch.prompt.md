@@ -1,7 +1,7 @@
 # Plan: Unified Partner Architecture — FormModal Items Array + PendingOp Simplification
 
 **Parent**: Bug 8 (partner broker lost on edit paired TX)
-**Parent plan**: [`plan-R2-SP-C-BugfixRound2-WacPreview`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md) (sezione Bug 8)
+**Parent plan**: [`plan-R2-SP-C-BugfixRound2-WacPreview`](../plan-SP-C-BugfixRound2-WacPreview.prompt.md) (sezione Bug 8)
 **Triggered by**: Walktest 2026-05-25 — confermato rotto (edit paired new draft → secondo broker scompare)
 **Scope**: Refactor strutturale del flusso dati BulkModal ↔ FormModal per paired TX
 
@@ -319,7 +319,7 @@ Non necessario per Bug 8 fix. La page standalone usa il FormModal in view-only m
 ```markdown
 # Prompt: Fix 4 Walktest Bugs (BugfixRound3b)
 
-Piano padre: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound3-UnifiedPartnerArch.prompt.md` (sezione Walktest 2026-05-26)
+Piano padre: `plan-BugfixRound3-UnifiedPartnerArch.prompt.md` (sezione Walktest 2026-05-26)
 Contesto: dopo il refactor "Unified Partner Architecture" (partner come PendingOp nascosto con `pairedWith`), un walktest manuale ha rivelato 4 problemi non tracciati. Vanno risolti prima di procedere.
 
 ---

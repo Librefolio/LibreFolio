@@ -1,6 +1,6 @@
 # Plan: WAC Backend Cleanup — Schema Consolidation + Tests
 
-**Parent plan**: [`plan-R2-SP-C-BugfixRound2-WacPreview`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md)
+**Parent plan**: [`plan-R2-SP-C-BugfixRound2-WacPreview`](../plan-SP-C-BugfixRound2-WacPreview.prompt.md)
 **Scope**: Backend-only refactoring + test coverage (Steps 6 del parent plan + TODO pending)
 **Triggered by**: Architecture feedback round 2
 

@@ -2,8 +2,8 @@
 
 > **✅ STATUS (2026-05-24)**: COMPLETATO. Commit `473d2611`.
 
-**Parent plan**: [`plan-R2-WalktestFeedbackRound`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_WalktestFeedbackRound.prompt.md)
-**Depends on**: [`plan-R2-SP-A-CostBasisWAC`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-A-CostBasisWAC.prompt.md) ✅ completed
+**Parent plan**: [`plan-R2-WalktestFeedbackRound`](../plan-R2-WalktestFeedbackRound.prompt.md)
+**Depends on**: [`plan-R2-SP-A-CostBasisWAC`](./plan-R2-SP-A-CostBasisWAC.prompt.md) ✅ completed
 
 ## Context
 

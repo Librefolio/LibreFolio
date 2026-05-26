@@ -1,6 +1,6 @@
 # Task: FX Implied Rate & Market Spread — Frontend-Only
 
-**Parent plan**: [`plan-R2-SP-C-BulkModalSuggestUX`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BulkModalSuggestUX.prompt.md)
+**Parent plan**: [`plan-R2-SP-C-BulkModalSuggestUX`](../plan-R2-SP-C-BulkModalSuggestUX.prompt.md)
 **Depends on**: SP-C walktest complete, BugfixRound1 (BUG-C7 suggest redesign)
 **Triggered by**: BUG-C12 fix revealing FX_CONVERSION suggestions in banner
 

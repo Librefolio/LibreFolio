@@ -4,8 +4,9 @@
 > Commits implementazione: `834028ba` → `473d2611` → `49f59260` → `42a2ae73` → `9b908c26` + sessione 2026-05-25 + sessione 2026-05-26.
 > Bug 1 (fetch loop): fix inline con dedup guard, nessun plan separato necessario.
 > Bug 8 (partner broker): risolto con Unified Partner Architecture refactor (child plan BugfixRound3).
+> **Child plan (Bug 9-10-11)**: [`plan-ReactiveWacBulkModal`](WacPreview/plan-ReactiveWacBulkModal.prompt.md)
 
-**Parent plan**: [`plan-R2-SP-C-BugfixRound1`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound1.prompt.md)
+**Parent plan**: [`plan-R2-SP-C-BugfixRound1`](./plan-SP-C-BugfixRound1.prompt.md)
 **Depends on**: BugfixRound1 completato (12/12)
 **Triggered by**: Walktest C9 — scoperte feature mancanti → ripensamento architetturale WAC
 
@@ -646,7 +647,7 @@ Se FX mancante per entrambi:
 - `./dev.py api sync` run
 
 **TODO for next iteration**:
-→ [`plan-R2-SP-C-BugfixRound2-WacBackendCleanup`](plan-phase07-transaction-Part4_Round6_1_CentralizePayloadCommit.prompt.md) — ✅ **COMPLETATO** (2026-05-19). Step 6 coperto integralmente (34 test). Continuare da **Step 7** (Frontend — FormModal WAC state machine).
+→ [`plan-R2-SP-C-BugfixRound2-WacBackendCleanup`](../../plan-CentralizePayloadCommit.prompt.md) — ✅ **COMPLETATO** (2026-05-19). Step 6 coperto integralmente (34 test). Continuare da **Step 7** (Frontend — FormModal WAC state machine).
 
 ---
 
@@ -764,7 +765,7 @@ curl -s -b /tmp/lf_cookies.txt "http://localhost:8001/api/v1/transactions?ids=TX
 Test backend dati per assodati grazie ai test untitari scritti in pytest.
 
 Durante la preparazione dei test manuali nel frontend ci si è accorti di una mancanza architetturale nella creazione dei pacchetti di transazione,
-e abbiamo pianificato la correzione in questo piano: [`plan-phase07-transaction-Part4_Round6_1_CentralizePayloadCommit.prompt.md`](./plan-phase07-transaction-Part4_Round6_1_CentralizePayloadCommit.prompt.md)
+e abbiamo pianificato la correzione in questo piano: [`plan-CentralizePayloadCommit.prompt.md`](../../plan-CentralizePayloadCommit.prompt.md)
 
 ---
 
@@ -975,7 +976,7 @@ wac-preview 200 → wac-preview 200 → wac-preview 200 → ... (~10+ in pochi s
 
 **Scope**: `TransactionFormModal.svelte` → caricamento paired TX in edit mode
 **Severità**: 🔴 Alta (regressione funzionale)
-**Child plan**: [`plan-R2-SP-C-BugfixRound3-UnifiedPartnerArch`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound3-UnifiedPartnerArch.prompt.md)
+**Child plan**: [`plan-R2-SP-C-BugfixRound3-UnifiedPartnerArch`](./WacPreview/plan-BugfixRound3-UnifiedPartnerArch.prompt.md)
 
 **Sintomo**: Editare una TX paired (TRANSFER titoli o CASH_TRANSFER/bonificho) nel FormModal dalla BulkModal → il secondo broker (partner side) non viene popolato nel form.
 
@@ -1048,7 +1049,7 @@ wac-preview 200 → wac-preview 200 → wac-preview 200 → ... (~10+ in pochi s
 | # | Bug | Cosa serve capire | Stato |
 |---|-----|-------------------|-------|
 | **1** | WAC fetch loop infinito | Interazione `$effect` ↔ `onChange` ↔ `autoMode` ↔ debounce. Dipendenza circolare value↔fetch. | ✅ Fixato 2026-05-25 (dedup guard, nessun plan separato — vedi nota sotto) |
-| **8** | Partner broker si perde in edit paired | Come il FormModal riceve i dati della TX partner dalla BulkModal. | ✅ Risolto 2026-05-26 — Unified Partner Architecture refactor ([child plan](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound3-UnifiedPartnerArch.prompt.md)) |
+| **8** | Partner broker si perde in edit paired | Come il FormModal riceve i dati della TX partner dalla BulkModal. | ✅ Risolto 2026-05-26 — Unified Partner Architecture refactor ([child plan](./WacPreview/plan-BugfixRound3-UnifiedPartnerArch.prompt.md)) |
 | **9** | Cella bulk "💡 auto" senza valore numerico | Propagazione valore WAC calcolato dal FormModal → cella BulkModal. | 🔲 Da verificare |
 | **10** | Manual digitato non si vede in cella | Come `cost_basis_override` torna al BulkModal quando FormModal chiude. | 🔲 Da verificare |
 | **11** | Righe DB non mostrano cost_basis | Logica condizionale `renderCostBasisCell()`, tipo-dipendente → type-agnostic. | 🔲 Da verificare |
@@ -1089,7 +1090,7 @@ wac-preview 200 → wac-preview 200 → wac-preview 200 → ... (~10+ in pochi s
 ## Contesto
 
 Stiamo lavorando su LibreFolio, un portfolio tracker self-hosted. Il piano padre è:
-`plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md`
+`plan-SP-C-BugfixRound2-WacPreview.prompt.md`
 
 I seguenti 6 bug sono stati classificati come "one-shot" (fix diretto senza analisi architetturale).
 Crea un piano di implementazione con step numerati, file coinvolti, e ordine esecuzione.
@@ -1156,7 +1157,7 @@ Piano con step numerati, ordine di esecuzione, file specifici, stima LOC modific
 
 In LibreFolio (SvelteKit 2 + Svelte 5 runes), il componente `WacPreviewSection.svelte` ha un loop infinito di fetch quando il WAC calcolato è `0`.
 
-Piano padre: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md` (sezione Bug 1)
+Piano padre: `plan-SP-C-BugfixRound2-WacPreview.prompt.md` (sezione Bug 1)
 
 ## Sintomo
 
@@ -1205,7 +1206,7 @@ Piano con: (1) root cause confermata dopo lettura codice, (2) opzione scelta con
 
 In LibreFolio, editare una TX paired (TRANSFER titoli o CASH_TRANSFER) nel FormModal dalla BulkModal fa sì che il secondo broker (partner side) non venga popolato.
 
-Piano padre: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md` (sezione Bug 8)
+Piano padre: `plan-SP-C-BugfixRound2-WacPreview.prompt.md` (sezione Bug 8)
 
 ## Analisi richiesta
 
@@ -1253,7 +1254,7 @@ Piano con: (1) architettura documentata (diagramma flusso dati BulkModal→FormM
 
 In LibreFolio, la cella `cost_basis_override` nella BulkModal (`TransactionBulkModal.svelte`) ha 3 problemi correlati che derivano dalla stessa architettura carente.
 
-Piano padre: `plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md` (sezione Bug 9, 10, 11)
+Piano padre: `plan-SP-C-BugfixRound2-WacPreview.prompt.md` (sezione Bug 9, 10, 11)
 
 ## Problemi
 

@@ -5,9 +5,9 @@
 **Priority**: P1
 **Estimated effort**: ~16h (~3-4 days)
 
-**Parent**: [`plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_2_PayloadSplitPreviewUX.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_2_PayloadSplitPreviewUX.prompt.md)
+**Parent**: [`plan-bugfix2_PayloadSplitPreviewUX.prompt.md`](./plan-bugfix2_PayloadSplitPreviewUX.prompt.md)
 
-**Child**: [`plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_4_SplitSuggestPmcOverrideUx.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_4_SplitSuggestPmcOverrideUx.prompt.md)
+**Child**: [`plan-bugfix4_SplitSuggestPmcOverrideUx.prompt.md`](./plan-bugfix4_SplitSuggestPmcOverrideUx.prompt.md)
 
 ---
 

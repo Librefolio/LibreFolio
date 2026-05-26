@@ -2,9 +2,9 @@
 
 > **✅ STATUS (2026-05-24)**: COMPLETATO. Inclusi BugfixRound1 (12/12) e BugfixRound2 (WAC Preview + 11 bug).
 
-**Parent plan**: [`plan-R2-WalktestFeedbackRound`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_WalktestFeedbackRound.prompt.md)
+**Parent plan**: [`plan-R2-WalktestFeedbackRound`](../plan-R2-WalktestFeedbackRound.prompt.md)
 **Depends on**: SP-A ✅ + SP-B ✅ + `./dev.py api sync`
-**Previous bugfix**: [`bugfix_4_SplitSuggestPmcOverrideUx`](plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_4_SplitSuggestPmcOverrideUx.prompt.md)
+**Previous bugfix**: [`bugfix_4_SplitSuggestPmcOverrideUx`](../PlanD2-bugfix/plan-bugfix4_SplitSuggestPmcOverrideUx.prompt.md)
 
 ## Context
 
@@ -386,4 +386,4 @@ Questo richiede un redesign del campo nel FormModal — non era in scope SP-C (c
 
 ## Follow-up Plan
 
-→ [`plan-R2-SP-C-BugfixRound1`](plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound1.prompt.md) — rientro completo per tutti gli 11 bug.
+→ [`plan-R2-SP-C-BugfixRound1`](./SP-C-Bugfix/plan-SP-C-BugfixRound1.prompt.md) — rientro completo per tutti gli 11 bug.

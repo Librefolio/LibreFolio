@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-20
 **Status**: Da verificare implementazione (2026-05-20)
-**Link back**: [`plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md) (riga 762)
+**Link back**: [`plan-SP-C-BugfixRound2-WacPreview.prompt.md`](./R2-WalktestFeedback/SP-C-Bugfix/plan-SP-C-BugfixRound2-WacPreview.prompt.md) (riga 762)
 
 ---
 

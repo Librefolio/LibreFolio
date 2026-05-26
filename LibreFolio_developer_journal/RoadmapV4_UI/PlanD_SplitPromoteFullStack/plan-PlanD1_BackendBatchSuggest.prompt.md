@@ -5,7 +5,7 @@
 **Priority**: P1 (feature completion)
 **Estimated effort**: ~10h (~2 days)
 
-**Parent**: [`plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md)
+**Parent**: [`plan-phase07-PlanD_SplitPromoteFullStack.prompt.md`](../plan-phase07-PlanD_SplitPromoteFullStack.prompt.md)
 **Steps covered**: E1, E2, A1, A2, A3, A4, A5, B1, B2, B3
 
 ---
@@ -898,7 +898,7 @@ B3 (test suggest) ┘
 
 ## 🔗 Cross-links
 
-- **Parent plan**: [`plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md`](./plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md)
-- **Next sub-plan (D2)**: `plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md` (⏳ planned)
+- **Parent plan**: [`plan-phase07-PlanD_SplitPromoteFullStack.prompt.md`](../plan-phase07-PlanD_SplitPromoteFullStack.prompt.md)
+- **Next sub-plan (D2)**: `plan-PlanD2_FrontendSplitPromoteUI.prompt.md` (⏳ planned)
 - **devWiki**: `LibreFolio_devWiki/wiki/decisions/pendingop-tagged-union.md`
 
