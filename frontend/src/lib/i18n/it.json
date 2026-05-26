@@ -554,7 +554,7 @@
       "assetEvent": "Evento asset",
       "assetEventNotApplicable": "Il collegamento all'evento è disponibile solo per DIVIDEND, INTEREST e ADJUSTMENT dopo aver scelto un asset.",
       "costBasis": "Override costo medio",
-      "linkUuid": "UUID collegamento",
+      "linkUuid": "TX Collegata",
       "pairPartner": "Transazione collegata",
       "unlink": "Scollega",
       "hintSignPositive": "deve essere > 0",
@@ -618,7 +618,8 @@
       "stateNew": "nuova",
       "stateEdit": "modifica",
       "stateDel": "elimina",
-      "suggestLightbulb": "Mostra suggerimento"
+      "suggestLightbulb": "Mostra suggerimento",
+      "partnerInaccessible": "Partner su broker inaccessibile"
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"
@@ -651,6 +652,7 @@
       "toggleManual": "Manuale",
       "unitCost": "Costo unitario",
       "effectLabel": "Effetto",
+      "columnWac": "PMC",
       "effect": {
         "add": "Pesata",
         "reduce": "Quantità ridotta",
@@ -791,7 +793,7 @@
       "cash": "Importo",
       "cash_amount": "Importo",
       "cash_code": "Valuta",
-      "link_uuid": "UUID collegamento",
+      "link_uuid": "TX Collegata",
       "asset_event_id": "Evento asset",
       "tags": "Tag",
       "description": "Descrizione",

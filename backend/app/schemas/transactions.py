@@ -727,6 +727,7 @@ class WACQualifyingTX(BaseModel):
     currency: Optional[str] = None
     effect: str = Field(..., description="add | reduce | add_zero_cost")
     fx_info: Optional[FxBackwardFillInfo] = None
+    running_wac: Optional[SafeDecimal] = Field(None, description="Running WAC per unit after this TX")
 
 
 class WACPreviewResultItem(BaseModel):

@@ -554,7 +554,7 @@
       "assetEvent": "Événement actif",
       "assetEventNotApplicable": "Le lien d'événement n'est disponible que pour DIVIDEND, INTEREST et ADJUSTMENT après avoir choisi un actif.",
       "costBasis": "Coût de revient (override)",
-      "linkUuid": "UUID de lien",
+      "linkUuid": "TX Liée",
       "pairPartner": "Transaction liée",
       "unlink": "Délier",
       "hintSignPositive": "doit être > 0",
@@ -618,7 +618,8 @@
       "stateNew": "nouveau",
       "stateEdit": "modif.",
       "stateDel": "suppr.",
-      "suggestLightbulb": "Afficher suggestion"
+      "suggestLightbulb": "Afficher suggestion",
+      "partnerInaccessible": "Partenaire sur courtier inaccessible"
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
@@ -651,6 +652,7 @@
       "toggleManual": "Manuel",
       "unitCost": "Coût unitaire",
       "effectLabel": "Effet",
+      "columnWac": "CMP",
       "effect": {
         "add": "Pondérée",
         "reduce": "Quantité réduite",
@@ -791,7 +793,7 @@
       "cash": "Montant",
       "cash_amount": "Montant",
       "cash_code": "Devise",
-      "link_uuid": "UUID de lien",
+      "link_uuid": "TX Liée",
       "asset_event_id": "Événement d'actif",
       "tags": "Tags",
       "description": "Description",

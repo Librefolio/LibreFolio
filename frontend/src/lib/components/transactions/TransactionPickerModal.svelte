@@ -57,7 +57,7 @@
             if (r.related_transaction_id != null) {
                 // Paired: both halves disabled if either broker is non-editable
                 const partner = lookup.get(r.related_transaction_id);
-                const partnerBrokerId = partner?.broker_id;
+                const partnerBrokerId = partner?.broker_id ?? (r as any).partner_broker_id;
                 if (!canEditBroker(r.broker_id) || (partnerBrokerId != null && !canEditBroker(partnerBrokerId))) {
                     disabled.add(r.id);
                     if (partner) disabled.add(partner.id);
