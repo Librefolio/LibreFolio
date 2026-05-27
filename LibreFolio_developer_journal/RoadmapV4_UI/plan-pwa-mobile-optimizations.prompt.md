@@ -233,37 +233,35 @@ Poi apri: `http://localhost:5173`
 
 #### Test Checklist Localhost
 
-**1. Mobile CSS (simulazione)**
+**1. Mobile CSS (simulazione)** — non testato (richiede device reale per validazione completa)
 - [ ] Apri DevTools → Toggle device toolbar (Cmd+Shift+M)
 - [ ] Seleziona iPhone/Android
 - [ ] Verifica: non si dovrebbe fare zoom con double-tap su link/pulsanti
 - [ ] Verifica: fai scroll in fondo pagina → non dovrebbe "rimbalzare" (overscroll)
 - [ ] Verifica: Input text → font >= 16px (Inspect → Computed)
 
-**2. PWA Manifest**
-- [ ] DevTools → Application tab → Manifest
-- [ ] Verifica che appaia:
+**2. PWA Manifest** ✅ (testato 2026-05-27)
+- [x] DevTools → Application tab → Manifest
+- [x] Verifica che appaia:
   - name: "LibreFolio"
   - display: "standalone"
   - theme_color: "#1a4031"
   - icons: 192×192 e 512×512
 
-**3. Install Button (Desktop Chrome/Edge)**
-- [ ] Vai sul sito
-- [ ] Click su **❓ (Help & Support)** in alto a destra
-- [ ] Verifica: dovrebbe apparire **"Install App"** nel menu
-  - Se NON appare → normale (localhost + Chrome a volte non triggera `beforeinstallprompt`)
-  - Alternativa: guarda l'icona ⊕ nella barra indirizzi di Chrome
+**3. Install Button (Desktop Chrome/Edge)** ✅ (testato 2026-05-27)
+- [x] Vai sul sito
+- [x] Click su **❓ (Help & Support)** in alto a destra
+- [x] Verifica: dovrebbe apparire **"Install App"** nel menu
 
 **4. iOS Simulation (solo look)**
 - [ ] DevTools → device iPhone
 - [ ] Help menu → Install App
 - [ ] Verifica: testo *"Tap Share, then Add to Home Screen"* appare
 
-**5. Dark Mode**
-- [ ] Toggle tema (icona sole/luna in alto)
-- [ ] Help menu → Install App
-- [ ] Verifica: background scuro, testo chiaro, colori corretti
+**5. Dark Mode** ✅ (testato 2026-05-27)
+- [x] Toggle tema (icona sole/luna in alto)
+- [x] Help menu → Install App
+- [x] Verifica: background scuro, testo chiaro, colori corretti
 
 ---
 
@@ -397,62 +395,54 @@ done
 1. Install su Android + fullscreen check
 2. Install su iOS Safari + fullscreen check
 3. Mobile CSS: no zoom accidentale
-4. **Offline fallback page** (server down → pagina branded)
+4. ~~**Offline fallback page** (server down → pagina branded)~~ ✅
 
 **Priorità Media** (should test):
-4. Desktop PWA install ✅ (già testato)
+4. ~~Desktop PWA install~~ ✅ (già testato)
 5. Standalone mode detection
-6. Dark mode
-7. Offline fallback dark mode + i18n + countdown
+6. ~~Dark mode~~ ✅
+7. ~~Offline fallback dark mode + i18n + countdown~~ ✅
 
 **Priorità Bassa** (nice to test):
 7. HTTP LAN (manual install)
 8. Troubleshooting scenarios
-9. Offline auto-retry (countdown 10s)
+9. ~~Offline auto-retry (countdown 10s)~~ ✅
 
 ---
 
-### 🧪 Test: Offline Fallback Page
+### 🧪 Test: Offline Fallback Page — ✅ Testato 2026-05-27
 
 **Prerequisiti**: frontend avviato (`npm run dev` o build + preview)
 
-**Test 1: Verifica registrazione SW**
+**Test 1: Verifica registrazione SW** ✅
 1. Apri `http://localhost:5173` (o porta backend se build)
 2. DevTools → Application → Service Workers
-3. ✅ Verifica: `sw.js` registrato e "activated and is running"
-4. ✅ Verifica: Cache Storage → `offline-fallback` contiene `offline.html`
+3. ✅ `sw.js` registrato e "activated and is running"
+4. ✅ Cache Storage → `offline-fallback` contiene `offline.html`
 
-**Test 2: Simulazione server down**
+**Test 2: Simulazione server down** ✅
 1. Apri il sito normalmente (almeno una volta, per registrare il SW)
 2. Ferma il server (Ctrl+C sul backend/frontend)
 3. Ricarica la pagina (F5 o Cmd+R)
-4. ✅ Verifica: appare la pagina offline con:
-   - Sfondo animato (onde verdi + linee chart che si disegnano)
-   - Icona wifi-off grande con animazione pulse
-   - Titolo + messaggio nella lingua del browser
-   - Bottone "Riprova"
-   - Countdown "Prossimo tentativo tra Xs" con secondi che scendono
-   - Toolbar in alto a dx: selettore lingua, toggle tema, link docs
-5. ✅ Verifica dark mode: toggle nel toolbar deve switchare light/dark
-6. ✅ Verifica lingua: cambiare nel dropdown → testo si aggiorna
+4. ✅ Pagina offline appare con sfondo animato, wifi-off, countdown, toolbar
+5. ✅ Dark mode: toggle nel toolbar switcha light/dark
+6. ✅ Lingua: cambiare nel dropdown → testo si aggiorna
 
-**Test 3: Auto-reconnect con countdown**
-1. Con la pagina offline aperta, osserva il countdown (10s → 9s → 8s…)
-2. Riavvia il server prima che arrivi a 0
-3. ✅ Verifica: quando il countdown arriva a 0, la pagina si ricarica automaticamente
-4. Alternativa: click "Riprova" → ricarica immediatamente (resetta countdown)
+**Test 3: Auto-reconnect con countdown** ✅
+1. ✅ Countdown visibile (10s → 9s → 8s…)
+2. ✅ Click "Riprova" → ricarica immediatamente
+3. ✅ Al countdown=0 → ping GET /api/v1/system/health → reload automatico
 
-**Test 4: Nessun impatto su navigazione normale**
-1. Server attivo, naviga normalmente nell'app
-2. ✅ Verifica: nessun rallentamento o comportamento anomalo
-3. DevTools → Network: le request NON passano dalla cache del SW (solo navigate fallite)
+**Test 4: Nessun impatto su navigazione normale** ✅
+1. ✅ Server attivo, navigazione fluida senza rallentamenti
+2. ✅ Request non passano dalla cache del SW
 
-**Test 5: Update SW (auto-versioning)**
-1. Modifica `frontend/static/offline.html` (es. cambia un testo)
-2. Rifare build (`npm run build` o `./dev.py frontend build`)
-3. Verifica: `head -2 frontend/build/sw.js` → hash in riga 2 è cambiato
-4. Ricarica la pagina
-5. DevTools → Application → Service Workers
-6. ✅ Verifica: "waiting to activate" appare (nuovo SW in attesa)
-7. Chiudi e riapri il tab → il nuovo SW è attivo, offline.html aggiornata
+**Test 5: Update SW (auto-versioning)** ✅
+1. ✅ Modifica offline.html → rebuild → hash cambia in sw.js
+2. ✅ Browser rileva sw.js diverso → "waiting to activate"
+3. ✅ Chiudi/riapri tab → nuovo SW attivo
+
+**Bugfix 2026-05-27**: theme-color nella offline page non aggiornava la title bar PWA al toggle tema.
+- **Causa**: mancava `<meta name="theme-color">` in offline.html + `applyTheme()` non lo aggiornava
+- **Fix**: aggiunto meta tag + update dinamico in JS (`#1a4031` light / `#156534` dark)
 

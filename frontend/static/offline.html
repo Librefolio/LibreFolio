@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1a4031" />
     <title>LibreFolio — Offline</title>
     <link href="/fonts/noto-color-emoji/noto-color-emoji.css" rel="stylesheet" />
     <style>
@@ -515,6 +516,9 @@
             document.documentElement.classList.toggle('dark', theme === 'dark');
             document.getElementById('icon-sun').style.display = theme === 'dark' ? 'none' : 'block';
             document.getElementById('icon-moon').style.display = theme === 'dark' ? 'block' : 'none';
+            // Update PWA title bar color
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', theme === 'dark' ? '#156534' : '#1a4031');
         }
 
         let currentTheme = getPreferredTheme();
