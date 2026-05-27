@@ -83,6 +83,12 @@ Check that:
 - Check if your account is activated
 - Clear browser cookies and try again
 
+### 📱 Can I use LibreFolio as a mobile app?
+
+Yes! LibreFolio supports **PWA (Progressive Web App)** installation. You can add it to your home screen on Android, iOS, or desktop for a full-screen, app-like experience — no app store needed.
+
+See the [Install as App (PWA)](../user/pwa.md) guide for step-by-step instructions.
+
 ## 🆘 Need More Help?
 
 - [Full Documentation](../index.md)

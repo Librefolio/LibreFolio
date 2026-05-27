@@ -213,7 +213,7 @@ class JustETFProvider(AssetSourceProvider):
     @property
     def test_cases(self) -> list[dict]:
         """Test cases for the generic provider test framework.
-        
+
         Only EUR is included here because the generic test expects get_current_value
         to succeed for all cases. Non-EUR currencies only support history (no current).
         Multi-currency is validated via the search test and manual testing.
@@ -253,8 +253,7 @@ class JustETFProvider(AssetSourceProvider):
         currency = self._get_currency(provider_params)
         if currency != "EUR":
             raise AssetSourceError(
-                f"Current price only available in EUR (gettex exchange). "
-                f"For {currency} prices, only historical data is available.",
+                f"Current price only available in EUR (gettex exchange). " f"For {currency} prices, only historical data is available.",
                 "NOT_SUPPORTED",
                 {"currency": currency, "supported_for_current": "EUR"},
             )

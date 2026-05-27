@@ -178,7 +178,10 @@
     "faq": "Preguntas Frecuentes",
     "reportBug": "Reportar Bug",
     "supportProject": "Apoyar el Proyecto",
-    "buyMeACoffee": "Invítame a un Café"
+    "buyMeACoffee": "Invítame a un Café",
+    "installApp": "Instalar App",
+    "installAppIos": "Toca Compartir, luego \"Añadir a pantalla de inicio\"",
+    "installAppDesktop": "Busca el icono de instalación (⊕) en la barra de direcciones"
   },
   "dashboard": {
     "welcomeBack": "Bienvenido de nuevo",
@@ -619,7 +622,8 @@
       "stateEdit": "editar",
       "stateDel": "eliminar",
       "suggestLightbulb": "Mostrar sugerencia",
-      "partnerInaccessible": "Contraparte en bróker inaccesible"
+      "partnerInaccessible": "Contraparte en bróker inaccesible",
+      "wacCalcFailed": "Cálculo WAC falló para algunas filas"
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
