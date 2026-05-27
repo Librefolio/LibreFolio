@@ -37,9 +37,9 @@ related: [entities/api-router]
 ### Ports
 | Port | Use |
 |------|-----|
-| 8000 | Production API + static |
-| 8001 | Test server |
-| 8002 | MkDocs dev server |
+| 6040 | Production API + static |
+| 6041 | Test server |
+| 6042 | MkDocs dev server |
 | 5173 | SvelteKit HMR (dev) |
 
 ### Architecture

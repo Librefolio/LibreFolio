@@ -18,8 +18,8 @@ Data Directory Structure:
 Environment Variables (see .env):
     LIBREFOLIO_DATA_DIR: Override production data directory (default: ./backend/data/prod)
     LIBREFOLIO_TEST_MODE: When "1", use test data directory (backend/data/test/)
-    PORT: Production server port (default: 8000)
-    TEST_PORT: Test server port (default: 8001)
+    PORT: Production server port (default: 6040)
+    TEST_PORT: Test server port (default: 6041)
     LOG_LEVEL: Logging level (default: INFO)
     PORTFOLIO_BASE_CURRENCY: Base currency ISO 4217 (default: EUR)
     PREVIEW_CACHE_MAX_MB: Image preview cache size in MB (default: 50)
@@ -94,8 +94,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""
 
     # Server
-    PORT: int = 8000
-    TEST_PORT: int = 8001
+    PORT: int = 6040
+    TEST_PORT: int = 6041
 
     # Logging
     LOG_LEVEL: str = "INFO"

@@ -71,8 +71,8 @@ Registros de la aplicación en formato JSON estructurado (vía `structlog`).
 |----------|---------|-------------|
 | `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Sobrescribe la ruta del directorio de datos de producción |
 | `LIBREFOLIO_TEST_MODE` | `0` | Establézcalo en `1` para usar `backend/data/test/` en lugar de `prod/` |
-| `PORT` | `8000` | Puerto del servidor de producción |
-| `TEST_PORT` | `8001` | Puerto del servidor de prueba (usado cuando `LIBREFOLIO_TEST_MODE=1`) |
+| `PORT` | `6040` | Puerto del servidor de producción |
+| `TEST_PORT` | `6041` | Puerto del servidor de prueba (usado cuando `LIBREFOLIO_TEST_MODE=1`) |
 
 ---
 

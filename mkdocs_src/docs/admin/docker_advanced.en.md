@@ -44,7 +44,7 @@ The `docker-compose.yml` file defines the service and persistent data directory.
 ### 🔧 Service: `librefolio`
 
 - 🏗️ **`build: .`**: Builds from the `Dockerfile` in the project root.
-- 🔌 **`ports`**: Maps the host port (`${PORT:-8000}`) to the container's port `8000`, and `${TEST_PORT:-8001}` to `8001` for test mode.
+- 🔌 **`ports`**: Maps the host port (`${PORT:-6040}`) to the container's port `6040`, and `${TEST_PORT:-6041}` to `6041` for test mode.
 - 📂 **`volumes`**: A bind mount `./LibreFolio-data` → `/app/backend/data/prod-docker` persists database, uploads, broker reports, and logs **in the same directory as `docker-compose.yml`**.
 - 📝 **`env_file: .env`**: Loads all configuration from the `.env` file (copied from `.env.example`).
 - 🌍 **`environment`**: Overrides only Docker-specific values: `LIBREFOLIO_DATA_DIR` (container path) and `HOST=0.0.0.0`.
@@ -180,12 +180,12 @@ The Docker Compose configuration exposes **two ports**:
 
 | Port | Purpose | Database |
 |------|---------|----------|
-| `8000` | Production server (started by container CMD) | `prod-docker/sqlite/app.db` (persistent volume) |
-| `8001` | Test server (started manually via `docker exec`) | `test/sqlite/app.db` (ephemeral) |
+| `6040` | Production server (started by container CMD) | `prod-docker/sqlite/app.db` (persistent volume) |
+| `6041` | Test server (started manually via `docker exec`) | `test/sqlite/app.db` (ephemeral) |
 
 ### Starting the Test Server
 
-1. **Start the container** (production server starts automatically on `:8000`):
+1. **Start the container** (production server starts automatically on `:6040`):
 
     ```bash
     docker compose up -d
@@ -197,13 +197,13 @@ The Docker Compose configuration exposes **two ports**:
     ./dev.py docker exec test db populate --force --with-static
     ```
 
-3. **Start the test server** on port 8001:
+3. **Start the test server** on port 6041:
 
     ```bash
     ./dev.py docker exec server --test
     ```
 
-4. **Access** at **`http://localhost:8001`**
+4. **Access** at **`http://localhost:6041`**
 
     Test credentials:
 
@@ -247,8 +247,8 @@ services:
     # then drops to 'librefolio' user via gosu (same pattern as postgres/redis).
     restart: unless-stopped
     ports:
-      - "${PORT:-8000}:8000"           # (2) Production port — change via PORT in .env
-      - "${TEST_PORT:-8001}:8001"      # (3) Test server port (optional)
+      - "${PORT:-6040}:6040"           # (2) Production port — change via PORT in .env
+      - "${TEST_PORT:-6041}:6041"      # (3) Test server port (optional)
     volumes:
       - ./LibreFolio-data:/app/backend/data/prod-docker  # (4) Persistent data (bind mount)
     env_file: .env                     # (5) All config from .env file
@@ -256,7 +256,7 @@ services:
       - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker  # Docker-specific override
       - HOST=0.0.0.0
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
       interval: 30s
       timeout: 10s
       start_period: 15s
@@ -302,8 +302,8 @@ All configuration is managed in the `.env` file (copied from `.env.example`). Th
 
 | Variable | Default | Description | Where |
 |----------|---------|-------------|-------|
-| `PORT` | `8000` | Host port for production server | `.env` |
-| `TEST_PORT` | `8001` | Host port for test server | `.env` |
+| `PORT` | `6040` | Host port for production server | `.env` |
+| `TEST_PORT` | `6041` | Host port for test server | `.env` |
 | `UID` | `1000` | Container user UID (must match data directory owner) | `.env` |
 | `GID` | `1000` | Container user GID (must match data directory owner) | `.env` |
 | `LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `.env` |

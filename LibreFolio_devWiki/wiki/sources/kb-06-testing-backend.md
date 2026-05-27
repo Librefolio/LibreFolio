@@ -12,13 +12,13 @@ related_features: [F-068]
 
 ## Summary
 
-Comprehensive backend test architecture guide covering: test structure (7 categories across `backend/test_scripts/`), `_TestingServerManager` (uvicorn as thread, not subprocess, for pytest-cov coverage tracking on port 8001), 276+ API tests, mock data via `populate_mock_data.py`, 3-layer coverage (backend/frontend/combined), provider filtering (`--providers`/`--exclude-providers` via regex discovery), and yfinance retry logic with exponential backoff.
+Comprehensive backend test architecture guide covering: test structure (7 categories across `backend/test_scripts/`), `_TestingServerManager` (uvicorn as thread, not subprocess, for pytest-cov coverage tracking on port 6041), 276+ API tests, mock data via `populate_mock_data.py`, 3-layer coverage (backend/frontend/combined), provider filtering (`--providers`/`--exclude-providers` via regex discovery), and yfinance retry logic with exponential backoff.
 
 ## Key insights extracted
 
 - **Backend test isolation** (each test creates its own user via `unique_id()`) → [[concepts/backend-test-isolation]] created
 - **Coverage tracking architecture** (uvicorn in thread, not subprocess, enables pytest-cov) → [[features/F-068]] enriched
-- **Test server on port 8001** (isolated from production port 8000) → [[features/F-068]] enriched
+- **Test server on port 6041** (isolated from production port 6040) → [[features/F-068]] enriched
 - **Mock data deterministic** (`populate_mock_data.py` creates e2e_test_user, 3 brokers, 4 assets, 10+ transactions) → [[features/F-068]] enriched
 - **Provider filtering** (dynamic regex discovery without importing modules, avoids cache/logger side effects) → [[features/F-068]] enriched
 - **Coverage analysis** (uncovered functions classification HIGH/MEDIUM/LOW/INFRA) → [[features/F-068]] enriched

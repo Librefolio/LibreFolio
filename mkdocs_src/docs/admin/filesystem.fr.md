@@ -71,8 +71,8 @@ Journaux de l'application au format JSON structuré (via `structlog`).
 |----------|---------|-------------|
 | `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Remplace le chemin du répertoire de données de production |
 | `LIBREFOLIO_TEST_MODE` | `0` | Régler sur `1` pour utiliser `backend/data/test/` au lieu de `prod/` |
-| `PORT` | `8000` | Port du serveur de production |
-| `TEST_PORT` | `8001` | Port du serveur de test (utilisé quand `LIBREFOLIO_TEST_MODE=1`) |
+| `PORT` | `6040` | Port du serveur de production |
+| `TEST_PORT` | `6041` | Port du serveur de test (utilisé quand `LIBREFOLIO_TEST_MODE=1`) |
 
 ---
 

@@ -21,7 +21,7 @@
  * Part D — Regressions:
  *   D1-D8 covered by tx-broker-access.spec.ts + transactions-table.spec.ts
  *
- * Prerequisites: backend test mode (port 8001), mock data populated.
+ * Prerequisites: backend test mode (port 6041), mock data populated.
  * Mock data contract: populate_mock_data.py creates:
  *   - "delete-safe" tagged TX: DEPOSIT on IB, FEE on Directa, TRANSFER ETH IB↔Coinbase
  *   - "access-test" tagged TX: Asym-a (IB↔Directa), Asym-b (IB↔Coinbase),

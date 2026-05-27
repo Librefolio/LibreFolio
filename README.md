@@ -41,7 +41,7 @@ cp .env.example .env    # Configure environment
 ./dev.py server         # Start development server
 ```
 
-Access: **http://localhost:8000** — API Docs: **http://localhost:8000/api/v1/docs**
+Access: **http://localhost:6040** — API Docs: **http://localhost:6040/api/v1/docs**
 
 `./dev.py --help` shows all available commands.
 
@@ -61,7 +61,7 @@ cp .env.example .env       # Configure environment
 docker compose up -d       # Start container
 ```
 
-Access: **http://localhost:8000** — The first registered user becomes administrator.
+Access: **http://localhost:6040** — The first registered user becomes administrator.
 
 For reverse proxy, test mode, and advanced options see the [Docker Guide](https://alfystar.github.io/LibreFolio/admin/docker_advanced/).
 

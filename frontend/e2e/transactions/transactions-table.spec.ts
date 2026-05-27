@@ -11,7 +11,7 @@
  * - Selection toolbar (Edit/Clone/Delete)
  * - Refresh button
  *
- * Prerequisites: backend test mode (port 8001), mock data populated.
+ * Prerequisites: backend test mode (port 6041), mock data populated.
  */
 import {expect, test, type Page} from '@playwright/test';
 import {login, navigateTo} from '../fixtures/auth-helpers';

@@ -8,9 +8,9 @@ description: "Use this skill when the user needs to start/stop the development s
 ## Server
 
 ```bash
-./dev.py server                        # Production mode (port 8000)
-./dev.py server --test                 # Test mode (port 8001, debug=true)
-./dev.py server --debug                # Debug mode (port 8000, debug=true)
+./dev.py server                        # Production mode (port 6040)
+./dev.py server --test                 # Test mode (port 6041, debug=true)
+./dev.py server --debug                # Debug mode (port 6040, debug=true)
 ./dev.py server --force                # Kill zombie processes on the port first
 ./dev.py server --workers 4            # Multi-worker (default: 1)
 ./dev.py server --coverage             # Start under coverage tracking (for E2E tests)
@@ -65,8 +65,8 @@ When `--coverage` is used, `dev.py` replaces itself via `os.execvpe()` with `cov
 ```
 
 ### Development workflow
-Terminal 1: `./dev.py server` (backend on 8000, serves static build)
-Terminal 2: `./dev.py front dev` (Vite HMR on 5173, proxies API to 8000)
+Terminal 1: `./dev.py server` (backend on 6040, serves static build)
+Terminal 2: `./dev.py front dev` (Vite HMR on 5173, proxies API to 6040)
 
 ## API Sync
 
