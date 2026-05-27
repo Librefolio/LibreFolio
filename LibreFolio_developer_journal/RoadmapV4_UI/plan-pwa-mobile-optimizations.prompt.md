@@ -147,6 +147,23 @@ pwa-docs → install-button
   - Theme-color dinamico dark: **implementato** (vedi sopra)
   - Fallback page offline: **analisi sotto**
 
+**Test utente 2026-05-27 22:47**: Test mobile su server reale ✅ (con fix)
+- **iOS PWA installato da Safari** ✅ — si aggiunge alla home e funziona
+- **BUG iOS**: contenuto sotto la status bar (orario/batteria) → non cliccabile
+  - **Causa**: `viewport-fit=cover` senza `env(safe-area-inset-top)` nel CSS
+  - **Fix**: Aggiunta classe `.safe-top` in `app.css` (padding-top env safe-area)
+  - Applicata a: `Sidebar.svelte` (nav), `Header.svelte`, login toolbar (`.safe-top-offset`)
+- **BUG iOS**: bandiere lingua non visibili (né in browser né in PWA Safari)
+  - **Causa**: `font-family: 'Noto Color Emoji'` prima di Apple Color Emoji — iOS ignora font emoji custom
+  - **Fix**: Riordinato `.emoji-flag`: `'Apple Color Emoji', 'Noto Color Emoji', 'Segoe UI Emoji'`
+  - iOS usa emoji Apple nativi (hanno tutte le flag), Windows/Linux fallback a Noto
+- **Android install**: bottone non compare su HTTP LAN
+  - **Causa**: Chrome richiede HTTPS per `beforeinstallprompt` (design di sicurezza)
+  - "Aggiungi a Home" da menu Chrome su HTTP = solo bookmark, non PWA
+  - **Fix (docs)**: Aggiunto hint specifico Android nel HelpMenu (`help.installAppAndroid`) in 4 lingue
+  - Detecta `isAndroid` → mostra messaggio "HTTPS richiesto, usa menu ⋮ come scorciatoia"
+  - Per installazione PWA completa su Android → serve HTTPS (Tailscale, reverse proxy)
+
 ### 📋 Analisi: Offline Fallback Page
 
 **Richiesta**: mostrare una pagina "Server non raggiungibile" con estetica LibreFolio quando l'endpoint è offline.
