@@ -42,7 +42,7 @@
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/brokerStore';
     import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
-    import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
+    import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getTransactionTypeIconUrl, getCostBasisRule} from '$lib/stores/transactionTypeStore';
     import {findPromoteMatch, type PromoteContext} from '$lib/stores/transactionTypeStore';
     import PromoteMergeModal from './PromoteMergeModal.svelte';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
@@ -81,12 +81,18 @@
         description: string;
         asset_event_id: number | null;
         cost_basis_override: {code: string; amount: string} | null;
+        /** UI-only: tracks whether cost_basis is auto-calculated, manual, or not applicable.
+         *  null = field not applicable for this type/side (forbidden).
+         *  'auto' = WAC will be calculated automatically.
+         *  'manual' = user provided explicit value. */
+        cost_basis_mode: 'auto' | 'manual' | null;
     }
 
     /** Pending operation — one per row in the BulkModal (visible + hidden partners).
      *  Tagged union: 'create' for new rows, 'edit' for existing DB rows.
-     *  If `pairedWith` is set, this op is the hidden partner of a paired row. */
-    type PendingOp = ({op: 'create'; link_uuid: string | null} | {op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean}) & {tempId: string; fields: DraftFields; pairedWith?: string; /** W4b: partner on inaccessible broker — read-only sentinel */ inaccessible?: boolean};
+     *  If `pairedWith` is set, this op is the hidden partner of a paired row.
+     *  `link_uuid` is the shared pairing UUID for backend payloads (WAC, commit). */
+    type PendingOp = ({op: 'create'} | {op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean}) & {tempId: string; fields: DraftFields; pairedWith?: string; link_uuid?: string | null; /** W4b: partner on inaccessible broker — read-only sentinel */ inaccessible?: boolean};
 
     interface Props {
         open: boolean;
@@ -143,6 +149,7 @@
             description: '',
             asset_event_id: null,
             cost_basis_override: null,
+            cost_basis_mode: null,
         };
     }
 
@@ -160,6 +167,22 @@
         if (cash && rule.cashSign === 'negative' && Number(cash.amount) < 0) {
             cash = {code: cash.code, amount: String(Math.abs(Number(cash.amount)))};
         }
+        const cbo = tx.cost_basis_override
+            ? typeof tx.cost_basis_override === 'object' && tx.cost_basis_override !== null
+                ? {code: String((tx.cost_basis_override as any).code ?? ''), amount: String((tx.cost_basis_override as any).amount ?? '')}
+                : {amount: String(tx.cost_basis_override), code: tx.cash?.code ?? ''}
+            : null;
+        // Derive cost_basis_mode from backend rules
+        // For DB rows: if cost_basis is present → 'manual'; if absent but applicable → still 'manual'
+        // (existing rows without cost_basis were saved intentionally or before the feature existed).
+        // Only NEW creates get 'auto' (see applyFormPayload fallback).
+        const rawQty = Number(tx.quantity);
+        const side: 'from' | 'to' | 'self' = tx.related_transaction_id != null ? (rawQty < 0 ? 'from' : 'to') : 'self';
+        const cbRule = getCostBasisRule(tx.type, side);
+        let cbMode: 'auto' | 'manual' | null = null;
+        if (cbRule !== 'forbidden') {
+            cbMode = 'manual';
+        }
         return {
             broker_id: tx.broker_id,
             asset_id: tx.asset_id ?? null,
@@ -170,11 +193,8 @@
             tags: [...(tx.tags ?? [])],
             description: tx.description ?? '',
             asset_event_id: tx.asset_event_id ?? null,
-            cost_basis_override: tx.cost_basis_override
-                ? typeof tx.cost_basis_override === 'object' && tx.cost_basis_override !== null
-                    ? {code: String((tx.cost_basis_override as any).code ?? ''), amount: String((tx.cost_basis_override as any).amount ?? '')}
-                    : {amount: String(tx.cost_basis_override), code: tx.cash?.code ?? ''}
-                : null,
+            cost_basis_override: cbo,
+            cost_basis_mode: cbMode,
         };
     }
 
@@ -272,6 +292,15 @@
     let wacFetchPromise: Promise<void> | null = null;
     let wacFetchResolve: (() => void) | null = null;
 
+    /** Single source of truth: WAC results per auto-op (keyed by tempId).
+     *  Contains full details (qualifying_txs) for FormModal display. */
+    type WacResultEntry = {
+        wac: {code: string; amount: string} | null;
+        qualifying_txs: Array<Record<string, any>>;
+        missing_pairs: string[];
+    };
+    let wacResults = $state<Map<string, WacResultEntry>>(new Map());
+
     $effect(() => {
         const _fp = wacFingerprint;
         const _autoItems = autoWacItems;
@@ -305,8 +334,9 @@
 
         try {
             // Build pending_txs from all non-delete ops
-            const pendingTxs = ops
-                .filter((o) => !(o.op === 'edit' && (o as any).markedDelete))
+            const nonDeleteOps = ops.filter((o) => !(o.op === 'edit' && (o as any).markedDelete));
+
+            const pendingTxs = nonDeleteOps
                 .map((o) => {
                     const f = o.fields;
                     return {
@@ -318,6 +348,7 @@
                         quantity: f.quantity,
                         cash: f.cash,
                         cost_basis_override: f.cost_basis_override,
+                        link_uuid: o.link_uuid ?? undefined,
                     };
                 })
                 .filter((p) => p.asset_id != null);
@@ -337,16 +368,24 @@
                     items,
                     pending_txs: pendingTxs as any,
                     excluded_tx_ids: excludedTxIds,
-                    include_details: false,
+                    include_details: true,
                 },
                 {signal: wacAbortController.signal},
             );
 
-            // Write results back to matching ops
+            // Write results back to matching ops + wacResults map
             const results = (resp as any)?.items ?? [];
+            const nextMap = new Map<string, WacResultEntry>();
             for (let i = 0; i < autoItems.length && i < results.length; i++) {
                 const item = autoItems[i];
                 const result = results[i];
+                // Store full result in map (always, even if wac is null)
+                nextMap.set(item.tempId, {
+                    wac: result?.wac ?? null,
+                    qualifying_txs: result?.wac_qualifying_txs ?? [],
+                    missing_pairs: result?.wac_missing_pairs ?? [],
+                });
+                // Write WAC value into the op's fields
                 if (result?.wac) {
                     // Find the op in current ops array (may have changed during fetch)
                     const opIndex = ops.findIndex((o) => o.tempId === item.tempId);
@@ -358,6 +397,8 @@
                     }
                 }
             }
+            wacResults = nextMap;
+
         } catch (e: any) {
             if (e?.name !== 'AbortError') {
                 console.error('WAC batch fetch failed:', e);
@@ -422,7 +463,7 @@
                     // Bug6-fix: reset quantity when the type requires qty=0 (e.g. INTEREST)
                     const rule = getTypeRule(r.type);
                     if (rule.quantityRule === 'zero') c.quantity = '0';
-                    if (sharedLinkUuid) (c as any).link_uuid = sharedLinkUuid;
+                    if (sharedLinkUuid) c.link_uuid = sharedLinkUuid;
                     return c;
                 });
                 return {rows: cloned, autoForm: cloned.length === 1 ? 'create' : null};
@@ -639,6 +680,10 @@
             }
             // Mark "to" as hidden partner of "from"
             opArr[toIdx].pairedWith = opArr[fromIdx].tempId;
+            // Generate shared link_uuid for WAC payload
+            const sharedUuid = generateUUID();
+            opArr[fromIdx].link_uuid = sharedUuid;
+            opArr[toIdx].link_uuid = sharedUuid;
             toHide.add(toIdx);
         }
         // For remaining edit drafts with DB partner not in batch, create hidden partner op from txStore
@@ -654,11 +699,14 @@
                 const mainTx = txStoreGet(d.txId);
                 const pBrokerId = mainTx?.partner_broker_id;
                 if (pBrokerId) {
+                    const sharedUuid = generateUUID();
+                    d.link_uuid = sharedUuid;
                     const placeholderOp: PendingOp = {
                         op: 'edit', txId: relId, markedDelete: false,
                         tempId: generateUUID(),
                         fields: {type: mainTx.type, broker_id: pBrokerId, date: mainTx.date} as any,
                         pairedWith: d.tempId,
+                        link_uuid: sharedUuid,
                         inaccessible: true,
                     };
                     opArr.push(placeholderOp);
@@ -666,10 +714,13 @@
                 continue;
             }
             // Create a hidden edit op for the partner
+            const sharedUuid = generateUUID();
+            d.link_uuid = sharedUuid;
             const partnerOp: PendingOp = {
                 op: 'edit', txId: relId, markedDelete: false,
                 tempId: generateUUID(), fields: fieldsFromTx(partnerTx),
                 pairedWith: d.tempId,
+                link_uuid: sharedUuid,
             };
             opArr.push(partnerOp);
         }
@@ -678,7 +729,7 @@
         for (let i = 0; i < opArr.length; i++) {
             const op = opArr[i];
             if (op.op !== 'create' || op.pairedWith) continue;
-            const uuid = (op as any).link_uuid as string | undefined;
+            const uuid = op.link_uuid as string | undefined;
             if (!uuid) continue;
             const prev = linkUuidMap.get(uuid);
             if (prev !== undefined) {
@@ -735,6 +786,7 @@
     }
 
     function applyFormPayload(target: DraftFields, p: Record<string, unknown>) {
+        const prevType = target.type; // Capture before overwrite for type-change detection
         if (typeof p.broker_id === 'number') target.broker_id = p.broker_id;
         if (typeof p.type === 'string') target.type = p.type as TransactionTypeCode;
         if (typeof p.date === 'string') target.date = p.date;
@@ -745,6 +797,25 @@
         target.description = typeof p.description === 'string' ? p.description : '';
         target.asset_event_id = (p.asset_event_id as number | null | undefined) ?? null;
         target.cost_basis_override = p.cost_basis_override && typeof p.cost_basis_override === 'object' && 'code' in (p.cost_basis_override as any) ? (p.cost_basis_override as {code: string; amount: string}) : null;
+
+        // Derive cost_basis_mode with backend-driven guardrail
+        const typeChanged = target.type !== prevType;
+        const qty = Number(target.quantity ?? 0);
+        const side: 'from' | 'to' | 'self' = qty < 0 ? 'from' : qty > 0 ? 'to' : 'self';
+        const cbRule = getCostBasisRule(target.type, side);
+
+        if (cbRule === 'forbidden' || (cbRule === 'required_qty_pos' && qty <= 0)) {
+            // Guardrail: forbidden OR required_qty_pos with non-positive qty → no cost_basis
+            target.cost_basis_mode = null;
+            target.cost_basis_override = null;
+        } else if (typeof p._cost_basis_mode === 'string') {
+            // Explicit mode from FormModal (covers both auto and manual)
+            target.cost_basis_mode = p._cost_basis_mode as 'auto' | 'manual';
+        } else if (target.cost_basis_mode === null || typeChanged) {
+            // Re-derive: mode was null (fresh from defaultFields) or type actually changed
+            target.cost_basis_mode = target.cost_basis_override ? 'manual' : 'auto';
+        }
+        // else: target already has 'auto' or 'manual' and no explicit override → preserve
     }
 
     // =========================================================================
@@ -772,7 +843,7 @@
             op: 'create',
             tempId: generateUUID(),
             fields: {...src.fields, date: todayIso()},
-            link_uuid: src.op === 'create' && src.link_uuid ? generateUUID() : null,
+            link_uuid: getTypeRule(src.fields.type as TransactionTypeCode)?.requiresPair ? generateUUID() : null,
         };
         // Clone hidden partner if exists
         const srcPartner = getPartnerOp(tempId);
@@ -854,17 +925,17 @@
 
             // Main row → standalone type
             row.fields.type = (isFrom ? fromType : toType) as TransactionTypeCode;
-            (row as any).link_uuid = null;
+            row.link_uuid = null;
 
             // Partner → standalone type, becomes visible
             partnerOp.fields.type = (isFrom ? toType : fromType) as TransactionTypeCode;
             partnerOp.pairedWith = undefined;
-            if (partnerOp.op === 'create') (partnerOp as any).link_uuid = null;
+            if (partnerOp.op === 'create') partnerOp.link_uuid = null;
 
             ops = [...ops]; // trigger reactivity
         } else if (row.op === 'create' && row.link_uuid) {
             // Case B legacy: link_uuid shared between two visible create ops
-            const partner = ops.find((o) => o !== row && o.op === 'create' && (o as any).link_uuid === row.link_uuid);
+            const partner = ops.find((o) => o !== row && o.op === 'create' && o.link_uuid === row.link_uuid);
             if (partner) {
                 const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
                 if (!splitTypes) return;
@@ -874,8 +945,8 @@
                 const isFrom = row.fields.type === 'TRANSFER' ? qty < 0 : cashAmt < 0;
                 row.fields.type = (isFrom ? fromType : toType) as TransactionTypeCode;
                 partner.fields.type = (isFrom ? toType : fromType) as TransactionTypeCode;
-                (row as any).link_uuid = null;
-                (partner as any).link_uuid = null;
+                row.link_uuid = null;
+                partner.link_uuid = null;
                 ops = [...ops];
             }
         }
@@ -979,7 +1050,7 @@
 
     /** Convert a PendingOp to the shared TxFields interface. */
     function opToTxFields(d: PendingOp): TxFields {
-        return {...d.fields, link_uuid: d.op === 'create' ? d.link_uuid : null};
+        return {...d.fields, link_uuid: d.link_uuid ?? null};
     }
 
     /** Derive the effective display status of a draft row.
@@ -1136,7 +1207,9 @@
             return;
         }
 
-        // Pre-commit guard: ensure all auto WAC items have values
+        // Pre-commit guard: ensure WAC fetch is complete before committing.
+        // We wait for any in-flight fetch and force one if needed, but never block the commit
+        // — the backend will validate and reject if cost_basis is truly required but missing.
         const pendingAutoItems = autoWacItems.filter((o) => o.fields.cost_basis_override === null);
         if (pendingAutoItems.length > 0) {
             // If WAC fetch is in flight, wait for it
@@ -1146,16 +1219,9 @@
             // Check again after waiting
             const stillPending = autoWacItems.filter((o) => o.fields.cost_basis_override === null);
             if (stillPending.length > 0) {
-                // Force a sync fetch (no debounce)
+                // Force a sync fetch (no debounce) — best effort
                 if (wacDebounceTimer) clearTimeout(wacDebounceTimer);
                 await fetchBatchWac(stillPending);
-                // Final check
-                const finalPending = autoWacItems.filter((o) => o.fields.cost_basis_override === null);
-                if (finalPending.length > 0) {
-                    toasts.error($t('transactions.bulk.wacCalcFailed') || 'WAC calculation failed for some rows');
-                    committing = false;
-                    return;
-                }
             }
         }
 
@@ -1469,8 +1535,11 @@
                 filterable: false,
                 hiddenByDefault: false,
                 cell: (row): CellContent => {
-                    const mode = row.fields.cost_basis_mode;
-                    const cbo = row.fields.cost_basis_override;
+                    // For paired rows (sender visible), cost_basis lives on the receiver (hidden partner)
+                    const partner = getPartnerOp(row.tempId);
+                    const source = partner ?? row;
+                    const mode = source.fields.cost_basis_mode;
+                    const cbo = source.fields.cost_basis_override;
 
                     // mode null → field not applicable for this type
                     if (mode === null) {
@@ -1878,15 +1947,20 @@
             return;
         }
 
+        // Propagate cost_basis_mode to receiver item if present at top level
+        if (typeof payload._cost_basis_mode === 'string' && !('_cost_basis_mode' in items[1])) {
+            items[1]._cost_basis_mode = payload._cost_basis_mode;
+        }
+
         // "From" side — visible row
         const fromOp = createOpEmpty();
         applyFormPayload(fromOp.fields, items[0]);
-        if (typeof items[0].link_uuid === 'string' && fromOp.op === 'create') (fromOp as any).link_uuid = items[0].link_uuid;
+        if (typeof items[0].link_uuid === 'string' && fromOp.op === 'create') fromOp.link_uuid = items[0].link_uuid;
 
         // "To" side — hidden partner op
         const toOp = createOpEmpty();
         applyFormPayload(toOp.fields, items[1]);
-        if (typeof items[1].link_uuid === 'string' && toOp.op === 'create') (toOp as any).link_uuid = items[1].link_uuid;
+        if (typeof items[1].link_uuid === 'string' && toOp.op === 'create') toOp.link_uuid = items[1].link_uuid;
         toOp.pairedWith = fromOp.tempId;
 
         ops = [...ops, fromOp, toOp];
@@ -1900,14 +1974,18 @@
             return;
         }
 
+        // Note: do NOT propagate payload._cost_basis_mode to items here.
+        // For patches, the existing op's cost_basis_mode is preserved by applyFormPayload
+        // (it only re-derives when mode is null or type changes).
+
         // Update main op
         ops = ops.map((d) => {
             if (d.tempId !== tempId) return d;
             const merged = {...d, fields: {...d.fields}};
             applyFormPayload(merged.fields, items[0]);
             // B6: sync link_uuid
-            const sharedUuid = (items[0].link_uuid as string) ?? (items[1].link_uuid as string) ?? (d as any).link_uuid;
-            if (sharedUuid && d.op === 'create') (merged as any).link_uuid = sharedUuid;
+            const sharedUuid = (items[0].link_uuid as string) ?? (items[1].link_uuid as string) ?? d.link_uuid;
+            if (sharedUuid) merged.link_uuid = sharedUuid;
             return merged;
         });
 
@@ -1919,8 +1997,8 @@
                 const merged = {...d, fields: {...d.fields}};
                 applyFormPayload(merged.fields, items[1]);
                 // B6: sync link_uuid on partner
-                const sharedUuid = (items[0].link_uuid as string) ?? (items[1].link_uuid as string) ?? (d as any).link_uuid;
-                if (sharedUuid && d.op === 'create') (merged as any).link_uuid = sharedUuid;
+                const sharedUuid = (items[0].link_uuid as string) ?? (items[1].link_uuid as string) ?? d.link_uuid;
+                if (sharedUuid) merged.link_uuid = sharedUuid;
                 return merged;
             });
         } else {
@@ -1929,7 +2007,7 @@
             applyFormPayload(toOp.fields, items[1]);
             toOp.pairedWith = tempId;
             const sharedUuid = (items[0].link_uuid as string) ?? (items[1].link_uuid as string);
-            if (sharedUuid && toOp.op === 'create') (toOp as any).link_uuid = sharedUuid;
+            if (sharedUuid) toOp.link_uuid = sharedUuid;
             ops = [...ops, toOp];
         }
     }
@@ -2050,20 +2128,20 @@
         } else if (opA.op === 'create' && opB.op === 'create') {
             // 2 new → local transformation (assign shared link_uuid)
             const sharedUuid = generateUUID();
-            (opA as any).link_uuid = sharedUuid;
-            (opB as any).link_uuid = sharedUuid;
+            opA.link_uuid = sharedUuid;
+            opB.link_uuid = sharedUuid;
             opA.fields.type = match.targetType as TransactionTypeCode;
             opB.fields.type = match.targetType as TransactionTypeCode;
         } else {
             // 1 saved + 1 new (mixed)
             const savedOp = opA.op === 'edit' ? opA : opB;
             const newOp = opA.op === 'create' ? opA : opB;
-            if (!(newOp as any).link_uuid && newOp.op === 'create') (newOp as any).link_uuid = generateUUID();
+            if (!newOp.link_uuid) newOp.link_uuid = generateUUID();
             pendingPromotes = [
                 ...pendingPromotes,
                 {
                     id_a: (savedOp as any).txId,
-                    link_uuid_b: (newOp as any).link_uuid,
+                    link_uuid_b: newOp.link_uuid,
                     ...(Object.keys(resolved).length > 0 ? {resolved_fields: resolved} : {}),
                 },
             ];
@@ -2137,7 +2215,7 @@
 
     /** Local promote suggestions: match new standalone ops against each other. */
     let localSuggestions = $derived.by(() => {
-        const newStandalone = ops.filter((o) => o.op === 'create' && !o.pairedWith && !getPartnerOp(o.tempId) && !(o as any).link_uuid);
+        const newStandalone = ops.filter((o) => o.op === 'create' && !o.pairedWith && !getPartnerOp(o.tempId) && !o.link_uuid);
         const results: SuggestEntry[] = [];
         for (let i = 0; i < newStandalone.length; i++) {
             for (let j = i + 1; j < newStandalone.length; j++) {
@@ -2759,6 +2837,16 @@
     zIndex={70}
     openKey={formKey}
     getBulkContext={() => getBulkContextExcluding(formEditingTempId)}
+    getWacResult={(tempId) => {
+        // Direct lookup (standalone ADJUSTMENT)
+        const direct = wacResults.get(tempId);
+        if (direct) return direct;
+        // Partner lookup (paired TRANSFER — WAC is on the receiver/hidden op)
+        const partnerOp = getPartnerOp(tempId);
+        if (partnerOp) return wacResults.get(partnerOp.tempId) ?? null;
+        return null;
+    }}
+    editingTempId={formEditingTempId}
     onClose={() => {
         formOpen = false;
         formEditingTempId = null;
@@ -2770,7 +2858,7 @@
 <!-- Plan B Step 9: PickerModal for adding existing DB transactions -->
 <TransactionPickerModal open={pickerOpen} excludeIds={pickerExcludeIds} onAdd={handlePickerAdd} onClose={() => (pickerOpen = false)} />
 
-<!-- BUG-C7: Suggest PickerModal — filtered to importable candidates -->
+<!-- BUG-C7: Suggest picker — opens PickerModal filtered to importable candidates -->
 <TransactionPickerModal open={suggestPickerOpen} excludeIds={pickerExcludeIds} includeIds={suggestPickerIncludeIds} onAdd={handlePickerAdd} onClose={() => (suggestPickerOpen = false)} />
 
 <!-- Plan D2 Step C4: PromoteMergeModal for resolving divergent fields during promote -->

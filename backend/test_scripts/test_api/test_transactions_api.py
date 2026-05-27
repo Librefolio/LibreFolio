@@ -660,6 +660,23 @@ async def test_get_transaction_types(test_server):
             assert "name" in item  # e.g., "Buy", "Sell"
             assert "description" in item
             assert "icon_slug" in item  # e.g., "buy", "sell"
+            # cost_basis_mode must be present and valid
+            assert "cost_basis_mode" in item, f"Missing cost_basis_mode for {item.get('code')}"
+            assert item["cost_basis_mode"] in ("forbidden", "optional", "required_qty_pos"), (
+                f"Invalid cost_basis_mode '{item['cost_basis_mode']}' for {item['code']}"
+            )
+
+        # Verify specific cost_basis rules
+        types_by_code = {t["code"]: t for t in tx_types}
+        # BUY: forbidden, no pair
+        assert types_by_code["BUY"]["cost_basis_mode"] == "forbidden"
+        assert types_by_code["BUY"].get("cost_basis_pair") is None
+        # ADJUSTMENT: required_qty_pos, no pair
+        assert types_by_code["ADJUSTMENT"]["cost_basis_mode"] == "required_qty_pos"
+        assert types_by_code["ADJUSTMENT"].get("cost_basis_pair") is None
+        # TRANSFER: forbidden standalone, pair = [forbidden, required_qty_pos]
+        assert types_by_code["TRANSFER"]["cost_basis_mode"] == "forbidden"
+        assert types_by_code["TRANSFER"]["cost_basis_pair"] == ["forbidden", "required_qty_pos"]
 
         # Event types should have emoji + compatible_tx_types
         ev_types = data["event_types"]

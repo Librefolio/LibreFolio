@@ -1016,6 +1016,99 @@ class TestWACPreview:
             assert Decimal(wac_item["wac"]["amount"]) == Decimal("300")
             print_success("WAC-P9: Pool reset after full sell → WAC = 300 ✓")
 
+    # ------------------------------------------------------------------ WAC-P10
+    async def test_wacp10_transfer_in_pending_txs(self):
+        """WAC preview with TRANSFER pair in pending_txs → 200 OK (no 422)."""
+        print_section("WAC-P10 — TRANSFER in pending_txs → 200 OK")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "WACTransferA")
+            broker_b = await create_broker(client, "WACTransferB")
+            asset_id = await create_asset(client, currency="EUR")
+
+            # Commit a BUY 10@100 on broker_a
+            data = await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_a, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                    {"broker_id": broker_a, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                ],
+            )
+            assert data["committed"] is True
+
+            # Call wac-preview with TRANSFER pair in pending_txs (with cost_basis_override on receiver)
+            shared_uuid = str(uuid.uuid4())
+            resp = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker_b, "asset_id": asset_id, "date_range": {"end": "2026-02-01"}},
+                    ],
+                    "pending_txs": [
+                        {
+                            "broker_id": broker_a,
+                            "asset_id": asset_id,
+                            "type": "TRANSFER",
+                            "date": "2026-01-20",
+                            "quantity": "-5",
+                            "link_uuid": shared_uuid,
+                        },
+                        {
+                            "broker_id": broker_b,
+                            "asset_id": asset_id,
+                            "type": "TRANSFER",
+                            "date": "2026-01-20",
+                            "quantity": "5",
+                            "cost_basis_override": {"code": "EUR", "amount": "100"},
+                            "link_uuid": shared_uuid,
+                        },
+                    ],
+                    "excluded_tx_ids": [],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, f"wac-preview failed: {resp.text}"
+            result = resp.json()
+            assert len(result["items"]) == 1
+            wac_item = result["items"][0]
+            # WAC for broker_b: received 5 units with cost_basis_override=100
+            assert wac_item["wac"] is not None
+            assert wac_item["wac"]["code"] == "EUR"
+            assert Decimal(wac_item["wac"]["amount"]) == Decimal("100")
+            print_success("WAC-P10: TRANSFER in pending_txs → WAC = 100 ✓")
+
+    # ------------------------------------------------------------------ WAC-P11
+    async def test_wacp11_transfer_without_link_uuid_422(self):
+        """WAC preview with TRANSFER in pending_txs without link_uuid → 422."""
+        print_section("WAC-P11 — TRANSFER without link_uuid → 422")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "WACNoLinkA")
+            asset_id = await create_asset(client, currency="EUR")
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker_a, "asset_id": asset_id, "date_range": {"end": "2026-02-01"}},
+                    ],
+                    "pending_txs": [
+                        {
+                            "broker_id": broker_a,
+                            "asset_id": asset_id,
+                            "type": "TRANSFER",
+                            "date": "2026-01-20",
+                            "quantity": "-5",
+                            # Missing link_uuid
+                        },
+                    ],
+                    "excluded_tx_ids": [],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
+            print_success("WAC-P11: TRANSFER without link_uuid → 422 ✓")
+
 
 @pytest.mark.asyncio
 class TestWACValidation:

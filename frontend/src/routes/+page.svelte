@@ -7,6 +7,7 @@
     import RegisterCard from '$lib/components/auth/RegisterCard.svelte';
     import ForgotPasswordCard from '$lib/components/auth/ForgotPasswordCard.svelte';
     import LanguageSelector from '$lib/components/layout/LanguageSelector.svelte';
+    import HelpMenu from '$lib/components/layout/HelpMenu.svelte';
     import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
     import {auth} from '$lib/stores/auth';
     import {_} from '$lib/i18n';
@@ -79,8 +80,9 @@
                 <span class="hidden sm:inline text-sm font-medium leading-5">{$_('help.buyMeACoffee')}</span>
                 <Coffee size={20} class="flex-shrink-0" />
             </a>
-            <LanguageSelector />
             <ThemeToggle />
+            <LanguageSelector />
+            <HelpMenu />
         </div>
 
         <!-- Card Container - Cambio istantaneo senza transizione -->

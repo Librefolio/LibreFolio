@@ -1024,6 +1024,12 @@ SignType = Literal["positive", "negative", "zero", "nonzero", "free"]
 # Shared by asset_mode, cash_mode, quantity_mode.
 FieldMode = Literal["required", "optional", "forbidden"]
 
+# Cost basis field mode — specific to cost_basis_override applicability.
+# "forbidden": field not used for this type/side.
+# "optional": can have cost_basis but not mandatory.
+# "required_qty_pos": required when quantity > 0 (receiver side of TRANSFER, positive ADJUSTMENT).
+CostBasisFieldMode = Literal["forbidden", "optional", "required_qty_pos"]
+
 # Pair form layout — controls the dual-transaction form layout in the frontend.
 # None = standard single form, otherwise specifies which dual form to show.
 PairFormLayout = Literal["fx", "transfer_asset", "transfer_cash"]
@@ -1118,6 +1124,24 @@ class TXTypeMetadata(BaseModel):
     # Swap group — types this type can be "flipped" to (including itself).
     # Singleton = [self] (no swap partners). Frontend uses this directly.
     swap_group: list[str] = Field(default_factory=list, description="Other type codes this type can be swapped with (sign-flip). Empty = no swap.")
+
+    # Cost basis override applicability — tells frontend whether to show/require the field.
+    cost_basis_mode: CostBasisFieldMode = Field(
+        "forbidden",
+        description="Whether cost_basis_override is applicable. "
+        "'forbidden': field not used; "
+        "'required_qty_pos': required when quantity > 0; "
+        "'optional': can have cost_basis but not mandatory.",
+    )
+
+    # For paired types: per-side cost_basis rule. Index 0 = 'from' (sender, qty<0), index 1 = 'to' (receiver, qty>0).
+    # Overrides cost_basis_mode when present. None for standalone types.
+    cost_basis_pair: list[CostBasisFieldMode] | None = Field(
+        None,
+        description="[from_side, to_side] cost_basis rules for paired types. "
+        "Index 0 = 'Da' (sender, qty<0), index 1 = 'A' (receiver, qty>0). "
+        "Overrides cost_basis_mode when present. None for standalone types.",
+    )
 
 
 # Precomputed metadata for all transaction types.
@@ -1268,6 +1292,7 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
                 PairFieldConstraint(field="broker_id", relation="different"),
                 PairFieldConstraint(field="quantity", relation="opposite"),
             ],
+            cost_basis_pair=["forbidden", "required_qty_pos"],
         ),
         TransactionType.FX_CONVERSION: dict(
             code="FX_CONVERSION",
@@ -1312,6 +1337,7 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
             quantity_sign="nonzero",
             cash_sign="zero",
             event_compatible=True,
+            cost_basis_mode="required_qty_pos",
         ),
         TransactionType.CASH_TRANSFER: dict(
             code="CASH_TRANSFER",

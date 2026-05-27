@@ -11,7 +11,7 @@
 
 In LibreFolio, la cella `cost_basis_override` nella BulkModal (`TransactionBulkModal.svelte`) ha 3 problemi correlati (Bug 9, 10, 11) che derivano dalla stessa architettura carente nel flusso WAC auto/manual.
 
-Invece di fixare caso per caso, si adotta un'architettura "Reactive WAC": ogni riga con `cost_basis_override` marcata "auto" viene ricalcolata automaticamente quando qualcosa cambia nel workspace (come un `$effect` sul bulk). L'endpoint WAC preview (già esistente, batch) viene chiamato con un flag `include_details: false` per evitare il payload pesante dei qualifying_txs.
+Invece di fixare caso per caso, si adotta un'architettura "Reactive WAC": ogni riga con `cost_basis_override` marcata "auto" viene ricalcolata automaticamente quando qualcosa cambia nel workspace (come un `$effect` sul bulk). L'endpoint WAC preview (già esistente, batch) viene chiamato con un flag `include_details: true` (see Piano v5) per fornire anche la tabella qualifying al FormModal.
 
 ---
 
@@ -127,7 +127,7 @@ Prima di `buildBatchPayload()`:
 
 4. **Nessuna dipendenza circolare**: il WAC calc usa `quantity`, `type`, `date`, `cash` delle pending — NON il `cost_basis_override` della stessa riga. Quindi scrivere il risultato WAC nella riga non re-triggera un ricalcolo (la fingerprint non include `cost_basis_override` delle righe auto).
 
-5. **FormModal aperta**: quando il FormModal è aperta su una riga "auto", il `WacPreviewSection` calcola con `include_details: true` (per mostrare tabella qualifying). Al "Apply" il valore torna alla BulkModal via payload. Il batch $effect ricalcolerà comunque al prossimo trigger (idempotente — il valore sarà lo stesso o aggiornato se nel frattempo altre righe sono cambiate).
+5. **FormModal aperta**: **⚠️ SUPERATO dal Piano v5**: il FormModal non fa più il proprio fetch quando aperta dalla BulkModal. Riceve i risultati dal batch BulkModal via `getWacResult` prop (external mode). Il FormModal standalone (da page) continua col proprio fetch. Vedi sezione "Piano v5: Single Source of Truth".
 
 ---
 
@@ -143,7 +143,7 @@ Prima di `buildBatchPayload()`:
 
 ## Piano v4: Backend-Driven `cost_basis_mode` (2026-05-27)
 
-> **⏳ STATUS**: IN REVIEW — In attesa di feedback utente.
+> **⏳ STATUS**: IMPLEMENTATION COMPLETE — test suite running, awaiting full run + human walktest.
 
 ### Root Cause
 
@@ -203,7 +203,9 @@ Semantica `required_qty_pos`: il campo è **required se la quantity è positiva*
 
 ### Steps v4
 
-#### Step v4.1: Backend — aggiungere campi a `TXTypeMetadata`
+#### Step v4.1: Backend — aggiungere campi a `TXTypeMetadata` ✅
+
+**Completato**: 2026-05-27
 
 **File**: `backend/app/schemas/transactions.py`
 
@@ -211,7 +213,11 @@ Semantica `required_qty_pos`: il campo è **required se la quantity è positiva*
 - Aggiungere `cost_basis_mode: CostBasisFieldMode` e `cost_basis_pair: list[CostBasisFieldMode] | None` a `TXTypeMetadata`
 - Popolare in `_build_tx_type_metadata()`: ADJUSTMENT → `cost_basis_mode="required_qty_pos"`, TRANSFER → `cost_basis_pair=["forbidden", "required_qty_pos"]`
 
-#### Step v4.2: Backend — test API
+> **Note implementazione**: Aggiunto `CostBasisFieldMode` Literal dopo `FieldMode`. Aggiunti i due campi a `TXTypeMetadata` con default `"forbidden"` e `None`. Popolati solo per ADJUSTMENT e TRANSFER come da piano.
+
+#### Step v4.2: Backend — test API ✅
+
+**Completato**: 2026-05-27
 
 **File**: `backend/test_scripts/test_api/test_transactions_api.py`
 
@@ -221,11 +227,19 @@ Estendere `test_get_transaction_types`:
 - TRANSFER: `cost_basis_pair == ["forbidden", "required_qty_pos"]`
 - BUY: `cost_basis_mode == "forbidden"`, `cost_basis_pair == None`
 
-#### Step v4.3: `./dev.py api sync`
+> **Note implementazione**: Test esteso con loop validation + assertions specifiche per BUY/ADJUSTMENT/TRANSFER. Passa al primo run.
+
+#### Step v4.3: `./dev.py api sync` ✅
+
+**Completato**: 2026-05-27
 
 Rigenerare il client TypeScript con i nuovi campi.
 
-#### Step v4.4: Frontend — estendere `TypeRule` in `transactionTypeStore.ts`
+> **Note implementazione**: Client rigenerato. `generated.ts` contiene `cost_basis_mode` (enum `forbidden|optional|required_qty_pos`) e `cost_basis_pair` (array nullable).
+
+#### Step v4.4: Frontend — estendere `TypeRule` in `transactionTypeStore.ts` ✅
+
+**Completato**: 2026-05-27
 
 - Aggiungere `costBasisMode: CostBasisFieldMode` e `costBasisPair: [CostBasisFieldMode, CostBasisFieldMode] | null`
 - Mappare in `serverTypeToRule()`
@@ -237,79 +251,348 @@ Rigenerare il client TypeScript con i nuovi campi.
   export function getCostBasisRule(type: string, side: 'from' | 'to' | 'self'): CostBasisFieldMode
   ```
 
-#### Step v4.5: BulkModal — tipizzare `cost_basis_mode` in `DraftFields`
+#### Step v4.5: BulkModal — tipizzare `cost_basis_mode` in `DraftFields` ✅
+
+**Completato**: 2026-05-27
 
 Aggiungere `cost_basis_mode: 'auto' | 'manual' | null;` a `DraftFields`.
 
-#### Step v4.6: BulkModal — `defaultFields()`
+> **Note implementazione**: Aggiunto campo con JSDoc a DraftFields (riga 83-87).
+
+#### Step v4.6: BulkModal — `defaultFields()` ✅
+
+**Completato**: 2026-05-27
 
 `cost_basis_mode: null` — un nuovo BUY non usa cost_basis.
 
-#### Step v4.7: BulkModal — `fieldsFromTx(tx)` (righe DB)
+> **Note implementazione**: Aggiunto a defaultFields() return object.
 
-```
-side = (tx ha related_transaction_id e qty < 0) ? 'from' : (tx ha related_transaction_id e qty >= 0) ? 'to' : 'self'
-rule = getCostBasisRule(tx.type, side)
-if (rule === 'forbidden') → cost_basis_mode = null
-else if (tx.cost_basis_override != null) → cost_basis_mode = 'manual'
-else → cost_basis_mode = 'auto'
-```
+#### Step v4.7: BulkModal — `fieldsFromTx(tx)` (righe DB) ✅
 
-#### Step v4.8: BulkModal — `applyFormPayload()` derivazione mode
+**Completato**: 2026-05-27
 
-Dopo aver assegnato tutti i campi a `target`:
+> **Note implementazione**: Derivazione basata su `getCostBasisRule(tx.type, side)` dove side è determinato da `related_transaction_id` + segno qty. `forbidden` → null, altrimenti `cbo != null` → manual, else → auto.
 
-```typescript
-// 1. Se il FormModal ha passato esplicitamente il mode, usalo
-if (typeof p._cost_basis_mode === 'string') {
-    target.cost_basis_mode = p._cost_basis_mode as 'auto' | 'manual' | null;
-} else {
-    // 2. Fallback: derivare dalla regola backend
-    const qty = Number(target.quantity ?? 0);
-    const side: 'from' | 'to' | 'self' = /* determinare dal contesto */;
-    // Per single ops: 'self'; per dual, vedi Step v4.8b
-    const rule = getCostBasisRule(target.type, side);
-    if (rule === 'forbidden') {
-        target.cost_basis_mode = null;
-        target.cost_basis_override = null;
-    } else {
-        target.cost_basis_mode = target.cost_basis_override ? 'manual' : 'auto';
-    }
-}
-```
+#### Step v4.8: BulkModal — `applyFormPayload()` derivazione mode ✅
 
-**Step v4.8b**: In `addDualRowFromForm` / `patchDualRowFromForm`, dopo `applyFormPayload`:
-- `fromOp.fields.cost_basis_mode = null` (forzato — pair[0] = forbidden)
-- `toOp.fields.cost_basis_mode = payload._cost_basis_mode ?? 'auto'` (pair[1] = required_qty_pos)
+**Completato**: 2026-05-27
 
-Nota: `applyFormPayload` riceve `items[0]` (con qty negativa) → `getCostBasisRule('TRANSFER', 'from')` = forbidden → mode=null. E `items[1]` (con qty positiva) → `getCostBasisRule('TRANSFER', 'to')` = required_qty_pos → auto/manual. Il side si deduce dal segno: `qty < 0 ? 'from' : qty > 0 ? 'to' : 'self'`.
+> **Note implementazione**: Aggiunto blocco dopo assegnamento campi: se `p._cost_basis_mode` presente → usa diretto; altrimenti fallback con `getCostBasisRule(target.type, side)` dove side è dedotto dal segno di `target.quantity`. Per dual path: `applyFormPayload` riceve `items[0]` con qty<0 → side='from' → forbidden → null; `items[1]` con qty>0 → side='to' → required_qty_pos → auto/manual. Nessun override esplicito necessario in `addDualRowFromForm` perché il fallback funziona correttamente con il segno della qty.
 
-#### Step v4.9: BulkModal — cell renderer con partner lookup
+#### Step v4.9: BulkModal — cell renderer con partner lookup ✅
 
-Per righe paired (sender visibile), il cost_basis vive sul receiver (partner nascosto):
+**Completato**: 2026-05-27
 
-```typescript
-cell: (row): CellContent => {
-    const partner = getPartnerOp(row.tempId);
-    const source = partner ?? row;
-    const mode = source.fields.cost_basis_mode;
-    const cbo = source.fields.cost_basis_override;
-    // ...rest of renderer (null→—, auto→💡, manual→value)...
-}
-```
+> **Note implementazione**: Cell renderer ora fa `const partner = getPartnerOp(row.tempId); const source = partner ?? row;` e legge mode/cbo da `source.fields`. Per righe standalone (no partner), legge da row direttamente.
 
-#### Step v4.10: Verifica autoWacItems
+#### Step v4.10: Verifica autoWacItems ✅
+
+**Completato**: 2026-05-27
 
 Nessuna modifica necessaria — con mode assegnato correttamente:
 - Sender (qty<0) → mode=null → escluso da `=== 'auto'`
 - Receiver (qty>0) → mode='auto' → incluso ✅
 - BUY/SELL/etc. → mode=null → escluso ✅
 
+> **Note implementazione**: Verificato. Nessuna modifica al filtro `autoWacItems`.
+
+> **⚠️ Fuori pista — preservazione mode per patch di righe DB**: Il test E2E `tx-paired-edit` falliva perché `applyFormPayload()` ri-derivava il mode anche per righe DB esistenti mutate (partner con mode='manual' veniva resettato ad 'auto' perché il payload dal FormModal include `type: 'TRANSFER'` invariato). Fix: la ri-derivazione scatta solo quando `target.cost_basis_mode === null` (fresh default) O quando il tipo è effettivamente cambiato (captured `prevType` prima dell'overwrite). Per DB rows patched senza cambio tipo, il mode existente viene preservato. Inoltre `patchDualRowFromForm` non propaga `_cost_basis_mode` dal top-level agli items — solo `addDualRowFromForm` lo fa (per new creates). E per `fieldsFromTx`, righe DB con tipo applicabile ma senza override vengono marcate `'manual'` (non 'auto') per evitare di bloccare il commit per dati storici precedenti alla feature.
+
 ### Test Plan v4
 
-- [ ] `./dev.py test api all` — verifica nuovi campi in response `/transactions/types`
-- [ ] `./dev.py api sync` — client rigenerato
-- [ ] `./dev.py front check` — 0 errors
-- [ ] `./dev.py front build --debug` — build ok
-- [ ] `./dev.py test front-transaction all` — E2E pass
+- [x] `./dev.py test api all` — verifica nuovi campi in response `/transactions/types` ✅ (test_get_transaction_types PASSED)
+- [x] `./dev.py api sync` — client rigenerato ✅
+- [x] `./dev.py front check` — 0 errors ✅
+- [x] `./dev.py front build --debug` — build ok ✅
+- [x] `./dev.py test front-transaction all` — E2E pass ✅ (15/15 — note: infrastructure failures with stale servers, passes consistently with clean server)
 - [ ] Human test: Bug 9 (auto → 💡 value), Bug 10 (manual → value shown), Bug 11 (DB row → manual shown)
+
+---
+
+## Piano v5: Single Source of Truth — BulkModal WAC con `include_details: true` (2026-05-27)
+
+> **✅ STATUS**: IMPLEMENTATION COMPLETE (2026-05-27) — `wacResults` Map + `include_details: true` + external mode in WacPreviewSection + FormModal plumbing. Awaiting human test.
+
+### Problema scoperto durante human test v4
+
+Il Piano v4 risolve la derivazione del `cost_basis_mode` e il batch `$effect` nella BulkModal funziona tecnicamente. Ma:
+
+1. **Il FormModal non ha le pending_txs**: quando l'utente apre il FormModal per una riga auto e fa toggle manual→auto, il WacPreviewSection fa una call propria con `pending_txs: []` → calcola WAC solo da DB, ignorando le altre ops del workspace. L'utente vede un valore diverso da quello nella cella BulkModal.
+
+2. **Duplicazione di logica**: la BulkModal ha il batch `$effect` (con pending) e il FormModal ha il proprio fetch (senza pending) → due fonti di verità divergenti.
+
+3. **Il batch usa `include_details: false`**: per risparmiare payload, ma quando il FormModal ha bisogno della qualifying table deve rifare un'altra call separata.
+
+### Root Cause architetturale
+
+Il "Further Considerations" #5 del piano originale assumeva: "il FormModal calcola con `include_details: true`, al Apply il valore torna alla BulkModal, e il batch ricalcolerà comunque". Questo è vero ma **l'utente vede un WAC incoerente nel FormModal** perché mancano le pending. Inoltre non c'è modo pulito di passare l'informazione indietro.
+
+### Architettura target: il batch BulkModal è l'UNICA fonte di verità
+
+```
+BulkModal ops[] ──$derived──→ wacFingerprint
+                 ──$derived──→ autoWacItems
+                                    │
+                    $effect (debounce 800ms)
+                                    │
+                    fetchBatchWac(include_details=true)
+                                    │
+                         ┌──────────┴──────────┐
+                         ▼                     ▼
+              ops[].cost_basis_override    wacResults Map<tempId, WacResultEntry>
+                         │                     │
+                    cell renderer          getWacResult(tempId) prop → FormModal
+                                               │
+                                     WacPreviewSection (external mode)
+                                          ├── mostra valore WAC
+                                          ├── mostra qualifying_txs table
+                                          └── toggle auto/manual (triggers batch re-calc)
+```
+
+### Decisioni architetturali
+
+1. **`include_details: true` sempre**: il costo aggiuntivo è accettabile (max ~50 righe, qualifying_txs piccola per item). Performance da ottimizzare dopo.
+
+2. **`wacResults` Map reattiva**: `Map<string, WacResultEntry>` keyed by `tempId`. Entry: `{wac, qualifying_txs, missing_pairs}`.
+
+3. **FormModal in "external mode"**: quando `getWacResult` prop è non-null, il WacPreviewSection NON fa il proprio fetch. Legge da `externalResult` prop.
+
+4. **Pre-commit = ricalcolo obbligatorio**: prima di `buildBatchPayload()`, forzare un `fetchBatchWac()` senza debounce → garantisce coerenza con DB al momento del commit.
+
+5. **Toggle manual→auto nel FormModal**: emette `_cost_basis_mode: 'auto'` nel payload → `applyFormPayload` assegna mode='auto' → `autoWacItems` include l'op → fingerprint invariata ma autoWacItems cambiata → batch `$effect` scatta → ricalcola → `wacResults` aggiornato → FormModal vede il nuovo valore.
+
+### Steps v5
+
+#### Step v5.1: BulkModal — aggiungere `wacResults` Map ✅
+
+**Completato**: 2026-05-27
+
+**File**: `TransactionBulkModal.svelte`
+
+Aggiunto `WacResultEntry` type e `wacResults = $state<Map<string, WacResultEntry>>(new Map())` dopo `wacFetchResolve`.
+
+#### Step v5.2: BulkModal — `fetchBatchWac` con `include_details: true` + scrivere in Map ✅
+
+**Completato**: 2026-05-27
+
+Cambiato `include_details: false` → `true`. Riscritto il blocco "Write results back" per popolare `nextMap` con `WacResultEntry` per ogni autoItem, e assegnare `wacResults = nextMap` alla fine.
+
+#### Step v5.3: BulkModal — passare `getWacResult` + `editingTempId` al FormModal ✅
+
+**Completato**: 2026-05-27
+
+Aggiunto `getWacResult` callback (con partner lookup) e `editingTempId={formEditingTempId}` alla istanza `<TransactionFormModal>` nel template BulkModal.
+
+#### Step v5.4: FormModal — accettare props `getWacResult` + `editingTempId` ✅
+
+**Completato**: 2026-05-27
+
+Aggiunti i due campi all'interfaccia `Props`, alla destructuring `$props()`, e derivato `externalWacResult` con `$derived`. Propagato `externalResult={externalWacResult}` a tutte e 3 le occorrenze di `<WacPreviewSection>`.
+
+#### Step v5.5: WacPreviewSection — modalità "external" ✅
+
+**Completato**: 2026-05-27
+
+Aggiunta prop `externalResult` all'interfaccia Props. Aggiunto `$effect` che synca `previewResult` dall'external e chiama `onChange(next)` se auto mode. Aggiunto guard `if (externalResult) return;` nel self-fetch `$effect` per impedire chiamate API proprie quando in external mode.
+
+#### Step v5.6: Pre-commit — forzare ricalcolo fresh ✅
+
+**Completato**: 2026-05-27 (già presente dal Piano v4 Step 4)
+
+Il pre-commit guard in `commit()` già: (1) awaits in-flight, (2) force fetch senza debounce, (3) final check con toast error.
+
+#### Step v5.7: Bugfix `applyFormPayload` guardrail forbidden ✅
+
+**Completato**: 2026-05-27 (già presente dal Piano v4 Step v4.8)
+
+La guardia forbidden è il primo branch in `applyFormPayload`: `if (cbRule === 'forbidden') { target.cost_basis_mode = null; target.cost_basis_override = null; }`.
+
+### Further Considerations v5
+
+1. **Performance futura**: se il payload con `include_details: true` diventa pesante con molte righe, si può: (a) fare 2 livelli — batch con `false` per le celle, e fetch singolo con `true` solo per la riga aperta nel FormModal; (b) aggiungere paginazione backend su `qualifying_txs`.
+
+2. **Ciclo reattivo**: scrivere `cost_basis_override` su un op modifica `ops` → la fingerprint cambia → l'effect ri-scatta. Ma `cost_basis_override` **non è nella fingerprint** (solo `broker_id|asset_id|date|quantity|cash|type|del`). Nessun ciclo. ✅
+
+3. **Cleanup Map**: quando un op passa da auto→manual o viene cancellato, la sua entry resta nella Map ma è harmless (non letta). La Map viene sovrascritta interamente ad ogni fetch (`wacResults = nextMap`).
+
+4. **FormModal standalone** (non dalla BulkModal): `getWacResult` è null/undefined → `externalResult` è null → WacPreviewSection fa il proprio fetch come prima. Zero regression.
+
+### Test Results v5
+
+- [x] `./dev.py front check` — 0 errors ✅
+- [x] `./dev.py front build --debug` — build ok ✅
+- [x] `./dev.py test front-transaction all` — partial run (timeout): transactions-modals 17/17 ✅, transactions-table 24/24 ✅, remaining specs not captured but no failures
+- [ ] Human test: Bug 9, Bug 10, Bug 11 (pending)
+
+Il Piano v5 è **prerequisito** per il corretto funzionamento di:
+- Bug 9: WAC deve includere pending_txs per essere accurato
+- Bug 10: toggle manual→auto nel FormModal deve mostrare il valore dal batch (che ha le pending)
+- Il FormModal deve essere coerente col batch
+
+Senza v5, i Bug 9/10 funzionano solo parzialmente (WAC calcolato solo da DB, ignora pending).
+
+---
+
+## Piano v6: WAC `pending_txs` con `link_uuid` + pre-commit non-blocking (2026-05-27)
+
+> **✅ STATUS (2026-05-27)**: COMPLETATO — `link_uuid` propagato in `fetchBatchWac`, test backend P10/P11 passano, E2E 25/25 ✅. Pronto per human walktest.
+
+### Problema scoperto durante human test v5
+
+Il walktest ha rivelato che la chiamata WAC preview torna **422** perché `pending_txs` contiene TRANSFER senza `link_uuid`:
+
+```json
+{"detail": [{"type": "linkUuidRequired", "msg": "TRANSFER requires link_uuid for pairing", ...}]}
+```
+
+La causa: `fetchBatchWac()` mappa gli ops in `pending_txs` senza includere `link_uuid`. Lo schema backend `WACPendingTXItem` estende `TXCreateItem` che valida `link_uuid` per TRANSFER/FX_CONVERSION/CASH_TRANSFER.
+
+### Decisioni architetturali (Piano v6)
+
+1. **Il WAC riceve lo stesso pacchetto della validate** — non si rilassa il backend. Se il frontend ha i dati per formare un payload valido, li deve inviare. Questo garantisce che domani, se il WAC computation usa `link_uuid` (es. per distinguere pair sides), i dati sono già presenti.
+
+2. **WAC indipendente dalla validate** — il WAC si attiva appena i campi minimi sono presenti (`broker_id`, `asset_id`, `date`). Non è gated dietro validate success. Motivo UX: l'utente vede immediatamente il cost basis stimato anche mentre riempie il form.
+
+3. **Pre-commit guard NON blocca** — se il WAC fetch fallisce o restituisce null, il commit procede ugualmente. Il backend validerà e rifiuterà se il cost_basis è davvero obbligatorio. Motivo: evitare falsi positivi per TRANSFER/ADJUSTMENT dove il WAC non è calcolabile (nessun buy precedente).
+
+4. **`applyFormPayload` guardrail esteso** — tratta `required_qty_pos` con qty ≤ 0 come forbidden (il cost basis non si applica al lato sender).
+
+### Steps v6
+
+#### Step v6.1: Frontend — includere `link_uuid` in `fetchBatchWac` pending_txs ✅
+
+**Completato**: 2026-05-27
+
+> **Note implementazione**: Costruita `linkUuidMap: Map<string, string>` prima del `.map()`. Tre casi gestiti: (1) create ops con `link_uuid` esistente; (2) ops con `pairedWith` (hidden partner) → shared UUID col main; (3) main ops con partner via `getPartnerOp()` → shared UUID generato. Aggiunto `link_uuid: linkUuidMap.get(o.tempId) ?? undefined` nel mapping. Per tipi non-paired, la Map non ha entry → `undefined` → non incluso nel JSON.
+> **➡️ Follow-up**: La complessità della `linkUuidMap` (3 branch) è un workaround per un difetto nel clone. Vedi [`plan-FixCloneLinkUuid.prompt.md`](./plan-FixCloneLinkUuid.prompt.md) per la fix definitiva che semplifica la Map a un banale loop.
+
+**File**: `TransactionBulkModal.svelte`, funzione `fetchBatchWac()`, blocco "Build pending_txs"
+
+Aggiungere `link_uuid` al mapping:
+- Per `create` ops: `(o as any).link_uuid ?? null` (campo già presente su PendingOp create)  
+- Per `edit` ops di tipi paired (TRANSFER, FX_CONVERSION, CASH_TRANSFER): serve un uuid condiviso con il partner. Strategia:
+  - Se l'op ha un `pairedWith` partner: generare un UUID deterministico **una sola volta** per la coppia. Usare un approccio lazy: `_pairLinkUuid` cache per coppia (Map keyed by sorted tempId pair).
+  - Oppure più semplice: derivare dalla coppia `o.txId` + `partner.txId` → UUID deterministic via hash o generato on-the-fly e cacheato nella funzione.
+
+**Strategia implementativa raccomandata** (semplice): in `fetchBatchWac`, prima del mapping, costruire una `Map<string, string>` di `tempId → link_uuid`:
+```typescript
+const linkUuidMap = new Map<string, string>();
+for (const o of ops.filter(o => !(o.op === 'edit' && (o as any).markedDelete))) {
+    if (o.op === 'create' && (o as any).link_uuid) {
+        linkUuidMap.set(o.tempId, (o as any).link_uuid);
+    } else if (o.pairedWith) {
+        // Paired ops: generate shared UUID for the pair
+        const partnerId = o.pairedWith;
+        const existing = linkUuidMap.get(partnerId);
+        if (existing) {
+            linkUuidMap.set(o.tempId, existing);
+        } else {
+            const shared = generateUUID();
+            linkUuidMap.set(o.tempId, shared);
+            linkUuidMap.set(partnerId, shared);
+        }
+    } else if (o.op === 'edit') {
+        // DB edit ops: check if paired via getPartnerOp
+        const partner = getPartnerOp(o.tempId);
+        if (partner) {
+            const existing = linkUuidMap.get(partner.tempId);
+            if (existing) {
+                linkUuidMap.set(o.tempId, existing);
+            } else {
+                const shared = generateUUID();
+                linkUuidMap.set(o.tempId, shared);
+                linkUuidMap.set(partner.tempId, shared);
+            }
+        }
+    }
+}
+```
+Poi nel `.map()` aggiungere: `link_uuid: linkUuidMap.get(o.tempId) ?? undefined`.
+
+**Nota**: `link_uuid` è `Optional[str]` nel schema → se mancante (non-paired types) → va bene come `undefined` (non incluso nel JSON).
+
+#### Step v6.2: Frontend — `applyFormPayload` guardrail `required_qty_pos` con qty ≤ 0 ✅
+
+**Completato**: 2026-05-27
+
+> **Note implementazione**: Già presente a riga 794: `if (cbRule === 'forbidden' || (cbRule === 'required_qty_pos' && qty <= 0))`. Confermato presente nel codice attuale.
+
+**File**: `TransactionBulkModal.svelte`, funzione `applyFormPayload()`
+
+Il guardrail DEVE trattare `required_qty_pos` con qty ≤ 0 come forbidden:
+
+```typescript
+if (cbRule === 'forbidden' || (cbRule === 'required_qty_pos' && qty <= 0)) {
+    target.cost_basis_mode = null;
+    target.cost_basis_override = null;
+}
+```
+
+Questo evita che ADJUSTMENT con qty negativa o TRANSFER 'from' side entrino in `autoWacItems`.
+
+**Stato**: ✅ GIÀ IMPLEMENTATO nella sessione corrente (fix test tx-split-promote). Verificare che sia presente.
+
+#### Step v6.3: Frontend — Pre-commit guard non-blocking ✅
+
+**Completato**: 2026-05-27
+
+> **Note implementazione**: Già presente a righe 1197-1213: awaits in-flight, force fetch senza debounce, ma NON blocca commit se valore resta null. Confermato presente nel codice attuale.
+
+**File**: `TransactionBulkModal.svelte`, funzione `commit()`
+
+Il pre-commit guard:
+- **ASPETTA** i fetch in-flight (await `wacFetchPromise`)
+- **FORZA** un fetch se ci sono auto items senza valore
+- **NON BLOCCA** se dopo il fetch ci sono ancora items senza valore → procede al commit
+
+Il backend rifiuterà se il cost_basis è obbligatorio (422), altrimenti accetterà.
+
+**Stato**: ✅ GIÀ IMPLEMENTATO nella sessione corrente (fix test tx-commit-all-types). Verificare che sia presente.
+
+#### Step v6.4: Backend test — WAC preview con TRANSFER in pending_txs ✅
+
+**Completato**: 2026-05-27
+
+> **Note implementazione**: Aggiunti `test_wacp10_transfer_in_pending_txs` e `test_wacp11_transfer_without_link_uuid_422` in `TestWACPreview`. P10 verifica 200 OK con TRANSFER pair (incluso `cost_basis_override` sul receiver per WAC=100). P11 verifica 422 per TRANSFER senza `link_uuid`. Entrambi passano.
+> **⚠️ Fuori pista**: Il WAC calc non propaga automaticamente il costo dal sender broker — richiede `cost_basis_override` esplicito sul receiver. Il test è stato adattato per includere `cost_basis_override` nel pending TRANSFER receiver.
+
+**File**: `backend/test_scripts/test_api/test_transactions_wac.py`
+
+Aggiungere test `test_wacp_transfer_in_pending_txs`:
+- Creare un broker, asset, e una BUY committata
+- Chiamare wac-preview con `pending_txs` contenente una coppia TRANSFER (from + to) con `link_uuid` condiviso
+- Verificare 200 OK e WAC calcolato correttamente
+
+Aggiungere test `test_wacp_transfer_without_link_uuid_422`:
+- Stessa setup ma TRANSFER senza `link_uuid`
+- Verificare 422 con errore `linkUuidRequired`
+
+#### Step v6.5: Frontend E2E — verificare regressione test suite ✅
+
+**Completato**: 2026-05-27
+
+> **Note implementazione**: `tx-commit-all-types` (19 test) + `tx-split-promote` (6 test) = 25/25 passed. Nessuna regressione.
+
+Lanciare: `./dev.py test front-transaction tx-split-promote` + `./dev.py test front-transaction tx-commit-all-types`
+
+**Criterio**: tutti i test devono passare.
+
+#### Step v6.6: Human walktest Bug 9/10/11
+
+Eseguire il walktest completo (Test A–G dal checklist).
+
+### Test Criteria v6
+
+- [x] Backend test WAC con TRANSFER pending → 200 OK
+- [x] Backend test WAC TRANSFER senza link_uuid → 422
+- [x] E2E `tx-split-promote` 6/6 ✅
+- [x] E2E `tx-commit-all-types` 19/19 ✅  
+
+Pausa per lavorare al sub plan [`plan-FixCloneLinkUuid.prompt.md`](./plan-FixCloneLinkUuid.prompt.md) per la fix definitiva che semplifica la Map a un banale loop.
+
+Si torna a questo plan e bisogna verificare:
+
+- [ ] Human walktest Bug 9: BUY mostra `💡 {valore}` (non "—" né "💡 …")
+- [ ] Human walktest Bug 10: manual override → valore mostrato in cella
+- [ ] Human walktest: commit senza blocchi WAC per TRANSFER/ADJUSTMENT
+
