@@ -62,7 +62,8 @@ pwa-docs → install-button
 ## Notes
 
 - `logo_square.png` (944×944 RGBA) → base per icone PWA, con padding bianco aggiunto in fase di generazione
-- Service Worker NON implementato (non serve per uso online-only, il progetto è self-hosted)
+- Service Worker implementato: solo offline fallback (NO caching generale dell'app)
+- Auto-versioning: `dev.py stamp_service_worker()` inietta MD5 hash → SW si auto-aggiorna
 - Su HTTP LAN: manifest + standalone funzionano. Solo `beforeinstallprompt` (banner auto Chrome) richiede HTTPS
 - iOS non mostra mai banner automatico → guida manuale nell'UI
 - `display: standalone` nel manifest → su "Add to Home" non mostra barra URL né gesture browser
@@ -174,26 +175,42 @@ pwa-docs → install-button
 ### ✅ Implementazione: Offline Fallback (2026-05-27)
 
 **File creati**:
-- `frontend/static/sw.js` — Service Worker minimale (~25 righe)
-  - `install`: pre-cacha `/offline.html` in cache `offline-v1`
+- `frontend/static/sw.js` — Service Worker minimale (~28 righe)
+  - `install`: pre-cacha `/offline.html` con `{ cache: 'reload' }` (bypassa HTTP cache)
   - `fetch`: intercetta solo `navigate`, serve fallback su network failure
   - `activate`: pulisce vecchie cache, `skipWaiting()` + `clients.claim()`
-- `frontend/static/offline.html` — Pagina fallback statica (~130 righe)
-  - CSS inline (zero dipendenze esterne)
-  - Dark mode via `@media (prefers-color-scheme: dark)`
+  - **Auto-versioning**: riga 2 contiene `// build: <hash>` iniettato da `dev.py`
+- `frontend/static/offline.html` — Pagina fallback branded (~300 righe)
+  - CSS inline (zero dipendenze esterne), Font Inter + Noto Color Emoji
+  - Dark mode via `html.dark` class (legge `localStorage librefolio-theme`)
+  - Sfondo animato: onde verdi + linee chart (identico a login page)
+  - Glassmorphism card con icona wifi-off + pulse animation
+  - Toolbar: selettore lingua custom (dropdown con flag emoji), toggle tema, link docs
   - i18n: detecta `navigator.language` → EN/IT/FR/ES
-  - Auto-retry: ping server ogni 10s, reload on success
+  - Auto-retry con countdown visuale (10s) → ping `GET /api/v1/system/health`
   - Bottone "Riprova" manuale
-  - Branding LibreFolio (colori, icona foglia inline SVG)
 
 **File modificati**:
 - `frontend/src/app.html` — aggiunta registrazione SW: `navigator.serviceWorker.register('/sw.js')`
 - `mkdocs_src/docs/developer/frontend/pwa.md` — sostituita sezione "No Service Worker" con documentazione SW completa
+- `dev.py` — aggiunta `stamp_service_worker()` (inietta hash) + chiamata da `copy_docs_assets()`
+
+**Meccanismo auto-update (zero versioning manuale)**:
+1. `CACHE_NAME` è fisso (`'offline-fallback'`) — non cambia mai
+2. `cache.add(new Request(url, { cache: 'reload' }))` → forza re-fetch fresco ad ogni install
+3. `stamp_service_worker()` in `dev.py` calcola `md5(offline.html)[:8]` e lo inietta come commento in riga 2 di `sw.js`
+4. **Flusso**: offline.html cambia → build → hash cambia → sw.js diverso (1 byte) → browser rileva differenza → triggera `install` → ri-scarica offline.html fresca
+5. **Risultato**: sviluppatore cambia offline.html, builda, deploya — l'utente riceve l'update al prossimo avvio. Nessuna azione manuale.
+
+**Bugfix: retry endpoint (2026-05-27)**:
+- `HEAD /` restituiva 405 (FastAPI non genera handler HEAD automatici)
+- Fix: cambiato a `GET /api/v1/system/health` (endpoint esistente, leggero)
 
 **FAQ utente**:
-- **Come si aggiorna il SW?** → Automatico. Il browser controlla `sw.js` ad ogni apertura della PWA (byte-diff). Se diverso, scarica e installa il nuovo SW. Al prossimo avvio, il nuovo SW è attivo.
+- **Come si aggiorna il SW?** → Automatico. Il browser controlla `sw.js` ad ogni apertura della PWA (byte-diff). Se diverso, scarica e installa il nuovo SW. Al prossimo avvio, il nuovo SW è attivo. L'hash auto-generato garantisce che `sw.js` cambi ogni volta che `offline.html` cambia.
 - **Cosa succede se installo 2 volte?** → Impossibile. Dopo l'install, `beforeinstallprompt` non scatta più. L'OS impedisce duplicati sulla stessa origin.
 - **Funziona su iOS?** → Sì. Service Workers supportati da iOS 11.3+ (2018). Cache eviction aggressiva è irrilevante (pre-cachiamo solo 1 file da ~5KB che viene ricachato alla prossima visita).
+- **Devo incrementare CACHE_NAME manualmente?** → No, mai. Il sistema di auto-hash in `dev.py` rende obsoleto il versioning manuale.
 
 ---
 
@@ -359,15 +376,16 @@ done
 ### ✅ Acceptance Criteria
 
 **Localhost (minimo)**:
-- [ ] Manifest visibile in DevTools
-- [ ] Install button appare nel HelpMenu
-- [ ] Dark mode funziona
-- [ ] Build contiene manifest + icons
+- [x] Manifest visibile in DevTools
+- [x] Install button appare nel HelpMenu
+- [x] Dark mode funziona
+- [x] Build contiene manifest + icons
+- [x] Desktop PWA install (Chrome finestra separata) ✅
 
 **Server Production (completo)**:
 - [ ] Install su Android (banner auto + fullscreen)
 - [ ] Install su iOS Safari (manuale + fullscreen)
-- [ ] Install su Desktop Chrome (finestra dedicata)
+- [x] Install su Desktop Chrome (finestra dedicata) ✅ testato localhost
 - [ ] Mobile CSS: no zoom, no overscroll, no pull-to-refresh
 - [ ] Standalone mode detection funziona
 
@@ -382,15 +400,15 @@ done
 4. **Offline fallback page** (server down → pagina branded)
 
 **Priorità Media** (should test):
-4. Desktop PWA install
+4. Desktop PWA install ✅ (già testato)
 5. Standalone mode detection
 6. Dark mode
-7. Offline fallback dark mode + i18n
+7. Offline fallback dark mode + i18n + countdown
 
 **Priorità Bassa** (nice to test):
 7. HTTP LAN (manual install)
 8. Troubleshooting scenarios
-9. Offline auto-retry (10s)
+9. Offline auto-retry (countdown 10s)
 
 ---
 
@@ -402,7 +420,7 @@ done
 1. Apri `http://localhost:5173` (o porta backend se build)
 2. DevTools → Application → Service Workers
 3. ✅ Verifica: `sw.js` registrato e "activated and is running"
-4. ✅ Verifica: Cache Storage → `offline-v1` contiene `offline.html` e `icon-192.png`
+4. ✅ Verifica: Cache Storage → `offline-fallback` contiene `offline.html`
 
 **Test 2: Simulazione server down**
 1. Apri il sito normalmente (almeno una volta, per registrare il SW)
@@ -410,27 +428,31 @@ done
 3. Ricarica la pagina (F5 o Cmd+R)
 4. ✅ Verifica: appare la pagina offline con:
    - Sfondo animato (onde verdi + linee chart che si disegnano)
-   - Logo LibreFolio (icona 192px)
-   - Icona wifi-off con animazione pulse
+   - Icona wifi-off grande con animazione pulse
    - Titolo + messaggio nella lingua del browser
    - Bottone "Riprova"
-   - Indicatore rosso lampeggiante "Tentativo di riconnessione…"
-5. ✅ Verifica dark mode: se il browser è in dark mode, la pagina deve essere scura
+   - Countdown "Prossimo tentativo tra Xs" con secondi che scendono
+   - Toolbar in alto a dx: selettore lingua, toggle tema, link docs
+5. ✅ Verifica dark mode: toggle nel toolbar deve switchare light/dark
+6. ✅ Verifica lingua: cambiare nel dropdown → testo si aggiorna
 
-**Test 3: Auto-reconnect**
-1. Con la pagina offline aperta, riavvia il server
-2. ✅ Verifica: entro 10 secondi la pagina si ricarica automaticamente
-3. Alternativa: click "Riprova" → ricarica immediatamente
+**Test 3: Auto-reconnect con countdown**
+1. Con la pagina offline aperta, osserva il countdown (10s → 9s → 8s…)
+2. Riavvia il server prima che arrivi a 0
+3. ✅ Verifica: quando il countdown arriva a 0, la pagina si ricarica automaticamente
+4. Alternativa: click "Riprova" → ricarica immediatamente (resetta countdown)
 
 **Test 4: Nessun impatto su navigazione normale**
 1. Server attivo, naviga normalmente nell'app
 2. ✅ Verifica: nessun rallentamento o comportamento anomalo
 3. DevTools → Network: le request NON passano dalla cache del SW (solo navigate fallite)
 
-**Test 5: Update SW**
-1. Modifica un commento in `sw.js` (es. aggiungi uno spazio)
-2. Ricarica la pagina
-3. DevTools → Application → Service Workers
-4. ✅ Verifica: "waiting to activate" appare (nuovo SW in attesa)
-5. Chiudi e riapri il tab → il nuovo SW è attivo
+**Test 5: Update SW (auto-versioning)**
+1. Modifica `frontend/static/offline.html` (es. cambia un testo)
+2. Rifare build (`npm run build` o `./dev.py frontend build`)
+3. Verifica: `head -2 frontend/build/sw.js` → hash in riga 2 è cambiato
+4. Ricarica la pagina
+5. DevTools → Application → Service Workers
+6. ✅ Verifica: "waiting to activate" appare (nuovo SW in attesa)
+7. Chiudi e riapri il tab → il nuovo SW è attivo, offline.html aggiornata
 

@@ -16,6 +16,7 @@ Autocompletion setup:
 """
 
 import argparse
+import hashlib
 import math
 import os
 import platform
@@ -45,23 +46,21 @@ os.chdir(PROJECT_ROOT)
 
 from scripts.cli_base import (
     Colors,
+    check_server_running,
+    get_database_path,
     get_server_host,
     get_server_port,
-    get_test_server_port,
-    get_database_path,
     get_test_database_path,
-    run_pipenv,
-    run_command_live,
+    get_test_server_port,
+    pipenv_prefix,
+    print_error,
     print_header,
     print_success,
-    print_error,
     print_warning,
-    check_server_running,
-    pipenv_prefix,
-    )
-
+    run_command_live,
+    run_pipenv,
+)
 from scripts.cli_tree_parser import TreeParser, format_help
-
 
 # =============================================================================
 # Backend Commands: Server
@@ -1596,10 +1595,26 @@ def generate_pwa_icons():
     print_success(f"PWA icons generated (192×192, 512×512 from {w}×{h} logo_square)")
 
 
+def stamp_service_worker():
+    """Stamp sw.js with a content hash of offline.html to auto-trigger SW updates."""
+    sw_path = PROJECT_ROOT / "frontend" / "static" / "sw.js"
+    offline_path = PROJECT_ROOT / "frontend" / "static" / "offline.html"
+    if not sw_path.exists() or not offline_path.exists():
+        return
+    offline_hash = hashlib.md5(offline_path.read_bytes()).hexdigest()[:8]
+    sw_content = sw_path.read_text()
+    # Remove any existing hash comment
+    lines = [l for l in sw_content.splitlines() if not l.startswith('// build:')]
+    # Prepend hash comment (any byte change in sw.js triggers browser SW update)
+    lines.insert(1, f'// build: {offline_hash}')
+    sw_path.write_text('\n'.join(lines) + '\n')
+
+
 def copy_docs_assets():
     """Copy logo, favicon, and icons to docs."""
     generate_favicon()
     generate_pwa_icons()
+    stamp_service_worker()
     static_dir = PROJECT_ROOT / "mkdocs_src" / "docs" / "static"
     static_dir.mkdir(parents=True, exist_ok=True)
 

@@ -21,9 +21,9 @@
                 } catch (e) {}
                 var theme = stored === 'dark' ? 'dark' : stored === 'light' ? 'light' : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                 document.documentElement.classList.add(theme);
-                // Sync PWA title bar color with theme
+                // PWA title bar matches sidebar (libre-green light / dark variant)
                 var meta = document.querySelector('meta[name="theme-color"]');
-                if (meta) meta.setAttribute('content', theme === 'dark' ? '#0f172a' : '#1a4031');
+                if (meta) meta.setAttribute('content', theme === 'dark' ? '#156534' : '#1a4031');
             })();
             // Early PWA install prompt capture (before Svelte mounts)
             window.addEventListener('beforeinstallprompt', function(e) {

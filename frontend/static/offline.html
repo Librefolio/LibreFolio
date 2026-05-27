@@ -4,11 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>LibreFolio — Offline</title>
+    <link href="/fonts/noto-color-emoji/noto-color-emoji.css" rel="stylesheet" />
     <style>
         /* === Theme Variables === */
         :root {
             --bg: #f5f4ef;
-            --bg-dark: #11151c;
             --text: #1f2937;
             --text-muted: #6b7280;
             --accent: #1a4031;
@@ -18,26 +18,36 @@
             --card-bg: rgba(255, 255, 255, 0.85);
             --card-border: rgba(255, 255, 255, 0.3);
             --card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+            --toolbar-bg: rgba(255, 255, 255, 0.6);
+            --toolbar-border: rgba(0, 0, 0, 0.08);
+            --dropdown-bg: #ffffff;
+            --dropdown-border: #e5e7eb;
+            --dropdown-hover: #f9fafb;
+            --dropdown-active: rgba(26, 64, 49, 0.1);
         }
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg: #11151c;
-                --text: #f1f5f9;
-                --text-muted: #94a3b8;
-                --accent: #4ade80;
-                --accent-light: #00ff9a;
-                --btn-bg: #4ade80;
-                --btn-text: #0f172a;
-                --card-bg: rgba(30, 41, 59, 0.85);
-                --card-border: rgba(51, 65, 85, 0.5);
-                --card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
-            }
+        html.dark {
+            --bg: #11151c;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --accent: #4ade80;
+            --accent-light: #00ff9a;
+            --btn-bg: #4ade80;
+            --btn-text: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.85);
+            --card-border: rgba(51, 65, 85, 0.5);
+            --card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+            --toolbar-bg: rgba(30, 41, 59, 0.6);
+            --toolbar-border: rgba(255, 255, 255, 0.08);
+            --dropdown-bg: #1e293b;
+            --dropdown-border: #334155;
+            --dropdown-hover: #334155;
+            --dropdown-active: rgba(74, 222, 128, 0.15);
         }
 
         /* === Base === */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: Inter, system-ui, sans-serif;
             background: var(--bg);
             color: var(--text);
             min-height: 100dvh;
@@ -47,6 +57,119 @@
             padding: 24px;
             overflow: hidden;
         }
+        .emoji-flag {
+            font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
+        }
+
+        /* === Toolbar (top-right) === */
+        .toolbar {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            background: var(--toolbar-bg);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid var(--toolbar-border);
+            border-radius: 10px;
+        }
+        .toolbar button, .toolbar a {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, color 0.2s;
+            text-decoration: none;
+        }
+        .toolbar button:hover, .toolbar a:hover {
+            background: rgba(128, 128, 128, 0.15);
+            color: var(--text);
+        }
+        .toolbar .coffee-link {
+            color: #d97706;
+        }
+        html.dark .toolbar .coffee-link {
+            color: #fbbf24;
+        }
+        .toolbar .coffee-link:hover {
+            color: #b45309;
+        }
+        html.dark .toolbar .coffee-link:hover {
+            color: #f59e0b;
+        }
+        .toolbar .sep {
+            width: 1px;
+            height: 20px;
+            background: var(--toolbar-border);
+            margin: 0 2px;
+        }
+
+        /* === Custom Language Dropdown === */
+        .lang-dropdown {
+            position: relative;
+        }
+        .lang-btn {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 6px 8px;
+            border-radius: 8px;
+            transition: background 0.2s;
+            color: var(--text-muted);
+        }
+        .lang-btn:hover { background: rgba(128, 128, 128, 0.15); }
+        .lang-btn .flag { font-size: 1.25rem; line-height: 1; }
+        .lang-btn .chevron {
+            width: 14px;
+            height: 14px;
+            transition: transform 0.2s;
+            color: var(--text-muted);
+        }
+        .lang-btn.open .chevron { transform: rotate(180deg); }
+        .lang-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 8px);
+            width: 160px;
+            background: var(--dropdown-bg);
+            border: 1px solid var(--dropdown-border);
+            border-radius: 10px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            z-index: 100;
+        }
+        .lang-menu.open { display: block; }
+        .lang-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            padding: 10px 14px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            text-align: left;
+            font-size: 0.875rem;
+            color: var(--text);
+            transition: background 0.15s;
+            font-family: Inter, system-ui, sans-serif;
+        }
+        .lang-option:hover { background: var(--dropdown-hover); }
+        .lang-option.active { background: var(--dropdown-active); }
+        .lang-option .flag { font-size: 1.2rem; line-height: 1; }
 
         /* === Animated Background (matching login page) === */
         .animated-bg {
@@ -137,40 +260,17 @@
             box-shadow: var(--card-shadow);
         }
 
-        /* === Logo === */
-        .logo {
-            width: 80px;
-            height: 80px;
-            margin: 0 auto 24px;
-            border-radius: 16px;
-            background: white;
-            padding: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        @media (prefers-color-scheme: dark) {
-            .logo { background: #1e293b; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
-        }
-        .logo img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            border-radius: 8px;
-        }
-
         /* === Offline icon === */
         .icon-offline {
-            width: 48px;
-            height: 48px;
-            margin: 0 auto 16px;
-            color: var(--text-muted);
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 20px;
+            color: var(--accent);
             animation: pulse 3s ease-in-out infinite;
         }
         @keyframes pulse {
-            0%, 100% { opacity: 0.6; }
-            50% { opacity: 1; }
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
         }
 
         /* === Typography === */
@@ -201,11 +301,12 @@
             font-weight: 600;
             cursor: pointer;
             transition: opacity 0.2s, transform 0.1s;
+            font-family: Inter, system-ui, sans-serif;
         }
         .btn:hover { opacity: 0.9; }
         .btn:active { transform: scale(0.97); }
 
-        /* === Status indicator === */
+        /* === Status indicator with countdown === */
         .status {
             margin-top: 24px;
             display: flex;
@@ -226,26 +327,71 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.3; }
         }
+        .countdown {
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+            color: var(--accent);
+        }
     </style>
-    <script>
-        // i18n
-        const messages = {
-            en: { title: 'Server Unreachable', body: 'LibreFolio cannot connect to the server. Check your network connection or try again later.', retry: 'Retry', status: 'Attempting to reconnect…' },
-            it: { title: 'Server non raggiungibile', body: 'LibreFolio non riesce a connettersi al server. Controlla la connessione di rete o riprova più tardi.', retry: 'Riprova', status: 'Tentativo di riconnessione…' },
-            fr: { title: 'Serveur inaccessible', body: 'LibreFolio ne peut pas se connecter au serveur. Vérifiez votre connexion réseau ou réessayez plus tard.', retry: 'Réessayer', status: 'Tentative de reconnexion…' },
-            es: { title: 'Servidor inaccesible', body: 'LibreFolio no puede conectarse al servidor. Comprueba tu conexión de red o inténtalo más tarde.', retry: 'Reintentar', status: 'Intentando reconectar…' }
-        };
-        const lang = (navigator.language || 'en').slice(0, 2);
-        const t = messages[lang] || messages.en;
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('title').textContent = t.title;
-            document.getElementById('body').textContent = t.body;
-            document.getElementById('retry-text').textContent = t.retry;
-            document.getElementById('status-text').textContent = t.status;
-        });
-    </script>
 </head>
 <body>
+    <!-- Toolbar: Coffee + Theme + Language + Docs -->
+    <div class="toolbar">
+        <!-- Buy Me a Coffee -->
+        <a href="https://www.buymeacoffee.com/librefolio" target="_blank" rel="noopener noreferrer" title="Buy Me a Coffee" class="coffee-link">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/>
+            </svg>
+        </a>
+
+        <div class="sep"></div>
+
+        <!-- Theme Toggle -->
+        <button id="theme-toggle" title="Toggle theme">
+            <svg id="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+            <svg id="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+        </button>
+
+        <div class="sep"></div>
+
+        <!-- Custom Language Dropdown -->
+        <div class="lang-dropdown" id="lang-dropdown">
+            <button class="lang-btn" id="lang-btn" aria-haspopup="true">
+                <span class="flag emoji-flag" id="lang-flag">🇬🇧</span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </button>
+            <div class="lang-menu" id="lang-menu" role="menu">
+                <button class="lang-option" data-lang="en" role="menuitem">
+                    <span class="flag emoji-flag">🇬🇧</span><span>English</span>
+                </button>
+                <button class="lang-option" data-lang="it" role="menuitem">
+                    <span class="flag emoji-flag">🇮🇹</span><span>Italiano</span>
+                </button>
+                <button class="lang-option" data-lang="fr" role="menuitem">
+                    <span class="flag emoji-flag">🇫🇷</span><span>Français</span>
+                </button>
+                <button class="lang-option" data-lang="es" role="menuitem">
+                    <span class="flag emoji-flag">🇪🇸</span><span>Español</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="sep"></div>
+
+        <!-- Documentation link (online) -->
+        <a href="https://librefolio.github.io/LibreFolio/" target="_blank" rel="noopener noreferrer" title="Documentation">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/>
+            </svg>
+        </a>
+    </div>
+
     <!-- Animated Background (same as login page) -->
     <div class="animated-bg">
         <div class="wave wave-1"></div>
@@ -260,10 +406,6 @@
 
     <!-- Card -->
     <div class="card">
-        <div class="logo">
-            <img src="/icons/icon-192.png" alt="LibreFolio" />
-        </div>
-
         <!-- Offline icon (wifi-off) -->
         <svg class="icon-offline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="2" y1="2" x2="22" y2="22"/>
@@ -288,17 +430,128 @@
 
         <div class="status">
             <span class="status-dot"></span>
-            <span id="status-text">Attempting to reconnect…</span>
+            <span id="status-text">Next attempt in</span>
+            <span class="countdown" id="countdown">10s</span>
         </div>
     </div>
 
     <script>
-        // Auto-retry every 10 seconds
-        setInterval(() => {
-            fetch('/', { method: 'HEAD', cache: 'no-store' })
+        // === i18n ===
+        const languages = [
+            { code: 'en', flag: '🇬🇧', name: 'English' },
+            { code: 'it', flag: '🇮🇹', name: 'Italiano' },
+            { code: 'fr', flag: '🇫🇷', name: 'Français' },
+            { code: 'es', flag: '🇪🇸', name: 'Español' }
+        ];
+        const messages = {
+            en: { title: 'Server Unreachable', body: 'LibreFolio cannot connect to the server. Check your network connection or try again later.', retry: 'Retry', status: 'Next attempt in' },
+            it: { title: 'Server non raggiungibile', body: 'LibreFolio non riesce a connettersi al server. Controlla la connessione di rete o riprova più tardi.', retry: 'Riprova', status: 'Prossimo tentativo tra' },
+            fr: { title: 'Serveur inaccessible', body: 'LibreFolio ne peut pas se connecter au serveur. Vérifiez votre connexion réseau ou réessayez plus tard.', retry: 'Réessayer', status: 'Prochaine tentative dans' },
+            es: { title: 'Servidor inaccesible', body: 'LibreFolio no puede conectarse al servidor. Comprueba tu conexión de red o inténtalo más tarde.', retry: 'Reintentar', status: 'Próximo intento en' }
+        };
+
+        let currentLang = (navigator.language || 'en').slice(0, 2);
+        if (!messages[currentLang]) currentLang = 'en';
+
+        function applyLang(lang) {
+            currentLang = lang;
+            const t = messages[lang];
+            document.getElementById('title').textContent = t.title;
+            document.getElementById('body').textContent = t.body;
+            document.getElementById('retry-text').textContent = t.retry;
+            document.getElementById('status-text').textContent = t.status;
+            // Update flag in button
+            const info = languages.find(l => l.code === lang);
+            document.getElementById('lang-flag').textContent = info ? info.flag : '🇬🇧';
+            // Update active state
+            document.querySelectorAll('.lang-option').forEach(el => {
+                el.classList.toggle('active', el.dataset.lang === lang);
+            });
+        }
+
+        // === Custom Language Dropdown ===
+        const langBtn = document.getElementById('lang-btn');
+        const langMenu = document.getElementById('lang-menu');
+        let langOpen = false;
+
+        function toggleLangMenu() {
+            langOpen = !langOpen;
+            langMenu.classList.toggle('open', langOpen);
+            langBtn.classList.toggle('open', langOpen);
+        }
+
+        langBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleLangMenu();
+        });
+
+        document.querySelectorAll('.lang-option').forEach(btn => {
+            btn.addEventListener('click', () => {
+                applyLang(btn.dataset.lang);
+                toggleLangMenu();
+            });
+        });
+
+        // Close on click outside
+        document.addEventListener('click', (e) => {
+            if (langOpen && !document.getElementById('lang-dropdown').contains(e.target)) {
+                langOpen = false;
+                langMenu.classList.remove('open');
+                langBtn.classList.remove('open');
+            }
+        });
+
+        // Init language
+        applyLang(currentLang);
+
+        // === Theme Toggle ===
+        function getPreferredTheme() {
+            const stored = localStorage.getItem('librefolio-theme');
+            if (stored === 'dark' || stored === 'light') return stored;
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+
+        function applyTheme(theme) {
+            document.documentElement.classList.toggle('dark', theme === 'dark');
+            document.getElementById('icon-sun').style.display = theme === 'dark' ? 'none' : 'block';
+            document.getElementById('icon-moon').style.display = theme === 'dark' ? 'block' : 'none';
+        }
+
+        let currentTheme = getPreferredTheme();
+        applyTheme(currentTheme);
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('librefolio-theme', currentTheme);
+            applyTheme(currentTheme);
+        });
+
+        // === Countdown + Auto-retry ===
+        const RETRY_INTERVAL = 10;
+        let countdown = RETRY_INTERVAL;
+        const countdownEl = document.getElementById('countdown');
+
+        function updateCountdown() {
+            countdownEl.textContent = countdown + 's';
+        }
+
+        function tryReconnect() {
+            fetch('/api/v1/system/health', { cache: 'no-store' })
                 .then((r) => { if (r.ok) location.reload(); })
                 .catch(() => {});
-        }, 10000);
+            countdown = RETRY_INTERVAL;
+            updateCountdown();
+        }
+
+        updateCountdown();
+        setInterval(() => {
+            countdown--;
+            if (countdown <= 0) {
+                tryReconnect();
+            } else {
+                updateCountdown();
+            }
+        }, 1000);
     </script>
 </body>
 </html>
