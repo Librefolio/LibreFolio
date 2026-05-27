@@ -130,9 +130,19 @@
          *  bulk payload (from this callback) merged with its own row to /validate,
          *  so the balance walk sees all in-flight changes. */
         getBulkContext?: () => {creates: Record<string, unknown>[]; updates: Record<string, unknown>[]; deletes: number[]};
+        /** V5: WAC result getter — when non-null, WacPreviewSection uses external
+         *  mode (no own fetch). Provided by BulkModal's single source of truth. */
+        getWacResult?: ((tempId: string) => {wac: {code: string; amount: string} | null; qualifying_txs: Array<Record<string, any>>; missing_pairs: string[]} | null) | null;
+        /** V5: The tempId of the op currently being edited in the BulkModal. */
+        editingTempId?: string | null;
     }
 
-    let {open, mode, initialRow = null, forcedBroker = null, commitOnSave = true, unlockImmutable = false, availableTags = [], zIndex = 50, injectedPartnerRow = null, onClose, onCommitted, onPushDraft, onSwitchToEdit, canEdit = true, openKey = 0, getBulkContext}: Props = $props();
+    let {open, mode, initialRow = null, forcedBroker = null, commitOnSave = true, unlockImmutable = false, availableTags = [], zIndex = 50, injectedPartnerRow = null, onClose, onCommitted, onPushDraft, onSwitchToEdit, canEdit = true, openKey = 0, getBulkContext, getWacResult = null, editingTempId = null}: Props = $props();
+
+    /** V5: External WAC result from BulkModal (single source of truth). */
+    let externalWacResult = $derived(
+        getWacResult && editingTempId ? getWacResult(editingTempId) : null
+    );
 
     // =========================================================================
     // Form state
@@ -1516,6 +1526,7 @@
                                 assetId={draft.asset_id}
                                 txDate={draft.date}
                                 onModeChange={(m) => (costBasisMode = m)}
+                                externalResult={externalWacResult}
                             />
                         </div>
                     {/if}
@@ -1712,6 +1723,7 @@
                                 assetId={draft.asset_id}
                                 txDate={draft.date}
                                 onModeChange={(m) => (costBasisMode = m)}
+                                externalResult={externalWacResult}
                             />
                             {#if Number(draft.quantity) > 0 && !draft.cost_basis_override?.amount?.trim()}
                                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="tx-form-cost-basis-warning">
@@ -1738,6 +1750,7 @@
                         assetId={draft.asset_id}
                         txDate={draft.date}
                         onModeChange={(m) => (costBasisMode = m)}
+                        externalResult={externalWacResult}
                     />
                 </div>
             {/if}

@@ -297,10 +297,10 @@ test.describe('Split & Promote', () => {
         const formModal = page.locator('[data-testid="tx-form-modal"]');
         await expect(formModal).toBeVisible({timeout: 3_000});
 
-        // Change quantity value in the FormModal
+        // Change quantity value in the FormModal (keep negative to preserve TRANSFER 'from' side)
         const qtyInput = formModal.getByTestId('tx-form-quantity');
         await expect(qtyInput).toBeVisible({timeout: 2_000});
-        await qtyInput.fill('0.123');
+        await qtyInput.fill('-0.002');
         await page.waitForTimeout(200);
 
         // Save the FormModal

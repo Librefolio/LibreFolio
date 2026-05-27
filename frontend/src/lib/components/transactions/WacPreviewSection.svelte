@@ -76,9 +76,12 @@
         hideTable?: boolean;
         /** Called when mode changes (auto ↔ manual) — for BulkModal propagation */
         onModeChange?: (mode: 'auto' | 'manual') => void;
+        /** V5: External WAC result from BulkModal's single source of truth.
+         *  When non-null, this component skips its own fetch and uses the external data. */
+        externalResult?: {wac: {code: string; amount: string} | null; qualifying_txs: Array<Record<string, any>>; missing_pairs: string[]} | null;
     }
 
-    let {value, onChange, variant, defaultCode = 'EUR', disabled = false, testid = 'wac-preview', senderBrokerId = null, assetId = null, txDate = null, pendingTxs = [], excludedTxIds = [], hideTable = false, onModeChange}: Props = $props();
+    let {value, onChange, variant, defaultCode = 'EUR', disabled = false, testid = 'wac-preview', senderBrokerId = null, assetId = null, txDate = null, pendingTxs = [], excludedTxIds = [], hideTable = false, onModeChange, externalResult = null}: Props = $props();
 
     // =========================================================================
     // State
@@ -113,7 +116,30 @@
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     let lastFetchKey = '';
 
+    // V5: External mode — sync previewResult from BulkModal's batch result
     $effect(() => {
+        if (!externalResult) return;
+        previewResult = {
+            wac: externalResult.wac,
+            qualifying_txs: externalResult.qualifying_txs as any ?? [],
+            missing_pairs: externalResult.missing_pairs ?? [],
+            asset_price: null,
+            asset_price_stale: null,
+            asset_price_missing: false,
+        };
+        loading = false;
+        if (mode === 'auto' && externalResult.wac) {
+            const next = externalResult.wac;
+            if (!value || value.code !== next.code || value.amount !== next.amount) {
+                onChange(next);
+            }
+        }
+    });
+
+    $effect(() => {
+        // V5: external mode — skip own fetch (BulkModal is the single source of truth)
+        if (externalResult) return;
+
         // Dependencies: re-run when these change
         const _broker = senderBrokerId;
         const _asset = assetId;
