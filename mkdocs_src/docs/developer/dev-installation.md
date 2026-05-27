@@ -70,15 +70,15 @@ To start the FastAPI server with auto-reload:
 ./dev.py server
 ```
 
-The server will be available at `http://localhost:8000`.
+The server will be available at `http://localhost:6040`.
 
 #### Server Options
 
 | Flag | Description |
 |------|-------------|
 | `--host HOST` | Bind address (default: `HOST` env var or `0.0.0.0`) |
-| `--port PORT` | Bind port (default: `PORT` env var or `8000`) |
-| `--test` / `-t` | Use test database (port 8001) |
+| `--port PORT` | Bind port (default: `PORT` env var or `6040`) |
+| `--test` / `-t` | Use test database (port 6041) |
 | `--debug` / `-d` | Debug mode: verbose logging + frontend debug build |
 | `--rebuild` / `-r` | Force rebuild frontend before starting |
 | `--force` / `-f` | Kill blocking processes on the port before starting |

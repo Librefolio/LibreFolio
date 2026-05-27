@@ -8,7 +8,7 @@
  * Gap filled: the crash on FX_CONVERSION commit (resp.results[0].ids[0])
  * was never caught because no test exercised the actual commit for paired types.
  *
- * Prerequisites: backend in test mode (port 8001), mock data populated.
+ * Prerequisites: backend in test mode (port 6041), mock data populated.
  */
 import {expect, test, type Page} from '@playwright/test';
 import {login, navigateTo} from '../fixtures/auth-helpers';

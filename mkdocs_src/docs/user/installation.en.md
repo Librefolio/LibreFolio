@@ -44,7 +44,7 @@ Or download the latest release from [GitHub Releases](https://github.com/Alfysta
 
 2. **Edit `.env`** to customize:
 
-    - 🔌 `PORT`: Change the port if `8000` is already in use.
+    - 🔌 `PORT`: Change the port if `6040` is already in use.
     - 💰 `PORTFOLIO_BASE_CURRENCY`: Your base currency (default: `EUR`).
     - 📊 `LOG_LEVEL`: Logging verbosity (default: `INFO`).
 
@@ -80,7 +80,7 @@ docker compose up -d
 
 Open your browser and go to:
 
-**`http://localhost:8000`**
+**`http://localhost:6040`**
 
 (Or use the port you configured in `.env`).
 
@@ -88,8 +88,8 @@ The first time you access LibreFolio, you'll be presented with a **registration 
 
 Available endpoints:
 
-- 🏠 **Frontend**: `http://localhost:8000/`
-- 📚 **User Docs**: `http://localhost:8000/mkdocs/`
+- 🏠 **Frontend**: `http://localhost:6040/`
+- 📚 **User Docs**: `http://localhost:6040/mkdocs/`
 
 !!! tip "CLI user management"
 
@@ -124,7 +124,7 @@ You can start a test server with pre-populated mock data to explore the applicat
 ./dev.py docker exec server --test
 ```
 
-Access at **`http://localhost:8001`** with user `e2e_test_user` / `E2eTestPass123!`.
+Access at **`http://localhost:6041`** with user `e2e_test_user` / `E2eTestPass123!`.
 
 The test server runs alongside the production one, using a separate database. See the [Advanced Docker Guide](../admin/docker_advanced.md#test-mode) for details.
 

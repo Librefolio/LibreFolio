@@ -44,7 +44,7 @@ Ou téléchargez la dernière version depuis [GitHub Releases](https://github.co
 
 2. **Modifiez `.env`** pour personnaliser :
 
- - 🔌 `PORT` : Changez le port si `8000` est déjà utilisé.
+ - 🔌 `PORT` : Changez le port si `6040` est déjà utilisé.
  - 💰 `PORTFOLIO_BASE_CURRENCY` : Votre devise de base du portefeuille (par défaut : `EUR`).
  - 📊 `LOG_LEVEL` : Verbosité des journaux (par défaut : `INFO`).
 
@@ -80,7 +80,7 @@ docker compose up -d
 
 Ouvrez votre navigateur et allez à l'adresse :
 
-**`http://localhost:8000`**
+**`http://localhost:6040`**
 
 (Ou utilisez le port que vous avez configuré dans `.env`).
 
@@ -88,8 +88,8 @@ La première fois que vous accéderez à LibreFolio, une **page d'inscription** 
 
 Points de terminaison disponibles :
 
-- 🏠 **Frontend** : `http://localhost:8000/`
-- 📚 **Docs Utilisateur** : `http://localhost:8000/mkdocs/`
+- 🏠 **Frontend** : `http://localhost:6040/`
+- 📚 **Docs Utilisateur** : `http://localhost:6040/mkdocs/`
 
 !!! tip "Gestion des utilisateurs via CLI"
 
@@ -124,7 +124,7 @@ Vous pouvez démarrer un serveur de test avec des données fictives pré-remplie
 ./dev.py docker exec server --test
 ```
 
-Accédez à **`http://localhost:8001`** avec l'utilisateur `e2e_test_user` / `E2eTestPass123!`.
+Accédez à **`http://localhost:6041`** avec l'utilisateur `e2e_test_user` / `E2eTestPass123!`.
 
 Le serveur de test s'exécute parallèlement au serveur de production, en utilisant une base de données séparée. Voir le [Guide Docker Avancé](../admin/docker_advanced.md#test-mode) pour plus de détails.
 

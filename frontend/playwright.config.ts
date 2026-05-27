@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({path: path.resolve(__dirname, '../.env')});
 
 // Use TEST_PORT for E2E tests (server runs in test mode)
-const TEST_PORT = process.env.TEST_PORT || '8001';
+const TEST_PORT = process.env.TEST_PORT || '6041';
 const BASE_URL = `http://localhost:${TEST_PORT}`;
 
 export default defineConfig({

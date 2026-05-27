@@ -6,7 +6,7 @@
  * - Bug 14: BulkModal edit paired produces updates (not creates)
  * - Bug 7:  Flat mode keeps paired rows adjacent
  *
- * Prerequisites: backend test mode (port 8001), mock data populated.
+ * Prerequisites: backend test mode (port 6041), mock data populated.
  *
  * Mock data contract: populate_mock_data.py creates INTEREST transactions,
  * asymmetric paired TRANSFERs, and linked pairs. If a test fails because

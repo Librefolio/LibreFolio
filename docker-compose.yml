@@ -10,12 +10,12 @@
 # Usage:
 #   1. Build image:     ./dev.py docker build
 #   2. Start:           docker compose up -d
-#   3. Access:          http://localhost:${PORT:-8000}
+#   3. Access:          http://localhost:${PORT:-6040}
 #
 # Test mode (optional):
-#   ./dev.py docker exec server --test            # start test server on :8001
+#   ./dev.py docker exec server --test            # start test server on :6041
 #   ./dev.py docker exec test db populate --force --with-static
-#   Access:  http://localhost:${TEST_PORT:-8001}
+#   Access:  http://localhost:${TEST_PORT:-6041}
 # =============================================================================
 
 services:
@@ -32,8 +32,8 @@ services:
     # (Same pattern as postgres, mysql, redis official images.)
     restart: unless-stopped
     ports:
-      - "${PORT:-8000}:8000"
-      - "${TEST_PORT:-8001}:8001"
+      - "${PORT:-6040}:6040"
+      - "${TEST_PORT:-6041}:6041"
     volumes:
       - ./LibreFolio-data:/app/backend/data/prod-docker
     env_file: .env
@@ -46,7 +46,7 @@ services:
       - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
       - HOST=0.0.0.0
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
       interval: 30s
       timeout: 10s
       start_period: 15s

@@ -44,7 +44,7 @@ Le fichier `docker-compose.yml` définit le service et le répertoire de donnée
 ### 🔧 Service : `librefolio`
 
 - 🏗️ **`build: .`** : Construit à partir du `Dockerfile` à la racine du projet.
-- 🔌 **`ports`** : Mappe le port de l'hôte (`${PORT:-8000}`) vers le port `8000` du conteneur, et `${TEST_PORT:-8001}` vers `8001` pour le mode test.
+- 🔌 **`ports`** : Mappe le port de l'hôte (`${PORT:-6040}`) vers le port `6040` du conteneur, et `${TEST_PORT:-6041}` vers `6041` pour le mode test.
 - 📂 **`volumes`** : Un montage lié (bind mount) `./LibreFolio-data` → `/app/backend/data/prod-docker` persiste la base de données, les uploads, les rapports de courtier et les logs **dans le même répertoire que `docker-compose.yml`**.
 - 📝 **`env_file: .env`** : Charge toute la configuration depuis le fichier `.env` (copié depuis `.env.example`).
 - 🌍 **`environment`** : Écrase uniquement les valeurs spécifiques à Docker : `LIBREFOLIO_DATA_DIR` (chemin dans le conteneur) et `HOST=0.0.0.0`.
@@ -179,12 +179,12 @@ La configuration Docker Compose expose **deux ports** :
 
 | Port | Usage | Base de données |
 |------|---------|----------|
-| `8000` | Serveur de production (démarré par le CMD du conteneur) | `prod-docker/sqlite/app.db` (volume persistant) |
-| `8001` | Serveur de test (démarré manuellement via `docker exec`) | `test/sqlite/app.db` (éphémère) |
+| `6040` | Serveur de production (démarré par le CMD du conteneur) | `prod-docker/sqlite/app.db` (volume persistant) |
+| `6041` | Serveur de test (démarré manuellement via `docker exec`) | `test/sqlite/app.db` (éphémère) |
 
 ### Démarrer le serveur de test
 
-1. **Démarrez le conteneur** (le serveur de production démarre automatiquement sur `:8000`) :
+1. **Démarrez le conteneur** (le serveur de production démarre automatiquement sur `:6040`) :
 
  ```bash
  docker compose up -d
@@ -196,13 +196,13 @@ La configuration Docker Compose expose **deux ports** :
  ./dev.py docker exec test db populate --force --with-static
  ```
 
-3. **Démarrez le serveur de test** sur le port 8001 :
+3. **Démarrez le serveur de test** sur le port 6041 :
 
  ```bash
  ./dev.py docker exec server --test
  ```
 
-4. **Accédez** à l'adresse **`http://localhost:8001`**
+4. **Accédez** à l'adresse **`http://localhost:6041`**
 
  Identifiants de test :
 
@@ -246,8 +246,8 @@ services:
  # puis bascule vers l'utilisateur 'librefolio' via gosu (même schéma que postgres/redis).
  restart: unless-stopped
  ports:
- - "${PORT:-8000}:8000" # (2) Port de production — modifier via PORT dans .env
- - "${TEST_PORT:-8001}:8001" # (3) Port du serveur de test (optionnel)
+ - "${PORT:-6040}:6040" # (2) Port de production — modifier via PORT dans .env
+ - "${TEST_PORT:-6041}:6041" # (3) Port du serveur de test (optionnel)
  volumes:
  - ./LibreFolio-data:/app/backend/data/prod-docker # (4) Données persistantes (bind mount)
  env_file: .env # (5) Toute la config depuis le fichier .env
@@ -255,7 +255,7 @@ services:
  - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker # Override spécifique à Docker
  - HOST=0.0.0.0
  healthcheck:
- test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/health')"]
+ test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
  interval: 30s
  timeout: 10s
  start_period: 15s
@@ -301,8 +301,8 @@ Toute la configuration est gérée dans le fichier `.env` (copié depuis `.env.e
 
 | Variable | Par défaut | Description | Où |
 |----------|---------|-------------|-------|
-| `PORT` | `8000` | Port hôte pour le serveur de production | `.env` |
-| `TEST_PORT` | `8001` | Port hôte pour le serveur de test | `.env` |
+| `PORT` | `6040` | Port hôte pour le serveur de production | `.env` |
+| `TEST_PORT` | `6041` | Port hôte pour le serveur de test | `.env` |
 | `UID` | `1000` | UID de l'utilisateur conteneur (doit correspondre au propriétaire du répertoire de données) | `.env` |
 | `GID` | `1000` | GID de l'utilisateur conteneur (doit correspondre au propriétaire du répertoire de données) | `.env` |
 | `LOG_LEVEL` | `INFO` | Verbosité des logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `.env` |

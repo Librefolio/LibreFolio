@@ -61,20 +61,20 @@ The JWT signing key (`JWT_SECRET`) is:
 
 ```bash
 # Login and save cookie
-curl -s -c cookies.txt -X POST http://localhost:8000/api/v1/auth/login \
+curl -s -c cookies.txt -X POST http://localhost:6040/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "admin", "password": "yourpassword"}'
 
 # Use cookie for authenticated requests
-curl -b cookies.txt http://localhost:8000/api/v1/auth/me
+curl -b cookies.txt http://localhost:6040/api/v1/auth/me
 
 # List brokers
-curl -b cookies.txt http://localhost:8000/api/v1/brokers
+curl -b cookies.txt http://localhost:6040/api/v1/brokers
 
 # Sync FX rates
 curl -b cookies.txt -X POST \
   -H "Content-Type: application/json" \
-  http://localhost:8000/api/v1/fx/currencies/sync
+  http://localhost:6040/api/v1/fx/currencies/sync
 ```
 
 ## 🛡️ Endpoint Protection
@@ -115,7 +115,7 @@ graph LR
     Client[User Browser] -- "HTTPS (Encrypted)" --> Proxy[Reverse Proxy / Tunnel]
     
     subgraph "Internal Network / Docker Network"
-        Proxy -- "HTTP (Plain)" --> Backend[LibreFolio Backend :8000]
+        Proxy -- "HTTP (Plain)" --> Backend[LibreFolio Backend :6040]
     end
 ```
 

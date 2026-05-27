@@ -44,7 +44,7 @@ O descargue la última versión desde [GitHub Releases](https://github.com/Alfys
 
 2. **Edite `.env`** para personalizar:
 
- - 🔌 `PORT`: Cambie el puerto si el `8000` ya está en uso.
+ - 🔌 `PORT`: Cambie el puerto si el `6040` ya está en uso.
  - 💰 `PORTFOLIO_BASE_CURRENCY`: La moneda base de la cartera (por defecto: `EUR`).
  - 📊 `LOG_LEVEL`: Verbosidad del registro (por defecto: `INFO`).
 
@@ -80,7 +80,7 @@ docker compose up -d
 
 Abra su navegador y vaya a:
 
-**`http://localhost:8000`**
+**`http://localhost:6040`**
 
 (O utilice el puerto que configuró en `.env`).
 
@@ -88,8 +88,8 @@ La primera vez que acceda a LibreFolio, aparecerá una **página de registro** �
 
 Endpoints disponibles:
 
-- 🏠 **Frontend**: `http://localhost:8000/`
-- 📚 **Documentación de Usuario**: `http://localhost:8000/mkdocs/`
+- 🏠 **Frontend**: `http://localhost:6040/`
+- 📚 **Documentación de Usuario**: `http://localhost:6040/mkdocs/`
 
 !!! tip "Gestión de usuarios por CLI"
 
@@ -124,7 +124,7 @@ Puede iniciar un servidor de prueba con datos simulados pre-cargados para explor
 ./dev.py docker exec server --test
 ```
 
-Acceda en **`http://localhost:8001`** con el usuario `e2e_test_user` / `E2eTestPass123!`.
+Acceda en **`http://localhost:6041`** con el usuario `e2e_test_user` / `E2eTestPass123!`.
 
 El servidor de prueba se ejecuta junto al de producción, utilizando una base de datos separada. Consulte la [Guía Avanzada de Docker](../admin/docker_advanced.md#test-mode) para más detalles.
 

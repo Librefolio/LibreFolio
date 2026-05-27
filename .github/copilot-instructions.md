@@ -161,8 +161,8 @@ The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/gra
 
 | Port | Service |
 |------|---------|
-| 8000 | Backend production |
-| 8001 | Backend test mode |
-| 8002 | MkDocs serve |
+| 6040 | Backend production |
+| 6041 | Backend test mode |
+| 6042 | MkDocs serve |
 | 5173 | Frontend dev (Vite HMR) |
 

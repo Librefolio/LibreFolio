@@ -70,7 +70,7 @@ frontend/
 - **2 projects**: `desktop` (1280×720, Chrome) + `mobile` (iPhone 14 Pro Max viewport, Chromium)
 - **Workers**: 1 (sequential — shared DB state)
 - **Timeout**: 15s per test (localhost — fast responses expected)
-- **Web Server auto-start**: `./dev.py server --test --force` (port 8001)
+- **Web Server auto-start**: `./dev.py server --test --force` (port 6041)
 - **Retry**: 0 local, 2 in CI
 
 ## Fixtures

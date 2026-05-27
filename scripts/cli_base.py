@@ -78,13 +78,13 @@ def get_server_host() -> str:
 
 
 def get_server_port() -> int:
-    """Get server port from environment variable (default: 8000)."""
-    return int(os.environ.get("PORT", "8000"))
+    """Get server port from environment variable (default: 6040)."""
+    return int(os.environ.get("PORT", "6040"))
 
 
 def get_test_server_port() -> int:
-    """Get test server port from environment variable (default: 8001)."""
-    return int(os.environ.get("TEST_PORT", "8001"))
+    """Get test server port from environment variable (default: 6041)."""
+    return int(os.environ.get("TEST_PORT", "6041"))
 
 
 # =============================================================================

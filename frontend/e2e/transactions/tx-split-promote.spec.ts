@@ -8,7 +8,7 @@
  * 4. Promote from Main Table → select 2 promote-test rows
  * 5. BulkModal open after page refresh (NR-1 non-regression for F6)
  *
- * Prerequisites: backend test mode (port 8001), mock data populated.
+ * Prerequisites: backend test mode (port 6041), mock data populated.
  * Mock data contract: populate_mock_data.py creates tagged transactions:
  * - "promote-test" tag on standalone DEPOSIT/WITHDRAWAL for promote candidates
  *   (Coinbase/EDITOR + IB/OWNER — both editable by e2e_test_user)

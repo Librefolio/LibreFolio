@@ -15,7 +15,7 @@ import {execSync} from 'child_process';
 import * as path from 'path';
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '..', '..');
-const TEST_PORT = process.env.TEST_PORT || '8001';
+const TEST_PORT = process.env.TEST_PORT || '6041';
 const BASE_URL = `http://localhost:${TEST_PORT}`;
 
 export default async function globalSetup() {

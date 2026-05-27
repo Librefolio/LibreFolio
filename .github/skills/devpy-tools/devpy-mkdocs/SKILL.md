@@ -9,7 +9,7 @@ description: "Use this skill when the user needs to build, serve, or deploy MkDo
 
 ```bash
 ./dev.py mkdocs build                  # Build docs (strict mode, checks admonitions)
-./dev.py mkdocs serve                  # Dev server on port 8002
+./dev.py mkdocs serve                  # Dev server on port 6042
 ./dev.py mkdocs clean                  # Remove build artifacts
 ./dev.py mkdocs deploy                 # Deploy to GitHub Pages
 ./dev.py mkdocs check-links           # Validate cross-boundary links (frontend/backend → docs)
@@ -35,7 +35,7 @@ Generate automatic screenshots for documentation (light/dark × desktop/mobile �
 ### Gallery Pipeline
 1. Populates test DB with deterministic data (`--with-static --with-reports`)
 2. Ensures E2E test users exist
-3. Starts test server on port 8001
+3. Starts test server on port 6041
 4. Runs `gallery.spec.ts` via Playwright (desktop + mobile projects)
 5. Screenshots saved to `mkdocs_src/docs/gallery/`
 
