@@ -181,7 +181,8 @@
     "buyMeACoffee": "Invítame a un Café",
     "installApp": "Instalar App",
     "installAppIos": "Toca Compartir, luego \"Añadir a pantalla de inicio\"",
-    "installAppDesktop": "Busca el icono de instalación (⊕) en la barra de direcciones"
+    "installAppDesktop": "Busca el icono de instalación (⊕) en la barra de direcciones",
+    "installAppAndroid": "Se requiere HTTPS para instalar. Usa menú Chrome ⋮ → \"Añadir a pantalla de inicio\" como acceso directo"
   },
   "dashboard": {
     "welcomeBack": "Bienvenido de nuevo",

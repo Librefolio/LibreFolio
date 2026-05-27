@@ -181,7 +181,8 @@
     "buyMeACoffee": "Buy Me a Coffee",
     "installApp": "Install App",
     "installAppIos": "Tap Share, then \"Add to Home Screen\"",
-    "installAppDesktop": "Look for the install icon (⊕) in your browser's address bar"
+    "installAppDesktop": "Look for the install icon (⊕) in your browser's address bar",
+    "installAppAndroid": "HTTPS required for install. Use Chrome menu ⋮ → \"Add to Home Screen\" as shortcut"
   },
   "dashboard": {
     "welcomeBack": "Welcome back",
