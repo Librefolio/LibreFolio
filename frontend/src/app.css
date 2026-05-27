@@ -64,9 +64,17 @@ a, button, input, select, textarea, [role="button"] {
     touch-action: manipulation;
 }
 
-/* Flag emoji — Windows doesn't support country flags with Segoe UI Emoji */
+/* iOS PWA safe-area: push content below status bar/notch in standalone mode */
+.safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-top-offset {
+    top: calc(1rem + env(safe-area-inset-top, 0px));
+}
+
+/* Flag emoji — Apple Color Emoji first for iOS, Noto for Windows/Linux */
 .emoji-flag {
-    font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
+    font-family: 'Apple Color Emoji', 'Noto Color Emoji', 'Segoe UI Emoji', sans-serif;
 }
 
 /* Utility: Hidden scrollbar but still scrollable */

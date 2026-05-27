@@ -75,7 +75,7 @@
 {:else}
     <div class="min-h-screen flex items-center justify-center p-4" data-testid="login-page">
         <!-- Language & Theme Selector (top right) -->
-        <div class="fixed top-4 right-4 z-50 flex items-center space-x-2">
+        <div class="fixed right-4 z-50 flex items-center space-x-2 safe-top-offset">
             <a href="https://www.buymeacoffee.com/librefolio" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-colors text-amber-600 dark:text-amber-400" title={$_('help.buyMeACoffee')}>
                 <span class="hidden sm:inline text-sm font-medium leading-5">{$_('help.buyMeACoffee')}</span>
                 <Coffee size={20} class="flex-shrink-0" />

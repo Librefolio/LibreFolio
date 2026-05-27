@@ -181,7 +181,8 @@
     "buyMeACoffee": "Offrimi un Caffè",
     "installApp": "Installa App",
     "installAppIos": "Tocca Condividi, poi \"Aggiungi a Home\"",
-    "installAppDesktop": "Cerca l'icona di installazione (⊕) nella barra degli indirizzi"
+    "installAppDesktop": "Cerca l'icona di installazione (⊕) nella barra degli indirizzi",
+    "installAppAndroid": "Serve HTTPS per l'installazione. Usa menu Chrome ⋮ → \"Aggiungi a Home\" come scorciatoia"
   },
   "dashboard": {
     "welcomeBack": "Bentornato",

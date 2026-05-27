@@ -8,6 +8,7 @@
     let deferredPrompt: any = null;
     let isStandalone = $state(false);
     let isIos = $state(false);
+    let isAndroid = $state(false);
     let showIosHint = $state(false);
     let showDesktopHint = $state(false);
 
@@ -61,6 +62,7 @@
         // Detect iOS
         const ua = navigator.userAgent;
         isIos = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        isAndroid = /Android/.test(ua);
 
         // Listen for beforeinstallprompt (Chrome/Android/Edge)
         const handler = (e: Event) => {
@@ -102,7 +104,7 @@
                 {/if}
                 {#if showDesktopHint}
                     <p class="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 italic">
-                        {$_('help.installAppDesktop')}
+                        {isAndroid ? $_('help.installAppAndroid') : $_('help.installAppDesktop')}
                     </p>
                 {/if}
                 <div class="border-t border-gray-100 dark:border-slate-600 my-1"></div>
