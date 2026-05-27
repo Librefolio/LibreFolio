@@ -1571,9 +1571,35 @@ def generate_favicon():
     print_success(f"favicon.png generated (48×48 from {w}×{h} logo)")
 
 
+def generate_pwa_icons():
+    """Generate PWA icons (192x192, 512x512) from logo_square.png with white padding."""
+    from PIL import Image
+    src = PROJECT_ROOT / "frontend" / "static" / "logo_square.png"
+    icons_dir = PROJECT_ROOT / "frontend" / "static" / "icons"
+    if not src.exists():
+        print_warning("logo_square.png not found, skipping PWA icon generation")
+        return
+    icons_dir.mkdir(parents=True, exist_ok=True)
+    img = Image.open(src).convert("RGBA")
+    w, h = img.size
+    # Add ~12% white padding around the logo
+    padding_ratio = 0.12
+    for target_size in (192, 512):
+        padded_size = int(target_size * (1 + 2 * padding_ratio))
+        canvas = Image.new("RGBA", (padded_size, padded_size), (255, 255, 255, 255))
+        logo_size = target_size
+        resized = img.resize((logo_size, logo_size), Image.LANCZOS)
+        offset = (padded_size - logo_size) // 2
+        canvas.paste(resized, (offset, offset), resized)
+        final = canvas.resize((target_size, target_size), Image.LANCZOS)
+        final.save(icons_dir / f"icon-{target_size}.png")
+    print_success(f"PWA icons generated (192×192, 512×512 from {w}×{h} logo_square)")
+
+
 def copy_docs_assets():
     """Copy logo, favicon, and icons to docs."""
     generate_favicon()
+    generate_pwa_icons()
     static_dir = PROJECT_ROOT / "mkdocs_src" / "docs" / "static"
     static_dir.mkdir(parents=True, exist_ok=True)
 
