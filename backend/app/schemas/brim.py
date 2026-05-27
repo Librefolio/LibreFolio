@@ -24,7 +24,6 @@ DTOs for broker report file upload, parsing, and import operations.
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 from enum import StrEnum
 from typing import Dict, List, Literal, Optional
 

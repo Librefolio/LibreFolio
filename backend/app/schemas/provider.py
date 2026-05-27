@@ -26,7 +26,6 @@ both Financial Assets (FA) and Foreign Exchange (FX) systems.
 
 from __future__ import annotations
 
-from decimal import Decimal
 from enum import StrEnum
 from typing import Any, List, Optional
 

@@ -29,7 +29,6 @@ from backend.app.db.models import (
     BrokerUserAccess,
     PriceHistory,
     Transaction,
-    TransactionType,
     UserRole,
 )
 from backend.app.schemas.brokers import (
