@@ -19,7 +19,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.app.services.asset_source import AssetSourceError
 from backend.app.services.provider_registry import AssetProviderRegistry
-from backend.test_scripts.test_utils import print_info, print_section, print_success, print_warning
+from backend.test_scripts.test_utils import print_section, print_success
 
 # Discover providers
 AssetProviderRegistry.auto_discover()
@@ -40,9 +40,7 @@ async def test_current_value_eur():
     print_section("JustETF: Current Value EUR")
     provider = _get_provider()
 
-    result = await provider.get_current_value(
-        ISIN, IdentifierType.ISIN, {"currency": "EUR"}
-    )
+    result = await provider.get_current_value(ISIN, IdentifierType.ISIN, {"currency": "EUR"})
     assert result.value > 0
     assert result.currency == "EUR"
     print_success(f"EUR current: {result.value} {result.currency}")
@@ -56,9 +54,7 @@ async def test_current_value_non_eur_rejected(currency: str):
     provider = _get_provider()
 
     with pytest.raises(AssetSourceError) as exc_info:
-        await provider.get_current_value(
-            ISIN, IdentifierType.ISIN, {"currency": currency}
-        )
+        await provider.get_current_value(ISIN, IdentifierType.ISIN, {"currency": currency})
 
     assert "NOT_SUPPORTED" in str(exc_info.value) or "only available in EUR" in str(exc_info.value)
     print_success(f"{currency} current correctly rejected")
@@ -74,9 +70,7 @@ async def test_history_all_currencies(currency: str):
     end_date = date.today()
     start_date = end_date - timedelta(days=7)
 
-    result = await provider.get_history_value(
-        ISIN, IdentifierType.ISIN, {"currency": currency}, start_date, end_date
-    )
+    result = await provider.get_history_value(ISIN, IdentifierType.ISIN, {"currency": currency}, start_date, end_date)
 
     assert hasattr(result, "prices")
     assert len(result.prices) > 0, f"No prices returned for {currency}"
@@ -126,7 +120,7 @@ async def test_search_multicurrency():
     # iShares Core MSCI World is USD-denominated
     assert crown_results[0]["currency"] == "USD"
 
-    print_success(f"Search returned 4 currency variants with correct flags and 👑")
+    print_success("Search returned 4 currency variants with correct flags and 👑")
 
 
 def test_params_schema():

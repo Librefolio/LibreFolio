@@ -43,6 +43,9 @@ export type SignRule = ServerTXType['quantity_sign'];
 /** Pair form layout — derived from backend PairFormLayout enum. */
 export type PairFormLayout = NonNullable<ServerTXType['pair_form_layout']>;
 
+/** Cost basis field mode — derived from backend CostBasisFieldMode enum. */
+export type CostBasisFieldMode = NonNullable<ServerTXType['cost_basis_mode']>;
+
 // =============================================================================
 //  TypeRule — frontend-friendly shape (renamed fields for readability)
 // =============================================================================
@@ -56,6 +59,8 @@ export interface TypeRule {
     eventLinkable: boolean;
     requiresPair: boolean;
     pairFormLayout: PairFormLayout | null;
+    costBasisMode: CostBasisFieldMode;
+    costBasisPair: [CostBasisFieldMode, CostBasisFieldMode] | null;
 }
 
 export interface ValidatableDraft {
@@ -93,6 +98,8 @@ function serverTypeToRule(s: ServerTXType): TypeRule {
         eventLinkable: s.event_compatible,
         requiresPair: s.requires_link,
         pairFormLayout: s.pair_form_layout ?? null,
+        costBasisMode: s.cost_basis_mode ?? 'forbidden',
+        costBasisPair: s.cost_basis_pair ? (s.cost_basis_pair as [CostBasisFieldMode, CostBasisFieldMode]) : null,
     };
 }
 
@@ -117,6 +124,8 @@ const FALLBACK_RULE: TypeRule = {
     eventLinkable: false,
     requiresPair: false,
     pairFormLayout: null,
+    costBasisMode: 'forbidden',
+    costBasisPair: null,
 };
 
 // =============================================================================
@@ -155,6 +164,19 @@ export function isTypesLoaded(): boolean {
 export function getTypeRule(type: string | null | undefined): TypeRule {
     const code = (type ?? '').toUpperCase();
     return _ruleMap[code] ?? FALLBACK_RULE;
+}
+
+/** Get cost_basis rule for a type given its role in a pair.
+ *  - 'from' (index 0 = sender, qty<0)
+ *  - 'to' (index 1 = receiver, qty>0)
+ *  - 'self' (standalone — uses costBasisMode directly)
+ *  Returns the applicable CostBasisFieldMode. */
+export function getCostBasisRule(type: string, side: 'from' | 'to' | 'self'): CostBasisFieldMode {
+    const rule = getTypeRule(type);
+    if (rule.costBasisPair && side !== 'self') {
+        return rule.costBasisPair[side === 'from' ? 0 : 1];
+    }
+    return rule.costBasisMode;
 }
 
 /** Icon URL for a transaction type. */

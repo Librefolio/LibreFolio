@@ -76,6 +76,7 @@ plugins:
             Overview: Panoramica
             Getting Started: Per Iniziare
             Installation (Docker): Installazione (Docker)
+            Install as App (PWA): Installa come App (PWA)
             Brokers: Broker
             Broker Sharing: Condivisione Broker
             Files: File
@@ -172,6 +173,7 @@ plugins:
             Overview: Aperçu
             Getting Started: Premiers Pas
             Installation (Docker): Installation (Docker)
+            Install as App (PWA): Installer comme App (PWA)
             Brokers: Courtiers
             Broker Sharing: Partage de Courtier
             Files: Fichiers
@@ -268,6 +270,7 @@ plugins:
             Overview: Resumen
             Getting Started: Primeros Pasos
             Installation (Docker): Instalación (Docker)
+            Install as App (PWA): Instalar como App (PWA)
             Brokers: Brokers
             Broker Sharing: Compartir Broker
             Files: Archivos
@@ -377,6 +380,7 @@ nav:
       - Overview: user/index.md
       - Getting Started: user/getting-started.md
       - Installation (Docker): user/installation.md
+      - Install as App (PWA): user/pwa.md
       - Brokers:
           - Overview: user/brokers/index.md
           - Broker Sharing: user/brokers/sharing.md
@@ -558,6 +562,7 @@ nav:
           - State Management: developer/frontend/state/index.md
           - Internationalization: developer/frontend/i18n.md
           - Styling: developer/frontend/styling.md
+          - PWA & Mobile: developer/frontend/pwa.md
       - Test Walkthrough:
           - Overview: developer/test-walkthrough/index.md
           - Backend Tests:

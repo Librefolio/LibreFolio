@@ -44,6 +44,24 @@
 /* Base styles */
 html {
     font-family: Inter, system-ui, sans-serif;
+    overscroll-behavior-x: none;
+}
+
+body {
+    overscroll-behavior: contain;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent iOS auto-zoom on input focus (triggers when font-size < 16px) */
+@media (max-width: 768px) {
+    input, select, textarea {
+        font-size: 16px !important;
+    }
+}
+
+/* Disable double-tap zoom on interactive elements */
+a, button, input, select, textarea, [role="button"] {
+    touch-action: manipulation;
 }
 
 /* Flag emoji — Windows doesn't support country flags with Segoe UI Emoji */

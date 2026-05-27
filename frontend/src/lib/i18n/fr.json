@@ -178,7 +178,10 @@
     "faq": "FAQ",
     "reportBug": "Signaler un Bug",
     "supportProject": "Soutenir le Projet",
-    "buyMeACoffee": "Offrez-moi un Café"
+    "buyMeACoffee": "Offrez-moi un Café",
+    "installApp": "Installer l'App",
+    "installAppIos": "Touchez Partager, puis \"Sur l'écran d'accueil\"",
+    "installAppDesktop": "Cherchez l'icône d'installation (⊕) dans la barre d'adresse"
   },
   "dashboard": {
     "welcomeBack": "Bienvenue",
@@ -619,7 +622,8 @@
       "stateEdit": "modif.",
       "stateDel": "suppr.",
       "suggestLightbulb": "Afficher suggestion",
-      "partnerInaccessible": "Partenaire sur courtier inaccessible"
+      "partnerInaccessible": "Partenaire sur courtier inaccessible",
+      "wacCalcFailed": "Calcul WAC échoué pour certaines lignes"
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"

@@ -178,7 +178,10 @@
     "faq": "FAQ",
     "reportBug": "Report Bug",
     "supportProject": "Support the Project",
-    "buyMeACoffee": "Buy Me a Coffee"
+    "buyMeACoffee": "Buy Me a Coffee",
+    "installApp": "Install App",
+    "installAppIos": "Tap Share, then \"Add to Home Screen\"",
+    "installAppDesktop": "Look for the install icon (⊕) in your browser's address bar"
   },
   "dashboard": {
     "welcomeBack": "Welcome back",
@@ -619,7 +622,8 @@
       "stateEdit": "edit",
       "stateDel": "del",
       "suggestLightbulb": "Show suggestion",
-      "partnerInaccessible": "Partner on inaccessible broker"
+      "partnerInaccessible": "Partner on inaccessible broker",
+      "wacCalcFailed": "WAC calculation failed for some rows"
     },
     "commit": {
       "serverError": "Save failed — server error"
