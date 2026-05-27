@@ -407,7 +407,7 @@ class TestWACCostBasis:
             # No wac_info in commit response
             create_results = [r for r in data["results"] if r["operation"] == "create"]
             wac_results = [r for r in create_results if r.get("wac_info")]
-            assert len(wac_results) == 0, f"wac_info should not be in commit response"
+            assert len(wac_results) == 0, "wac_info should not be in commit response"
 
             # Verify cost_basis_override is NULL
             all_ids = [tid for r in create_results for tid in r["ids"]]
@@ -827,7 +827,7 @@ class TestWACPreview:
             )
             assert resp.status_code == 200
             wac_item = resp.json()["items"][0]
-            assert Decimal(wac_item["wac"]["amount"]) == Decimal("100"), f"Expected 100 after excluding second BUY"
+            assert Decimal(wac_item["wac"]["amount"]) == Decimal("100"), "Expected 100 after excluding second BUY"
             print_success("WAC-P4: excluded_tx_ids → excluded TX not counted ✓")
 
     # ------------------------------------------------------------------ WAC-P5
@@ -1193,11 +1193,15 @@ class TestWACUpdatePromote:
 
             # Create WITHDRAWAL + DEPOSIT standalone
             w_id = await _create_standalone_tx(
-                client, broker_a, "WITHDRAWAL",
+                client,
+                broker_a,
+                "WITHDRAWAL",
                 cash={"code": "EUR", "amount": "-500"},
             )
             d_id = await _create_standalone_tx(
-                client, broker_b, "DEPOSIT",
+                client,
+                broker_b,
+                "DEPOSIT",
                 cash={"code": "EUR", "amount": "500"},
             )
 
@@ -1250,11 +1254,15 @@ class TestWACUpdatePromote:
 
             # Create WITHDRAWAL + DEPOSIT
             w_id = await _create_standalone_tx(
-                client, broker_a, "WITHDRAWAL",
+                client,
+                broker_a,
+                "WITHDRAWAL",
                 cash={"code": "EUR", "amount": "-400"},
             )
             d_id = await _create_standalone_tx(
-                client, broker_b, "DEPOSIT",
+                client,
+                broker_b,
+                "DEPOSIT",
                 cash={"code": "EUR", "amount": "400"},
             )
 
@@ -1315,4 +1323,3 @@ async def _create_standalone_tx(
     data = await commit_batch(client, creates=[create_dict])
     assert data["committed"] is True, f"Standalone not committed: {data}"
     return data["results"][0]["ids"][0]
-

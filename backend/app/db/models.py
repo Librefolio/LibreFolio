@@ -27,11 +27,10 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     event,
-    )
+)
 from sqlmodel import Field, Relationship, SQLModel
 
 from backend.app.utils.datetime_utils import utcnow
-
 
 # =============================================================================
 # CURRENCY VALIDATION HELPER
@@ -431,8 +430,8 @@ class BrokerUserAccess(SQLModel, table=True):
         CheckConstraint(
             "share_percentage >= 0 AND share_percentage <= 1",
             name="ck_broker_user_access_share_percentage",
-            ),
-        )
+        ),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
@@ -442,7 +441,7 @@ class BrokerUserAccess(SQLModel, table=True):
         default=Decimal("1"),
         sa_column=Column(Numeric(7, 6), nullable=False, default=1),
         description="Ownership fraction (0.000000 to 1.000000) for portfolio aggregation",
-        )
+    )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -484,7 +483,7 @@ class Asset(SQLModel, table=True):
         UniqueConstraint("display_name", name="uq_assets_display_name"),
         Index("ix_assets_identifier_isin", "identifier_isin"),
         Index("ix_assets_identifier_ticker", "identifier_ticker"),
-        )
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     display_name: str = Field(nullable=False)
@@ -585,7 +584,7 @@ class Transaction(SQLModel, table=True):
         Index("idx_transactions_asset_date", "asset_id", "date"),
         Index("idx_transactions_related", "related_transaction_id"),
         Index("idx_transactions_asset_event", "asset_event_id"),
-        )
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -594,7 +593,7 @@ class Transaction(SQLModel, table=True):
         default=None,
         sa_column=Column(Integer, ForeignKey("assets.id"), nullable=True, index=True),
         description="Asset ID, NULL for pure cash transactions",
-        )
+    )
 
     type: TransactionType = Field(nullable=False)
     date: date_type = Field(nullable=False, index=True, description="Settlement date")
@@ -604,12 +603,12 @@ class Transaction(SQLModel, table=True):
         default=Decimal("0"),
         sa_column=Column(Numeric(18, 6), nullable=False, default=0),
         description="Asset quantity delta (+ in, - out)",
-        )
+    )
     amount: Decimal = Field(
         default=Decimal("0"),
         sa_column=Column(Numeric(18, 6), nullable=False, default=0),
         description="Cash amount delta (+ in, - out)",
-        )
+    )
     currency: Optional[str] = Field(default=None, max_length=3, description="ISO 4217 currency code, required if amount != 0")
 
     # Link for paired transactions (TRANSFER, FX_CONVERSION)
@@ -622,9 +621,9 @@ class Transaction(SQLModel, table=True):
             Integer,
             ForeignKey("transactions.id", deferrable=True, initially="DEFERRED"),
             nullable=True,
-            ),
+        ),
         description="Links to paired transaction (for TRANSFER, FX_CONVERSION). Bidirectional.",
-        )
+    )
 
     # Relationship for ORM access (post_update=True for bidirectional self-reference)
     # This tells SQLAlchemy to INSERT first with NULL, then UPDATE to set the link
@@ -633,15 +632,15 @@ class Transaction(SQLModel, table=True):
             "foreign_keys": "[Transaction.related_transaction_id]",
             "remote_side": "[Transaction.id]",
             "post_update": True,
-            }
-        )
+        }
+    )
 
     # User-defined tags for filtering and grouping
     tags: Optional[str] = Field(
         default=None,
         sa_column=Column(Text),
         description="Comma-separated tags (e.g., 'tag1,tag2,tag3')",
-        )
+    )
 
     description: Optional[str] = Field(default=None, sa_column=Column(Text))
 
@@ -655,7 +654,7 @@ class Transaction(SQLModel, table=True):
         default=None,
         sa_column=Column(Numeric(18, 6), nullable=True),
         description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",
-        )
+    )
 
     # Currency code for cost_basis_override (ISO 4217 / crypto).
     # Always set together with cost_basis_override (both null or both non-null).
@@ -669,9 +668,13 @@ class Transaction(SQLModel, table=True):
     # This is consistent with Asset↔Transaction integrity policy (preserves user data).
     asset_event_id: Optional[int] = Field(
         default=None,
-        sa_column=Column(Integer, ForeignKey("asset_events.id", ondelete="RESTRICT"), nullable=True, ),
+        sa_column=Column(
+            Integer,
+            ForeignKey("asset_events.id", ondelete="RESTRICT"),
+            nullable=True,
+        ),
         description="FK to AssetEvent this transaction realizes. RESTRICT on delete.",
-        )
+    )
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -704,7 +707,7 @@ class PriceHistory(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("asset_id", "date", name="uq_price_history_asset_date"),
         Index("idx_price_history_asset_date", "asset_id", "date"),
-        )
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -750,7 +753,7 @@ class AssetEvent(SQLModel, table=True):
         Index("idx_asset_event_asset_date", "asset_id", "date"),
         Index("idx_asset_event_asset_type_date", "asset_id", "type", "date"),
         Index("idx_asset_event_provider_assignment", "provider_assignment_id"),
-        )
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     asset_id: int = Field(foreign_key="assets.id", nullable=False)
@@ -764,9 +767,9 @@ class AssetEvent(SQLModel, table=True):
             Integer,
             ForeignKey("asset_provider_assignments.id", ondelete="CASCADE"),
             nullable=True,
-            ),
+        ),
         description="FK to provider config that generated this event. NULL = user-created manual event.",
-        )
+    )
     notes: Optional[str] = Field(default=None, sa_column=Column(Text))
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -801,7 +804,7 @@ class FxRate(SQLModel, table=True):
         UniqueConstraint("date", "base", "quote", name="uq_fx_rates_date_base_quote"),
         CheckConstraint("base < quote", name="ck_fx_rates_base_less_than_quote"),
         Index("idx_fx_rates_base_quote_date", "base", "quote", "date"),
-        )
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -849,7 +852,7 @@ class FxConversionRoute(SQLModel, table=True):
         UniqueConstraint("base", "quote", "priority", name="uq_route_base_quote_priority"),
         CheckConstraint("base < quote", name="ck_route_base_less_than_quote"),
         Index("idx_route_base_quote", "base", "quote"),
-        )
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -861,7 +864,7 @@ class FxConversionRoute(SQLModel, table=True):
     chain_steps: str = Field(
         sa_column=Column(Text, nullable=False),
         description="JSON array of conversion steps [{from, to, provider}, ...]",
-        )
+    )
 
     fetch_interval: Optional[int] = Field(default=None, ge=1, description="Fetch frequency in minutes (NULL = default 1440 = 24h)")
 
@@ -934,7 +937,7 @@ class AssetProviderAssignment(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("asset_id", name="uq_asset_provider_asset_id"),
         Index("idx_asset_provider_asset_id", "asset_id"),
-        )
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -943,23 +946,23 @@ class AssetProviderAssignment(SQLModel, table=True):
         nullable=False,
         unique=True,
         description="Asset ID (1-to-1 relationship)",
-        )
+    )
     provider_code: str = Field(
         max_length=50,
         nullable=False,
         description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)",
-        )
+    )
     identifier: Optional[str] = Field(
         default=None,
         nullable=True,
         description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.). NULL for AUTO_GENERATED providers.",
-        )
+    )
     identifier_type: ProviderInputType = Field(nullable=False, description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED)")
     provider_params: Optional[str] = Field(
         default=None,
         sa_column=Column(Text),
         description="JSON configuration for provider (validated by plugin)",
-        )
+    )
     last_fetch_at: Optional[datetime] = Field(default=None, description="Last fetch attempt timestamp (NULL = never fetched)")
     fetch_interval: Optional[int] = Field(default=None, description="Refresh frequency in minutes (NULL = default 1440 = 24h)")
 

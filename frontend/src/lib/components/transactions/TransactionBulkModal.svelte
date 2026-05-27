@@ -244,6 +244,138 @@
     let confirmEditDeleteOpen = $state(false);
     let confirmEditDeleteRow = $state<PendingOp | null>(null);
 
+    // =========================================================================
+    // Reactive WAC — batch fetch for rows with cost_basis_mode='auto'
+    // =========================================================================
+
+    /** Fingerprint of all WAC-relevant fields across ALL ops (not just auto).
+     *  Any change triggers recalc of all auto rows since a BUY affects TRANSFER WAC. */
+    let wacFingerprint = $derived.by(() => {
+        return ops
+            .map((o) => {
+                const f = o.fields;
+                const del = o.op === 'edit' ? (o as any).markedDelete : false;
+                return `${f.broker_id}|${f.asset_id}|${f.date}|${f.quantity}|${f.cash?.amount ?? ''}|${f.type}|${del}`;
+            })
+            .join(';;');
+    });
+
+    /** List of ops with mode='auto' and valid params for WAC calc. */
+    let autoWacItems = $derived.by(() => {
+        return ops.filter((o) => o.fields.cost_basis_mode === 'auto' && o.fields.broker_id && o.fields.asset_id && o.fields.date);
+    });
+
+    let wacFetchInFlight = $state(false);
+    let wacAbortController: AbortController | null = null;
+    let wacDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Promise resolved when WAC fetch completes (for pre-commit await). */
+    let wacFetchPromise: Promise<void> | null = null;
+    let wacFetchResolve: (() => void) | null = null;
+
+    $effect(() => {
+        const _fp = wacFingerprint;
+        const _autoItems = autoWacItems;
+
+        if (_autoItems.length === 0) return;
+
+        // Debounce 800ms trailing
+        if (wacDebounceTimer) clearTimeout(wacDebounceTimer);
+        wacDebounceTimer = setTimeout(() => {
+            fetchBatchWac(_autoItems);
+        }, 800);
+
+        return () => {
+            if (wacDebounceTimer) clearTimeout(wacDebounceTimer);
+        };
+    });
+
+    /** Fetch WAC for all auto items in a single batch call. */
+    async function fetchBatchWac(autoItems: PendingOp[]) {
+        if (autoItems.length === 0) return;
+
+        // Abort previous request
+        if (wacAbortController) wacAbortController.abort();
+        wacAbortController = new AbortController();
+
+        wacFetchInFlight = true;
+        // Create promise for pre-commit await
+        wacFetchPromise = new Promise((resolve) => {
+            wacFetchResolve = resolve;
+        });
+
+        try {
+            // Build pending_txs from all non-delete ops
+            const pendingTxs = ops
+                .filter((o) => !(o.op === 'edit' && (o as any).markedDelete))
+                .map((o) => {
+                    const f = o.fields;
+                    return {
+                        id: o.op === 'edit' ? (o as any).txId : undefined,
+                        broker_id: f.broker_id,
+                        asset_id: f.asset_id,
+                        type: f.type,
+                        date: f.date,
+                        quantity: f.quantity,
+                        cash: f.cash,
+                        cost_basis_override: f.cost_basis_override,
+                    };
+                })
+                .filter((p) => p.asset_id != null);
+
+            // Build excluded_tx_ids from markedDelete edit ops
+            const excludedTxIds = ops.filter((o) => o.op === 'edit' && (o as any).markedDelete).map((o) => (o as any).txId);
+
+            // Build items[] from autoItems
+            const items = autoItems.map((o) => ({
+                sender_broker_id: o.fields.broker_id,
+                asset_id: o.fields.asset_id!,
+                date_range: {end: o.fields.date},
+            }));
+
+            const resp = await zodiosApi.wac_preview_api_v1_transactions_wac_preview_post(
+                {
+                    items,
+                    pending_txs: pendingTxs as any,
+                    excluded_tx_ids: excludedTxIds,
+                    include_details: false,
+                },
+                {signal: wacAbortController.signal},
+            );
+
+            // Write results back to matching ops
+            const results = (resp as any)?.items ?? [];
+            for (let i = 0; i < autoItems.length && i < results.length; i++) {
+                const item = autoItems[i];
+                const result = results[i];
+                if (result?.wac) {
+                    // Find the op in current ops array (may have changed during fetch)
+                    const opIndex = ops.findIndex((o) => o.tempId === item.tempId);
+                    if (opIndex >= 0 && ops[opIndex].fields.cost_basis_mode === 'auto') {
+                        ops = ops.map((o, idx) => {
+                            if (idx !== opIndex) return o;
+                            return {...o, fields: {...o.fields, cost_basis_override: {code: result.wac.code, amount: result.wac.amount}}};
+                        });
+                    }
+                }
+            }
+        } catch (e: any) {
+            if (e?.name !== 'AbortError') {
+                console.error('WAC batch fetch failed:', e);
+            }
+        } finally {
+            wacFetchInFlight = false;
+            if (wacFetchResolve) {
+                wacFetchResolve();
+                wacFetchResolve = null;
+            }
+            wacFetchPromise = null;
+        }
+    }
+
+    // =========================================================================
+    // Initial rows resolution
+    // =========================================================================
+
     /** Resolve initialRows from intent (if provided) or use legacy initialRows prop. */
     function resolveInitialRows(): {rows: TXReadItem[]; status?: 'delete'; autoForm: string | null} {
         if (intent) {
@@ -1003,6 +1135,30 @@
             committing = false;
             return;
         }
+
+        // Pre-commit guard: ensure all auto WAC items have values
+        const pendingAutoItems = autoWacItems.filter((o) => o.fields.cost_basis_override === null);
+        if (pendingAutoItems.length > 0) {
+            // If WAC fetch is in flight, wait for it
+            if (wacFetchInFlight && wacFetchPromise) {
+                await wacFetchPromise;
+            }
+            // Check again after waiting
+            const stillPending = autoWacItems.filter((o) => o.fields.cost_basis_override === null);
+            if (stillPending.length > 0) {
+                // Force a sync fetch (no debounce)
+                if (wacDebounceTimer) clearTimeout(wacDebounceTimer);
+                await fetchBatchWac(stillPending);
+                // Final check
+                const finalPending = autoWacItems.filter((o) => o.fields.cost_basis_override === null);
+                if (finalPending.length > 0) {
+                    toasts.error($t('transactions.bulk.wacCalcFailed') || 'WAC calculation failed for some rows');
+                    committing = false;
+                    return;
+                }
+            }
+        }
+
         try {
             const splitTxIds = new Set(pendingSplits.flatMap((s) => [s.id_a, s.id_b]));
             const promoteTxIds = new Set(pendingPromotes.flatMap((p) => [p.id_a, p.id_b].filter(Boolean) as number[]));
@@ -1313,16 +1469,33 @@
                 filterable: false,
                 hiddenByDefault: false,
                 cell: (row): CellContent => {
-                    if (!row.fields.cost_basis_override) {
-                        const isNew = row.op === 'create';
-                        const needsWac = row.fields.type === 'TRANSFER' || row.fields.type === 'ADJUSTMENT';
-                        if (isNew && needsWac) {
-                            return {type: 'html', html: '<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto">💡 auto</span>'};
-                        }
+                    const mode = row.fields.cost_basis_mode;
+                    const cbo = row.fields.cost_basis_override;
+
+                    // mode null → field not applicable for this type
+                    if (mode === null) {
                         return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
                     }
-                    const cbo = row.fields.cost_basis_override;
-                    return {type: 'html', html: `<span class="font-mono text-xs">${formatCurrencyAmountHtml(Number(cbo.amount), cbo.code)}</span>`};
+
+                    // mode 'auto'
+                    if (mode === 'auto') {
+                        if (cbo && cbo.amount) {
+                            // Auto-calculated value present
+                            return {
+                                type: 'html',
+                                html: `<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto">💡 ${formatCurrencyAmountHtml(Number(cbo.amount), cbo.code)}</span>`,
+                            };
+                        }
+                        // Loading/pending
+                        return {type: 'html', html: '<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto">💡 …</span>'};
+                    }
+
+                    // mode 'manual'
+                    if (cbo && cbo.amount) {
+                        return {type: 'html', html: `<span class="font-mono text-xs">${formatCurrencyAmountHtml(Number(cbo.amount), cbo.code)}</span>`};
+                    }
+                    // User explicitly cleared the value
+                    return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
                 },
             },
             {

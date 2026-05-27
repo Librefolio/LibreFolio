@@ -138,7 +138,10 @@ class TXCreateItem(BaseModel):
 
     # Frozen cost basis for TRANSFER_IN - snapshot of PMC at transfer time
     # Object {code, amount} — e.g. {"code": "EUR", "amount": "42.50"}
-    cost_basis_override: Optional[Currency] = Field(default=None,description="Frozen cost basis for TRANSFER_IN. Object {code, amount}.",)
+    cost_basis_override: Optional[Currency] = Field(
+        default=None,
+        description="Frozen cost basis for TRANSFER_IN. Object {code, amount}.",
+    )
 
     # Link to AssetEvent (realization of a global asset event in this portfolio).
     # Only valid for event-compatible types (see EVENT_COMPATIBLE_TYPES).
@@ -494,7 +497,10 @@ class TXUpdateItem(BaseModel):
     description: Optional[str] = Field(default=None, max_length=500, description="New description")
 
     # Frozen cost basis override (for TRANSFER_IN) — object {code, amount}
-    cost_basis_override: Optional[Currency] = Field(default=None,description="Frozen cost basis for TRANSFER_IN. Object {code, amount}.",)
+    cost_basis_override: Optional[Currency] = Field(
+        default=None,
+        description="Frozen cost basis for TRANSFER_IN. Object {code, amount}.",
+    )
 
     # Link/unlink to AssetEvent:
     # - None   -> leave asset_event_id unchanged
@@ -508,7 +514,7 @@ class TXUpdateItem(BaseModel):
         return validate_tags_list(v)
 
     @model_validator(mode="after")
-    def _business_rules(self) -> "TXUpdateItem":
+    def _business_rules(self) -> TXUpdateItem:
         """Validate id > 0 in the model_validator so Pydantic doesn't
         short-circuit and the full error set is always returned."""
         if self.id is not None and self.id <= 0:
@@ -712,6 +718,7 @@ class WACPreviewRequest(BaseModel):
     items: List[WACPreviewItem] = Field(..., min_length=1, max_length=50)
     pending_txs: List[WACPendingTXItem] = Field(default_factory=list, max_length=500)
     excluded_tx_ids: List[int] = Field(default_factory=list, max_length=500, description="DB TX ids to exclude (deleted in workspace)")
+    include_details: bool = Field(True, description="If False, skip qualifying_txs and missing_pairs in response (lighter payload for batch WAC)")
 
 
 class WACQualifyingTX(BaseModel):
@@ -749,7 +756,6 @@ class WACPreviewResponse(BaseListResponse[WACPreviewResultItem]):
     """Response for POST /transactions/wac-preview. items[i] ↔ request.items[i]."""
 
     pass
-
 
 
 class TXBatchResultItem(BaseModel):
@@ -934,7 +940,7 @@ class TXSplitBatchItem(BaseModel):
     id_b: int = Field(..., gt=0, description="ID of the other half of the pair")
 
     @model_validator(mode="after")
-    def ids_must_differ(self) -> "TXSplitBatchItem":
+    def ids_must_differ(self) -> TXSplitBatchItem:
         if self.id_a == self.id_b:
             raise ValueError("id_a and id_b must be different transactions")
         return self
@@ -952,7 +958,7 @@ class TXPromoteBatchItem(BaseModel):
     resolved_fields: Optional[Dict[str, Any]] = Field(None, description="Merged field values from PromoteMergeModal: description, tags, date, cost_basis_override")
 
     @model_validator(mode="after")
-    def _validate_refs(self) -> "TXPromoteBatchItem":
+    def _validate_refs(self) -> TXPromoteBatchItem:
         """At least one of id_a/link_uuid_a and id_b/link_uuid_b must be set."""
         if self.id_a is None and self.link_uuid_a is None:
             raise ValueError("Either id_a or link_uuid_a must be provided for TX A")

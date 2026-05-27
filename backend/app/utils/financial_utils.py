@@ -56,11 +56,7 @@ def determine_target_currency(txs: list[WACInputTX], asset_currency: str) -> str
     2. On tie: asset_currency if among tied
     3. Otherwise: first alphabetically
     """
-    acq_currencies = [
-        tx.original_currency or asset_currency
-        for tx in txs
-        if tx.quantity > 0
-    ]
+    acq_currencies = [tx.original_currency or asset_currency for tx in txs if tx.quantity > 0]
     if not acq_currencies:
         return asset_currency
 
@@ -147,16 +143,18 @@ def compute_wac_from_txlist(
 
             qty_pool = new_qty
 
-            qualifying.append(WACQualifyingTX(
-                tx_id=tx.tx_id,
-                type=tx.type,
-                date=tx.date,
-                quantity=tx.quantity,
-                unit_cost=unit_cost,
-                currency=tx.original_currency,
-                effect=effect,
-                running_wac=wac,
-            ))
+            qualifying.append(
+                WACQualifyingTX(
+                    tx_id=tx.tx_id,
+                    type=tx.type,
+                    date=tx.date,
+                    quantity=tx.quantity,
+                    unit_cost=unit_cost,
+                    currency=tx.original_currency,
+                    effect=effect,
+                    running_wac=wac,
+                )
+            )
 
     return WACCalcResult(
         wac_amount=wac,

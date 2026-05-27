@@ -19,12 +19,11 @@ from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
-from backend.app.db.models import Asset, Transaction, TransactionType, User
+from backend.app.db.models import Asset, TransactionType, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import BackwardFillInfo, Currency, DateRangeModel
@@ -45,7 +44,6 @@ from backend.app.schemas.transactions import (
     TXSplitBatchItem,
     TXTransferPromoteRequest,
     TXTransferPromoteResponse,
-    TXTypeMetadata,
     TXTypesResponse,
     TXUpdateItem,
     WACPreviewRequest,
@@ -415,13 +413,15 @@ async def wac_preview(
             price_missing = False
 
         # Merge into result
-        results.append(WACPreviewResultItem(
-            wac=wac_result.wac,
-            wac_qualifying_txs=wac_result.wac_qualifying_txs,
-            wac_missing_pairs=wac_result.wac_missing_pairs,
-            asset_price=price_ccy,
-            asset_price_stale=stale_info,
-            asset_price_missing=price_missing,
-        ))
+        results.append(
+            WACPreviewResultItem(
+                wac=wac_result.wac,
+                wac_qualifying_txs=wac_result.wac_qualifying_txs if body.include_details else [],
+                wac_missing_pairs=wac_result.wac_missing_pairs if body.include_details else [],
+                asset_price=price_ccy,
+                asset_price_stale=stale_info,
+                asset_price_missing=price_missing,
+            )
+        )
 
     return WACPreviewResponse(items=results)

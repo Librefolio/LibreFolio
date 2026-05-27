@@ -25,11 +25,11 @@ from backend.app.schemas.fx import (
 )
 from backend.app.schemas.refresh import FXSyncBulkResponse
 
+# Import mock provider constants for precise assertions
+from backend.app.services.fx_providers.mockfx import MockFXFailProvider
+
 # Test server fixture
 from backend.test_scripts.test_server_helper import _TestingServerManager
-
-# Import mock provider constants for precise assertions
-from backend.app.services.fx_providers.mockfx import MOCKFX_FIXED_RATE, MockFXFailProvider
 
 # Constants
 settings = get_settings()

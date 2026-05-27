@@ -74,9 +74,11 @@
         excludedTxIds?: number[];
         /** Hide qualifying table (e.g. in view-only mode) */
         hideTable?: boolean;
+        /** Called when mode changes (auto ↔ manual) — for BulkModal propagation */
+        onModeChange?: (mode: 'auto' | 'manual') => void;
     }
 
-    let {value, onChange, variant, defaultCode = 'EUR', disabled = false, testid = 'wac-preview', senderBrokerId = null, assetId = null, txDate = null, pendingTxs = [], excludedTxIds = [], hideTable = false}: Props = $props();
+    let {value, onChange, variant, defaultCode = 'EUR', disabled = false, testid = 'wac-preview', senderBrokerId = null, assetId = null, txDate = null, pendingTxs = [], excludedTxIds = [], hideTable = false, onModeChange}: Props = $props();
 
     // =========================================================================
     // State
@@ -256,11 +258,13 @@
 
     function setAutoMode() {
         mode = 'auto';
+        onModeChange?.('auto');
         // Re-trigger fetch by touching dependencies naturally via $effect
     }
 
     function switchToManual() {
         mode = 'manual';
+        onModeChange?.('manual');
         if (abortController) abortController.abort();
     }
 
@@ -268,6 +272,7 @@
     function handleValueChange(next: {code: string; amount: string} | null) {
         if (mode === 'auto' && variant === 'auto-new') {
             mode = 'manual';
+            onModeChange?.('manual');
         }
         onChange(next);
     }
