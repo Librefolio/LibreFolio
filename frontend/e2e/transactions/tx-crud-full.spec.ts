@@ -6,7 +6,7 @@
  *
  * Plan D2 Bugfix 3, Step 10 (2026-05-14).
  *
- * Prerequisites: backend in test mode (port 8001), mock data populated.
+ * Prerequisites: backend in test mode (port 6041), mock data populated.
  */
 import {expect, test, type Page} from '@playwright/test';
 import {login, navigateTo} from '../fixtures/auth-helpers';

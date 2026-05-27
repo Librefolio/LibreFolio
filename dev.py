@@ -645,9 +645,9 @@ def cmd_mkdocs_build(args):
 
 def cmd_mkdocs_serve(args):
     """Serve MkDocs documentation locally."""
-    print(Colors.success("Serving MkDocs site (http://127.0.0.1:8002)"))
+    print(Colors.success("Serving MkDocs site (http://127.0.0.1:6042)"))
     copy_docs_assets()
-    return run_pipenv(["mkdocs", "serve", "-f", "mkdocs_src/mkdocs.yml", "-a", "127.0.0.1:8002"])
+    return run_pipenv(["mkdocs", "serve", "-f", "mkdocs_src/mkdocs.yml", "-a", "127.0.0.1:6042"])
 
 
 def cmd_mkdocs_clean(args):
@@ -1709,13 +1709,13 @@ Examples:
 
     # Server (unified with --test flag)
     p = subparsers.add_parser("server", help="🖥️  Start development server")
-    p.add_argument("--test", "-t", action="store_true", help="Use test database (port 8001)")
+    p.add_argument("--test", "-t", action="store_true", help="Use test database (port 6041)")
     p.add_argument("--rebuild", "-r", action="store_true", help="Force rebuild frontend before starting")
     p.add_argument("--debug", "-d", action="store_true", help="Debug mode: verbose logging + frontend debug build")
     p.add_argument("--force", "-f", action="store_true", help="Kill blocking processes on port before starting")
     p.add_argument("--workers", "-w", type=int, default=1, help="Number of uvicorn workers (default: 1)")
     p.add_argument("--host", type=str, default=None, help="Bind host (default: HOST env or 0.0.0.0)")
-    p.add_argument("--port", "-p", type=int, default=None, help="Bind port (default: PORT env or 8000)")
+    p.add_argument("--port", "-p", type=int, default=None, help="Bind port (default: PORT env or 6040)")
     p.add_argument("--coverage", action="store_true", help="Enable backend code coverage tracking (writes .coverage.<pid>)")
     p.set_defaults(func=cmd_server)
 
@@ -1796,7 +1796,7 @@ Examples:
     mk_p = mk_sub.add_parser("build", help="Build documentation site")
     mk_p.set_defaults(func=cmd_mkdocs_build)
 
-    mk_p = mk_sub.add_parser("serve", help="Serve documentation locally (port 8002)")
+    mk_p = mk_sub.add_parser("serve", help="Serve documentation locally (port 6042)")
     mk_p.set_defaults(func=cmd_mkdocs_serve)
 
     mk_p = mk_sub.add_parser("clean", help="Remove built site/ directory")
@@ -1819,7 +1819,7 @@ Examples:
     mk_p.add_argument("--workers", "-w", type=int, default=None,
                       help="Number of Playwright workers (default: CPU count)")
     mk_p.add_argument("--test-port", type=int, default=None,
-                      help="Port for the test server (default: TEST_PORT env or 8001)")
+                      help="Port for the test server (default: TEST_PORT env or 6041)")
     mk_p.add_argument("--headed", action="store_true",
                       help="Run browser in headed mode (visible window) instead of headless")
     mk_p.add_argument("--force", action="store_true",

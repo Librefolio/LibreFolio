@@ -10,7 +10,7 @@
  * - W-sell:   SELL intermediate → WAC inventory correct (pool reduction)
  * - W-excluded: Delete TX in workspace → WAC recalculated without it
  *
- * Prerequisites: backend test mode (port 8001), mock data populated.
+ * Prerequisites: backend test mode (port 6041), mock data populated.
  */
 import {expect, test, type Page} from '@playwright/test';
 import {login, navigateTo} from '../fixtures/auth-helpers';

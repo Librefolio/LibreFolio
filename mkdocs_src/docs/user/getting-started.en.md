@@ -6,7 +6,7 @@ Welcome to LibreFolio! This guide walks you through registering an account, logg
 
 ## 📝 1. Register Your Account
 
-Navigate to the LibreFolio URL (e.g., `http://localhost:8000`) and you'll see the login page. Click **Register** to create a new account.
+Navigate to the LibreFolio URL (e.g., `http://localhost:6040`) and you'll see the login page. Click **Register** to create a new account.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Registration Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

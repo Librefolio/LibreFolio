@@ -8,7 +8,7 @@
  * - Clone paired commit → pair created in DB
  * - Clone from view-only broker → clone button not visible
  *
- * Prerequisites: backend test mode (port 8001), mock data populated.
+ * Prerequisites: backend test mode (port 6041), mock data populated.
  * Mock data contract: populate_mock_data.py creates INTEREST transactions,
  * asymmetric paired TRANSFERs, and linked pairs with "access-test" tag.
  */

@@ -7,7 +7,7 @@
  *   P3 — Tooltip on disabled rows shows rich broker info (not #id)
  *   P4 — Validation banner shows yellow for validate issues
  *
- * Prerequisites: backend test mode (port 8001), mock data populated.
+ * Prerequisites: backend test mode (port 6041), mock data populated.
  * At least 20+ transactions in the DB for pagination to trigger.
  */
 import {expect, test, type Page} from '@playwright/test';

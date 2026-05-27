@@ -6,7 +6,7 @@ Bienvenue sur LibreFolio ! Ce guide vous accompagne dans la création d'un compt
 
 ## 📝 1. Créer votre compte
 
-Accédez à l'URL de LibreFolio (par exemple, `http://localhost:8000`) et vous verrez la page de connexion. Cliquez sur **S'inscrire** pour créer un nouveau compte.
+Accédez à l'URL de LibreFolio (par exemple, `http://localhost:6040`) et vous verrez la page de connexion. Cliquez sur **S'inscrire** pour créer un nouveau compte.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Formulaire d'inscription" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

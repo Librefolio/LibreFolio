@@ -125,8 +125,8 @@ To support **English, Italian, Spanish, and French**, the documentation structur
 - **`index.md`**:
     - Dynamic route generation explanation.
     - Links to running docs:
-        - 🚀 **Swagger UI**: `http://localhost:8000/api/v1/docs`
-        - 💻 **ReDoc**: `http://localhost:8000/api/v1/redoc`
+        - 🚀 **Swagger UI**: `http://localhost:6040/api/v1/docs`
+        - 💻 **ReDoc**: `http://localhost:6040/api/v1/redoc`
 
 ### `developer/financial-calculations/`
 

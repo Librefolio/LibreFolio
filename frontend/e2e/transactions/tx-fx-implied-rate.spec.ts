@@ -8,7 +8,7 @@
  *   when creating an FX_CONVERSION with both amounts filled.
  *
  * Plan: FxImpliedRateSpread (2026-05-18).
- * Prerequisites: backend test mode (port 8001), mock data populated.
+ * Prerequisites: backend test mode (port 6041), mock data populated.
  */
 import {expect, test, type Page} from '@playwright/test';
 import {login, navigateTo} from '../fixtures/auth-helpers';

@@ -5,7 +5,7 @@
  * - Bug 8:      Linked pair tooltip shows favicon + bold name + role SVG icon
  * - Enhancement: Tooltip content for all access levels (OWNER/EDITOR/VIEWER/Hidden)
  *
- * Prerequisites: backend test mode (port 8001), mock data populated
+ * Prerequisites: backend test mode (port 6041), mock data populated
  * with asymmetric broker access pairs.
  *
  * Mock data contract: populate_mock_data.py creates Asym-a through Asym-d

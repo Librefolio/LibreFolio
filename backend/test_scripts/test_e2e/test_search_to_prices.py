@@ -63,7 +63,7 @@ def test_server():
     Start test server once for all tests in this module.
 
     The server will be automatically started before tests run and stopped after.
-    Uses TEST_PORT from settings (default: 8001) to avoid conflicts.
+    Uses TEST_PORT from settings (default: 6041) to avoid conflicts.
     """
     manager = _TestingServerManager()
 

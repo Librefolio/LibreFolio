@@ -8,7 +8,7 @@
  * - Bug 13: Hidden broker shows lock icon + name + "not accessible" message
  * - Enum filter defaults: start deselected (no filter active)
  *
- * Prerequisites: backend test mode (port 8001), mock data populated
+ * Prerequisites: backend test mode (port 6041), mock data populated
  * with asymmetric broker access pairs (Asym-a through Asym-d).
  *
  * Mock data contract: populate_mock_data.py creates 4 asymmetric TRANSFER

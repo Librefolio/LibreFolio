@@ -4,7 +4,7 @@
  * Covers: CRUD, BulkModal, FormModal, paired transactions, sign-flip,
  * column visibility, banner dismissal, i18n labels.
  *
- * Prerequisites: backend in test mode (port 8001), at least 1 broker seeded.
+ * Prerequisites: backend in test mode (port 6041), at least 1 broker seeded.
  */
 import {expect, test, type Page} from '@playwright/test';
 import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';

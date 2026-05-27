@@ -64,7 +64,7 @@ Rationale: developer audience expects English technical docs, translation overhe
 ## Where It Applies
 
 - **Build**: `./dev.py mkdocs build` — mkdocs-static-i18n generates 4 language versions of the site
-- **Serve**: `./dev.py mkdocs serve` — preview all languages at `http://localhost:8002/XX/` (EN, IT, FR, ES)
+- **Serve**: `./dev.py mkdocs serve` — preview all languages at `http://localhost:6042/XX/` (EN, IT, FR, ES)
 - **Translation**: `./dev.py mkdocs translate` — Aphra reads `.en.md`, writes `.it.md`/`.fr.md`/`.es.md`
 - **Validation**: `./dev.py mkdocs translate-diff` — structural diff ensures EN and translations match
 

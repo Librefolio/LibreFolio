@@ -44,7 +44,7 @@ El archivo `docker-compose.yml` define el servicio y el directorio de datos pers
 ### 🔧 Servicio: `librefolio`
 
 - 🏗️ **`build: .`**: Compila a partir del `Dockerfile` en la raíz del proyecto.
-- 🔌 **`ports`**: Mapea el puerto del host (`${PORT:-8000}`) al puerto `8000` del contenedor, y `${TEST_PORT:-8001}` al `8001` para el modo de prueba.
+- 🔌 **`ports`**: Mapea el puerto del host (`${PORT:-6040}`) al puerto `6040` del contenedor, y `${TEST_PORT:-6041}` al `6041` para el modo de prueba.
 - 📂 **`volumes`**: Un montaje de enlace (bind mount) `./LibreFolio-data` → `/app/backend/data/prod-docker` persiste la base de datos, las cargas de archivos, los informes de brókers y los logs **en el mismo directorio que `docker-compose.yml`**.
 - 📝 **`env_file: .env`**: Carga toda la configuración desde el archivo `.env` (copiado de `.env.example`).
 - 🌍 **`environment`**: Sobrescribe solo los valores específicos de Docker: `LIBREFOLIO_DATA_DIR` (ruta del contenedor) y `HOST=0.0.0.0`.
@@ -180,12 +180,12 @@ La configuración de Docker Compose expone **dos puertos**:
 
 | Puerto | Propósito | Base de datos |
 |------|---------|----------|
-| `8000` | Servidor de producción (iniciado por el CMD del contenedor) | `prod-docker/sqlite/app.db` (volumen persistente) |
-| `8001` | Servidor de prueba (iniciado manualmente vía `docker exec`) | `test/sqlite/app.db` (efímera) |
+| `6040` | Servidor de producción (iniciado por el CMD del contenedor) | `prod-docker/sqlite/app.db` (volumen persistente) |
+| `6041` | Servidor de prueba (iniciado manualmente vía `docker exec`) | `test/sqlite/app.db` (efímera) |
 
 ### Iniciar el Servidor de Prueba
 
-1. **Inicie el contenedor** (el servidor de producción se inicia automáticamente en `:8000`):
+1. **Inicie el contenedor** (el servidor de producción se inicia automáticamente en `:6040`):
 
  ```bash
  docker compose up -d
@@ -197,13 +197,13 @@ La configuración de Docker Compose expone **dos puertos**:
  ./dev.py docker exec test db populate --force --with-static
  ```
 
-3. **Inicie el servidor de prueba** en el puerto 8001:
+3. **Inicie el servidor de prueba** en el puerto 6041:
 
  ```bash
  ./dev.py docker exec server --test
  ```
 
-4. **Acceda** a **`http://localhost:8001`**
+4. **Acceda** a **`http://localhost:6041`**
 
  Credenciales de prueba:
 
@@ -247,8 +247,8 @@ services:
  # then drops to 'librefolio' user via gosu (same pattern as postgres/redis).
  restart: unless-stopped
  ports:
- - "${PORT:-8000}:8000" # (2) Production port — change via PORT in .env
- - "${TEST_PORT:-8001}:8001" # (3) Test server port (optional)
+ - "${PORT:-6040}:6040" # (2) Production port — change via PORT in .env
+ - "${TEST_PORT:-6041}:6041" # (3) Test server port (optional)
  volumes:
  - ./LibreFolio-data:/app/backend/data/prod-docker # (4) Persistent data (bind mount)
  env_file: .env # (5) All config from .env file
@@ -256,7 +256,7 @@ services:
  - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker # Docker-specific override
  - HOST=0.0.0.0
  healthcheck:
- test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/system/health')"]
+ test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
  interval: 30s
  timeout: 10s
  start_period: 15s
@@ -302,8 +302,8 @@ Toda la configuración se gestiona en el archivo `.env` (copiado de `.env.exampl
 
 | Variable | Por defecto | Descripción | Dónde |
 |----------|---------|-------------|-------|
-| `PORT` | `8000` | Puerto del host para el servidor de producción | `.env` |
-| `TEST_PORT` | `8001` | Puerto del host para el servidor de prueba | `.env` |
+| `PORT` | `6040` | Puerto del host para el servidor de producción | `.env` |
+| `TEST_PORT` | `6041` | Puerto del host para el servidor de prueba | `.env` |
 | `UID` | `1000` | UID del usuario del contenedor (debe coincidir con el dueño del directorio de datos) | `.env` |
 | `GID` | `1000` | GID del usuario del contenedor (debe coincidir con el dueño del directorio de datos) | `.env` |
 | `LOG_LEVEL` | `INFO` | Nivel de detalle de los logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `.env` |

@@ -4,8 +4,8 @@ Test Server Helper
 Utilities for managing backend server during API tests.
 Auto-starts server on a separate TEST PORT, and stops it after tests.
 
-Test server uses port from TEST_PORT in config.py (default: 8001)
-Production server uses PORT from config.py (default: 8000)
+Test server uses port from TEST_PORT in config.py (default: 6041)
+Production server uses PORT from config.py (default: 6040)
 Both configurable via environment variables.
 
 Coverage:

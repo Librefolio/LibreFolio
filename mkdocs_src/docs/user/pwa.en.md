@@ -62,7 +62,7 @@ LibreFolio can be installed as a **Progressive Web App (PWA)** on your device. T
 
 !!! info "Self-hosted on LAN"
 
-    If you access LibreFolio via HTTP on your local network (e.g., `http://192.168.1.100:8000`), the automatic install prompt won't appear. You can still install manually:
+    If you access LibreFolio via HTTP on your local network (e.g., `http://192.168.1.100:6040`), the automatic install prompt won't appear. You can still install manually:
 
     - **Android**: Browser menu → "Add to Home screen"
     - **iOS**: Share → "Add to Home Screen"

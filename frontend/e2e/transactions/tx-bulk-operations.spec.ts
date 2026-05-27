@@ -10,7 +10,7 @@
  * - Picker: no context menu, no action buttons
  * - Create pair with different descriptions → validation error
  *
- * Prerequisites: backend test mode (port 8001), mock data populated.
+ * Prerequisites: backend test mode (port 6041), mock data populated.
  * Mock data contract: populate_mock_data.py creates multiple TX types on
  * editable brokers (IB=OWNER, Directa=EDITOR). DEGIRO=VIEWER.
  */

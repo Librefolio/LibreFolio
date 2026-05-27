@@ -14,7 +14,7 @@ cp .env.example .env
 ### 🔑 Key Environment Variables
 
 - **`PORT`**: The port on which the FastAPI server will run.
-    - Default: `8000`
+    - Default: `6040`
 
 - **`DATABASE_URL`**: The connection string for the main application database.
     - Default: `sqlite:///./backend/data/prod/sqlite/app.db`

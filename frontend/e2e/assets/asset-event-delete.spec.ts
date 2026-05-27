@@ -7,7 +7,7 @@
  * 3. Delete asset with events → cascade/block behavior
  * 4. ●evt badge in transactions table reflects linked state
  *
- * Prerequisites: backend in test mode (port 8001), mock data with asset events populated.
+ * Prerequisites: backend in test mode (port 6041), mock data with asset events populated.
  *
  * UI flow:
  *   Asset detail → click "Edit Prices & Events" (data-testid="asset-detail-editdata-btn")

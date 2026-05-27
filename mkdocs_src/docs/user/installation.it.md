@@ -44,7 +44,7 @@ Oppure scarica l'ultima release da [GitHub Releases](https://github.com/Alfystar
 
 2. **Modifica `.env`** per personalizzare:
 
- - 🔌 `PORT`: Cambia la porta se la `8000` è già in uso.
+ - 🔌 `PORT`: Cambia la porta se la `6040` è già in uso.
  - 💰 `PORTFOLIO_BASE_CURRENCY`: La tua valuta di base (default: `EUR`).
  - 📊 `LOG_LEVEL`: Verbosità dei log (default: `INFO`).
 
@@ -80,7 +80,7 @@ docker compose up -d
 
 Apri il browser e vai su:
 
-**`http://localhost:8000`**
+**`http://localhost:6040`**
 
 (Oppure usa la porta configurata in `.env`).
 
@@ -88,8 +88,8 @@ La prima volta che accedi a LibreFolio, ti verrà presentata una **pagina di reg
 
 Endpoint disponibili:
 
-- 🏠 **Frontend**: `http://localhost:8000/`
-- 📚 **Documentazione Utente**: `http://localhost:8000/mkdocs/`
+- 🏠 **Frontend**: `http://localhost:6040/`
+- 📚 **Documentazione Utente**: `http://localhost:6040/mkdocs/`
 
 !!! tip "Gestione utenti via CLI"
 
@@ -124,7 +124,7 @@ Puoi avviare un server di test con dati mock pre-popolati per esplorare l'applic
 ./dev.py docker exec server --test
 ```
 
-Accedi a **`http://localhost:8001`** con l'utente `e2e_test_user` / `E2eTestPass123!`.
+Accedi a **`http://localhost:6041`** con l'utente `e2e_test_user` / `E2eTestPass123!`.
 
 Il server di test gira parallelamente a quello di produzione, utilizzando un database separato. Consulta la [Guida Avanzata Docker](../admin/docker_advanced.md#test-mode) per i dettagli.
 

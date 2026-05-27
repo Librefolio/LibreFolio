@@ -40,7 +40,7 @@ When you run a frontend test category, `dev.py` handles everything automatically
 
 1. **Builds the frontend** — Runs `front build` to produce a production build
 2. **Starts the backend** — Launches the FastAPI server in `--test` mode (isolated test database at `backend/data/test/`)
-3. **Serves the frontend** — The backend serves the built frontend at `http://localhost:8001`
+3. **Serves the frontend** — The backend serves the built frontend at `http://localhost:6041`
 4. **Runs Playwright** — Executes the test specs against the live application
 5. **Tears down** — Stops the server after tests complete
 

@@ -6,7 +6,7 @@
 
 ## 📝 1. Registrar su Cuenta
 
-Navegue a la URL de LibreFolio (por ejemplo, `http://localhost:8000`) y verá la página de inicio de sesión. Haga clic en **Registrarse** para crear una cuenta nueva.
+Navegue a la URL de LibreFolio (por ejemplo, `http://localhost:6040`) y verá la página de inicio de sesión. Haga clic en **Registrarse** para crear una cuenta nueva.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Formulario de Registro" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

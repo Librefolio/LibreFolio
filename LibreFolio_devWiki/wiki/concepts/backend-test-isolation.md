@@ -48,10 +48,10 @@ Every test calls `create_user_and_login()` in its setup → fresh user, fresh se
 
 | Database | Location | Usage |
 |----------|----------|-------|
-| Production | `backend/data/prod/sqlite/app.db` | Real app data (port 8000) |
-| Test | `backend/data/test/sqlite/app.db` | Isolated test data (port 8001) |
+| Production | `backend/data/prod/sqlite/app.db` | Real app data (port 6040) |
+| Test | `backend/data/test/sqlite/app.db` | Isolated test data (port 6041) |
 
-`_TestingServerManager` auto-starts backend on TEST_PORT (8001) with test DB. Production server never touched during tests.
+`_TestingServerManager` auto-starts backend on TEST_PORT (6041) with test DB. Production server never touched during tests.
 
 ## Mock Data Exception
 

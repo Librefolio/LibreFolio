@@ -58,7 +58,7 @@ pipenv run pytest backend/test_scripts/test_api/test_transactions_api.py::test_g
 API tests use `_TestingServerManager` from `test_server_helper.py`:
 
 1. **Server as thread**: uvicorn runs in a thread within pytest process → enables `pytest-cov` coverage tracking
-2. **Test port**: `TEST_PORT` (default 8001)
+2. **Test port**: `TEST_PORT` (default 6041)
 3. **Isolated test DB**: `backend/data/test/sqlite/app.db`
 4. **HTTP Client**: `httpx.AsyncClient`
 

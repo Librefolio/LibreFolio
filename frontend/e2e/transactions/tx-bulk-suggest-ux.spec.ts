@@ -6,7 +6,7 @@
  * FE-SP-C4: Suggest banner presence + delta slider interactivity
  * FE-SP-C5: ActionModal split AFTER has date, qty, tags, desc rows
  *
- * Prerequisites: backend test mode (port 8001), mock data populated.
+ * Prerequisites: backend test mode (port 6041), mock data populated.
  * Mock data contract:
  * - "delete-safe" tag → paired TRANSFER ETH IB↔Coinbase
  * - "promote-test" tag → standalone W/D/Adj on Coinbase+IB

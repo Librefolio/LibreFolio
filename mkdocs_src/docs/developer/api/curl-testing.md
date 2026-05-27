@@ -10,7 +10,7 @@ LibreFolio uses session-based authentication with HTTP-only cookies. To make aut
 
 ```bash
 # Login and save the session cookie
-curl -v -X POST http://localhost:8000/api/v1/auth/login \
+curl -v -X POST http://localhost:6040/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"YOUR_USERNAME","password":"YOUR_PASSWORD"}' \
   -c /tmp/cookies.txt
@@ -43,13 +43,13 @@ Use the `-b` flag to send the saved cookie:
 
 ```bash
 # Get current user info
-curl -s -b /tmp/cookies.txt http://localhost:8000/api/v1/auth/me
+curl -s -b /tmp/cookies.txt http://localhost:6040/api/v1/auth/me
 
 # List brokers
-curl -s -b /tmp/cookies.txt http://localhost:8000/api/v1/brokers
+curl -s -b /tmp/cookies.txt http://localhost:6040/api/v1/brokers
 
 # List uploaded files
-curl -s -b /tmp/cookies.txt http://localhost:8000/api/v1/uploads
+curl -s -b /tmp/cookies.txt http://localhost:6040/api/v1/uploads
 ```
 
 ### 🔑 Alternative: Direct Cookie Header
@@ -61,7 +61,7 @@ If `-b` doesn't work, you can extract the cookie from the login response and use
 # Example: session=PL4H9KVBq2...
 
 # Use it directly
-curl -s http://localhost:8000/api/v1/auth/me \
+curl -s http://localhost:6040/api/v1/auth/me \
   -H "Cookie: session=YOUR_SESSION_TOKEN_HERE"
 ```
 
@@ -70,7 +70,7 @@ curl -s http://localhost:8000/api/v1/auth/me \
 ### 🏥 Health Check (No Auth Required)
 
 ```bash
-curl http://localhost:8000/api/v1/system/health
+curl http://localhost:6040/api/v1/system/health
 # Returns: {"status":"ok"}
 ```
 
@@ -78,63 +78,63 @@ curl http://localhost:8000/api/v1/system/health
 
 ```bash
 # Get current user
-curl -b /tmp/cookies.txt http://localhost:8000/api/v1/auth/me
+curl -b /tmp/cookies.txt http://localhost:6040/api/v1/auth/me
 
 # Update preferences
 curl -X PATCH -b /tmp/cookies.txt \
   -H "Content-Type: application/json" \
   -d '{"language":"it","currency":"EUR"}' \
-  http://localhost:8000/api/v1/auth/users/me/preferences
+  http://localhost:6040/api/v1/auth/users/me/preferences
 ```
 
 ### 🏦 Brokers
 
 ```bash
 # List all brokers
-curl -b /tmp/cookies.txt http://localhost:8000/api/v1/brokers
+curl -b /tmp/cookies.txt http://localhost:6040/api/v1/brokers
 
 # Get broker by ID
-curl -b /tmp/cookies.txt http://localhost:8000/api/v1/brokers/1
+curl -b /tmp/cookies.txt http://localhost:6040/api/v1/brokers/1
 
 # Get broker summary (with balances)
-curl -b /tmp/cookies.txt http://localhost:8000/api/v1/brokers/1/summary
+curl -b /tmp/cookies.txt http://localhost:6040/api/v1/brokers/1/summary
 ```
 
 ### 📥 BRIM (Broker Report Import)
 
 ```bash
 # List BRIM files
-curl -b /tmp/cookies.txt http://localhost:8000/api/v1/brokers/import/files
+curl -b /tmp/cookies.txt http://localhost:6040/api/v1/brokers/import/files
 
 # Filter by status
-curl -b /tmp/cookies.txt "http://localhost:8000/api/v1/brokers/import/files?status=uploaded"
+curl -b /tmp/cookies.txt "http://localhost:6040/api/v1/brokers/import/files?status=uploaded"
 
 # Filter by broker IDs
-curl -b /tmp/cookies.txt "http://localhost:8000/api/v1/brokers/import/files?broker_ids=1&broker_ids=2"
+curl -b /tmp/cookies.txt "http://localhost:6040/api/v1/brokers/import/files?broker_ids=1&broker_ids=2"
 
 # Upload a file (requires broker_id)
 curl -b /tmp/cookies.txt \
   -F "file=@/path/to/report.csv" \
-  "http://localhost:8000/api/v1/brokers/import/upload?broker_id=1"
+  "http://localhost:6040/api/v1/brokers/import/upload?broker_id=1"
 
 # Get available plugins
-curl -b /tmp/cookies.txt http://localhost:8000/api/v1/brokers/import/plugins
+curl -b /tmp/cookies.txt http://localhost:6040/api/v1/brokers/import/plugins
 ```
 
 ### 📁 Static Files
 
 ```bash
 # List uploaded files
-curl -b /tmp/cookies.txt http://localhost:8000/api/v1/uploads
+curl -b /tmp/cookies.txt http://localhost:6040/api/v1/uploads
 
 # Upload a file
 curl -b /tmp/cookies.txt \
   -F "file=@/path/to/image.png" \
-  http://localhost:8000/api/v1/uploads
+  http://localhost:6040/api/v1/uploads
 
 # Download a file
 curl -b /tmp/cookies.txt -O \
-  "http://localhost:8000/api/v1/uploads/file/FILE_ID?download=true"
+  "http://localhost:6040/api/v1/uploads/file/FILE_ID?download=true"
 ```
 
 ## 🧰 Useful cURL Flags
@@ -156,20 +156,20 @@ curl -b /tmp/cookies.txt -O \
 
 ## 🧪 Test Mode
 
-To test against the test database (port 8001):
+To test against the test database (port 6041):
 
 ```bash
 # Start server in test mode
 ./dev.py server --test
 
-# Use port 8001 for all requests
-curl http://localhost:8001/api/v1/system/health
+# Use port 6041 for all requests
+curl http://localhost:6041/api/v1/system/health
 ```
 
 ## 📖 API Documentation
 
 For complete API documentation, visit:
 
-- **Swagger UI**: http://localhost:8000/api/v1/docs
-- **ReDoc**: http://localhost:8000/api/v1/redoc
-- **OpenAPI JSON**: http://localhost:8000/api/v1/openapi.json
+- **Swagger UI**: http://localhost:6040/api/v1/docs
+- **ReDoc**: http://localhost:6040/api/v1/redoc
+- **OpenAPI JSON**: http://localhost:6040/api/v1/openapi.json
