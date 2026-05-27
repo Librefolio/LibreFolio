@@ -30,7 +30,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, UserRole
 from backend.app.schemas.common import Currency
-from backend.app.services.fx import convert_bulk
 from backend.app.schemas.transactions import (
     EVENT_COMPATIBLE_TYPES,
     TX_TYPE_METADATA,
@@ -59,6 +58,7 @@ from backend.app.schemas.transactions import (
     get_swap_group,
     tags_to_csv,
 )
+from backend.app.services.fx import convert_bulk
 from backend.app.utils.datetime_utils import parse_ISO_date, utcnow
 from backend.app.utils.financial_utils import WACInputTX, compute_wac_from_txlist, determine_target_currency
 
@@ -171,14 +171,16 @@ async def compute_weighted_avg_cost(
                 stale_days = (dt - rate_date).days if rate_date < dt else 0
                 # Figure out the rate: converted.amount / amt_ccy.amount
                 rate = converted.amount / amt_ccy.amount if amt_ccy.amount != 0 else Decimal("0")
-                conversions_info.append(WACConversionInfo(
-                    tx_id=tx_id,
-                    from_currency=amt_ccy.code,
-                    to_currency=target_currency,
-                    rate=rate,
-                    rate_date=rate_date,
-                    stale_days=stale_days,
-                ))
+                conversions_info.append(
+                    WACConversionInfo(
+                        tx_id=tx_id,
+                        from_currency=amt_ccy.code,
+                        to_currency=target_currency,
+                        rate=rate,
+                        rate_date=rate_date,
+                        stale_days=stale_days,
+                    )
+                )
                 # Replace cost with converted amount
                 qty_orig = row_data[row_idx][0]
                 row_data[row_idx] = (qty_orig, converted.amount, target_currency, tx_id, dt)
@@ -211,7 +213,7 @@ async def compute_wac_iterative(
     asset_currency: str,
     pending_txs: list | None = None,
     excluded_tx_ids: list[int] | None = None,
-) -> "WACPreviewResultItem":
+) -> WACPreviewResultItem:
     """Compute inventory-aware WAC (PMC) for an asset at a broker up to a date.
 
     Preparation layer: queries DB, merges pending TXs, handles FX conversion,
@@ -255,11 +257,19 @@ async def compute_wac_iterative(
                 ptx_type = ptx.type.value if hasattr(ptx.type, "value") else str(ptx.type)
                 unified.append((ptx.id, ptx_type, ptx.date, ptx.quantity, ptx_amount, ptx_currency, cbo_amount, cbo_ccy, True))
         else:
-            unified.append((
-                row.id, row.type.value if hasattr(row.type, "value") else str(row.type),
-                row.date, row.quantity, row.amount, row.currency,
-                row.cost_basis_override, row.cost_basis_currency, False,
-            ))
+            unified.append(
+                (
+                    row.id,
+                    row.type.value if hasattr(row.type, "value") else str(row.type),
+                    row.date,
+                    row.quantity,
+                    row.amount,
+                    row.currency,
+                    row.cost_basis_override,
+                    row.cost_basis_currency,
+                    False,
+                )
+            )
 
     # Remaining pending overrides not found in DB
     for _pid, ptx in pending_by_id.items():
@@ -291,15 +301,22 @@ async def compute_wac_iterative(
     # 3. Build WACInputTX list and determine target_currency
     #    First pass: determine currencies for target_currency selection
     pre_txs: list[WACInputTX] = []
-    for (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend) in unified:
+    for tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend in unified:
         if qty > 0:
             orig_ccy = ccy if ttype == "BUY" else (cbo_ccy or asset_currency)
         else:
             orig_ccy = ccy or asset_currency
-        pre_txs.append(WACInputTX(
-            tx_id=tid, type=ttype, date=dt, quantity=qty,
-            unit_cost_converted=None, original_currency=orig_ccy, is_pending=is_pend,
-        ))
+        pre_txs.append(
+            WACInputTX(
+                tx_id=tid,
+                type=ttype,
+                date=dt,
+                quantity=qty,
+                unit_cost_converted=None,
+                original_currency=orig_ccy,
+                is_pending=is_pend,
+            )
+        )
 
     target_currency = determine_target_currency(pre_txs, asset_currency)
 
@@ -365,10 +382,17 @@ async def compute_wac_iterative(
                 orig_ccy = asset_currency
         # For reductions, unit_cost stays None — compute_wac_from_txlist uses current WAC
 
-        input_txs.append(WACInputTX(
-            tx_id=tid, type=ttype, date=dt, quantity=qty,
-            unit_cost_converted=unit_cost, original_currency=orig_ccy, is_pending=is_pend,
-        ))
+        input_txs.append(
+            WACInputTX(
+                tx_id=tid,
+                type=ttype,
+                date=dt,
+                quantity=qty,
+                unit_cost_converted=unit_cost,
+                original_currency=orig_ccy,
+                is_pending=is_pend,
+            )
+        )
 
     # 6. Delegate to pure math function
     calc_result = compute_wac_from_txlist(input_txs, target_currency)
@@ -376,9 +400,13 @@ async def compute_wac_iterative(
     # 7. Convert result to schema
     qualifying_txs = [
         WACQualifyingTX(
-            tx_id=q.tx_id, type=q.type, date=q.date,
-            quantity=q.quantity, unit_cost=q.unit_cost,
-            currency=q.currency, effect=q.effect,
+            tx_id=q.tx_id,
+            type=q.type,
+            date=q.date,
+            quantity=q.quantity,
+            unit_cost=q.unit_cost,
+            currency=q.currency,
+            effect=q.effect,
             running_wac=q.running_wac,
         )
         for q in calc_result.qualifying
@@ -389,7 +417,6 @@ async def compute_wac_iterative(
         wac_qualifying_txs=qualifying_txs,
         wac_missing_pairs=[],
     )
-
 
 
 class BalanceValidationError(Exception):
@@ -547,7 +574,7 @@ class TransactionService:
         for broker_id in broker_ids:
             await self._check_broker_access_or_raise(broker_id, user_id, min_role=min_role)
 
-    async def _check_paired_access(self, tx: "Transaction", user_id: int) -> Optional[str]:
+    async def _check_paired_access(self, tx: Transaction, user_id: int) -> Optional[str]:
         """Check if user has EDITOR access on both sides of a paired tx.
 
         Returns None if OK (standalone or full access), or an error string
@@ -1537,7 +1564,6 @@ class TransactionService:
                 results.append(TXBatchResultItem(operation="create", index=orig_idx, ids=[tx.id], link_uuid=item.link_uuid, status="success"))
             except Exception as e:  # noqa: BLE001
                 issues.append(TXValidationIssue(operation="create", index=orig_idx, ref_id=None, error=str(e)))
-
 
         # 5c. Apply promotes
         consumed_link_uuids: Set[str] = set()

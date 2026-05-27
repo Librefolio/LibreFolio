@@ -1656,7 +1656,7 @@ def populate_transactions(session: Session):
 
     session.add_all([tx_disc_prefund, tx_disc_w, tx_disc_d, tx_disc_adj_out, tx_disc_adj_in, tx_disc_fx_w, tx_disc_fx_d])
     session.commit()
-    print(f"  💡 suggest-discover pairs:")
+    print("  💡 suggest-discover pairs:")
     print(f"      Cash Transfer: W#{tx_disc_w.id} (IB/loaded) ↔ D#{tx_disc_d.id} (Directa/hidden)")
     print(f"      Asset Transfer: Adj-#{tx_disc_adj_out.id} (Coinbase/loaded) ↔ Adj+#{tx_disc_adj_in.id} (IB/hidden)")
     print(f"      FX Conversion: W#{tx_disc_fx_w.id} (IB-EUR/loaded) ↔ D#{tx_disc_fx_d.id} (IB-USD/hidden)")

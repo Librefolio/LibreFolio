@@ -237,6 +237,8 @@
     let draft = $state<FormDraft>(emptyDraft());
     /** Dual-form "To" side — populated when pairLayout !== null. */
     let dualTo = $state<DualDraftTo>(emptyDualTo());
+    /** Cost basis mode tracking for BulkModal propagation. */
+    let costBasisMode = $state<'auto' | 'manual'>('auto');
     /** The partner TXReadItem when editing a paired transaction. */
     let partnerRow = $state<TXReadItem | null>(null);
     /** Loading state for the partner fetch. */
@@ -917,12 +919,14 @@
                     _partnerBrokerId: dualTo.broker_id,
                     _partnerCash: dualTo.cash,
                     _partnerDate: dualTo.date,
+                    _cost_basis_mode: costBasisMode,
                 };
                 // Also carry the "from" side fields for applyFormPayload
                 Object.assign(payload, items[0]);
                 onPushDraft?.(payload);
             } else {
                 const payload = collectCreate();
+                (payload as any)._cost_basis_mode = costBasisMode;
                 onPushDraft?.(payload);
             }
             onClose();
@@ -1511,6 +1515,7 @@
                                 senderBrokerId={draft.broker_id}
                                 assetId={draft.asset_id}
                                 txDate={draft.date}
+                                onModeChange={(m) => (costBasisMode = m)}
                             />
                         </div>
                     {/if}
@@ -1706,6 +1711,7 @@
                                 senderBrokerId={draft.broker_id}
                                 assetId={draft.asset_id}
                                 txDate={draft.date}
+                                onModeChange={(m) => (costBasisMode = m)}
                             />
                             {#if Number(draft.quantity) > 0 && !draft.cost_basis_override?.amount?.trim()}
                                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="tx-form-cost-basis-warning">
@@ -1731,6 +1737,7 @@
                         senderBrokerId={draft.broker_id}
                         assetId={draft.asset_id}
                         txDate={draft.date}
+                        onModeChange={(m) => (costBasisMode = m)}
                     />
                 </div>
             {/if}

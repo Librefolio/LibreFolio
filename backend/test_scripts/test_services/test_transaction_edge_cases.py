@@ -34,8 +34,8 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem, TXQueryParams
 from backend.app.services.transaction_service import TransactionService
-from backend.test_scripts.test_services._tx_test_helpers import create_bulk, delete_bulk, update_bulk
 from backend.app.utils.datetime_utils import utcnow
+from backend.test_scripts.test_services._tx_test_helpers import create_bulk
 
 # ============================================================================
 # PYTEST FIXTURES

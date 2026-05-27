@@ -8,10 +8,7 @@ Tests compute_wac_from_txlist() and determine_target_currency().
 from datetime import date
 from decimal import Decimal
 
-import pytest
-
 from backend.app.utils.financial_utils import (
-    WACCalcResult,
     WACInputTX,
     compute_wac_from_txlist,
     determine_target_currency,
@@ -211,4 +208,3 @@ class TestDetermineTargetCurrency:
         result = determine_target_currency(txs, "EUR")
         assert result == "EUR"
         print_success("FU-10: Tie → asset_currency (EUR) wins ✓")
-
