@@ -40,6 +40,7 @@ Each transaction contributes to the WAC computation in one of these ways:
 | **Weighted** | `qty > 0` and `unit_cost > 0` | WAC moves toward the new acquisition cost |
 | **Quantity reduced** | `qty < 0` | Exits at current WAC — WAC unchanged, pool shrinks |
 | **Dilution** | `qty > 0` but `unit_cost = 0` | Pool grows, numerator unchanged → WAC **decreases** |
+| **Auto WAC** | `qty > 0`, `cost_basis_mode = "auto"` | Pool unchanged — units enter at current WAC |
 
 ### 📅 Same-Day Ordering
 
@@ -94,15 +95,42 @@ When multiple transactions occur on the same date:
 
 For transfers and adjustments, LibreFolio supports a **cost basis override**: a user-specified unit cost that represents the historical cost of the transferred units.
 
-**When set:**
+**When set (manual mode):**
 
 - The transaction enters the WAC computation as a normal weighted acquisition
 - This preserves cost continuity across brokers (e.g., when transferring from broker A to broker B)
 
-**When not set:**
+**When not set (no mode specified):**
 
 - The transaction enters with `unit_cost = 0` (dilution effect)
 - This is appropriate for stock splits, gifts, or airdrops where no purchase price exists
+
+**When auto mode (`cost_basis_mode = "auto"`):**
+
+- The transaction enters at the **current pool WAC** — the WAC remains algebraically unchanged
+- This is appropriate for transfers or adjustments where the cost basis should be inherited from the source broker's pool
+
+$$
+WAC_{new} = \frac{WAC \times Q_{pool} + WAC \times Q_{tx}}{Q_{pool} + Q_{tx}} = WAC
+$$
+
+!!! tip "Auto WAC in the UI"
+
+    In the transaction form, the "Auto" toggle uses this mode. The qualifying table shows the **Auto WAC** (or **Auto PMC** in Italian) effect badge, indicating that the units entered at the current pool cost without altering the WAC.
+
+??? example "Example 4: Transfer in Auto Mode — WAC unchanged"
+
+    | Date | Type | Qty | Unit Cost | Pool Qty | WAC |
+    |------|------|-----|-----------|----------|-----|
+    | Apr 1 | BUY | 10 | $150 | 10 | $150.00 |
+    | Apr 15 | BUY | 5 | $180 | 15 | $160.00 |
+    | May 1 | TRANSFER (auto) | +3 | $160 (=WAC) | 18 | $160.00 |
+
+    $$
+    WAC = \frac{160 \times 15 + 160 \times 3}{15 + 3} = \frac{2880}{18} = 160.00
+    $$
+
+    The transfer receiver in **auto mode** inherits the current WAC as its unit cost. The pool grows but the WAC stays **unchanged**.
 
 ## 🌍 Multi-Currency Handling
 

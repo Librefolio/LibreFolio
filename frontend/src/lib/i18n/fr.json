@@ -661,7 +661,8 @@
       "effect": {
         "add": "Pondérée",
         "reduce": "Quantité réduite",
-        "addZeroCost": "Dilution"
+        "addZeroCost": "Dilution",
+        "addAtWac": "Auto CMP"
       }
     },
     "promote": {

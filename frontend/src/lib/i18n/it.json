@@ -661,7 +661,8 @@
       "effect": {
         "add": "Pesata",
         "reduce": "Quantità ridotta",
-        "addZeroCost": "Diluizione"
+        "addZeroCost": "Diluizione",
+        "addAtWac": "Auto PMC"
       }
     },
     "promote": {

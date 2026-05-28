@@ -241,7 +241,7 @@ async def compute_wac_iterative(
         else:
             pending_new.append(ptx)
 
-    # Unified row tuples: (tx_id, type_str, date, quantity, amount, currency, cbo_amount, cbo_ccy, is_pending)
+    # Unified row tuples: (tx_id, type_str, date, quantity, amount, currency, cbo_amount, cbo_ccy, is_pending, cbm)
     unified: list[tuple] = []
 
     for row in db_rows:
@@ -255,7 +255,7 @@ async def compute_wac_iterative(
                 ptx_amount = ptx.cash.amount if ptx.cash else None
                 ptx_currency = ptx.cash.code if ptx.cash else None
                 ptx_type = ptx.type.value if hasattr(ptx.type, "value") else str(ptx.type)
-                unified.append((ptx.id, ptx_type, ptx.date, ptx.quantity, ptx_amount, ptx_currency, cbo_amount, cbo_ccy, True))
+                unified.append((ptx.id, ptx_type, ptx.date, ptx.quantity, ptx_amount, ptx_currency, cbo_amount, cbo_ccy, True, ptx.cost_basis_mode))
         else:
             unified.append(
                 (
@@ -268,6 +268,7 @@ async def compute_wac_iterative(
                     row.cost_basis_override,
                     row.cost_basis_currency,
                     False,
+                    None,
                 )
             )
 
@@ -279,7 +280,7 @@ async def compute_wac_iterative(
             ptx_amount = ptx.cash.amount if ptx.cash else None
             ptx_currency = ptx.cash.code if ptx.cash else None
             ptx_type = ptx.type.value if hasattr(ptx.type, "value") else str(ptx.type)
-            unified.append((ptx.id, ptx_type, ptx.date, ptx.quantity, ptx_amount, ptx_currency, cbo_amount, cbo_ccy, True))
+            unified.append((ptx.id, ptx_type, ptx.date, ptx.quantity, ptx_amount, ptx_currency, cbo_amount, cbo_ccy, True, ptx.cost_basis_mode))
 
     # New pending (no id)
     for ptx in pending_new:
@@ -289,7 +290,7 @@ async def compute_wac_iterative(
             ptx_amount = ptx.cash.amount if ptx.cash else None
             ptx_currency = ptx.cash.code if ptx.cash else None
             ptx_type = ptx.type.value if hasattr(ptx.type, "value") else str(ptx.type)
-            unified.append((None, ptx_type, ptx.date, ptx.quantity, ptx_amount, ptx_currency, cbo_amount, cbo_ccy, True))
+            unified.append((None, ptx_type, ptx.date, ptx.quantity, ptx_amount, ptx_currency, cbo_amount, cbo_ccy, True, ptx.cost_basis_mode))
 
     if not unified:
         return WACPreviewResultItem(
@@ -301,7 +302,7 @@ async def compute_wac_iterative(
     # 3. Build WACInputTX list and determine target_currency
     #    First pass: determine currencies for target_currency selection
     pre_txs: list[WACInputTX] = []
-    for tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend in unified:
+    for tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend, cbm in unified:
         if qty > 0:
             orig_ccy = ccy if ttype == "BUY" else (cbo_ccy or asset_currency)
         else:
@@ -323,7 +324,7 @@ async def compute_wac_iterative(
     # 4. FX conversion for acquisitions with different currency
     fx_requests: list[tuple[int, Currency, str, date_type]] = []  # (idx, cost_ccy, target, date)
 
-    for i, (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend) in enumerate(unified):
+    for i, (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend, cbm) in enumerate(unified):
         if qty <= 0:
             continue
         if ttype == "BUY":
@@ -358,7 +359,7 @@ async def compute_wac_iterative(
 
     # 5. Build final WACInputTX list with converted costs
     input_txs: list[WACInputTX] = []
-    for i, (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend) in enumerate(unified):
+    for i, (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend, cbm) in enumerate(unified):
         unit_cost: Decimal | None = None
         orig_ccy = ccy or asset_currency
 
@@ -378,7 +379,7 @@ async def compute_wac_iterative(
                     unit_cost = cbo_amt
                 orig_ccy = cbo_ccy or asset_currency
             else:
-                unit_cost = None  # will be treated as zero cost
+                unit_cost = None  # will be treated as zero cost (or add_at_wac if cbm == "auto")
                 orig_ccy = asset_currency
         # For reductions, unit_cost stays None — compute_wac_from_txlist uses current WAC
 
@@ -391,6 +392,7 @@ async def compute_wac_iterative(
                 unit_cost_converted=unit_cost,
                 original_currency=orig_ccy,
                 is_pending=is_pend,
+                cost_basis_mode=cbm,
             )
         )
 

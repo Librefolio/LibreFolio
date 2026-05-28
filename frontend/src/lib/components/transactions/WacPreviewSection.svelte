@@ -291,6 +291,7 @@
     function switchToManual() {
         mode = 'manual';
         onModeChange?.('manual');
+        showQualifying = false;
         if (abortController) abortController.abort();
     }
 
@@ -436,12 +437,16 @@
                                         ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400'
                                         : qtx.effect === 'reduce'
                                           ? 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400'
-                                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}"
+                                          : qtx.effect === 'add_at_wac'
+                                            ? 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400'
+                                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}"
                                     >{qtx.effect === 'add'
                                         ? ($t('transactions.wacPreview.effect.add') ?? 'Weighted')
                                         : qtx.effect === 'reduce'
                                           ? ($t('transactions.wacPreview.effect.reduce') ?? 'Reduced')
-                                          : ($t('transactions.wacPreview.effect.addZeroCost') ?? 'Dilution')}</span
+                                          : qtx.effect === 'add_at_wac'
+                                            ? ($t('transactions.wacPreview.effect.addAtWac') ?? 'Inherited')
+                                            : ($t('transactions.wacPreview.effect.addZeroCost') ?? 'Dilution')}</span
                                 >
                             </td>
                             <td class="px-2 py-0.5 text-left font-mono">{qtx.running_wac && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.running_wac), qtx.currency, {maxFraction: 4}) : qtx.running_wac ? parseFloat(qtx.running_wac).toFixed(4) : '—'}</td>

@@ -302,15 +302,15 @@
     let wacResults = $state<Map<string, WacResultEntry>>(new Map());
 
     $effect(() => {
-        const _fp = wacFingerprint;
-        const _autoItems = autoWacItems;
-
-        if (_autoItems.length === 0) return;
+        const _fp = wacFingerprint; // sole tracked dependency (string primitive → stable after writeback)
 
         // Debounce 800ms trailing
         if (wacDebounceTimer) clearTimeout(wacDebounceTimer);
         wacDebounceTimer = setTimeout(() => {
-            fetchBatchWac(_autoItems);
+            // Read autoWacItems inside setTimeout → outside Svelte 5 tracking scope
+            // This prevents the effect from re-subscribing to the array reference
+            const items = autoWacItems;
+            if (items.length > 0) fetchBatchWac(items);
         }, 800);
 
         return () => {
@@ -347,7 +347,8 @@
                         date: f.date,
                         quantity: f.quantity,
                         cash: f.cash,
-                        cost_basis_override: f.cost_basis_override,
+                        cost_basis_override: f.cost_basis_mode === 'auto' ? null : (f.cost_basis_override ?? null),
+                        cost_basis_mode: f.cost_basis_mode ?? undefined,
                         link_uuid: o.link_uuid ?? undefined,
                     };
                 })
@@ -463,7 +464,7 @@
                     // Bug6-fix: reset quantity when the type requires qty=0 (e.g. INTEREST)
                     const rule = getTypeRule(r.type);
                     if (rule.quantityRule === 'zero') c.quantity = '0';
-                    if (sharedLinkUuid) c.link_uuid = sharedLinkUuid;
+                    if (sharedLinkUuid) (c as any).link_uuid = sharedLinkUuid;
                     return c;
                 });
                 return {rows: cloned, autoForm: cloned.length === 1 ? 'create' : null};
@@ -1561,7 +1562,7 @@
 
                     // mode 'manual'
                     if (cbo && cbo.amount) {
-                        return {type: 'html', html: `<span class="font-mono text-xs">${formatCurrencyAmountHtml(Number(cbo.amount), cbo.code)}</span>`};
+                        return {type: 'html', html: `<span class="font-mono text-xs" data-testid="tx-bulk-cost-basis-manual">${formatCurrencyAmountHtml(Number(cbo.amount), cbo.code)}</span>`};
                     }
                     // User explicitly cleared the value
                     return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};

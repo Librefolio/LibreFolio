@@ -596,3 +596,135 @@ Si torna a questo plan e bisogna verificare:
 - [ ] Human walktest Bug 10: manual override → valore mostrato in cella
 - [ ] Human walktest: commit senza blocchi WAC per TRANSFER/ADJUSTMENT
 
+> **⚠️ Bloccante (2026-05-28)**: Human walktest ha rivelato un **feedback loop** — il batch WAC ricalcola iterativamente il `cost_basis_override` fino a ~0. Root cause: il receiver manda il proprio valore calcolato nel pending_txs → il backend lo re-include nel pool. Fix in → [`plan-FixWacFeedbackLoop.prompt.md`](./plan-FixWacFeedbackLoop.prompt.md)
+
+---
+
+## Piano v7: E2E Test `tx-wac-bulk.spec.ts` — BulkModal WAC Cell Rendering (2026-05-27)
+
+> **⏳ STATUS**: DA IMPLEMENTARE
+
+### Contesto
+
+Il file `tx-wac.spec.ts` esistente copre solo il **FormModal standalone** (toggle auto/manual, tooltip, qualifying TXs). I Bug 9/10/11 riguardano la **cella BulkModal** che è completamente scoperta dai test automatici. Serve un nuovo spec file dedicato.
+
+### Prerequisiti UI — nuovi `data-testid`
+
+Il cell renderer nella BulkModal ha queste rese:
+
+| Stato | HTML | Testid |
+|-------|------|--------|
+| Auto con valore | `💡 {amount}` | `tx-bulk-cost-basis-auto` ✅ |
+| Auto loading | `💡 …` | `tx-bulk-cost-basis-auto` ✅ (stessa, distinguibile per contenuto) |
+| Manual con valore | `{amount}` | ❌ **MANCANTE** — serve `tx-bulk-cost-basis-manual` |
+| Forbidden / vuoto | `—` | Nessuno (non serve testare) |
+
+**Step 0**: aggiungere `data-testid="tx-bulk-cost-basis-manual"` alla riga 1564 del renderer manual.
+
+### Strategia di attesa WAC
+
+Il renderer mostra `💡 …` durante il loading e `💡 {amount}` dopo il calcolo. Il test può usare:
+
+```typescript
+// Wait for WAC to compute — the "…" disappears when value arrives
+await page.locator('[data-testid="tx-bulk-cost-basis-auto"]')
+    .filter({hasNotText: '…'})
+    .first()
+    .waitFor({state: 'visible', timeout: 5_000});
+```
+
+Questo è più robusto di `waitForTimeout(2000)`: non flaky se il server è lento, non waste time se è veloce.
+
+### Strategia per intercettare 422
+
+```typescript
+const wacResponse = await page.waitForResponse(
+    r => r.url().includes('/wac-preview') && r.status() !== 0,
+    {timeout: 5_000}
+);
+expect(wacResponse.status()).toBe(200);
+```
+
+### Tests (5 test cases)
+
+#### WB1 — TRANSFER auto shows WAC value (Bug 9)
+
+1. Login → Transactions → Add Row (opens FormModal from BulkModal)
+2. Crea BUY: broker editabile, asset esistente, qty=10, cash=1000, date: 2026-01-01
+3. Apply → torna alla griglia BulkModal
+4. Add Row → Crea TRANSFER: from=broker_A, to=broker_B, same asset, qty=5, date: 2026-01-15
+5. Apply → torna alla griglia
+6. **Wait**: `[data-testid="tx-bulk-cost-basis-auto"]` non contiene "…"
+7. **Assert**: testo contiene `💡` + un numero (regex `/💡\s*[\d.,]+/`)
+
+#### WB2 — Manual override propagates to cell (Bug 10)
+
+1. Dalla griglia WB1, clicca sulla riga TRANSFER (apre FormModal)
+2. Nel FormModal, toggle → manual
+3. Digita `150` nel campo cost basis
+4. Apply
+5. **Assert**: `[data-testid="tx-bulk-cost-basis-manual"]` visibile con testo contenente `150`
+
+#### WB3 — Toggle manual→auto restores value (Bug 10 reverse)
+
+1. Dalla griglia WB2, clicca sulla riga TRANSFER (riapre FormModal)
+2. Toggle → auto
+3. Apply
+4. **Wait**: `[data-testid="tx-bulk-cost-basis-auto"]` non contiene "…"
+5. **Assert**: testo contiene `💡` + numero (il WAC ricalcolato)
+
+#### WB4 — DB rows with saved cost_basis (Bug 11)
+
+1. Dalla griglia WB3, **Commit** il workspace
+2. **Wait** commit successo (toast o modal chiusa)
+3. Nella tabella transazioni, seleziona le righe TRANSFER appena create
+4. Apri BulkModal (Edit)
+5. **Assert**: `[data-testid="tx-bulk-cost-basis-manual"]` visibile (DB salvato = manual)
+
+#### WB5 — Clone paired from DB, no 422 (link_uuid fix)
+
+1. Nella tabella transazioni, trova un TRANSFER committato (dal WB4 o mock data)
+2. Seleziona → apri BulkModal → Clone la riga
+3. **Intercept**: `page.waitForResponse(r => r.url().includes('/wac-preview'))`
+4. **Assert**: response.status() === 200 (non 422)
+5. **Assert**: `[data-testid="tx-bulk-cost-basis-auto"]` presente sulla riga clonata
+
+### Steps implementativi
+
+#### Step v7.1: Aggiungere `data-testid="tx-bulk-cost-basis-manual"` al renderer
+
+**File**: `TransactionBulkModal.svelte`, riga 1564
+
+```typescript
+// BEFORE
+return {type: 'html', html: `<span class="font-mono text-xs">${formatCurrencyAmountHtml(...)}</span>`};
+
+// AFTER
+return {type: 'html', html: `<span class="font-mono text-xs" data-testid="tx-bulk-cost-basis-manual">${formatCurrencyAmountHtml(...)}</span>`};
+```
+
+#### Step v7.2: Creare `frontend/e2e/transactions/tx-wac-bulk.spec.ts`
+
+Nuovo file con i 5 test cases sopra. Pattern: login → create BUY + TRANSFER in BulkModal → verify cell rendering.
+
+**Dipendenze mock data**: nessuna — i test creano tutto da zero nella BulkModal. Servono solo broker editabili e asset esistente (già presenti nei mock di `e2e_test_user`).
+
+#### Step v7.3: Registrare nel test runner
+
+**File**: `scripts/test_runner/_frontend_transaction.py`
+
+- Aggiungere `front_tx_wac_bulk()` runner
+- Inserire in `front_transaction_all()` tests list
+- Aggiungere a `populate_registry()` con `add_test(cat, "tx-wac-bulk", ...)`
+
+#### Step v7.4: Run test
+
+```bash
+./dev.py test front-transaction tx-wac-bulk
+```
+
+### Test Criteria v7
+
+- [ ] `tx-wac-bulk` 5/5 ✅
+- [ ] Nessun test esistente rotto (regression check)
+- [ ] `./dev.py front check` — 0 errors
