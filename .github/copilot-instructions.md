@@ -101,6 +101,15 @@ plan-phase{NN}Step{N}Round{N}{Suffix}.prompt.md     # Sub-iteration (e.g. part2,
 
 When a plan spawns a follow-up, both files cross-link each other (the original links forward, the new one links back).
 
+### Plan Execution — Progress Tracking Rule
+
+When executing a plan, after completing **EVERY step**, immediately return to the plan `.prompt.md` file and:
+1. Mark the step as ✅ completed with date
+2. Add a line `> **Note implementazione**: ...` describing what was done
+3. If there were **detours** (unexpected fixes, discoveries, errors), note them with `> **⚠️ Fuori pista**: ...`
+
+**Do not wait until the end** — update after each step. If context resets mid-execution, nothing is lost.
+
 ### Archive Structure
 
 Completed plan chains are moved into `LibreFolio_developer_journal/RoadmapV4_UI/phases/`:

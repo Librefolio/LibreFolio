@@ -1109,6 +1109,254 @@ class TestWACPreview:
             assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
             print_success("WAC-P11: TRANSFER without link_uuid → 422 ✓")
 
+    # ------------------------------------------------------------------ WAC-P12
+    async def test_wacp12_auto_mode_no_feedback_loop(self):
+        """WAC with TRANSFER receiver in auto mode → stable result, no loop."""
+        print_section("WAC-P12 — auto mode no feedback loop")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "WACP12A")
+            broker_b = await create_broker(client, "WACP12B")
+            asset_id = await create_asset(client, currency="USD")
+
+            # Commit BUY 10@100 on broker_a
+            data = await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_a, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "USD", "amount": "10000"}},
+                    {"broker_id": broker_a, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "USD", "amount": "-1000"}},
+                ],
+            )
+            assert data["committed"] is True
+
+            shared_uuid = str(uuid.uuid4())
+            payload = {
+                "items": [
+                    {"sender_broker_id": broker_b, "asset_id": asset_id, "date_range": {"end": "2026-02-01"}},
+                ],
+                "pending_txs": [
+                    {
+                        "broker_id": broker_a,
+                        "asset_id": asset_id,
+                        "type": "TRANSFER",
+                        "date": "2026-01-20",
+                        "quantity": "-5",
+                        "link_uuid": shared_uuid,
+                    },
+                    {
+                        "broker_id": broker_b,
+                        "asset_id": asset_id,
+                        "type": "TRANSFER",
+                        "date": "2026-01-20",
+                        "quantity": "5",
+                        "cost_basis_mode": "auto",
+                        "cost_basis_override": None,
+                        "link_uuid": shared_uuid,
+                    },
+                ],
+                "excluded_tx_ids": [],
+            }
+
+            # First call
+            resp1 = await client.post(f"{API_BASE}/transactions/wac-preview", json=payload, timeout=TIMEOUT)
+            assert resp1.status_code == 200, f"Call 1 failed: {resp1.text}"
+            wac1 = Decimal(resp1.json()["items"][0]["wac"]["amount"])
+            # broker_b pool is empty: auto transfer enters at running_wac=0
+            # This is correct — the "real" WAC comes from the endpoint result for the source
+            assert wac1 == Decimal("0"), f"Expected WAC=0 (empty pool + auto), got {wac1}"
+
+            # Second call (same payload) → must be stable (no degradation)
+            resp2 = await client.post(f"{API_BASE}/transactions/wac-preview", json=payload, timeout=TIMEOUT)
+            assert resp2.status_code == 200
+            wac2 = Decimal(resp2.json()["items"][0]["wac"]["amount"])
+            assert wac2 == wac1, f"Feedback loop! WAC changed from {wac1} to {wac2}"
+
+            # Now test the REAL scenario: broker_b has prior BUYs
+            # The auto transfer should NOT dilute the existing pool
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_b, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "USD", "amount": "5000"}},
+                    {"broker_id": broker_b, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "5", "cash": {"code": "USD", "amount": "-500"}},
+                ],
+            )
+            # broker_b now has pool: 5@100, WAC=100
+            # Transfer auto +5 arrives → add_at_wac → unit_cost=100 → WAC stays 100
+            resp3 = await client.post(f"{API_BASE}/transactions/wac-preview", json=payload, timeout=TIMEOUT)
+            assert resp3.status_code == 200
+            wac3 = Decimal(resp3.json()["items"][0]["wac"]["amount"])
+            assert wac3 == Decimal("100"), f"Expected WAC=100 (auto inherits pool), got {wac3}"
+
+            # Call again → stable
+            resp4 = await client.post(f"{API_BASE}/transactions/wac-preview", json=payload, timeout=TIMEOUT)
+            assert resp4.status_code == 200
+            wac4 = Decimal(resp4.json()["items"][0]["wac"]["amount"])
+            assert wac4 == wac3, f"Feedback loop with non-empty pool! {wac3} → {wac4}"
+            print_success("WAC-P12: auto mode stable, no feedback loop ✓")
+
+    # ------------------------------------------------------------------ WAC-P13
+    async def test_wacp13_interdependent_auto_same_broker(self):
+        """Two auto ADJUSTMENTs on same broker, different days → pool unchanged."""
+        print_section("WAC-P13 — interdependent auto same broker")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker = await create_broker(client, "WACP13")
+            asset_id = await create_asset(client, currency="USD")
+
+            # Commit BUY 10@100
+            data = await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "USD", "amount": "10000"}},
+                    {"broker_id": broker, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "USD", "amount": "-1000"}},
+                ],
+            )
+            assert data["committed"] is True
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker, "asset_id": asset_id, "date_range": {"end": "2026-01-22"}},
+                    ],
+                    "pending_txs": [
+                        {
+                            "broker_id": broker,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-01-15",
+                            "quantity": "5",
+                            "cost_basis_mode": "auto",
+                            "cost_basis_override": None,
+                        },
+                        {
+                            "broker_id": broker,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-01-20",
+                            "quantity": "3",
+                            "cost_basis_mode": "auto",
+                            "cost_basis_override": None,
+                        },
+                    ],
+                    "excluded_tx_ids": [],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, f"Failed: {resp.text}"
+            wac = Decimal(resp.json()["items"][0]["wac"]["amount"])
+            assert wac == Decimal("100"), f"Expected WAC=100 (pool invariant), got {wac}"
+            print_success("WAC-P13: interdependent auto → pool invariant ✓")
+
+    # ------------------------------------------------------------------ WAC-P14
+    async def test_wacp14_auto_same_day(self):
+        """Two auto ADJUSTMENTs same day → pool unchanged."""
+        print_section("WAC-P14 — auto same day")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker = await create_broker(client, "WACP14")
+            asset_id = await create_asset(client, currency="USD")
+
+            data = await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "USD", "amount": "10000"}},
+                    {"broker_id": broker, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "USD", "amount": "-1000"}},
+                ],
+            )
+            assert data["committed"] is True
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker, "asset_id": asset_id, "date_range": {"end": "2026-01-15"}},
+                    ],
+                    "pending_txs": [
+                        {
+                            "broker_id": broker,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-01-15",
+                            "quantity": "5",
+                            "cost_basis_mode": "auto",
+                            "cost_basis_override": None,
+                        },
+                        {
+                            "broker_id": broker,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-01-15",
+                            "quantity": "3",
+                            "cost_basis_mode": "auto",
+                            "cost_basis_override": None,
+                        },
+                    ],
+                    "excluded_tx_ids": [],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, f"Failed: {resp.text}"
+            wac = Decimal(resp.json()["items"][0]["wac"]["amount"])
+            assert wac == Decimal("100"), f"Expected WAC=100, got {wac}"
+            print_success("WAC-P14: auto same day → pool invariant ✓")
+
+    # ------------------------------------------------------------------ WAC-P15
+    async def test_wacp15_mixed_auto_manual(self):
+        """Manual ADJUSTMENT contributes to pool, subsequent auto inherits."""
+        print_section("WAC-P15 — mixed auto+manual")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker = await create_broker(client, "WACP15")
+            asset_id = await create_asset(client, currency="USD")
+
+            data = await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "USD", "amount": "10000"}},
+                    {"broker_id": broker, "asset_id": asset_id, "type": "BUY", "date": "2026-01-05", "quantity": "10", "cash": {"code": "USD", "amount": "-1000"}},
+                ],
+            )
+            assert data["committed"] is True
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/wac-preview",
+                json={
+                    "items": [
+                        {"sender_broker_id": broker, "asset_id": asset_id, "date_range": {"end": "2026-01-22"}},
+                    ],
+                    "pending_txs": [
+                        {
+                            "broker_id": broker,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-01-15",
+                            "quantity": "5",
+                            "cost_basis_mode": "manual",
+                            "cost_basis_override": {"code": "USD", "amount": "200"},
+                        },
+                        {
+                            "broker_id": broker,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-01-20",
+                            "quantity": "3",
+                            "cost_basis_mode": "auto",
+                            "cost_basis_override": None,
+                        },
+                    ],
+                    "excluded_tx_ids": [],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, f"Failed: {resp.text}"
+            wac = Decimal(resp.json()["items"][0]["wac"]["amount"])
+            # Expected: (10*100 + 5*200) / 15 = 2000/15 = 133.333...
+            expected = Decimal("2000") / Decimal("15")
+            # Day2 auto inherits 133.33, doesn't change it → final WAC = 133.33
+            assert abs(wac - expected) < Decimal("0.01"), f"Expected WAC≈133.33, got {wac}"
+            print_success("WAC-P15: mixed auto+manual → WAC = 133.33 ✓")
+
 
 @pytest.mark.asyncio
 class TestWACValidation:

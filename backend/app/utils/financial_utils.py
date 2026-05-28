@@ -36,6 +36,7 @@ class WACInputTX:
     unit_cost_converted: Optional[Decimal]  # per-unit cost in target_currency (None → zero cost)
     original_currency: Optional[str] = None
     is_pending: bool = False  # True if from workspace (not yet in DB)
+    cost_basis_mode: Optional[str] = None  # "auto" | "manual" | None
 
 
 @dataclass
@@ -116,7 +117,11 @@ def compute_wac_from_txlist(
 
             if tx_qty > 0:
                 # Acquisition
-                if tx.unit_cost_converted is not None and tx.unit_cost_converted > 0:
+                if tx.cost_basis_mode == "auto":
+                    # Auto: shares arrive at current pool cost → pool WAC unchanged
+                    unit_cost = wac if qty_pool > 0 else Decimal("0")
+                    effect = "add_at_wac"
+                elif tx.unit_cost_converted is not None and tx.unit_cost_converted > 0:
                     unit_cost = tx.unit_cost_converted
                     effect = "add"
                 else:

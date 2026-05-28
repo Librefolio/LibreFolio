@@ -704,10 +704,17 @@ class WACPendingTXItem(TXCreateItem):
     Extends TXCreateItem to inherit full semantic validation.
     Overrides: asset_id is required (WAC always needs an asset).
     Added: id field to identify DB rows to override.
+    Added: cost_basis_mode to signal auto/manual intent for WAC computation.
     """
 
     id: Optional[int] = Field(None, description="DB id to override, or None for new pending TX")
     asset_id: int = Field(..., description="Asset ID (required for WAC calculation)")
+    cost_basis_mode: Literal["auto", "manual"] | None = Field(
+        None,
+        description="'auto': cost = inherit running WAC (no pool impact); "
+        "'manual': use cost_basis_override; "
+        "None: not applicable (BUY, SELL, etc.)",
+    )
 
 
 class WACPreviewRequest(BaseModel):
