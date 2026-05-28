@@ -5,6 +5,17 @@
 **Priorità**: P1 (Important)  
 **Dipendenze**: Phase 4.8 (share_percentage per aggregazione), Phase 5 (PriceChartShared), Phase 6, Phase 7 (tutti i dati)
 
+> **📊 WAC Analytics (2026-05-28)**: Il calcolo WAC iterativo è già implementato e testato
+> (28 backend tests, `compute_wac_iterative` in `transaction_service.py`, `compute_wac_from_txlist`
+> in `financial_utils.py`). L'attuale `/transactions/wac-preview` verrà migrato verso un endpoint
+> analytics dedicato (`POST /api/v1/analytics/wac`) per serie temporali WAC — utile per:
+> - Overlay WAC su price chart (linea entry price)
+> - P&L storico (realized gains = sell_price − WAC)
+> - Portfolio KPI (average entry price per holding)
+>
+> Il flusso workspace editing (validate/commit) integra già il calcolo WAC inline (nessun endpoint
+> separato necessario). Vedi [`plan-WacInlineValidateCommit.prompt.md`](../PlanD_SplitPromoteFullStack/R2-WalktestFeedback/SP-C-Bugfix/WacPreview/plan-WacInlineValidateCommit.prompt.md).
+
 > **📌 Riferimento principale**: [`plan-phase05-to-08-upgrade.md` §8](../plan-phase05-to-08-upgrade.md)
 > Questa sezione è stata **SUPERATA** dal piano aggiornato. Quando si arriva a implementare Phase 8,
 > ripartire da §8 di `plan-phase05-to-08-upgrade.md` che contiene:

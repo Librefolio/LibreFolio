@@ -499,3 +499,16 @@ Dopo la prima risoluzione WAC, intercettare le request a `/wac-preview` durante 
 - [x] Label: qualifying table mostra "Auto WAC" / "Auto PMC"
 - [x] Docs: pagina WAC aggiornata con nuovo effect + Example 4
 - [x] `./dev.py front check` — 0 errors
+
+---
+
+## Next: WAC Inline in Validate/Commit
+
+> **Child plan**: [`plan-WacInlineValidateCommit.prompt.md`](./plan-WacInlineValidateCommit.prompt.md)
+>
+> Ristrutturazione architetturale: il calcolo WAC viene integrato in `/validate` (response inline) e
+> applicato server-side in `/commit`. L'endpoint `/wac-preview` viene migrato verso `/analytics/wac`
+> per serie temporali (dashboard, grafici). Elimina la necessità di un endpoint WAC separato nel
+> flusso workspace editing e risolve il bug `sender_broker_id` per TRANSFER linked (il backend
+> determina autonomamente il source broker via `link_uuid`).
+
