@@ -26,7 +26,7 @@
                 if (meta) meta.setAttribute('content', theme === 'dark' ? '#156534' : '#1a4031');
             })();
             // Early PWA install prompt capture (before Svelte mounts)
-            window.addEventListener('beforeinstallprompt', function(e) {
+            window.addEventListener('beforeinstallprompt', function (e) {
                 e.preventDefault();
                 window.__pwaInstallPrompt = e;
             });

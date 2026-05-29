@@ -37,6 +37,25 @@ backend/test_scripts/
 ./dev.py test --coverage api all   # With coverage tracking
 ```
 
+## Resume Interrupted Runs
+
+When a test fails mid-suite, fix the issue and resume from where it stopped:
+
+```bash
+./dev.py test --resume all-backend       # Skip already-passed, restart from failure
+./dev.py test --resume api all           # Same for a single category's "all"
+
+./dev.py test --run-status               # Show current cache (what passed, where stopped)
+./dev.py test --fresh-run all-backend    # Clear cache + run from scratch
+./dev.py test --fresh-run                # Just clear cache (no run)
+```
+
+**How it works**:
+- Cache: `scripts/test_runner/.run_cache.json` (gitignored)
+- Each suite tracks passed test names; on `--resume` skips them
+- When entire suite passes: cache auto-clears (cycle complete)
+- `--fresh-run`: explicitly clears all cached state
+
 See skill `testing-backend` for full details on patterns, fixtures, coverage, and provider filtering.
 
 ## API Test Pattern

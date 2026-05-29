@@ -30,6 +30,8 @@ export interface TxFields {
     tags: string[];
     description: string;
     cost_basis_override: {code: string; amount: string} | null;
+    /** WAC mode: 'auto' = backend calculates, 'manual' = user-provided, null = not applicable */
+    cost_basis_mode?: 'auto' | 'manual' | null;
     asset_event_id?: number | null;
     link_uuid?: string | null;
 }
@@ -136,7 +138,14 @@ export function buildCreatePayload(fields: TxFields, rule: TypeRule): Record<str
     const desc = (fields.description ?? '').trim();
     if (desc) out.description = desc;
     if (fields.asset_event_id != null && rule.eventLinkable) out.asset_event_id = fields.asset_event_id;
-    if (fields.cost_basis_override) out.cost_basis_override = fields.cost_basis_override;
+    // WAC: for auto mode, send mode + null override (backend calculates).
+    // For manual mode, send the user-provided value normally.
+    if (fields.cost_basis_mode === 'auto') {
+        out.cost_basis_mode = 'auto';
+        out.cost_basis_override = null;
+    } else if (fields.cost_basis_override) {
+        out.cost_basis_override = fields.cost_basis_override;
+    }
     if (fields.link_uuid && rule.requiresPair) out.link_uuid = fields.link_uuid;
     return out;
 }
@@ -175,6 +184,11 @@ export function buildUpdateDiff(current: TxFields, original: TxOriginal, current
                 changes[key] = cur;
             }
         }
+    }
+    // WAC: for auto mode, force cost_basis_mode + null override (backend calculates)
+    if (current.cost_basis_mode === 'auto') {
+        changes.cost_basis_mode = 'auto';
+        changes.cost_basis_override = null;
     }
     return changes;
 }
@@ -272,7 +286,11 @@ export function buildDualCreatePayloads(layout: PairFormLayout, from: TxFields, 
             fromItem.asset_id = from.asset_id;
             toItem.asset_id = from.asset_id;
         }
-        if (from.cost_basis_override && (from.cost_basis_override as CashValue).amount?.trim()) {
+        // WAC: for auto mode, send mode + null override (backend calculates on receiver)
+        if (from.cost_basis_mode === 'auto') {
+            toItem.cost_basis_mode = 'auto';
+            toItem.cost_basis_override = null;
+        } else if (from.cost_basis_override && (from.cost_basis_override as CashValue).amount?.trim()) {
             toItem.cost_basis_override = from.cost_basis_override;
         } else if (to.cost_basis_override && to.cost_basis_override.amount?.trim()) {
             toItem.cost_basis_override = to.cost_basis_override;

@@ -54,13 +54,20 @@ body {
 
 /* Prevent iOS auto-zoom on input focus (triggers when font-size < 16px) */
 @media (max-width: 768px) {
-    input, select, textarea {
+    input,
+    select,
+    textarea {
         font-size: 16px !important;
     }
 }
 
 /* Disable double-tap zoom on interactive elements */
-a, button, input, select, textarea, [role="button"] {
+a,
+button,
+input,
+select,
+textarea,
+[role='button'] {
     touch-action: manipulation;
 }
 

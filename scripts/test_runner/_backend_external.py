@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 
 from ._common import (
+    _RESUME_MODE,
     PROJECT_ROOT, _run_test_suite, _build_pytest_cmd, run_command,
     print_section, print_info,
     make_category, add_test,
@@ -251,6 +252,7 @@ def external_all(verbose: bool = False,
             "⚠️  WARNING: Requires internet connection for FX/Asset providers",
             "⚠️  WARNING: May be slow",
             ],
+            resume=_RESUME_MODE,
         )
 
 

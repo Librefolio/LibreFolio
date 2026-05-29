@@ -449,7 +449,7 @@ class OpenDateRangeModel(BaseModel):
 
     The validator still enforces end >= start when both are provided.
 
-    Use cases: WAC computation window, flexible query filters.
+    Use cases: /analytics/wac date_range, flexible query filters.
     """
 
     model_config = ConfigDict(extra="forbid")

@@ -1,6 +1,6 @@
 """Frontend user E2E tests: multi-user isolation, broker sharing."""
 
-from ._common import _run_test_suite, print_header, print_section
+from ._common import _RESUME_MODE, _run_test_suite, print_header, print_section
 from ._frontend_common import _ensure_frontend_build, _ensure_db_populated, _ensure_test_users, _run_playwright
 
 
@@ -35,6 +35,7 @@ def front_user_all(verbose: bool = False, ui: bool = False, headed: bool = False
         header_msg=None,
         summary_title="Frontend User Test Summary",
         success_msg="All frontend user tests passed! 🎉",
+        resume=_RESUME_MODE,
     )
 
 

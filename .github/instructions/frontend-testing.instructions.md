@@ -48,13 +48,32 @@ frontend/e2e/
 ./dev.py test front-transaction tx-broker-access      # Broker access visibility
 ./dev.py test front-transaction tx-paired-edit        # Paired edit/clone
 ./dev.py test front-transaction tx-tooltips           # Tooltip rendering
-
+```bash
 # All frontend at once
 ./dev.py test all-frontend
 
 # Options: --ui (Playwright UI), --headed (visible browser), --debug (debug mode)
 ./dev.py test front-transaction tx-broker-access --headed
 ```
+
+## Resume Interrupted Runs
+
+When a test fails mid-suite, fix the issue and resume from where it stopped:
+
+```bash
+./dev.py test --resume all-frontend              # Skip already-passed categories
+./dev.py test --resume front-transaction all     # Skip passed tests within category
+
+./dev.py test --run-status                       # Show cache state
+./dev.py test --fresh-run all-frontend           # Clear cache + run from scratch
+./dev.py test --fresh-run                        # Just clear cache (no run)
+```
+
+**How it works**:
+- Cache: `scripts/test_runner/.run_cache.json` (gitignored)
+- Each suite tracks passed test names; `--resume` skips them
+- When entire suite passes: cache auto-clears (cycle complete)
+- `--fresh-run`: explicitly clears all cached state
 
 See skill `testing-frontend` for full details on patterns, fixtures, gallery, and coverage pipeline.
 

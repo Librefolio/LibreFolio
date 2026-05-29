@@ -65,7 +65,10 @@ test.describe('Asset Event Delete', () => {
         await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
 
         // Click on Loan Milano card (has events without linked transactions)
-        const loanCard = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Loan Milano/i}).first();
+        const loanCard = page
+            .locator('[data-testid^="asset-card-"]')
+            .filter({hasText: /Loan Milano/i})
+            .first();
         await expect(loanCard).toBeVisible({timeout: 5_000});
         await loanCard.click();
 
@@ -91,10 +94,7 @@ test.describe('Asset Event Delete', () => {
         await expect(saveBtn).toBeEnabled({timeout: 3_000});
 
         // Intercept the delete API call to verify it succeeds
-        const responsePromise = page.waitForResponse(
-            (resp) => resp.url().includes('/api/v1/assets/events') && resp.request().method() === 'DELETE',
-            {timeout: 10_000},
-        );
+        const responsePromise = page.waitForResponse((resp) => resp.url().includes('/api/v1/assets/events') && resp.request().method() === 'DELETE', {timeout: 10_000});
 
         // Click save to commit deletion
         await saveBtn.click();
@@ -145,10 +145,7 @@ test.describe('Asset Event Delete', () => {
         await expect(saveBtn).toBeEnabled({timeout: 3_000});
 
         // Intercept the delete API response
-        const responsePromise = page.waitForResponse(
-            (resp) => resp.url().includes('/api/v1/assets/events') && resp.request().method() === 'DELETE',
-            {timeout: 10_000},
-        );
+        const responsePromise = page.waitForResponse((resp) => resp.url().includes('/api/v1/assets/events') && resp.request().method() === 'DELETE', {timeout: 10_000});
 
         await saveBtn.click();
 
@@ -182,7 +179,10 @@ test.describe('Asset Event Delete', () => {
         if (await moreBtn.isVisible({timeout: 2_000}).catch(() => false)) {
             await moreBtn.click();
             await page.waitForTimeout(300);
-            const deleteOption = page.locator('[role="menuitem"]').filter({hasText: /delete|elimina/i}).first();
+            const deleteOption = page
+                .locator('[role="menuitem"]')
+                .filter({hasText: /delete|elimina/i})
+                .first();
             if (await deleteOption.isVisible({timeout: 1_000}).catch(() => false)) {
                 // Just verify it exists — don't actually delete
                 expect(await deleteOption.isVisible()).toBe(true);
