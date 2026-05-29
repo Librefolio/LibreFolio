@@ -265,32 +265,8 @@
     let confirmEditDeleteRow = $state<PendingOp | null>(null);
 
     // =========================================================================
-    // Reactive WAC — batch fetch for rows with cost_basis_mode='auto'
+    // WAC results — populated from validate response (Phase C: inline WAC)
     // =========================================================================
-
-    /** Fingerprint of all WAC-relevant fields across ALL ops (not just auto).
-     *  Any change triggers recalc of all auto rows since a BUY affects TRANSFER WAC. */
-    let wacFingerprint = $derived.by(() => {
-        return ops
-            .map((o) => {
-                const f = o.fields;
-                const del = o.op === 'edit' ? (o as any).markedDelete : false;
-                return `${f.broker_id}|${f.asset_id}|${f.date}|${f.quantity}|${f.cash?.amount ?? ''}|${f.type}|${del}`;
-            })
-            .join(';;');
-    });
-
-    /** List of ops with mode='auto' and valid params for WAC calc. */
-    let autoWacItems = $derived.by(() => {
-        return ops.filter((o) => o.fields.cost_basis_mode === 'auto' && o.fields.broker_id && o.fields.asset_id && o.fields.date);
-    });
-
-    let wacFetchInFlight = $state(false);
-    let wacAbortController: AbortController | null = null;
-    let wacDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-    /** Promise resolved when WAC fetch completes (for pre-commit await). */
-    let wacFetchPromise: Promise<void> | null = null;
-    let wacFetchResolve: (() => void) | null = null;
 
     /** Single source of truth: WAC results per auto-op (keyed by tempId).
      *  Contains full details (qualifying_txs) for FormModal display. */
@@ -300,119 +276,6 @@
         missing_pairs: string[];
     };
     let wacResults = $state<Map<string, WacResultEntry>>(new Map());
-
-    $effect(() => {
-        const _fp = wacFingerprint; // sole tracked dependency (string primitive → stable after writeback)
-
-        // Debounce 800ms trailing
-        if (wacDebounceTimer) clearTimeout(wacDebounceTimer);
-        wacDebounceTimer = setTimeout(() => {
-            // Read autoWacItems inside setTimeout → outside Svelte 5 tracking scope
-            // This prevents the effect from re-subscribing to the array reference
-            const items = autoWacItems;
-            if (items.length > 0) fetchBatchWac(items);
-        }, 800);
-
-        return () => {
-            if (wacDebounceTimer) clearTimeout(wacDebounceTimer);
-        };
-    });
-
-    /** Fetch WAC for all auto items in a single batch call. */
-    async function fetchBatchWac(autoItems: PendingOp[]) {
-        if (autoItems.length === 0) return;
-
-        // Abort previous request
-        if (wacAbortController) wacAbortController.abort();
-        wacAbortController = new AbortController();
-
-        wacFetchInFlight = true;
-        // Create promise for pre-commit await
-        wacFetchPromise = new Promise((resolve) => {
-            wacFetchResolve = resolve;
-        });
-
-        try {
-            // Build pending_txs from all non-delete ops
-            const nonDeleteOps = ops.filter((o) => !(o.op === 'edit' && (o as any).markedDelete));
-
-            const pendingTxs = nonDeleteOps
-                .map((o) => {
-                    const f = o.fields;
-                    return {
-                        id: o.op === 'edit' ? (o as any).txId : undefined,
-                        broker_id: f.broker_id,
-                        asset_id: f.asset_id,
-                        type: f.type,
-                        date: f.date,
-                        quantity: f.quantity,
-                        cash: f.cash,
-                        cost_basis_override: f.cost_basis_mode === 'auto' ? null : (f.cost_basis_override ?? null),
-                        cost_basis_mode: f.cost_basis_mode ?? undefined,
-                        link_uuid: o.link_uuid ?? undefined,
-                    };
-                })
-                .filter((p) => p.asset_id != null);
-
-            // Build excluded_tx_ids from markedDelete edit ops
-            const excludedTxIds = ops.filter((o) => o.op === 'edit' && (o as any).markedDelete).map((o) => (o as any).txId);
-
-            // Build items[] from autoItems
-            const items = autoItems.map((o) => ({
-                sender_broker_id: o.fields.broker_id,
-                asset_id: o.fields.asset_id!,
-                date_range: {end: o.fields.date},
-            }));
-
-            const resp = await zodiosApi.wac_preview_api_v1_transactions_wac_preview_post(
-                {
-                    items,
-                    pending_txs: pendingTxs as any,
-                    excluded_tx_ids: excludedTxIds,
-                    include_details: true,
-                },
-                {signal: wacAbortController.signal},
-            );
-
-            // Write results back to matching ops + wacResults map
-            const results = (resp as any)?.items ?? [];
-            const nextMap = new Map<string, WacResultEntry>();
-            for (let i = 0; i < autoItems.length && i < results.length; i++) {
-                const item = autoItems[i];
-                const result = results[i];
-                // Store full result in map (always, even if wac is null)
-                nextMap.set(item.tempId, {
-                    wac: result?.wac ?? null,
-                    qualifying_txs: result?.wac_qualifying_txs ?? [],
-                    missing_pairs: result?.wac_missing_pairs ?? [],
-                });
-                // Write WAC value into the op's fields
-                if (result?.wac) {
-                    // Find the op in current ops array (may have changed during fetch)
-                    const opIndex = ops.findIndex((o) => o.tempId === item.tempId);
-                    if (opIndex >= 0 && ops[opIndex].fields.cost_basis_mode === 'auto') {
-                        ops = ops.map((o, idx) => {
-                            if (idx !== opIndex) return o;
-                            return {...o, fields: {...o.fields, cost_basis_override: {code: result.wac.code, amount: result.wac.amount}}};
-                        });
-                    }
-                }
-            }
-            wacResults = nextMap;
-
-        } catch (e: any) {
-            if (e?.name !== 'AbortError') {
-                console.error('WAC batch fetch failed:', e);
-            }
-        } finally {
-            wacFetchInFlight = false;
-            if (wacFetchResolve) {
-                wacFetchResolve();
-                wacFetchResolve = null;
-            }
-            wacFetchPromise = null;
-        }
-    }
 
     // =========================================================================
     // Initial rows resolution
@@ -671,12 +534,15 @@
             // Determine from/to: "from" = negative cash or negative qty (the sender)
             const cashAmt = Number((d.op === 'edit' ? txStoreGet(d.txId) : undefined)?.cash?.amount ?? 0);
             const partnerCashAmt = Number((opArr[pIdx].op === 'edit' ? txStoreGet(opArr[pIdx].txId) : undefined)?.cash?.amount ?? 0);
-            let fromIdx = i, toIdx = pIdx;
+            let fromIdx = i,
+                toIdx = pIdx;
             if (cashAmt > 0 && partnerCashAmt <= 0) {
-                fromIdx = pIdx; toIdx = i;
+                fromIdx = pIdx;
+                toIdx = i;
             } else if (cashAmt === 0 && partnerCashAmt === 0) {
                 if (Number((d.op === 'edit' ? txStoreGet(d.txId) : undefined)?.quantity ?? 0) > 0) {
-                    fromIdx = pIdx; toIdx = i;
+                    fromIdx = pIdx;
+                    toIdx = i;
                 }
             }
             // Mark "to" as hidden partner of "from"
@@ -703,7 +569,9 @@
                     const sharedUuid = generateUUID();
                     d.link_uuid = sharedUuid;
                     const placeholderOp: PendingOp = {
-                        op: 'edit', txId: relId, markedDelete: false,
+                        op: 'edit',
+                        txId: relId,
+                        markedDelete: false,
                         tempId: generateUUID(),
                         fields: {type: mainTx.type, broker_id: pBrokerId, date: mainTx.date} as any,
                         pairedWith: d.tempId,
@@ -718,8 +586,11 @@
             const sharedUuid = generateUUID();
             d.link_uuid = sharedUuid;
             const partnerOp: PendingOp = {
-                op: 'edit', txId: relId, markedDelete: false,
-                tempId: generateUUID(), fields: fieldsFromTx(partnerTx),
+                op: 'edit',
+                txId: relId,
+                markedDelete: false,
+                tempId: generateUUID(),
+                fields: fieldsFromTx(partnerTx),
                 pairedWith: d.tempId,
                 link_uuid: sharedUuid,
             };
@@ -738,9 +609,11 @@
                 const cashI = Number(op.fields.cash?.amount ?? 0);
                 const cashP = Number(opArr[prev].fields.cash?.amount ?? 0);
                 const qtyI = Number(op.fields.quantity ?? 0);
-                let fromIdx = prev, toIdx = i;
+                let fromIdx = prev,
+                    toIdx = i;
                 if (cashI < 0 || (cashI === 0 && cashP === 0 && qtyI < 0)) {
-                    fromIdx = i; toIdx = prev;
+                    fromIdx = i;
+                    toIdx = prev;
                 }
                 opArr[toIdx].pairedWith = opArr[fromIdx].tempId;
             } else {
@@ -757,11 +630,14 @@
         const cashA = Number(opA.fields.cash?.amount ?? 0);
         const cashB = Number(opB.fields.cash?.amount ?? 0);
         const qtyA = Number(opA.fields.quantity ?? 0);
-        let from = opA, to = opB;
+        let from = opA,
+            to = opB;
         if (cashA > 0 && cashB <= 0) {
-            from = opB; to = opA;
+            from = opB;
+            to = opA;
         } else if (cashA === 0 && cashB === 0 && qtyA > 0) {
-            from = opB; to = opA;
+            from = opB;
+            to = opA;
         }
         // Mark "to" as hidden partner of "from"
         to.pairedWith = from.tempId;
@@ -1086,15 +962,71 @@
     // Validate scheduler
     // =========================================================================
 
+    /** Map a ResolvedOp back to the tempId of the PendingOp that produced it.
+     *  Uses the resolved ops array to find the source PendingOp by intent match.
+     *  `resolvedIdx` is the index within the `resolved` array. */
+    function buildOpsIndexMap(resolved: ResolvedOp[]): Map<string, string> {
+        // Replicate buildBatchPayload ordering to map "operation:index" → tempId.
+        // The resolved array mirrors ops ordering (pairedWith skipped, same filter).
+        const opsMap = new Map<string, string>(); // "create:0" → tempId
+        let createIdx = 0;
+        let updateIdx = 0;
+
+        // Track which resolved op came from which visible PendingOp.
+        // resolveOps iterates ops in order, skipping pairedWith. We do the same.
+        const splitTxIds = new Set(pendingSplits.flatMap((s) => [s.id_a, s.id_b]));
+        const promoteTxIds = new Set(pendingPromotes.flatMap((p) => [p.id_a, p.id_b].filter(Boolean) as number[]));
+        let resolvedI = 0;
+
+        for (const d of ops) {
+            if (d.pairedWith) continue;
+            const st = deriveStatus(d);
+            // Same skip logic as resolveOps
+            if (d.op === 'edit' && splitTxIds.has((d as any).txId) && st !== 'edited') continue;
+            if (d.op === 'edit' && promoteTxIds.has((d as any).txId)) continue;
+
+            if (resolvedI >= resolved.length) break;
+            const rOp = resolved[resolvedI];
+
+            if (st === 'new' && rOp.intent === 'create') {
+                opsMap.set(`create:${createIdx}`, d.tempId);
+                createIdx++;
+                const pOp = getPartnerOp(d.tempId);
+                if (rOp.partnerPayload && pOp) {
+                    opsMap.set(`create:${createIdx}`, pOp.tempId);
+                    createIdx++;
+                }
+                resolvedI++;
+            } else if (st === 'edited' && rOp.intent === 'update') {
+                opsMap.set(`update:${updateIdx}`, d.tempId);
+                updateIdx++;
+                const pOp = getPartnerOp(d.tempId);
+                if (rOp.partnerPayload && pOp) {
+                    opsMap.set(`update:${updateIdx}`, pOp.tempId);
+                    updateIdx++;
+                }
+                resolvedI++;
+            } else if (st === 'delete' && rOp.intent === 'delete') {
+                resolvedI++;
+            } else {
+                // Mismatch — skip this op (original/no-change)
+            }
+        }
+        return opsMap;
+    }
+
     const scheduler = createValidateScheduler({
-        enabled: () => ops.length > 0 && ops.length <= AUTO_VALIDATE_THRESHOLD && ops.some((d) => {
-            if (deriveStatus(d) === 'delete') return false;
-            if (!isDraftReadyForValidation(d.fields as any)) return false;
-            // W3-fix: for paired ops, partner must also be ready (unless inaccessible)
-            const pOp = getPartnerOp(d.tempId);
-            if (pOp && !(pOp as any).inaccessible && !isDraftReadyForValidation(pOp.fields as any)) return false;
-            return true;
-        }),
+        enabled: () =>
+            ops.length > 0 &&
+            ops.length <= AUTO_VALIDATE_THRESHOLD &&
+            ops.some((d) => {
+                if (deriveStatus(d) === 'delete') return false;
+                if (!isDraftReadyForValidation(d.fields as any)) return false;
+                // W3-fix: for paired ops, partner must also be ready (unless inaccessible)
+                const pOp = getPartnerOp(d.tempId);
+                if (pOp && !(pOp as any).inaccessible && !isDraftReadyForValidation(pOp.fields as any)) return false;
+                return true;
+            }),
         draftKey: () => lastDraftKey,
         validateFn: async () => {
             if (ops.length === 0) {
@@ -1118,6 +1050,49 @@
             }
             lastValidatedDraftKey = sentKey;
             issuesDismissed = false;
+
+            // ── Phase C: extract wac_results from validate response ──
+            const rawResp = result.rawResponse as Record<string, unknown> | null;
+            const rawWacResults = (rawResp?.wac_results as Array<Record<string, unknown>> | null | undefined) ?? null;
+            if (rawWacResults && rawWacResults.length > 0) {
+                // Build mapping: "operation:index" → tempId
+                const opsMap = buildOpsIndexMap(resolved);
+
+                // Map wac_results to tempIds
+                const nextMap = new Map<string, WacResultEntry>();
+                for (const wr of rawWacResults) {
+                    const op = wr.operation as string | null;
+                    const idx = wr.index as number | null;
+                    if (op == null || idx == null) continue;
+                    const key = `${op}:${idx}`;
+                    const tempId = opsMap.get(key);
+                    if (!tempId) continue;
+                    const wacVal = (wr.wac as {code: string; amount: string} | null) ?? null;
+                    nextMap.set(tempId, {
+                        wac: wacVal,
+                        qualifying_txs: (wr.wac_qualifying_txs as Array<Record<string, any>>) ?? [],
+                        missing_pairs: (wr.wac_missing_pairs as string[]) ?? [],
+                    });
+                    // Write WAC value into the op's fields for cell display (with equality guard)
+                    if (wacVal) {
+                        const opObj = ops.find((o) => o.tempId === tempId);
+                        if (opObj && opObj.fields.cost_basis_mode === 'auto') {
+                            const existing = opObj.fields.cost_basis_override;
+                            if (!existing || existing.code !== wacVal.code || existing.amount !== wacVal.amount) {
+                                ops = ops.map((o) => {
+                                    if (o.tempId !== tempId) return o;
+                                    return {...o, fields: {...o.fields, cost_basis_override: {code: wacVal.code, amount: wacVal.amount}}};
+                                });
+                            }
+                        }
+                    }
+                }
+                wacResults = nextMap;
+            } else {
+                // No WAC results — clear (might have been cleared by backend due to pydantic errors)
+                if (wacResults.size > 0) wacResults = new Map();
+            }
+
             return {issuesCount: issues.length};
         },
     });
@@ -1206,24 +1181,6 @@
         if (currentKey === lastCommitDraftKey && Date.now() - lastCommitAt < COMMIT_ANTI_BOUNCE_MS) {
             committing = false;
             return;
-        }
-
-        // Pre-commit guard: ensure WAC fetch is complete before committing.
-        // We wait for any in-flight fetch and force one if needed, but never block the commit
-        // — the backend will validate and reject if cost_basis is truly required but missing.
-        const pendingAutoItems = autoWacItems.filter((o) => o.fields.cost_basis_override === null);
-        if (pendingAutoItems.length > 0) {
-            // If WAC fetch is in flight, wait for it
-            if (wacFetchInFlight && wacFetchPromise) {
-                await wacFetchPromise;
-            }
-            // Check again after waiting
-            const stillPending = autoWacItems.filter((o) => o.fields.cost_basis_override === null);
-            if (stillPending.length > 0) {
-                // Force a sync fetch (no debounce) — best effort
-                if (wacDebounceTimer) clearTimeout(wacDebounceTimer);
-                await fetchBatchWac(stillPending);
-            }
         }
 
         try {
@@ -1792,7 +1749,6 @@
 
     // Bugfix-4 §U16: validate chip removed — banners are the single source
     // of truth. Footer keeps only an inline "Validating…" indicator.
-
 
     let newCount = $derived(visibleOps.filter((d) => deriveStatus(d) === 'new').length);
     let editedCount = $derived(visibleOps.filter((d) => deriveStatus(d) === 'edited').length);

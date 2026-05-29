@@ -12,12 +12,16 @@ from pathlib import Path
 from scripts.cli_base import pipenv_prefix
 
 from ._common import (
-    _run_test_suite, Colors,
-    print_header, print_info, print_success, print_error, print_warning,
     _COVERAGE_MODE,
+    Colors,
+    _run_test_suite,
+    print_error,
+    print_header,
+    print_info,
+    print_success,
+    print_warning,
 )
 from ._registry import TEST_REGISTRY
-
 
 _BACKEND_CATEGORIES = ("external", "db", "services", "utils", "schemas", "api", "e2e")
 _FRONTEND_CATEGORIES = ("front-utility", "front-broker", "front-user", "front-fx", "front-asset", "front-transaction")
@@ -44,6 +48,7 @@ def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
             archive_dir = data_dir / "archive"
             archive_dir.mkdir(parents=True, exist_ok=True)
             from datetime import datetime as _dt
+
             ts = _dt.now().strftime("%Y%m%d_%H%M")
             archive_name = f"{label}_{ts}_clean"
             shutil.move(str(db_path), str(archive_dir / archive_name))
@@ -64,16 +69,10 @@ def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
         _archive_and_remove(data_dir / "frontend", "frontend")
 
     if clean_backend or clean_frontend:
-        result = subprocess.run(
-            [*pipenv_prefix(), "coverage", "erase"],
-            cwd=os.getcwd(),
-            capture_output=True,
-            text=True
-            )
+        result = subprocess.run([*pipenv_prefix(), "coverage", "erase"], cwd=os.getcwd(), capture_output=True, text=True)
 
 
-def run_all_tests(verbose: bool = False,
-                  providers: list = None, exclude_providers: list = None) -> bool:
+def run_all_tests(verbose: bool = False, providers: list = None, exclude_providers: list = None, resume: bool = False) -> bool:
     """Run all tests (backend + frontend) in optimal order."""
     from ._backend_external import external_all
 
@@ -89,9 +88,8 @@ def run_all_tests(verbose: bool = False,
         if func:
             func_params = inspect.signature(func).parameters
             if "providers" in func_params:
-                all_tests.append((name, lambda f=func, v=verbose, p=providers, ep=exclude_providers:
-                                  f(verbose=v, providers=p, exclude_providers=ep)))
-            elif 'coverage' in func_params:
+                all_tests.append((name, lambda f=func, v=verbose, p=providers, ep=exclude_providers: f(verbose=v, providers=p, exclude_providers=ep)))
+            elif "coverage" in func_params:
                 all_tests.append((name, lambda f=func, v=verbose, c=_COVERAGE_MODE: f(verbose=v, coverage=c)))
             else:
                 all_tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
@@ -104,7 +102,7 @@ def run_all_tests(verbose: bool = False,
         func = all_info.get("func")
         name = all_info.get("name", f"{category.title()} Tests")
         if func:
-            if 'coverage' in inspect.signature(func).parameters:
+            if "coverage" in inspect.signature(func).parameters:
                 all_tests.append((name, lambda f=func, v=verbose, c=_COVERAGE_MODE: f(verbose=v, coverage=c)))
             else:
                 all_tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
@@ -113,16 +111,16 @@ def run_all_tests(verbose: bool = False,
         suite_name="Complete Test Suite",
         tests=all_tests,
         verbose=verbose,
+        resume=resume,
         info_msgs=[
             "Running all test categories (backend + frontend)",
             "This may take several minutes...\n",
-            ],
+        ],
         success_msg="\n🎉 ALL TESTS PASSED! 🎉",
-        )
+    )
 
 
-def run_all_backend_tests(verbose: bool = False,
-                          providers: list = None, exclude_providers: list = None) -> bool:
+def run_all_backend_tests(verbose: bool = False, providers: list = None, exclude_providers: list = None, resume: bool = False) -> bool:
     """Run all backend tests."""
     tests = []
     for category in _BACKEND_CATEGORIES:
@@ -134,8 +132,7 @@ def run_all_backend_tests(verbose: bool = False,
         if func:
             func_params = inspect.signature(func).parameters
             if "providers" in func_params:
-                tests.append((name, lambda f=func, v=verbose, p=providers, ep=exclude_providers:
-                              f(verbose=v, providers=p, exclude_providers=ep)))
+                tests.append((name, lambda f=func, v=verbose, p=providers, ep=exclude_providers: f(verbose=v, providers=p, exclude_providers=ep)))
             else:
                 tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
 
@@ -143,15 +140,16 @@ def run_all_backend_tests(verbose: bool = False,
         suite_name="Backend Test Suite",
         tests=tests,
         verbose=verbose,
+        resume=resume,
         info_msgs=[
             "Running all backend test categories",
             "This may take a few minutes...\n",
-            ],
+        ],
         success_msg="\n🎉 ALL BACKEND TESTS PASSED! 🎉",
-        )
+    )
 
 
-def run_all_frontend_tests(verbose: bool = False) -> bool:
+def run_all_frontend_tests(verbose: bool = False, resume: bool = False) -> bool:
     """Run all frontend tests (front-utility, front-broker, front-user, front-fx, front-asset, front-transaction)."""
     tests = []
     for category in _FRONTEND_CATEGORIES:
@@ -161,7 +159,7 @@ def run_all_frontend_tests(verbose: bool = False) -> bool:
         func = all_info.get("func")
         name = all_info.get("name", f"{category.title()} Tests")
         if func:
-            if 'coverage' in inspect.signature(func).parameters:
+            if "coverage" in inspect.signature(func).parameters:
                 tests.append((name, lambda f=func, v=verbose, c=_COVERAGE_MODE: f(verbose=v, coverage=c)))
             else:
                 tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
@@ -170,10 +168,10 @@ def run_all_frontend_tests(verbose: bool = False) -> bool:
         suite_name="Frontend Test Suite",
         tests=tests,
         verbose=verbose,
+        resume=resume,
         info_msgs=[
             "Running all frontend test categories",
             "This may take a few minutes...\n",
-            ],
+        ],
         success_msg="\n🎉 ALL FRONTEND TESTS PASSED! 🎉",
-        )
-
+    )

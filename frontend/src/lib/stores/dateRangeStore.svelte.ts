@@ -112,4 +112,3 @@ export function seedFromUrl(searchParams: URLSearchParams): void {
         setDateRange(_start, urlEnd);
     }
 }
-

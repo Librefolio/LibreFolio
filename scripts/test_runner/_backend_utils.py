@@ -3,6 +3,7 @@ Backend utility tests: decimal precision, datetime, day count, geo, version, etc
 """
 
 from ._common import (
+    _RESUME_MODE,
     _run_test_suite, _get_category_tests_for_all, _build_pytest_cmd, run_command,
     print_section, print_info,
     make_category, add_test,
@@ -96,6 +97,7 @@ def utils_all(verbose: bool = False) -> bool:
         tests=_get_category_tests_for_all("utils", verbose),
         verbose=verbose,
         info_msgs=["Testing utility modules and helper functions"],
+            resume=_RESUME_MODE,
         )
 
 

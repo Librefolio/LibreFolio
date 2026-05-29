@@ -14,17 +14,21 @@ from typing import Callable
 # Ensure project root is in path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
+# Setup test database configuration
+from backend.test_scripts.test_db_config import TEST_DATABASE_URL, TEST_DB_PATH, setup_test_database
+
+# Import test utilities
+from backend.test_scripts.test_utils import Colors, print_error, print_header, print_info, print_section, print_success, print_warning
 from scripts.cli_base import pipenv_prefix
 
-# Setup test database configuration
-from backend.test_scripts.test_db_config import setup_test_database, TEST_DB_PATH, TEST_DATABASE_URL
-# Import test utilities
-from backend.test_scripts.test_utils import Colors, print_header, print_section, print_success, print_error, print_warning, print_info
+from ._run_cache import clear_suite, is_passed, load_cache, mark_failed, mark_passed
 
 # Global flag for coverage mode (set by main())
 _COVERAGE_MODE = False
 # Coverage source: "backend", "frontend", or None (auto-detect)
 _COVERAGE_SOURCE = None
+# Global flag for resume mode (set by main())
+_RESUME_MODE = False
 
 
 def _run_test_suite(
@@ -36,7 +40,8 @@ def _run_test_suite(
     summary_title: str = None,
     success_msg: str = None,
     combine_coverage: bool = False,
-    ) -> bool:
+    resume: bool = False,
+) -> bool:
     """
     Generic function to run a suite of tests with consistent output format.
 
@@ -49,10 +54,13 @@ def _run_test_suite(
         summary_title: Optional custom summary section title (default: "{suite_name} Summary")
         success_msg: Optional custom success message (default: "All {suite_name.lower()} passed! 🎉")
         combine_coverage: If True, combine coverage data after tests (for API/E2E tests)
+        resume: If True, skip tests already cached as passed
 
     Returns:
         bool: True if all tests passed
     """
+    suite_key = suite_name  # Use suite_name as cache key
+
     # Print header (unless None to skip)
     if header_msg is not None or header_msg != "":
         print_header(header_msg or f"LibreFolio {suite_name}")
@@ -61,6 +69,12 @@ def _run_test_suite(
     if info_msgs:
         for msg in info_msgs:
             print_info(msg)
+
+    if resume:
+        cached = load_cache(suite_key)
+        cached_passed = cached.get("passed", [])
+        if cached_passed:
+            print_info(f"🔄 Resuming: {len(cached_passed)} test(s) already passed, skipping them")
 
     total_tests = len(tests)
     results = {}
@@ -71,12 +85,23 @@ def _run_test_suite(
 
     # Run tests
     for test_name, test_func in tests:
+        # Skip if already passed in cache (resume mode)
+        if resume and is_passed(suite_key, test_name):
+            results[test_name] = True
+            print(f"{Colors.CYAN}⏩ SKIP (cached pass){Colors.NC} - {test_name}")
+            continue
+
         success = test_func()
         results[test_name] = success
 
-        if not success:
+        if success:
+            mark_passed(suite_key, test_name)
+        else:
+            mark_failed(suite_key, test_name)
             print_error(f"Test failed: {test_name}")
             print_warning(f"Stopping {suite_name.lower()} execution")
+            if resume:
+                print_info("💡 Fix the issue and re-run with --resume to continue from here")
             break
 
     # Summary
@@ -104,12 +129,7 @@ def _run_test_suite(
         print_section("Combining Coverage Data")
         print_info("Merging coverage from test server subprocess...")
         try:
-            result = subprocess.run(
-                ["coverage", "combine", "--keep"],
-                capture_output=True,
-                text=True,
-                cwd=Path(__file__).parent
-                )
+            result = subprocess.run(["coverage", "combine", "--keep"], capture_output=True, text=True, cwd=Path(__file__).parent)
             if result.returncode == 0:
                 print_success("Coverage data combined successfully")
             else:
@@ -118,6 +138,8 @@ def _run_test_suite(
             print_warning(f"Could not combine coverage: {e}")
 
     if passed == total_tests:
+        # Full suite passed — clear cache for this suite (cycle complete)
+        clear_suite(suite_key)
         print_success(success_msg or f"All {suite_name.lower()} passed! 🎉")
         return True
     else:
@@ -168,34 +190,42 @@ def _build_pytest_cmd(test_path: str, test_names: list = None) -> list:
 
 
 # TODO: riscrivere in maniera sensata questa funzione affinchè per i test si prenda solo il path e aggiunga tutto lei
-def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool:
+def run_command(cmd: list[str], description: str, verbose: bool = False, timeout: int = 600) -> bool:
     """
     Run a command and return True if successful.
+
+    Args:
+        cmd: Command parts to run
+        description: Human-readable description for output
+        verbose: If True, stream stdout/stderr live
+        timeout: Max seconds per command (default 300s). Use 600 for E2E/frontend.
 
     If _COVERAGE_MODE is True and the command is a pytest test, automatically
     adds coverage tracking flags and updates the cumulative coverage database.
     """
     # Check if this is a pytest command and coverage is enabled
-    is_pytest = 'pytest' in ' '.join(cmd)
+    is_pytest = "pytest" in " ".join(cmd)
     use_coverage = _COVERAGE_MODE and is_pytest
 
     # If coverage mode, enhance pytest command
     if is_pytest:
-        pytest_idx = next((i for i, c in enumerate(cmd) if 'pytest' in c), None)
+        pytest_idx = next((i for i, c in enumerate(cmd) if "pytest" in c), None)
         if pytest_idx is not None:
             flags_to_add = []
             if verbose:
-                flags_to_add.append('-s')
+                flags_to_add.append("-s")
             if use_coverage:
                 html_dir = "htmlcov-backend" if _COVERAGE_SOURCE != "frontend" else "htmlcov-frontend"
-                flags_to_add.extend([
-                    '--cov=backend/app',
-                    '--cov-append',
-                    f'--cov-report=html:{html_dir}',
-                    '--cov-report=term-missing:skip-covered',
-                    ])
+                flags_to_add.extend(
+                    [
+                        "--cov=backend/app",
+                        "--cov-append",
+                        f"--cov-report=html:{html_dir}",
+                        "--cov-report=term-missing:skip-covered",
+                    ]
+                )
             if flags_to_add:
-                cmd = cmd[:pytest_idx + 1] + flags_to_add + cmd[pytest_idx + 1:]
+                cmd = cmd[: pytest_idx + 1] + flags_to_add + cmd[pytest_idx + 1 :]
                 if use_coverage:
                     print(f"{Colors.YELLOW}📊 Coverage tracking enabled (appending to .coverage){Colors.NC}")
     print(f"\n{Colors.BLUE}Running: {description}{Colors.NC}")
@@ -215,15 +245,15 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
     try:
         env = None
         try:
-            if any('backend.test_scripts' in c or c.endswith('.py') and 'backend/test_scripts' in c for c in cmd):
+            if any("backend.test_scripts" in c or c.endswith(".py") and "backend/test_scripts" in c for c in cmd):
                 env = os.environ.copy()
-                env['LIBREFOLIO_TEST_MODE'] = '1'
-                env['DATABASE_URL'] = TEST_DATABASE_URL
+                env["LIBREFOLIO_TEST_MODE"] = "1"
+                env["DATABASE_URL"] = TEST_DATABASE_URL
                 if use_coverage:
-                    env['COVERAGE_RUN'] = '1'
+                    env["COVERAGE_RUN"] = "1"
         except Exception:
             env = None
-        result = subprocess.run(cmd, cwd=PROJECT_ROOT, capture_output=not verbose, text=True, env=env)
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT, capture_output=not verbose, text=True, env=env, timeout=timeout)
 
         if result.returncode == 0:
             print_success(f"{description} - PASSED")
@@ -252,14 +282,13 @@ def run_command(cmd: list[str], description: str, verbose: bool = False) -> bool
 
 # ── Registry builder helpers ────────────────────────────────────────────
 
+
 def make_category(help_text: str, description: str) -> dict:
     """Create the _meta entry for a registry category."""
     return {"_meta": {"help": help_text, "description": description}}
 
 
-def add_test(category: dict, action: str, func, *,
-             test_names: bool = True, name: str, desc: str,
-             prereq: str = None, tests: str = None, note: str = None) -> None:
+def add_test(category: dict, action: str, func, *, test_names: bool = True, name: str, desc: str, prereq: str = None, tests: str = None, note: str = None) -> None:
     """Add a single test entry to a category dict."""
     entry = {"func": func, "test_names": test_names, "name": name, "desc": desc}
     if prereq:
@@ -269,4 +298,3 @@ def add_test(category: dict, action: str, func, *,
     if note:
         entry["note"] = note
     category[action] = entry
-

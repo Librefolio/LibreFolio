@@ -12,8 +12,8 @@
 export type SignRule = 'positive' | 'negative' | 'nonzero' | 'zero' | 'any' | 'free' | 'optional' | string;
 
 export interface SignHintResult {
-	ok: boolean;
-	bad: boolean;
+    ok: boolean;
+    bad: boolean;
 }
 
 /**
@@ -24,21 +24,20 @@ export interface SignHintResult {
  * positive (system negates on save), so positive → ok, negative → bad.
  */
 export function computeSignHint(value: number, rule: SignRule): SignHintResult {
-	if (Number.isNaN(value)) return {ok: false, bad: false};
+    if (Number.isNaN(value)) return {ok: false, bad: false};
 
-	switch (rule) {
-		case 'positive':
-			return {ok: value > 0, bad: value < 0};
-		case 'negative':
-			// Auto-flip active: user enters positive (green), negative is wrong (red)
-			return {ok: value > 0, bad: value < 0};
-		case 'nonzero':
-			return {ok: value !== 0, bad: value === 0};
-		case 'zero':
-			return {ok: value === 0, bad: value !== 0};
-		default:
-			// 'any', 'free', 'optional', or unknown — no coloring
-			return {ok: false, bad: false};
-	}
+    switch (rule) {
+        case 'positive':
+            return {ok: value > 0, bad: value < 0};
+        case 'negative':
+            // Auto-flip active: user enters positive (green), negative is wrong (red)
+            return {ok: value > 0, bad: value < 0};
+        case 'nonzero':
+            return {ok: value !== 0, bad: value === 0};
+        case 'zero':
+            return {ok: value === 0, bad: value !== 0};
+        default:
+            // 'any', 'free', 'optional', or unknown — no coloring
+            return {ok: false, bad: false};
+    }
 }
-

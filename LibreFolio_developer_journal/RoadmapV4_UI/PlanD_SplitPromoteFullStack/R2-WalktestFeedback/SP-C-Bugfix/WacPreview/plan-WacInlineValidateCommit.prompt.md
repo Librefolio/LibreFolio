@@ -1,6 +1,6 @@
 # Plan: WAC Inline in Validate/Commit + Analytics Migration
 
-> **⏳ STATUS**: PENDING REVIEW — awaiting user approval before execution.
+> **✅ STATUS**: COMPLETED — All phases (A+B+C+D+E) done. Analytics endpoint live.
 
 **Parent plan**: [`plan-FixWacFeedbackLoop.prompt.md`](./plan-FixWacFeedbackLoop.prompt.md) (v8+v8b completato — questo piano ristruttura l'architettura WAC)
 
@@ -124,121 +124,37 @@ Nessun `pending_txs` — solo dati committed nel DB. Utile per overlay WAC su pr
 
 ### Phase A: Backend — Schema + Logica WAC in execute_batch
 
-#### Step A1: Estendere `cost_basis_mode` Literal
+#### Step A1: Estendere `cost_basis_mode` Literal ✅ 2026-05-28
 
-**File**: `backend/app/schemas/transactions.py`
+> **Note implementazione**: Campo aggiunto a `TXCreateItem`, `TXUpdateItem` e `WACPendingTXItem`.
+> Aggiunta **Rule 12** nel model_validator: valida che `cost_basis_mode` != None è compatibile solo con TRANSFER receiver (qty>0) o ADJUSTMENT (qty>0). Se incompatibile → `PydanticCustomError("costBasisModeIncompatible", ...)`.
 
-- `TXCreateItem.cost_basis_mode`: da `Literal["auto", "manual"] | None` a `Literal["auto", "auto-detail", "manual"] | None`
-- `WACPendingTXItem.cost_basis_mode`: idem (backward compat: "auto-detail" è nuovo, "auto" e None invariati)
+#### Step A2: Creare `TXBatchWacResult` schema ✅ 2026-05-28
 
-#### Step A2: Creare `TXBatchWacResult` schema
+> **⚠️ Fuori pista**: In fase di review utente, eliminato `TXBatchWacResult` — i campi posizionali (operation, index, source_broker_id) aggiunti come Optional direttamente a `WACPreviewResultItem`. Riuso diretto senza wrapper dedicato.
 
-**File**: `backend/app/schemas/transactions.py`
+#### Step A3: Estendere `TXBatchResponse` con `wac_results` ✅ 2026-05-28
 
-Aggiungere la classe `TXBatchWacResult` (vedi §3 sopra) dopo `TXBatchResultItem`.
+> **⚠️ Fuori pista**: In fase di review utente, `TXBatchResponse` ora eredita da `BaseBulkResponse[TXBatchResultItem]` (non più BaseModel vanilla). Aggiunto `committed`, `issues`, `wac_results`. `results` è ora sempre una List (non Optional), `success_count` computed.
 
-#### Step A3: Estendere `TXBatchResponse` con `wac_results`
+#### Step A4: Implementare WAC computation in `execute_batch` ✅ 2026-05-28
 
-**File**: `backend/app/schemas/transactions.py`
+> **Note implementazione**: Aggiunto `_compute_wac_for_auto_items()`, `_find_created_tx_for_wac()`, e `_resolve_source_broker_from_link()` al TransactionService. Il metodo viene invocato al step 6b (post link resolution, pre balance walk). Condizione: skip se ci sono errori pydantic/access. Usa direttamente `WACPreviewResultItem` con campi posizionali.
 
-```python
-class TXBatchResponse(BaseModel):
-    committed: bool
-    issues: List[TXValidationIssue] = Field(default_factory=list)
-    results: Optional[List[TXBatchResultItem]] = None
-    wac_results: Optional[List[TXBatchWacResult]] = None  # NEW
-```
+#### Step A5: `./dev.py api sync` ✅ 2026-05-28
 
-#### Step A4: Implementare WAC computation in `execute_batch`
-
-**File**: `backend/app/services/transaction_service.py`
-
-Aggiungere un metodo privato `_compute_wac_for_auto_items()` chiamato nel punto 6b di `execute_batch` (tra link resolution e balance walk — riga 1729 attuale).
-
-**Precondizioni**: zero issues pydantic + zero access denied. Se ci sono → skip (wac_results=None).
-
-**Algoritmo** (post-flush, tutte le righe sono nella session):
-
-```python
-async def _compute_wac_for_auto_items(
-    self,
-    parsed_creates: list,   # [(orig_idx, TXCreateItem)]
-    parsed_updates: list,   # [(orig_idx, TXUpdateItem)]
-    created_tx_map: dict,   # {orig_idx: Transaction} — i DB rows creati
-    updated_tx_map: dict,   # {orig_idx: Transaction} — i DB rows aggiornati
-) -> list[TXBatchWacResult]:
-    results = []
-    
-    # Collect all auto items
-    auto_items = []
-    for orig_idx, item in parsed_creates:
-        if item.cost_basis_mode in ("auto", "auto-detail"):
-            auto_items.append(("create", orig_idx, item, created_tx_map[orig_idx]))
-    for orig_idx, item in parsed_updates:
-        if item.cost_basis_mode in ("auto", "auto-detail"):
-            auto_items.append(("update", orig_idx, item, updated_tx_map[orig_idx]))
-    
-    if not auto_items:
-        return []
-    
-    for operation, idx, schema_item, db_tx in auto_items:
-        # Determine source broker
-        if schema_item.link_uuid:
-            # TRANSFER: find partner in batch payload
-            partner = self._find_link_partner(schema_item.link_uuid, parsed_creates, parsed_updates, schema_item)
-            source_broker_id = partner.broker_id if partner else db_tx.broker_id
-        else:
-            # ADJUSTMENT standalone
-            source_broker_id = db_tx.broker_id
-        
-        # Compute WAC (session sees all flushed rows)
-        # For ADJUSTMENT: exclude self so we get "pool WAC before me"
-        excluded = [db_tx.id] if not schema_item.link_uuid else []
-        
-        wac_result = await compute_wac_iterative(
-            self.session,
-            broker_id=source_broker_id,
-            asset_id=db_tx.asset_id,
-            as_of_date=db_tx.date,
-            asset_currency=...,  # from asset lookup
-            excluded_tx_ids=excluded,
-        )
-        
-        # Write cbo on the DB row
-        if wac_result.wac:
-            db_tx.cost_basis_override = wac_result.wac.amount
-            db_tx.cost_basis_currency = wac_result.wac.code
-        
-        # Build response item
-        results.append(TXBatchWacResult(
-            operation=operation, index=idx,
-            source_broker_id=source_broker_id,
-            wac=wac_result.wac,
-            qualifying_txs=wac_result.wac_qualifying_txs if schema_item.cost_basis_mode == "auto-detail" else None,
-            missing_pairs=wac_result.wac_missing_pairs,
-            asset_price=wac_result.asset_price if schema_item.cost_basis_mode == "auto-detail" else None,
-            asset_price_stale=wac_result.asset_price_stale if schema_item.cost_basis_mode == "auto-detail" else None,
-            asset_price_missing=wac_result.asset_price_missing if schema_item.cost_basis_mode == "auto-detail" else False,
-        ))
-    
-    return results
-```
-
-**Nota**: nessun adapter. `compute_wac_iterative` fa query dirette sulla session (dove i rows sono già flushati). L'unico override è `excluded_tx_ids` per gli ADJUSTMENT standalone.
-
-#### Step A5: `./dev.py api sync`
-
-Rigenerare client TypeScript con i nuovi campi su `TXBatchResponse`.
+> **Note implementazione**: Client TypeScript rigenerato 2x (dopo primo design e dopo redesign). Verificato: 28/28 test WAC esistenti passano (P1-P15, WAC1-13). Nessuna regressione.
 
 ### Phase B: Backend — Test
 
-#### Step B1: Adattare test WAC esistenti (P12-P15)
+#### Step B1: Adattare test WAC esistenti (P12-P15) ✅ 2026-05-28
 
-**File**: `backend/test_scripts/test_api/test_transactions_wac.py`
+> **Note implementazione**: I test P1-P15 esistenti passano invariati (28/28). Non serve duplicarli — il vecchio endpoint `/wac-preview` è funzionante e coperto.
 
-I test P12-P15 attualmente chiamano `/wac-preview`. Creare una COPIA dei test che chiama `/validate` con gli stessi scenari e asserisce `wac_results[]` nella response. L'endpoint `/wac-preview` resta funzionante (non rotto) — i vecchi test restano come regression.
+#### Step B2: Nuovi test validate+commit con WAC ✅ 2026-05-28
 
-#### Step B2: Nuovi test validate+commit con WAC
+> **Note implementazione**: Creato file separato `test_transactions_wac_inline.py` (non modificato il file originale).
+> **13/13 test passano** al primo run: P16-P28 tutti green in 8.71s.
 
 **File**: `backend/test_scripts/test_api/test_transactions_wac.py`
 
@@ -258,104 +174,100 @@ I test P12-P15 attualmente chiamano `/wac-preview`. Creare una COPIA dei test ch
 | P27 | TRANSFER auto da broker con pool vuoto → wac = null o amount "0" |
 | P28 | `auto-detail` su ADJUSTMENT → qualifying include riga con effect="add_at_wac" |
 
-#### Step B3: Test regression — endpoint `/wac-preview` ancora funzionante
+#### Step B3: Test regression — endpoint `/wac-preview` ancora funzionante ✅ 2026-05-28
 
-Verificare che i test P1-P15 esistenti passano invariati (l'endpoint legacy non è rotto).
+> **Note implementazione**: 28/28 test passano (confermato sia prima che dopo l'aggiunta dei test inline). Endpoint legacy non toccato.
 
 ### Phase C: Frontend — BulkModal migration
 
-#### Step C1: Eliminare `fetchBatchWac` e infrastruttura WAC dedicata
+#### Step C1: Eliminare `fetchBatchWac` e infrastruttura WAC dedicata ✅ 2026-05-29
 
-**File**: `frontend/src/lib/components/transactions/TransactionBulkModal.svelte`
+> **Note implementazione**: Rimossi: `wacFingerprint`, `autoWacItems`, `wacFetchInFlight`, `wacAbortController`, `wacDebounceTimer`, `wacFetchPromise`, `wacFetchResolve`, `fetchBatchWac()`, l'`$effect` WAC. Mantenuto solo `wacResults` state e `WacResultEntry` type.
 
-Rimuovere:
-- `wacFingerprint` derived
-- `autoWacItems` derived
-- `wacFetchInFlight`, `wacAbortController`, `wacDebounceTimer`, `wacFetchPromise`, `wacFetchResolve`
-- `fetchBatchWac()` function
-- `$effect` WAC (righe 304-319)
-- Pre-commit WAC guard (righe 1214-1226)
+#### Step C2: Leggere `wac_results` dalla validate response ✅ 2026-05-29
 
-#### Step C2: Leggere `wac_results` dalla validate response
+> **Note implementazione**: Aggiunto `buildOpsIndexMap(resolved)` che replica l'ordinamento di `resolveOps+buildBatchPayload` per mappare `"operation:index"` → `tempId`. La validateFn estrae `wac_results` da `rawResponse` e popola la mappa.
 
-**File**: `frontend/src/lib/components/transactions/TransactionBulkModal.svelte`
+#### Step C3: Writeback WAC in ops per il display nelle celle ✅ 2026-05-29
 
-Nella `validateFn` (riga 1099), dopo la response:
-```typescript
-const result = await validateTransactions(payload, {...});
-// Extract WAC results and populate wacResults map
-if (result.wac_results) {
-    const nextMap = new Map<string, WacResultEntry>();
-    for (const wr of result.wac_results) {
-        // Map (operation, index) back to tempId via resolvedOps ordering
-        const tempId = resolvedOpsMap.get(`${wr.operation}:${wr.index}`);
-        if (tempId) {
-            nextMap.set(tempId, {
-                wac: wr.wac, qualifying_txs: wr.qualifying_txs ?? [], missing_pairs: wr.missing_pairs,
-            });
-        }
-    }
-    wacResults = nextMap;
-}
-```
+> **Note implementazione**: Dopo il mapping, il valore WAC viene scritto in `ops[x].fields.cost_basis_override` con equality guard (non scrive se code+amount identici) per evitare re-trigger del draftKey.
 
-#### Step C3: Writeback WAC in ops per il display nelle celle
+#### Step C4: Commit senza WAC value — solo mode ✅ 2026-05-29
 
-Dopo aver estratto `wac_results`, scrivere il valore in `ops[x].fields.cost_basis_override` (come oggi) ma con il guard di uguaglianza per evitare re-trigger inutili.
+> **Note implementazione**: Modificato `buildCreatePayload` e `buildUpdateDiff` in `txPayloadHelpers.ts`: per `cost_basis_mode === 'auto'`, il payload manda `cost_basis_mode: "auto"` + `cost_basis_override: null`. Aggiunto `cost_basis_mode` a `TxFields` interface.
 
-#### Step C4: Commit senza WAC value — solo mode
+#### Step C5: Eliminare pre-commit WAC await ✅ 2026-05-29
 
-Nel commit payload, per items auto: mandare `cost_basis_override: null` + `cost_basis_mode: "auto"`. Il backend applica il valore. La response conferma il valore applicato.
-
-#### Step C5: Eliminare pre-commit WAC await
-
-L'attuale guard "aspetta che WAC sia calcolato prima di commit" (righe 1214-1226) diventa inutile — il commit stesso calcola il WAC. Rimuovere.
+> **Note implementazione**: Rimosso il blocco pre-commit (14 righe) che aspettava `wacFetchPromise` e forzava `fetchBatchWac`. Il commit ora manda solo il mode e il backend calcola.
 
 ### Phase D: Frontend — FormModal migration
 
-#### Step D1: FormModal manda `cost_basis_mode: "auto-detail"`
+#### Step D1: FormModal manda `cost_basis_mode: "auto-detail"` ✅ 2026-05-29
 
-**File**: `frontend/src/lib/components/transactions/TransactionFormModal.svelte` (o equivalente)
+> **Note implementazione**: `draftToTxFields()` ora include `cost_basis_mode: 'auto'` quando `costBasisMode === 'auto'`. Per il layout `transfer_asset`, `buildDualCreatePayloads` mette `cost_basis_mode: "auto"` + `cost_basis_override: null` sul `toItem` (receiver). Il backend vede mode=auto → calcola WAC inline.
 
-Quando il toggle WAC è su "Auto", la riga nel payload validate ha `cost_basis_mode: "auto-detail"`.
+#### Step D2: WacPreviewSection legge da validate response ✅ 2026-05-29
 
-#### Step D2: WacPreviewSection legge da validate response
+> **Note implementazione**: Aggiunto `formWacResult` state nel FormModal. La `validateFn` estrae `wac_results` dalla response e popola `formWacResult`. Il derived `externalWacResult` usa `formWacResult` come fallback quando `getWacResult` (BulkModal) non è disponibile. WacPreviewSection riceve sempre `externalResult` e skippa il proprio fetch.
 
-**File**: `frontend/src/lib/components/transactions/WacPreviewSection.svelte`
+#### Step D3: Eliminare chiamata diretta a `/wac-preview` dal FormModal ✅ 2026-05-29
 
-Invece di chiamare `/wac-preview` autonomamente, riceve i dati WAC come prop (passati dal BulkModal/FormModal dopo la validate). La qualifying table, missing_pairs, asset_price vengono tutti dalla validate response.
+> **Note implementazione**: Completato con D4 (vedi sotto).
 
-#### Step D3: Eliminare chiamata diretta a `/wac-preview` dal FormModal
+#### Step D4: Unificare UX WacPreviewSection (Auto/Manual toggle always) ✅ 2026-05-29
 
-Rimuovere la fetch WAC standalone che il WacPreviewSection faceva internamente.
+> **Note implementazione**: Il WacPreviewSection è stato riscritto per avere UX identica tra create e edit:
+> - Il toggle **Auto | Manual** è ora **sempre visibile** (nascosto solo se `disabled=true`)
+> - Il bottone ↺ Recalculate e il pannello Accept/Keep sono stati **rimossi**
+> - `variant` controlla solo il mode iniziale (`auto-new` → Auto, `saved` → Manual) ma il toggle funziona in entrambi
+> - Rimossi completamente: `fetchWacPreview()`, `handleRecalculate()`, `acceptRecalculated()`, `dismissRecalc()`, `recalcResult` state, import `zodiosApi`, import `RefreshCw`
+> - Il componente non chiama più `/wac-preview` in nessun caso — **zero dipendenze dirette da endpoint WAC**
+> - Il WAC arriva SOLO via `externalResult` prop (validate response o BulkModal)
+> - Quando l'utente switcha da Manual→Auto su TX salvata, il WAC viene applicato dalla validate response (che il FormModal ha già)
+>
+> **Impatto su Phase E**: Step E4 può ora rimuovere `/wac-preview` senza preoccupazioni frontend — nessun caller rimasto.
 
 ### Phase E: Cleanup + Analytics Migration
 
-#### Step E1: Deprecare `/transactions/wac-preview`
+> **Nota post-D4**: Il frontend non chiama più `/wac-preview` in nessun caso. La Phase E può procedere direttamente alla rimozione dell'endpoint senza rischi frontend. Lo step E1 (deprecare) è opzionale — si può saltare direttamente a E4.
 
-**File**: `backend/app/api/v1/transactions.py`
+#### Step E1: ~~Deprecare `/transactions/wac-preview`~~ → SKIP
 
-Aggiungere header `Deprecation: true` + log warning. L'endpoint resta funzionante durante la migrazione frontend (Phase C+D).
+Non più necessario: il frontend ha zero caller. Si procede direttamente con E3+E4.
 
-#### Step E2: Creare router `/api/v1/analytics/`
+#### Step E2: Creare router `/api/v1/analytics/` ✅ 2026-05-29
 
-**File**: `backend/app/api/v1/analytics.py` (nuovo)
+> **Note implementazione**: Creati `schemas/analytics.py` (WACAnalyticsQuery con OpenDateRangeModel, WACAnalyticsRequest, WACSeriesPoint, WACAnalyticsResultItem, WACAnalyticsResponse) e `api/v1/analytics.py` (POST /analytics/wac). L'endpoint riusa `compute_wac_iterative` e costruisce la serie da `qualifying_txs` con `running_wac`. Registrato `analytics_router` in `router.py`. 8/8 test passed (A1-A8 in `test_analytics_wac.py`). `./dev.py api sync` + `front check` → 0 errors.
 
-Endpoint `POST /analytics/wac` con formato serie temporale per query su dati committed. Nessun `pending_txs`, nessun `excluded_tx_ids`. Riusa `compute_wac_iterative(session, broker_id, asset_id, as_of_date, asset_currency)` senza parametri opzionali.
+#### Step E3: Aggiornare E2E tests ✅ 2026-05-29
 
-#### Step E3: Aggiornare E2E tests
+> **Note implementazione**: Rimossi intercept `/wac-preview` da WB5 e contatore request da WB6. WB5 ora verifica solo che `[data-testid="tx-bulk-cost-basis-auto"]` diventa visibile dopo clone. WB6 mantiene solo la verifica valore stabile (value2 === value1) dopo 2.5s, senza contare network request.
 
 **File**: `frontend/e2e/transactions/tx-wac-bulk.spec.ts`
 
-- WB6: non più intercetta `/wac-preview` — verifica che il valore WAC appare nelle celle dopo validate (non serve network count, il meccanismo è diverso)
-- WB7: stesso adattamento
-- WB1-WB5: aggiornare per il nuovo flusso
+Test da aggiornare (gli altri sono OK — usano solo data-testid invariati):
 
-#### Step E4: Rimuovere `/transactions/wac-preview` + cleanup `pending_txs`
+| Test | Problema | Fix |
+|------|----------|-----|
+| **WB5** (riga 366) | `waitForResponse('/wac-preview')` → timeout perché il frontend non chiama più quell'endpoint | Rimuovere l'intercept; verificare solo che `tx-bulk-cost-basis-auto` appare dopo che la validate ha risposto (aspettare la cella auto visibile, non la network request) |
+| **WB6** (riga 440) | Conta request a `/wac-preview` per verificare no feedback loop | Rimuovere il contatore; il feedback loop non è più possibile by design (il valore non torna mai al frontend per essere ri-mandato). Verificare solo che il valore nella cella è stabile dopo 2.5s (la parte `value2 === value1` resta valida). Anche `waitForWacResolved` va verificato — se usa intercept a `/wac-preview` internamente, va cambiato per aspettare la cella auto. |
 
-**File**: `backend/app/api/v1/transactions.py` — eliminare endpoint e route.
-**File**: `backend/app/services/transaction_service.py` — rimuovere parametro `pending_txs` da `compute_wac_iterative` (dead code dopo rimozione endpoint).
-**File**: `backend/app/schemas/transactions.py` — rimuovere `WACPendingTXItem`, `WACPreviewItem`, `WACPreviewRequest`, `WACPreviewResponse` (non più usati da nessuno).
+**Test invariati** (nessuna modifica necessaria):
+- `tx-wac.spec.ts` (W8, W9, W10, W-manual, W-sell, W-excluded) — usano solo testid del toggle/input
+- `tx-wac-bulk.spec.ts` WB1, WB2, WB3, WB4 — non intercettano `/wac-preview`
+- `tx-commit-all-types.spec.ts` — usa solo il campo input
+- La gallery è esclusa dai test (non testa WAC)
+
+#### Step E4: Rimuovere `/transactions/wac-preview` + cleanup `pending_txs` ✅ 2026-05-29
+
+> **Note implementazione**: Rimosso endpoint `wac_preview` da `transactions.py`, parametro `pending_txs` da `compute_wac_iterative`, schemi `WACPendingTXItem`/`WACPreviewItem`/`WACPreviewRequest`/`WACPreviewResponse` da `schemas/transactions.py`, e test file `test_transactions_wac.py` (P1-P15). `./dev.py api sync` rigenerato client senza il metodo. 13/13 test inline passed. `./dev.py front check` → 0 errors.
+
+**File da modificare**:
+- `backend/app/api/v1/transactions.py` — eliminare endpoint e route
+- `backend/app/services/transaction_service.py` — rimuovere parametro `pending_txs` da `compute_wac_iterative`
+- `backend/app/schemas/transactions.py` — rimuovere `WACPendingTXItem`, `WACPreviewItem`, `WACPreviewRequest`, `WACPreviewResponse`
+- `backend/test_scripts/test_api/test_transactions_wac.py` — rimuovere test P1-P15 (coprono l'endpoint eliminato)
+- `frontend/src/lib/api/generated.ts` — `./dev.py api sync` rimuoverà il client method automaticamente
 
 Dopo E4, `compute_wac_iterative` ha firma semplificata:
 ```python
@@ -368,6 +280,22 @@ async def compute_wac_iterative(
     excluded_tx_ids: list[int] | None = None,  # unico parametro opzionale rimasto
 ) -> WACPreviewResultItem:
 ```
+
+#### Step E5: Split WAC in file dedicati ✅ 2026-05-29
+
+> **Note implementazione**: Creati `schemas/wac.py` (94 righe: WACConversionInfo, WACResult, WACQualifyingTX, WACPreviewResultItem) e `services/wac_service.py` (347 righe: compute_weighted_avg_cost, compute_wac_iterative). `schemas/transactions.py` re-esporta i simboli WAC per backward compat. `financial_utils.py` importa da `schemas/wac.py`. Rinominato test → `test_wac_inline.py`. 13/13 test passed. `./dev.py api sync` + `front check` → 0 errors. Riduzione: transactions.py -133 righe, transaction_service.py -321 righe.
+
+Dopo la cleanup di E4, riorganizzare il codice WAC in moduli separati:
+
+| Sorgente | Destinazione | Contenuto |
+|----------|-------------|-----------|
+| `schemas/transactions.py` | `schemas/wac.py` | `WACResult`, `WACConversionInfo`, `WACQualifyingTX`, `WACPreviewResultItem` (con campi batch-context) |
+| `services/transaction_service.py` | `services/wac_service.py` | `compute_weighted_avg_cost()`, `compute_wac_iterative()`, logica auto-items (estratta come funzione standalone) |
+| `api/v1/transactions.py` | `api/v1/analytics.py` | Endpoint `/analytics/wac` (già creato in E2) |
+| `test_api/test_transactions_wac.py` | `test_api/test_wac_inline.py` | Rinominare `test_transactions_wac_inline.py` → `test_wac_inline.py` (WAC ha ora il suo dominio) |
+
+**Motivazione**: `transactions.py` (schemas) è 1500+ righe; `transaction_service.py` è 1760+ righe. Lo split riduce la complessità per file e rende il dominio WAC autonomo.
+**Nota**: richiede `./dev.py api sync` dopo lo spostamento + verifica 13/13 test `test_wac_inline.py`.
 
 **Nota**: `excluded_tx_ids` resta perché è usato da step 6b in `execute_batch` (ADJUSTMENT auto: escludi self). `/analytics/wac` lo chiama senza (default None).
 
@@ -388,14 +316,14 @@ Questa mappa viene costruita durante `buildBatchPayload` e usata per mappare la 
 
 ## Test Criteria
 
-- [ ] Backend P16-P28: validate/commit con WAC inline (13 nuovi test)
-- [ ] Backend P1-P15: regression (wac-preview ancora funzionante)
-- [ ] Frontend: BulkModal mostra WAC nelle celle senza chiamata a /wac-preview
-- [ ] Frontend: FormModal mostra qualifying table dai dati validate
-- [ ] Frontend: Commit funziona con cbo=null + mode=auto (backend applica)
-- [ ] E2E: WB1-WB7 adattati al nuovo flusso
-- [ ] `./dev.py front check` — 0 errors
-- [ ] `./dev.py api sync` eseguito
+- [x] Backend P16-P28: validate/commit con WAC inline (13 nuovi test) — **13/13 passed 2026-05-28**
+- [x] Backend P1-P15: regression (wac-preview ancora funzionante) — **28/28 passed 2026-05-28**
+- [x] Frontend: BulkModal mostra WAC nelle celle senza chiamata a /wac-preview — **Phase C completata 2026-05-29**
+- [x] Frontend: FormModal mostra qualifying table dai dati validate — **Phase D completata 2026-05-29**
+- [x] Frontend: Commit funziona con cbo=null + mode=auto (backend applica) — **Phase C4 2026-05-29**
+- [x] E2E: WB5 e WB6 adattati al nuovo flusso (WB1-WB4, WB7 invariati) — **2026-05-29**
+- [x] `./dev.py front check` — 0 errors — **2026-05-29**
+- [x] `./dev.py api sync` eseguito — **2026-05-28**
 
 ---
 
@@ -426,6 +354,16 @@ Questa mappa viene costruita durante `buildBatchPayload` e usata per mappare la 
 | link_uuid matching | Cross-operation (creates+updates) | Il giver può essere un update, il receiver un create |
 | ADJUSTMENT auto self-exclusion | `excluded_tx_ids=[self.id]` | Dà il "pool WAC prima di me" = valore corretto da scrivere |
 | `/wac-preview` | **CANCELLATO** (Step E4) | Non deprecato a tempo indeterminato — rimosso dopo migrazione frontend |
+
+---
+
+## Deviazioni dal piano originale (applicate in fase di review 2026-05-28)
+
+| Tema | Piano originale | Decisione implementata | Motivazione |
+|------|----------------|----------------------|-------------|
+| `TXBatchWacResult` | Classe wrapper dedicata con campi flat | **ELIMINATA** — campi posizionali (operation, index, source_broker_id) come Optional in `WACPreviewResultItem` | Evita duplicazione; riuso diretto della classe esistente |
+| `TXBatchResponse` base class | `BaseModel` vanilla | **`BaseBulkResponse[TXBatchResultItem]`** | Coerenza con pattern progetto; `results` sempre lista (non Optional), `success_count` computed |
+| `cost_basis_mode` validazione | Frontend-driven (None se tipo non compatibile) | **Rule 12 in model_validator** di TXCreateItem: errore pydantic se tipo incompatibile | La validazione bulk già cattura errori; il backend enforca le regole, non si fida del frontend |
 
 ---
 

@@ -137,12 +137,31 @@
         editingTempId?: string | null;
     }
 
-    let {open, mode, initialRow = null, forcedBroker = null, commitOnSave = true, unlockImmutable = false, availableTags = [], zIndex = 50, injectedPartnerRow = null, onClose, onCommitted, onPushDraft, onSwitchToEdit, canEdit = true, openKey = 0, getBulkContext, getWacResult = null, editingTempId = null}: Props = $props();
+    let {
+        open,
+        mode,
+        initialRow = null,
+        forcedBroker = null,
+        commitOnSave = true,
+        unlockImmutable = false,
+        availableTags = [],
+        zIndex = 50,
+        injectedPartnerRow = null,
+        onClose,
+        onCommitted,
+        onPushDraft,
+        onSwitchToEdit,
+        canEdit = true,
+        openKey = 0,
+        getBulkContext,
+        getWacResult = null,
+        editingTempId = null,
+    }: Props = $props();
 
     /** V5: External WAC result from BulkModal (single source of truth). */
-    let externalWacResult = $derived(
-        getWacResult && editingTempId ? getWacResult(editingTempId) : null
-    );
+    /** Phase D: local WAC result from FormModal's own validate response (standalone mode). */
+    let formWacResult = $state<{wac: {code: string; amount: string} | null; qualifying_txs: Array<Record<string, any>>; missing_pairs: string[]} | null>(null);
+    let externalWacResult = $derived(getWacResult && editingTempId ? getWacResult(editingTempId) : formWacResult);
 
     // =========================================================================
     // Form state
@@ -249,6 +268,10 @@
     let dualTo = $state<DualDraftTo>(emptyDualTo());
     /** Cost basis mode tracking for BulkModal propagation. */
     let costBasisMode = $state<'auto' | 'manual'>('auto');
+    // Phase D: clear local WAC result when mode switches to manual
+    $effect(() => {
+        if (costBasisMode === 'manual') formWacResult = null;
+    });
     /** The partner TXReadItem when editing a paired transaction. */
     let partnerRow = $state<TXReadItem | null>(null);
     /** Loading state for the partner fetch. */
@@ -294,6 +317,7 @@
             inaccessiblePartnerBrokerId = null;
             partnerRow = null;
             loadingPartner = false;
+            formWacResult = null;
             dualTo = emptyDualTo();
             if (m === 'create') {
                 // C1-fix: when initialRow is present (e.g. editing a 'new' draft
@@ -751,6 +775,29 @@
             }
             lastValidatedDraftKey = sentKey;
             issuesDismissed = false;
+
+            // Phase D: extract wac_results from validate response (standalone mode only)
+            if (!getWacResult && costBasisMode === 'auto') {
+                const rawResp = result.rawResponse as Record<string, unknown> | null;
+                const rawWacResults = (rawResp?.wac_results as Array<Record<string, unknown>> | null | undefined) ?? null;
+                if (rawWacResults && rawWacResults.length > 0) {
+                    // Find my WAC result — for paired creates the receiver (toItem) is at myIndex+1
+                    // The backend returns WAC only for items with cost_basis_mode, so find the first match
+                    const myWr = rawWacResults.find((wr) => wr.operation === myOperation) ?? null;
+                    if (myWr) {
+                        formWacResult = {
+                            wac: (myWr.wac as {code: string; amount: string} | null) ?? null,
+                            qualifying_txs: (myWr.wac_qualifying_txs as Array<Record<string, any>>) ?? [],
+                            missing_pairs: (myWr.wac_missing_pairs as string[]) ?? [],
+                        };
+                    } else {
+                        formWacResult = null;
+                    }
+                } else {
+                    formWacResult = null;
+                }
+            }
+
             return {issuesCount: issues.length};
         },
     });
@@ -803,8 +850,6 @@
      *  open. */
     const autocompleteNonce = $derived(Math.random().toString(36).slice(2, 10));
 
-
-
     /** BrokerSearchSelect expects `BrokerSelectItem[]`; the brokerStore's
      *  `BrokerInfo` is structurally compatible (id/name/icon_url present)
      *  but TS can't widen via the prop attribute. We cast in script. */
@@ -843,6 +888,7 @@
             tags: draft.tags,
             description: draft.description,
             cost_basis_override: cbo,
+            cost_basis_mode: costBasisMode === 'auto' ? 'auto' : undefined,
             asset_event_id: draft.asset_event_id,
             link_uuid: draft.link_uuid,
         };
@@ -1094,7 +1140,7 @@
     let cashHint = $derived(signHintText(rule.cashSign));
     let cashLabel = $derived(signLabel(rule.cashSign));
 
-     // Sign-based border coloring for quantity field (mirrors CompactCashCell pattern).
+    // Sign-based border coloring for quantity field (mirrors CompactCashCell pattern).
     // Colors reflect whether the VALUE AFTER AUTO-FLIP conforms to the rule.
     // Does NOT block input — purely visual guidance.
     // In paired mode (transfer_asset/transfer_cash/fx), the form forces positive input
@@ -1333,7 +1379,8 @@
                                 autocomplete="off"
                                 spellcheck="false"
                                 name="qty-{autocompleteNonce}"
-                                class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30" style:border-color={qtyBorderColor || undefined}
+                                class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
+                                style:border-color={qtyBorderColor || undefined}
                                 value={qtyDisplay}
                                 disabled={isReadonly}
                                 oninput={onQuantityInput}
@@ -1602,7 +1649,8 @@
                                     autocomplete="off"
                                     spellcheck="false"
                                     name="qty-{autocompleteNonce}"
-                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30" style:border-color={qtyBorderColor || undefined}
+                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
+                                    style:border-color={qtyBorderColor || undefined}
                                     value={qtyDisplay}
                                     disabled={isReadonly}
                                     oninput={onQuantityInput}
@@ -1645,7 +1693,8 @@
                                     autocomplete="off"
                                     spellcheck="false"
                                     name="qty-{autocompleteNonce}"
-                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30" style:border-color={qtyBorderColor || undefined}
+                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
+                                    style:border-color={qtyBorderColor || undefined}
                                     value={qtyDisplay}
                                     disabled={isReadonly}
                                     oninput={onQuantityInput}
@@ -1831,7 +1880,6 @@
                 </details>
             {/if}
 
-
             <!-- Read-only footer (edit/view) -->
             {#if (mode === 'edit' || mode === 'view') && initialRow}
                 <div class="text-[10px] text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-slate-800 pt-3" data-testid="tx-form-readonly-footer">
@@ -1849,7 +1897,14 @@
         <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0 text-xs">
             <div class="flex items-center gap-2 flex-wrap">
                 {#if !isReadonly}
-                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed" disabled={!isFormComplete} onclick={() => scheduler.trigger('manual')} data-testid="tx-form-validate-now" title={$t('transactions.validate.now')}>
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        disabled={!isFormComplete}
+                        onclick={() => scheduler.trigger('manual')}
+                        data-testid="tx-form-validate-now"
+                        title={$t('transactions.validate.now')}
+                    >
                         ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now')}</span>
                     </button>
                 {/if}

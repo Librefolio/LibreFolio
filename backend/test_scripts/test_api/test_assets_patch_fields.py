@@ -104,7 +104,7 @@ async def test_patch_display_name(test_server):
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
         assert patch_data.success_count == 1
-        assert any(item.field == "display_name" for item in patch_data.results[0].updated_fields)
+        assert any(item.info == "display_name" for item in patch_data.results[0].updated_fields)
         print_success("✓ display_name patched successfully")
 
         # Step 3: Verify in DB
@@ -142,7 +142,7 @@ async def test_patch_currency(test_server):
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
         assert patch_data.success_count == 1
-        assert any(item.field == "currency" for item in patch_data.results[0].updated_fields)
+        assert any(item.info == "currency" for item in patch_data.results[0].updated_fields)
         print_success("✓ currency patched successfully")
 
         # Step 3: Verify in DB
@@ -180,7 +180,7 @@ async def test_patch_asset_type(test_server):
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
         assert patch_data.success_count == 1
-        assert any(item.field == "asset_type" for item in patch_data.results[0].updated_fields)
+        assert any(item.info == "asset_type" for item in patch_data.results[0].updated_fields)
         print_success("✓ asset_type patched successfully")
 
         # Step 3: Verify in DB
@@ -215,7 +215,7 @@ async def test_patch_icon_url(test_server):
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
         assert patch_data.success_count == 1
-        assert any(item.field == "icon_url" for item in patch_data.results[0].updated_fields)
+        assert any(item.info == "icon_url" for item in patch_data.results[0].updated_fields)
         print_success("✓ icon_url patched successfully")
 
         # Step 3: Verify in DB
@@ -261,24 +261,24 @@ async def test_patch_icon_url_clear(test_server):
         print_info(f"  Created asset {asset_id} with icon_url")
 
         # Step 2: Verify icon_url is set
-        read_resp = await client.get(f"{API_BASE}/assets/{asset_id}", timeout=TIMEOUT)
+        read_resp = await client.get(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
         assert read_resp.status_code == 200
-        asset_data = FAAssetMetadataResponse(**read_resp.json())
+        asset_data = [FAAssetMetadataResponse(**a) for a in read_resp.json()][0]
         assert asset_data.icon_url == "http://example.com/icon.png"
         print_info(f"  ✓ icon_url verified: {asset_data.icon_url}")
 
-        # Step 3: PATCH icon_url to None
-        patch_item = FAAssetPatchItem(asset_id=asset_id, icon_url=None)
-        patch_resp = await client.patch(f"{API_BASE}/assets", json=[patch_item.model_dump(mode="json")], timeout=TIMEOUT)
+        # Step 3: PATCH icon_url to clear (empty string → backend converts to None)
+        patch_item = FAAssetPatchItem(asset_id=asset_id, icon_url="")
+        patch_resp = await client.patch(f"{API_BASE}/assets", json=[patch_item.model_dump(mode="json", exclude_unset=True)], timeout=TIMEOUT)
         assert patch_resp.status_code == 200, f"PATCH failed: {patch_resp.status_code}"
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
         assert patch_data.success_count == 1
         print_success("✓ PATCH request succeeded")
 
         # Step 4: Verify icon_url is cleared (None)
-        read_after = await client.get(f"{API_BASE}/assets/{asset_id}", timeout=TIMEOUT)
+        read_after = await client.get(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
         assert read_after.status_code == 200
-        asset_after = FAAssetMetadataResponse(**read_after.json())
+        asset_after = [FAAssetMetadataResponse(**a) for a in read_after.json()][0]
         assert asset_after.icon_url is None, f"Expected None, got {asset_after.icon_url}"
         print_success("✓ icon_url cleared successfully (None)")
 
@@ -311,14 +311,15 @@ async def test_patch_active(test_server):
 
         patch_data = FABulkAssetPatchResponse(**patch_resp.json())
         assert patch_data.success_count == 1
-        assert any(item.field == "active" for item in patch_data.results[0].updated_fields)
+        assert any(item.info == "active" for item in patch_data.results[0].updated_fields)
         print_success("✓ active patched to False")
 
-        # Step 3: Verify: asset NOT in active=true filter
-        list_resp = await client.get(f"{API_BASE}/assets/query", params={"active": True}, timeout=TIMEOUT)
-        list_data = [FAinfoResponse(**item) for item in list_resp.json()]
-        asset_ids_active = [a.asset_id for a in list_data]
-        assert asset_id not in asset_ids_active, "Asset should NOT appear in active=true filter"
+        # Step 3: Verify via /assets/query (active=true should NOT include this asset)
+        list_resp = await client.get(f"{API_BASE}/assets/query", params={"active": "true"}, timeout=TIMEOUT)
+        assert list_resp.status_code == 200
+        # FAinfoResponse uses 'id' (not 'asset_id')
+        active_ids = [item["id"] for item in list_resp.json()]
+        assert asset_id not in active_ids, "Deactivated asset should NOT appear in active=true query"
         print_success("✓ Asset correctly filtered out when active=false")
 
 
@@ -344,9 +345,10 @@ async def test_patch_multiple_base_fields(test_server):
         print_info(f"  Created asset ID: {asset_id}")
 
         # Step 2: PATCH multiple fields at once
+        new_name = f"Multi Patched Name {unique_id('UPD7')}"
         patch_item = FAAssetPatchItem(
             asset_id=asset_id,
-            display_name="Multi Patched Name",
+            display_name=new_name,
             currency="EUR",
             asset_type=AssetType.ETF,
             icon_url="https://multi.test/icon.png",
@@ -359,16 +361,16 @@ async def test_patch_multiple_base_fields(test_server):
 
         # Verify all fields in updated_fields
         updated = patch_data.results[0].updated_fields
-        assert any(item.field == "display_name" for item in updated)
-        assert any(item.field == "currency" for item in updated)
-        assert any(item.field == "asset_type" for item in updated)
-        assert any(item.field == "icon_url" for item in updated)
+        assert any(item.info == "display_name" for item in updated)
+        assert any(item.info == "currency" for item in updated)
+        assert any(item.info == "asset_type" for item in updated)
+        assert any(item.info == "icon_url" for item in updated)
         print_success(f"✓ All fields patched: {updated}")
         # Step 3: Verify in DB
         read_resp = await client.get(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
         assets = [FAAssetMetadataResponse(**a) for a in read_resp.json()]
         asset = assets[0]
-        assert asset.display_name == "Multi Patched Name"
+        assert asset.display_name == new_name
         assert asset.currency == "EUR"
         assert asset.asset_type == AssetType.ETF
         assert asset.icon_url == "https://multi.test/icon.png"

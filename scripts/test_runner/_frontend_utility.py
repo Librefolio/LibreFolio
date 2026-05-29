@@ -2,7 +2,7 @@
 
 import subprocess
 
-from ._common import PROJECT_ROOT, _run_test_suite, Colors, print_section, print_success, print_error
+from ._common import _RESUME_MODE, PROJECT_ROOT, Colors, _run_test_suite, print_error, print_section, print_success
 from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_playwright
 
 
@@ -68,12 +68,13 @@ def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = Fa
         header_msg=None,
         summary_title="Frontend Utility Test Summary",
         success_msg="All frontend utility tests passed! 🎉",
+        resume=_RESUME_MODE,
     )
 
 
 def populate_registry(registry: dict) -> None:
     """Register all frontend utility test entries."""
-    from ._common import make_category, add_test
+    from ._common import add_test, make_category
     cat = make_category(
         help_text="Frontend utility & component E2E tests (auth, settings, files, select, image-crop)",
         description="""Frontend Utility & Component Tests\n\nOptions: --ui, --headed, --debug""")
