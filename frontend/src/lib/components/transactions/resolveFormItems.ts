@@ -104,12 +104,7 @@ export interface MinimalPendingOp {
  * @param opToTxLike  Adapter: PendingOp → TXReadItem
  * @param txStoreGet  Lookup: DB id → TXReadItem (for fallback)
  */
-export function resolveFormItemsFromOps<T extends MinimalPendingOp>(
-    mainOp: T,
-    ops: T[],
-    opToTxLike: (op: T) => TXReadItem,
-    txStoreGet: (id: number) => TXReadItem | undefined,
-): FormModalItems {
+export function resolveFormItemsFromOps<T extends MinimalPendingOp>(mainOp: T, ops: T[], opToTxLike: (op: T) => TXReadItem, txStoreGet: (id: number) => TXReadItem | undefined): FormModalItems {
     const item0 = opToTxLike(mainOp);
 
     // 1. Try to find partner op in the local ops array (pairedWith points to main)
@@ -148,11 +143,7 @@ export function resolveFormItemsFromOps<T extends MinimalPendingOp>(
  * @param txStoreGet    Lookup: DB id → TXReadItem
  * @param getBrokerRole Lookup: broker_id → role string | null (null = no access)
  */
-export function resolveFormItemsForView(
-    row: TXReadItem,
-    txStoreGet: (id: number) => TXReadItem | undefined,
-    getBrokerRole: (brokerId: number) => string | null,
-): FormModalItems {
+export function resolveFormItemsForView(row: TXReadItem, txStoreGet: (id: number) => TXReadItem | undefined, getBrokerRole: (brokerId: number) => string | null): FormModalItems {
     const relId = row.related_transaction_id;
     if (relId == null || relId <= 0) return [row];
 
@@ -176,5 +167,3 @@ export function resolveFormItemsForView(
     // Partner exists but not loaded (edge case) — return single
     return [row];
 }
-
-

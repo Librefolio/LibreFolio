@@ -56,8 +56,7 @@
         document.addEventListener('click', handleClickOutside);
 
         // Detect standalone mode
-        isStandalone = window.matchMedia('(display-mode: standalone)').matches
-            || (window.navigator as any).standalone === true;
+        isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
 
         // Detect iOS
         const ua = navigator.userAgent;

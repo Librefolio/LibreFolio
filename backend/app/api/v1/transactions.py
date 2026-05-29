@@ -19,15 +19,13 @@ from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
-from backend.app.db.models import Asset, TransactionType, User
+from backend.app.db.models import TransactionType, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.common import BackwardFillInfo, Currency, DateRangeModel
-from backend.app.schemas.prices import FAPriceQueryItem
+from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.transactions import (
     EVENT_TYPE_METADATA,
     TX_TYPE_METADATA,
@@ -46,12 +44,8 @@ from backend.app.schemas.transactions import (
     TXTransferPromoteResponse,
     TXTypesResponse,
     TXUpdateItem,
-    WACPreviewRequest,
-    WACPreviewResponse,
-    WACPreviewResultItem,
 )
-from backend.app.services.asset_source import AssetSourceManager
-from backend.app.services.transaction_service import TransactionService, compute_wac_iterative
+from backend.app.services.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import parse_ISO_date
 
 logger = get_logger(__name__)
@@ -352,76 +346,3 @@ async def promote_transfer(
         logger.warning("Promote transfer rolled back: %s", response.errors, user_id=user_id)
 
     return response
-
-
-# =============================================================================
-# WAC PREVIEW — Explicit preview endpoint (inventory-aware WAC + asset price)
-# =============================================================================
-
-
-@tx_router.post("/wac-preview", response_model=WACPreviewResponse)
-async def wac_preview(
-    body: WACPreviewRequest,
-    session: AsyncSession = Depends(get_session_generator),
-    current_user: User = Depends(get_current_user),
-) -> WACPreviewResponse:
-    """Bulk WAC preview: for each item, compute inventory-aware WAC + asset price.
-
-    This is a read-only endpoint — no DB writes. Used by the frontend to show
-    suggested cost_basis values in the form/bulk modal before commit.
-
-    Accepts pending TXs from the workspace and excluded_tx_ids for TXs deleted
-    in the workspace. Pending TXs with matching id override DB rows.
-    """
-    results: list[WACPreviewResultItem] = []
-
-    for item in body.items:
-        # Fetch asset currency
-        asset_row = await session.execute(select(Asset.currency).where(Asset.id == item.asset_id))
-        asset_ccy = asset_row.scalar_one_or_none() or ""
-
-        # Compute iterative WAC
-        effective = item.end_date
-        wac_result = await compute_wac_iterative(
-            session,
-            broker_id=item.sender_broker_id,
-            asset_id=item.asset_id,
-            as_of_date=effective,
-            asset_currency=asset_ccy,
-            pending_txs=body.pending_txs,
-            excluded_tx_ids=body.excluded_tx_ids,
-        )
-
-        # Compute asset price at date via get_prices_bulk (backward-fill unlimited after Step 0)
-        price_ccy = None
-        stale_info = None
-        price_missing = True
-
-        price_req = FAPriceQueryItem(
-            asset_id=item.asset_id,
-            date_range=DateRangeModel(start=effective, end=effective),
-        )
-        price_results = await AssetSourceManager.get_prices_bulk([price_req], session)
-        if price_results and price_results[0].prices:
-            last_point = price_results[0].prices[-1]
-            price_ccy = Currency(code=last_point.currency, amount=last_point.close)
-            if last_point.backward_fill_info:
-                stale_info = BackwardFillInfo(
-                    actual_rate_date=last_point.backward_fill_info.actual_rate_date,
-                    days_back=last_point.backward_fill_info.days_back,
-                )
-            price_missing = False
-
-        # Merge into result
-        results.append(
-            WACPreviewResultItem(
-                wac=wac_result.wac,
-                wac_qualifying_txs=wac_result.wac_qualifying_txs if body.include_details else [],
-                wac_missing_pairs=wac_result.wac_missing_pairs if body.include_details else [],
-                asset_price=price_ccy,
-                asset_price_stale=stale_info,
-                asset_price_missing=price_missing,
-            )
-        )
-
-    return WACPreviewResponse(items=results)

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -27,15 +27,13 @@ from pydantic_core import PydanticCustomError
 
 from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.common import (
-    BackwardFillInfo,
+    BaseBulkResponse,
     BaseDeleteResult,
-    BaseListResponse,
     Currency,
     DateRangeModel,
-    FxBackwardFillInfo,
-    OpenDateRangeModel,
     SafeDecimal,
 )
+from backend.app.schemas.wac import WACConversionInfo, WACPreviewResultItem, WACQualifyingTX  # noqa: E402, F401
 from backend.app.utils.datetime_utils import UTCDateTime
 
 # =============================================================================
@@ -141,6 +139,16 @@ class TXCreateItem(BaseModel):
     cost_basis_override: Optional[Currency] = Field(
         default=None,
         description="Frozen cost basis for TRANSFER_IN. Object {code, amount}.",
+    )
+
+    # WAC computation mode — session-only instruction (not persisted in DB).
+    # "auto": backend computes WAC and writes cost_basis_override at commit.
+    # "auto-detail": same + returns qualifying_txs, asset_price in validate response.
+    # "manual": use cost_basis_override as-is.
+    # None: not applicable (BUY, SELL, etc.)
+    cost_basis_mode: Literal["auto", "auto-detail", "manual"] | None = Field(
+        default=None,
+        description="'auto': backend computes WAC; 'auto-detail': + qualifying details; " "'manual': use cost_basis_override; None: not applicable.",
     )
 
     # Link to AssetEvent (realization of a global asset event in this portfolio).
@@ -289,6 +297,24 @@ class TXCreateItem(BaseModel):
                 errors.append(PydanticCustomError("cashSignNegative", "{type} requires cash.amount < 0", {"type": t}))
             if self.type in (TransactionType.SELL, TransactionType.DIVIDEND, TransactionType.INTEREST, TransactionType.DEPOSIT) and amt <= zero:
                 errors.append(PydanticCustomError("cashSignPositive", "{type} requires cash.amount > 0", {"type": t}))
+
+        # Rule 12: cost_basis_mode is only valid for:
+        #   - TRANSFER with quantity > 0 (receiver side)
+        #   - ADJUSTMENT with quantity > 0
+        if self.cost_basis_mode is not None:
+            cbm_valid = False
+            if self.type == TransactionType.TRANSFER and self.quantity > zero:
+                cbm_valid = True
+            elif self.type == TransactionType.ADJUSTMENT and self.quantity > zero:
+                cbm_valid = True
+            if not cbm_valid:
+                errors.append(
+                    PydanticCustomError(
+                        "costBasisModeIncompatible",
+                        "cost_basis_mode is only valid for TRANSFER receiver (qty>0) or ADJUSTMENT (qty>0), got {type} qty={qty}",
+                        {"type": t, "qty": str(self.quantity)},
+                    )
+                )
 
         # Pydantic v2 model_validator can only raise a single exception.
         # When there are multiple business-rule errors, we pack them ALL into
@@ -502,6 +528,12 @@ class TXUpdateItem(BaseModel):
         description="Frozen cost basis for TRANSFER_IN. Object {code, amount}.",
     )
 
+    # WAC computation mode — session-only instruction (not persisted in DB).
+    cost_basis_mode: Literal["auto", "auto-detail", "manual"] | None = Field(
+        default=None,
+        description="'auto': backend computes WAC at commit; 'auto-detail': + qualifying details; " "'manual': use cost_basis_override; None: leave unchanged.",
+    )
+
     # Link/unlink to AssetEvent:
     # - None   -> leave asset_event_id unchanged
     # - 0      -> UNLINK (set to NULL) — Part 1 sentinel
@@ -641,130 +673,6 @@ class TXMixedBatch(BaseModel):
     promotes: List[dict] = Field(default_factory=list, max_length=100)
 
 
-# =============================================================================
-# WAC (WEIGHTED AVERAGE COST) — FX-aware calculation results
-# =============================================================================
-
-
-class WACConversionInfo(BaseModel):
-    """Single FX conversion applied during WAC calculation."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    tx_id: int = Field(..., description="Transaction ID that needed conversion")
-    from_currency: str = Field(..., description="Original currency of the transaction")
-    to_currency: str = Field(..., description="Target currency for WAC")
-    rate: SafeDecimal = Field(..., description="FX rate applied")
-    rate_date: date_type = Field(..., description="Actual date of the FX rate used")
-    stale_days: int = Field(0, ge=0, description="Days between TX date and rate date (0 = fresh)")
-
-
-class WACResult(BaseModel):
-    """Result of weighted average cost calculation with FX details.
-
-    - wac is None when at least one FX conversion failed (see missing_pairs).
-    - wac is Currency(code=target, amount="0") when total_qty == 0 without FX errors.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    wac: Optional[Currency] = Field(None, description="Calculated WAC. None if FX conversion failed.")
-    conversions: List[WACConversionInfo] = Field(default_factory=list, description="FX conversions applied")
-    missing_pairs: List[str] = Field(default_factory=list, description="FX pairs that could not be resolved (e.g. 'CHF/EUR')")
-
-
-# =============================================================================
-# WAC PREVIEW — Explicit preview endpoint (replaces auto-calc at commit)
-# =============================================================================
-
-
-class WACPreviewItem(BaseModel):
-    """Single WAC preview request within a bulk call.
-
-    Uses OpenDateRangeModel for flexible windowing:
-    - start=None → consider ALL transactions from the beginning
-    - end=None → up to today
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    sender_broker_id: int = Field(..., description="Broker ID of the source (sender) side")
-    asset_id: int = Field(..., description="Asset ID to calculate WAC for")
-    date_range: OpenDateRangeModel = Field(..., description="Date range for WAC computation. start=None → from first TX, end=None → today.")
-
-    @property
-    def end_date(self) -> date_type:
-        """The effective end date for WAC computation."""
-        return self.date_range.end or date_type.today()
-
-
-class WACPendingTXItem(TXCreateItem):
-    """A pending TX from workspace for WAC calculation.
-
-    Extends TXCreateItem to inherit full semantic validation.
-    Overrides: asset_id is required (WAC always needs an asset).
-    Added: id field to identify DB rows to override.
-    Added: cost_basis_mode to signal auto/manual intent for WAC computation.
-    """
-
-    id: Optional[int] = Field(None, description="DB id to override, or None for new pending TX")
-    asset_id: int = Field(..., description="Asset ID (required for WAC calculation)")
-    cost_basis_mode: Literal["auto", "manual"] | None = Field(
-        None,
-        description="'auto': cost = inherit running WAC (no pool impact); "
-        "'manual': use cost_basis_override; "
-        "None: not applicable (BUY, SELL, etc.)",
-    )
-
-
-class WACPreviewRequest(BaseModel):
-    """Bulk WAC preview request."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    items: List[WACPreviewItem] = Field(..., min_length=1, max_length=50)
-    pending_txs: List[WACPendingTXItem] = Field(default_factory=list, max_length=500)
-    excluded_tx_ids: List[int] = Field(default_factory=list, max_length=500, description="DB TX ids to exclude (deleted in workspace)")
-    include_details: bool = Field(True, description="If False, skip qualifying_txs and missing_pairs in response (lighter payload for batch WAC)")
-
-
-class WACQualifyingTX(BaseModel):
-    """A TX that participated in WAC calculation."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    tx_id: Optional[int] = Field(None, description="DB id, or None if pending without id")
-    type: str
-    date: date_type
-    quantity: SafeDecimal
-    unit_cost: Optional[SafeDecimal] = None
-    currency: Optional[str] = None
-    effect: str = Field(..., description="add | reduce | add_zero_cost")
-    fx_info: Optional[FxBackwardFillInfo] = None
-    running_wac: Optional[SafeDecimal] = Field(None, description="Running WAC per unit after this TX")
-
-
-class WACPreviewResultItem(BaseModel):
-    """Result for a single WAC preview item."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    # WAC inventory-aware
-    wac: Optional[Currency] = Field(None, description="Calculated WAC per unit. None if FX conversion failed.")
-    wac_qualifying_txs: List[WACQualifyingTX] = Field(default_factory=list)
-    wac_missing_pairs: List[str] = Field(default_factory=list)
-    # Asset price at date (useful for ADJUSTMENT scenario)
-    asset_price: Optional[Currency] = Field(None, description="Asset close price at as_of_date (backward-filled)")
-    asset_price_stale: Optional[BackwardFillInfo] = Field(None, description="Staleness of asset price")
-    asset_price_missing: bool = Field(False, description="True if no price data available at all")
-
-
-class WACPreviewResponse(BaseListResponse[WACPreviewResultItem]):
-    """Response for POST /transactions/wac-preview. items[i] ↔ request.items[i]."""
-
-    pass
-
-
 class TXBatchResultItem(BaseModel):
     """Per-item result for committed rows."""
 
@@ -777,14 +685,18 @@ class TXBatchResultItem(BaseModel):
     status: TXItemStatus
 
 
-class TXBatchResponse(BaseModel):
-    """Unified response for /validate and /commit."""
+class TXBatchResponse(BaseBulkResponse[TXBatchResultItem]):
+    """Unified response for /validate and /commit.
 
-    model_config = ConfigDict(extra="forbid")
+    Extends BaseBulkResponse with transaction-specific fields:
+    - committed: whether the batch was committed to DB
+    - issues: rich validation issue objects (superset of errors)
+    - wac_results: WAC computation results for auto items
+    """
 
-    committed: bool
-    issues: List[TXValidationIssue] = Field(default_factory=list)
-    results: Optional[List[TXBatchResultItem]] = None
+    committed: bool = Field(..., description="Whether the batch was committed to DB")
+    issues: List[TXValidationIssue] = Field(default_factory=list, description="Rich validation issues")
+    wac_results: Optional[List[WACPreviewResultItem]] = Field(None, description="WAC results for auto items")
 
 
 # =============================================================================
@@ -792,7 +704,7 @@ class TXBatchResponse(BaseModel):
 # =============================================================================
 
 
-class TXValidationCode(str, Enum):
+class TXValidationCode(StrEnum):
     """Centralized validation error codes for transaction operations.
 
     Frontend maps these to i18n keys via `transactions.errors.{code}`.
@@ -1135,19 +1047,14 @@ class TXTypeMetadata(BaseModel):
     # Cost basis override applicability — tells frontend whether to show/require the field.
     cost_basis_mode: CostBasisFieldMode = Field(
         "forbidden",
-        description="Whether cost_basis_override is applicable. "
-        "'forbidden': field not used; "
-        "'required_qty_pos': required when quantity > 0; "
-        "'optional': can have cost_basis but not mandatory.",
+        description="Whether cost_basis_override is applicable. " "'forbidden': field not used; " "'required_qty_pos': required when quantity > 0; " "'optional': can have cost_basis but not mandatory.",
     )
 
     # For paired types: per-side cost_basis rule. Index 0 = 'from' (sender, qty<0), index 1 = 'to' (receiver, qty>0).
     # Overrides cost_basis_mode when present. None for standalone types.
     cost_basis_pair: list[CostBasisFieldMode] | None = Field(
         None,
-        description="[from_side, to_side] cost_basis rules for paired types. "
-        "Index 0 = 'Da' (sender, qty<0), index 1 = 'A' (receiver, qty>0). "
-        "Overrides cost_basis_mode when present. None for standalone types.",
+        description="[from_side, to_side] cost_basis rules for paired types. " "Index 0 = 'Da' (sender, qty<0), index 1 = 'A' (receiver, qty>0). " "Overrides cost_basis_mode when present. None for standalone types.",
     )
 
 
@@ -1156,134 +1063,134 @@ class TXTypeMetadata(BaseModel):
 def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
     """Build metadata dict with auto-populated swap_group field."""
     raw: dict[TransactionType, dict] = {
-        TransactionType.BUY: dict(
-            code="BUY",
-            name="Buy",
-            description="Purchase asset with cash",
-            icon_slug="buy",
-            doc_slug="buy-sell",
-            asset_mode="required",
-            cash_mode="required",
-            quantity_mode="required",
-            requires_link=False,
-            quantity_sign="positive",
-            cash_sign="negative",
-            event_compatible=False,
-        ),
-        TransactionType.SELL: dict(
-            code="SELL",
-            name="Sell",
-            description="Sell asset for cash",
-            icon_slug="sell",
-            doc_slug="buy-sell",
-            asset_mode="required",
-            cash_mode="required",
-            quantity_mode="required",
-            requires_link=False,
-            quantity_sign="negative",
-            cash_sign="positive",
-            event_compatible=False,
-        ),
-        TransactionType.DIVIDEND: dict(
-            code="DIVIDEND",
-            name="Dividend",
-            description="Dividend payment received",
-            icon_slug="dividend",
-            doc_slug="dividend",
-            asset_mode="required",
-            cash_mode="required",
-            quantity_mode="forbidden",
-            requires_link=False,
-            quantity_sign="zero",
-            cash_sign="positive",
-            event_compatible=True,
-        ),
-        TransactionType.INTEREST: dict(
-            code="INTEREST",
-            name="Interest",
-            description="Interest payment (bond or deposit)",
-            icon_slug="interest",
-            doc_slug="interest",
-            asset_mode="optional",
-            cash_mode="required",
-            quantity_mode="forbidden",
-            requires_link=False,
-            quantity_sign="zero",
-            cash_sign="positive",
-            event_compatible=True,
-        ),
-        TransactionType.DEPOSIT: dict(
-            code="DEPOSIT",
-            name="Deposit",
-            description="Add cash to broker account",
-            icon_slug="deposit",
-            doc_slug="deposit-withdrawal",
-            asset_mode="forbidden",
-            cash_mode="required",
-            quantity_mode="forbidden",
-            requires_link=False,
-            quantity_sign="zero",
-            cash_sign="positive",
-            event_compatible=False,
-        ),
-        TransactionType.WITHDRAWAL: dict(
-            code="WITHDRAWAL",
-            name="Withdrawal",
-            description="Remove cash from broker account",
-            icon_slug="withdrawal",
-            doc_slug="deposit-withdrawal",
-            asset_mode="forbidden",
-            cash_mode="required",
-            quantity_mode="forbidden",
-            requires_link=False,
-            quantity_sign="zero",
-            cash_sign="negative",
-            event_compatible=False,
-        ),
-        TransactionType.FEE: dict(
-            code="FEE",
-            name="Fee",
-            description="Fee or commission (trading or account)",
-            icon_slug="fee",
-            doc_slug="fee",
-            asset_mode="optional",
-            cash_mode="required",
-            quantity_mode="forbidden",
-            requires_link=False,
-            quantity_sign="zero",
-            cash_sign="negative",
-            event_compatible=False,
-        ),
-        TransactionType.TAX: dict(
-            code="TAX",
-            name="Tax",
-            description="Tax payment (capital gain or stamp duty)",
-            icon_slug="tax",
-            doc_slug="fee",
-            asset_mode="optional",
-            cash_mode="required",
-            quantity_mode="forbidden",
-            requires_link=False,
-            quantity_sign="zero",
-            cash_sign="negative",
-            event_compatible=False,
-        ),
-        TransactionType.TRANSFER: dict(
-            code="TRANSFER",
-            name="Asset Transfer",
-            description="Asset transfer between brokers",
-            icon_slug="transfer",
-            doc_slug="transfer",
-            asset_mode="required",
-            cash_mode="forbidden",
-            quantity_mode="required",
-            requires_link=True,
-            quantity_sign="nonzero",
-            cash_sign="zero",
-            event_compatible=False,
-            pair_form_layout="transfer_asset",
-            split_into=SplitMeta(from_type="ADJUSTMENT", to_type="ADJUSTMENT"),
-            promote_from=[
+        TransactionType.BUY: {
+            "code": "BUY",
+            "name": "Buy",
+            "description": "Purchase asset with cash",
+            "icon_slug": "buy",
+            "doc_slug": "buy-sell",
+            "asset_mode": "required",
+            "cash_mode": "required",
+            "quantity_mode": "required",
+            "requires_link": False,
+            "quantity_sign": "positive",
+            "cash_sign": "negative",
+            "event_compatible": False,
+        },
+        TransactionType.SELL: {
+            "code": "SELL",
+            "name": "Sell",
+            "description": "Sell asset for cash",
+            "icon_slug": "sell",
+            "doc_slug": "buy-sell",
+            "asset_mode": "required",
+            "cash_mode": "required",
+            "quantity_mode": "required",
+            "requires_link": False,
+            "quantity_sign": "negative",
+            "cash_sign": "positive",
+            "event_compatible": False,
+        },
+        TransactionType.DIVIDEND: {
+            "code": "DIVIDEND",
+            "name": "Dividend",
+            "description": "Dividend payment received",
+            "icon_slug": "dividend",
+            "doc_slug": "dividend",
+            "asset_mode": "required",
+            "cash_mode": "required",
+            "quantity_mode": "forbidden",
+            "requires_link": False,
+            "quantity_sign": "zero",
+            "cash_sign": "positive",
+            "event_compatible": True,
+        },
+        TransactionType.INTEREST: {
+            "code": "INTEREST",
+            "name": "Interest",
+            "description": "Interest payment (bond or deposit)",
+            "icon_slug": "interest",
+            "doc_slug": "interest",
+            "asset_mode": "optional",
+            "cash_mode": "required",
+            "quantity_mode": "forbidden",
+            "requires_link": False,
+            "quantity_sign": "zero",
+            "cash_sign": "positive",
+            "event_compatible": True,
+        },
+        TransactionType.DEPOSIT: {
+            "code": "DEPOSIT",
+            "name": "Deposit",
+            "description": "Add cash to broker account",
+            "icon_slug": "deposit",
+            "doc_slug": "deposit-withdrawal",
+            "asset_mode": "forbidden",
+            "cash_mode": "required",
+            "quantity_mode": "forbidden",
+            "requires_link": False,
+            "quantity_sign": "zero",
+            "cash_sign": "positive",
+            "event_compatible": False,
+        },
+        TransactionType.WITHDRAWAL: {
+            "code": "WITHDRAWAL",
+            "name": "Withdrawal",
+            "description": "Remove cash from broker account",
+            "icon_slug": "withdrawal",
+            "doc_slug": "deposit-withdrawal",
+            "asset_mode": "forbidden",
+            "cash_mode": "required",
+            "quantity_mode": "forbidden",
+            "requires_link": False,
+            "quantity_sign": "zero",
+            "cash_sign": "negative",
+            "event_compatible": False,
+        },
+        TransactionType.FEE: {
+            "code": "FEE",
+            "name": "Fee",
+            "description": "Fee or commission (trading or account)",
+            "icon_slug": "fee",
+            "doc_slug": "fee",
+            "asset_mode": "optional",
+            "cash_mode": "required",
+            "quantity_mode": "forbidden",
+            "requires_link": False,
+            "quantity_sign": "zero",
+            "cash_sign": "negative",
+            "event_compatible": False,
+        },
+        TransactionType.TAX: {
+            "code": "TAX",
+            "name": "Tax",
+            "description": "Tax payment (capital gain or stamp duty)",
+            "icon_slug": "tax",
+            "doc_slug": "fee",
+            "asset_mode": "optional",
+            "cash_mode": "required",
+            "quantity_mode": "forbidden",
+            "requires_link": False,
+            "quantity_sign": "zero",
+            "cash_sign": "negative",
+            "event_compatible": False,
+        },
+        TransactionType.TRANSFER: {
+            "code": "TRANSFER",
+            "name": "Asset Transfer",
+            "description": "Asset transfer between brokers",
+            "icon_slug": "transfer",
+            "doc_slug": "transfer",
+            "asset_mode": "required",
+            "cash_mode": "forbidden",
+            "quantity_mode": "required",
+            "requires_link": True,
+            "quantity_sign": "nonzero",
+            "cash_sign": "zero",
+            "event_compatible": False,
+            "pair_form_layout": "transfer_asset",
+            "split_into": SplitMeta(from_type="ADJUSTMENT", to_type="ADJUSTMENT"),
+            "promote_from": [
                 PromoteRule(
                     type_a="ADJUSTMENT",
                     type_b="ADJUSTMENT",
@@ -1294,29 +1201,29 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
                     ],
                 ),
             ],
-            pair_field_constraints=[
+            "pair_field_constraints": [
                 PairFieldConstraint(field="asset_id", relation="equal"),
                 PairFieldConstraint(field="broker_id", relation="different"),
                 PairFieldConstraint(field="quantity", relation="opposite"),
             ],
-            cost_basis_pair=["forbidden", "required_qty_pos"],
-        ),
-        TransactionType.FX_CONVERSION: dict(
-            code="FX_CONVERSION",
-            name="FX Conversion",
-            description="Currency exchange",
-            icon_slug="fx-conversion",
-            doc_slug="fx-conversion",
-            asset_mode="forbidden",
-            cash_mode="required",
-            quantity_mode="forbidden",
-            requires_link=True,
-            quantity_sign="zero",
-            cash_sign="nonzero",
-            event_compatible=False,
-            pair_form_layout="fx",
-            split_into=SplitMeta(from_type="WITHDRAWAL", to_type="DEPOSIT"),
-            promote_from=[
+            "cost_basis_pair": ["forbidden", "required_qty_pos"],
+        },
+        TransactionType.FX_CONVERSION: {
+            "code": "FX_CONVERSION",
+            "name": "FX Conversion",
+            "description": "Currency exchange",
+            "icon_slug": "fx-conversion",
+            "doc_slug": "fx-conversion",
+            "asset_mode": "forbidden",
+            "cash_mode": "required",
+            "quantity_mode": "forbidden",
+            "requires_link": True,
+            "quantity_sign": "zero",
+            "cash_sign": "nonzero",
+            "event_compatible": False,
+            "pair_form_layout": "fx",
+            "split_into": SplitMeta(from_type="WITHDRAWAL", to_type="DEPOSIT"),
+            "promote_from": [
                 PromoteRule(
                     type_a="WITHDRAWAL",
                     type_b="DEPOSIT",
@@ -1326,42 +1233,42 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
                     ],
                 ),
             ],
-            pair_field_constraints=[
+            "pair_field_constraints": [
                 PairFieldConstraint(field="cash_currency", relation="different"),
                 PairFieldConstraint(field="broker_id", relation="equal"),
             ],
-        ),
-        TransactionType.ADJUSTMENT: dict(
-            code="ADJUSTMENT",
-            name="Adjustment",
-            description="Manual quantity correction (splits, gifts)",
-            icon_slug="adjustment",
-            doc_slug="adjustment",
-            asset_mode="required",
-            cash_mode="forbidden",
-            quantity_mode="required",
-            requires_link=False,
-            quantity_sign="nonzero",
-            cash_sign="zero",
-            event_compatible=True,
-            cost_basis_mode="required_qty_pos",
-        ),
-        TransactionType.CASH_TRANSFER: dict(
-            code="CASH_TRANSFER",
-            name="Cash Transfer",
-            description="Wire transfer / bonifico between brokers",
-            icon_slug="cash-transfer",
-            doc_slug="cash-transfer",
-            asset_mode="forbidden",
-            cash_mode="required",
-            quantity_mode="forbidden",
-            requires_link=True,
-            quantity_sign="zero",
-            cash_sign="nonzero",
-            event_compatible=False,
-            pair_form_layout="transfer_cash",
-            split_into=SplitMeta(from_type="WITHDRAWAL", to_type="DEPOSIT"),
-            promote_from=[
+        },
+        TransactionType.ADJUSTMENT: {
+            "code": "ADJUSTMENT",
+            "name": "Adjustment",
+            "description": "Manual quantity correction (splits, gifts)",
+            "icon_slug": "adjustment",
+            "doc_slug": "adjustment",
+            "asset_mode": "required",
+            "cash_mode": "forbidden",
+            "quantity_mode": "required",
+            "requires_link": False,
+            "quantity_sign": "nonzero",
+            "cash_sign": "zero",
+            "event_compatible": True,
+            "cost_basis_mode": "required_qty_pos",
+        },
+        TransactionType.CASH_TRANSFER: {
+            "code": "CASH_TRANSFER",
+            "name": "Cash Transfer",
+            "description": "Wire transfer / bonifico between brokers",
+            "icon_slug": "cash-transfer",
+            "doc_slug": "cash-transfer",
+            "asset_mode": "forbidden",
+            "cash_mode": "required",
+            "quantity_mode": "forbidden",
+            "requires_link": True,
+            "quantity_sign": "zero",
+            "cash_sign": "nonzero",
+            "event_compatible": False,
+            "pair_form_layout": "transfer_cash",
+            "split_into": SplitMeta(from_type="WITHDRAWAL", to_type="DEPOSIT"),
+            "promote_from": [
                 PromoteRule(
                     type_a="WITHDRAWAL",
                     type_b="DEPOSIT",
@@ -1372,12 +1279,12 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
                     ],
                 ),
             ],
-            pair_field_constraints=[
+            "pair_field_constraints": [
                 PairFieldConstraint(field="cash_currency", relation="equal"),
                 PairFieldConstraint(field="broker_id", relation="different"),
                 PairFieldConstraint(field="cash_amount", relation="opposite"),
             ],
-        ),
+        },
     }
     # Auto-populate swap_group for every type
     result: dict[TransactionType, TXTypeMetadata] = {}

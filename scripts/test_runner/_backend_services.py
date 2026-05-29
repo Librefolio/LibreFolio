@@ -3,12 +3,22 @@ Backend service tests: FX conversion, asset source, provider registry, transacti
 """
 
 
-from ._common import (
-    _run_test_suite, _get_category_tests_for_all, _build_pytest_cmd, run_command,
-    print_header, print_section, print_info, print_success, print_error, print_warning,
-    make_category, add_test,
-)
 from ._backend_db import db_create
+from ._common import (
+    _RESUME_MODE,
+    _build_pytest_cmd,
+    _get_category_tests_for_all,
+    _run_test_suite,
+    add_test,
+    make_category,
+    print_error,
+    print_header,
+    print_info,
+    print_section,
+    print_success,
+    print_warning,
+    run_command,
+)
 
 
 def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
@@ -214,6 +224,24 @@ def services_financial_utils(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Financial utils tests", verbose=verbose)
 
 
+def services_asset_sync_counts(verbose: bool = False, test_names: list = None) -> bool:
+    """Test asset sync count tracking."""
+    print_section("Services: Asset Sync Counts")
+    print_info("Testing: Asset sync count logic")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_sync_counts.py", test_names)
+    return run_command(cmd, "Asset sync counts tests", verbose=verbose)
+
+
+def services_brim_versioning(verbose: bool = False, test_names: list = None) -> bool:
+    """Test BRIM provider versioning."""
+    print_section("Services: BRIM Versioning")
+    print_info("Testing: BRIM provider version detection and compatibility")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_versioning.py", test_names)
+    return run_command(cmd, "BRIM versioning tests", verbose=verbose)
+
+
 def services_all(verbose: bool = False) -> bool:
     """Run all backend service tests."""
     print_header("LibreFolio Backend Services Tests")
@@ -234,6 +262,7 @@ def services_all(verbose: bool = False) -> bool:
         header_msg=None,
         summary_title="Backend Services Test Summary",
         success_msg="All backend services tests passed! 🎉",
+            resume=_RESUME_MODE,
         )
 
 
@@ -274,6 +303,8 @@ Note: No backend server required.
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base default properties")
     add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
+    add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
+    add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat
 

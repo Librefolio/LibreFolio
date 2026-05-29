@@ -662,9 +662,7 @@ async def test_get_transaction_types(test_server):
             assert "icon_slug" in item  # e.g., "buy", "sell"
             # cost_basis_mode must be present and valid
             assert "cost_basis_mode" in item, f"Missing cost_basis_mode for {item.get('code')}"
-            assert item["cost_basis_mode"] in ("forbidden", "optional", "required_qty_pos"), (
-                f"Invalid cost_basis_mode '{item['cost_basis_mode']}' for {item['code']}"
-            )
+            assert item["cost_basis_mode"] in ("forbidden", "optional", "required_qty_pos"), f"Invalid cost_basis_mode '{item['cost_basis_mode']}' for {item['code']}"
 
         # Verify specific cost_basis rules
         types_by_code = {t["code"]: t for t in tx_types}

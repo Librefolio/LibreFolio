@@ -3738,7 +3738,7 @@ class AssetCRUDService:
                         value = json.dumps(value)  # Transform dict as serialized JSON
                     oldVal = getattr(asset, field)
                     setattr(asset, field, value)
-                    updated_fields.append(OldNew(info=field, old=oldVal, new=value))
+                    updated_fields.append(OldNew(info=field, old=str(oldVal) if oldVal is not None else None, new=str(value) if value is not None else None))
                     logger.debug(f"updated field '{field}': '{oldVal}' -> '{value}'")
 
                 await session.flush()

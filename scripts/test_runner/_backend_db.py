@@ -5,6 +5,7 @@ Database tests: create, validate, populate, fx_rates, brim, referential integrit
 from scripts.cli_base import pipenv_prefix
 
 from ._common import (
+    _RESUME_MODE,
     _run_test_suite, _build_pytest_cmd, run_command,
     setup_test_database, TEST_DB_PATH,
     print_section, print_info, print_success, print_error, print_warning,
@@ -174,6 +175,7 @@ def db_all(verbose: bool = False) -> bool:
             f"Target: {TEST_DB_PATH}",
             ],
         summary_title="Database Test Summary",
+            resume=_RESUME_MODE,
         )
 
 

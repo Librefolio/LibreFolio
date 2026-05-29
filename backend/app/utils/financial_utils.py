@@ -16,7 +16,7 @@ from decimal import Decimal
 from itertools import groupby
 from typing import Optional
 
-from backend.app.schemas.transactions import WACQualifyingTX
+from backend.app.schemas.wac import WACQualifyingTX
 
 
 @dataclass

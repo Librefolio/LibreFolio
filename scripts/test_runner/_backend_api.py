@@ -3,9 +3,15 @@ Backend API endpoint tests and E2E tests.
 """
 
 from ._common import (
-    _run_test_suite, _get_category_tests_for_all, _build_pytest_cmd, run_command,
-    print_section, print_info,
-    make_category, add_test,
+    _RESUME_MODE,
+    _build_pytest_cmd,
+    _get_category_tests_for_all,
+    _run_test_suite,
+    add_test,
+    make_category,
+    print_info,
+    print_section,
+    run_command,
 )
 
 
@@ -213,15 +219,25 @@ def api_batch_split_promote(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Batch split/promote tests", verbose=verbose)
 
 
-def api_transactions_wac(verbose: bool = False, test_names: list = None) -> bool:
-    """Run WAC (Weighted Average Cost) API tests."""
-    print_section("WAC Cost Basis API Tests")
-    print_info("Testing cost_basis_override Currency, auto-calc WAC, recalc-wac endpoint")
-    print_info("Tests: WAC-1→13 (override, auto-calc, cross-FX, missing, recalc, validation, promote)")
+def api_transactions_wac_inline(verbose: bool = False, test_names: list = None) -> bool:
+    """Run WAC inline validate/commit tests (P16-P28)."""
+    print_section("WAC Inline Validate/Commit Tests")
+    print_info("Testing cost_basis_mode='auto'/'auto-detail' in /validate and /commit")
+    print_info("Tests: P16-P28 (TRANSFER auto, ADJUSTMENT auto, source detection, intra-batch)")
     print_info("Note: Server will be automatically started and stopped by test")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_transactions_wac.py", test_names)
-    return run_command(cmd, "WAC cost basis tests", verbose=verbose)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_wac_inline.py", test_names)
+    return run_command(cmd, "WAC inline tests", verbose=verbose)
+
+
+def api_assets_patch_fields(verbose: bool = False, test_names: list = None) -> bool:
+    """Run asset PATCH fields tests."""
+    print_section("Assets Patch Fields Tests")
+    print_info("Testing PATCH /assets/{id} field-level updates")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_patch_fields.py", test_names)
+    return run_command(cmd, "Assets patch fields tests", verbose=verbose)
 
 
 def api_ohlc_sentinel(verbose: bool = False, test_names: list = None) -> bool:
@@ -432,9 +448,10 @@ def api_test(verbose: bool = False) -> bool:
         info_msgs=[
             "Testing REST API endpoints",
             "Note: Server will be automatically started/stopped by tests",
-            ],
+        ],
         combine_coverage=True,
-        )
+        resume=_RESUME_MODE,
+    )
 
 
 def e2e_brim(verbose: bool = False, test_names: list = None) -> bool:
@@ -458,9 +475,10 @@ def e2e_test(verbose: bool = False) -> bool:
         info_msgs=[
             "Testing E2E workflow using REST API endpoints",
             "Note: Server will be automatically started/stopped by tests",
-            ],
+        ],
         combine_coverage=True,
-        )
+        resume=_RESUME_MODE,
+    )
 
 
 def populate_registry(registry: dict) -> None:
@@ -473,7 +491,8 @@ API Endpoint Tests
 
 Tests for REST API endpoints (server auto-started):
   • FX, Assets, Transactions, Brokers, Auth, Settings, Uploads, System, Backup
-""")
+""",
+    )
     add_test(api, "fx", api_fx, name="FX API", desc="Conversion, providers, pair sources")
     add_test(api, "fx-compress-errors", api_fx_compress_errors, name="FX Compress Errors", desc="_compress_convert_errors utility")
     add_test(api, "preview-cache", api_preview_cache, name="Preview Cache", desc="PreviewCache in uploads API")
@@ -493,7 +512,8 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "tx-balance-walk", api_tx_balance_walk, name="TX Balance Walk", desc="Same-day ordering, cascade, end-of-day")
     add_test(api, "events-suggest", api_events_suggest, name="Events Suggest", desc="Candidate events within tolerance")
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
-    add_test(api, "transactions-wac", api_transactions_wac, name="WAC Cost Basis", desc="cost_basis_override Currency, auto-calc WAC, recalc-wac")
+    add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")
+    add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets/{id} field-level updates")
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="Sentinel rules on POST /assets/prices")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")
     add_test(api, "prices-currency-coherence", api_prices_currency_coherence, name="Prices Currency Coherence", desc="Hard-400 on currency mismatch")
@@ -524,13 +544,9 @@ E2E API Tests
 Complete workflow tests via REST API:
   • Search → Create → Assign → Metadata → Prices
   • BRIM import flow: Upload → Parse → Import
-""")
-    add_test(e2e, "search-to-prices", search2prices_test, name="Search to Prices",
-             desc="Full asset lifecycle flow", prereq="Database created",
-             tests="Search → Create → Assign → Metadata → Prices")
-    add_test(e2e, "brim-e2e", e2e_brim, name="BRIM E2E",
-             desc="Test complete BRIM import flow", prereq="Database created",
-             tests="Upload → Parse → Asset Mapping → Import")
+""",
+    )
+    add_test(e2e, "search-to-prices", search2prices_test, name="Search to Prices", desc="Full asset lifecycle flow", prereq="Database created", tests="Search → Create → Assign → Metadata → Prices")
+    add_test(e2e, "brim-e2e", e2e_brim, name="BRIM E2E", desc="Test complete BRIM import flow", prereq="Database created", tests="Upload → Parse → Asset Mapping → Import")
     add_test(e2e, "all", e2e_test, test_names=False, name="All E2E Tests", desc="Run all E2E tests")
     registry["e2e"] = e2e
-

@@ -25,10 +25,7 @@ test.setTimeout(20_000);
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     // Wait for either the table or the loading state to resolve
-    await Promise.race([
-        page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}),
-        page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000}),
-    ]).catch(() => {
+    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {
         /* either is fine */
     });
     await page.waitForTimeout(500);

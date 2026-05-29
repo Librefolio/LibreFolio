@@ -2,7 +2,7 @@
 
 import subprocess
 
-from ._common import PROJECT_ROOT, _run_test_suite, Colors, print_section, print_success, print_error
+from ._common import _RESUME_MODE, PROJECT_ROOT, _run_test_suite, Colors, print_section, print_success, print_error
 from ._frontend_common import _ensure_frontend_build, _ensure_db_populated, _ensure_test_users, _run_playwright
 
 
@@ -115,6 +115,7 @@ def front_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debu
         header_msg="All FX Tests (Unit + E2E)",
         summary_title="FX Test Summary",
         success_msg="All FX tests passed! 🎉",
+        resume=_RESUME_MODE,
     )
 
 

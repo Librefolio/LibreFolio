@@ -16,7 +16,7 @@ Atomic multi-broker semantics (Part 3):
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -51,374 +51,12 @@ from backend.app.schemas.transactions import (
     TXUpdateItem,
     TXValidationCode,
     TXValidationIssue,
-    WACConversionInfo,
-    WACPreviewResultItem,
-    WACQualifyingTX,
-    WACResult,
     get_swap_group,
     tags_to_csv,
 )
-from backend.app.services.fx import convert_bulk
+from backend.app.schemas.wac import WACPreviewResultItem
+from backend.app.services.wac_service import compute_wac_iterative
 from backend.app.utils.datetime_utils import parse_ISO_date, utcnow
-from backend.app.utils.financial_utils import WACInputTX, compute_wac_from_txlist, determine_target_currency
-
-
-async def compute_weighted_avg_cost(
-    session: AsyncSession,
-    broker_id: int,
-    asset_id: int,
-    as_of_date: date_type,
-    asset_currency: str,
-) -> WACResult:
-    """Compute weighted average cost of an asset at a broker up to a given date.
-
-    FX-aware: converts BUY/TRANSFER costs to a common target currency using
-    convert_bulk(). Returns WACResult with conversion details and missing pairs.
-
-    Target currency selection:
-    1. Most frequent currency among qualifying TXs.
-    2. On tie: asset_currency if it's among the tied currencies.
-    3. Otherwise: first alphabetically.
-
-    Edge cases:
-    - No qualifying TXs or total_qty == 0 without FX errors →
-      WACResult(wac=Currency(code=target, amount="0"))
-    - Any FX conversion fails → WACResult(wac=None, missing_pairs=[...])
-    """
-    # 1. Query qualifying transactions: BUY + incoming TRANSFER (qty > 0)
-    stmt = select(Transaction).where(
-        Transaction.broker_id == broker_id,
-        Transaction.asset_id == asset_id,
-        Transaction.date <= as_of_date,
-        or_(
-            Transaction.type == TransactionType.BUY,
-            and_(
-                Transaction.type == TransactionType.TRANSFER,
-                Transaction.quantity > 0,
-            ),
-        ),
-    )
-    rows = (await session.execute(stmt)).scalars().all()
-
-    if not rows:
-        return WACResult(wac=Currency(code=asset_currency, amount=Decimal("0")))
-
-    # 2. Build per-row (qty, cost, currency, tx_id) tuples
-    row_data: list[tuple[Decimal, Decimal, str, int, date_type]] = []
-    for row in rows:
-        if row.type == TransactionType.BUY:
-            qty = abs(row.quantity) if row.quantity else Decimal("0")
-            if qty == 0:
-                continue
-            unit_price = abs(row.amount) / qty if row.amount else Decimal("0")
-            ccy = row.currency or asset_currency
-            row_data.append((qty, qty * unit_price, ccy, row.id, row.date))
-        else:
-            # TRANSFER receiver
-            qty = row.quantity if row.quantity else Decimal("0")
-            if qty <= 0:
-                continue
-            if row.cost_basis_override is not None and row.cost_basis_currency is not None:
-                # Has frozen cost basis
-                cost = qty * row.cost_basis_override
-                ccy = row.cost_basis_currency
-            elif row.cost_basis_override is not None:
-                # Legacy: override without currency — use asset_currency
-                cost = qty * row.cost_basis_override
-                ccy = asset_currency
-            else:
-                # No cost basis override — skip (cannot contribute to WAC)
-                continue
-            row_data.append((qty, cost, ccy, row.id, row.date))
-
-    if not row_data:
-        return WACResult(wac=Currency(code=asset_currency, amount=Decimal("0")))
-
-    # 3. Determine target_currency
-    ccy_counter = Counter(ccy for _, _, ccy, _, _ in row_data)
-    max_count = max(ccy_counter.values())
-    top_ccys = sorted(c for c, n in ccy_counter.items() if n == max_count)
-    if len(top_ccys) == 1:
-        target_currency = top_ccys[0]
-    elif asset_currency in top_ccys:
-        target_currency = asset_currency
-    else:
-        target_currency = top_ccys[0]  # first alphabetically
-
-    # 4. Build conversion list for non-target currencies
-    fx_needed: list[tuple[int, Currency, str, date_type, int]] = []  # (row_idx, amount_ccy, to_ccy, date, tx_id)
-    for i, (qty, cost, ccy, tx_id, tx_date) in enumerate(row_data):
-        if ccy != target_currency:
-            fx_needed.append((i, Currency(code=ccy, amount=cost), target_currency, tx_date, tx_id))
-
-    conversions_info: list[WACConversionInfo] = []
-    missing_pairs: list[str] = []
-
-    # Convert all non-target costs in one batch
-    if fx_needed:
-        bulk_input = [(amt_ccy, to_ccy, dt) for _, amt_ccy, to_ccy, dt, _ in fx_needed]
-        fx_results, fx_errors = await convert_bulk(session, bulk_input, raise_on_error=False)
-
-        for j, (row_idx, amt_ccy, to_ccy, dt, tx_id) in enumerate(fx_needed):
-            result = fx_results[j] if j < len(fx_results) else None
-            if result is None:
-                # FX conversion failed
-                pair_key = f"{amt_ccy.code}/{to_ccy}"
-                if pair_key not in missing_pairs:
-                    missing_pairs.append(pair_key)
-            else:
-                converted, rate_date, _bf = result
-                stale_days = (dt - rate_date).days if rate_date < dt else 0
-                # Figure out the rate: converted.amount / amt_ccy.amount
-                rate = converted.amount / amt_ccy.amount if amt_ccy.amount != 0 else Decimal("0")
-                conversions_info.append(
-                    WACConversionInfo(
-                        tx_id=tx_id,
-                        from_currency=amt_ccy.code,
-                        to_currency=target_currency,
-                        rate=rate,
-                        rate_date=rate_date,
-                        stale_days=stale_days,
-                    )
-                )
-                # Replace cost with converted amount
-                qty_orig = row_data[row_idx][0]
-                row_data[row_idx] = (qty_orig, converted.amount, target_currency, tx_id, dt)
-
-    # 5. If any conversion failed → wac=None
-    if missing_pairs:
-        return WACResult(wac=None, conversions=conversions_info, missing_pairs=missing_pairs)
-
-    # 6. Sum up
-    total_qty = sum(rd[0] for rd in row_data)
-    total_cost = sum(rd[1] for rd in row_data)
-
-    if total_qty == 0:
-        return WACResult(wac=Currency(code=target_currency, amount=Decimal("0")), conversions=conversions_info)
-
-    wac_amount = total_cost / total_qty
-    return WACResult(wac=Currency(code=target_currency, amount=wac_amount), conversions=conversions_info)
-
-
-# =============================================================================
-# WAC PREVIEW — Inventory-aware iterative WAC (replaces cumulative approach)
-# =============================================================================
-
-
-async def compute_wac_iterative(
-    session: AsyncSession,
-    broker_id: int,
-    asset_id: int,
-    as_of_date: date_type,
-    asset_currency: str,
-    pending_txs: list | None = None,
-    excluded_tx_ids: list[int] | None = None,
-) -> WACPreviewResultItem:
-    """Compute inventory-aware WAC (PMC) for an asset at a broker up to a date.
-
-    Preparation layer: queries DB, merges pending TXs, handles FX conversion,
-    then delegates to compute_wac_from_txlist() for pure math.
-    """
-    excluded = set(excluded_tx_ids or [])
-    pending = pending_txs or []
-
-    # 1. Query ALL transactions for this (broker, asset) with date <= as_of_date and qty != 0
-    stmt = select(Transaction).where(
-        Transaction.broker_id == broker_id,
-        Transaction.asset_id == asset_id,
-        Transaction.date <= as_of_date,
-        Transaction.quantity.is_not(None),
-        Transaction.quantity != 0,
-    )
-    db_rows = (await session.execute(stmt)).scalars().all()
-
-    # 2. Merge: DB rows (minus excluded, overridden by pending) + new pending
-    pending_by_id: dict[int, Any] = {}
-    pending_new: list[Any] = []
-    for ptx in pending:
-        if ptx.id is not None:
-            pending_by_id[ptx.id] = ptx
-        else:
-            pending_new.append(ptx)
-
-    # Unified row tuples: (tx_id, type_str, date, quantity, amount, currency, cbo_amount, cbo_ccy, is_pending, cbm)
-    unified: list[tuple] = []
-
-    for row in db_rows:
-        if row.id in excluded:
-            continue
-        if row.id in pending_by_id:
-            ptx = pending_by_id.pop(row.id)
-            if ptx.broker_id == broker_id and ptx.asset_id == asset_id and ptx.date <= as_of_date:
-                cbo_amount = ptx.cost_basis_override.amount if ptx.cost_basis_override else None
-                cbo_ccy = ptx.cost_basis_override.code if ptx.cost_basis_override else None
-                ptx_amount = ptx.cash.amount if ptx.cash else None
-                ptx_currency = ptx.cash.code if ptx.cash else None
-                ptx_type = ptx.type.value if hasattr(ptx.type, "value") else str(ptx.type)
-                unified.append((ptx.id, ptx_type, ptx.date, ptx.quantity, ptx_amount, ptx_currency, cbo_amount, cbo_ccy, True, ptx.cost_basis_mode))
-        else:
-            unified.append(
-                (
-                    row.id,
-                    row.type.value if hasattr(row.type, "value") else str(row.type),
-                    row.date,
-                    row.quantity,
-                    row.amount,
-                    row.currency,
-                    row.cost_basis_override,
-                    row.cost_basis_currency,
-                    False,
-                    None,
-                )
-            )
-
-    # Remaining pending overrides not found in DB
-    for _pid, ptx in pending_by_id.items():
-        if ptx.broker_id == broker_id and ptx.asset_id == asset_id and ptx.date <= as_of_date and ptx.quantity and ptx.quantity != 0:
-            cbo_amount = ptx.cost_basis_override.amount if ptx.cost_basis_override else None
-            cbo_ccy = ptx.cost_basis_override.code if ptx.cost_basis_override else None
-            ptx_amount = ptx.cash.amount if ptx.cash else None
-            ptx_currency = ptx.cash.code if ptx.cash else None
-            ptx_type = ptx.type.value if hasattr(ptx.type, "value") else str(ptx.type)
-            unified.append((ptx.id, ptx_type, ptx.date, ptx.quantity, ptx_amount, ptx_currency, cbo_amount, cbo_ccy, True, ptx.cost_basis_mode))
-
-    # New pending (no id)
-    for ptx in pending_new:
-        if ptx.broker_id == broker_id and ptx.asset_id == asset_id and ptx.date <= as_of_date and ptx.quantity and ptx.quantity != 0:
-            cbo_amount = ptx.cost_basis_override.amount if ptx.cost_basis_override else None
-            cbo_ccy = ptx.cost_basis_override.code if ptx.cost_basis_override else None
-            ptx_amount = ptx.cash.amount if ptx.cash else None
-            ptx_currency = ptx.cash.code if ptx.cash else None
-            ptx_type = ptx.type.value if hasattr(ptx.type, "value") else str(ptx.type)
-            unified.append((None, ptx_type, ptx.date, ptx.quantity, ptx_amount, ptx_currency, cbo_amount, cbo_ccy, True, ptx.cost_basis_mode))
-
-    if not unified:
-        return WACPreviewResultItem(
-            wac=Currency(code=asset_currency, amount=Decimal("0")),
-            wac_qualifying_txs=[],
-            wac_missing_pairs=[],
-        )
-
-    # 3. Build WACInputTX list and determine target_currency
-    #    First pass: determine currencies for target_currency selection
-    pre_txs: list[WACInputTX] = []
-    for tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend, cbm in unified:
-        if qty > 0:
-            orig_ccy = ccy if ttype == "BUY" else (cbo_ccy or asset_currency)
-        else:
-            orig_ccy = ccy or asset_currency
-        pre_txs.append(
-            WACInputTX(
-                tx_id=tid,
-                type=ttype,
-                date=dt,
-                quantity=qty,
-                unit_cost_converted=None,
-                original_currency=orig_ccy,
-                is_pending=is_pend,
-            )
-        )
-
-    target_currency = determine_target_currency(pre_txs, asset_currency)
-
-    # 4. FX conversion for acquisitions with different currency
-    fx_requests: list[tuple[int, Currency, str, date_type]] = []  # (idx, cost_ccy, target, date)
-
-    for i, (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend, cbm) in enumerate(unified):
-        if qty <= 0:
-            continue
-        if ttype == "BUY":
-            tx_ccy = ccy or asset_currency
-            if tx_ccy != target_currency and amount:
-                cost = abs(amount)
-                fx_requests.append((i, Currency(code=tx_ccy, amount=cost), target_currency, dt))
-        elif cbo_amt is not None:
-            tx_ccy = cbo_ccy or asset_currency
-            if tx_ccy != target_currency:
-                cost = qty * cbo_amt
-                fx_requests.append((i, Currency(code=tx_ccy, amount=cost), target_currency, dt))
-
-    fx_converted: dict[int, Decimal] = {}
-    missing_pairs: list[str] = []
-
-    if fx_requests:
-        bulk_input = [(amt, to_ccy, dt) for _, amt, to_ccy, dt in fx_requests]
-        fx_results, _fx_errors = await convert_bulk(session, bulk_input, raise_on_error=False)
-        for j, (unified_idx, amt_ccy, to_ccy, dt) in enumerate(fx_requests):
-            result = fx_results[j] if j < len(fx_results) else None
-            if result is None:
-                pair_key = f"{amt_ccy.code}/{to_ccy}"
-                if pair_key not in missing_pairs:
-                    missing_pairs.append(pair_key)
-            else:
-                converted, _rate_date, _bf = result
-                fx_converted[unified_idx] = converted.amount
-
-    if missing_pairs:
-        return WACPreviewResultItem(wac=None, wac_qualifying_txs=[], wac_missing_pairs=missing_pairs)
-
-    # 5. Build final WACInputTX list with converted costs
-    input_txs: list[WACInputTX] = []
-    for i, (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend, cbm) in enumerate(unified):
-        unit_cost: Decimal | None = None
-        orig_ccy = ccy or asset_currency
-
-        if qty > 0:
-            if ttype == "BUY":
-                if i in fx_converted:
-                    unit_cost = fx_converted[i] / qty
-                elif amount:
-                    unit_cost = abs(amount) / qty
-                else:
-                    unit_cost = Decimal("0")
-                orig_ccy = ccy or asset_currency
-            elif cbo_amt is not None:
-                if i in fx_converted:
-                    unit_cost = fx_converted[i] / qty
-                else:
-                    unit_cost = cbo_amt
-                orig_ccy = cbo_ccy or asset_currency
-            else:
-                unit_cost = None  # will be treated as zero cost (or add_at_wac if cbm == "auto")
-                orig_ccy = asset_currency
-        # For reductions, unit_cost stays None — compute_wac_from_txlist uses current WAC
-
-        input_txs.append(
-            WACInputTX(
-                tx_id=tid,
-                type=ttype,
-                date=dt,
-                quantity=qty,
-                unit_cost_converted=unit_cost,
-                original_currency=orig_ccy,
-                is_pending=is_pend,
-                cost_basis_mode=cbm,
-            )
-        )
-
-    # 6. Delegate to pure math function
-    calc_result = compute_wac_from_txlist(input_txs, target_currency)
-
-    # 7. Convert result to schema
-    qualifying_txs = [
-        WACQualifyingTX(
-            tx_id=q.tx_id,
-            type=q.type,
-            date=q.date,
-            quantity=q.quantity,
-            unit_cost=q.unit_cost,
-            currency=q.currency,
-            effect=q.effect,
-            running_wac=q.running_wac,
-        )
-        for q in calc_result.qualifying
-    ]
-
-    return WACPreviewResultItem(
-        wac=Currency(code=target_currency, amount=calc_result.wac_amount) if calc_result.pool_qty >= 0 else None,
-        wac_qualifying_txs=qualifying_txs,
-        wac_missing_pairs=[],
-    )
 
 
 class BalanceValidationError(Exception):
@@ -576,22 +214,6 @@ class TransactionService:
         for broker_id in broker_ids:
             await self._check_broker_access_or_raise(broker_id, user_id, min_role=min_role)
 
-    async def _check_paired_access(self, tx: Transaction, user_id: int) -> Optional[str]:
-        """Check if user has EDITOR access on both sides of a paired tx.
-
-        Returns None if OK (standalone or full access), or an error string
-        like ``"paired_access_denied:<broker_id>"`` when the partner's broker
-        is not editable by the user.
-        """
-        if tx.related_transaction_id is None:
-            return None
-        partner = await self.session.get(Transaction, tx.related_transaction_id)
-        if partner is None:
-            return None  # orphan — nothing to restrict
-        role = await self._check_broker_access(partner.broker_id, user_id, min_role=UserRole.EDITOR)
-        if role is None:
-            return f"paired_access_denied:{partner.broker_id}"
-        return None
 
     # =========================================================================
     # CROSS-RECORD VALIDATION HELPERS
@@ -1202,7 +824,7 @@ class TransactionService:
         for inp in inputs:
             # Determine complementary types from promote_from rules
             complementary: list[tuple[TransactionType, list]] = []
-            for pair_type, meta in TX_TYPE_METADATA.items():
+            for _pair_type, meta in TX_TYPE_METADATA.items():
                 if meta.promote_from is None:
                     continue
                 for rule in meta.promote_from:
@@ -1349,7 +971,7 @@ class TransactionService:
 
         # If access denied, stop early
         if any(i.code == "accessDenied" for i in issues):
-            return TXBatchResponse(committed=False, issues=issues)
+            return TXBatchResponse(committed=False, issues=issues, results=[], success_count=0)
 
         earliest_date_by_broker: Dict[int, date_type] = {}
 
@@ -1726,8 +1348,12 @@ class TransactionService:
                     )
                 )
 
-        # 6b. WAC auto-calc removed (WAC Preview Architecture v5).
-        # The frontend now sets cost_basis_override explicitly before commit.
+        # 6b. WAC auto-computation for items with cost_basis_mode in ("auto", "auto-detail").
+        # Post-flush: all rows are visible in session. No adapter needed.
+        wac_results: list[WACPreviewResultItem] | None = None
+        has_pydantic_errors = any(i.code not in (TXValidationCode.BALANCE_ASSET_NEGATIVE.value, TXValidationCode.BALANCE_CASH_NEGATIVE.value) for i in issues)
+        if not has_pydantic_errors:
+            wac_results = await self._compute_wac_for_auto_items(parsed_creates, parsed_updates, link_uuid_map)
 
         # 7. Balance walk per affected broker
         try:
@@ -1740,11 +1366,146 @@ class TransactionService:
             issues.append(TXValidationIssue(operation="create", index=-1, ref_id=None, error=f"Balance validation error: {e}"))
 
         # 8. Decision
+        success_count = sum(1 for r in results if r.status == "success")
         if issues:
-            return TXBatchResponse(committed=False, issues=issues)
+            return TXBatchResponse(committed=False, issues=issues, results=results, success_count=success_count, wac_results=wac_results)
         elif not commit:
             # Dry-run: clean batch but caller requested validate-only
-            return TXBatchResponse(committed=False, issues=[], results=results)
+            return TXBatchResponse(committed=False, issues=[], results=results, success_count=success_count, wac_results=wac_results)
         else:
             # Commit: caller (router) will session.commit()
-            return TXBatchResponse(committed=True, issues=[], results=results)
+            return TXBatchResponse(committed=True, issues=[], results=results, success_count=success_count, wac_results=wac_results)
+
+    # =========================================================================
+    # WAC AUTO-COMPUTATION (inline in validate/commit)
+    # =========================================================================
+
+    async def _compute_wac_for_auto_items(
+        self,
+        parsed_creates: list[tuple[int, TXCreateItem]],
+        parsed_updates: list[tuple[int, TXUpdateItem]],
+        link_uuid_map: dict[str, list[tuple[int, Transaction]]],
+    ) -> list[WACPreviewResultItem] | None:
+        """Compute WAC for items with cost_basis_mode in ('auto', 'auto-detail').
+
+        Called post-flush: all rows are in the session (not committed).
+        For TRANSFER (has link_uuid): source broker = partner's broker_id.
+        For ADJUSTMENT (no link_uuid): source broker = own broker_id, exclude self.
+
+        Returns list of WACPreviewResultItem with batch-context fields populated
+        (operation, index, source_broker_id).
+        """
+        # Collect auto items: (operation, orig_idx, schema_item, db_tx)
+        auto_items: list[tuple[str, int, TXCreateItem | TXUpdateItem, Transaction]] = []
+
+        for orig_idx, item in parsed_creates:
+            if getattr(item, "cost_basis_mode", None) in ("auto", "auto-detail"):
+                # Find the flushed Transaction row by matching in link_uuid_map or by query
+                tx = await self._find_created_tx_for_wac(item, link_uuid_map, orig_idx)
+                if tx:
+                    auto_items.append(("create", orig_idx, item, tx))
+
+        for orig_idx, item in parsed_updates:
+            if getattr(item, "cost_basis_mode", None) in ("auto", "auto-detail"):
+                tx = await self.session.get(Transaction, item.id)
+                if tx:
+                    auto_items.append(("update", orig_idx, item, tx))
+
+        if not auto_items:
+            return None
+
+        results: list[WACPreviewResultItem] = []
+
+        for operation, idx, schema_item, db_tx in auto_items:
+            # Determine source broker
+            link_uuid = getattr(schema_item, "link_uuid", None)
+            if link_uuid:
+                # TRANSFER: find partner via link_uuid_map → use partner's broker_id
+                source_broker_id = self._resolve_source_broker_from_link(link_uuid, db_tx.id, link_uuid_map)
+            else:
+                # ADJUSTMENT standalone: own broker, exclude self
+                source_broker_id = db_tx.broker_id
+
+            # Get asset currency
+            asset_result = await self.session.execute(select(Asset.currency).where(Asset.id == db_tx.asset_id))
+            asset_currency = asset_result.scalar_one_or_none() or "USD"
+
+            # Compute WAC (session sees all flushed rows)
+            excluded = [db_tx.id] if not link_uuid else []
+            wac_result = await compute_wac_iterative(
+                self.session,
+                broker_id=source_broker_id,
+                asset_id=db_tx.asset_id,
+                as_of_date=db_tx.date,
+                asset_currency=asset_currency,
+                excluded_tx_ids=excluded if excluded else None,
+            )
+
+            # Write cost_basis_override on the DB row
+            if wac_result.wac:
+                db_tx.cost_basis_override = wac_result.wac.amount
+                db_tx.cost_basis_currency = wac_result.wac.code
+
+            # Build response item (reuse WACPreviewResultItem with batch-context fields)
+            is_detail = getattr(schema_item, "cost_basis_mode", None) == "auto-detail"
+            results.append(
+                WACPreviewResultItem(
+                    operation=operation,
+                    index=idx,
+                    source_broker_id=source_broker_id,
+                    wac=wac_result.wac,
+                    wac_qualifying_txs=wac_result.wac_qualifying_txs if is_detail else [],
+                    wac_missing_pairs=wac_result.wac_missing_pairs,
+                    asset_price=wac_result.asset_price if is_detail else None,
+                    asset_price_stale=wac_result.asset_price_stale if is_detail else None,
+                    asset_price_missing=wac_result.asset_price_missing if is_detail else False,
+                )
+            )
+
+        return results if results else None
+
+    async def _find_created_tx_for_wac(
+        self,
+        item: TXCreateItem,
+        link_uuid_map: dict[str, list[tuple[int, Transaction]]],
+        orig_idx: int,
+    ) -> Transaction | None:
+        """Find the flushed Transaction DB row for a created item."""
+        if item.link_uuid and item.link_uuid in link_uuid_map:
+            # Find in link_uuid_map by matching orig_idx
+            for map_idx, tx in link_uuid_map[item.link_uuid]:
+                if map_idx == orig_idx:
+                    return tx
+        # Fallback: query by matching fields (last resort)
+        stmt = (
+            select(Transaction)
+            .where(
+                Transaction.broker_id == item.broker_id,
+                Transaction.asset_id == item.asset_id,
+                Transaction.date == item.date,
+                Transaction.type == item.type,
+            )
+            .order_by(Transaction.id.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().first()
+
+    def _resolve_source_broker_from_link(
+        self,
+        link_uuid: str,
+        self_id: int,
+        link_uuid_map: dict[str, list[tuple[int, Transaction]]],
+    ) -> int:
+        """For a TRANSFER with link_uuid, find the partner's broker_id (source)."""
+        if link_uuid in link_uuid_map:
+            pairs = link_uuid_map[link_uuid]
+            for _, tx in pairs:
+                if tx.id != self_id:
+                    return tx.broker_id
+        # Fallback: if partner not found in map, use own broker
+        # This shouldn't happen in a valid batch but is safe.
+        for _, tx in link_uuid_map.get(link_uuid, []):
+            if tx.id == self_id:
+                return tx.broker_id
+        return 0  # Should never reach here

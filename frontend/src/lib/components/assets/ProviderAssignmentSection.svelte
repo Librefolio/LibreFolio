@@ -579,7 +579,13 @@
                             {#if field.required}<span class="text-red-500">*</span>{/if}
                         </label>
                         {#if field.type === 'select' && field.options}
-                            <SimpleSelect value={paramsValues[field.key] ?? field.default ?? ''} options={formattedFieldOptions[field.key] ?? field.options.map((o: string) => ({value: o, label: o}))} disabled={disabled || readonly} dropdownPosition="auto" onchange={(v) => handleParamChange(field.key, v)} />
+                            <SimpleSelect
+                                value={paramsValues[field.key] ?? field.default ?? ''}
+                                options={formattedFieldOptions[field.key] ?? field.options.map((o: string) => ({value: o, label: o}))}
+                                disabled={disabled || readonly}
+                                dropdownPosition="auto"
+                                onchange={(v) => handleParamChange(field.key, v)}
+                            />
                         {:else if field.type === 'currency'}
                             <CurrencySearchSelect value={paramsValues[field.key] ?? field.default ?? ''} disabled={disabled || readonly} dropdownPosition="auto" placeholder={field.placeholder ?? ''} onchange={(v) => handleParamChange(field.key, v)} />
                         {:else if field.type === 'number'}
@@ -646,7 +652,13 @@
             {#if testResults.length > 0 || testStatus === 'testing'}
                 <div class="flex flex-col gap-1.5 pl-3 border-l-2 {testStatus === 'passed' ? (testResults.some((r) => r.status === 'warning') ? 'border-amber-400' : 'border-green-400') : testStatus === 'failed' ? 'border-red-400' : 'border-gray-300 dark:border-slate-600'}">
                     {#each testResults as result}
-                        <Tooltip html={(() => { void $currencyStoreVersion; return buildTooltipHtml(result); })()} position="top">
+                        <Tooltip
+                            html={(() => {
+                                void $currencyStoreVersion;
+                                return buildTooltipHtml(result);
+                            })()}
+                            position="top"
+                        >
                             <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
                                 {#if result.status === 'warning'}
                                     <AlertTriangle size={14} class="text-amber-500 shrink-0 self-center" />
