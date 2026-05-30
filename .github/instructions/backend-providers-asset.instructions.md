@@ -34,6 +34,7 @@ All provider calls go through `_run_provider_in_thread()` in `asset_source.py` �
 |----------|------|-----------|-------------------|--------|
 | **yfinance** | `yahoo_finance.py` | Ticker (AAPL) | None | ✅ |
 | **justetf** | `justetf.py` | ISIN (IE00B4L5Y983) | None | ✅ |
+| **borsa_italiana** | `borsa_italiana.py` | ISIN (IT0003128367) | None | ✅ |
 | **cssscraper** | `css_scraper.py` | Web page URL | `{current_css_selector, currency, decimal_format?}` | ❌ |
 | **scheduled_investment** | `scheduled_investment.py` | asset_id | `FAScheduledInvestmentSchedule` | ❌ |
 | **mockprov** | `mockprov.py` | any | None | ✅ (testing only, hidden from UI) |
