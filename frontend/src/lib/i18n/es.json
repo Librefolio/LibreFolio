@@ -442,7 +442,7 @@
       "providerValue": "Valor del proveedor",
       "selectAll": "Seleccionar todo",
       "deselectAll": "Deseleccionar todo",
-      "applySelected": "Aplicar seleccionados ({n}/{total})",
+      "applySelected": "Aplicar seleccionados ({count}/{total})",
       "allMatch": "Todos los datos coinciden con el proveedor",
       "noDistributionData": "El proveedor no tiene datos para: {fields}"
     },

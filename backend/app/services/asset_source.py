@@ -4072,6 +4072,7 @@ class AssetSearchService:
                         currency=item.get("currency"),
                         asset_type=raw_asset_type,
                         provider_url=item_provider_url,
+                        provider_params=item.get("provider_params"),
                     )
                 )
 
@@ -4191,6 +4192,7 @@ class AssetSearchService:
                         "currency": item.get("currency"),
                         "asset_type": raw_asset_type,
                         "provider_url": item_provider_url,
+                        "provider_params": item.get("provider_params"),
                     }
                 )
 

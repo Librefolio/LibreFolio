@@ -67,6 +67,7 @@ graph TD
 | `test_search_query` | `@property → str \| None` | Search query for automated tests. `None` if search not supported. |
 | `get_current_value(identifier, type, params)` | `async → FACurrentValue` | Fetch latest price. Returns `value`, `currency`, `as_of_date`, `source`. |
 | `get_history_value(identifier, type, params, start, end)` | `async → FAHistoricalData` | Fetch historical OHLCV data for date range. Return raw data only — no gap filling. |
+| `validate_params(params)` | `→ None` | Validate provider-specific `provider_params`. Raise `AssetSourceError` if invalid. Use `pass` if no params needed. |
 
 ### 💪 Strongly Recommended (Override)
 
@@ -77,7 +78,6 @@ graph TD
 | Method | Default | Description |
 |--------|---------|-------------|
 | `search(query)` | Raises `NOT_SUPPORTED` | Search for assets by name, ticker, or ISIN. Returns `[{identifier, identifier_type, display_name, currency, type}]`. |
-| `test_search_query` | — | Query string for automated search tests (e.g., `"Apple"`). Return `None` if search not supported. |
 
 ### 🔧 Optional (Override)
 
@@ -85,12 +85,12 @@ graph TD
 |--------|---------|-------------|
 | `get_icon` | `None` | Provider icon URL for the UI |
 | `supports_history` | `True` | Set `False` for providers that only support current prices (e.g., web scrapers) |
-| `validate_params(params)` | — | Validate provider-specific configuration (raise on invalid) |
 | `params_schema` | `[]` | List of field definitions for `provider_params`. Used by frontend to generate dynamic forms. |
 | `get_asset_url(identifier, type, params)` | `None` | Generate URL to the provider's page for this asset (e.g., Yahoo Finance quote page) |
 | `accepted_identifier_types` | `[TICKER, ISIN]` | Input types accepted by this provider (shown in frontend dropdown) |
 | `fetch_asset_metadata(identifier, type, params)` | `None` | Fetch asset metadata (type, sector, identifiers) from the provider |
 | `provider_help_url` | `None` | URL to the provider's documentation page (served by the running instance) |
+| `shutdown()` | no-op | Called at app teardown to clean up resources (close sessions, stop threads). Override if your provider holds persistent connections. |
 | `generate_static_url(path)` | — | Helper to build `/api/v1/uploads/plugin/asset/{path}` |
 
 ---
@@ -115,6 +115,7 @@ The `search(query)` method allows users to **discover assets** by name, ticker, 
 | **JustETF** | ✅ | `"iShares Core S&P 500"` | ✅ | ISIN-based search across cached ETF list |
 | **CSS Scraper** | ❌ | `None` | ✅ | No search — URL must be provided manually |
 | **Scheduled Investment** | ❌ | `None` | — | Synthetic provider, no external search |
+| **Borsa Italiana** | ✅ | `"ENEL"` | ✅ | Full search on borsaitaliana.it (stocks, bonds, ETFs) |
 
 !!! info "`supports_search` detection"
 
@@ -184,7 +185,9 @@ This runs selectable operations (`current_price`, `history`, `metadata`) without
 
 from datetime import date
 from decimal import Decimal
-from backend.app.services.asset_source import AssetSourceProvider, IdentifierType
+from backend.app.db import IdentifierType
+from backend.app.db.models import ProviderInputType
+from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAPricePoint
 
@@ -243,6 +246,10 @@ class MyProvider(AssetSourceProvider):
             for d, p in raw_data
         ]
         return FAHistoricalData(prices=prices, currency="USD", source=self.provider_name)
+
+    def validate_params(self, params: dict | None) -> None:
+        # No params required — accept anything
+        pass
 ```
 
 ---

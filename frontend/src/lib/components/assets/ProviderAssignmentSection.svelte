@@ -33,6 +33,7 @@
         required: boolean;
         description: string;
         options?: string[];
+        option_labels?: Record<string, string>;
         default?: any;
         placeholder?: string;
         help_url?: string;
@@ -116,8 +117,14 @@
         const map: Record<string, SelectOption[]> = {};
         for (const field of genericFields) {
             if (field.type !== 'select' || !field.options) continue;
+            const optLabels = field.option_labels as Record<string, string> | undefined;
             const isCurrencyField = field.key?.toLowerCase().includes('currency') && field.options.every((o: string) => /^[A-Z]{3}$/.test(o));
             map[field.key] = field.options.map((o: string) => {
+                // 1. Provider-defined labels (e.g. option_labels: {en: "🇬🇧 English"})
+                if (optLabels?.[o]) {
+                    return {value: o, label: optLabels[o]};
+                }
+                // 2. Currency enrichment (flag + symbol)
                 if (isCurrencyField) {
                     const info = getCurrencyInfo(o);
                     const flag = info.flag_emoji && info.flag_emoji !== '🏳️' ? info.flag_emoji : '';

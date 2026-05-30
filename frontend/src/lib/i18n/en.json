@@ -442,7 +442,7 @@
       "providerValue": "Provider Value",
       "selectAll": "Select All",
       "deselectAll": "Deselect All",
-      "applySelected": "Apply Selected ({n}/{total})",
+      "applySelected": "Apply Selected ({count}/{total})",
       "allMatch": "All data matches provider",
       "noDistributionData": "Provider has no data for: {fields}"
     },

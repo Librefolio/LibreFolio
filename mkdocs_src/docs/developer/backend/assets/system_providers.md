@@ -8,6 +8,7 @@ This section provides the technical deep-dive for each asset pricing provider in
 |:---|:---|:---|:---:|:---:|:---|:---|
 | [**Yahoo Finance**](provider_yahoo_finance.md) | `yfinance` | History, Search, Metadata | ✅ | — | TICKER, ISIN | Beta |
 | [**JustETF**](provider_justetf.md) | `justetf` | History, Search, Metadata | ✅ | — | ISIN | Beta |
+| [**Borsa Italiana**](provider_borsa_italiana.md) | `borsa_italiana` | History, Search, Metadata | ✅ | — | ISIN | Beta |
 | [**CSS Scraper**](provider_cssscraper.md) | `cssscraper` | Current Value | ✅ | ✅ | URL | Beta |
 | [**Scheduled Investment**](provider_scheduled_investment.md) | `scheduled_investment` | History (Calc), Events | — | ✅ | AUTO_GENERATED | Beta |
 | **Mock Provider** | `mockprov` | History, Search | — | — | TICKER, ISIN | Alpha |
@@ -52,6 +53,18 @@ Specialized ETF provider — fetches data from [justetf.com](https://www.justetf
 - **Key details**: Cached ETF list for instant search, Gettex WebSocket for real-time quotes, geographic/sector distributions, pre-warm at startup
 - 📖 [Technical Details →](provider_justetf.md)
 - 📖 [User Guide →](../../../user/assets/providers/justetf.md)
+
+---
+
+## 🇮🇹 [Borsa Italiana (`borsa_italiana`)](provider_borsa_italiana.md)
+
+Italian market data provider — fetches stocks, bonds (BTP), and ETFs listed on Borsa Italiana using the [`borsa-italiana-scraping`](https://github.com/Librefolio/borsaItaliana-scraping) library.
+
+- **Features**: History, Search, Metadata, Current Value
+- **Identifier types**: `ISIN`
+- **Provider params**: Optional `language` (`"en"` / `"it"`) — controls names, metadata, and search results language
+- **Key details**: Full OHLCV history, dual-language search with flag emojis, instrument page scraping for metadata, geographic/sector inference, shared HTTP session with WAF/JWT handling
+- 📖 [Technical Details →](provider_borsa_italiana.md)
 
 ---
 
