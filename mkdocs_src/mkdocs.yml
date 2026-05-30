@@ -530,6 +530,7 @@ nav:
                   - justETF Tech: developer/backend/assets/provider_justetf.md
                   - CSS Scraper Tech: developer/backend/assets/provider_cssscraper.md
                   - Scheduled Investment Tech: developer/backend/assets/provider_scheduled_investment.md
+                  - Borsa Italiana Tech: developer/backend/assets/provider_borsa_italiana.md
               - Events: developer/backend/assets/events.md
           - FX (Currency):
               - Architecture: developer/backend/fx/architecture.md

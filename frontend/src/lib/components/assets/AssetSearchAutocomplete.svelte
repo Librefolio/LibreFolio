@@ -29,6 +29,7 @@
         currency?: string | null;
         asset_type?: string | null;
         provider_url?: string | null;
+        provider_params?: Record<string, any> | null;
     }
 
     interface ProviderInfo {
@@ -171,6 +172,7 @@
                                 currency: r.currency,
                                 asset_type: r.asset_type,
                                 provider_url: r.provider_url,
+                                provider_params: r.provider_params,
                             }));
                             results = [...results, ...newItems];
                         } else if (event.event === 'provider_error') {

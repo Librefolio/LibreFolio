@@ -85,6 +85,7 @@ class FAProviderParamField(BaseModel):
     required: bool = Field(..., description="Whether this field is required")
     description: str = Field("", description="Human-readable description")
     options: Optional[List[str]] = Field(None, description="Options for 'select' type")
+    option_labels: Optional[dict[str, str]] = Field(None, description="Display labels for select options (value → label)")
     default: Optional[Any] = Field(None, description="Default value")
     placeholder: Optional[str] = Field(None, description="Placeholder text for the input field")
     help_url: Optional[str] = Field(None, description="URL to documentation or help page for this field")
@@ -409,6 +410,7 @@ class FAProviderSearchResultItem(BaseModel):
     currency: Optional[str] = Field(None, description="Asset currency if known")
     asset_type: Optional[str] = Field(None, description="Asset type (ETF, stock, bond, etc.)")
     provider_url: Optional[str] = Field(None, description="URL to asset page on provider site")
+    provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific params to carry over (e.g. language)")
 
 
 class FAProviderSearchResponse(BaseModel):

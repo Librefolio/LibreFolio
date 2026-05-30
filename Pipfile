@@ -42,6 +42,7 @@ argcomplete = "*"
 pillow = "*"
 PyJWT = "*"
 mkdocs-static-i18n = "*"
+"borsa-italiana-scraping " = {git = "https://github.com/Librefolio/borsaItaliana-scraping.git"}
 
 [dev-packages]
 pytest = "*"

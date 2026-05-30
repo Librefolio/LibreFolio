@@ -518,8 +518,14 @@
         providerIdentifierType = result.identifier_type;
         providerUrl = result.provider_url ?? null;
         providerNoProvider = false;
-        // Pre-fill provider_params with currency from search result (for multi-currency providers)
-        providerParams = result.currency ? {currency: result.currency} : null;
+        // Carry over provider_params from search result (e.g. language, currency).
+        // Provider-supplied params take priority; currency is added as fallback
+        // only when the provider didn't already include it.
+        const searchParams: Record<string, any> = {...(result.provider_params ?? {})};
+        if (result.currency && !('currency' in searchParams)) {
+            searchParams.currency = result.currency;
+        }
+        providerParams = Object.keys(searchParams).length > 0 ? searchParams : null;
 
         // Expand sections
         moreInfoExpanded = true;
