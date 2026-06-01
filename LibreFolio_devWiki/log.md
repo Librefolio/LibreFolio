@@ -4,7 +4,91 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
-## [2026-05-31] ingest | Phase 07 Part 4 Round 6 — Plan B23 (registry backfill) + Plan D chain (7 files: split/promote full stack)
+## [2026-06-02] ingest | Batch 2 — SP-C Bugfix Chain (11 plans: BulkModal + WAC Preview)
+
+Ingested 11 completed plans from SP-C sub-plan (Frontend BulkModal + Suggest UX + WAC bugfixes) @ anchor `84f8bd07`.
+
+**Created** (1 source page):
+- [[sources/r2-sp-c-bugfix-chain]] — Combined source covering all 11 plans in the SP-C bugfix dependency chain
+
+**Created** (2 problem pages):
+- [[problems/wac-feedback-loop]] — WAC recalc → field update → infinite loop (resolved via cost_basis_mode)
+- [[problems/clone-link-uuid-duplication]] — Clone paired rows from DB didn't generate link_uuid (resolved via type-rule check)
+
+**Created** (2 concept pages):
+- [[concepts/paired-partner-architecture]] — pairedWith, getPartnerOp, visibleOps, resolveFormItems pattern
+- [[concepts/stateless-preview-pattern]] — Controlled components for computed values (WacPreviewSection)
+
+**Created** (1 decision page):
+- [[decisions/wac-inline-validate-commit]] — WAC computed in validate/commit, standalone endpoint eliminated from editing flow
+
+**Updated**:
+- [[features/F-097]] — Added bugfix chain status history, dead ends, implementation notes (feedback loop, stateless preview, link_uuid)
+- [[features/F-048]] — Added SP-C bugfix chain references and related problems/concepts
+- `raw/ingest-registry.md` — 11 entries added
+- `index.md` — 1 source, 2 problems, 2 concepts, 1 decision added
+
+Key patterns extracted:
+1. **Feedback loop prevention**: Separate "what to compute" (mode) from "computed result" (value) — never let output be input trigger
+2. **Paired partner architecture**: `pairedWith` for UI, `link_uuid` for backend — two separate linkage mechanisms
+3. **Stateless preview**: Components displaying computed data should be controlled (no internal state)
+4. **Fingerprint invalidation**: Hash material fields only — prevents unnecessary recalculation
+5. **link_uuid promotion**: Decision based on target type needs, not source op type
+6. **Post-flush WAC**: Compute on actual DB state in same transaction — eliminates adapter layer
+
+## [2026-06-02] ingest | Batch 3 — Parallel Features (PWA, Port 60/40, Borsa Italiana, FX Fix)
+
+Ingested 4 parallel-terminal features/fixes (no formal plan chains) @ anchor `84f8bd07`.
+
+**Created** (1 source page):
+- [[sources/r2-parallel-features-pwa-borsa-fx]] — Combined source covering PWA support (4 commits), Port 60/40 migration, Borsa Italiana provider, FX provider removal fix
+
+**Created** (2 feature pages):
+- [[features/F-098]] — NEW: Progressive Web App (PWA) — offline fallback, install button, iOS safe-area, theme-color sync
+- [[features/F-099]] — NEW: Borsa Italiana Asset Provider — stocks, bonds, ETFs from borsaitaliana.it
+
+**Created** (1 decision page):
+- [[decisions/port-6040-scheme]] — All ports migrated from 8000/8001/8002 to 6040/6041/6042 ("60/40 rule" mnemonic)
+
+**Updated**:
+- [[features/registry]] — F-098 + F-099 added (Infrastructure / Assets domains)
+- `raw/ingest-registry.md` — 5 entries added (PWA commits + plan, port commit, Borsa commit, FX fix commit)
+- `index.md` — 2 feature pages, 1 source page, 1 decision added
+
+Key observations:
+1. **Provider pattern maturity**: Borsa Italiana is the 5th provider following `@register_provider` pattern — pattern now proven robust
+2. **PWA = no-cache strategy**: financial apps prioritize data freshness over offline access — intentional design choice
+3. **FX sentinel edge cases**: MANUAL auto-reinstate logic now handles all deletion scenarios including bulk-remove-all
+
+## [2026-06-01] ingest | R2 Walktest Feedback Round — Batch 1 (WAC feature, 4 plans)
+
+Ingested 4 source files from `PlanD_SplitPromoteFullStack/` R2 WAC sub-plans @ anchor `84f8bd07`.
+
+**Created** (4 source pages):
+- [[sources/r2-walktest-feedback-master]] — Master plan: 18 steps, 5 sub-plans (SP-A✅ SP-B✅ SP-C✅ SP-D⏳ SP-E🔲); cost_basis→Currency, WAC with FX, AssetEvent picker, store-first
+- [[sources/r2-sp-a-cost-basis-wac]] — Backend: cost_basis_override→Currency, WACResult/WACConversionInfo schemas, compute_weighted_avg_cost with FX, recalc-wac endpoint (commit `92f4b1ba`)
+- [[sources/r2-sp-b-backend-tests]] — Tests: 13 WAC API tests (WAC-1→WAC-13) + helpers; self-contained per-test isolation (commit `473d2611`)
+- [[sources/r2-sp-c-bulkmodal-suggest-ux]] — Frontend: toolbar alignment, split preview fix, suggest overhaul (subtractive filter, human-readable, lightbulb), PromoteMergeModal simplified, ActionModal enhanced
+
+**Created** (1 feature page):
+- [[features/F-097]] — NEW: WAC — Weighted Average Cost (cross-currency, auto-calc on TRANSFER)
+
+**Created** (1 decision page):
+- [[decisions/cost-basis-currency-object]] — cost_basis_override from SafeDecimal to Currency {code, amount}; breaking change, no backward compat
+
+**Updated**:
+- [[features/F-048]] — 3 new status history entries (R2 SP-A/B/C), deferred items updated
+- [[features/registry]] — F-097 added (fullstack, in-progress)
+- `raw/ingest-registry.md` — 4 entries added
+- `index.md` — F-097 in feature list, decision + 4 source pages added
+
+Key architectural insights:
+1. **Currency object over bare decimal**: unambiguous currency association enables multi-currency WAC
+2. **Fail-safe WAC**: even one failed FX conversion → wac=None, never silently wrong
+3. **Transient wac_info**: computed at commit time, not persisted — changes when FX rates update
+4. **Target currency heuristic**: majority among TX → asset currency on tie → alphabetical
+
+## [2026-05-31] ingest | Phase 07 Part 4 Round 6 — Plan D chain (7 files: split/promote full stack)
 
 Ingested 8 source files: PlanB23 (registry backfill only, source page already existed), PlanD master @ `b0e223c0`, PlanD1 @ `666059b5`, PlanD2 @ `db7264ce`, D2-bugfix1 @ `fdf00d4b`, D2-bugfix2 @ `eb9b8ae2`, D2-bugfix3 @ `78f44497`, D2-bugfix4 @ `ce7344a1`.
 

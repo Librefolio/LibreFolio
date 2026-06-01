@@ -1,88 +1,8 @@
 {
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD2_round2_WalktestFeedbackRound.prompt.md": {
-    "mtime": 1779357383.1385133,
-    "ast_hash": "d61b56fbb8fda3970472f5479aa70281",
-    "semantic_hash": "d61b56fbb8fda3970472f5479aa70281"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_2_PayloadSplitPreviewUX.prompt.md": {
-    "mtime": 1779357383.1372633,
-    "ast_hash": "89d922b32f5516a715e6e27e7e02e346",
-    "semantic_hash": "89d922b32f5516a715e6e27e7e02e346"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-A-CostBasisWAC.prompt.md": {
-    "mtime": 1779357383.1388838,
-    "ast_hash": "2e44fe2a493a10cc6f0622aaac905696",
-    "semantic_hash": "2e44fe2a493a10cc6f0622aaac905696"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md": {
-    "mtime": 1779357383.130949,
-    "ast_hash": "df401332dbe3711c31496d9d5957fb2e",
-    "semantic_hash": "df401332dbe3711c31496d9d5957fb2e"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md": {
-    "mtime": 1779357383.144928,
-    "ast_hash": "a61d6f8f8a87a42bca9d51e8c453a22a",
-    "semantic_hash": "a61d6f8f8a87a42bca9d51e8c453a22a"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BulkModalSuggestUX.prompt.md": {
-    "mtime": 1779357383.1435978,
-    "ast_hash": "7a05bf1664c6d907cce95f2d520e2e67",
-    "semantic_hash": "7a05bf1664c6d907cce95f2d520e2e67"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-B-BackendTests.prompt.md": {
-    "mtime": 1779357383.1396196,
-    "ast_hash": "5a24b54bf7b4297870af3ae0a404222d",
-    "semantic_hash": "5a24b54bf7b4297870af3ae0a404222d"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound1.prompt.md": {
-    "mtime": 1779357383.1398935,
-    "ast_hash": "a8a9039611c19bad0ca78d96b7b9a6fa",
-    "semantic_hash": "a8a9039611c19bad0ca78d96b7b9a6fa"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_3_UXModalPayloadSuggestE2E.prompt.md": {
-    "mtime": 1779357383.1379068,
-    "ast_hash": "acc79995630de6e590441910a89aa88f",
-    "semantic_hash": "acc79995630de6e590441910a89aa88f"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacPreview.prompt.md": {
-    "mtime": 1779370367.627253,
-    "ast_hash": "3e104922f716de5b0ea1244c0c02bdf8",
-    "semantic_hash": "3e104922f716de5b0ea1244c0c02bdf8"
-  },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase05-to-08-upgrade.md": {
     "mtime": 1776003950.3834803,
     "ast_hash": "3862763e43f1f4b11caac1645ad03f7d",
     "semantic_hash": "3862763e43f1f4b11caac1645ad03f7d"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-BugfixRound2-WacBackendCleanup.prompt.md": {
-    "mtime": 1779357383.1405027,
-    "ast_hash": "0628a8ccb2f4b2017553cf142b7664c0",
-    "semantic_hash": "0628a8ccb2f4b2017553cf142b7664c0"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_1_CentralizePayloadCommit.prompt.md": {
-    "mtime": 1779357383.1306305,
-    "ast_hash": "2ed8a61cd6e938f0f54a1b7679c077a7",
-    "semantic_hash": "2ed8a61cd6e938f0f54a1b7679c077a7"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD2_round2_plan-R2-SP-C-FxImpliedRateSpread.prompt.md": {
-    "mtime": 1779357383.1445727,
-    "ast_hash": "17f84d2886efdf4ffdec81936fcb933d",
-    "semantic_hash": "17f84d2886efdf4ffdec81936fcb933d"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_1_SplitPromotePolish.prompt.md": {
-    "mtime": 1779357383.136981,
-    "ast_hash": "42f908c91b61590e3d36d5ffe27ea469",
-    "semantic_hash": "42f908c91b61590e3d36d5ffe27ea469"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD2_FrontendSplitPromoteUI.prompt.md": {
-    "mtime": 1779357383.1312828,
-    "ast_hash": "14c831000894e97d1eeb6fad9ce8b8f2",
-    "semantic_hash": "14c831000894e97d1eeb6fad9ce8b8f2"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_4_SplitSuggestPmcOverrideUx.prompt.md": {
-    "mtime": 1779357383.1382232,
-    "ast_hash": "fec346da5aad01947eddead88a4219c1",
-    "semantic_hash": "fec346da5aad01947eddead88a4219c1"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/roadmap/phases/phase-03-layout-settings.md": {
     "mtime": 1768326310.7263355,
@@ -2175,9 +2095,9 @@
     "semantic_hash": "66dfac4fd9c1e3819e8dad267246027f"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/admin/docker_advanced.en.md": {
-    "mtime": 1779357383.2100055,
-    "ast_hash": "6407079730f7830c42316646a49cf06e",
-    "semantic_hash": "6407079730f7830c42316646a49cf06e"
+    "mtime": 1779913646.1653526,
+    "ast_hash": "c021f3dc825648b5a8036dfa21eb5c96",
+    "semantic_hash": "c021f3dc825648b5a8036dfa21eb5c96"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/admin/settings.en.md": {
     "mtime": 1774260728.2115571,
@@ -2200,9 +2120,9 @@
     "semantic_hash": "5d2d5ff1db6b53596e867af85b37b637"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/admin/filesystem.en.md": {
-    "mtime": 1774260728.2079258,
-    "ast_hash": "2645b3fe8dc598c8540e93ae1ace0914",
-    "semantic_hash": "2645b3fe8dc598c8540e93ae1ace0914"
+    "mtime": 1779913645.7592819,
+    "ast_hash": "6eddce9d54236106c35e233b8c8f5668",
+    "semantic_hash": "6eddce9d54236106c35e233b8c8f5668"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/financial-theory/index.en.md": {
     "mtime": 1776003950.4883697,
@@ -2415,9 +2335,9 @@
     "semantic_hash": "fb919ca32ee09cd778df84231ec2ba20"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/financial-theory/portfolio-theory/weighted-average-cost.en.md": {
-    "mtime": 1779367251.3363812,
-    "ast_hash": "b57c8f8eb39305092d050bf8ed88d157",
-    "semantic_hash": "b57c8f8eb39305092d050bf8ed88d157"
+    "mtime": 1779961664.4972088,
+    "ast_hash": "2150975b44b095a3e8355e752037edcb",
+    "semantic_hash": "2150975b44b095a3e8355e752037edcb"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/financial-theory/portfolio-theory/asset-allocation.en.md": {
     "mtime": 1776003950.514519,
@@ -2460,14 +2380,14 @@
     "semantic_hash": "9c9a05a391a508882d61f2dedfdddd94"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/user/getting-started.en.md": {
-    "mtime": 1774260728.3711963,
-    "ast_hash": "3f8a4ca801fc529d2d556af0484abba3",
-    "semantic_hash": "3f8a4ca801fc529d2d556af0484abba3"
+    "mtime": 1779913646.9455974,
+    "ast_hash": "a851ceae636f5f6431ea66242f35889f",
+    "semantic_hash": "a851ceae636f5f6431ea66242f35889f"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/user/installation.en.md": {
-    "mtime": 1776003950.5753043,
-    "ast_hash": "b977e324dcd418985fcf01894dd26389",
-    "semantic_hash": "b977e324dcd418985fcf01894dd26389"
+    "mtime": 1779913646.5584455,
+    "ast_hash": "872246487b9dabfc56b38880105c0ce6",
+    "semantic_hash": "872246487b9dabfc56b38880105c0ce6"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/user/index.en.md": {
     "mtime": 1774260728.3743234,
@@ -2560,9 +2480,9 @@
     "semantic_hash": "42daddd7b5a6d5c9d466384044a91dbb"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/user/assets/providers/index.en.md": {
-    "mtime": 1776003950.5593727,
-    "ast_hash": "cf0a68108b290f85d7ff7196bceeffc4",
-    "semantic_hash": "cf0a68108b290f85d7ff7196bceeffc4"
+    "mtime": 1779790496.0284944,
+    "ast_hash": "f43378ac9b7577272ced45044dc0e5c7",
+    "semantic_hash": "f43378ac9b7577272ced45044dc0e5c7"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/user/assets/providers/yahoo-finance.en.md": {
     "mtime": 1776003950.5615323,
@@ -2575,9 +2495,9 @@
     "semantic_hash": "fe385699bcaf56b9a8d6fd124fcaf2ce"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/user/assets/providers/justetf.en.md": {
-    "mtime": 1776003950.5600045,
-    "ast_hash": "3237becefc9c1743f3d5255384f17b76",
-    "semantic_hash": "3237becefc9c1743f3d5255384f17b76"
+    "mtime": 1779790489.4233406,
+    "ast_hash": "c6242be68d69a41380ed0ec8492f6efb",
+    "semantic_hash": "c6242be68d69a41380ed0ec8492f6efb"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/user/assets/detail/events.en.md": {
     "mtime": 1776003950.5538614,
@@ -2615,9 +2535,9 @@
     "semantic_hash": "9c77c9de21c94675667e244c18f5c01e"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/community/faq.en.md": {
-    "mtime": 1776361038.7682607,
-    "ast_hash": "300c5b586fda24f32c6addc1c305e8b5",
-    "semantic_hash": "300c5b586fda24f32c6addc1c305e8b5"
+    "mtime": 1779872010.1511147,
+    "ast_hash": "1173680f8fc439202fef0038345d8719",
+    "semantic_hash": "1173680f8fc439202fef0038345d8719"
   },
   "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/community/contribute.en.md": {
     "mtime": 1776456279.4424896,
@@ -4378,5 +4298,1340 @@
     "mtime": 1768326310.7603228,
     "ast_hash": "b254d73eac3afd68f19419b251a1c42d",
     "semantic_hash": "b254d73eac3afd68f19419b251a1c42d"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/SCHEMA.md": {
+    "mtime": 1779616999.9282196,
+    "ast_hash": "ad3e6fe3daa357ee3ca6673c551d8d8a",
+    "semantic_hash": "ad3e6fe3daa357ee3ca6673c551d8d8a"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/code-reality-check.md": {
+    "mtime": 1779623711.4828641,
+    "ast_hash": "523fdb971f885332eba0802c9a3b97a1",
+    "semantic_hash": "523fdb971f885332eba0802c9a3b97a1"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/log.md": {
+    "mtime": 1780304992.820569,
+    "ast_hash": "68bfbe8c5e384ad2ace4e449f0047e1b",
+    "semantic_hash": "68bfbe8c5e384ad2ace4e449f0047e1b"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/index.md": {
+    "mtime": 1780305018.758447,
+    "ast_hash": "c11af52335e6094e362379d811f556d6",
+    "semantic_hash": "c11af52335e6094e362379d811f556d6"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/domains/assets.md": {
+    "mtime": 1777316019.470179,
+    "ast_hash": "74f8f527e74e44962a12e24f85cb7fe5",
+    "semantic_hash": "74f8f527e74e44962a12e24f85cb7fe5"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/domains/dashboard.md": {
+    "mtime": 1777316019.4708273,
+    "ast_hash": "8938149ac9ba6f472c24f0e8138ebe4a",
+    "semantic_hash": "8938149ac9ba6f472c24f0e8138ebe4a"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/domains/scheduler.md": {
+    "mtime": 1777316019.4715717,
+    "ast_hash": "49ff7a094117e324e6288a9e42200f37",
+    "semantic_hash": "49ff7a094117e324e6288a9e42200f37"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/domains/fx.md": {
+    "mtime": 1777316019.4710066,
+    "ast_hash": "f5f29d5088d81065a3c673ada3498727",
+    "semantic_hash": "f5f29d5088d81065a3c673ada3498727"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/domains/layout-settings.md": {
+    "mtime": 1777316019.4713929,
+    "ast_hash": "44be16c30246dc81688b94bff555a464",
+    "semantic_hash": "44be16c30246dc81688b94bff555a464"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/domains/brokers.md": {
+    "mtime": 1779357383.0567286,
+    "ast_hash": "e5f3a79f7e4df9dc44835a0de730b737",
+    "semantic_hash": "e5f3a79f7e4df9dc44835a0de730b737"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/domains/auth.md": {
+    "mtime": 1777316019.4702802,
+    "ast_hash": "b3b7f213cfd8573cacc84bf3fc2c7527",
+    "semantic_hash": "b3b7f213cfd8573cacc84bf3fc2c7527"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/domains/signals.md": {
+    "mtime": 1777316019.4717562,
+    "ast_hash": "1f2850ed4f5a1a14cd28193e2bfc2e01",
+    "semantic_hash": "1f2850ed4f5a1a14cd28193e2bfc2e01"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/domains/calculations.md": {
+    "mtime": 1777316019.4706466,
+    "ast_hash": "d62b84a1b59e1c5268f4f9ebb19ae80c",
+    "semantic_hash": "d62b84a1b59e1c5268f4f9ebb19ae80c"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/domains/transactions.md": {
+    "mtime": 1779357383.0569663,
+    "ast_hash": "593870eec53198c83f7af26904ba3042",
+    "semantic_hash": "593870eec53198c83f7af26904ba3042"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/domains/infrastructure.md": {
+    "mtime": 1777316019.471213,
+    "ast_hash": "47429ceef3cdd2200582fe77c54998fa",
+    "semantic_hash": "47429ceef3cdd2200582fe77c54998fa"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-098.md": {
+    "mtime": 1780304483.8702939,
+    "ast_hash": "0a7e0b915dc410cb4f656a81d06b82ff",
+    "semantic_hash": "0a7e0b915dc410cb4f656a81d06b82ff"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-088.md": {
+    "mtime": 1777316019.480882,
+    "ast_hash": "cf985a988961721cf1388a5e8e5831b5",
+    "semantic_hash": "cf985a988961721cf1388a5e8e5831b5"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-099.md": {
+    "mtime": 1780304483.8702786,
+    "ast_hash": "df08f6dbdaa12d7d74eb85e95a095a59",
+    "semantic_hash": "df08f6dbdaa12d7d74eb85e95a095a59"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-089.md": {
+    "mtime": 1777316019.4809735,
+    "ast_hash": "44304e144495a686a48099b9eb43c873",
+    "semantic_hash": "44304e144495a686a48099b9eb43c873"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-051.md": {
+    "mtime": 1777316019.477494,
+    "ast_hash": "126923a13b18f323b485b161f11e0be1",
+    "semantic_hash": "126923a13b18f323b485b161f11e0be1"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-096.md": {
+    "mtime": 1777316019.4816098,
+    "ast_hash": "883f57c1fc485067f312721a0a629da9",
+    "semantic_hash": "883f57c1fc485067f312721a0a629da9"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-065.md": {
+    "mtime": 1777316019.4787974,
+    "ast_hash": "71482de98a6b40169734d116649207e2",
+    "semantic_hash": "71482de98a6b40169734d116649207e2"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-034.md": {
+    "mtime": 1777316019.4758186,
+    "ast_hash": "926bce8e36e8d205954dd65bf24b3364",
+    "semantic_hash": "926bce8e36e8d205954dd65bf24b3364"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-024.md": {
+    "mtime": 1777316019.4748912,
+    "ast_hash": "5f45baca4249e900ca8fefdbafd25e3e",
+    "semantic_hash": "5f45baca4249e900ca8fefdbafd25e3e"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-075.md": {
+    "mtime": 1777316019.479731,
+    "ast_hash": "cdd012fc3c9395a4efa52b74de7defcc",
+    "semantic_hash": "cdd012fc3c9395a4efa52b74de7defcc"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-086.md": {
+    "mtime": 1777316019.4806974,
+    "ast_hash": "dde4cd95e8232764966adc57aa49ef23",
+    "semantic_hash": "dde4cd95e8232764966adc57aa49ef23"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-041.md": {
+    "mtime": 1777316019.4764688,
+    "ast_hash": "c68e3dd815fa33bda966700a0905f5c4",
+    "semantic_hash": "c68e3dd815fa33bda966700a0905f5c4"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-010.md": {
+    "mtime": 1777316019.4735126,
+    "ast_hash": "0123392e2ec3d826f288922a7366169a",
+    "semantic_hash": "0123392e2ec3d826f288922a7366169a"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-092.md": {
+    "mtime": 1777316019.4812472,
+    "ast_hash": "9727ef07063f7daa41ddfb341515bc01",
+    "semantic_hash": "9727ef07063f7daa41ddfb341515bc01"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-030.md": {
+    "mtime": 1777316019.475456,
+    "ast_hash": "84b31baf89291d72ad7780d8a7a7b691",
+    "semantic_hash": "84b31baf89291d72ad7780d8a7a7b691"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-061.md": {
+    "mtime": 1777316019.478435,
+    "ast_hash": "faa29adc56530996fe4d8ebb9ff1bccc",
+    "semantic_hash": "faa29adc56530996fe4d8ebb9ff1bccc"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-055.md": {
+    "mtime": 1777316019.477892,
+    "ast_hash": "97d06a5051754075077a195e6d111770",
+    "semantic_hash": "97d06a5051754075077a195e6d111770"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-004.md": {
+    "mtime": 1777316019.4729097,
+    "ast_hash": "fb5d31f73f79a88459b0351052adb76a",
+    "semantic_hash": "fb5d31f73f79a88459b0351052adb76a"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-014.md": {
+    "mtime": 1777316019.473967,
+    "ast_hash": "13c4c91f2b315bddc62ae80f626d8cfe",
+    "semantic_hash": "13c4c91f2b315bddc62ae80f626d8cfe"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-045.md": {
+    "mtime": 1777316019.4768267,
+    "ast_hash": "f1927afc01edcf7b09e9d5098138f080",
+    "semantic_hash": "f1927afc01edcf7b09e9d5098138f080"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-071.md": {
+    "mtime": 1777316019.4793646,
+    "ast_hash": "2fb2a38d5abebb74253c8f0b1434fce5",
+    "semantic_hash": "2fb2a38d5abebb74253c8f0b1434fce5"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-020.md": {
+    "mtime": 1777316019.4745212,
+    "ast_hash": "fbf0a0fed10d26a9b863064f6725daf6",
+    "semantic_hash": "fbf0a0fed10d26a9b863064f6725daf6"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-082.md": {
+    "mtime": 1777316019.4803536,
+    "ast_hash": "5554c205ab68c8016e58c5b33a3a4cca",
+    "semantic_hash": "5554c205ab68c8016e58c5b33a3a4cca"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-093.md": {
+    "mtime": 1777316019.4813437,
+    "ast_hash": "91ef90687de9be8ade7e424e4aaea3d8",
+    "semantic_hash": "91ef90687de9be8ade7e424e4aaea3d8"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-031.md": {
+    "mtime": 1777316019.4755442,
+    "ast_hash": "070e4cc07769d9df8d5d422413b940f4",
+    "semantic_hash": "070e4cc07769d9df8d5d422413b940f4"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-060.md": {
+    "mtime": 1777316019.4783463,
+    "ast_hash": "922edaba6c0f2c14f22d75b13d1549f7",
+    "semantic_hash": "922edaba6c0f2c14f22d75b13d1549f7"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-054.md": {
+    "mtime": 1777316019.4778004,
+    "ast_hash": "0a2bc3b7c7a578633cf7e33505f0ee4a",
+    "semantic_hash": "0a2bc3b7c7a578633cf7e33505f0ee4a"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-005.md": {
+    "mtime": 1777316019.4729939,
+    "ast_hash": "9745f6659fa9f542597a58a228b942c1",
+    "semantic_hash": "9745f6659fa9f542597a58a228b942c1"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-015.md": {
+    "mtime": 1777316019.4740646,
+    "ast_hash": "bb1fc6e37dccf4cd9fa853deb776cd1d",
+    "semantic_hash": "bb1fc6e37dccf4cd9fa853deb776cd1d"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-044.md": {
+    "mtime": 1777316019.4767337,
+    "ast_hash": "e814452e1252209463f31af2150fdff4",
+    "semantic_hash": "e814452e1252209463f31af2150fdff4"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-070.md": {
+    "mtime": 1777316019.4792721,
+    "ast_hash": "748c07493d85e7fdc5ffa72b4bdd64d8",
+    "semantic_hash": "748c07493d85e7fdc5ffa72b4bdd64d8"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-021.md": {
+    "mtime": 1777316019.4746144,
+    "ast_hash": "212204275583f8965eefe2b24b3e6927",
+    "semantic_hash": "212204275583f8965eefe2b24b3e6927"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-083.md": {
+    "mtime": 1777316019.4804418,
+    "ast_hash": "f07807b68c7df5fcb32183b0dc479d10",
+    "semantic_hash": "f07807b68c7df5fcb32183b0dc479d10"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-001.md": {
+    "mtime": 1777316019.4726276,
+    "ast_hash": "e5b78efdfd856256b9b1bc7638d3f28c",
+    "semantic_hash": "e5b78efdfd856256b9b1bc7638d3f28c"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-050.md": {
+    "mtime": 1777316019.477402,
+    "ast_hash": "5ac94ebf6ae77418685937af99ce9d3d",
+    "semantic_hash": "5ac94ebf6ae77418685937af99ce9d3d"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-097.md": {
+    "mtime": 1780304941.0596592,
+    "ast_hash": "39a7b205f963084b09a89d2b531b6d71",
+    "semantic_hash": "39a7b205f963084b09a89d2b531b6d71"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-064.md": {
+    "mtime": 1779913667.8336298,
+    "ast_hash": "d5305a6759eafe8ec51f9e571c04e6d2",
+    "semantic_hash": "d5305a6759eafe8ec51f9e571c04e6d2"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-035.md": {
+    "mtime": 1777316019.4759078,
+    "ast_hash": "37e1b383537fa2a9732ebbe7378aaa34",
+    "semantic_hash": "37e1b383537fa2a9732ebbe7378aaa34"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-025.md": {
+    "mtime": 1777316019.474983,
+    "ast_hash": "eefce5e530c6b635259e251e41316b04",
+    "semantic_hash": "eefce5e530c6b635259e251e41316b04"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-074.md": {
+    "mtime": 1777316019.4796472,
+    "ast_hash": "ee27ad7dda8484d9fc7ad8dda543b92d",
+    "semantic_hash": "ee27ad7dda8484d9fc7ad8dda543b92d"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-087.md": {
+    "mtime": 1777316019.4807954,
+    "ast_hash": "e484f06a29e82f6f25b6a6abf7c6c31b",
+    "semantic_hash": "e484f06a29e82f6f25b6a6abf7c6c31b"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-040.md": {
+    "mtime": 1777316019.4763691,
+    "ast_hash": "34b9fbb6cb6405252d340a7f7f0e8840",
+    "semantic_hash": "34b9fbb6cb6405252d340a7f7f0e8840"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-011.md": {
+    "mtime": 1777316019.4736054,
+    "ast_hash": "ea0e4fcc583dfa3acbfc44d628c6fa8e",
+    "semantic_hash": "ea0e4fcc583dfa3acbfc44d628c6fa8e"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-063.md": {
+    "mtime": 1777316019.4786117,
+    "ast_hash": "2f185fb507fcd05436c93c6a1c010689",
+    "semantic_hash": "2f185fb507fcd05436c93c6a1c010689"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-032.md": {
+    "mtime": 1777316019.475639,
+    "ast_hash": "2dd83b84c7c286eafd0873640d8fa114",
+    "semantic_hash": "2dd83b84c7c286eafd0873640d8fa114"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-090.md": {
+    "mtime": 1777316019.4810681,
+    "ast_hash": "8d4f2d1cc21224317f84bf2560a62d76",
+    "semantic_hash": "8d4f2d1cc21224317f84bf2560a62d76"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-006.md": {
+    "mtime": 1777316019.4731283,
+    "ast_hash": "a032497a98b8373280cfa8ee8549910b",
+    "semantic_hash": "a032497a98b8373280cfa8ee8549910b"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-057.md": {
+    "mtime": 1777316019.4780674,
+    "ast_hash": "6fae00bd37280e429c71965573d72da0",
+    "semantic_hash": "6fae00bd37280e429c71965573d72da0"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-047.md": {
+    "mtime": 1779357383.0580997,
+    "ast_hash": "2b53912d13eaba75037c8636448084cf",
+    "semantic_hash": "2b53912d13eaba75037c8636448084cf"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-016.md": {
+    "mtime": 1777316019.4741607,
+    "ast_hash": "2a0261815c45e997be27706be4cf1361",
+    "semantic_hash": "2a0261815c45e997be27706be4cf1361"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-080.md": {
+    "mtime": 1777316019.4801803,
+    "ast_hash": "51c51da6584ddbb6b238355271a40119",
+    "semantic_hash": "51c51da6584ddbb6b238355271a40119"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-022.md": {
+    "mtime": 1777316019.4747066,
+    "ast_hash": "9ba28c81366d463cdaf3301b85958039",
+    "semantic_hash": "9ba28c81366d463cdaf3301b85958039"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-073.md": {
+    "mtime": 1777316019.4795563,
+    "ast_hash": "62ef0ea0ec47b6a3ac983d7788b6f096",
+    "semantic_hash": "62ef0ea0ec47b6a3ac983d7788b6f096"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-053.md": {
+    "mtime": 1777316019.4777014,
+    "ast_hash": "fddc20ae50e9dece4a25dffeefdd6f8d",
+    "semantic_hash": "fddc20ae50e9dece4a25dffeefdd6f8d"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-002.md": {
+    "mtime": 1777316019.472727,
+    "ast_hash": "2549f796f77d744d0f27dd552d09df90",
+    "semantic_hash": "2549f796f77d744d0f27dd552d09df90"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-036.md": {
+    "mtime": 1777316019.475995,
+    "ast_hash": "32348076d3b3d40f44c9b69290f005e8",
+    "semantic_hash": "32348076d3b3d40f44c9b69290f005e8"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-067.md": {
+    "mtime": 1777316019.4789886,
+    "ast_hash": "37a55adeaa1a500b14679025a442e098",
+    "semantic_hash": "37a55adeaa1a500b14679025a442e098"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-094.md": {
+    "mtime": 1777316019.4814305,
+    "ast_hash": "afc556c426ebcad5ce1b703cc6e5db4b",
+    "semantic_hash": "afc556c426ebcad5ce1b703cc6e5db4b"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-084.md": {
+    "mtime": 1777316019.4805267,
+    "ast_hash": "c849436fa1815809288bcd66f81f6348",
+    "semantic_hash": "c849436fa1815809288bcd66f81f6348"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-077.md": {
+    "mtime": 1777316019.479907,
+    "ast_hash": "e11b1211d438daf6d2a54d430d021c55",
+    "semantic_hash": "e11b1211d438daf6d2a54d430d021c55"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-026.md": {
+    "mtime": 1777316019.4750817,
+    "ast_hash": "25ba11c61a96d95b7f46732415c0cc5b",
+    "semantic_hash": "25ba11c61a96d95b7f46732415c0cc5b"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-012.md": {
+    "mtime": 1777316019.4737797,
+    "ast_hash": "afe27b96f4e0c973db96d674abd862a9",
+    "semantic_hash": "afe27b96f4e0c973db96d674abd862a9"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-043.md": {
+    "mtime": 1777316019.4766448,
+    "ast_hash": "5a3b6675fd63f39636eea809fcc0ea65",
+    "semantic_hash": "5a3b6675fd63f39636eea809fcc0ea65"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-052.md": {
+    "mtime": 1777316019.4775982,
+    "ast_hash": "e3735cf14451fb29fc0e8867a59acb9c",
+    "semantic_hash": "e3735cf14451fb29fc0e8867a59acb9c"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-003.md": {
+    "mtime": 1777316019.4728217,
+    "ast_hash": "65244a90b9bb741bc369384486a51964",
+    "semantic_hash": "65244a90b9bb741bc369384486a51964"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-037.md": {
+    "mtime": 1777316019.4760935,
+    "ast_hash": "62a3531db561d6f902cc4c1a1e1ecaa4",
+    "semantic_hash": "62a3531db561d6f902cc4c1a1e1ecaa4"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-066.md": {
+    "mtime": 1777316019.478889,
+    "ast_hash": "30076cce7a9b2f175ea848d34951d523",
+    "semantic_hash": "30076cce7a9b2f175ea848d34951d523"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-095.md": {
+    "mtime": 1777316019.4815197,
+    "ast_hash": "efb9d628d52c59d70e3263319c9b5e4c",
+    "semantic_hash": "efb9d628d52c59d70e3263319c9b5e4c"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-085.md": {
+    "mtime": 1777316019.4806113,
+    "ast_hash": "84c07aa3b95b25df4c939b1af0bde932",
+    "semantic_hash": "84c07aa3b95b25df4c939b1af0bde932"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-076.md": {
+    "mtime": 1777316019.4798176,
+    "ast_hash": "4c5428d83044eb5b4f42d6d6aa777790",
+    "semantic_hash": "4c5428d83044eb5b4f42d6d6aa777790"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-027.md": {
+    "mtime": 1777316019.4751792,
+    "ast_hash": "c7d2a7e0946fbff0306e4460d80ad716",
+    "semantic_hash": "c7d2a7e0946fbff0306e4460d80ad716"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-013.md": {
+    "mtime": 1777316019.473871,
+    "ast_hash": "45a0ee92ff422c9ea50c7325941c82a2",
+    "semantic_hash": "45a0ee92ff422c9ea50c7325941c82a2"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-042.md": {
+    "mtime": 1777316019.4765577,
+    "ast_hash": "e152535c3563737cdb8d512af20618a9",
+    "semantic_hash": "e152535c3563737cdb8d512af20618a9"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-062.md": {
+    "mtime": 1779913701.7042177,
+    "ast_hash": "b55976380e2a3abc03f52d35973c67be",
+    "semantic_hash": "b55976380e2a3abc03f52d35973c67be"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-033.md": {
+    "mtime": 1777316019.4757264,
+    "ast_hash": "f68c0ddb037739b9c017743dd16a427d",
+    "semantic_hash": "f68c0ddb037739b9c017743dd16a427d"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-091.md": {
+    "mtime": 1777316019.4811537,
+    "ast_hash": "895c83a65e713d3880dee8b9e5a4ebc7",
+    "semantic_hash": "895c83a65e713d3880dee8b9e5a4ebc7"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-007.md": {
+    "mtime": 1777316019.4732177,
+    "ast_hash": "48449f5d5825198222d3c8879364fec3",
+    "semantic_hash": "48449f5d5825198222d3c8879364fec3"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-056.md": {
+    "mtime": 1777316019.4779773,
+    "ast_hash": "9dc1649650b8e632ceb37f455526a200",
+    "semantic_hash": "9dc1649650b8e632ceb37f455526a200"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-046.md": {
+    "mtime": 1779357383.0573945,
+    "ast_hash": "10bba1504cbc2d5eede606b8813fc8d4",
+    "semantic_hash": "10bba1504cbc2d5eede606b8813fc8d4"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-017.md": {
+    "mtime": 1777316019.4742475,
+    "ast_hash": "5a827615e59745e6189b54380bc97b30",
+    "semantic_hash": "5a827615e59745e6189b54380bc97b30"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-081.md": {
+    "mtime": 1777316019.4802678,
+    "ast_hash": "971dc632f2afcb32cecedf725c02e8b7",
+    "semantic_hash": "971dc632f2afcb32cecedf725c02e8b7"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-023.md": {
+    "mtime": 1777316019.474802,
+    "ast_hash": "b38b406ff9c230496aadb74b7a6c1bf0",
+    "semantic_hash": "b38b406ff9c230496aadb74b7a6c1bf0"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-072.md": {
+    "mtime": 1777316019.4794567,
+    "ast_hash": "db9b98eda757d03b2907d31add43d9ba",
+    "semantic_hash": "db9b98eda757d03b2907d31add43d9ba"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-069.md": {
+    "mtime": 1777316019.479168,
+    "ast_hash": "ddfcbb22bc43efd1834e13ebcee9a824",
+    "semantic_hash": "ddfcbb22bc43efd1834e13ebcee9a824"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-038.md": {
+    "mtime": 1777316019.476186,
+    "ast_hash": "bb3fb4406ad41c644ed1047a6b0de753",
+    "semantic_hash": "bb3fb4406ad41c644ed1047a6b0de753"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-028.md": {
+    "mtime": 1777316019.475284,
+    "ast_hash": "08bd5da19454aaf88df7ffa14ec0490d",
+    "semantic_hash": "08bd5da19454aaf88df7ffa14ec0490d"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-079.md": {
+    "mtime": 1777316019.4800868,
+    "ast_hash": "55e76cf3ad7cde57c0b6223352f48668",
+    "semantic_hash": "55e76cf3ad7cde57c0b6223352f48668"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-059.md": {
+    "mtime": 1777316019.4782577,
+    "ast_hash": "29a2cc36b0242acfe0a847b1dd1e5434",
+    "semantic_hash": "29a2cc36b0242acfe0a847b1dd1e5434"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-008.md": {
+    "mtime": 1777316019.4733129,
+    "ast_hash": "530ce3a5e399a021cce77cdfc603859f",
+    "semantic_hash": "530ce3a5e399a021cce77cdfc603859f"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-018.md": {
+    "mtime": 1777316019.4743385,
+    "ast_hash": "0a8b305f07ada32d4e27a7e345c50547",
+    "semantic_hash": "0a8b305f07ada32d4e27a7e345c50547"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-049.md": {
+    "mtime": 1777316019.4773142,
+    "ast_hash": "6b15840bde10a14ca0e20b21785ad93b",
+    "semantic_hash": "6b15840bde10a14ca0e20b21785ad93b"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-058.md": {
+    "mtime": 1777316019.4781682,
+    "ast_hash": "169a60282b963470142eeede3c83f634",
+    "semantic_hash": "169a60282b963470142eeede3c83f634"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-009.md": {
+    "mtime": 1777316019.4734197,
+    "ast_hash": "974b2b929953cb91fac46ccfaef565be",
+    "semantic_hash": "974b2b929953cb91fac46ccfaef565be"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/registry.md": {
+    "mtime": 1780304499.2412615,
+    "ast_hash": "a31d484447ec9eb35b72e15763070847",
+    "semantic_hash": "a31d484447ec9eb35b72e15763070847"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-019.md": {
+    "mtime": 1777316019.4744287,
+    "ast_hash": "cac74434385c59705b3c12b5126b6dcd",
+    "semantic_hash": "cac74434385c59705b3c12b5126b6dcd"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-048.md": {
+    "mtime": 1780304952.8959422,
+    "ast_hash": "d88fc3f928cd1f8d365e3add3a074655",
+    "semantic_hash": "d88fc3f928cd1f8d365e3add3a074655"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-068.md": {
+    "mtime": 1777316019.4790816,
+    "ast_hash": "b4effd158cfb3f29b5bf1df840592f62",
+    "semantic_hash": "b4effd158cfb3f29b5bf1df840592f62"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-039.md": {
+    "mtime": 1777316019.476276,
+    "ast_hash": "675ee29d8253044c61ecace722d0251c",
+    "semantic_hash": "675ee29d8253044c61ecace722d0251c"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-029.md": {
+    "mtime": 1777316019.4753685,
+    "ast_hash": "93bc6adc060f1da556a82a6232709289",
+    "semantic_hash": "93bc6adc060f1da556a82a6232709289"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/features/F-078.md": {
+    "mtime": 1777316019.479993,
+    "ast_hash": "b0e5162bc63f54b511faffe81c5ecb45",
+    "semantic_hash": "b0e5162bc63f54b511faffe81c5ecb45"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/workflows/asset-onboarding-flow.md": {
+    "mtime": 1777316019.4874232,
+    "ast_hash": "ecd182fdccf25773f354bce8fc4c3b12",
+    "semantic_hash": "ecd182fdccf25773f354bce8fc4c3b12"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/workflows/brim-import-flow.md": {
+    "mtime": 1777316019.4875414,
+    "ast_hash": "8f97bcd7b38592601e049dbb9da14b83",
+    "semantic_hash": "8f97bcd7b38592601e049dbb9da14b83"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/babel-currency-symbol-echo.md": {
+    "mtime": 1777316019.4824069,
+    "ast_hash": "bf4406f07591f33eb0f95499c6bc05be",
+    "semantic_hash": "bf4406f07591f33eb0f95499c6bc05be"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/liveticker-header-crash.md": {
+    "mtime": 1777316019.4827874,
+    "ast_hash": "cb2a5a6bdfdd54c4d8e1ac70f3232bd8",
+    "semantic_hash": "cb2a5a6bdfdd54c4d8e1ac70f3232bd8"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/justetf-websocket-disconnect.md": {
+    "mtime": 1777316019.4826872,
+    "ast_hash": "4e73c14a9645ba4dc9ac73556d0b3d4a",
+    "semantic_hash": "4e73c14a9645ba4dc9ac73556d0b3d4a"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/clone-link-uuid-duplication.md": {
+    "mtime": 1780304894.2591453,
+    "ast_hash": "c6409823a53a779106850c543468d80e",
+    "semantic_hash": "c6409823a53a779106850c543468d80e"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/prices-current-sync-chain-empty-delta.md": {
+    "mtime": 1777316019.4828835,
+    "ast_hash": "2e72e1e1fa8eb3a44003789e0b5eebf2",
+    "semantic_hash": "2e72e1e1fa8eb3a44003789e0b5eebf2"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/babel-currency-symbol-locale.md": {
+    "mtime": 1779357383.0594132,
+    "ast_hash": "a1ab251f6a5f79cf153f07a99fd82002",
+    "semantic_hash": "a1ab251f6a5f79cf153f07a99fd82002"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/event-loop-blocking.md": {
+    "mtime": 1777316019.4824977,
+    "ast_hash": "57ed242afbc882c138927f8688b656dd",
+    "semantic_hash": "57ed242afbc882c138927f8688b656dd"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/tanstack-svelte5-incompatibility.md": {
+    "mtime": 1777316019.4832003,
+    "ast_hash": "69999606348ecb9e42f0bbf62a7c5d48",
+    "semantic_hash": "69999606348ecb9e42f0bbf62a7c5d48"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/datatable-filter-options-disappear.md": {
+    "mtime": 1779357383.0601068,
+    "ast_hash": "fa8881db4a09bb9bf9d85caffe3c5894",
+    "semantic_hash": "fa8881db4a09bb9bf9d85caffe3c5894"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/browser-autofill-numeric-fields.md": {
+    "mtime": 1779357383.059925,
+    "ast_hash": "06be913d3deb125ba3f70df3073d286c",
+    "semantic_hash": "06be913d3deb125ba3f70df3073d286c"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/assets-wipe-error-attr-mismatch.md": {
+    "mtime": 1777316019.4823112,
+    "ast_hash": "8983ebbfcb65b7aac8e8880508b26a83",
+    "semantic_hash": "8983ebbfcb65b7aac8e8880508b26a83"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/asset-sync-transaction-closed.md": {
+    "mtime": 1777316019.4822097,
+    "ast_hash": "825d163c707854be7eeb9ee83d984871",
+    "semantic_hash": "825d163c707854be7eeb9ee83d984871"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/fx-multi-route-no-fallback.md": {
+    "mtime": 1779357383.0603414,
+    "ast_hash": "57ecf15b60b99e5416d4ad5fc107b79e",
+    "semantic_hash": "57ecf15b60b99e5416d4ad5fc107b79e"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/dual-form-collect-duplication.md": {
+    "mtime": 1779357383.0602248,
+    "ast_hash": "16b2ecbc35ab904ae8f7a07b3bd7f4b3",
+    "semantic_hash": "16b2ecbc35ab904ae8f7a07b3bd7f4b3"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/pydantic-422-preemption.md": {
+    "mtime": 1779357383.060444,
+    "ast_hash": "71570212fa2f69ea685d29dc49eea534",
+    "semantic_hash": "71570212fa2f69ea685d29dc49eea534"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/sync-functions-dead-code.md": {
+    "mtime": 1777316019.4829743,
+    "ast_hash": "568bb5688c35947ab7176a5234cc8fd0",
+    "semantic_hash": "568bb5688c35947ab7176a5234cc8fd0"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/asset-list-500-provider-input-type.md": {
+    "mtime": 1777316019.4820254,
+    "ast_hash": "fa5e83aab94b2dd7ae7caea69538ecc3",
+    "semantic_hash": "fa5e83aab94b2dd7ae7caea69538ecc3"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/flag-emoji-windows.md": {
+    "mtime": 1777316019.4825914,
+    "ast_hash": "20ec45dbd5e5d8dcd0b1011a0d775f34",
+    "semantic_hash": "20ec45dbd5e5d8dcd0b1011a0d775f34"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/wac-feedback-loop.md": {
+    "mtime": 1780304894.2591627,
+    "ast_hash": "b5d2ef8dd47ba4d6dfa9adf393339b00",
+    "semantic_hash": "b5d2ef8dd47ba4d6dfa9adf393339b00"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/svelte5-effect-read-write-loop.md": {
+    "mtime": 1779357383.0605443,
+    "ast_hash": "0c2c6658fec358b9af05ddc91cd89c39",
+    "semantic_hash": "0c2c6658fec358b9af05ddc91cd89c39"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/problems/asset-currency-mismatch.md": {
+    "mtime": 1777316019.4819317,
+    "ast_hash": "890ce4844ea74f3a1dd8d905a12bebe9",
+    "semantic_hash": "890ce4844ea74f3a1dd8d905a12bebe9"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/brim-broker-scoped.md": {
+    "mtime": 1777316019.4671748,
+    "ast_hash": "e6137baed66452b54bbc7ead12b054c7",
+    "semantic_hash": "e6137baed66452b54bbc7ead12b054c7"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/cost-basis-currency-object.md": {
+    "mtime": 1780304186.1839557,
+    "ast_hash": "50d2575cc81a39c3b445c97e9b4e99e4",
+    "semantic_hash": "50d2575cc81a39c3b445c97e9b4e99e4"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/policy-d-currency-wipe.md": {
+    "mtime": 1777316019.4684892,
+    "ast_hash": "a692484eb81ab9f228c922736bc2e6ee",
+    "semantic_hash": "a692484eb81ab9f228c922736bc2e6ee"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/pair-description-tags-validation.md": {
+    "mtime": 1779357383.0553596,
+    "ast_hash": "f41b5032c8df63085033586679981216",
+    "semantic_hash": "f41b5032c8df63085033586679981216"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/txstore-single-source-of-truth.md": {
+    "mtime": 1779357383.056294,
+    "ast_hash": "80a6d8bff14f4ca233215f6121753b67",
+    "semantic_hash": "80a6d8bff14f4ca233215f6121753b67"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/prod-test-data-separation.md": {
+    "mtime": 1777316019.4688025,
+    "ast_hash": "7740a967eafa163b8f24a88ac2d31457",
+    "semantic_hash": "7740a967eafa163b8f24a88ac2d31457"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/zodios-api-client.md": {
+    "mtime": 1777316019.469917,
+    "ast_hash": "74b806eceb3a5a66916d9e3ac2cdb4e1",
+    "semantic_hash": "74b806eceb3a5a66916d9e3ac2cdb4e1"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/cash-transfer-split-promote.md": {
+    "mtime": 1779357383.054566,
+    "ast_hash": "638e5f4de8dab2d3cec8a87d9c5800a3",
+    "semantic_hash": "638e5f4de8dab2d3cec8a87d9c5800a3"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/formmodal-contextual-validate.md": {
+    "mtime": 1779357383.0552366,
+    "ast_hash": "9885321479c34c76c930fced37fae08c",
+    "semantic_hash": "9885321479c34c76c930fced37fae08c"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/fifo-runtime-decision.md": {
+    "mtime": 1777316019.4675438,
+    "ast_hash": "78f9295df576ae3afc37d0878b7c48bb",
+    "semantic_hash": "78f9295df576ae3afc37d0878b7c48bb"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/provider-shutdown-generic.md": {
+    "mtime": 1777316019.4690099,
+    "ast_hash": "7edc863530ca105412b8347d389aa8f1",
+    "semantic_hash": "7edc863530ca105412b8347d389aa8f1"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/brim-fake-asset-id.md": {
+    "mtime": 1777316019.4672692,
+    "ast_hash": "362955e54d76228b8bd9a5b516749f03",
+    "semantic_hash": "362955e54d76228b8bd9a5b516749f03"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/data-editor-unification.md": {
+    "mtime": 1777316019.4674473,
+    "ast_hash": "2dd902054dc9e26faf26ab25ede4b4c3",
+    "semantic_hash": "2dd902054dc9e26faf26ab25ede4b4c3"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/signal-label-unification.md": {
+    "mtime": 1777316019.4692862,
+    "ast_hash": "daf2d450076e006adcfd8e698a7e7d25",
+    "semantic_hash": "daf2d450076e006adcfd8e698a7e7d25"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/three-phase-pipeline.md": {
+    "mtime": 1777316019.4697258,
+    "ast_hash": "c7bef38c4374b568eb94d05cd0257a4f",
+    "semantic_hash": "c7bef38c4374b568eb94d05cd0257a4f"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/fx-sync-pair-based.md": {
+    "mtime": 1777316019.467656,
+    "ast_hash": "e83fa3d03d45bf2947a63af4d6a3beec",
+    "semantic_hash": "e83fa3d03d45bf2947a63af4d6a3beec"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/unified-batch-pipeline.md": {
+    "mtime": 1779357383.0564406,
+    "ast_hash": "73cd489373b204b6434a24df7f300fe7",
+    "semantic_hash": "73cd489373b204b6434a24df7f300fe7"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/server-driven-type-rules.md": {
+    "mtime": 1779357383.0556889,
+    "ast_hash": "b774fcd57fb66e84f24cd389bfcca4b0",
+    "semantic_hash": "b774fcd57fb66e84f24cd389bfcca4b0"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/multi-broker-atomic-tx.md": {
+    "mtime": 1777316019.4682758,
+    "ast_hash": "50e72779921e4e6f827a65f29ecf1eee",
+    "semantic_hash": "50e72779921e4e6f827a65f29ecf1eee"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/dual-transaction-form-design.md": {
+    "mtime": 1779357383.055008,
+    "ast_hash": "692e1397a02989b27ac95c29abc931a5",
+    "semantic_hash": "692e1397a02989b27ac95c29abc931a5"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/scheduled-investment-redesign.md": {
+    "mtime": 1777316019.469107,
+    "ast_hash": "b2b7070c6151082831fff4f9dc5045ee",
+    "semantic_hash": "b2b7070c6151082831fff4f9dc5045ee"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/tx-link-uuid-semantics.md": {
+    "mtime": 1777316019.469821,
+    "ast_hash": "c217a3db7bff377c6af5ff1b6f3d5af2",
+    "semantic_hash": "c217a3db7bff377c6af5ff1b6f3d5af2"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/bulkmodal-mode-removal.md": {
+    "mtime": 1779357383.0544248,
+    "ast_hash": "20bb40affc55cc2a4cd15b34fa83f9d9",
+    "semantic_hash": "20bb40affc55cc2a4cd15b34fa83f9d9"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/i18n-key-rationalization.md": {
+    "mtime": 1777316019.46785,
+    "ast_hash": "ad7f9065842fe11fd260f47ab6491b7a",
+    "semantic_hash": "ad7f9065842fe11fd260f47ab6491b7a"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/auto-populate-removal.md": {
+    "mtime": 1779357383.0541558,
+    "ast_hash": "299b429b754e2edc0657bea090b68575",
+    "semantic_hash": "299b429b754e2edc0657bea090b68575"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/end-of-day-balance-check.md": {
+    "mtime": 1779357383.055122,
+    "ast_hash": "a28322a71df9f93918c5c9cb5c235f32",
+    "semantic_hash": "a28322a71df9f93918c5c9cb5c235f32"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/single-docker-image.md": {
+    "mtime": 1779913701.693022,
+    "ast_hash": "6f7be63e95431adc34f88af5b0ecb7c2",
+    "semantic_hash": "6f7be63e95431adc34f88af5b0ecb7c2"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/price-currency-hard-reject.md": {
+    "mtime": 1777316019.4686933,
+    "ast_hash": "600cfd6aaa95e1fdcdf7942375a596b8",
+    "semantic_hash": "600cfd6aaa95e1fdcdf7942375a596b8"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/datatable-tooltip-custom-cell.md": {
+    "mtime": 1779357383.054837,
+    "ast_hash": "6ab42fb65836821dfb9a3ecb477fdce6",
+    "semantic_hash": "6ab42fb65836821dfb9a3ecb477fdce6"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/pendingop-tagged-union.md": {
+    "mtime": 1779357383.0555406,
+    "ast_hash": "3e391fd455c95884495028e34bb07267",
+    "semantic_hash": "3e391fd455c95884495028e34bb07267"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/static-metadata-export.md": {
+    "mtime": 1779357383.0558443,
+    "ast_hash": "734dc488ae834ad4bc09a5f0035eef2f",
+    "semantic_hash": "734dc488ae834ad4bc09a5f0035eef2f"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/wac-inline-validate-commit.md": {
+    "mtime": 1780304894.2591383,
+    "ast_hash": "998245454107e438637e11d24b1188ac",
+    "semantic_hash": "998245454107e438637e11d24b1188ac"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/manual-fx-sentinel.md": {
+    "mtime": 1777316019.468126,
+    "ast_hash": "634242a2df498adf07f9826dc8ac5cbd",
+    "semantic_hash": "634242a2df498adf07f9826dc8ac5cbd"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/broker-access-min-paired.md": {
+    "mtime": 1779357383.05429,
+    "ast_hash": "1db421bb9b234a2ff86b677f55fef20a",
+    "semantic_hash": "1db421bb9b234a2ff86b677f55fef20a"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/sveltekit-over-react.md": {
+    "mtime": 1777316019.4695032,
+    "ast_hash": "f8b8bc9fdd20d0da58b84b18b4664aa5",
+    "semantic_hash": "f8b8bc9fdd20d0da58b84b18b4664aa5"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/port-6040-scheme.md": {
+    "mtime": 1780304483.87026,
+    "ast_hash": "f510ae1b1294c67e5f7bd7c807be88b0",
+    "semantic_hash": "f510ae1b1294c67e5f7bd7c807be88b0"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/test-runner-package-split.md": {
+    "mtime": 1779357383.0560217,
+    "ast_hash": "442f7c9371ea39e7622f846a67774d89",
+    "semantic_hash": "442f7c9371ea39e7622f846a67774d89"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/context-menu-all-tables.md": {
+    "mtime": 1779357383.054707,
+    "ast_hash": "c4138378dbf32e611ff1b2f7fd674141",
+    "semantic_hash": "c4138378dbf32e611ff1b2f7fd674141"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/transactions-client-side-filtering.md": {
+    "mtime": 1779357383.0561495,
+    "ast_hash": "58772e5ef1e65e51b227228594675410",
+    "semantic_hash": "58772e5ef1e65e51b227228594675410"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/brim-parser-only.md": {
+    "mtime": 1777316019.4673586,
+    "ast_hash": "5b81e483003cda79dc5158b4ec660aec",
+    "semantic_hash": "5b81e483003cda79dc5158b4ec660aec"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/decisions/provider-registry-decision.md": {
+    "mtime": 1777316019.468911,
+    "ast_hash": "10fefa601376de82a0936c3441ea0e2d",
+    "semantic_hash": "10fefa601376de82a0936c3441ea0e2d"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/connections/transactions-connections.md": {
+    "mtime": 1779357383.0539641,
+    "ast_hash": "d92025193d50e7397b15ef3444411cdb",
+    "semantic_hash": "d92025193d50e7397b15ef3444411cdb"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/connections/dependency-graph.md": {
+    "mtime": 1777316019.46674,
+    "ast_hash": "2ef1409d2597c9c1e674f8da594a7840",
+    "semantic_hash": "2ef1409d2597c9c1e674f8da594a7840"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/connections/assets-connections.md": {
+    "mtime": 1777316019.4665432,
+    "ast_hash": "0319d59addf4eff2b12eb4f975768610",
+    "semantic_hash": "0319d59addf4eff2b12eb4f975768610"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/connections/fx-connections.md": {
+    "mtime": 1777316019.4668403,
+    "ast_hash": "27e1a54d53a0d6d9754ac49320c097e9",
+    "semantic_hash": "27e1a54d53a0d6d9754ac49320c097e9"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/prices-current-side-effect.md": {
+    "mtime": 1777316019.4657695,
+    "ast_hash": "0151ecc5c142c48961ba2260605ff82a",
+    "semantic_hash": "0151ecc5c142c48961ba2260605ff82a"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/entity-store-pattern.md": {
+    "mtime": 1779357383.0515509,
+    "ast_hash": "83697bf8ea16f4147f7c8bc238c4a162",
+    "semantic_hash": "83697bf8ea16f4147f7c8bc238c4a162"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/async-io-rule.md": {
+    "mtime": 1777316019.464621,
+    "ast_hash": "dc013e4d1d04f70aa97e6a3fe86df2f8",
+    "semantic_hash": "dc013e4d1d04f70aa97e6a3fe86df2f8"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/backend-only-calculations.md": {
+    "mtime": 1777316019.464737,
+    "ast_hash": "2476c9bcb699b597a3f63fce972bc990",
+    "semantic_hash": "2476c9bcb699b597a3f63fce972bc990"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/opportunistic-cache-merge.md": {
+    "mtime": 1779357383.0521526,
+    "ast_hash": "c0d59ce0ed9019213da908055b1175ec",
+    "semantic_hash": "c0d59ce0ed9019213da908055b1175ec"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/e2e-data-testid-rule.md": {
+    "mtime": 1779357383.051412,
+    "ast_hash": "648d4b59c93472651b35c8bad65b10a7",
+    "semantic_hash": "648d4b59c93472651b35c8bad65b10a7"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/validate-scheduler-pattern.md": {
+    "mtime": 1779357383.0527902,
+    "ast_hash": "e502d946e602836456c2623d224d27c2",
+    "semantic_hash": "e502d946e602836456c2623d224d27c2"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/single-migration-strategy.md": {
+    "mtime": 1777316019.4661875,
+    "ast_hash": "ea11f8995ff42ea737c79c510c0d1aa8",
+    "semantic_hash": "ea11f8995ff42ea737c79c510c0d1aa8"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/svelte5-runes.md": {
+    "mtime": 1777316019.4662902,
+    "ast_hash": "17bdaa0c5152a29d61c9063fb9c51574",
+    "semantic_hash": "17bdaa0c5152a29d61c9063fb9c51574"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/daily-point-policy.md": {
+    "mtime": 1777316019.4650447,
+    "ast_hash": "f2c2ec55bc27be8648af2b94fb09845d",
+    "semantic_hash": "f2c2ec55bc27be8648af2b94fb09845d"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/stateless-preview-pattern.md": {
+    "mtime": 1780304894.259173,
+    "ast_hash": "2b799fa82c25013cb8ffef22a609dfe3",
+    "semantic_hash": "2b799fa82c25013cb8ffef22a609dfe3"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/mkdocs-suffix-i18n.md": {
+    "mtime": 1779913667.54597,
+    "ast_hash": "563bc981e75abc48d0b81fae386ff3a9",
+    "semantic_hash": "563bc981e75abc48d0b81fae386ff3a9"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/dual-view-pattern.md": {
+    "mtime": 1777316019.4651625,
+    "ast_hash": "ba03a45c80a5d04bd3e9d8c0250408b0",
+    "semantic_hash": "ba03a45c80a5d04bd3e9d8c0250408b0"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/txstore-pattern.md": {
+    "mtime": 1779357383.052663,
+    "ast_hash": "0d4f712b01cd0bfbdfdf6e3f7705adae",
+    "semantic_hash": "0d4f712b01cd0bfbdfdf6e3f7705adae"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/resolve-validation-message-pattern.md": {
+    "mtime": 1779357383.0523424,
+    "ast_hash": "1357f4b9e430913ab42f725678d8e5ee",
+    "semantic_hash": "1357f4b9e430913ab42f725678d8e5ee"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/responsive-4mode-layout.md": {
+    "mtime": 1777316019.465979,
+    "ast_hash": "e85893823a0af2709f504739378c82c9",
+    "semantic_hash": "e85893823a0af2709f504739378c82c9"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/savewithretry-frontend-pattern.md": {
+    "mtime": 1777316019.4660885,
+    "ast_hash": "f01d359aa9176e132c4a79ca633e35b4",
+    "semantic_hash": "f01d359aa9176e132c4a79ca633e35b4"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/backend-test-isolation.md": {
+    "mtime": 1779913701.7173138,
+    "ast_hash": "011933027a3dfdeefeea0969fe965f81",
+    "semantic_hash": "011933027a3dfdeefeea0969fe965f81"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/always-pair-adjacent.md": {
+    "mtime": 1779357383.0510452,
+    "ast_hash": "678425ff3239320c4af09f69d6ba15d5",
+    "semantic_hash": "678425ff3239320c4af09f69d6ba15d5"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/paired-partner-architecture.md": {
+    "mtime": 1780304894.2591789,
+    "ast_hash": "8ff70a96461aea6298f9a2d83d9bdf83",
+    "semantic_hash": "8ff70a96461aea6298f9a2d83d9bdf83"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/editbuffer-pattern.md": {
+    "mtime": 1777316019.4654725,
+    "ast_hash": "12d28e87cbe681b826cffd09bfff5710",
+    "semantic_hash": "12d28e87cbe681b826cffd09bfff5710"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/safe-decimal-pattern.md": {
+    "mtime": 1779357383.0524611,
+    "ast_hash": "3de4e6dcd5bb125ae185cf0e9fb6fd39",
+    "semantic_hash": "3de4e6dcd5bb125ae185cf0e9fb6fd39"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/concepts/timeseries-store-pattern.md": {
+    "mtime": 1777316019.4663868,
+    "ast_hash": "028f8c8dff5104dfacb3f87e9101f57c",
+    "semantic_hash": "028f8c8dff5104dfacb3f87e9101f57c"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/r2-walktest-feedback-master.md": {
+    "mtime": 1780304139.0916767,
+    "ast_hash": "de10ce591bd076e0ea41d2c42c0ae34a",
+    "semantic_hash": "de10ce591bd076e0ea41d2c42c0ae34a"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-pland2-frontend-split-promote.md": {
+    "mtime": 1779357383.07129,
+    "ast_hash": "f08936bd816b110efe07a908bb70b896",
+    "semantic_hash": "f08936bd816b110efe07a908bb70b896"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round3-bugfix2.md": {
+    "mtime": 1779357383.0611038,
+    "ast_hash": "0e4af375422ef50b6fc3f469007ffa03",
+    "semantic_hash": "0e4af375422ef50b6fc3f469007ffa03"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part2-brim-revision.md": {
+    "mtime": 1777316019.485755,
+    "ast_hash": "18e397492e41deb0d7fc1aaea171b8eb",
+    "semantic_hash": "18e397492e41deb0d7fc1aaea171b8eb"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-transactions.md": {
+    "mtime": 1777316019.4867368,
+    "ast_hash": "e5c1266b6769eb172b10fc71cc1e8292",
+    "semantic_hash": "e5c1266b6769eb172b10fc71cc1e8292"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round5-bugfix1-dual-form.md": {
+    "mtime": 1779357383.0615559,
+    "ast_hash": "1c59c5a1f839c0f0b6c9b5ffc19f81ed",
+    "semantic_hash": "1c59c5a1f839c0f0b6c9b5ffc19f81ed"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round1.md": {
+    "mtime": 1779357383.0607216,
+    "ast_hash": "ab9bc683823edf089eda5fdb55efd865",
+    "semantic_hash": "ab9bc683823edf089eda5fdb55efd865"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-context-menu-delete.md": {
+    "mtime": 1779357383.0648625,
+    "ast_hash": "665b228e360e96893543a1b5ef5e4764",
+    "semantic_hash": "665b228e360e96893543a1b5ef5e4764"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/r2-sp-c-bugfix-chain.md": {
+    "mtime": 1780304794.0780234,
+    "ast_hash": "eb02888ee1e122112857c4c65fa361a1",
+    "semantic_hash": "eb02888ee1e122112857c4c65fa361a1"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/roadmap-v1-summary.md": {
+    "mtime": 1777316019.486844,
+    "ast_hash": "d2a2c834de64d386f3dca9285fcd1f42",
+    "semantic_hash": "d2a2c834de64d386f3dca9285fcd1f42"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round5.md": {
+    "mtime": 1779357383.0647328,
+    "ast_hash": "0ae1696557af8c2d3ee97caf45a4ad7f",
+    "semantic_hash": "0ae1696557af8c2d3ee97caf45a4ad7f"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part3-api-consolidation.md": {
+    "mtime": 1777316019.486006,
+    "ast_hash": "ae06778dccd4695f6926dae879ba45f2",
+    "semantic_hash": "ae06778dccd4695f6926dae879ba45f2"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/r2-sp-b-backend-tests.md": {
+    "mtime": 1780304139.0917125,
+    "ast_hash": "e6bf44f34df9fe1318386a8003074295",
+    "semantic_hash": "e6bf44f34df9fe1318386a8003074295"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/roadmap-v4-index.md": {
+    "mtime": 1777316019.4869587,
+    "ast_hash": "18f5427dbb952b9d9f2a69ea412c87c9",
+    "semantic_hash": "18f5427dbb952b9d9f2a69ea412c87c9"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase06-step2-providers.md": {
+    "mtime": 1777316019.4843712,
+    "ast_hash": "218fe91677b19177abc49e40fecf4c2a",
+    "semantic_hash": "218fe91677b19177abc49e40fecf4c2a"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-pland2-bugfix4.md": {
+    "mtime": 1779357383.07106,
+    "ast_hash": "e82eea544eb2cb461f83fabbc723e94e",
+    "semantic_hash": "e82eea544eb2cb461f83fabbc723e94e"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round4-unified-pipeline.md": {
+    "mtime": 1779357383.0614588,
+    "ast_hash": "44f8c82473a075fdf9c31ea424f54eaa",
+    "semantic_hash": "44f8c82473a075fdf9c31ea424f54eaa"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase06-bugfix-migration.md": {
+    "mtime": 1777316019.4841428,
+    "ast_hash": "ad5c2cf212b0e4a4ba83b051fa6230d8",
+    "semantic_hash": "ad5c2cf212b0e4a4ba83b051fa6230d8"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/kb-01-backend.md": {
+    "mtime": 1777316019.4833581,
+    "ast_hash": "525dd708432350c34ae511a82efc30a0",
+    "semantic_hash": "525dd708432350c34ae511a82efc30a0"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase06-step4-planc.md": {
+    "mtime": 1777316019.485313,
+    "ast_hash": "5bd42eb2df23098abfcc5c620710d32d",
+    "semantic_hash": "5bd42eb2df23098abfcc5c620710d32d"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-planc2r2-regressions-mockfx.md": {
+    "mtime": 1779357383.0667906,
+    "ast_hash": "4f1e452350362b69bdee4deaca126dd6",
+    "semantic_hash": "4f1e452350362b69bdee4deaca126dd6"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part3-closure2.md": {
+    "mtime": 1777316019.486619,
+    "ast_hash": "ae2cee7c28491c61f24e6ab866056386",
+    "semantic_hash": "ae2cee7c28491c61f24e6ab866056386"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-pland2-bugfix1.md": {
+    "mtime": 1779357383.069736,
+    "ast_hash": "4ec9e350982e571c69b85db4e466f4d0",
+    "semantic_hash": "4ec9e350982e571c69b85db4e466f4d0"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/kb-08-i18n-duplicates.md": {
+    "mtime": 1777316019.4838686,
+    "ast_hash": "812860514ad59f108f7e378bdcb56bf4",
+    "semantic_hash": "812860514ad59f108f7e378bdcb56bf4"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-planc3-pendingop-refactor.md": {
+    "mtime": 1779357383.067748,
+    "ast_hash": "664199497ee8a3b05ec31e19b77049e4",
+    "semantic_hash": "664199497ee8a3b05ec31e19b77049e4"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round5-server-type-rules.md": {
+    "mtime": 1779357383.0619276,
+    "ast_hash": "088c2c0be9e794e39fceadcec3d5db77",
+    "semantic_hash": "088c2c0be9e794e39fceadcec3d5db77"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-pland-split-promote-master.md": {
+    "mtime": 1780304315.0950546,
+    "ast_hash": "30174bc8ebe38114d04c79d6bd710734",
+    "semantic_hash": "30174bc8ebe38114d04c79d6bd710734"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/kb-02-frontend.md": {
+    "mtime": 1777316019.4834576,
+    "ast_hash": "34b0db82b9c9a7370563a2d0d9bb8397",
+    "semantic_hash": "34b0db82b9c9a7370563a2d0d9bb8397"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase06-step6-i18n-polish.md": {
+    "mtime": 1777316019.4855072,
+    "ast_hash": "4ef2738335696bdfd9b2afb06e22118d",
+    "semantic_hash": "4ef2738335696bdfd9b2afb06e22118d"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/r2-parallel-features-pwa-borsa-fx.md": {
+    "mtime": 1780304483.870413,
+    "ast_hash": "39dee64be87955cb4ad6c9b5400fbce8",
+    "semantic_hash": "39dee64be87955cb4ad6c9b5400fbce8"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/r2-sp-c-bulkmodal-suggest-ux.md": {
+    "mtime": 1780304139.091703,
+    "ast_hash": "da3da1232eb075efbd0d8d2938a0fa9a",
+    "semantic_hash": "da3da1232eb075efbd0d8d2938a0fa9a"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-planc-txstore-refactor.md": {
+    "mtime": 1779357383.066291,
+    "ast_hash": "e7ee47f7c481d997d3190e7cdfc496af",
+    "semantic_hash": "e7ee47f7c481d997d3190e7cdfc496af"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-plana-context-menu-bugfix.md": {
+    "mtime": 1779357383.0650144,
+    "ast_hash": "26db1cfd5caa72390f55f5b3a5bf09fd",
+    "semantic_hash": "26db1cfd5caa72390f55f5b3a5bf09fd"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-pland2-bugfix2.md": {
+    "mtime": 1779357383.0698557,
+    "ast_hash": "384dd239aad881f04f94603c5771f994",
+    "semantic_hash": "384dd239aad881f04f94603c5771f994"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase06-step4-plana.md": {
+    "mtime": 1777316019.4851139,
+    "ast_hash": "092c305ae067b83f348e2b2bee46f3a7",
+    "semantic_hash": "092c305ae067b83f348e2b2bee46f3a7"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/r2-sp-a-cost-basis-wac.md": {
+    "mtime": 1780304139.0917284,
+    "ast_hash": "3991390a1a3cc6806eba5ac4b3459992",
+    "semantic_hash": "3991390a1a3cc6806eba5ac4b3459992"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/todos.md": {
+    "mtime": 1777316019.4872065,
+    "ast_hash": "40bf63c1944e4b49434f06b679abf4b9",
+    "semantic_hash": "40bf63c1944e4b49434f06b679abf4b9"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-planb-delete-picker-access.md": {
+    "mtime": 1779357383.065209,
+    "ast_hash": "941b8d6bb59e71f4912152623657bb70",
+    "semantic_hash": "941b8d6bb59e71f4912152623657bb70"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-planb23-appendix1-ui-polish.md": {
+    "mtime": 1779357383.065353,
+    "ast_hash": "cf826168c5d32cb45c6ca52ce5c491d1",
+    "semantic_hash": "cf826168c5d32cb45c6ca52ce5c491d1"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-transactions-ui.md": {
+    "mtime": 1779357383.0720818,
+    "ast_hash": "70f946003c4b86e637393ee631868300",
+    "semantic_hash": "70f946003c4b86e637393ee631868300"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-pland2-bugfix3.md": {
+    "mtime": 1779357383.0701587,
+    "ast_hash": "12f435082ae62a9ae815711f3bff99f0",
+    "semantic_hash": "12f435082ae62a9ae815711f3bff99f0"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-planc2-bugfix-pair-validation.md": {
+    "mtime": 1779357383.0665677,
+    "ast_hash": "bbe79d5f8c571b3f9647cb293d65d9e0",
+    "semantic_hash": "bbe79d5f8c571b3f9647cb293d65d9e0"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round2.md": {
+    "mtime": 1779357383.0608857,
+    "ast_hash": "3b578478a15fb391d474121c9937f36d",
+    "semantic_hash": "3b578478a15fb391d474121c9937f36d"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round5-bugfix3-testwalk-fixes.md": {
+    "mtime": 1779357383.0617697,
+    "ast_hash": "f45138d050621cc20111fc239983245b",
+    "semantic_hash": "f45138d050621cc20111fc239983245b"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round5-bugfix2-testwalk-overhaul.md": {
+    "mtime": 1779357383.0616693,
+    "ast_hash": "620005b8734386ed79a40fd9bb8cbf45",
+    "semantic_hash": "620005b8734386ed79a40fd9bb8cbf45"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-planb23-bulk-delete.md": {
+    "mtime": 1779357383.0655131,
+    "ast_hash": "ed2a4c0a85cd2c8f31a2c1a5da780034",
+    "semantic_hash": "ed2a4c0a85cd2c8f31a2c1a5da780034"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase06-step2c-sync-refactor.md": {
+    "mtime": 1777316019.484618,
+    "ast_hash": "7cfc2b80be67cdb0451376c9b358fe7b",
+    "semantic_hash": "7cfc2b80be67cdb0451376c9b358fe7b"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/kb-07-testing-frontend.md": {
+    "mtime": 1777316019.4837618,
+    "ast_hash": "f8374707cec5d8b5af6209e10aad0eec",
+    "semantic_hash": "f8374707cec5d8b5af6209e10aad0eec"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round6-pland1-backend-batch-suggest.md": {
+    "mtime": 1779357383.0695703,
+    "ast_hash": "4bc79838ccb7fc9953ef82049734fb88",
+    "semantic_hash": "4bc79838ccb7fc9953ef82049734fb88"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round3-bugfix1.md": {
+    "mtime": 1779357383.0610032,
+    "ast_hash": "112ac34a4b44c67ac566a9a455e414f0",
+    "semantic_hash": "112ac34a4b44c67ac566a9a455e414f0"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round3.md": {
+    "mtime": 1779357383.0613477,
+    "ast_hash": "33e5c3c361e36d76ff5747e2614e2626",
+    "semantic_hash": "33e5c3c361e36d76ff5747e2614e2626"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase06-step3-rounds.md": {
+    "mtime": 1777316019.4848337,
+    "ast_hash": "4cb2372825dff37214fb7c74c1b97e58",
+    "semantic_hash": "4cb2372825dff37214fb7c74c1b97e58"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/kb-03-documentation.md": {
+    "mtime": 1777316019.4835613,
+    "ast_hash": "9f34721747fc58f3e6e138d38cd906ad",
+    "semantic_hash": "9f34721747fc58f3e6e138d38cd906ad"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/kb-06-testing-backend.md": {
+    "mtime": 1779913667.3539455,
+    "ast_hash": "aa1c7c9692685a6306c2f79bb9f7f887",
+    "semantic_hash": "aa1c7c9692685a6306c2f79bb9f7f887"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part4-round3-staging-rewrite.md": {
+    "mtime": 1779357383.0612361,
+    "ast_hash": "fdfbcaf6fe8e3978cc94ff16bf88728e",
+    "semantic_hash": "fdfbcaf6fe8e3978cc94ff16bf88728e"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/sources/phase07-part3-closure.md": {
+    "mtime": 1777316019.4862301,
+    "ast_hash": "378c2237ce8059b55cfb3eeac6340151",
+    "semantic_hash": "378c2237ce8059b55cfb3eeac6340151"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/entities/db-models.md": {
+    "mtime": 1777316019.4723785,
+    "ast_hash": "25492aca84d1c0fbdc56c390505bb2dd",
+    "semantic_hash": "25492aca84d1c0fbdc56c390505bb2dd"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/entities/backup-router.md": {
+    "mtime": 1777316019.4722762,
+    "ast_hash": "ba8f61a903f3ab24d1c0dd87c6b39674",
+    "semantic_hash": "ba8f61a903f3ab24d1c0dd87c6b39674"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/entities/devpy-cli.md": {
+    "mtime": 1779913667.2717018,
+    "ast_hash": "e1df1955cda0dda620c49d28245a1541",
+    "semantic_hash": "e1df1955cda0dda620c49d28245a1541"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/wiki/entities/api-router.md": {
+    "mtime": 1777316019.472093,
+    "ast_hash": "3753b90e9e7f572fbaa6419ffa455af9",
+    "semantic_hash": "3753b90e9e7f572fbaa6419ffa455af9"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/raw/ingest-registry.md": {
+    "mtime": 1780304972.9352906,
+    "ast_hash": "d3a3f9b3a80e2f867d17d66c3dd5bb4d",
+    "semantic_hash": "d3a3f9b3a80e2f867d17d66c3dd5bb4d"
   }
 }

@@ -829,4 +829,59 @@ With the addition of `lookupFxRate()` (Step 1 of FX Implied Rate feature), the p
 
 ---
 
+## 🔒 TransactionPicker — Filter Inaccessible Paired TX (W4a)
+
+**Data aggiunta**: 1 Giugno 2026
+**Priority**: P3
+**Status**: 📋 PIANIFICATO
+**Source**: `plan-BugfixRound3-UnifiedPartnerArch.prompt.md` walktest Bug W4
+
+### Contesto
+
+The TransactionPickerModal allows importing paired TX where the partner is on a broker the user cannot access. The BulkModal already handles this case (shows lock icon via W4b fix), but the picker should prevent the selection in the first place.
+
+### Azione Futura
+
+1. In `TransactionPickerModal.svelte`, when building the list of selectable transactions:
+   - If a TX has `related_transaction_id` and the partner's `broker_id` is not accessible (user has no role), disable the checkbox or show a warning tooltip
+2. Alternative: allow import but show a confirmation dialog explaining that the partner is read-only
+
+### Files Affected
+
+- `frontend/src/lib/components/transactions/TransactionPickerModal.svelte`
+- May need `partner_broker_id` from TXReadItem (already available in schema)
+
+---
+
+## 🔄 FormModal Items Array Refactor (Step 8/10 Deferred)
+
+**Data aggiunta**: 1 Giugno 2026
+**Priority**: P4
+**Status**: 📋 PIANIFICATO
+**Source**: `plan-BugfixRound3-UnifiedPartnerArch.prompt.md` Steps 8, 10
+
+### Contesto
+
+The FormModal still uses the legacy `initialRow + injectedPartnerRow` props interface. The `resolveFormItems.ts` helper and `FormModalItems` type already exist but aren't integrated into FormModal. The current interface works correctly — this is pure cleanup.
+
+### Azione Futura
+
+**Step 8**: Replace FormModal props `initialRow + injectedPartnerRow` with `items: FormModalItems | null`. Remove `fetchPartner()`, `loadingPartner`, deferred fetch logic. Init $effect reads from `items[0]` / `items[1]`.
+
+**Step 10**: Update page `+page.svelte` to use `resolveFormItemsForView(row, txStoreGet, getBrokerRole)` when opening FormModal in view mode.
+
+### Files Affected
+
+- `frontend/src/lib/components/transactions/TransactionFormModal.svelte` — Props refactor
+- `frontend/src/routes/(app)/transactions/+page.svelte` — Use resolveFormItemsForView
+- `frontend/src/lib/components/transactions/resolveFormItems.ts` — Already exists
+
+### Benefit
+
+- Eliminates `fetchPartner()` async dance (store-first pattern)
+- Single contract for all FormModal consumers
+- Prevents future regressions when partner handling changes
+
+---
+
 ##

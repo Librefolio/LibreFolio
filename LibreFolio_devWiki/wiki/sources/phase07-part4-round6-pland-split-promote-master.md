@@ -44,7 +44,7 @@ Master plan (2026-05-12, in-progress) for integrating split and promote operatio
 | D2-bugfix2 — Payload + Split Preview | ✅ | Split preview editability (corrects DD-BF1), pipeline reorder, ids[] schema |
 | D2-bugfix3 — UX + Payload + Suggest + E2E | ✅ | Biggest round: PromoteMergeModal polish, split schema {id_a,id_b}, E2E (absorbed D3) |
 | D2-bugfix4 — Split Suggest + PMC Override | ✅ | PMC auto-calc, promote cost_basis only on receiver, suggest constraint fix |
-| D2-round2 — Walktest Feedback | ⏳ | NOT ingested (still planning) |
+| D2-round2 — Walktest Feedback | ⏳ → ✅ (SP-A/B/C) | See [[sources/r2-walktest-feedback-master]] |
 | ~~D3 — E2E Tests~~ | ⛔ | Merged into D2-bugfix3 |
 
 ## Wiki Pages Updated
