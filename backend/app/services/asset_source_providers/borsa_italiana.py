@@ -538,4 +538,4 @@ class BorsaItalianaProvider(AssetSourceProvider):
         if _shared_session is not None:
             _shared_session.chiudi()
             _shared_session = None
-            logger.info("Borsa Italiana shared session closed")
+            logger.debug("Borsa Italiana shared session closed")

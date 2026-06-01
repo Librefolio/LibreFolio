@@ -2842,7 +2842,7 @@ class AssetSourceManager:
             existing_res = await session.execute(existing_stmt)
             existing_by_asset = {row.asset_id: row for row in existing_res.scalars().all()}
 
-            logger.info(
+            logger.debug(
                 "Current-price persist: processing %d fresh provider quote(s) for %s (existing rows today: %d)",
                 len(items_to_persist),
                 today,
@@ -2868,7 +2868,7 @@ class AssetSourceManager:
                             fetched_at=utcnow(),
                         )
                     )
-                    logger.info(
+                    logger.debug(
                         "  [F.2 bootstrap] asset=%s date=%s close=%s currency=%s source=%s",
                         item.asset_id,
                         today,
@@ -2884,7 +2884,7 @@ class AssetSourceManager:
                     for field_name, new_val in patch.items():
                         setattr(existing, field_name, new_val)
                     existing.fetched_at = utcnow()
-                    logger.info(
+                    logger.debug(
                         "  [Intra-day price extend] asset=%s date=%s new_close=%s patch_fields=%s",
                         item.asset_id,
                         today,
@@ -2894,7 +2894,7 @@ class AssetSourceManager:
 
             try:
                 await session.commit()
-                logger.info("Current-price persist: commit OK (%d row(s) written/updated)", len(items_to_persist))
+                logger.debug("Current-price persist: commit OK (%d row(s) written/updated)", len(items_to_persist))
             except Exception as commit_err:
                 logger.warning("Current-price OHLC persist failed, rolling back: %s", commit_err)
                 await session.rollback()
@@ -2902,7 +2902,7 @@ class AssetSourceManager:
             # Only log when something was expected but filtered out (db:last_known or today mismatch)
             skipped_count = sum(1 for r in results if r.source == "db:last_known")
             if skipped_count > 0:
-                logger.info(
+                logger.debug(
                     "Current-price persist: skipped %d item(s) with source=db:last_known (stale fallback, not persisted)",
                     skipped_count,
                 )

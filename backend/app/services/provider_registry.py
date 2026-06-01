@@ -203,7 +203,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
         for code, instance, priority in plugins_with_priority:
             try:
                 if instance.can_parse(file_path):
-                    logger.info(
+                    logger.debug(
                         "Auto-detected plugin for file",
                         plugin_code=code,
                         priority=priority,

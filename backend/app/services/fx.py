@@ -435,7 +435,7 @@ async def ensure_rates_multi_source(
 
     # MANUAL provider: skip sync silently — manual pairs don't auto-sync
     if provider_code.upper() == "MANUAL":
-        logger.info(f"MANUAL provider: skipping sync for {len(currencies)} currencies " f"({date_range[0]} to {date_range[1]}) — manual-only pair")
+        logger.debug(f"MANUAL provider: skipping sync for {len(currencies)} currencies " f"({date_range[0]} to {date_range[1]}) — manual-only pair")
         return {
             "provider": "MANUAL",
             "base_currency": "",
@@ -457,7 +457,7 @@ async def ensure_rates_multi_source(
 
     actual_base = base_currency if base_currency else provider.base_currency
 
-    logger.info(f"Syncing FX rates using {provider.name} ({provider.code}) " f"with base {actual_base} " f"for {len(currencies)} currencies from {date_range[0]} to {date_range[1]}")
+    logger.debug(f"Syncing FX rates using {provider.name} ({provider.code}) " f"with base {actual_base} " f"for {len(currencies)} currencies from {date_range[0]} to {date_range[1]}")
 
     start_date, end_date = date_range
 
@@ -548,7 +548,7 @@ async def ensure_rates_multi_source(
 
     for currency, observations in rates_by_currency.items():
         if not observations:
-            logger.info(f"No rates available for {currency} in date range")
+            logger.debug(f"No rates available for {currency} in date range")
             continue
 
         currencies_synced.append(currency)
@@ -566,10 +566,10 @@ async def ensure_rates_multi_source(
 
     db_only_pairs = set(existing_lookup.keys()) - api_pairs
     if db_only_pairs:
-        logger.info(f"Found {len(db_only_pairs)} rate(s) in database not returned by API " f"(this is normal if API doesn't provide historical data for some pairs)")
+        logger.debug(f"Found {len(db_only_pairs)} rate(s) in database not returned by API " f"(this is normal if API doesn't provide historical data for some pairs)")
         # Optional: Log first few examples at debug level
         for base, quote, rate_date in list(db_only_pairs)[:5]:
-            logger.debug(f"  DB-only rate: {base}/{quote} on {rate_date}")
+            logger.log(5, f"  DB-only rate: {base}/{quote} on {rate_date}")
 
     # Track changes per currency (for logging)
     changes_by_currency = {}
@@ -596,13 +596,13 @@ async def ensure_rates_multi_source(
                 if currency not in changes_by_currency:
                     changes_by_currency[currency] = 0
                 changes_by_currency[currency] += 1
-                logger.debug(f"Updated rate: {base}/{quote} on {obs_date}: {old_rate_truncated} -> {rate_truncated}")
+                logger.log(5, f"Updated rate: {base}/{quote} on {obs_date}: {old_rate_truncated} -> {rate_truncated}")
         # else: Same value after truncation, no change to log
 
     total_changed = sum(changes_by_currency.values())
 
     if total_changed == 0 and total_fetched > 0:
-        logger.info(f"All {total_fetched} fetched rate(s) already exist in DB with same values " f"(existing_lookup={len(existing_lookup)}, all_normalized={len(all_normalized)})")
+        logger.debug(f"All {total_fetched} fetched rate(s) already exist in DB with same values " f"(existing_lookup={len(existing_lookup)}, all_normalized={len(all_normalized)})")
 
     # Process each currency for batch insert
     for currency, observations in rates_by_currency.items():
@@ -646,7 +646,7 @@ async def ensure_rates_multi_source(
 
             await session.execute(batch_stmt)
 
-            logger.info(f"Synced {currency}: {len(observations)} fetched, " f"{changed_count} changed")
+            logger.debug(f"Synced {currency}: {len(observations)} fetched, " f"{changed_count} changed")
 
     await session.commit()
 
@@ -988,7 +988,7 @@ async def sync_pairs_bulk(
                 # If fallback was used, log it
                 if route_idx > 0 and result.status in (SyncStatus.OK, SyncStatus.PARTIAL):
                     providers_used = [s["provider"] for s in steps if s["provider"].upper() != "MANUAL"]
-                    logger.info(f"Pair {pair_slug}: primary route failed, used fallback route {route_idx + 1} " f"(providers: {', '.join(providers_used)})")
+                    logger.warning(f"Pair {pair_slug}: primary route failed, used fallback route {route_idx + 1} " f"(providers: {', '.join(providers_used)})")
 
                 return result
 

@@ -269,7 +269,7 @@ class BOEProvider(FXRateProvider):
                 logger.debug(f"Skipping invalid line in BOE response: {line[:50]}... ({e})")
                 continue
 
-        logger.info(f"Parsed {len(observations)} rates for {currency} from BOE")
+        logger.debug(f"Parsed {len(observations)} rates for {currency} from BOE")
         return observations
 
     def _parse_boe_date(self, date_str: str) -> date:  # pragma: no cover

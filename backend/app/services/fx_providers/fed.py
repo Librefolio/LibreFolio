@@ -298,5 +298,5 @@ class FEDProvider(FXRateProvider):
                 logger.debug(f"Skipping invalid line in FRED CSV: {line[:50]}... ({e})")
                 continue
 
-        logger.info(f"Parsed {len(observations)} rates for {currency} from FRED")
+        logger.debug(f"Parsed {len(observations)} rates for {currency} from FRED")
         return observations

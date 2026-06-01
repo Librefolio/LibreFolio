@@ -198,7 +198,7 @@ async def _prewarm_provider_caches():
         for provider_info in AssetProviderRegistry.list_providers():
             code = provider_info["code"]
             AssetProviderRegistry.get_provider_instance(code)
-        logger.info("Provider caches pre-warmed successfully")
+        logger.debug("Provider caches pre-warmed successfully")
     except Exception as e:
         logger.warning(f"Provider cache pre-warm failed (non-blocking): {e}")
 

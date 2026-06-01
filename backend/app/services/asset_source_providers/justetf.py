@@ -106,7 +106,7 @@ def _ensure_live_feed(isin: str) -> None:
         t = threading.Thread(target=_live_quote_worker, args=(isin,), daemon=True, name=f"justetf-live-{isin}")
         _live_quote_threads[isin] = t
         t.start()
-        logger.info(f"Started live quote feed for {isin}")
+        logger.debug(f"Started live quote feed for {isin}")
 
 
 def shutdown_live_feeds() -> None:  # pragma: no cover
@@ -116,7 +116,7 @@ def shutdown_live_feeds() -> None:  # pragma: no cover
         for _isin, t in _live_quote_threads.items():
             t.join(timeout=3)
         _live_quote_threads.clear()
-    logger.info("All JustETF live quote feeds stopped")
+    logger.debug("All JustETF live quote feeds stopped")
 
 
 def _country_name_to_iso3(country_name: str) -> Optional[str]:  # pragma: no cover
@@ -382,7 +382,7 @@ class JustETFProvider(AssetSourceProvider):
                             )
                         )
                     if events:
-                        logger.info(f"Parsed {len(events)} DIVIDEND events for {identifier} from chart data")
+                        logger.debug(f"Parsed {len(events)} DIVIDEND events for {identifier} from chart data")
             except Exception as e:
                 logger.debug(f"Could not parse dividends from chart for {identifier}: {e}")
 
