@@ -33,7 +33,7 @@
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
-    import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
+    import {formatProviderText, formatSyncDetail, fxPairHtml} from '$lib/utils/providerHelpers';
     import {buildFxSyncToast} from '$lib/utils/syncToastHelpers';
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
 
@@ -446,14 +446,14 @@
             if (filterCurrency1 && !remaining.has(filterCurrency1)) filterCurrency1 = '';
             if (filterCurrency2 && !remaining.has(filterCurrency2)) filterCurrency2 = '';
 
-            const pairLabel = deletingPair.slug.replace('-', '/');
+            const pairLabel = fxPairHtml(deletingPair.slug);
             toasts.success($_('fx.delete.toastOk', {values: {pair: pairLabel, count: rateCount}}));
 
             deleteDialogOpen = false;
             deletingPair = null;
         } catch (e: any) {
             console.error('Failed to delete pair:', e);
-            toasts.error($_('fx.delete.toastFailed', {values: {pair: deletingPair?.slug?.replace('-', '/') ?? ''}}));
+            toasts.error($_('fx.delete.toastFailed', {values: {pair: deletingPair?.slug ? fxPairHtml(deletingPair.slug) : ''}}));
         } finally {
             deleteLoading = false;
         }
