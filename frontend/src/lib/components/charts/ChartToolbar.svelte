@@ -25,10 +25,11 @@
 <div class="flex flex-wrap items-center gap-2 text-sm">
     <!-- Chart Type Toggle -->
     <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-        <button class="px-3 py-1.5 transition-colors {chartType === 'line' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" onclick={() => onChartTypeChange?.('line')}> Line </button>
+        <button class="px-3 py-1.5 transition-colors {chartType === 'line' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" data-testid="chart-type-line" onclick={() => onChartTypeChange?.('line')}> Line </button>
         <button
             class="px-3 py-1.5 transition-colors {chartType === 'candlestick' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}
                 {disableCandlestick ? 'opacity-50 cursor-not-allowed' : ''}"
+            data-testid="chart-type-candlestick"
             disabled={disableCandlestick}
             onclick={() => !disableCandlestick && onChartTypeChange?.('candlestick')}
             title={disableCandlestick ? 'Coming soon' : ''}

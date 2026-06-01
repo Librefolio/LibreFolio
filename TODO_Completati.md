@@ -202,3 +202,17 @@ L'infrastruttura è completa. Resta da fare il **picker modale** per selezionare
 - Chart settings modal per personalizzazione grafico
 - CSV import/export dati
 - Multi-lingua (EN/IT/FR/ES) completa
+
+---
+
+## 📱 Mobile Column Reorder (DataTable) ✅
+
+**Data aggiunta**: 23 Gennaio 2026
+**Data completamento**: ~Maggio 2026
+**Status**: ✅ COMPLETATO
+
+### Contesto
+Il riordinamento colonne nella DataTable su mobile era limitato (no drag & drop touch).
+
+### Soluzione
+Implementati bottoni freccia su/giù come controllo alternativo al drag & drop desktop. Il riordinamento funziona correttamente su dispositivi touch. Non è stato necessario implementare touch drag nativo.

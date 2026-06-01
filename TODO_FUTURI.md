@@ -44,21 +44,6 @@ Quando TanStack Table v9 sarà **rilasciato come stabile** con supporto ufficial
 ---
 
 
-## 📱 Mobile Column Reorder (DataTable)
-
-**Data aggiunta**: 23 Gennaio 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Bassa
-
-### Contesto
-Il riordinamento colonne nella DataTable funziona con drag & drop su desktop, ma su mobile usiamo bottoni su/giù. Potrebbe essere migliorato con touch drag nativo.
-
-### Azione Futura
-1. Verificare comportamento su dispositivi touch reali (iOS Safari, Android Chrome)
-2. Se necessario, implementare touch drag con `touchstart`, `touchmove`, `touchend`
-3. Oppure integrare libreria come SortableJS con opzione `handle`
-
----
 
 ## 👥 Filtro Utente nella Files Page
 
@@ -223,40 +208,6 @@ Creare un assistente AI basato su MCP server chiamato "QuarkAI".
 
 ---
 
-## 🖼️ Client-side Image Preview Cache (LazyImage)
-
-**Data aggiunta**: 23 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Media
-
-### Contesto
-
-Quando si passa dalla modalità **griglia** (preview 120x120) alla modalità **lista** (preview 48x48) nella pagina files, il browser fa nuove richieste al backend per le stesse immagini a risoluzione inferiore. Questo succede perché le URL sono diverse (`?img_preview=120x120` vs `?img_preview=48x48`).
-
-Sarebbe più efficiente riutilizzare la risorsa già caricata a risoluzione maggiore e lasciare al browser il ridimensionamento CSS, evitando chiamate network ridondanti.
-
-### Azione Futura
-
-1. Creare un **Map globale** lato client (`imagePreviewCache: Map<fileId, {maxSize: number, objectUrl: string}>`)
-2. Nel componente `LazyImage`, prima di fare fetch, controllare se il fileId è già in cache a risoluzione >= quella richiesta
-3. Se sì, usare l'objectUrl già disponibile e fare `object-fit: cover` CSS
-4. Se no, fare la richiesta normale e salvare in cache
-5. Gestire la pulizia cache con `URL.revokeObjectURL()` quando i componenti vengono distrutti
-6. Eventuale Service Worker per intercettare le richieste `?img_preview=` e servire versioni cached
-
-### Note
-
-- La cache backend (50MB, TTL 1h) già mitiga il problema server-side
-- Questa ottimizzazione è puramente client-side per evitare roundtrip network
-- Valutare l'impatto su memoria del browser se molte immagini sono in griglia
-
----
-
-### 📊 Aggiungere al componente Linea altri stili della line al segnale
-
-Oltre l'attuale visualizzazione a segmenti spezzati, indagare se si possono mostrare le linee anche come spilne smoot, ed in quanti modi, e se si, renderlo un parametro estetico configurabile
-
----
 
 ### 📊 Grafico Asset con rendimento a N
 Con i dati degli asset ha senso mostrare i grafici oltre che per abs e % da P0, anche il rendimento a N (anni o giorni, parametrico) con il significato che ogni punto rappresenta il guadagno/perdita di valore percentuale dell'asset se vosse stato comprato N giorni prima e venduto nel giorno attuale.
@@ -289,32 +240,6 @@ Ogni provider (ECB, FED, BOE, SNB) dovrebbe avere una **pagina dedicata** nella 
 3. Il frontend già usa `docs_url` per il link nell'info bar del FxProviderSelect (cliccando sull'icona del provider)
 
 ---
-
-## 📊 CandlestickChart / VolumeBar — Visualizzazione OHLCV
-
-**Data aggiunta**: 16 Marzo 2026  
-**Aggiornato**: 15 Aprile 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Media
-
-### Contesto
-I dati OHLCV (Open/High/Low/Close/Volume) sono già salvati nel DB e modificabili
-dal Data Editor nella detail page degli asset. Manca solo la **visualizzazione
-grafica** con candele giapponesi e barre di volume.
-
-Per FX si hanno solo close rate giornalieri — non esiste OHLC reale.
-
-### Da implementare
-- `frontend/src/lib/components/charts/CandlestickChart.svelte` — grafico candlestick ECharts
-- `frontend/src/lib/components/charts/VolumeBar.svelte` — barre volume sotto il chart
-- Aggiungere i componenti al barrel export `charts/index.ts`
-- Togliere il flag `disableCandlestick` in `ChartToolbar.svelte` per gli asset
-- Per FX il toggle Line/Candlestick resta disabilitato (`disableCandlestick={true}`)
-
-### Note
-- Gli stub placeholder sono stati rimossi nella cleanup Phase 6 Step 6
-- I dati OHLCV arrivano da yfinance e JustETF (già implementati nei provider)
-- L'OHLC sintetizzato (O=prev close) non ha valore informativo per FX
 
 
 

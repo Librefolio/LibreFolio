@@ -35,6 +35,12 @@
         originalCurrencyFlag?: string;
         /** Original (unconverted) value — from original_close when FX conversion is active */
         originalValue?: number;
+        /** OHLCV fields — optional, used by CandlestickChart */
+        open?: number | null;
+        high?: number | null;
+        low?: number | null;
+        close?: number | null;
+        volume?: number | null;
     }
 
     interface Props {

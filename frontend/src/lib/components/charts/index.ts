@@ -8,6 +8,7 @@
 
 // Core chart components
 export {default as LineChart} from './LineChart.svelte';
+export {default as CandlestickChart} from './CandlestickChart.svelte';
 export {default as ChartToolbar} from './ChartToolbar.svelte';
 export {default as ChartAestheticsSection} from './ChartAestheticsSection.svelte';
 export {default as ChartSignalsSection} from './ChartSignalsSection.svelte';
