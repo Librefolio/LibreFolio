@@ -26,6 +26,8 @@
         yAxisMax?: number | undefined;
         /** Called when any value changes */
         onchange?: (values: {colorByBaseline: boolean; areaFill: boolean; gridLines: boolean; staleGradient: boolean; yAxisMode: 'auto' | 'include0' | 'custom'; yAxisMin: number | undefined; yAxisMax: number | undefined}) => void;
+        /** Fields that don't apply in current chart type — rendered greyed out and non-interactive */
+        disabledFields?: Set<string>;
     }
 
     let {
@@ -37,6 +39,7 @@
         yAxisMin = $bindable<number | undefined>(undefined),
         yAxisMax = $bindable<number | undefined>(undefined),
         onchange,
+        disabledFields = new Set<string>(),
     }: Props = $props();
 
     // =========================================================================
@@ -52,7 +55,7 @@
     <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{$t('common.aesthetics')}</h3>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <!-- Color by baseline -->
-        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
+        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 {disabledFields.has('colorByBaseline') ? 'opacity-40 pointer-events-none' : ''}">
             <span>
                 <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.baselineColors')}</span>
                 <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.baselineColorsDesc')}</span>
@@ -60,6 +63,7 @@
             <button
                 aria-label={$t('chartSettings.baselineColors')}
                 class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {colorByBaseline ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                disabled={disabledFields.has('colorByBaseline')}
                 onclick={() => {
                     colorByBaseline = !colorByBaseline;
                     emitChange();
@@ -71,7 +75,7 @@
         </div>
 
         <!-- Area fill -->
-        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
+        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 {disabledFields.has('areaFill') ? 'opacity-40 pointer-events-none' : ''}">
             <span>
                 <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.areaFill')}</span>
                 <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.areaFillDesc')}</span>
@@ -79,6 +83,7 @@
             <button
                 aria-label={$t('chartSettings.areaFill')}
                 class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {areaFill ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                disabled={disabledFields.has('areaFill')}
                 onclick={() => {
                     areaFill = !areaFill;
                     emitChange();
@@ -109,7 +114,7 @@
         </div>
 
         <!-- Stale gradient -->
-        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
+        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 {disabledFields.has('staleGradient') ? 'opacity-40 pointer-events-none' : ''}">
             <span>
                 <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.staleGradient')}</span>
                 <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.staleGradientDesc')}</span>
@@ -117,6 +122,7 @@
             <button
                 aria-label={$t('chartSettings.staleGradient')}
                 class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {staleGradient ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                disabled={disabledFields.has('staleGradient')}
                 onclick={() => {
                     staleGradient = !staleGradient;
                     emitChange();

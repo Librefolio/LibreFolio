@@ -201,6 +201,7 @@
                                     props: {
                                         value: numVal,
                                         step: col.step ?? 0.0001,
+                                        min: col.min,
                                         placeholder: col.placeholder ?? '',
                                         onchange: (newValue: number | null) => handleCellEditByRowId(r.rowId, col.key, newValue),
                                     },

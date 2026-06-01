@@ -241,4 +241,46 @@ test.describe('Asset Detail Page', () => {
         await expect(page.getByTestId('asset-detail-page')).toBeVisible();
         await expect(page.getByTestId('asset-detail-chart')).toBeVisible();
     });
+
+    // ========================================================================
+    // Test 17: Chart type toggle — Line → Candlestick → Line
+    // ========================================================================
+    test('chart type toggle switches between line and candlestick', async ({page}) => {
+        await goToFirstAssetDetail(page);
+
+        // Chart toolbar must be visible and "Candle" button enabled
+        const candleBtn = page.getByTestId('chart-type-candlestick');
+        const lineBtn = page.getByTestId('chart-type-line');
+        await expect(candleBtn).toBeVisible();
+        await expect(candleBtn).not.toBeDisabled();
+
+        // Switch to candlestick
+        await candleBtn.click();
+        await page.waitForTimeout(500);
+
+        // Candlestick chart container must appear inside asset-detail-chart
+        const chartWrapper = page.getByTestId('asset-detail-chart');
+        await expect(chartWrapper.getByTestId('candlestick-chart')).toBeVisible({timeout: 5000});
+
+        // Switch back to line — candlestick div disappears
+        await lineBtn.click();
+        await page.waitForTimeout(500);
+        await expect(chartWrapper.getByTestId('candlestick-chart')).not.toBeVisible();
+    });
+
+    // ========================================================================
+    // Test 18: Candlestick renders without JS error
+    // ========================================================================
+    test('candlestick chart renders without console errors', async ({page}) => {
+        const errors: string[] = [];
+        page.on('pageerror', (err) => errors.push(err.message));
+
+        await goToFirstAssetDetail(page);
+        await page.getByTestId('chart-type-candlestick').click();
+        await page.waitForTimeout(800);
+
+        // ECharts must have initialised without throwing
+        await expect(page.getByTestId('asset-detail-chart').getByTestId('candlestick-chart')).toBeVisible({timeout: 5000});
+        expect(errors).toHaveLength(0);
+    });
 });

@@ -13,9 +13,12 @@
     import type {ChartType, ViewMode} from './ChartToolbar.svelte';
     import ChartToolbar from './ChartToolbar.svelte';
     import type {LineDataPoint} from './LineChart.svelte';
+    import CandlestickChart from './CandlestickChart.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
+    import {ChartLine, ChartCandlestick} from 'lucide-svelte';
 
     // =========================================================================
     // Event Marker types and constants
@@ -78,6 +81,8 @@
         onMeasureHover?: (date: string, value: number) => void;
         /** Hide the built-in toolbar (chart type + view mode toggles) */
         hideToolbar?: boolean;
+        /** Externally controlled chart type (when toolbar is hidden) */
+        externalChartType?: ChartType;
         /** Externally controlled view mode (when toolbar is hidden) */
         externalViewMode?: ViewMode;
         /** Custom label for the main series in the tooltip (overrides currency) */
@@ -106,6 +111,10 @@
         mainCurrency?: string;
         /** Main asset native currency flag emoji (e.g. "🇺🇸") */
         mainCurrencyFlag?: string;
+        /** Disable the candlestick toggle (e.g. for FX charts without OHLCV data) */
+        disableCandlestick?: boolean;
+        /** Callback when chart type changes (for external state sync) */
+        onChartTypeChange?: (type: ChartType) => void;
     }
 
     let {
@@ -128,6 +137,7 @@
         onMeasureClick,
         onMeasureHover,
         hideToolbar = false,
+        externalChartType,
         externalViewMode,
         mainSeriesLabel,
         eventMarkers = [],
@@ -142,6 +152,8 @@
         displayCurrencyFlag,
         mainCurrency: mainCurrencyProp,
         mainCurrencyFlag: mainCurrencyFlagProp,
+        disableCandlestick = false,
+        onChartTypeChange: onChartTypeChangeProp,
     }: Props = $props();
 
     // =========================================================================
@@ -156,7 +168,7 @@
     let chartOptionSet = false;
 
     $effect(() => {
-        chartType = initialChartType;
+        chartType = externalChartType ?? initialChartType;
     });
     $effect(() => {
         viewMode = externalViewMode ?? initialViewMode;
@@ -217,6 +229,7 @@
 
     function handleChartTypeChange(type: ChartType) {
         chartType = type;
+        onChartTypeChangeProp?.(type);
     }
 
     function handleViewModeChange(mode: ViewMode) {
@@ -247,6 +260,15 @@
 
     function renderChart() {
         if (!chartContainer || displayData.length === 0) return;
+
+        // If the DOM element changed (e.g. after switching chart type), dispose stale instance
+        if (chartInstance && chartInstance.getDom() !== chartContainer) {
+            chartInstance.dispose();
+            chartInstance = null;
+            resizeObserver?.disconnect();
+            resizeObserver = null;
+            chartOptionSet = false;
+        }
 
         if (!resizeObserver) {
             resizeObserver = new ResizeObserver(() => {
@@ -515,84 +537,8 @@
             });
         }
 
-        // Overlay signals
-        if (overlaySignals && overlaySignals.length > 0) {
-            for (const signal of overlaySignals) {
-                if (!signal.data.length) continue;
-                const sType = signal.seriesType ?? 'line';
-                const signalLookup = new Map(signal.data.map((d) => [d.date, d.value]));
-                const signalSeriesData: any[] = dates.map((date) => signalLookup.get(date) ?? null);
-
-                if (sType === 'band' && signal.bandData) {
-                    const bandSeries = buildBandSeries(signal, dates, isDark);
-                    for (const bs of bandSeries) {
-                        bs.xAxisIndex = 0;
-                        series.push(bs);
-                    }
-                    continue;
-                }
-                if (sType === 'bar') {
-                    const barS = buildBarSeries(signal, signalSeriesData, isDark);
-                    barS.xAxisIndex = 0;
-                    series.push(barS);
-                    continue;
-                }
-
-                const overlaySeries: any = {
-                    type: 'line',
-                    name: signal.label,
-                    data: signalSeriesData,
-                    connectNulls: true,
-                    smooth: false,
-                    symbol: 'none',
-                    showSymbol: false,
-                    sampling: 'lttb',
-                    xAxisIndex: 0,
-                    yAxisIndex: signal.yAxisIndex ?? 0,
-                    lineStyle: {color: signal.color, width: signal.lineWidth, type: signal.lineType, opacity: signal.opacity ?? 1},
-                    itemStyle: {color: signal.color, opacity: signal.opacity ?? 1},
-                    emphasis: {focus: 'none'},
-                    z: signal.opacity != null && signal.opacity < 1 ? 0 : 1,
-                };
-
-                if ((signal.markerStart || signal.markerEnd) && signalSeriesData.length > 0) {
-                    const markData: any[] = [];
-
-                    if (signal.markerStart) {
-                        for (let i = 0; i < signalSeriesData.length; i++) {
-                            if (signalSeriesData[i] !== null) {
-                                markData.push({
-                                    coord: [dates[i], signalSeriesData[i]],
-                                    symbol: signal.markerStart,
-                                    symbolSize: Math.max(signal.lineWidth * 3, 8),
-                                    symbolRotate: 0, // real rotation set by updateArrowRotations()
-                                    itemStyle: {color: signal.color},
-                                });
-                                break;
-                            }
-                        }
-                    }
-                    if (signal.markerEnd) {
-                        for (let i = signalSeriesData.length - 1; i >= 0; i--) {
-                            if (signalSeriesData[i] !== null) {
-                                markData.push({
-                                    coord: [dates[i], signalSeriesData[i]],
-                                    symbol: signal.markerEnd,
-                                    symbolSize: Math.max(signal.lineWidth * 3, 8),
-                                    symbolRotate: 0, // real rotation set by updateArrowRotations()
-                                    itemStyle: {color: signal.color},
-                                });
-                                break;
-                            }
-                        }
-                    }
-                    if (markData.length > 0) {
-                        overlaySeries.markPoint = {data: markData, label: {show: false}, animation: false};
-                    }
-                }
-                series.push(overlaySeries);
-            }
-        }
+        // Overlay signals — uses shared helper
+        series.push(...buildOverlaySignalSeries(overlaySignals, dates, isDark, 0));
 
         // Baseline reference line
         if (useBaselineColoring) {
@@ -720,18 +666,9 @@
         }
 
         // Check which overlay axes are active
-        const hasSecondaryAxis = overlaySignals.some((s) => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
-        const hasTertiaryAxis = overlaySignals.some((s) => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
-        const extraAxesCount = (hasSecondaryAxis ? 1 : 0) + (hasTertiaryAxis ? 1 : 0);
-
-        // Y-axis configuration
-        const isCustom = yAxisMode === 'custom';
-        const isInclude0 = yAxisMode === 'include0';
-        let effectiveMin = isCustom && yAxisMin !== undefined ? yAxisMin : undefined;
-        let effectiveMax = isCustom && yAxisMax !== undefined ? yAxisMax : undefined;
-        if (effectiveMin !== undefined && effectiveMax !== undefined && effectiveMin > effectiveMax) {
-            [effectiveMin, effectiveMax] = [effectiveMax, effectiveMin];
-        }
+        // Y-axis configuration — uses shared helpers
+        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(overlaySignals, isDark, 0);
+        const colors = getChartColors(isDark);
 
         // Preserve zoom state across re-renders
         let savedZoom: {start: number; end: number} | null = null;
@@ -761,7 +698,7 @@
 
         const option: echarts.EChartsOption = {
             animation: false,
-            grid: [{top: 20, right: extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12, bottom: 20, left: 10, containLabel: true}],
+            grid: [{top: 20, right: computeRightMargin(extraAxesCount), bottom: 20, left: 10, containLabel: true}],
             xAxis: [
                 {
                     type: 'category',
@@ -772,71 +709,8 @@
                     splitLine: {show: false},
                 },
             ],
-            yAxis: [
-                {
-                    type: 'value',
-                    gridIndex: 0,
-                    position: 'left',
-                    min: effectiveMin,
-                    max: effectiveMax,
-                    axisLine: {show: true, lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
-                    axisTick: {show: true},
-                    axisLabel: {
-                        color: isDark ? '#94a3b8' : '#6b7280',
-                        fontSize: 11,
-                        formatter: isPercentage
-                            ? (v: number) => `${v.toFixed(1)}%`
-                            : (v: number) => {
-                                  if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
-                                  if (Math.abs(v) >= 1) return v.toFixed(2);
-                                  return v.toFixed(4).replace(/\.?0+$/, '');
-                              },
-                    },
-                    splitLine: {show: showGridLines, lineStyle: {color: isDark ? '#4b5563' : '#d1d5db', type: 'dashed'}},
-                    scale: !isInclude0,
-                },
-                {
-                    type: 'value',
-                    gridIndex: 0,
-                    position: 'right',
-                    name: hasSecondaryAxis ? 'RSI' : '',
-                    nameLocation: 'start',
-                    nameGap: 5,
-                    nameTextStyle: {color: isDark ? '#94a3b8' : '#9ca3af', fontSize: 9, fontWeight: 'bold', align: 'center'},
-                    show: hasSecondaryAxis,
-                    min: hasSecondaryAxis ? undefined : 0,
-                    max: hasSecondaryAxis ? undefined : 100,
-                    axisLine: {show: hasSecondaryAxis, lineStyle: {color: isDark ? '#64748b' : '#9ca3af'}},
-                    axisTick: {show: hasSecondaryAxis},
-                    axisLabel: {show: hasSecondaryAxis, color: isDark ? '#94a3b8' : '#9ca3af', fontSize: 10, formatter: (v: number) => v.toFixed(0)},
-                    splitLine: {show: false},
-                    scale: hasSecondaryAxis,
-                },
-                {
-                    type: 'value',
-                    gridIndex: 0,
-                    position: 'right',
-                    name: hasTertiaryAxis ? 'MACD' : '',
-                    nameLocation: 'start',
-                    nameGap: 5,
-                    nameTextStyle: {color: isDark ? '#a78bfa' : '#7c3aed', fontSize: 9, fontWeight: 'bold', align: 'center'},
-                    show: hasTertiaryAxis,
-                    offset: hasSecondaryAxis && hasTertiaryAxis ? 55 : 0,
-                    min: hasTertiaryAxis ? undefined : 0,
-                    max: hasTertiaryAxis ? undefined : 1,
-                    axisLine: {show: hasTertiaryAxis, lineStyle: {color: isDark ? '#8b5cf6' : '#7c3aed'}},
-                    axisTick: {show: hasTertiaryAxis},
-                    axisLabel: {
-                        show: hasTertiaryAxis,
-                        color: isDark ? '#a78bfa' : '#7c3aed',
-                        fontSize: 10,
-                        formatter: (v: number) => (Math.abs(v) >= 1 ? v.toFixed(2) : v.toFixed(4).replace(/\.?0+$/, '')),
-                    },
-                    splitLine: {show: false},
-                    scale: hasTertiaryAxis,
-                },
-            ],
-            dataZoom: [{type: 'inside', xAxisIndex: [0], start: savedZoom?.start ?? 0, end: savedZoom?.end ?? 100, zoomOnMouseWheel: true, moveOnMouseMove: true}],
+            yAxis: [buildPriceYAxis({mode: yAxisMode, min: yAxisMin, max: yAxisMax, isPercentage}, colors, {gridIndex: 0, showGridLines}), ...secondaryAxes],
+            dataZoom: [{...buildDataZoom([0])[0], start: savedZoom?.start ?? 0, end: savedZoom?.end ?? 100}],
             tooltip: {
                 trigger: 'axis',
                 backgroundColor: isDark ? '#1e293b' : '#ffffff',
@@ -1009,18 +883,53 @@
 <div class="space-y-2">
     <!-- Toolbar (hidden when parent provides external controls) -->
     {#if !hideToolbar}
-        <ChartToolbar {chartType} {viewMode} onChartTypeChange={handleChartTypeChange} onViewModeChange={handleViewModeChange} disableCandlestick={true} />
+        <ChartToolbar {chartType} {viewMode} onChartTypeChange={handleChartTypeChange} onViewModeChange={handleViewModeChange} {disableCandlestick} />
     {/if}
 
     <!-- Unified Chart -->
     <div class="relative">
+        {#if !disableCandlestick}
+            <!-- Floating chart-type toggle (top-left on chart) -->
+            <div class="absolute top-2 left-12 z-10 flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity">
+                <button
+                    class="p-1.5 transition-colors {chartType === 'line' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                    data-testid="chart-type-line"
+                    title="Line chart"
+                    onclick={() => handleChartTypeChange('line')}><ChartLine size={14} /></button
+                >
+                <button
+                    class="p-1.5 transition-colors {chartType === 'candlestick' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                    data-testid="chart-type-candlestick"
+                    title="Candlestick chart"
+                    onclick={() => handleChartTypeChange('candlestick')}><ChartCandlestick size={14} /></button
+                >
+            </div>
+        {/if}
         {#if chartType === 'line'}
             <div bind:this={chartContainer} class="w-full" style="height: {chartHeight};" class:cursor-crosshair={measureMode}></div>
         {:else}
-            <!-- Candlestick stub — TODO Phase 6 (Assets) -->
-            <div class="flex items-center justify-center bg-gray-50 dark:bg-slate-800 rounded-lg border border-dashed border-gray-300 dark:border-slate-600" style="height: {chartHeight};">
-                <p class="text-gray-400 dark:text-slate-500 text-sm">Candlestick chart — Coming soon</p>
-            </div>
+            <CandlestickChart
+                {data}
+                currency={currency || undefined}
+                height={chartHeight}
+                {showGridLines}
+                {overlaySignals}
+                {viewMode}
+                {measureMode}
+                {onMeasureClick}
+                {onMeasureHover}
+                {onDblClick}
+                {mainSeriesLabel}
+                {mainIconUrl}
+                {mainAssetType}
+                displayCurrency={displayCurrencyProp}
+                {displayCurrencyFlag}
+                mainCurrency={mainCurrencyProp}
+                mainCurrencyFlag={mainCurrencyFlagProp}
+                {yAxisMode}
+                {yAxisMin}
+                {yAxisMax}
+            />
         {/if}
     </div>
 </div>

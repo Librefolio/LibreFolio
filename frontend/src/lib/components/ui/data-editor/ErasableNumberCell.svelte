@@ -25,6 +25,8 @@
         value: number | null | undefined;
         /** Decimal step for the native input. */
         step?: number;
+        /** Minimum allowed value (values below this are clamped on commit). */
+        min?: number;
         /**
          * Placeholder shown ONLY when the cell is focused for editing (ghost hint).
          * When the value is null the cell instead shows the i18n "Not set" label in
@@ -35,7 +37,7 @@
         onchange: (newValue: number | null) => void;
     }
 
-    let {value, step = 0.01, placeholder = '', onchange}: Props = $props();
+    let {value, step = 0.01, min, placeholder = '', onchange}: Props = $props();
 
     let editing = $state(false);
     // IMPORTANT: `draft` is bound to `<input type="number" bind:value>`. Svelte 5
@@ -59,18 +61,16 @@
     let isCleared = $derived(value === -1);
 
     function commit() {
-        // Order matters: emit the new value FIRST, THEN flip `editing` off.
-        // If we flipped first, the `$effect` above would run with the stale prop
-        // `value` (still the pre-edit one) and reset `draft` to that value or null -
-        // the user's input would appear to vanish on blur.
         if (draft === null || draft === undefined || Number.isNaN(draft)) {
             if (value !== null && value !== undefined) {
                 onchange(null);
             }
         } else {
-            const n = Number(draft);
-            if (!Number.isNaN(n) && n !== value) {
-                onchange(n);
+            let n = Number(draft);
+            if (!Number.isNaN(n)) {
+                if (min !== undefined && n < min) n = min;
+                if (n !== value) onchange(n);
+                draft = n;
             }
         }
         editing = false;
@@ -129,6 +129,7 @@
                    {isNotSet && !editing ? 'italic text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}"
             bind:value={draft}
             {step}
+            {min}
             placeholder={isNotSet && !editing ? $t('dataEditor.cell.notSet') : placeholder}
             onfocus={() => (editing = true)}
             onblur={commit}

@@ -134,6 +134,25 @@ class FAPricePoint(BaseModel):
             return None
         return Decimal(str(v))
 
+    @field_validator("close", mode="after")
+    @classmethod
+    def close_must_be_positive(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("close price must be positive (> 0)")
+        return v
+
+    @field_validator("open", "high", "low", "volume", "original_open", "original_high", "original_low", "original_close", mode="after")
+    @classmethod
+    def ohlcv_must_be_positive_or_sentinel(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is None:
+            return None
+        # -1 is the "SET NULL" sentinel — allowed
+        if v == Decimal("-1"):
+            return v
+        if v < 0:
+            raise ValueError("price/volume fields must be >= 0 (or -1 sentinel to clear)")
+        return v
+
     @property
     def close_cur(self) -> Currency:
         """Get close price as Currency object for internal calculations."""
