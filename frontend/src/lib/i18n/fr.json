@@ -663,7 +663,11 @@
         "reduce": "Quantité réduite",
         "addZeroCost": "Dilution",
         "addAtWac": "Auto CMP"
-      }
+      },
+      "pendingCreate": "Transaction en attente (nouvelle, pas encore enregistrée)",
+      "pendingEdit": "Transaction en attente (modifiée, pas encore enregistrée)",
+      "validateHint": "Complétez les champs et validez pour calculer le CMP",
+      "validateToRecalculate": "⚡ Validez maintenant pour recalculer le tableau"
     },
     "promote": {
       "title": "Promouvoir la paire",

@@ -64,7 +64,7 @@
     import {generateUUID} from '$lib/utils/uuid';
     import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
     import {computeSignHint} from '$lib/utils/signHintColor';
-    import {buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/txPayloadHelpers';
+    import {buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/txPayloadHelpers';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/fxConversionHelper';
     import type {TXReadItem} from './types';
@@ -135,6 +135,8 @@
         getWacResult?: ((tempId: string) => {wac: {code: string; amount: string} | null; qualifying_txs: Array<Record<string, any>>; missing_pairs: string[]} | null) | null;
         /** V5: The tempId of the op currently being edited in the BulkModal. */
         editingTempId?: string | null;
+        /** Set of TX IDs from the current batch (uncommitted). Passed to WacPreviewSection for pending markers. */
+        pendingTxIds?: Set<number> | null;
     }
 
     let {
@@ -156,12 +158,13 @@
         getBulkContext,
         getWacResult = null,
         editingTempId = null,
+        pendingTxIds = null,
     }: Props = $props();
 
     /** V5: External WAC result from BulkModal (single source of truth). */
     /** Phase D: local WAC result from FormModal's own validate response (standalone mode). */
     let formWacResult = $state<{wac: {code: string; amount: string} | null; qualifying_txs: Array<Record<string, any>>; missing_pairs: string[]} | null>(null);
-    let externalWacResult = $derived(getWacResult && editingTempId ? getWacResult(editingTempId) : formWacResult);
+    let externalWacResult = $derived((getWacResult && editingTempId ? getWacResult(editingTempId) : null) ?? formWacResult);
 
     // =========================================================================
     // Form state
@@ -332,12 +335,27 @@
                         if (layout) {
                             applyPartnerToDualTo(row, injected, layout);
                         }
+                        // Derive costBasisMode from receiver's state
+                        if (layout === 'transfer_asset' && (injected as any).cost_basis_mode === 'manual') {
+                            costBasisMode = 'manual';
+                        } else {
+                            costBasisMode = 'auto';
+                        }
+                        // Restore receiver's cost_basis_override into draft so WacPreviewSection.value is correct
+                        if (dualTo.cost_basis_override) {
+                            draft = {...draft, cost_basis_override: dualTo.cost_basis_override};
+                        }
+                    } else {
+                        // Solo op (no partner) — use explicit mode from BulkModal when available
+                        costBasisMode = (row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto') ? row.cost_basis_mode : 'auto';
                     }
                 } else {
                     draft = emptyDraft();
+                    costBasisMode = 'auto';
                 }
             } else if (m === 'duplicate' && row) {
                 draft = fromTx(row, {regenerateLink: row.related_transaction_id != null, resetDate: true});
+                costBasisMode = draft.cost_basis_override ? 'manual' : 'auto';
             } else if ((m === 'edit' || m === 'view') && row) {
                 draft = fromTx(row);
                 // C1-fix: if a partner was injected (from BulkModal), use it
@@ -348,6 +366,16 @@
                     const layout = getPairFormLayout(row.type);
                     if (layout) {
                         applyPartnerToDualTo(row, injected, layout);
+                    }
+                    // Derive costBasisMode from receiver's state
+                    if (layout === 'transfer_asset') {
+                        costBasisMode = (injected as any).cost_basis_mode === 'manual' ? 'manual' : 'auto';
+                    } else {
+                        costBasisMode = (row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto') ? row.cost_basis_mode : 'auto';
+                    }
+                    // Restore receiver's cost_basis_override into draft for WacPreviewSection
+                    if (dualTo.cost_basis_override) {
+                        draft = {...draft, cost_basis_override: dualTo.cost_basis_override};
                     }
                 } else if (row.related_transaction_id != null && row.related_transaction_id > 0) {
                     // If the row has a linked partner and its type has a pairFormLayout,
@@ -366,6 +394,8 @@
                             inaccessiblePartnerBrokerId = pBid;
                         }
                     }
+                    // Use explicit mode if available (BulkModal); fallback to override heuristic for DB rows
+                    costBasisMode = (row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto') ? row.cost_basis_mode : (draft.cost_basis_override ? 'manual' : 'auto');
 
                     if (layout) {
                         loadingPartner = true;
@@ -387,9 +417,14 @@
                     // form will still show (from pairLayout) but partner fields empty.
                     const layout = getPairFormLayout(row.type);
                     void layout; // dual form will activate via pairLayout derived
+                    costBasisMode = (row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto') ? row.cost_basis_mode : 'auto';
+                } else {
+                    // Standalone edit (no partner) — use explicit mode from BulkModal when available
+                    costBasisMode = (row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto') ? row.cost_basis_mode : 'auto';
                 }
             } else {
                 draft = emptyDraft();
+                costBasisMode = 'auto';
             }
             lastTypeForReset = draft.type;
             initialDraftKey = JSON.stringify(draft) + JSON.stringify(dualTo);
@@ -760,6 +795,7 @@
                 myIndex = 0;
             }
 
+            upgradeAutoToDetail(payload);
             const sentKey = lastDraftKey;
             const result = await validateTransactions(payload, {fallback: $t('transactions.form.saveFailed')});
 
@@ -776,8 +812,8 @@
             lastValidatedDraftKey = sentKey;
             issuesDismissed = false;
 
-            // Phase D: extract wac_results from validate response (standalone mode only)
-            if (!getWacResult && costBasisMode === 'auto') {
+            // Phase D: extract wac_results from validate response
+            if (costBasisMode === 'auto') {
                 const rawResp = result.rawResponse as Record<string, unknown> | null;
                 const rawWacResults = (rawResp?.wac_results as Array<Record<string, unknown>> | null | undefined) ?? null;
                 if (rawWacResults && rawWacResults.length > 0) {
@@ -1564,7 +1600,7 @@
                             <WacPreviewSection
                                 value={draft.cost_basis_override}
                                 onChange={onCostBasisChange}
-                                variant={mode === 'create' ? 'auto-new' : 'saved'}
+                                mode={costBasisMode}
                                 defaultCode={draft.cash?.code ?? 'EUR'}
                                 disabled={isReadonly}
                                 hideTable={isReadonly}
@@ -1574,6 +1610,7 @@
                                 txDate={draft.date}
                                 onModeChange={(m) => (costBasisMode = m)}
                                 externalResult={externalWacResult}
+                                {pendingTxIds}
                             />
                         </div>
                     {/if}
@@ -1763,7 +1800,7 @@
                             <WacPreviewSection
                                 value={draft.cost_basis_override}
                                 onChange={onCostBasisChange}
-                                variant={mode === 'create' ? 'auto-new' : 'saved'}
+                                mode={costBasisMode}
                                 defaultCode={draft.cash?.code ?? 'EUR'}
                                 disabled={isReadonly}
                                 hideTable={isReadonly}
@@ -1773,6 +1810,7 @@
                                 txDate={draft.date}
                                 onModeChange={(m) => (costBasisMode = m)}
                                 externalResult={externalWacResult}
+                                {pendingTxIds}
                             />
                             {#if Number(draft.quantity) > 0 && !draft.cost_basis_override?.amount?.trim()}
                                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="tx-form-cost-basis-warning">
@@ -1790,7 +1828,7 @@
                     <WacPreviewSection
                         value={draft.cost_basis_override}
                         onChange={onCostBasisChange}
-                        variant={mode === 'create' ? 'auto-new' : 'saved'}
+                        mode={costBasisMode}
                         defaultCode={draft.cash?.code ?? 'EUR'}
                         disabled={isReadonly}
                         hideTable={isReadonly}
@@ -1800,6 +1838,7 @@
                         txDate={draft.date}
                         onModeChange={(m) => (costBasisMode = m)}
                         externalResult={externalWacResult}
+                        {pendingTxIds}
                     />
                 </div>
             {/if}

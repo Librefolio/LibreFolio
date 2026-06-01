@@ -663,7 +663,11 @@
         "reduce": "Quantità ridotta",
         "addZeroCost": "Diluizione",
         "addAtWac": "Auto PMC"
-      }
+      },
+      "pendingCreate": "Transazione in attesa (nuova, non ancora salvata)",
+      "pendingEdit": "Transazione in attesa (modificata, non ancora salvata)",
+      "validateHint": "Completa i campi e valida per calcolare il PMC",
+      "validateToRecalculate": "⚡ Esegui la validazione per ricalcolare la tabella"
     },
     "promote": {
       "title": "Promuovi coppia",

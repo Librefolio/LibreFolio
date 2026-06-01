@@ -663,7 +663,11 @@
         "reduce": "Quantity reduced",
         "addZeroCost": "Dilution",
         "addAtWac": "Auto WAC"
-      }
+      },
+      "pendingCreate": "Pending transaction (new, not yet saved)",
+      "pendingEdit": "Pending transaction (edited, not yet saved)",
+      "validateHint": "Complete the fields and validate to calculate WAC",
+      "validateToRecalculate": "⚡ Validate now to recalculate the table"
     },
     "promote": {
       "title": "Promote pair",

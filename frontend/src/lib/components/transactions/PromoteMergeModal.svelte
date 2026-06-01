@@ -47,6 +47,7 @@
     let resDescription = $state('');
     let resTags = $state<string[]>([]);
     let resCostBasis = $state<{code: string; amount: string} | null>(null);
+    let wacMode = $state<'auto' | 'manual'>(receiverIsNew ? 'auto' : 'manual');
 
     // Dirty guard
     let showDiscardConfirm = $state(false);
@@ -267,12 +268,13 @@
                                 resCostBasis = v;
                                 interacted = true;
                             }}
-                            variant={receiverIsNew ? 'auto-new' : 'saved'}
+                            mode={wacMode}
                             defaultCode="EUR"
                             testid="promote-merge-wac"
                             {senderBrokerId}
                             {assetId}
                             txDate={promoteDate}
+                            onModeChange={(m) => (wacMode = m)}
                         />
                     </div>
                 {/if}

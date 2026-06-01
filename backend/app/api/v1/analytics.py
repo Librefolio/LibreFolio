@@ -21,7 +21,7 @@ from backend.app.services.wac_service import compute_wac_iterative
 
 logger = get_logger(__name__)
 
-analytics_router = APIRouter(prefix="/analytics", tags=["analytics"])
+analytics_router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
 @analytics_router.post(
