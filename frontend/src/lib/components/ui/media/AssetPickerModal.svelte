@@ -313,7 +313,7 @@
                             {searchQuery ? $_('common.noResults') || 'No results' : $_('uploads.noFiles') || 'No files'}
                         </div>
                     {:else if existingViewMode === 'grid'}
-                        <FileGrid files={filteredFiles} mode="select" cardSize="compact" showSearch={false} showActions={false} selectedFileId={selectedFile?.id || null} previewSize="120x120" on:select={(e) => selectExistingFile(e.detail.file)} on:dblselect={() => confirmSelection()} />
+                        <FileGrid files={filteredFiles} mode="select" cardSize="compact" showSearch={false} showActions={false} selectedFileId={selectedFile?.id || null} previewSize="120x120" onselect={(e) => selectExistingFile(e.file)} ondblselect={() => confirmSelection()} />
                     {:else}
                         <!-- List/table view using DataTable -->
                         <div class="list-table-wrapper">

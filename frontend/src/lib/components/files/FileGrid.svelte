@@ -13,42 +13,45 @@
   - selectedFileId: for single-selection highlight
 -->
 <script lang="ts">
-    import {createEventDispatcher} from 'svelte';
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/upload';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import {Check, Download, File as FileIcon, FileSpreadsheet, FileText, Image as ImageIcon, Link2, Search, Trash2, X} from 'lucide-svelte';
     import type {UploadedFile} from '$lib/types';
 
-    // Props
-    /** Files to display */
-    export let files: UploadedFile[] = [];
-    /** Grid mode: 'browse' for files page, 'select' for picker */
-    export let mode: 'browse' | 'select' = 'browse';
-    /** Card size: 'compact' for picker (100px min), 'full' for files page (200px min) */
-    export let cardSize: 'compact' | 'full' = 'full';
-    /** Show search bar above grid */
-    export let showSearch: boolean = true;
-    /** Show action buttons on cards (download, copy link, delete) */
-    export let showActions: boolean = true;
-    /** Currently selected file ID (for select mode) */
-    export let selectedFileId: string | null = null;
-    /** Preview size for images (WxH) */
-    export let previewSize: string = '240x240';
+    interface Props {
+        /** Files to display */
+        files?: UploadedFile[];
+        /** Grid mode: 'browse' for files page, 'select' for picker */
+        mode?: 'browse' | 'select';
+        /** Card size: 'compact' for picker (100px min), 'full' for files page (200px min) */
+        cardSize?: 'compact' | 'full';
+        /** Show search bar above grid */
+        showSearch?: boolean;
+        /** Show action buttons on cards (download, copy link, delete) */
+        showActions?: boolean;
+        /** Currently selected file ID (for select mode) */
+        selectedFileId?: string | null;
+        /** Preview size for images (WxH) */
+        previewSize?: string;
+        /** Called when a file card is clicked */
+        onselect?: (data: {file: UploadedFile}) => void;
+        /** Called when a file card is double-clicked */
+        ondblselect?: (data: {file: UploadedFile}) => void;
+        /** Called when delete is requested */
+        ondelete?: (data: {id: string}) => void;
+        /** Called when copy link is requested */
+        oncopyLink?: (data: {file: UploadedFile}) => void;
+    }
 
-    const dispatch = createEventDispatcher<{
-        select: {file: UploadedFile};
-        dblselect: {file: UploadedFile};
-        delete: {id: string};
-        copyLink: {file: UploadedFile};
-    }>();
+    let {files = [], mode = 'browse', cardSize = 'full', showSearch = true, showActions = true, selectedFileId = null, previewSize = '240x240', onselect, ondblselect, ondelete, oncopyLink}: Props = $props();
 
     // Internal state
-    let searchQuery = '';
-    let copiedFileId: string | null = null;
+    let searchQuery = $state('');
+    let copiedFileId: string | null = $state(null);
 
     // Filtered files
-    $: filteredFiles = searchQuery ? files.filter((f) => f.original_name.toLowerCase().includes(searchQuery.toLowerCase())) : files;
+    const filteredFiles = $derived(searchQuery ? files.filter((f) => f.original_name.toLowerCase().includes(searchQuery.toLowerCase())) : files);
 
     // Helpers
     function isImage(contentType: string): boolean {
@@ -77,15 +80,15 @@
     }
 
     function handleCardClick(file: UploadedFile) {
-        dispatch('select', {file});
+        onselect?.({file});
     }
 
     function handleCardDblClick(file: UploadedFile) {
-        dispatch('dblselect', {file});
+        ondblselect?.({file});
     }
 
     async function handleCopyLink(file: UploadedFile) {
-        dispatch('copyLink', {file});
+        oncopyLink?.({file});
         const fullUrl = `${window.location.origin}${file.url}`;
         try {
             if (navigator.clipboard && window.isSecureContext) {
@@ -111,7 +114,7 @@
     }
 
     function handleDelete(file: UploadedFile) {
-        dispatch('delete', {id: file.id});
+        ondelete?.({id: file.id});
     }
 </script>
 
@@ -121,7 +124,7 @@
         <Search size={16} class="grid-search-icon" />
         <input type="text" class="grid-search-input" placeholder={$t('common.search') || 'Search...'} bind:value={searchQuery} />
         {#if searchQuery}
-            <button class="grid-search-clear" on:click={() => (searchQuery = '')}>
+            <button class="grid-search-clear" onclick={() => (searchQuery = '')}>
                 <X size={14} />
             </button>
         {/if}
@@ -137,16 +140,17 @@
 {:else}
     <!-- Grid -->
     <div class="file-grid" class:compact={cardSize === 'compact'}>
-        {#each filteredFiles as file}
+        {#each filteredFiles as file (file.id)}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="file-card" class:selectable={mode === 'select'} class:selected={selectedFileId === file.id} on:click={() => handleCardClick(file)} on:dblclick={() => handleCardDblClick(file)}>
+            <div class="file-card" class:selectable={mode === 'select'} class:selected={selectedFileId === file.id} onclick={() => handleCardClick(file)} ondblclick={() => handleCardDblClick(file)}>
                 <div class="file-preview" class:compact={cardSize === 'compact'}>
                     {#if isImage(file.mime_type)}
-                        <LazyImage src={getPreviewUrl(file, cardSize === 'compact' ? '120x120' : previewSize)} alt={file.original_name} placeholder="generic" width="100%" height={cardSize === 'compact' ? '80px' : '120px'} />
+                        <LazyImage fileId={file.id} previewUrl={getPreviewUrl(file, cardSize === 'compact' ? '120x120' : previewSize)} alt={file.original_name} placeholder="generic" width="100%" height={cardSize === 'compact' ? '80px' : '120px'} />
                     {:else}
+                        {@const FileIcon = getFileIcon(file.mime_type, file.original_name)}
                         <div class="file-icon-wrapper">
-                            <svelte:component this={getFileIcon(file.mime_type, file.original_name)} size={cardSize === 'compact' ? 24 : 32} />
+                            <FileIcon size={cardSize === 'compact' ? 24 : 32} />
                         </div>
                     {/if}
                     <!-- Selected badge (select mode only) -->
@@ -172,17 +176,31 @@
                 <!-- Actions (browse mode only) -->
                 {#if showActions && mode === 'browse'}
                     <div class="card-actions">
-                        <a href={`${file.url}?download=true`} download={file.original_name} class="action-btn" title={$t('uploads.download') || 'Download'} on:click|stopPropagation>
+                        <a href={`${file.url}?download=true`} download={file.original_name} class="action-btn" title={$t('uploads.download') || 'Download'} onclick={(e) => e.stopPropagation()}>
                             <Download size={14} />
                         </a>
-                        <button class="action-btn" on:click|stopPropagation={() => handleCopyLink(file)} title={$t('uploads.copyLink') || 'Copy Link'}>
+                        <button
+                            class="action-btn"
+                            onclick={(e) => {
+                                e.stopPropagation();
+                                handleCopyLink(file);
+                            }}
+                            title={$t('uploads.copyLink') || 'Copy Link'}
+                        >
                             {#if copiedFileId === file.id}
                                 <Check size={14} class="text-green-500" />
                             {:else}
                                 <Link2 size={14} />
                             {/if}
                         </button>
-                        <button class="action-btn danger" on:click|stopPropagation={() => handleDelete(file)} title={$t('common.delete') || 'Delete'}>
+                        <button
+                            class="action-btn danger"
+                            onclick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(file);
+                            }}
+                            title={$t('common.delete') || 'Delete'}
+                        >
                             <Trash2 size={14} />
                         </button>
                     </div>
