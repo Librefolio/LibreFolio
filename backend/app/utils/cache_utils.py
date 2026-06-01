@@ -112,7 +112,7 @@ def get_ttl_cache(name: str, maxsize: int = 1000, ttl: int = 3600) -> NamedCache
             print(value)
     """
     if name not in _cache_registry:
-        logger.info("Creating new TTL cache", cache_name=name, maxsize=maxsize, ttl_seconds=ttl)
+        logger.debug("Creating new TTL cache", cache_name=name, maxsize=maxsize, ttl_seconds=ttl)
         _cache_registry[name] = NamedCache(name=name, maxsize=maxsize, ttl=ttl)
     return _cache_registry[name]
 
@@ -121,7 +121,7 @@ def clear_cache(name: str) -> bool:
     """Clear a named cache. Returns True if found, False otherwise."""
     if name in _cache_registry:
         _cache_registry[name].clear()
-        logger.info("Cache cleared", cache_name=name)
+        logger.debug("Cache cleared", cache_name=name)
         return True
     return False
 
@@ -154,7 +154,7 @@ def close_all_caches() -> int:
             logger.warning("Failed to close cache", cache_name=name, error=str(e))
     _cache_registry.clear()
     if count:
-        logger.info("All caches closed on shutdown", cache_count=count)
+        logger.debug("All caches closed on shutdown", cache_count=count)
     return count
 
 

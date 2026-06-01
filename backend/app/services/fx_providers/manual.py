@@ -95,5 +95,5 @@ class ManualProvider(FXRateProvider):
         Returns empty dict — the user must insert rates manually
         via the rate upsert endpoint or CSV import.
         """
-        logger.info(f"MANUAL provider: skipping sync for currencies={currencies}, " f"date_range={date_range} (manual-only pair)")
+        logger.debug(f"MANUAL provider: skipping sync for currencies={currencies}, " f"date_range={date_range} (manual-only pair)")
         return {}

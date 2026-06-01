@@ -103,7 +103,7 @@ def create_jwt_token(user_id: int, ttl_hours: int) -> str:
         "exp": now + timedelta(hours=ttl_hours),
     }
     token = jwt.encode(payload, _JWT_SECRET, algorithm=_JWT_ALGORITHM)
-    logger.info("JWT token created", user_id=user_id)
+    logger.debug("JWT token created", user_id=user_id)
     return token
 
 

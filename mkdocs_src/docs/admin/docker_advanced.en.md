@@ -306,7 +306,7 @@ All configuration is managed in the `.env` file (copied from `.env.example`). Th
 | `TEST_PORT` | `6041` | Host port for test server | `.env` |
 | `UID` | `1000` | Container user UID (must match data directory owner) | `.env` |
 | `GID` | `1000` | Container user GID (must match data directory owner) | `.env` |
-| `LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `.env` |
+| `LOG_LEVEL` | `INFO` | Logging verbosity — see **[Log Level Reference →](filesystem.md#logs)** | `.env` |
 | `PORTFOLIO_BASE_CURRENCY` | `EUR` | Base currency for portfolio calculations | `.env` |
 | `PREVIEW_CACHE_MAX_MB` | `50` | Max in-memory image preview cache (MB) | `.env` |
 | `LIBREFOLIO_DATA_DIR` | `/app/backend/data/prod-docker` | Container path for data (do not change) | `docker-compose.yml` |

@@ -61,7 +61,37 @@ Broker report files for the BRIM (Broker Report Import Manager) system:
 
 ### 📝 `logs/`
 
-Application logs in structured JSON format (via `structlog`).
+Application logs in structured JSON format (via `structlog`). Log files rotate weekly and are kept for 1 year (compressed with gzip).
+
+The verbosity is controlled by the `LOG_LEVEL` environment variable.
+
+**What each level captures** — each row shows which log levels are visible:
+
+| LOG_LEVEL | 🔬 TRACE (5) | 🐛 DEBUG (10) | ℹ️ INFO (20) | ⚠️ WARNING (30) | ❌ ERROR (40) | 💀 CRITICAL (50) |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| 🔬`TRACE` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 🐛`DEBUG` | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| ℹ️ **`INFO`** *(default)* | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
+| ⚠️ `WARNING` | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| ❌`ERROR` | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| 💀`CRITICAL` | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+
+**What each level means:**
+
+| Level | What it captures |
+|-------|-----------------|
+|  🔬`TRACE` | High-frequency granular data: individual FX rates parsed, per-asset price points |
+|  🐛`DEBUG` | Operational internals: which provider was used, intermediate results, algorithmic decisions |
+|  ℹ️`INFO` | Significant user operations: sync completed, import, login, resource created/deleted |
+|  ⚠️`WARNING` | Recoverable anomalies: fallback activated, missing optional data, degraded mode |
+|  ❌`ERROR` | Handled errors: failed operations, data corruption, provider unreachable |
+|  💀`CRITICAL` | Fatal errors that stop the process |
+
+!!! tip "Recommended settings"
+
+    - **Production**: `LOG_LEVEL=INFO` — clean signal, no noise
+    - **Troubleshooting**: `LOG_LEVEL=DEBUG` — see what the system is deciding
+    - **Deep FX/price debugging**: `LOG_LEVEL=TRACE` — see every individual data point
 
 ---
 

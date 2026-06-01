@@ -9,6 +9,21 @@ Uses structlog for structured logging with:
 
 Log rotation: Weekly with 52 weeks (1 year) retention, gzip compression.
 """
+# ═══════════════════════════════════════════════════════════════════════════════
+# LOG LEVEL POLICY — LibreFolio
+# ═══════════════════════════════════════════════════════════════════════════════
+# CRITICAL (50): process cannot continue, immediate intervention required
+# ERROR    (40): handled error, operation failed or data corrupted
+# WARNING  (30): anomaly but recoverable (fallback activated, missing data)
+# INFO     (20): significant user operations (sync done, import, login, create)
+# DEBUG    (10): operational details (provider used, SQL, intermediate results)
+# TRACE    ( 5): high-frequency granular data (single rate, single data point)
+#
+# Practical rule:
+#   "User did X"          → INFO
+#   "System decided X"    → DEBUG
+#   "Value X for date Y"  → TRACE (if repeated N times per operation)
+# ═══════════════════════════════════════════════════════════════════════════════
 
 import gzip
 import logging
@@ -19,9 +34,13 @@ from pathlib import Path
 from typing import Any
 
 import structlog
+import structlog.stdlib
 from structlog.types import EventDict
 
 from backend.app.config import get_data_dir
+
+# TRACE level constant — importable by other modules
+TRACE: int = 5
 
 
 def get_log_directory() -> Path:
@@ -72,11 +91,30 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     Configure structured logging for the application.
 
     Args:
-        log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL, TRACE)
         enable_file_logging: Whether to enable file logging (default: True)
     """
-    # Convert string level to logging constant
-    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
+    # Register TRACE level (5) as a formal named level
+    logging.addLevelName(TRACE, "TRACE")
+    logging.TRACE = TRACE  # type: ignore[attr-defined]  # needed for getattr(logging, "TRACE")
+
+    # Add trace() method to stdlib Logger so structlog can dispatch it
+    if not hasattr(logging.Logger, "trace"):
+
+        def _trace(self: logging.Logger, message: object, *args: object, **kwargs: object) -> None:
+            if self.isEnabledFor(TRACE):
+                self._log(TRACE, message, args, **kwargs)  # type: ignore[arg-type]
+
+        logging.Logger.trace = _trace  # type: ignore[attr-defined]
+
+    # Register level 5 in structlog's dispatch table (BoundLogger.log uses this dict)
+    if TRACE not in structlog.stdlib.LEVEL_TO_NAME:
+        structlog.stdlib.LEVEL_TO_NAME[TRACE] = "trace"
+
+    # Convert string level to logging constant (supports TRACE after addLevelName)
+    numeric_level = getattr(logging, log_level.upper(), logging.getLevelName(log_level.upper()))
+    if not isinstance(numeric_level, int):
+        numeric_level = logging.INFO
 
     # Remove all existing handlers from root logger
     root_logger = logging.getLogger()

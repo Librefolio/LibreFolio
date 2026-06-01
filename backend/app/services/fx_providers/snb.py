@@ -159,7 +159,7 @@ class SNBProvider(FXRateProvider):
                 continue
             self._walk_dimension_items(dim.get("dimensionItems", []), iso_to_d1, d1_to_iso)
 
-        logger.info(f"SNB dimensions loaded: {len(iso_to_d1)} currencies mapped")
+        logger.debug(f"SNB dimensions loaded: {len(iso_to_d1)} currencies mapped")
         # Class-level cache (shared across instances within the same process)
         SNBProvider._iso_to_d1 = iso_to_d1
         SNBProvider._d1_to_iso = d1_to_iso
@@ -345,7 +345,7 @@ class SNBProvider(FXRateProvider):
 
             if rates:
                 results[iso_code] = rates
-                logger.info(f"Parsed {len(rates)} rates for {iso_code} from SNB")
+                logger.debug(f"Parsed {len(rates)} rates for {iso_code} from SNB")
 
         return results
 

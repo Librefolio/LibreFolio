@@ -197,7 +197,7 @@ class ECBProvider(FXRateProvider):
                     response.raise_for_status()
 
                     if not response.text:
-                        logger.info(f"No FX rates available for {currency} ({start_date} to {end_date}). " f"This is normal for weekends/holidays when ECB doesn't publish rates.")
+                        logger.debug(f"No FX rates available for {currency} ({start_date} to {end_date}). " f"This is normal for weekends/holidays when ECB doesn't publish rates.")
                         return currency, []
 
                     # Parse JSON response from ECB API

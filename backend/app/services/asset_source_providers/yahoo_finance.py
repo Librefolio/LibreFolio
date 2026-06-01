@@ -409,7 +409,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                                     )
                                 )
                     if events:
-                        logger.info(f"Parsed {len(events)} DIVIDEND events for {identifier}")
+                        logger.debug(f"Parsed {len(events)} DIVIDEND events for {identifier}")
             except Exception as e:
                 logger.debug(f"Could not parse dividends for {identifier}: {e}")
 
@@ -431,7 +431,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                                 )
                                 split_count += 1
                     if split_count:
-                        logger.info(f"Parsed {split_count} SPLIT events for {identifier}")
+                        logger.debug(f"Parsed {split_count} SPLIT events for {identifier}")
             except Exception as e:
                 logger.debug(f"Could not parse splits for {identifier}: {e}")
 
@@ -523,7 +523,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                     }
                 )
 
-            logger.info(f"Search for '{query}': found {len(results)} results")
+            logger.debug(f"Search for '{query}': found {len(results)} results")
             return results
 
         except Exception as e:
@@ -667,7 +667,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 identifier_isin=identifier_isin,
             )
 
-            logger.info(f"Fetched metadata from yfinance for {identifier}: asset_type={asset_type}, sector={sector}")
+            logger.debug(f"Fetched metadata from yfinance for {identifier}: asset_type={asset_type}, sector={sector}")
             return patch_item
 
         except Exception as e:
