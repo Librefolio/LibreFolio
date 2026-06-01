@@ -23,9 +23,11 @@
         onstylechange: (key: keyof SignalStyle, value: any) => void;
         /** Hide marker grids (start/end) — used for measure signals */
         simplified?: boolean;
+        /** Hide the lineType selector — for signals where lineType is zone-driven (e.g. RSI) */
+        hideLineType?: boolean;
     }
 
-    let {style, onstylechange, simplified = false}: Props = $props();
+    let {style, onstylechange, simplified = false, hideLineType = false}: Props = $props();
 
     // =========================================================================
     // Constants
@@ -103,22 +105,24 @@
                     {/if}
                     <!-- Line type + Width -->
                     <div class="flex flex-col items-center {simplified ? '' : 'border-x border-gray-200 dark:border-slate-600 px-4'}">
-                        <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.lineType')}</span>
-                        <div class="flex gap-1.5 mb-3">
-                            {#each LINE_TYPES as lt}
-                                <button
-                                    type="button"
-                                    aria-label={lt}
-                                    class="w-10 h-6 flex items-center justify-center rounded border transition-colors
-                                        {style.lineType === lt ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'}"
-                                    onclick={() => onstylechange('lineType', lt)}
-                                >
-                                    <svg width="32" height="6">
-                                        <line x1="2" y1="3" x2="30" y2="3" stroke={style.color} stroke-width="2" stroke-dasharray={lt === 'dashed' ? '5,3' : lt === 'dotted' ? '2,3' : 'none'} />
-                                    </svg>
-                                </button>
-                            {/each}
-                        </div>
+                        {#if !hideLineType}
+                            <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.lineType')}</span>
+                            <div class="flex gap-1.5 mb-3">
+                                {#each LINE_TYPES as lt}
+                                    <button
+                                        type="button"
+                                        aria-label={lt}
+                                        class="w-10 h-6 flex items-center justify-center rounded border transition-colors
+                                            {style.lineType === lt ? 'border-libre-green bg-libre-green/10' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'}"
+                                        onclick={() => onstylechange('lineType', lt)}
+                                    >
+                                        <svg width="32" height="6">
+                                            <line x1="2" y1="3" x2="30" y2="3" stroke={style.color} stroke-width="2" stroke-dasharray={lt === 'dashed' ? '5,3' : lt === 'dotted' ? '2,3' : 'none'} />
+                                        </svg>
+                                    </button>
+                                {/each}
+                            </div>
+                        {/if}
                         <span class="text-[9px] text-gray-400 dark:text-gray-500 uppercase block mb-1.5">{$t('chartSettings.style.width')}</span>
                         <div class="flex gap-1.5">
                             {#each [1, 2, 3, 4] as w}
