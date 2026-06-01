@@ -133,6 +133,9 @@
 | [[concepts/txstore-pattern]] | txStore.svelte.ts: page-scoped Map<id,TXReadItem> — single source of truth for transactions, WorkspaceIntent + PendingOp model | frontend, stores, transactions, svelte5, single-source-of-truth |
 | [[concepts/paired-partner-architecture]] | pairedWith + getPartnerOp + visibleOps + resolveFormItems — frontend paired TX management | frontend, transactions, bulkModal, architecture, paired |
 | [[concepts/stateless-preview-pattern]] | Controlled components for computed values — no internal state, cache on data model | frontend, svelte5, reactivity, controlled-component, wac |
+| [[concepts/log-level-policy]] | 6-level hierarchy (CRITICAL→TRACE=5) with practical rules; structlog LEVEL_TO_NAME patched | backend, logging, structlog, trace, policy |
+| [[concepts/image-preview-cache-pattern]] | objectUrl cache with size-based reuse; no ref counting, held for page lifetime | frontend, images, cache, performance, objecturl |
+| [[concepts/fx-range-helper-pattern]] | ensureFxRangeLoaded centralizes gap-detect→bulk-fetch→merge for FX stores | frontend, fx, stores, dry, cache |
 
 ## Problems
 
@@ -234,3 +237,4 @@
 | [[sources/r2-sp-c-bulkmodal-suggest-ux]] | `R2-WalktestFeedback/plan-R2-SP-C-BulkModalSuggestUX.prompt.md` ✅ DONE | 2026-06-01 | phase07, transactions, frontend, bulkModal, suggest, ux |
 | [[sources/r2-sp-c-bugfix-chain]] | SP-C Bugfix Chain (11 plans): BugfixRound1+2, FxSpread, UnifiedPartnerArch, ReactiveWac, FixCloneLinkUuid, FixFeedbackLoop, WacInlineValidateCommit, FixPartnerRows, StatelessPreview, BackendCleanup ✅ | 2026-06-02 | phase07, transactions, wac, bugfix, partner-architecture, stateless-preview |
 | [[sources/r2-parallel-features-pwa-borsa-fx]] | Batch 3: PWA, Port 60/40, Borsa Italiana, FX fix (parallel commits) ✅ | 2026-06-02 | pwa, mobile, ports, assets, fx, borsa-italiana |
+| [[sources/independent-batch-2026-06-01]] | Batch 4: 5 independent plans (LogAudit, Candlestick, FxRange, LazyImage, RsiBands) ✅ | 2026-06-01 | backend, frontend, logging, charts, fx, cache, signals |

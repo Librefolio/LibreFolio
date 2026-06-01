@@ -117,3 +117,8 @@
 | `LibreFolio_developer_journal/RoadmapV4_UI/PlanD_SplitPromoteFullStack/R2-WalktestFeedback/SP-C-Bugfix/WacPreview/plan-FixWacPartnerRows.prompt.md` | `84f8bd07` | 2026-06-02 | [[sources/r2-sp-c-bugfix-chain]], [[features/F-097]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/PlanD_SplitPromoteFullStack/R2-WalktestFeedback/SP-C-Bugfix/WacPreview/plan-StatelessWacPreview.prompt.md` | `84f8bd07` | 2026-06-02 | [[sources/r2-sp-c-bugfix-chain]], [[concepts/stateless-preview-pattern]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/PlanD_SplitPromoteFullStack/R2-WalktestFeedback/SP-C-Bugfix/WacPreview/plan-WacBackendCleanup.prompt.md` | `84f8bd07` | 2026-06-02 | [[sources/r2-sp-c-bugfix-chain]], [[features/F-097]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/plan-independent-BackendLogAudit.prompt.md` | `b5a0bf9` | 2026-06-01 | [[sources/independent-batch-2026-06-01]], [[features/F-076]], [[concepts/log-level-policy]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/plan-independent-CandlestickChart.prompt.md` | `92c0516` | 2026-06-01 | [[sources/independent-batch-2026-06-01]], [[features/F-080]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/plan-independent-FxRangeHelper.prompt.md` | `f5aadec` | 2026-06-01 | [[sources/independent-batch-2026-06-01]], [[concepts/fx-range-helper-pattern]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/plan-independent-LazyImageCache.prompt.md` | `ce2bc92` | 2026-06-01 | [[sources/independent-batch-2026-06-01]], [[features/F-086]], [[concepts/image-preview-cache-pattern]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/plan-independent-RsiSignalBands.prompt.md` | `6f0d4c6` | 2026-06-01 | [[sources/independent-batch-2026-06-01]], [[features/F-039]] |
