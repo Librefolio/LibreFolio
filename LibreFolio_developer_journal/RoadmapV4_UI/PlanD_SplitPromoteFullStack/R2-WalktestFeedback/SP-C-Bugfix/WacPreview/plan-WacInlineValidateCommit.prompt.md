@@ -386,3 +386,61 @@ L'endpoint `/analytics/wac` (Step E2) sarà consumato dalla dashboard. Vedi nota
 4. **Tradurre docs WAC** — la pagina `.en.md` è stata aggiornata con Auto WAC effect + Example 4; le traduzioni IT/FR/ES vanno fatte con pipeline Aphra (`./dev.py mkdocs translate`)
 5. **Phase 9 (Dashboard)** — l'endpoint `/analytics/wac` (Step E2) è il fondamento per l'overlay WAC su price chart
 
+---
+
+## Bug post-completamento (walktest 2026-05-30)
+
+### Bug F1: BUY via FormModal → `costBasisModeIncompatible` error
+
+**Risolto** (2026-05-30). Il FormModal inizializza `costBasisMode = 'auto'` incondizionatamente (riga 270). Per BUY, `draftToTxFields()` mandava `cost_basis_mode: 'auto'` → Rule 12 backend rifiutava.
+
+**Fix**: `buildCreatePayload` e `buildUpdateDiff` in `txPayloadHelpers.ts` ora usano `getCostBasisRule(type, side)` (che legge il metadata `/api/v1/transactions/types`, campo `cost_basis_mode: "forbidden"` per BUY) come guardia prima di includere `cost_basis_mode` nel payload. Il BulkModal `applyFormPayload` usa lo stesso `cbRule` già computato al posto di hardcodare i tipi.
+
+### Bug F2: TRANSFER receiver → `wac_results: null` (tabella qualifying non appare)
+
+**Stato**: DA RISOLVERE (richiede plan dedicato).
+
+**Osservazione**: dopo il fix F1, la BUY va. Creando un TRANSFER pair (BUY 10@50 + TRANSFER -5/+5), il validate risponde con `wac_results: null` anche se il receiver ha qty>0.
+
+**Payload inviato**:
+```json
+{"creates":[
+  {"broker_id":1,"type":"BUY","date":"2026-05-30","quantity":"10","asset_id":9,"cash":{"code":"EUR","amount":"-500"}},
+  {"broker_id":1,"type":"TRANSFER","date":"2026-05-30","quantity":"-5","link_uuid":"50916e7f-...","asset_id":9},
+  {"broker_id":3,"type":"TRANSFER","date":"2026-05-30","quantity":"5","link_uuid":"50916e7f-...","asset_id":9}
+]}
+```
+
+**Response**: `"wac_results": null`, `"committed": false`, `"issues": []`
+
+**Probabile causa**: il receiver (index 2, qty=+5) NON ha `cost_basis_mode: "auto"` nel payload. Il fix F1 in `buildCreatePayload` verifica `getCostBasisRule('TRANSFER', 'to')` che dovrebbe dare `'required_qty_pos'` → `cbAllowed = true` → dovrebbe mandare `cost_basis_mode: "auto"`. MA: il receiver potrebbe avere `fields.cost_basis_mode === null` (non `'auto'`) perché:
+
+1. Il TRANSFER receiver viene creato dal `buildDualCreatePayloads` (riga ~290 di txPayloadHelpers) che setta `cost_basis_mode: "auto"` sul `toItem` — ma questo è il payload FormModal, non il BulkModal path.
+2. Nel BulkModal, il receiver viene creato come partner row dalla logica `addPairedRow`. Il `defaultFields()` setta `cost_basis_mode: null`. Il guard in `applyFormPayload` (riga 684) NON viene mai invocato per partner rows che non passano mai dal FormModal.
+3. Quindi il receiver in BulkModal ha `cost_basis_mode: null` → `buildCreatePayload` non manda il campo → backend non calcola WAC → `wac_results: null`.
+
+**Root cause**: la logica di creazione partner nel BulkModal (`addPairedRow` / clone logic) non assegna `cost_basis_mode: 'auto'` al receiver TRANSFER. Il fix deve assicurare che quando si crea un partner TRANSFER con qty>0, `cost_basis_mode` sia automaticamente `'auto'` (usando il backend rule).
+
+### Test E2E mancanti — FormModal flow
+
+I test attuali creano TX solo via celle BulkModal (mai FormModal). Il bug F1 non sarebbe stato catturato. Test da aggiungere:
+
+| # | Scenario | Verifica payload |
+|---|----------|-----------------|
+| FM1 | BUY via FormModal → commit | `cost_basis_mode` assente |
+| FM2 | SELL via FormModal → commit | `cost_basis_mode` assente |
+| FM3 | TRANSFER pair via FormModal | Receiver ha `cost_basis_mode: "auto"` |
+| FM4 | ADJUSTMENT+ via FormModal | `cost_basis_mode: "auto"` presente |
+| FM5 | ADJUSTMENT- via FormModal | `cost_basis_mode` assente |
+| FM6 | Edit TRANSFER saved con cbo | Manual mode, `cost_basis_override` esplicito |
+| FM7 | Toggle Auto→Manual nel FormModal | Payload ha override, NO auto |
+| FM8 | DEPOSIT via FormModal | Nessun cost_basis nel payload |
+| FM9 | BUY via FormModal → validate OK | Nessun error `costBasisModeIncompatible` |
+
+---
+
+## Continuation
+
+Il fix di Bug F2 + 9-10-11 e i test FM1-FM9 sono tracciati nel piano figlio:
+→ [`plan-FixWacPartnerRows.prompt.md`](./plan-FixWacPartnerRows.prompt.md)
+

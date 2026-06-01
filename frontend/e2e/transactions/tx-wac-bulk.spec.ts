@@ -319,8 +319,7 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         // Reload transactions page
         await goToTransactions(page);
 
-        // Find a paired giver row from today on our brokers
-        const today = new Date().toISOString().slice(0, 10);
+        // Find a paired giver row on our brokers (newest rows at top, search by asset name)
         const allRows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
         const count = await allRows.count();
         let giverRowId: string | null = null;
@@ -329,7 +328,7 @@ test.describe('BulkModal WAC Cell Rendering', () => {
             const nextCls = (await allRows.nth(i + 1).getAttribute('class')) ?? '';
             if (nextCls.includes('tx-row-receiver')) {
                 const text = (await allRows.nth(i).textContent()) ?? '';
-                if (text.includes(today) && (text.includes(BROKER_FROM) || text.includes(BROKER_TO) || text.includes(ASSET_NAME))) {
+                if (text.includes(ASSET_NAME) && (text.includes(BROKER_FROM) || text.includes(BROKER_TO))) {
                     giverRowId = await allRows.nth(i).getAttribute('data-row-id');
                     break;
                 }
@@ -467,5 +466,138 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"]').filter({hasNotText: '…'}).first();
         const cellText = await autoCell.textContent();
         expect(cellText).toMatch(/💡\s*[\d.,]+/);
+    });
+
+    test('WB8 — Mode persistence: manual stays manual on re-edit', async ({page}) => {
+        // Create BUY + TRANSFER pair
+        await openCreateFlow(page);
+        await selectType(page, 'BUY');
+        await pickFirstBroker(page);
+        await pickAssetByName(page, ASSET_NAME);
+        await fillQuantity(page, '10');
+        await fillCash(page, '1000');
+        await applyFormModal(page);
+        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+
+        await page.getByTestId('tx-bulk-add-row').click();
+        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        await selectType(page, 'TRANSFER');
+        await page.waitForTimeout(500);
+        await pickBrokerInPanel(page, 'tx-form-dual-from', BROKER_FROM);
+        await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
+        await pickAssetByName(page, ASSET_NAME);
+        await fillQuantity(page, '5');
+        await applyFormModal(page);
+        await waitForWacResolved(page);
+
+        // Set manual 150
+        const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
+        const lastIdx = (await rows.count()) - 1;
+        await rows.nth(lastIdx).dblclick();
+        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+
+        await page.getByTestId('tx-form-cost-basis-toggle-manual').click();
+        await page.waitForTimeout(300);
+        const amountInput = page.getByTestId('tx-form-cost-basis-input-amount');
+        await amountInput.fill('150');
+        await applyFormModal(page);
+        await page.waitForTimeout(1000);
+
+        // Re-edit — should still show manual
+        const rows2 = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
+        const lastIdx2 = (await rows2.count()) - 1;
+        await rows2.nth(lastIdx2).dblclick();
+        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+
+        // Assert: manual toggle is active (has font-medium)
+        const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
+        await expect(manualToggle).toBeVisible({timeout: 3_000});
+        await expect(manualToggle).toHaveClass(/font-medium/);
+
+        // Assert: input still has 150
+        const input = page.getByTestId('tx-form-cost-basis-input-amount');
+        await expect(input).toHaveValue('150');
+    });
+
+    test('WB9 — Mode persistence: auto stays auto on re-edit', async ({page}) => {
+        // Create BUY + TRANSFER pair (auto mode — default)
+        await openCreateFlow(page);
+        await selectType(page, 'BUY');
+        await pickFirstBroker(page);
+        await pickAssetByName(page, ASSET_NAME);
+        await fillQuantity(page, '10');
+        await fillCash(page, '1000');
+        await applyFormModal(page);
+        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+
+        await page.getByTestId('tx-bulk-add-row').click();
+        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        await selectType(page, 'TRANSFER');
+        await page.waitForTimeout(500);
+        await pickBrokerInPanel(page, 'tx-form-dual-from', BROKER_FROM);
+        await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
+        await pickAssetByName(page, ASSET_NAME);
+        await fillQuantity(page, '5');
+        await applyFormModal(page);
+        await waitForWacResolved(page);
+
+        // Re-edit without changing mode — should still be auto
+        const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
+        const lastIdx = (await rows.count()) - 1;
+        await rows.nth(lastIdx).dblclick();
+        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+
+        // Assert: auto toggle is active
+        const autoToggle = page.getByTestId('tx-form-cost-basis-toggle-auto');
+        await expect(autoToggle).toBeVisible({timeout: 3_000});
+        await expect(autoToggle).toHaveClass(/font-medium/);
+
+        // Assert: manual toggle is NOT active
+        const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
+        await expect(manualToggle).not.toHaveClass(/font-medium/);
+    });
+
+    test('WB10 — Pending indicator ● in qualifying table', async ({page}) => {
+        // Create BUY (this will be a pending tx visible in qualifying table)
+        await openCreateFlow(page);
+        await selectType(page, 'BUY');
+        await pickFirstBroker(page);
+        await pickAssetByName(page, ASSET_NAME);
+        await fillQuantity(page, '10');
+        await fillCash(page, '1000');
+        await applyFormModal(page);
+        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+
+        // Create TRANSFER pair
+        await page.getByTestId('tx-bulk-add-row').click();
+        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        await selectType(page, 'TRANSFER');
+        await page.waitForTimeout(500);
+        await pickBrokerInPanel(page, 'tx-form-dual-from', BROKER_FROM);
+        await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
+        await pickAssetByName(page, ASSET_NAME);
+        await fillQuantity(page, '5');
+        await applyFormModal(page);
+        await waitForWacResolved(page);
+
+        // Open the TRANSFER row
+        const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
+        const lastIdx = (await rows.count()) - 1;
+        await rows.nth(lastIdx).dblclick();
+        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+
+        // Expand qualifying table
+        const showBtn = page.getByTestId('tx-form-cost-basis-show-qualifying');
+        await expect(showBtn).toBeVisible({timeout: 5_000});
+        await showBtn.click();
+        await page.waitForTimeout(500);
+
+        // Assert: qualifying table has at least one row with ● (pending indicator)
+        const qualTable = page.getByTestId('tx-form-cost-basis-qualifying-table');
+        await expect(qualTable).toBeVisible({timeout: 3_000});
+        const pendingDots = qualTable.locator('td:first-child span.text-indigo-500');
+        expect(await pendingDots.count()).toBeGreaterThan(0);
+        const dotText = await pendingDots.first().textContent();
+        expect(dotText?.trim()).toBe('●');
     });
 });

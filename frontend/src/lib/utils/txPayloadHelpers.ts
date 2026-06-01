@@ -6,7 +6,7 @@
  * @module utils/txPayloadHelpers
  */
 
-import type {TypeRule} from '$lib/stores/transactionTypeStore';
+import {type TypeRule, getCostBasisRule} from '$lib/stores/transactionTypeStore';
 
 // =============================================================================
 //  Types
@@ -138,9 +138,14 @@ export function buildCreatePayload(fields: TxFields, rule: TypeRule): Record<str
     const desc = (fields.description ?? '').trim();
     if (desc) out.description = desc;
     if (fields.asset_event_id != null && rule.eventLinkable) out.asset_event_id = fields.asset_event_id;
-    // WAC: for auto mode, send mode + null override (backend calculates).
-    // For manual mode, send the user-provided value normally.
-    if (fields.cost_basis_mode === 'auto') {
+    // WAC: send cost_basis_mode only if the backend rule allows it for this type+side.
+    // The rule comes from the server transaction type metadata (getCostBasisRule).
+    const qty = Number(fields.quantity ?? 0);
+    const side: 'from' | 'to' | 'self' = qty < 0 ? 'from' : qty > 0 ? 'to' : 'self';
+    const cbRule = getCostBasisRule(fields.type, side);
+    const cbAllowed = cbRule !== 'forbidden' && !(cbRule === 'required_qty_pos' && qty <= 0);
+
+    if (fields.cost_basis_mode === 'auto' && cbAllowed) {
         out.cost_basis_mode = 'auto';
         out.cost_basis_override = null;
     } else if (fields.cost_basis_override) {
@@ -185,8 +190,13 @@ export function buildUpdateDiff(current: TxFields, original: TxOriginal, current
             }
         }
     }
-    // WAC: for auto mode, force cost_basis_mode + null override (backend calculates)
-    if (current.cost_basis_mode === 'auto') {
+    // WAC: send cost_basis_mode only if backend rule allows it for this type+side
+    const uQty = Number(current.quantity ?? 0);
+    const uSide: 'from' | 'to' | 'self' = uQty < 0 ? 'from' : uQty > 0 ? 'to' : 'self';
+    const uCbRule = getCostBasisRule(current.type, uSide);
+    const uCbAllowed = uCbRule !== 'forbidden' && !(uCbRule === 'required_qty_pos' && uQty <= 0);
+
+    if (current.cost_basis_mode === 'auto' && uCbAllowed) {
         changes.cost_basis_mode = 'auto';
         changes.cost_basis_override = null;
     }
@@ -387,4 +397,23 @@ export function buildBatchPayload(input: {ops: ResolvedOp[]; splits?: {id_a: num
     if (input.splits && input.splits.length > 0) out.splits = input.splits;
     if (input.promotes && input.promotes.length > 0) out.promotes = input.promotes;
     return out;
+}
+
+/**
+ * Post-process a batch payload for validate: upgrade cost_basis_mode 'auto' → 'auto-detail'
+ * so the backend includes qualifying_txs + asset_price in the response.
+ * Mutates the payload in-place (safe — the object is local to the validate call).
+ * Must NOT be called on commit payloads (commit doesn't need details).
+ */
+export function upgradeAutoToDetail(payload: Record<string, unknown>): void {
+    const arrays = ['creates', 'updates'] as const;
+    for (const key of arrays) {
+        const items = payload[key] as Record<string, unknown>[] | undefined;
+        if (!items) continue;
+        for (const item of items) {
+            if (item.cost_basis_mode === 'auto') {
+                item.cost_basis_mode = 'auto-detail';
+            }
+        }
+    }
 }

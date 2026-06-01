@@ -20,6 +20,7 @@ export interface TXReadItem {
     tags?: string[] | null;
     description?: string | null;
     cost_basis_override?: {code: string; amount: string} | string | null;
+    cost_basis_mode?: 'auto' | 'manual' | null;
     asset_event_id?: number | null;
     created_at?: string;
     updated_at?: string;

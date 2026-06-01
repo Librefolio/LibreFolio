@@ -47,7 +47,7 @@
     import PromoteMergeModal from './PromoteMergeModal.svelte';
     import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/utils/txCommitApi';
-    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, type TxFields, type TxOriginal, type ResolvedOp} from '$lib/utils/txPayloadHelpers';
+    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, upgradeAutoToDetail, type TxFields, type TxOriginal, type ResolvedOp} from '$lib/utils/txPayloadHelpers';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/uuid';
     import {formatCurrencyAmountHtml, formatCurrencyCodeHtml} from '$lib/utils/currencyFormat';
@@ -92,7 +92,7 @@
      *  Tagged union: 'create' for new rows, 'edit' for existing DB rows.
      *  If `pairedWith` is set, this op is the hidden partner of a paired row.
      *  `link_uuid` is the shared pairing UUID for backend payloads (WAC, commit). */
-    type PendingOp = ({op: 'create'} | {op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean}) & {tempId: string; fields: DraftFields; pairedWith?: string; link_uuid?: string | null; /** W4b: partner on inaccessible broker — read-only sentinel */ inaccessible?: boolean};
+    type PendingOp = ({op: 'create'} | {op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean}) & {tempId: string; fields: DraftFields; pairedWith?: string; link_uuid?: string | null; /** W4b: partner on inaccessible broker — read-only sentinel */ inaccessible?: boolean; /** Cached WAC result from validate — transient, not sent to backend */ _wacCache?: WacResultEntry | null};
 
     interface Props {
         open: boolean;
@@ -276,6 +276,8 @@
         missing_pairs: string[];
     };
     let wacResults = $state<Map<string, WacResultEntry>>(new Map());
+    /** TX IDs from the last validate response (uncommitted batch) — for pending markers in qualifying tables */
+    let pendingTxIds = $state<Set<number>>(new Set());
 
     // =========================================================================
     // Initial rows resolution
@@ -507,6 +509,7 @@
             tags: d.fields.tags,
             description: d.fields.description,
             cost_basis_override: (d.fields.cost_basis_override || null) as any,
+            cost_basis_mode: d.fields.cost_basis_mode,
             asset_event_id: d.fields.asset_event_id,
             created_at: orig?.created_at,
             updated_at: orig?.updated_at,
@@ -616,6 +619,15 @@
                     toIdx = prev;
                 }
                 opArr[toIdx].pairedWith = opArr[fromIdx].tempId;
+                // Derive cost_basis_mode for receiver (to) side using backend rules
+                const toQty = Number(opArr[toIdx].fields.quantity ?? 0);
+                if (toQty > 0) {
+                    const toCbRule = getCostBasisRule(opArr[toIdx].fields.type, 'to');
+                    if (toCbRule !== 'forbidden') {
+                        opArr[toIdx].fields.cost_basis_mode = 'auto';
+                        opArr[toIdx].fields.cost_basis_override = null;
+                    }
+                }
             } else {
                 linkUuidMap.set(uuid, i);
             }
@@ -686,11 +698,20 @@
             target.cost_basis_mode = null;
             target.cost_basis_override = null;
         } else if (typeof p._cost_basis_mode === 'string') {
-            // Explicit mode from FormModal (covers both auto and manual)
-            target.cost_basis_mode = p._cost_basis_mode as 'auto' | 'manual';
+            // Explicit mode from FormModal — only accept if backend rule allows it
+            // (cbRule is already != 'forbidden' here thanks to the guard above)
+            const cbAllowed = !(cbRule === 'required_qty_pos' && qty <= 0);
+            target.cost_basis_mode = cbAllowed ? (p._cost_basis_mode as 'auto' | 'manual') : null;
         } else if (target.cost_basis_mode === null || typeChanged) {
             // Re-derive: mode was null (fresh from defaultFields) or type actually changed
-            target.cost_basis_mode = target.cost_basis_override ? 'manual' : 'auto';
+            const cbAllowed = !(cbRule === 'required_qty_pos' && qty <= 0);
+            if (target.cost_basis_override) {
+                target.cost_basis_mode = 'manual';
+            } else if (cbAllowed) {
+                target.cost_basis_mode = 'auto';
+            } else {
+                target.cost_basis_mode = null;
+            }
         }
         // else: target already has 'auto' or 'manual' and no explicit override → preserve
     }
@@ -1041,6 +1062,7 @@
                 ops: resolved,
                 splits: pendingSplits.length > 0 ? pendingSplits.map((s) => ({id_a: s.id_a, id_b: s.id_b})) : undefined,
             });
+            upgradeAutoToDetail(payload);
             const sentKey = lastDraftKey;
             const result = await validateTransactions(payload, {fallback: $t('transactions.bulk.saveFailed')});
             if (result.networkError) {
@@ -1053,6 +1075,16 @@
 
             // ── Phase C: extract wac_results from validate response ──
             const rawResp = result.rawResponse as Record<string, unknown> | null;
+
+            // Always update pendingTxIds from results (even without WAC data)
+            const rawResults = (rawResp?.results as Array<{ids?: number[]; operation?: string; status?: string}> | null) ?? [];
+            const pendingIdOps = new Map<number, string>();
+            for (const r of rawResults) {
+                if (r.status !== 'success') continue;
+                for (const id of r.ids ?? []) pendingIdOps.set(id, r.operation ?? 'create');
+            }
+            if (pendingIdOps.size > 0) pendingTxIds = new Set(pendingIdOps.keys());
+
             const rawWacResults = (rawResp?.wac_results as Array<Record<string, unknown>> | null | undefined) ?? null;
             if (rawWacResults && rawWacResults.length > 0) {
                 // Build mapping: "operation:index" → tempId
@@ -1068,22 +1100,42 @@
                     const tempId = opsMap.get(key);
                     if (!tempId) continue;
                     const wacVal = (wr.wac as {code: string; amount: string} | null) ?? null;
-                    nextMap.set(tempId, {
+                    // Annotate qualifying_txs entries that belong to this batch (pending)
+                    const rawQtxs = (wr.wac_qualifying_txs as Array<Record<string, any>>) ?? [];
+                    const qualifyingTxs = pendingIdOps.size > 0
+                        ? rawQtxs.map((q) => {
+                            if (q.tx_id == null) return q;
+                            const pendingOp = pendingIdOps.get(q.tx_id);
+                            return pendingOp ? {...q, is_pending: true, pending_op: pendingOp} : q;
+                        })
+                        : rawQtxs;
+                    const cacheEntry: WacResultEntry = {
                         wac: wacVal,
-                        qualifying_txs: (wr.wac_qualifying_txs as Array<Record<string, any>>) ?? [],
+                        qualifying_txs: qualifyingTxs,
                         missing_pairs: (wr.wac_missing_pairs as string[]) ?? [],
-                    });
-                    // Write WAC value into the op's fields for cell display (with equality guard)
-                    if (wacVal) {
-                        const opObj = ops.find((o) => o.tempId === tempId);
-                        if (opObj && opObj.fields.cost_basis_mode === 'auto') {
-                            const existing = opObj.fields.cost_basis_override;
-                            if (!existing || existing.code !== wacVal.code || existing.amount !== wacVal.amount) {
-                                ops = ops.map((o) => {
-                                    if (o.tempId !== tempId) return o;
-                                    return {...o, fields: {...o.fields, cost_basis_override: {code: wacVal.code, amount: wacVal.amount}}};
-                                });
-                            }
+                    };
+                    nextMap.set(tempId, cacheEntry);
+                    // Write WAC value + cache into the op's fields for cell display (with equality guard)
+                    const opObj = ops.find((o) => o.tempId === tempId);
+                    if (opObj) {
+                        const needsValueUpdate = wacVal && opObj.fields.cost_basis_mode === 'auto' && (!opObj.fields.cost_basis_override || opObj.fields.cost_basis_override.code !== wacVal.code || opObj.fields.cost_basis_override.amount !== wacVal.amount);
+                        const needsCacheUpdate = true; // always update cache with latest result
+                        if (needsValueUpdate || needsCacheUpdate) {
+                            const mainTempId = opObj.pairedWith; // sender's tempId (receiver points to sender)
+                            ops = ops.map((o) => {
+                                if (o.tempId === tempId) {
+                                    const updated = {...o, _wacCache: cacheEntry};
+                                    if (needsValueUpdate && wacVal) {
+                                        updated.fields = {...o.fields, cost_basis_override: {code: wacVal.code, amount: wacVal.amount}};
+                                    }
+                                    return updated;
+                                }
+                                if (mainTempId && o.tempId === mainTempId) {
+                                    // Sender: new reference to force DataTable cell re-render
+                                    return {...o};
+                                }
+                                return o;
+                            });
                         }
                     }
                 }
@@ -1931,9 +1983,11 @@
             return;
         }
 
-        // Note: do NOT propagate payload._cost_basis_mode to items here.
-        // For patches, the existing op's cost_basis_mode is preserved by applyFormPayload
-        // (it only re-derives when mode is null or type changes).
+        // Propagate _cost_basis_mode to partner item so applyFormPayload can derive
+        // the correct mode on the receiver (e.g. user toggled Auto→Manual in FormModal)
+        if (typeof payload._cost_basis_mode === 'string' && !('_cost_basis_mode' in items[1])) {
+            items[1]._cost_basis_mode = payload._cost_basis_mode;
+        }
 
         // Update main op
         ops = ops.map((d) => {
@@ -2800,10 +2854,13 @@
         if (direct) return direct;
         // Partner lookup (paired TRANSFER — WAC is on the receiver/hidden op)
         const partnerOp = getPartnerOp(tempId);
-        if (partnerOp) return wacResults.get(partnerOp.tempId) ?? null;
-        return null;
+        if (partnerOp) return wacResults.get(partnerOp.tempId) ?? partnerOp._wacCache ?? null;
+        // Fallback to own op's cache (e.g. after Map was cleared)
+        const selfOp = ops.find((o) => o.tempId === tempId);
+        return selfOp?._wacCache ?? null;
     }}
     editingTempId={formEditingTempId}
+    pendingTxIds={pendingTxIds.size > 0 ? pendingTxIds : null}
     onClose={() => {
         formOpen = false;
         formEditingTempId = null;

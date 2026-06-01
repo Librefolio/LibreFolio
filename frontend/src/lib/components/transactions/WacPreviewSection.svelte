@@ -8,11 +8,10 @@
      * provided externally via `externalResult` (from validate response).
      * In Manual mode, the user types a value directly.
      *
-     * `variant` only controls the initial mode:
-     * - "auto-new": starts in Auto (new TX — no saved value)
-     * - "saved": starts in Manual (editing — has a DB value)
+     * **Controlled component**: `mode` is owned by the parent. The component calls
+     * `onModeChange` when the user clicks a toggle button; the parent decides
+     * whether to accept the change.
      */
-    import {untrack} from 'svelte';
     import {t} from 'svelte-i18n';
     import {ChevronDown, ChevronRight, Lightbulb, AlertTriangle} from 'lucide-svelte';
     import CompactCashCell from '$lib/components/ui/CompactCashCell.svelte';
@@ -40,6 +39,7 @@
             effect: string;
             running_wac?: string | null;
             is_pending?: boolean;
+            pending_op?: string;
         }>;
         missing_pairs: string[];
         asset_price: {code: string; amount: string} | null;
@@ -56,8 +56,8 @@
         value: {code: string; amount: string} | null;
         /** Called when value changes (from auto-fill or manual edit) */
         onChange: (v: {code: string; amount: string} | null) => void;
-        /** "auto-new" for new TXs (starts Auto), "saved" for edit mode (starts Manual) */
-        variant: 'auto-new' | 'saved';
+        /** Controlled mode — parent owns this state */
+        mode: 'auto' | 'manual';
         /** Default currency code for the input */
         defaultCode?: string;
         /** Whether the field is disabled */
@@ -83,20 +83,27 @@
         /** External WAC result from parent (validate response or BulkModal).
          *  When non-null and mode is 'auto', this data is displayed directly. */
         externalResult?: {wac: {code: string; amount: string} | null; qualifying_txs: Array<Record<string, any>>; missing_pairs: string[]} | null;
+        /** Set of TX IDs that are pending (batch-created, not yet committed).
+         *  Used to annotate qualifying table rows with pending indicator at render time. */
+        pendingTxIds?: Set<number> | null;
     }
 
-    let {value, onChange, variant, defaultCode = 'EUR', disabled = false, testid = 'wac-preview', senderBrokerId = null, assetId = null, txDate = null, pendingTxs = [], excludedTxIds = [], hideTable = false, onModeChange, externalResult = null}: Props = $props();
+    let {value, onChange, mode, defaultCode = 'EUR', disabled = false, testid = 'wac-preview', senderBrokerId = null, assetId = null, txDate = null, pendingTxs = [], excludedTxIds = [], hideTable = false, onModeChange, externalResult = null, pendingTxIds = null}: Props = $props();
 
     // =========================================================================
     // State
     // =========================================================================
 
-    let mode = $state<WacMode>(untrack(() => variant === 'auto-new' ? 'auto' : 'manual'));
     let loading = $state(false);
 
     let previewResult = $state<WacPreviewResult | null>(null);
     let error = $state<string | null>(null);
     let showQualifying = $state(false);
+
+    // Reset qualifying table visibility when mode switches to manual
+    $effect(() => {
+        if (mode === 'manual') showQualifying = false;
+    });
 
     // =========================================================================
     // Derived
@@ -134,7 +141,6 @@
     // =========================================================================
 
     function setAutoMode() {
-        mode = 'auto';
         onModeChange?.('auto');
         // If external result already has a value, apply it immediately
         if (externalResult?.wac) {
@@ -146,15 +152,12 @@
     }
 
     function switchToManual() {
-        mode = 'manual';
         onModeChange?.('manual');
-        showQualifying = false;
     }
 
     /** Called when user types in the amount field — auto-switch to manual */
     function handleValueChange(next: {code: string; amount: string} | null) {
         if (mode === 'auto') {
-            mode = 'manual';
             onModeChange?.('manual');
         }
         onChange(next);
@@ -205,7 +208,9 @@
     <!-- Auto mode: suggestion info + foldable qualifying panel -->
     {#if isAuto && previewResult && !hasMissingPairs && previewResult.wac}
         <div class="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400" data-testid="{testid}-suggestion">
-            <Lightbulb size={12} class="text-amber-500 shrink-0" />
+            <Tooltip text={$t('transactions.wacPreview.validateToRecalculate') ?? 'Validate to recalculate the table'} position="right">
+                <Lightbulb size={12} class="text-amber-500 shrink-0 cursor-help" />
+            </Tooltip>
             <button type="button" class="flex items-center gap-0.5 hover:text-gray-700 dark:hover:text-gray-200" onclick={() => (showQualifying = !showQualifying)} data-testid="{testid}-show-qualifying">
                 {#if showQualifying}
                     <ChevronDown size={10} />
@@ -219,6 +224,12 @@
                 </span>
             </button>
             <DocsLink path="financial-theory/portfolio-theory/weighted-average-cost/" label={$t('transactions.wacPreview.docsTooltip') ?? 'Learn how WAC (Weighted Average Cost) is calculated'} size={11} />
+        </div>
+    {:else if isAuto && !previewResult && !loading && !error}
+        <!-- Auto mode: no result yet — hint to validate -->
+        <div class="flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-500" data-testid="{testid}-validate-hint">
+            <Lightbulb size={12} class="text-amber-400/70 shrink-0" />
+            <span>{$t('transactions.wacPreview.validateHint') ?? 'Complete the fields and validate to calculate WAC'}</span>
         </div>
     {/if}
 
@@ -270,8 +281,18 @@
                 </thead>
                 <tbody>
                     {#each previewResult.qualifying_txs as qtx}
-                        <tr class="border-t border-gray-100 dark:border-slate-800 {qtx.tx_id == null ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}">
-                            <td class="px-2 py-0.5">{qtx.tx_id ?? '●'}</td>
+                        {@const isPending = qtx.tx_id == null || qtx.is_pending || (pendingTxIds != null && qtx.tx_id != null && pendingTxIds.has(qtx.tx_id))}
+                        {@const pendingType = qtx.pending_op === 'update' ? 'update' : (pendingTxIds != null && qtx.tx_id != null && pendingTxIds.has(qtx.tx_id)) ? 'create' : 'create'}
+                        <tr class="border-t border-gray-100 dark:border-slate-800 {isPending ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}">
+                            <td class="px-2 py-0.5">
+                                {#if isPending}
+                                    <Tooltip text={$t(pendingType === 'update' ? 'transactions.wacPreview.pendingEdit' : 'transactions.wacPreview.pendingCreate')} position="right">
+                                        <span class="cursor-help text-indigo-500">●</span>
+                                    </Tooltip>
+                                {:else}
+                                    {qtx.tx_id}
+                                {/if}
+                            </td>
                             <td class="px-2 py-0.5">
                                 <span class="inline-flex items-center gap-1">
                                     {#if getTransactionTypeIconUrl(qtx.type)}
