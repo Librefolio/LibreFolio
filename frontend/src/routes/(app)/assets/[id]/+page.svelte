@@ -42,9 +42,9 @@
     import {getSettingsForPair, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
-    import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
+    import type {ViewMode, ChartType} from '$lib/components/charts/ChartToolbar.svelte';
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
-    import {getFxStore, apiResultToFxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetTypeIconUrl, buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
@@ -94,6 +94,7 @@
     let activePreset: any = $state(null);
 
     let viewMode: ViewMode = $state('percentage');
+    let chartType: ChartType = $state('line');
     let displayCurrency = $state('');
 
     // Foldable panels
@@ -170,6 +171,11 @@
             originalCurrency: p.original_currency ?? undefined,
             originalCurrencyFlag: p.original_currency ? getCurrencyInfo(p.original_currency).flag_emoji : undefined,
             originalValue: p.original_close != null ? Number(p.original_close) : undefined,
+            open: p.open != null ? Number(p.open) : null,
+            high: p.high != null ? Number(p.high) : null,
+            low: p.low != null ? Number(p.low) : null,
+            close: Number(p.close ?? 0),
+            volume: p.volume != null ? Number(p.volume) : null,
         })),
     );
 
@@ -181,6 +187,14 @@
         return isParametricProvider(providerAssignment?.provider_code);
     });
     let isManualOnly = $derived(!providerAssignment);
+    /** True when OHLCV price data is available (enables candlestick chart) */
+    let hasOhlcv = $derived(lineData.some((p) => p.open != null));
+    // Reset to line chart when OHLCV becomes unavailable (e.g. date range with no data)
+    $effect(() => {
+        if (!hasOhlcv) chartType = 'line';
+    });
+    /** Settings that don't apply in candlestick mode — greyed out in aesthetics panel */
+    let disabledAesthetics = $derived((chartType as string) === 'candlestick' ? new Set(['colorByBaseline', 'areaFill', 'staleGradient']) : new Set<string>());
 
     /** First data point date — used for "no data before" banner */
     let firstDataDate = $derived(chartData.length > 0 ? chartData[0].date : null);
@@ -951,23 +965,8 @@
         // Invalidate FX overlay stores so they refetch updated rates
         for (const pair of requiredFxPairs) {
             if (pair.status === 'missing') continue;
-            const store = getFxStore(pair.slug);
-            store.invalidateAll();
-            const parts = pair.slug.split('-');
-            try {
-                const resp = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([
-                    {
-                        from_amount: {code: parts[0], amount: 1},
-                        to: parts[1],
-                        date_range: {start: dateStart, end: dateEnd},
-                    },
-                ]);
-                const results = (resp as any)?.results || [];
-                const points = results.map((r: any) => apiResultToFxDataPoint(r));
-                store.merge(points);
-            } catch {
-                /* best effort */
-            }
+            getFxStore(pair.slug).invalidateAll();
+            await ensureFxRangeLoaded(pair.slug, dateStart, dateEnd);
         }
         overlayDataVersion++;
         await maybeLoadComparison();
@@ -1179,25 +1178,8 @@
                 end: dateEnd,
             });
             // Refetch FX data into store after sync (invalidate + reload)
-            const store = getFxStore(slug);
-            store.invalidateAll();
-            const parts = slug.split('-');
-            const base = parts[0],
-                quote = parts[1];
-            try {
-                const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([
-                    {
-                        from_amount: {code: base, amount: 1},
-                        to: quote,
-                        date_range: {start: dateStart, end: dateEnd},
-                    },
-                ]);
-                const results = (response as any)?.results || [];
-                const points = results.map((r: any) => apiResultToFxDataPoint(r));
-                store.merge(points);
-            } catch {
-                /* convert may fail if no data yet */
-            }
+            getFxStore(slug).invalidateAll();
+            await ensureFxRangeLoaded(slug, dateStart, dateEnd);
             overlayDataVersion++;
             // Reload asset chart data to apply updated FX conversion
             await loadChartData();
@@ -1566,6 +1548,7 @@
                         yAxisMin={settings.yAxisMin}
                         yAxisMax={settings.yAxisMax}
                         onchange={handleAestheticsChange}
+                        disabledFields={disabledAesthetics}
                     />
                 </div>
             {/if}
@@ -1651,6 +1634,10 @@
                     onMeasureClick={handleMeasureClick}
                     onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
                     hideToolbar={true}
+                    externalChartType={chartType}
+                    onChartTypeChange={(t) => {
+                        chartType = t;
+                    }}
                     externalViewMode={viewMode}
                     editMode={showDataEditor}
                     staleLabel={$t('chart.tooltip.stale')}
