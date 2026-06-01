@@ -1,7 +1,7 @@
 # Plan — Phase 07 · Part 4 · Round 6 · Plan D — Split/Promote Full Stack
 
 **Date**: 2026-05-12
-**Status**: 🔄 IN PROGRESS (D1 ✅, D2 ✅ + bugfix1-4 ✅, D2-round2 ⏳ planning, D3 merged in D2-bugfix3)
+**Status**: 🔄 IN PROGRESS (D1 ✅, D2 ✅ + bugfix1-4 ✅, D2-round2 SP-A/B/C ✅, D2-round3 ⏳ SP-D, D3 merged in D2-bugfix3)
 **Priority**: P1 (feature completion)
 **Estimated effort**: ~5-6 days
 
@@ -764,7 +764,8 @@ Phase 4: E2E
 | **D2-bugfix2** — Payload + Split Preview UX | Post-bugfix1 | Commit payload alignments, split preview rendering | — | [`PlanD2_bugfix_2`](./phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/Bugfix/plan-bugfix2_PayloadSplitPreviewUX.prompt.md) | ✅ |
 | **D2-bugfix3** — UX Modal + Payload + Suggest + E2E | Post-bugfix2 | PromoteMergeModal polish, payload fixes, suggest banner UX, E2E tests (absorbed D3 scope) | — | [`PlanD2_bugfix_3`](./phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/Bugfix/plan-bugfix3_UXModalPayloadSuggestE2E.prompt.md) | ✅ |
 | **D2-bugfix4** — Split Suggest + PMC Override UX | Post-bugfix3 | Split suggest logic, PromoteMergeCandidate override, UX edge cases | — | [`PlanD2_bugfix_4`](./phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/Bugfix/plan-bugfix4_SplitSuggestPmcOverrideUx.prompt.md) | ✅ |
-| **D2-round2** — Walktest Feedback Round | Post-bugfix4 | cost_basis con valuta+FX, AssetEvent picker, paired TX store-first, 18 step in 5 sotto-piani | — | [`PlanD2_round2`](./phases/phase-07-subplan/Parte4/Round6/PlanD-R2/plan-R2-WalktestFeedbackRound.prompt.md) | ⏳ planning |
+| **D2-round2** — Walktest Feedback Round | Post-bugfix4 | cost_basis con valuta+FX, AssetEvent picker, paired TX store-first, 18 step in 5 sotto-piani | — | [`PlanD2_round2`](./phases/phase-07-subplan/Parte4/Round6/PlanD-R2/plan-R2-WalktestFeedbackRound.prompt.md) | 🔄 SP-A/B/C ✅, SP-D → R3 |
+| **D2-round3** — SP-D: FormModal + Picker + FX | Post-round2 | Store-first refactor, AssetEventPickerModal, WAC FX staleness feedback | ~12h | [`plan-R3-SP-D`](./plan-R3-SP-D-FormModalEventPickerWacFx.prompt.md) | ⏳ NEXT |
 | ~~**D3** — E2E Tests~~ | ~~D1, D2~~ | ~~tx-split-promote.spec.ts~~ | ~~3h~~ | — | ⛔ merged in D2-bugfix3 |
 
 ### Ordine di esecuzione
@@ -782,7 +783,11 @@ D2-bugfix3 (UX modal + suggest + E2E — absorbed D3 scope) ✅
   ↓
 D2-bugfix4 (split suggest + PMC override) ✅
   ↓
-D2-round2 (walktest feedback — 18 step, 5 sotto-piani) ⏳ NEXT
+D2-round2 (walktest feedback — SP-A/B/C ✅, SP-D/E pending) ✅ (core done)
+  ↓
+D2-round3 (SP-D: FormModal store-first + EventPicker + FX feedback) ⏳ NEXT
+  ↓
+SP-E (E2E tests for round2+round3) — after R3
 ```
 
 ---

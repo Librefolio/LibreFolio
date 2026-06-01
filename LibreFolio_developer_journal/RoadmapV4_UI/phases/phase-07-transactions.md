@@ -651,6 +651,11 @@ Modale unificata che copre i 4 ingressi, riusa `AssetModal` / `AssetMatchingWiza
 - **Gestione `rolled_back=true`**: banner rosso persistente con il dettaglio dei `results` falliti. Nessuna modifica al DB, quindi la Staging Modal resta aperta con lo stato invariato e l'utente può correggere.
 - **E2E `brim-atomic-commit.spec.ts`**: nuovo spec Playwright che verifica rollback atomico simulando un'overdraft violation → nessuna TX creata in DB, banner mostrato, stato Staging preservato.
 
+### 📌 Deferred from Round 6 SP-D — Input Concepts per Parte 5
+
+- **Multi-File Multi-Broker Import**: La Staging Modal deve supportare il caricamento simultaneo di più file BRIM (anche di broker diversi). Design: ogni file parsato produce un set di righe taggato per broker; la tabella unifica tutte le righe con color-band per broker/file. L'infrastruttura promote-suggest già funziona cross-row (identifica candidati da merge tra righe di broker diversi), quindi il multi-file import attiva automaticamente suggerimenti di promote tra le righe cross-broker nello stesso batch. Il commit resta atomico per-broker (un commit per broker). L'UX è: carica N file → vedi tutte le righe unite → risolvi conflitti/match → commit uno per broker o "commit all".
+- **Asset Matching Interattivo (Import)**: Quando il BRIM parse non riesce a risolvere un asset (`candidates.length == 0`), la Staging deve offrire un flusso interattivo: (1) mostrare `SearchSelect` con ricerca live su asset DB + query a provider esterni (yfinance, JustETF via `search_asset_candidates()`), (2) se 1 candidato auto-link, se N>1 dropdown con confidence score, se 0 → bottone "+ Create new" che apre `AssetModal`, (3) l'asset creato/selezionato viene assegnato alla riga e a tutte le righe dello stesso gruppo colore. Backend `brim_provider.search_asset_candidates()` già implementato (matching per ISIN/ticker/nome con 3 livelli di confidence).
+
 ---
 
 ## 🗂️ File da Creare / Modificare (riepilogo)
