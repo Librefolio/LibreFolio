@@ -129,40 +129,17 @@ La visibilità dei dati di altri utenti da parte del superuser deve essere ripen
 ## 📈 Asset Page — Prezzo e Transazioni
 
 **Data aggiunta**: 20 Febbraio 2026  
-**Status**: 🔄 PARZIALMENTE COMPLETATO (Phase 6)  
-**Priorità**: Alta (Phase 6)
+**Status**: 🔄 PARZIALMENTE COMPLETATO (Phase 6 + Phase 7 done)  
+**Priorità**: Media (Phase 8 Dashboard)
 
 ### Contesto
-~~La pagina dell'asset dovrebbe mostrare il prezzo corrente in alto~~ ✅ con ~~la possibilità, cliccando su un punto del grafico, di aprire un'interfaccia piccola per modificare il valore di quel giorno.~~ ✅ Data Editor implementato. ~~Sotto il grafico, per ogni transazione (slot per slot), mostrare il prezzo d'acquisto e la variazione rispetto ad oggi (guadagno/perdita), con uno storico del guadagno di quella transazione.~~ ❌ Richiede Phase 7 (Transazioni).
+~~La pagina dell'asset dovrebbe mostrare il prezzo corrente in alto~~ ✅ con ~~la possibilità, cliccando su un punto del grafico, di aprire un'interfaccia piccola per modificare il valore di quel giorno.~~ ✅ Data Editor implementato. ~~Sotto il grafico, per ogni transazione (slot per slot), mostrare il prezzo d'acquisto e la variazione rispetto ad oggi (guadagno/perdita), con uno storico del guadagno di quella transazione.~~ ⏳ Phase 7 completata — ora implementabile come feature Phase 8.
 
 ### Dettagli UI — Parti mancanti
 - Lista slot transazioni con prezzo d'acquisto, variazione %, storico guadagno
-- Richiede Phase 7 completata (import transazioni + linking asset)
+- Richiede: aggregazione portfolio + calcolo P&L (Phase 8 Dashboard scope)
 
 ---
-
-## 🔄 Import Transazioni — Matching Asset
-
-**Data aggiunta**: 20 Febbraio 2026  
-**Status**: 📋 PIANIFICATO → Phase 6 §6.4 + Phase 7 §7.6 (vedi `plan-phase05-to-08-upgrade.md`)  
-**Priorità**: Alta (Phase 7)
-
-### Contesto
-All'import delle transazioni (BRIM), per ogni riga deve essere ricercato un asset corrispondente. Se non viene trovato, all'utente viene chiesto di selezionare tra:
-1. Asset già esistenti nel database
-2. Asset trovati con query di ricerca ai vari provider plugin (yfinance, JustETF, etc.)
-
-Se l'utente seleziona un asset da un provider esterno, deve essere creato automaticamente l'asset associato nel database.
-
-### Flusso
-```
-Import riga → Cerca asset matching
-  ├─ Trovato → Link automatico
-  └─ Non trovato → Modale selezione:
-       ├─ Asset esistenti
-       ├─ Risultati ricerca provider
-       └─ Creazione manuale
-```
 
 ---
 
@@ -209,37 +186,6 @@ Diverse giurisdizioni usano metodi diversi per determinare quale lotto vendere i
 - Il vincolo di over-sell va esteso nell'import
 
 ---
-
-## ✂️ Split Cash In/Out nelle Transazioni
-
-**Data aggiunta**: 20 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Media
-
-### Contesto
-L'import delle transazioni deve permettere di fare split nel cash-in e cash-out per tracciare le varie fonti dei soldi. A database lo split non deve far perdere la transazione padre (per evitare doppio import).
-
-### Implementazione
-- Tabella di supporto per legare le transazioni split
-- UI: box unico dove le righe sono gli split
-- In fase di creazione, i totali degli split devono rispettare quelli della transazione padre
-- Anche in modifica questo vincolo deve essere mantenuto
-
----
-
-## 📁 Import Multi-File Multi-Broker
-
-**Data aggiunta**: 20 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Alta (Phase 7)
-
-### Contesto
-Deve essere possibile parsare contemporaneamente più file, anche di diversi broker. L'interfaccia deve permettere di muoversi tra i vari fogli e impostare i collegamenti.
-
-### Requisiti
-- Pulsante "Check" per validare le regole e ottenere in risposta elenco di errori e warning
-- Superamento soglie di check
-- Navigazione tra fogli/broker
 
 ---
 
@@ -400,19 +346,19 @@ Per FX si hanno solo close rate giornalieri — non esiste OHLC reale.
 
 
 
-## 🔗 Link Transazioni in Asset Delete Modal (Phase 7)
+## 🔗 Link Transazioni in Asset Delete Modal
 
 **Data aggiunta**: 26 Marzo 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Media (richiede Phase 7 completata)
+**Status**: 📋 ACTIONABLE (Phase 7 completata)  
+**Priorità**: Bassa (UX polish)
 
 ### Contesto
 
-Quando un asset non può essere eliminato perché ha transazioni esistenti (`error_code: HAS_TRANSACTIONS`), il messaggio è generico. Quando la pagina transazioni sarà implementata (Phase 7), bisognerà:
+Quando un asset non può essere eliminato perché ha transazioni esistenti (`error_code: HAS_TRANSACTIONS`), il messaggio è generico. Ora che la pagina transazioni esiste:
 
 1. **Delete modal**: mostrare il conteggio transazioni e un link diretto alla pagina transazioni filtrata (es. "This asset has 3 transactions: [View → /transactions?asset_id=123]")
 2. **Pagina dettaglio asset**: sezione con link alle transazioni collegate
-3. **Backend**: endpoint o campo aggiuntivo nel delete result con `transaction_count`
+3. **Backend**: aggiungere `transaction_count` a `FAAssetDeleteResult` quando `error_code == "HAS_TRANSACTIONS"`
 
 ### Azione Futura
 
@@ -446,31 +392,6 @@ genera eventi. I provider market dovranno essere estesi per catturare:
 5. Il frontend (pagina Asset Detail, Phase 8) dovrà mostrare gli eventi sul grafico come marker
 
 ---
-
-## 🔗 Phase 7 — Collegamento AssetEvent → Transaction
-
-**Data aggiunta**: 3 Aprile 2026 (Round 12 Finale)
-**Status**: 📋 PIANIFICATO
-**Priorità**: Alta (prerequisito per Phase 7)
-
-### Collegamento evento→transazione
-
-- Aggiungere `asset_event_id: Optional[int] = Field(default=None, foreign_key="asset_events.id")` su `Transaction`
-- Tipo DIVIDEND/INTEREST nella transaction collega all'evento asset auto-generato
-- Il FK `Transaction.asset_event_id` blocca il CASCADE delete su `AssetEvent` quando ci sono transazioni collegate → il backend ritorna errore **409 Conflict**
-- Frontend mostra modale "Alcuni eventi hanno transazioni collegate" con opzioni: migrazione date, scollegamento (`SET NULL` su `transaction.asset_event_id`), o annullamento
-- Gli eventi manuali (`provider_assignment_id=NULL`) servono per eventi un-planned
-- Gli eventi auto-generati (`provider_assignment_id` non-NULL, da `generate_interest=True`) sono planned e ricreabili deterministicamente
-- **MATURITY_SETTLEMENT** → al momento del settlement, il frontend suggerisce la creazione di una transazione SELL 100% (o del residuo)
-
-### Modale cambio provider
-
-Quando l'utente cambia provider su un asset che ha eventi auto-generati (`provider_assignment_id` non-NULL):
-1. Frontend mostra modale: "Ci sono N eventi generati dalla configurazione attuale"
-2. **Opzione A**: "Elimina tutto" → procedi con DELETE assignment (CASCADE elimina eventi)
-3. **Opzione B**: "Mantieni come manuali" → `UPDATE asset_events SET provider_assignment_id=NULL`, poi DELETE assignment
-4. **Opzione C**: "Annulla"
-- Se ci sono transazioni collegate (Phase 7+), l'opzione A è bloccata → mostrare dettaglio transazioni da scollegare prima
 
 ---
 

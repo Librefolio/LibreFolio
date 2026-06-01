@@ -166,6 +166,26 @@ Se l'utente non vuole auto-generare eventi di penale, lascia `generate_interest=
 
 ---
 
+## 🔗 Phase 7 — Collegamento AssetEvent → Transaction ✅
+
+**Data aggiunta**: 3 Aprile 2026 (Round 12 Finale)
+**Data completamento**: Maggio 2026 (SP-A, Phase 7 Part 4)
+**Status**: ✅ COMPLETATO (infrastruttura)
+
+### Completato
+
+- `asset_event_id: Optional[int]` FK su `Transaction` model (DB + Alembic)
+- Index `idx_transactions_asset_event` per lookup veloce
+- Schema `TXCreateItem.asset_event_id` con validazione (`> 0`)
+- FormModal: campo numerico + bottone unlink per `asset_event_id` (visibile solo quando `eventLinkable`)
+- Logic di reset: se tipo TX cambia a non-event-linkable → `asset_event_id = null`
+
+### Nota
+
+L'infrastruttura è completa. Resta da fare il **picker modale** per selezionare eventi in modo user-friendly (Step 14 di SP-D, piano separato). La modale "cambio provider con eventi collegati" (`AssetCurrencyChangeModal`) è già implementata.
+
+---
+
 ## 💱 FX Page — Grafico e Priorità Provider ✅
 
 **Data aggiunta**: 20 Febbraio 2026  
