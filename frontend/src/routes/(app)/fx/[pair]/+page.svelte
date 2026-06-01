@@ -40,7 +40,7 @@
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
     import {currentLanguage} from '$lib/stores/language';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
-    import {apiResultToFxDataPoint, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {setCardInverted} from '$lib/stores/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
@@ -375,35 +375,29 @@
     // =========================================================================
 
     async function loadChartData() {
-        loading = true;
         error = null;
-        const store = getFxStore(data.canonicalSlug);
-        const gaps = store.getMissingIntervals(dateStart, dateEnd);
 
-        if (gaps.length === 0) {
+        // Fast path: data fully cached — update without showing loading state
+        const store = getFxStore(data.canonicalSlug);
+        if (store.getMissingIntervals(dateStart, dateEnd).length === 0) {
             chartData = store.getRange(dateStart, dateEnd).data;
-            loading = false;
+            if (chartData.length === 0) error = '_i18n:fxDetail.noData';
             return;
         }
 
+        loading = true;
         try {
-            const convertRequests = gaps.map((gap) => ({
-                from_amount: {code: data.canonicalBase, amount: 1},
-                to: data.canonicalQuote,
-                date_range: {start: gap.start, end: gap.end},
-            }));
-            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
-            const results = (response as any)?.results || [];
-            const points: FxDataPoint[] = results.map((r: any) => apiResultToFxDataPoint(r));
-            store.merge(points);
-            chartData = store.getRange(dateStart, dateEnd).data;
+            chartData = await ensureFxRangeLoaded(data.canonicalSlug, dateStart, dateEnd);
+            if (chartData.length === 0 && !error) {
+                error = '_i18n:fxDetail.noData';
+            }
         } catch (e: any) {
-            const existingData = store.getRange(dateStart, dateEnd).data;
+            const existingData = getFxStore(data.canonicalSlug).getRange(dateStart, dateEnd).data;
             if (existingData.length > 0) {
                 chartData = existingData;
             } else if (e?.response?.status === 404) {
                 chartData = [];
-                store.invalidateRange(dateStart, dateEnd);
+                getFxStore(data.canonicalSlug).invalidateRange(dateStart, dateEnd);
                 error = '_i18n:fxDetail.noData';
             } else {
                 console.error('Failed to load chart data:', e);
@@ -497,23 +491,8 @@
             if (cfg.signalType === 'fx-pair') {
                 const pairSlug = String(cfg.params.pairSlug || '');
                 if (pairSlug && pairSlug !== data.canonicalSlug) {
-                    const overlayStore = getFxStore(pairSlug);
-                    overlayStore.invalidateRange(dateStart, dateEnd);
-                    try {
-                        const convertRequests = [
-                            {
-                                from_amount: {code: pairSlug.split('-')[0], amount: 1},
-                                to: pairSlug.split('-')[1],
-                                date_range: {start: dateStart, end: dateEnd},
-                            },
-                        ];
-                        const resp = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
-                        const results = (resp as any)?.results || [];
-                        const points = results.map((r: any) => apiResultToFxDataPoint(r));
-                        overlayStore.merge(points);
-                    } catch {
-                        /* best effort */
-                    }
+                    getFxStore(pairSlug).invalidateRange(dateStart, dateEnd);
+                    await ensureFxRangeLoaded(pairSlug, dateStart, dateEnd);
                 }
             }
         }
@@ -572,27 +551,12 @@
                 toasts[toast.variant](toast.message);
             }
             // Invalidate store + refresh if it's our pair, also reload overlay data
-            const store = getFxStore(slug);
-            store.invalidateRange(dateStart, dateEnd);
+            getFxStore(slug).invalidateRange(dateStart, dateEnd);
             if (slug === data.canonicalSlug) {
                 await handleRefresh();
             } else {
                 // Overlay pair: re-fetch data from DB so the chart updates
-                try {
-                    const convertRequests = [
-                        {
-                            from_amount: {code: slug.split('-')[0], amount: 1},
-                            to: slug.split('-')[1],
-                            date_range: {start: dateStart, end: dateEnd},
-                        },
-                    ];
-                    const resp = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
-                    const results = (resp as any)?.results || [];
-                    const points = results.map((r: any) => apiResultToFxDataPoint(r));
-                    store.merge(points);
-                } catch {
-                    /* best effort */
-                }
+                await ensureFxRangeLoaded(slug, dateStart, dateEnd);
                 overlayDataVersion++;
             }
         } catch (e: any) {
@@ -937,6 +901,7 @@
                     onMeasureClick={handleMeasureClick}
                     onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
                     hideToolbar={true}
+                    disableCandlestick={true}
                     externalViewMode={viewMode}
                     editMode={showDataEditor}
                     onPointClick={(date, _value) => fxDataEditorRef?.scrollToDate(date)}
@@ -968,7 +933,9 @@
                             <button
                                 class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
                                 data-testid="fx-detail-add-rates-manually"
-                                onclick={() => { showDataEditor = true; }}
+                                onclick={() => {
+                                    showDataEditor = true;
+                                }}
                             >
                                 <Pencil class="inline mr-1" size={14} />
                                 {$t('fxDetail.insertManually')}

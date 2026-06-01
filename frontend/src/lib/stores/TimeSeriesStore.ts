@@ -71,6 +71,8 @@ function addDays(date: Date, days: number): Date {
 
 export class TimeSeriesStore<T extends TimeSeriesPoint> {
     private data: Map<string, T> = new Map();
+    /** Intervals already fetched from the API (may have returned no data). */
+    private fetchedRanges: Array<{start: Date; end: Date}> = [];
 
     /** Number of data points currently in the store */
     get size(): number {
@@ -147,10 +149,29 @@ export class TimeSeriesStore<T extends TimeSeriesPoint> {
 
     /**
      * Get only the missing intervals for a range (convenience wrapper).
-     * Useful when you only need to know what to fetch.
+     * Excludes intervals already marked as fetched (even if they returned no data),
+     * preventing redundant API calls within the same session.
      */
     getMissingIntervals(start: string, end: string): DateGap[] {
-        return this.getRange(start, end).gaps;
+        return this.getRange(start, end).gaps.filter(
+            (gap) => !this.isRangeFetched(gap.start, gap.end),
+        );
+    }
+
+    /**
+     * Mark a date range as fetched from the API.
+     * After this call, getMissingIntervals will not return gaps inside this range,
+     * even if no data was stored (e.g. after a 404).
+     * Cleared by invalidateAll() and invalidateRange().
+     */
+    markFetched(start: string, end: string): void {
+        this.fetchedRanges.push({start: parseDate(start), end: parseDate(end)});
+    }
+
+    private isRangeFetched(start: string, end: string): boolean {
+        const s = parseDate(start);
+        const e = parseDate(end);
+        return this.fetchedRanges.some((r) => r.start <= s && r.end >= e);
     }
 
     /**
@@ -181,6 +202,11 @@ export class TimeSeriesStore<T extends TimeSeriesPoint> {
             this.data.delete(formatDate(current));
             current = addDays(current, 1);
         }
+
+        // Clear fetched marks that overlap the invalidated range
+        this.fetchedRanges = this.fetchedRanges.filter(
+            (r) => r.end < startDate || r.start > endDate,
+        );
     }
 
     /**
@@ -188,6 +214,7 @@ export class TimeSeriesStore<T extends TimeSeriesPoint> {
      */
     invalidateAll(): void {
         this.data.clear();
+        this.fetchedRanges = [];
     }
 
     /**

@@ -41,7 +41,7 @@
     import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
     import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {apiResultToFxDataPoint, createPairSlug, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
 
     // =========================================================================
     // Types
@@ -682,24 +682,7 @@
     /** Fetch FX rate data for all configured pairs (populates FxStores) */
     async function loadFxRateData() {
         const promises = fxPairSlugs.map(async (slug) => {
-            const store = getFxStore(slug);
-            if (store.getAllSorted().length > 0) return; // Already has data
-            try {
-                const [base, quote] = slug.split('-');
-                const convertRequests = [
-                    {
-                        from_amount: {code: base, amount: 1},
-                        to: quote,
-                        date_range: {start: dateStart, end: dateEnd},
-                    },
-                ];
-                const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
-                const results = (response as any)?.results || [];
-                const points: FxDataPoint[] = results.map((r: any) => apiResultToFxDataPoint(r));
-                store.merge(points);
-            } catch {
-                /* graceful skip */
-            }
+            await ensureFxRangeLoaded(slug, dateStart, dateEnd);
         });
         await Promise.allSettled(promises);
     }

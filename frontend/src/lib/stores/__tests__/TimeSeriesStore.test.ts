@@ -70,14 +70,44 @@ describe('TimeSeriesStore', () => {
     });
 
     // =========================================================================
-    // Test 5: getMissingIntervals is wrapper for getRange().gaps
+    // Test 5: getMissingIntervals excludes already-fetched intervals
     // =========================================================================
-    it('getMissingIntervals equals getRange().gaps', () => {
+    it('getMissingIntervals excludes intervals already marked as fetched', () => {
         const store = new TimeSeriesStore<TestPoint>();
         store.merge([pt('2024-01-01', 1.0), pt('2024-01-03', 1.2)]);
-        const gaps = store.getMissingIntervals('2024-01-01', '2024-01-03');
-        const rangeGaps = store.getRange('2024-01-01', '2024-01-03').gaps;
-        expect(gaps).toEqual(rangeGaps);
+        // Gap: 2024-01-02. Without markFetched it should appear.
+        expect(store.getMissingIntervals('2024-01-01', '2024-01-03')).toHaveLength(1);
+        // After marking the gap as fetched, getMissingIntervals returns empty
+        store.markFetched('2024-01-02', '2024-01-02');
+        expect(store.getMissingIntervals('2024-01-01', '2024-01-03')).toHaveLength(0);
+        // getRange().gaps is still the raw gaps (not filtered)
+        expect(store.getRange('2024-01-01', '2024-01-03').gaps).toHaveLength(1);
+    });
+
+    // =========================================================================
+    // Test 5b: invalidateRange clears overlapping fetchedRanges marks
+    // =========================================================================
+    it('invalidateRange clears fetched marks that overlap the invalidated range', () => {
+        const store = new TimeSeriesStore<TestPoint>();
+        store.merge([pt('2024-01-01', 1.0), pt('2024-01-02', 1.1), pt('2024-01-03', 1.2)]);
+        store.markFetched('2024-01-01', '2024-01-03');
+        // Gap introduced inside the marked range
+        store.invalidateRange('2024-01-02', '2024-01-02');
+        // Mark should be cleared → gap is now visible again
+        expect(store.getMissingIntervals('2024-01-01', '2024-01-03')).toHaveLength(1);
+    });
+
+    // =========================================================================
+    // Test 5c: invalidateAll clears all fetchedRanges marks
+    // =========================================================================
+    it('invalidateAll clears all fetched marks so gaps become visible again', () => {
+        const store = new TimeSeriesStore<TestPoint>();
+        store.markFetched('2024-01-01', '2024-01-05');
+        // Gap should be suppressed before invalidate
+        expect(store.getMissingIntervals('2024-01-01', '2024-01-05')).toHaveLength(0);
+        store.invalidateAll();
+        // After invalidateAll, marks cleared → gaps reappear
+        expect(store.getMissingIntervals('2024-01-01', '2024-01-05')).toHaveLength(1);
     });
 
     // =========================================================================

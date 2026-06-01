@@ -193,6 +193,50 @@ export function lookupFxRateSync(base: string, quote: string, date: string): FxD
     return {...point, rate: point.rate !== 0 ? 1 / point.rate : 0};
 }
 
+// ============================================================================
+// RANGE HELPERS
+// ============================================================================
+
+/**
+ * Ensure FX data for the given pair and date range is loaded into the cache.
+ * Gap-detection + bulk fetch + merge — all in one call.
+ *
+ * @param slug   Pair slug in alphabetical order (e.g. "EUR-USD")
+ * @param start  Start date YYYY-MM-DD (inclusive)
+ * @param end    End date YYYY-MM-DD (inclusive)
+ * @returns      All cached FxDataPoints in [start, end] after loading
+ */
+export async function ensureFxRangeLoaded(slug: string, start: string, end: string): Promise<FxDataPoint[]> {
+    const store = getFxStore(slug);
+    const gaps = store.getMissingIntervals(start, end);
+
+    if (gaps.length > 0) {
+        const {base: canonBase, quote: canonQuote} = parsePairSlug(slug);
+        const convertRequests = gaps.map((gap) => ({
+            from_amount: {code: canonBase, amount: '1'},
+            to: canonQuote,
+            date_range: {start: gap.start, end: gap.end},
+        }));
+
+        try {
+            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
+            const results = (response as any)?.results ?? [];
+            const points = results.map(apiResultToFxDataPoint);
+            if (points.length > 0) store.merge(points);
+            // Mark all fetched gaps so getMissingIntervals won't re-detect them
+            for (const gap of gaps) store.markFetched(gap.start, gap.end);
+        } catch (e: any) {
+            if (e?.response?.status === 404) {
+                // No rates available for this pair/range — mark fetched to avoid re-fetching
+                for (const gap of gaps) store.markFetched(gap.start, gap.end);
+            }
+            // Network / 5xx errors: don't mark — allow retry on next call
+        }
+    }
+
+    return store.getRange(start, end).data;
+}
+
 /**
  * Async lookup with auto-fetch. Checks cache first, fetches from backend if miss.
  * Result is merged into TimeSeriesStore for future cache hits.
