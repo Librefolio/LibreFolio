@@ -656,7 +656,7 @@
                         <!-- Style strip (non-MACD) -->
                         {#if signal.signalType !== 'macd'}
                             <div class="pt-1.5 border-t border-gray-100 dark:border-slate-700">
-                                <SignalStyleEditor style={signal.style} onstylechange={(key, value) => updateSignalStyle(signal.id, key, value)} />
+                                <SignalStyleEditor style={signal.style} onstylechange={(key, value) => updateSignalStyle(signal.id, key, value)} hideLineType={signal.signalType === 'rsi'} />
                             </div>
                         {/if}
 

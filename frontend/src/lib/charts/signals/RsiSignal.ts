@@ -15,7 +15,7 @@
  * See: docs/financial-theory/technical-analysis/indicators/rsi.en.md
  */
 
-import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';
+import {ChartSignal, type RenderedSignal, type SignalParamDescriptor} from './ChartSignal';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 
 export class RsiSignal extends ChartSignal {
@@ -103,5 +103,69 @@ export class RsiSignal extends ChartSignal {
 
     getLabel(): string {
         return `RSI(${this.params.period ?? 14})`;
+    }
+
+    override renderMulti(baseData: LineDataPoint[], _viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
+        const allPoints = this.computePoints(baseData);
+        if (allPoints.length === 0) return [];
+
+        const overbought = Number(this.params.overbought ?? 70);
+        const oversold = Number(this.params.oversold ?? 30);
+
+        type Zone = 'oversold' | 'neutral' | 'overbought';
+        const getZone = (v: number): Zone => {
+            if (v < oversold) return 'oversold';
+            if (v > overbought) return 'overbought';
+            return 'neutral';
+        };
+
+        function zoneStyle(zone: Zone, baseWidth: number): {lineType: 'solid' | 'dashed'; lineWidth: number} {
+            if (zone === 'neutral') return {lineType: 'dashed', lineWidth: baseWidth};
+            return {lineType: 'solid', lineWidth: baseWidth + 1};
+        }
+
+        interface Segment {
+            zone: Zone;
+            startIdx: number;
+            endIdx: number;
+        }
+
+        const segments: Segment[] = [];
+        let currentZone = getZone(allPoints[0].value);
+        let segStart = 0;
+
+        for (let i = 1; i <= allPoints.length; i++) {
+            const z: Zone | null = i < allPoints.length ? getZone(allPoints[i].value) : null;
+            if (z !== currentZone) {
+                segments.push({zone: currentZone, startIdx: segStart, endIdx: i - 1});
+                if (z !== null) {
+                    currentZone = z;
+                    segStart = i - 1; // overlap: include junction point in next segment
+                }
+            }
+        }
+
+        const baseWidth = this.style.lineWidth;
+        const color = this.style.color;
+        const yAxis = (this.constructor as typeof ChartSignal).yAxisIndex;
+
+        return segments
+            .map((seg): RenderedSignal | null => {
+                const segData = allPoints.slice(seg.startIdx, seg.endIdx + 1);
+                if (segData.length === 0) return null;
+                const s = zoneStyle(seg.zone, baseWidth);
+                return {
+                    id: `${this.id}-${seg.zone}-${seg.startIdx}`,
+                    label: seg.startIdx === 0 ? this.getLabel() : '',
+                    data: segData,
+                    color,
+                    lineWidth: s.lineWidth,
+                    lineType: s.lineType,
+                    markerStart: seg.startIdx === 0 ? this.style.markerStart : null,
+                    markerEnd: seg.endIdx === allPoints.length - 1 ? this.style.markerEnd : null,
+                    yAxisIndex: yAxis,
+                } satisfies RenderedSignal;
+            })
+            .filter((s): s is RenderedSignal => s !== null);
     }
 }
