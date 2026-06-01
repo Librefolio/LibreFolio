@@ -175,17 +175,17 @@
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
 | [[F-075]] | TanStack Table v9 Migration | frontend | `planned` | — |
-| [[F-076]] | Log Level Policy & TRACE Level | backend | `planned` | — |
+| [[F-076]] | Log Level Policy & TRACE Level | backend | `implemented` | — |
 | [[F-077]] | Mobile DataTable Touch Drag Column Reorder | frontend | `planned` | — |
 | [[F-078]] | User Filter in Files Page | fullstack | `planned` | — |
 | [[F-079]] | GDPR Broker Access Compliance | fullstack | `planned` | — |
-| [[F-080]] | Candlestick Chart / Volume Bars | frontend | `planned` | — |
+| [[F-080]] | Candlestick Chart / Volume Bars | frontend | `implemented` | — |
 | [[F-081]] | Fiscal Sale Method (FIFO/LIFO/PMC/SelectID) | fullstack | `planned` | — |
 | [[F-082]] | Cash Split Transactions | fullstack | `planned` | — |
 | [[F-083]] | Multi-File Multi-Broker Import | fullstack | `planned` | — |
 | [[F-084]] | Transaction Gain Chart | frontend | `planned` | — |
 | [[F-085]] | QuarkAI AI Assistant | fullstack | `idea` | — |
-| [[F-086]] | Client-side Image Preview Cache (LazyImage) | frontend | `planned` | — |
+| [[F-086]] | Client-side Image Preview Cache (LazyImage) | frontend | `implemented` | — |
 | [[F-087]] | Smooth Signal Line Style | frontend | `planned` | — |
 | [[F-088]] | Return-over-N Chart | frontend | `planned` | — |
 | [[F-089]] | FX Provider Per-Plugin Documentation | infra | `planned` | — |

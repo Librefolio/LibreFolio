@@ -41,6 +41,8 @@ Questa directory contiene i sotto-piani di implementazione per la Phase 6 (Asset
 | File | Contenuto | Status |
 |------|-----------|:------:|
 | `plan-justetf-multicurrency-enhancement.prompt.md` | JustETF multi-currency: params_schema, search 4 variants, EUR-only current, docs | ✅ |
+| `plan-independent-CandlestickChart.prompt.md` | CandlestickChart.svelte + volume bars (ECharts OHLCV) | ✅ |
+| `plan-independent-RsiSignalBands.prompt.md` | RSI zone-driven line style (oversold/neutral/overbought segmentation) | ✅ |
 
 ## Riepilogo Step
 

@@ -4,6 +4,24 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-06-01] ingest | Batch 4 — Five Independent Mini-Plans
+
+Ingested 5 independent plans (BackendLogAudit, CandlestickChart, FxRangeHelper, LazyImageCache, RsiSignalBands) — all ✅ DONE 2026-06-01.
+
+**Created** (1 source page):
+- [[sources/independent-batch-2026-06-01]]
+
+**Created** (3 concept pages):
+- [[concepts/log-level-policy]] — 6-level hierarchy, TRACE registration, structlog patch
+- [[concepts/image-preview-cache-pattern]] — objectUrl cache, size-based reuse, no ref counting
+- [[concepts/fx-range-helper-pattern]] — ensureFxRangeLoaded centralization (DRY 6→1)
+
+**Updated** (4 feature pages):
+- [[features/F-076]] — status: planned → implemented (log policy + TRACE)
+- [[features/F-080]] — status: planned → implemented (candlestick OHLCV chart)
+- [[features/F-086]] — status: planned → implemented (image preview cache)
+- [[features/F-039]] — added RSI zone-driven band style details
+
 ## [2026-06-02] ingest | Batch 2 — SP-C Bugfix Chain (11 plans: BulkModal + WAC Preview)
 
 Ingested 11 completed plans from SP-C sub-plan (Frontend BulkModal + Suggest UX + WAC bugfixes) @ anchor `84f8bd07`.
