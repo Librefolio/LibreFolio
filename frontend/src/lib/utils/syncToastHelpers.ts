@@ -10,8 +10,7 @@
  * @module utils/syncToastHelpers
  */
 
-import {getCurrencyInfo} from '$lib/stores/currencyStore';
-import {fxProviderBadgeHtml, parseProviderChain} from '$lib/utils/providerHelpers';
+import {fxPairHtml, fxProviderBadgeHtml, parseProviderChain} from '$lib/utils/providerHelpers';
 
 // Inline SVG icons (from Lucide) — small enough to embed in toast HTML strings
 const ICON_STYLE = 'display:inline-block;vertical-align:middle;margin-right:4px;width:14px;height:14px';
@@ -22,22 +21,6 @@ const dollarSignSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height
 /** CalendarClock icon SVG (matches data editor Events tab) */
 const calendarClockSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="${ICON_STYLE}"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/></svg>`;
 
-/** ArrowLeftRight SVG (for FX pair display in toast) */
-const arrowLrSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin:0 2px;width:10px;height:10px"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>`;
-
-/**
- * Format FX pair slug as HTML with flags and ArrowLeftRight icon.
- * e.g. "EUR-USD" → "🇪🇺 EUR ↔ 🇺🇸 USD"
- */
-function fxPairHtml(slug: string): string {
-    const parts = slug.split('-');
-    const base = parts[0] ?? slug;
-    const quote = parts[1] ?? '';
-    const baseFlag = getCurrencyInfo(base).flag_emoji;
-    const quoteFlag = quote ? getCurrencyInfo(quote).flag_emoji : '';
-    if (!quote) return `${baseFlag} ${base}`;
-    return `${baseFlag} ${base} ${arrowLrSvg} ${quoteFlag} ${quote}`;
-}
 
 /**
  * Format FX provider chain as HTML badges (icons with fallback text).

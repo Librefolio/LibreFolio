@@ -45,6 +45,7 @@
     import type {ViewMode, ChartType} from '$lib/components/charts/ChartToolbar.svelte';
     import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
     import {ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
     import {getAssetTypeIconUrl, buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
@@ -741,7 +742,37 @@
         }
     }
 
-    async function loadChartData() {
+    async function loadChartData(force = false) {
+        const effectiveCurrency = (displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency)
+            ? displayCurrency
+            : assetInfo?.currency ?? '';
+        const targetCurrency = (displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency)
+            ? displayCurrency
+            : undefined;
+
+        // Cache-first: check if the price store already covers this range
+        if (!force && effectiveCurrency) {
+            const store = getAssetPriceStore(data.assetId, effectiveCurrency);
+            const gaps = store.getMissingIntervals(dateStart, dateEnd);
+            if (gaps.length === 0) {
+                // Cache hit — update chart data without loading spinner
+                const cached = store.getRange(dateStart, dateEnd).data;
+                chartData = cached.map((p) => ({
+                    date: p.date, close: p.close, open: p.open, high: p.high,
+                    low: p.low, volume: p.volume, currency: p.currency,
+                    original_close: p.originalClose,
+                    backward_fill_info: p.backwardFillInfo ? {days_back: p.backwardFillInfo.daysBack} : null,
+                }));
+                if (chartData.length === 0 && !error) {
+                    error = '_i18n:assetDetail.noData';
+                } else {
+                    error = null;
+                }
+                return;
+            }
+        }
+
+        // Cache miss or force — full fetch with loading spinner
         loading = true;
         error = null;
         try {
@@ -750,18 +781,24 @@
                     asset_id: data.assetId,
                     date_range: {start: dateStart, end: dateEnd},
                     include_events: true,
-                    target_currency: displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : undefined,
+                    target_currency: targetCurrency,
                 },
             ]);
             const result = (response as any)?.items?.[0];
             if (result) {
                 chartData = result.prices ?? [];
                 events = result.events ?? [];
+                // Populate the price cache (derive currency from response if not known yet)
+                const cacheCurrency = effectiveCurrency || chartData[0]?.currency || '';
+                if (cacheCurrency && chartData.length > 0) {
+                    const store = getAssetPriceStore(data.assetId, cacheCurrency);
+                    store.merge(apiPricesToAssetPricePoints(chartData));
+                    store.markFetched(dateStart, dateEnd);
+                }
             } else {
                 chartData = [];
                 events = [];
             }
-            // Show "no data" banner when query succeeded but returned empty prices
             if (chartData.length === 0 && !error) {
                 error = '_i18n:assetDetail.noData';
             }
@@ -915,7 +952,8 @@
             // single silent full reload is the pragmatic fallback here.
             const isConvertedChart = !!(displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency);
             if (isConvertedChart) {
-                await loadChartData();
+                invalidateAssetPriceStore(data.assetId);
+                await loadChartData(true);
                 return;
             }
 
@@ -961,7 +999,8 @@
     // =========================================================================
 
     async function handleRefresh() {
-        await loadChartData();
+        invalidateAssetPriceStore(data.assetId);
+        await loadChartData(true);
         // Invalidate FX overlay stores so they refetch updated rates
         for (const pair of requiredFxPairs) {
             if (pair.status === 'missing') continue;
@@ -1130,11 +1169,13 @@
                     if (!isConvertedChart) {
                         chartData = mergeChartPointsIncremental(chartData, changedPoints);
                     }
-                    await loadChartData();
+                    invalidateAssetPriceStore(data.assetId);
+                    await loadChartData(true);
                 } else {
                     // No delta from backend (no changes, or above cap,
                     // or reload is needed anyway): full reload.
-                    await loadChartData();
+                    invalidateAssetPriceStore(data.assetId);
+                    await loadChartData(true);
                 }
             }
         } catch (e: any) {
@@ -1182,7 +1223,8 @@
             await ensureFxRangeLoaded(slug, dateStart, dateEnd);
             overlayDataVersion++;
             // Reload asset chart data to apply updated FX conversion
-            await loadChartData();
+            invalidateAssetPriceStore(data.assetId);
+            await loadChartData(true);
             const tr = get(t);
             const r = (syncResponse as any)?.results?.[0];
             const toast = buildFxSyncToast(r, slug, tr);

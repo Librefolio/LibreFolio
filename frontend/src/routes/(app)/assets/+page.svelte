@@ -42,6 +42,7 @@
     import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
 
     // =========================================================================
     // Types
@@ -370,13 +371,36 @@
     async function fetchAllPriceData() {
         if (assets.length === 0) return;
 
+        // Split into cached (no gaps) and need-fetch (have gaps)
+        const cached: Map<number, any[]> = new Map();
+        const needFetch: AssetState[] = [];
+        for (const asset of assets) {
+            const store = getAssetPriceStore(asset.id, asset.currency);
+            const gaps = store.getMissingIntervals(dateStart, dateEnd);
+            if (gaps.length === 0) {
+                const rangeData = store.getRange(dateStart, dateEnd).data;
+                cached.set(asset.id, rangeData.map((p) => ({
+                    date: p.date, close: p.close, open: p.open, high: p.high,
+                    low: p.low, volume: p.volume, currency: p.currency,
+                    backward_fill_info: p.backwardFillInfo ? {days_back: p.backwardFillInfo.daysBack} : null,
+                })));
+            } else {
+                needFetch.push(asset);
+            }
+        }
+
+        // If all cached — update instantly, no loading indicators
+        if (needFetch.length === 0) {
+            assets = assets.map((asset) => buildAssetStateFromPrices(asset, cached.get(asset.id) ?? []));
+            return;
+        }
+
         refreshing = true;
-        // Mark all as loading
-        assets = assets.map((a) => ({...a, loadingPrices: true}));
+        assets = assets.map((a) => ({...a, loadingPrices: needFetch.some((nf) => nf.id === a.id)}));
 
         try {
-            // Build bulk query
-            const queries = assets.map((a) => ({
+            // Bulk query only assets with gaps
+            const queries = needFetch.map((a) => ({
                 asset_id: a.id,
                 date_range: {start: dateStart, end: dateEnd},
             }));
@@ -384,56 +408,72 @@
             const response = (await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(queries)) as any;
             const items = response.items ?? [];
 
-            // Process results
+            // Populate caches and result map
             const resultMap = new Map<number, any[]>();
             for (const result of items) {
-                resultMap.set(result.asset_id, result.prices ?? []);
+                const prices = result.prices ?? [];
+                resultMap.set(result.asset_id, prices);
+                // Populate cache for this asset
+                const asset = needFetch.find((a) => a.id === result.asset_id);
+                if (asset && prices.length > 0) {
+                    const store = getAssetPriceStore(asset.id, asset.currency);
+                    store.merge(apiPricesToAssetPricePoints(prices));
+                    store.markFetched(dateStart, dateEnd);
+                }
             }
 
+            // Merge cached + fresh results
             assets = assets.map((asset) => {
-                const prices = resultMap.get(asset.id) ?? [];
-
-                if (prices.length > 0) {
-                    const firstPrice = prices[0]?.close != null ? Number(prices[0].close) : null;
-                    const lastPrice = prices[prices.length - 1]?.close != null ? Number(prices[prices.length - 1].close) : null;
-
-                    let deltaAbs: number | null = null;
-                    let deltaPercent: number | null = null;
-                    if (firstPrice !== null && lastPrice !== null && firstPrice !== 0) {
-                        deltaAbs = lastPrice - firstPrice;
-                        deltaPercent = ((lastPrice - firstPrice) / firstPrice) * 100;
-                    }
-
-                    const chartData = prices.map((p: any) => ({
-                        date: p.date,
-                        value: Number(p.close ?? 0),
-                        staleDays: p.backward_fill_info?.days_back ?? 0,
-                    }));
-
-                    // Compute multi-period deltas
-                    const deltas: Record<string, number | null> = {};
-                    for (const period of DELTA_PERIODS) {
-                        deltas[period.key] = computePeriodDelta(chartData, period.days);
-                    }
-
-                    return {
-                        ...asset,
-                        lastPrice,
-                        deltaAbs,
-                        deltaPercent,
-                        chartData,
-                        deltas,
-                        loadingPrices: false,
-                    };
-                }
-                return {...asset, loadingPrices: false, deltas: {}};
+                const prices = cached.get(asset.id) ?? resultMap.get(asset.id) ?? [];
+                return buildAssetStateFromPrices(asset, prices);
             });
         } catch (e: any) {
             console.error('Failed to fetch prices bulk:', e);
-            assets = assets.map((a) => ({...a, loadingPrices: false, deltas: {}}));
+            // For cached assets, still use cached data; for others, clear loading
+            assets = assets.map((a) => {
+                const cachedPrices = cached.get(a.id);
+                if (cachedPrices) return buildAssetStateFromPrices(a, cachedPrices);
+                return {...a, loadingPrices: false, deltas: {}};
+            });
         } finally {
             refreshing = false;
         }
+    }
+
+    function buildAssetStateFromPrices(asset: AssetState, prices: any[]): AssetState {
+        if (prices.length > 0) {
+            const firstPrice = prices[0]?.close != null ? Number(prices[0].close) : null;
+            const lastPrice = prices[prices.length - 1]?.close != null ? Number(prices[prices.length - 1].close) : null;
+
+            let deltaAbs: number | null = null;
+            let deltaPercent: number | null = null;
+            if (firstPrice !== null && lastPrice !== null && firstPrice !== 0) {
+                deltaAbs = lastPrice - firstPrice;
+                deltaPercent = ((lastPrice - firstPrice) / firstPrice) * 100;
+            }
+
+            const chartData = prices.map((p: any) => ({
+                date: p.date,
+                value: Number(p.close ?? 0),
+                staleDays: p.backward_fill_info?.days_back ?? p.backwardFillInfo?.daysBack ?? 0,
+            }));
+
+            const deltas: Record<string, number | null> = {};
+            for (const period of DELTA_PERIODS) {
+                deltas[period.key] = computePeriodDelta(chartData, period.days);
+            }
+
+            return {
+                ...asset,
+                lastPrice,
+                deltaAbs,
+                deltaPercent,
+                chartData,
+                deltas,
+                loadingPrices: false,
+            };
+        }
+        return {...asset, loadingPrices: false, deltas: {}};
     }
 
     function handleDateRangeChange(newStart: string, newEnd: string) {
@@ -521,6 +561,7 @@
                     }) + (r?.errors?.[0] ? ': ' + r.errors[0] : ''),
                 );
             }
+            invalidateAssetPriceStore(asset.id);
             await fetchAllPriceData();
         } catch (e: any) {
             toasts.error(
@@ -541,8 +582,8 @@
         syncModalOpen = true;
     }
 
-    async function handleRefreshAsset(_asset: any) {
-        // Re-fetch price data from DB for all assets
+    async function handleRefreshAsset(asset: any) {
+        invalidateAssetPriceStore(asset.id);
         await fetchAllPriceData();
     }
 
@@ -589,6 +630,7 @@
     }
 
     async function handleBulkRefreshAssets() {
+        for (const a of assets) invalidateAssetPriceStore(a.id);
         await fetchAllPriceData();
         assetTableComponent?.getTableRef()?.clearSelection();
         selectedAssetRows = [];
@@ -1039,7 +1081,7 @@
             <!-- Refresh All -->
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                onclick={() => fetchAllPriceData()}
+                onclick={() => { for (const a of assets) invalidateAssetPriceStore(a.id); fetchAllPriceData(); }}
             >
                 <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
                 {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
@@ -1188,7 +1230,7 @@
     onclose={() => {
         syncModalOpen = false;
     }}
-    onsynced={() => fetchAllPriceData()}
+    onsynced={() => { for (const a of assets) invalidateAssetPriceStore(a.id); fetchAllPriceData(); }}
 />
 
 <!-- Asset Create/Edit Modal -->

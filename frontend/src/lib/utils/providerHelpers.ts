@@ -9,6 +9,7 @@
  */
 
 import {getCachedFxProviders} from '$lib/stores/currencyGraphStore';
+import {getCurrencyInfo} from '$lib/stores/currencyStore';
 import {zodiosApi} from '$lib/api';
 import {writable} from 'svelte/store';
 
@@ -56,6 +57,23 @@ export function fxProviderBadgeHtml(providerCode: string): string {
         return `<span class="inline-flex items-center px-1 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${info.icon_url}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.parentElement.textContent='${providerCode.slice(0, 2)}'" /></span>`;
     }
     return `<span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded ${cls}">${providerCode}</span>`;
+}
+
+/** ArrowLeftRight SVG (inline, for FX pair display in toast/badge HTML) */
+const arrowLrSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin:0 2px;width:10px;height:10px"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>`;
+
+/**
+ * Format FX pair slug as HTML with flags and ArrowLeftRight icon.
+ * e.g. "EUR-USD" → "🇪🇺 EUR ↔ 🇺🇸 USD"
+ */
+export function fxPairHtml(slug: string): string {
+    const parts = slug.split('-');
+    const base = parts[0] ?? slug;
+    const quote = parts[1] ?? '';
+    const baseFlag = getCurrencyInfo(base).flag_emoji;
+    const quoteFlag = quote ? getCurrencyInfo(quote).flag_emoji : '';
+    if (!quote) return `${baseFlag} ${base}`;
+    return `${baseFlag} ${base} ${arrowLrSvg} ${quoteFlag} ${quote}`;
 }
 
 // =========================================================================
