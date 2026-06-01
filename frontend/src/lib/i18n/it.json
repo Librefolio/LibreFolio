@@ -935,7 +935,7 @@
     "deletePairQuestion": "Eliminare {pair}?",
     "deletePairWarning": "Questo rimuoverà la configurazione dei provider e tutti i tassi di cambio storici. ⚠️",
     "delete": {
-      "toastOk": "{pair} eliminata ({n} tassi rimossi)",
+      "toastOk": "{pair} eliminata ({count} tassi rimossi)",
       "toastFailed": "Impossibile eliminare {pair}",
       "resultDeleted": "eliminata ({n} tassi)"
     },

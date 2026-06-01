@@ -345,3 +345,64 @@ describe('ensureFxRangeLoaded', () => {
 - **`mockConvert.mock.calls[0]`**: il primo argomento della prima call è l'array di `BulkConvertRequest`
 - **Test 4 doppia call**: la seconda `ensureFxRangeLoaded` triggera un secondo tentativo API che lancia di nuovo — il test verifica che il risultato sia comunque la cache e non un'eccezione; se si vuole verificare una sola call usare `mockConvert.mockRejectedValue(...)` (permanente)
 - **`amount: '1'`** nella request: verificabile con `expect(requests[0].from_amount.amount).toBe('1')` — da aggiungere al Test 2 o 5 se si vuole coverage esplicita
+
+---
+
+## Step 8 — Asset Price Cache (Piano C) ✅ 2026-06-01
+
+### Obiettivo
+
+Estendere il pattern `ensureFxRangeLoaded` ai **prezzi asset**: cache client-side con gap-detection, così che un cambio range temporale sia istantaneo se i dati sono già in memoria. Anche le conversioni (`target_currency`) sono cachate come store separati (Piano C: `{assetId}:{currency}`).
+
+### Architettura
+
+Nuovo file `frontend/src/lib/stores/assetPriceStoreRegistry.ts`:
+
+```typescript
+// Key: "42:EUR" = asset 42, prices in EUR
+const stores: Map<string, TimeSeriesStore<AssetPricePoint>> = new Map();
+
+export function getAssetPriceStore(assetId: number, currency: string): TimeSeriesStore<AssetPricePoint>
+export function ensureAssetPriceRangeLoaded(assetId: number, currency: string, start: string, end: string, opts?): Promise<AssetPricePoint[]>
+export function invalidateAssetPriceStore(assetId: number): void  // invalida TUTTE le currency
+export function apiPricesToAssetPricePoints(prices: any[]): AssetPricePoint[]
+```
+
+`AssetPricePoint` include: `date, close, open, high, low, volume, currency, originalClose, backwardFillInfo`.
+
+### Modifiche applicate
+
+| File | Modifica |
+|------|----------|
+| `frontend/src/lib/stores/assetPriceStoreRegistry.ts` | **NUOVO** — registry + helper |
+| `frontend/src/lib/stores/__tests__/assetPriceStoreRegistry.test.ts` | **NUOVO** — 9 tests |
+| `frontend/src/routes/(app)/assets/[id]/+page.svelte` | `loadChartData(force?)`: cache-first path (no `loading = true` on cache hit). Invalidation on sync/refresh |
+| `frontend/src/routes/(app)/assets/+page.svelte` | `fetchAllPriceData`: split cached/needFetch, bulk solo per quelli con gaps. Invalidation on sync/refresh |
+
+### Comportamento
+
+- Range narrows (1Y → 3M) → cache hit → **instant**, no loading spinner, no API call
+- Range expands (3M → 1Y) → gap detected → fetch → populate cache
+- Sync / Refresh → `invalidateAssetPriceStore` → force refetch (tutte le currency)
+- DisplayCurrency change → store key diverso (`42:EUR` vs `42:USD`) → first time = miss → fetch → cached per dopo
+- 404 → marked as fetched (no retry loop)
+- Network error → NOT marked (retry allowed)
+
+### Bug fix: FX banner falso positivo
+
+Problema: con la cache, il path `chartData = cached.map(...)` non ricostruiva il campo `original_close` → `fxFirstConvertedDate` sempre `null` → banner "no FX data" appariva incorrettamente.
+
+Fix: aggiunto `originalClose` a `AssetPricePoint`, mappato in `apiPricesToAssetPricePoints`, e ricostruito come `original_close` nel cache-hit path.
+
+### Tests
+
+9 unit tests in `assetPriceStoreRegistry.test.ts`:
+1. Cache hit — no API call
+2. Cache miss — fetches from API
+3. Partial gap — fetches only missing range
+4. Network error — allows retry
+5. 404 — marks as fetched (no retry loop)
+6. Different currencies use different stores
+7. invalidateAssetPriceStore clears ALL currencies
+8. targetCurrency option passed to API
+9. apiPricesToAssetPricePoints mapping correctness

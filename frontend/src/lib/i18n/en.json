@@ -935,7 +935,7 @@
     "deletePairQuestion": "Delete {pair}?",
     "deletePairWarning": "This will remove the provider configuration and all historical exchange rates. ⚠️",
     "delete": {
-      "toastOk": "{pair} deleted ({n} rates removed)",
+      "toastOk": "{pair} deleted ({count} rates removed)",
       "toastFailed": "Failed to delete {pair}",
       "resultDeleted": "deleted ({n} rates)"
     },

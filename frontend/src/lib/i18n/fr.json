@@ -935,7 +935,7 @@
     "deletePairQuestion": "Supprimer {pair} ?",
     "deletePairWarning": "Cela supprimera la configuration des fournisseurs et tous les taux de change historiques. ⚠️",
     "delete": {
-      "toastOk": "{pair} supprimée ({n} taux supprimés)",
+      "toastOk": "{pair} supprimée ({count} taux supprimés)",
       "toastFailed": "Échec de suppression de {pair}",
       "resultDeleted": "supprimée ({n} taux)"
     },

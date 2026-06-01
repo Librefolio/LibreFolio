@@ -195,6 +195,11 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
         enriched.currency = formatCurrencyCodeHtml(rawParams.currency);
     }
 
+    // Resolve pairs array → comma-separated string (WAC FX issues)
+    if (Array.isArray(rawParams.pairs)) {
+        enriched.pairs = rawParams.pairs.join(', ');
+    }
+
     // Extract and translate field name for prefixing
     const fieldName = extractFieldName(issue);
     const fieldLabel = fieldName ? translateFieldName(fieldName, t) : null;
