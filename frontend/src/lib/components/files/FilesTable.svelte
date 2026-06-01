@@ -19,6 +19,7 @@
     // Uses shared golden-ratio color utility
     import {getIndexColor} from '$lib/utils/colors';
     import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
+    import {getCachedPreview} from '$lib/stores/imagePreviewCache';
 
     interface Props {
         files: FileData[];
@@ -202,9 +203,11 @@
                 header: () => $t('uploads.fileName'),
                 cell: (row) => {
                     if (isImageFile(row)) {
+                        const f = row as UploadedFile;
+                        const cached = getCachedPreview(f.id, 48);
                         return {
                             type: 'image',
-                            src: getPreviewUrl(row),
+                            src: cached ?? getPreviewUrl(row),
                             alt: getFileName(row),
                             text: getFileName(row),
                             fallbackIcon: ImageIcon,

@@ -703,7 +703,7 @@
                     <p>{$t('uploads.noFiles')}</p>
                 </div>
             {:else if viewMode === 'grid'}
-                <FileGrid files={staticFiles} mode="browse" cardSize="full" showSearch={true} showActions={true} on:delete={(e) => deleteFile(e.detail.id, false)} />
+                <FileGrid files={staticFiles} mode="browse" cardSize="full" showSearch={true} showActions={true} ondelete={(e) => deleteFile(e.id, false)} />
             {:else}
                 <!-- List View with New DataTable -->
                 <FilesTable bind:this={staticTableRef} files={staticFiles} type="static" onDelete={(id) => deleteFile(id, false)} {initialFilters} onFiltersChange={handleFiltersChange} onSelectionChange={(ids) => (selectedFileIds = ids)} />
