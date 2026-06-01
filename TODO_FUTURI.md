@@ -686,42 +686,6 @@ Gli screenshot vanno poi inseriti nelle pagine della documentazione mkdocs (`fin
 
 ---
 
-## 🔄 FX Store Registry — Centralize Fetch Pattern
-
-**Data aggiunta**: 18 Maggio 2026
-**Priority**: P3
-**Status**: 📋 PIANIFICATO
-
-### Contesto
-
-Currently, 4+ pages (fx list, fx detail, asset list, asset detail) duplicate the same FX data loading pattern:
-```
-store.getMissingIntervals() → fetch gaps via POST /fx/currencies/convert → store.merge()
-```
-
-With the addition of `lookupFxRate()` (Step 1 of FX Implied Rate feature), the pattern is now available as a single-point-lookup. But range-based loading (charts, tables) still uses the manual pattern.
-
-### Azione Futura
-
-1. Create `ensureFxRangeLoaded(slug, start, end): Promise<FxDataPoint[]>` in `fxStoreRegistry.ts` that encapsulates the gap-detection + fetch + merge pattern
-2. Refactor the 4 pages to use this helper instead of inline fetch logic
-3. Consider a reactive version counter (`fxCacheVersion` $state) in the registry to allow `$derived` consumers to react to cache updates without $effect bridges
-
-### Files Affected
-
-- `frontend/src/routes/(app)/fx/+page.svelte` — FX list page
-- `frontend/src/routes/(app)/fx/[pair]/+page.svelte` — FX detail page
-- `frontend/src/routes/(app)/assets/+page.svelte` — Asset list page
-- `frontend/src/routes/(app)/assets/[id]/+page.svelte` — Asset detail page
-- `frontend/src/lib/stores/fxStoreRegistry.ts` — New helper functions
-
-### Benefit
-
-- ~100 lines of duplicated code removed across 4 pages
-- Single source of truth for FX fetch logic
-- Foundation for future reactive FX cache (version counter)
-
----
 
 ## 🔒 TransactionPicker — Filter Inaccessible Paired TX (W4a)
 

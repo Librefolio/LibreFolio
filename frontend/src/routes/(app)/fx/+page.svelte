@@ -28,7 +28,7 @@
     import {type ChartSettings, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {apiResultToFxDataPoint, createPairSlug, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, ensureFxRangeLoaded, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, removeFxStore} from '$lib/stores/fxStoreRegistry';
     import {isCardInverted} from '$lib/stores/fxCardInversionStore';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
@@ -282,10 +282,9 @@
         const pair = pairs[index];
         if (!pair) return;
 
+        // Fast path: data fully cached — update without showing loading spinner
         const store = getFxStore(pair.config.slug);
-        const gaps = store.getMissingIntervals(dateStart, dateEnd);
-
-        if (gaps.length === 0) {
+        if (store.getMissingIntervals(dateStart, dateEnd).length === 0) {
             pairs[index] = {...pair, data: store.getRange(dateStart, dateEnd).data};
             return;
         }
@@ -293,26 +292,10 @@
         pairs[index] = {...pair, loading: true};
 
         try {
-            const convertRequests = gaps.map((gap) => ({
-                from_amount: {code: pair.config.base, amount: 1},
-                to: pair.config.quote,
-                date_range: {start: gap.start, end: gap.end},
-            }));
-
-            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
-
-            const results = (response as any)?.results || [];
-            const points: FxDataPoint[] = results.map((r: any) => apiResultToFxDataPoint(r));
-            store.merge(points);
-
-            pairs[index] = {
-                ...pair,
-                data: store.getRange(dateStart, dateEnd).data,
-                loading: false,
-            };
+            const loaded = await ensureFxRangeLoaded(pair.config.slug, dateStart, dateEnd);
+            pairs[index] = {...pair, data: loaded, loading: false};
         } catch (e: any) {
-            // Gracefully handle 404 (no data available) — show existing data if any
-            const existingData = store.getRange(dateStart, dateEnd).data;
+            const existingData = getFxStore(pair.config.slug).getRange(dateStart, dateEnd).data;
             pairs[index] = {...pair, data: existingData, loading: false};
             if (e?.response?.status !== 404) {
                 console.error(`Failed to fetch data for ${pair.config.slug}:`, e);
