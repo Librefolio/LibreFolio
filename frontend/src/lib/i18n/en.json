@@ -1301,7 +1301,9 @@
     "swapConfirmMessage": "You have unsaved changes in the rate editor. Swapping direction will discard them. Continue?",
     "noDataManual": "No data available — insert rates manually",
     "insertManually": "Insert Manually",
-    "syncDisabledManual": "Sync disabled — no provider configured. Add a provider or insert rates manually."
+    "syncDisabledManual": "Sync disabled — no provider configured. Add a provider or insert rates manually.",
+    "editorTipDesktop": "Double-click on the chart to jump to that date",
+    "editorTipMobile": "Long-press on the chart to jump to that date"
   },
   "csvImport": {
     "title": "Import CSV Data",
@@ -1442,7 +1444,9 @@
     "pricesInCurrency": "Prices in {currency}",
     "eventsInCurrency": "Events in {currency}",
     "addPricesManually": "Add manually",
-    "openFxPair": "Open FX pair detail"
+    "openFxPair": "Open FX pair detail",
+    "editorTipDesktop": "Double-click on the chart to jump to that date",
+    "editorTipMobile": "Long-press on the chart to jump to that date"
   },
   "ticker": {
     "noAssets": "No tracked assets",

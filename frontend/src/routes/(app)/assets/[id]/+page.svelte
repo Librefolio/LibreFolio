@@ -1760,6 +1760,9 @@
                     title={$t('common.closeEditor')}>✕</button
                 >
             </div>
+            <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
+                💡 {layout.layoutMode === 'mobile' ? $t('assetDetail.editorTipMobile') : $t('assetDetail.editorTipDesktop')}
+            </p>
             <div class="px-4 py-4">
                 <AssetDataEditorSection
                     bind:this={assetDataEditorRef}
