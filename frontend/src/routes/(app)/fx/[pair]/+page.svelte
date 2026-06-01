@@ -961,9 +961,19 @@
                         </button>
                     {:else}
                         <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('fxDetail.noData')}</p>
-                        <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSync}>
-                            {$t('fxDetail.syncRates')}
-                        </button>
+                        <div class="flex items-center gap-2 justify-center">
+                            <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSync}>
+                                {$t('fxDetail.syncRates')}
+                            </button>
+                            <button
+                                class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
+                                data-testid="fx-detail-add-rates-manually"
+                                onclick={() => { showDataEditor = true; }}
+                            >
+                                <Pencil class="inline mr-1" size={14} />
+                                {$t('fxDetail.insertManually')}
+                            </button>
+                        </div>
                     {/if}
                 </div>
             </div>
@@ -996,6 +1006,9 @@
                     >✕
                 </button>
             </div>
+            <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
+                💡 {layout.layoutMode === 'mobile' ? $t('fxDetail.editorTipMobile') : $t('fxDetail.editorTipDesktop')}
+            </p>
             <div class="px-4 pb-4 pt-3">
                 <FxDataEditorSection
                     bind:this={fxDataEditorRef}

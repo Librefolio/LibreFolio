@@ -239,6 +239,27 @@
                 }
             }
 
+            // In edit mode, delete all existing routes for this pair first
+            // to ensure stale routes don't persist (e.g., when user removes all providers).
+            // The backend auto-reinstates a MANUAL sentinel if no routes remain after delete.
+            if (editMode) {
+                const deleteResult = await trySave(
+                    () => zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete([{base, quote}]),
+                    {toast: false, fallback: $_('fx.addPair.createFailed')}
+                );
+                if (deleteResult.status === 'error') {
+                    error = deleteResult.message;
+                    saving = false;
+                    return;
+                }
+                // If user removed all providers, backend already reinstated MANUAL — skip POST
+                if (selectedRoutes.length === 0) {
+                    oncreated?.({base, quote, hasRealProvider: false, slug: base < quote ? `${base}-${quote}` : `${quote}-${base}`});
+                    resetAndClose();
+                    return;
+                }
+            }
+
             // I-bis #22 (Batch 4.d-part2) — wrap the create call through
             // ``trySave``. Auto-sync below stays in its own non-blocking
             // try/catch: a sync failure must NOT block creation success.

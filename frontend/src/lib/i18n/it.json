@@ -1301,7 +1301,9 @@
     "swapConfirmMessage": "Hai modifiche non salvate nell'editor dei tassi. Invertire la direzione le cancellerà. Continuare?",
     "noDataManual": "Nessun dato disponibile — inserire i tassi manualmente",
     "insertManually": "Inserisci manualmente",
-    "syncDisabledManual": "Sync disabilitato — nessun provider configurato. Aggiungere un provider o inserire i tassi manualmente."
+    "syncDisabledManual": "Sync disabilitato — nessun provider configurato. Aggiungere un provider o inserire i tassi manualmente.",
+    "editorTipDesktop": "Doppio clic sul grafico per saltare a quella data",
+    "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data"
   },
   "csvImport": {
     "title": "Importa dati CSV",
@@ -1442,7 +1444,9 @@
     "pricesInCurrency": "Prezzi in {currency}",
     "eventsInCurrency": "Eventi in {currency}",
     "addPricesManually": "Aggiungi manualmente",
-    "openFxPair": "Apri dettaglio coppia FX"
+    "openFxPair": "Apri dettaglio coppia FX",
+    "editorTipDesktop": "Doppio clic sul grafico per saltare a quella data",
+    "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data"
   },
   "ticker": {
     "noAssets": "Nessun asset monitorato",
