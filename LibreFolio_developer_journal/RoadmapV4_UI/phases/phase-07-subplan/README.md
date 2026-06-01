@@ -89,6 +89,34 @@ Piano principale + 20 round/bugfix plan, organizzati in sotto-cartelle.
 1. `assets.py::market_data_summary/wipe_market_data` — `e.code` → `e.error_code` (HTTP 500 → 404 corretto)
 2. `currency_utils.py::normalize_currency` — strict `pycountry.currencies.get(alpha_3=...)` lookup (prima accettava qualsiasi stringa non vuota)
 
+### Parte 4 — Round6 / PlanD-D1D2: Split/Promote Full Stack
+
+Backend batch pipeline + frontend split/promote UI + centralized payload + 4 bugfix rounds. Completati 2026-05-19.
+
+| Cartella | Contenuto | Status |
+|----------|-----------|:------:|
+| [`Round6/PlanD-D1D2/`](./Parte4/Round6/PlanD-D1D2/) | D1 backend + D2 frontend + CentralizePayload + 4 bugfix | ✅ |
+| [`Round6/PlanD-D1D2/README.md`](./Parte4/Round6/PlanD-D1D2/README.md) | Index con 7 file e decisioni chiave | ✅ |
+
+**Scope**: Batch pipeline split/promote (D1), PromoteMergeModal + suggest banner (D2), txPayloadHelpers.ts + txCommitApi.ts (Centralize), 4 bugfix polish rounds.
+
+### Parte 4 — Round6 / PlanD-R2: Walktest Feedback WAC
+
+Piano master D2-Round2 + 4 sub-plan (SP-A/B/C) + 8 bugfix WAC deep-dive. Tutti completati 2026-06-01.
+
+| Cartella | Contenuto | Status |
+|----------|-----------|:------:|
+| [`Round6/PlanD-R2/`](./Parte4/Round6/PlanD-R2/) | Master plan + SP-A/B/C + WacPreview 8 bugfix | ✅ |
+| [`Round6/PlanD-R2/README.md`](./Parte4/Round6/PlanD-R2/README.md) | Index con 15 file e pattern chiave | ✅ |
+
+**Scope**: WAC cross-currency backend (SP-A), 13 WAC API tests (SP-B), frontend BulkModal suggest UX + 11 bugfix rounds (SP-C). Key patterns: CostBasisFieldMode, pairedWith/getPartnerOp, stateless preview, fxMarketCache.
+
+### Standalone Features (periodo Phase 7)
+
+| File | Descrizione | Status |
+|------|-------------|:------:|
+| [`Standalone/plan-pwa-mobile-optimizations.prompt.md`](./Standalone/plan-pwa-mobile-optimizations.prompt.md) | PWA manifest, install button, CSS mobile, docs | ✅ |
+
 ## Plan companion non archiviati
 
 → [`./plan-phase7b-filePreview.md`](./plan-phase7b-filePreview.md) — assorbito in Parte 4b (manterrà il file fino a quando Parte 4b non sarà scritta).

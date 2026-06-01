@@ -196,6 +196,9 @@
 | [[F-094]] | Sync Date Range Dialog | frontend | `planned` | — |
 | [[F-095]] | Asset Delete — Transaction Count Link | fullstack | `planned` | — |
 | [[F-096]] | Scheduled Investment — Decoupled Frequencies + Anchor Day | backend | `idea` | — |
+| [[F-097]] | WAC — Weighted Average Cost (cross-currency, auto-calc on TRANSFER) | fullstack | `in-progress` | — |
+| [[F-098]] | Progressive Web App (PWA) | frontend | `implemented` | `user/pwa.en.md` |
+| [[F-099]] | Borsa Italiana Asset Provider | fullstack | `implemented` | `developer/backend/assets/provider_borsa_italiana.md` |
 
 ---
 

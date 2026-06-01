@@ -36,6 +36,12 @@ Questa directory contiene i sotto-piani di implementazione per la Phase 6 (Asset
 | `Bugfix-Step3/plan-phase06Step3Round12-AssetEventAndScheduleRedesign.prompt.md` | Step 3 | Round 12 — AssetEvent + Schedule Redesign | ✅ |
 | `Bugfix-Step3/plan-phase06Step3Round12Finale-MaturationEngine.prompt.md` | Step 3 | Round 12 Finale — Maturation Engine + Auto-Interest + Backend Cleanup + Frontend Fix | ✅ |
 
+## Provider Enhancements (periodo Phase 7)
+
+| File | Contenuto | Status |
+|------|-----------|:------:|
+| `plan-justetf-multicurrency-enhancement.prompt.md` | JustETF multi-currency: params_schema, search 4 variants, EUR-only current, docs | ✅ |
+
 ## Riepilogo Step
 
 | Step | Descrizione | Status |

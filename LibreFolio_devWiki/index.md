@@ -49,8 +49,9 @@
 | [[features/F-060]] | Thread Isolation for Providers | Infrastructure | implemented |
 | [[features/F-061]] | 5-layer Provider Cache | Infrastructure | implemented |
 | [[features/F-096]] | Scheduled Investment — Decoupled Frequencies + Anchor Day | Assets | idea |
-
-## Connections (Cross-Feature Dependency Maps)
+| [[features/F-097]] | WAC — Weighted Average Cost (cross-currency, auto-calc on TRANSFER) | Transactions | in-progress |
+| [[features/F-098]] | Progressive Web App (PWA) | Infrastructure | implemented |
+| [[features/F-099]] | Borsa Italiana Asset Provider | Assets | implemented |
 
 | Page | Domain | Summary |
 |------|--------|---------|
@@ -101,6 +102,9 @@
 | [[decisions/auto-populate-removal]] | Remove implicit auto-populate from bulk_assign_providers — metadata flow now frontend-driven (probe→diff→PATCH) | 2026-05-11 | backend, assets, providers, metadata |
 | [[decisions/formmodal-contextual-validate]] | FormModal sends entire bulk context to /validate for same-day dependency resolution | 2026-05-11 | frontend, transactions, validation, formModal |
 | [[decisions/end-of-day-balance-check]] | Balance validation uses end-of-day aggregation — intra-day order irrelevant; consistent with daily-point policy | 2026-05-11 | backend, transactions, validation, balance |
+| [[decisions/cost-basis-currency-object]] | cost_basis_override changed from bare SafeDecimal to Currency object {code, amount} — enables WAC cross-currency | 2026-05-24 | transactions, cost-basis, currency, schema, breaking-change |
+| [[decisions/wac-inline-validate-commit]] | WAC computed in /validate response (preview) and applied in /commit post-flush — no standalone endpoint in editing flow | 2026-05-28 | backend, frontend, transactions, wac, architecture, api |
+| [[decisions/port-6040-scheme]] | All ports migrated from 8000/8001/8002 to 6040/6041/6042 — "60/40 rule" mnemonic | 2026-05-27 | infrastructure, ports, developer-ergonomics |
 
 ## Concepts
 
@@ -127,6 +131,8 @@
 | [[concepts/resolve-validation-message-pattern]] | Frontend i18n error resolution: code→i18n key, ID→name via stores, amount→formatted | frontend, transactions, i18n, error-handling |
 | [[concepts/safe-decimal-pattern]] | SafeDecimal type prevents scientific notation in JSON responses; use instead of Decimal in response schemas | backend, serialization, pydantic, decimal, json |
 | [[concepts/txstore-pattern]] | txStore.svelte.ts: page-scoped Map<id,TXReadItem> — single source of truth for transactions, WorkspaceIntent + PendingOp model | frontend, stores, transactions, svelte5, single-source-of-truth |
+| [[concepts/paired-partner-architecture]] | pairedWith + getPartnerOp + visibleOps + resolveFormItems — frontend paired TX management | frontend, transactions, bulkModal, architecture, paired |
+| [[concepts/stateless-preview-pattern]] | Controlled components for computed values — no internal state, cache on data model | frontend, svelte5, reactivity, controlled-component, wac |
 
 ## Problems
 
@@ -150,6 +156,8 @@
 | [[problems/pydantic-422-pre-emption]] | Pydantic 422 pre-emption blocked service-layer validation; fixed by lenient per-row parse in unified pipeline | resolved | backend, pydantic, fastapi, transactions |
 | [[problems/browser-autofill-numeric-fields]] | Chrome autofill on numeric text inputs — fixed with `autocomplete="off"` + randomised `name` | resolved | frontend, ux, forms, autofill |
 | [[problems/dual-form-collect-duplication]] | FormModal/BulkModal had duplicated collect logic causing 3 cascading bugs — fixed via txPayloadHelpers.ts | resolved | frontend, transactions, dual-form, code-duplication |
+| [[problems/wac-feedback-loop]] | WAC recalc → field update → WAC recalc infinite loop — fixed via explicit cost_basis_mode field | resolved | frontend, wac, reactivity, infinite-loop |
+| [[problems/clone-link-uuid-duplication]] | Clone paired rows from DB didn't generate link_uuid — fixed via type-rule check | resolved | frontend, clone, link-uuid, paired |
 | [[problems/fx-multi-route-no-fallback]] | FX sync_pairs_bulk used only primary route with no fallback — alternative routes (ECB/FED/SNB) ignored on failure | resolved | backend, fx, providers, sync, fallback |
 
 ## Entities
@@ -213,3 +221,16 @@
 | [[sources/phase07-part4-round6-planc3-pendingop-refactor]] | `...Round6_PlanC3_PendingOpRefactor.prompt.md` ✅ DONE | 2026-05-30 | phase07, transactions, bulkModal, pendingOp, tagged-union, e2e |
 | [[sources/phase07-part4-round6-planc2-bugfix-pair-validation]] | `...Round6_PlanC2_BugfixAndPairValidation.prompt.md` ✅ DONE | 2026-05-30 | phase07, transactions, bugfix, pair-validation, clone, picker, toast, e2e |
 | [[sources/phase07-part4-round6-planc2r2-regressions-mockfx]] | `...Round6_PlanC2Round2_FixRegressionsAndMockFX.prompt.md` ✅ DONE | 2026-05-30 | phase07, transactions, mockfx, auto-populate, contextual-validate, balance-walk |
+| [[sources/phase07-part4-round6-pland-split-promote-master]] | `plan-phase07-tx-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md` ✅ DONE | 2026-05-31 | phase07, transactions, split, promote, batch-pipeline |
+| [[sources/phase07-part4-round6-pland1-backend-batch-suggest]] | `plan-PlanD1_BackendBatchSuggest.prompt.md` ✅ DONE | 2026-05-31 | phase07, transactions, backend, batch, suggest, endpoint-elimination |
+| [[sources/phase07-part4-round6-pland2-frontend-split-promote]] | `plan-PlanD2_FrontendSplitPromoteUI.prompt.md` ✅ DONE | 2026-05-31 | phase07, transactions, frontend, promoteMergeModal, suggest-banner |
+| [[sources/phase07-part4-round6-pland2-bugfix1]] | `plan-bugfix1_SplitPromotePolish.prompt.md` ✅ DONE | 2026-05-31 | phase07, transactions, bugfix, getTypeRule, promote-toolbar |
+| [[sources/phase07-part4-round6-pland2-bugfix2]] | `plan-bugfix2_PayloadSplitPreviewUX.prompt.md` ✅ DONE | 2026-05-31 | phase07, transactions, pipeline-reorder, split-preview |
+| [[sources/phase07-part4-round6-pland2-bugfix3]] | `plan-bugfix3_UXModalPayloadSuggestE2E.prompt.md` ✅ DONE (absorbed D3) | 2026-05-31 | phase07, transactions, e2e, split-schema, suggest-banner |
+| [[sources/phase07-part4-round6-pland2-bugfix4]] | `plan-bugfix4_SplitSuggestPmcOverrideUx.prompt.md` ✅ DONE | 2026-05-31 | phase07, transactions, pmc-auto-calc, cost-basis, delta-days |
+| [[sources/r2-walktest-feedback-master]] | `PlanD_SplitPromoteFullStack/plan-R2-WalktestFeedbackRound.prompt.md` (SP-A✅B✅C✅ D⏳ E🔲) | 2026-06-01 | phase07, transactions, wac, cost-basis, fx, walktest |
+| [[sources/r2-sp-a-cost-basis-wac]] | `R2-WalktestFeedback/plan-R2-SP-A-CostBasisWAC.prompt.md` ✅ DONE | 2026-06-01 | phase07, transactions, wac, cost-basis, currency, backend |
+| [[sources/r2-sp-b-backend-tests]] | `R2-WalktestFeedback/plan-R2-SP-B-BackendTests.prompt.md` ✅ DONE | 2026-06-01 | phase07, transactions, wac, testing, backend |
+| [[sources/r2-sp-c-bulkmodal-suggest-ux]] | `R2-WalktestFeedback/plan-R2-SP-C-BulkModalSuggestUX.prompt.md` ✅ DONE | 2026-06-01 | phase07, transactions, frontend, bulkModal, suggest, ux |
+| [[sources/r2-sp-c-bugfix-chain]] | SP-C Bugfix Chain (11 plans): BugfixRound1+2, FxSpread, UnifiedPartnerArch, ReactiveWac, FixCloneLinkUuid, FixFeedbackLoop, WacInlineValidateCommit, FixPartnerRows, StatelessPreview, BackendCleanup ✅ | 2026-06-02 | phase07, transactions, wac, bugfix, partner-architecture, stateless-preview |
+| [[sources/r2-parallel-features-pwa-borsa-fx]] | Batch 3: PWA, Port 60/40, Borsa Italiana, FX fix (parallel commits) ✅ | 2026-06-02 | pwa, mobile, ports, assets, fx, borsa-italiana |
