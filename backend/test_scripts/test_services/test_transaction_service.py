@@ -274,6 +274,7 @@ class TestCreateBulkLinkResolution:
                 type=TransactionType.ADJUSTMENT,
                 date=date.today() - timedelta(days=1),
                 quantity=Decimal("100"),
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             )
         ]
         await create_bulk(service, setup_items)
@@ -297,6 +298,7 @@ class TestCreateBulkLinkResolution:
                 date=date.today(),
                 quantity=Decimal("10"),  # In to broker 2
                 link_uuid=link_uuid,
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             ),
         ]
 
@@ -328,6 +330,7 @@ class TestCreateBulkLinkResolution:
                 type=TransactionType.ADJUSTMENT,
                 date=date.today() - timedelta(days=1),
                 quantity=Decimal("100"),
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             )
         ]
         await create_bulk(service, setup_items)
@@ -623,6 +626,7 @@ class TestQueryBidirectionalLink:
                 type=TransactionType.ADJUSTMENT,
                 date=date.today() - timedelta(days=1),
                 quantity=Decimal("100"),
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             )
         ]
         await create_bulk(service, setup_items)
@@ -645,6 +649,7 @@ class TestQueryBidirectionalLink:
                 date=date.today(),
                 quantity=Decimal("10"),
                 link_uuid=link_uuid,
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             ),
         ]
 
@@ -698,6 +703,7 @@ class TestQueryBidirectionalLink:
                 type=TransactionType.ADJUSTMENT,
                 date=date.today() - timedelta(days=1),
                 quantity=Decimal("100"),
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             )
         ]
         await create_bulk(service, setup_items)
@@ -720,6 +726,7 @@ class TestQueryBidirectionalLink:
                 date=date.today(),
                 quantity=Decimal("10"),
                 link_uuid=link_uuid,
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             ),
         ]
 
@@ -951,6 +958,7 @@ class TestDeleteBulkLinkedEnforcement:
                 type=TransactionType.ADJUSTMENT,
                 date=date.today() - timedelta(days=1),
                 quantity=Decimal("100"),
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             )
         ]
         await create_bulk(service, setup_items)
@@ -973,6 +981,7 @@ class TestDeleteBulkLinkedEnforcement:
                 date=date.today(),
                 quantity=Decimal("10"),
                 link_uuid=link_uuid,
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             ),
         ]
 
@@ -999,6 +1008,7 @@ class TestDeleteBulkLinkedEnforcement:
                 type=TransactionType.ADJUSTMENT,
                 date=date.today() - timedelta(days=1),
                 quantity=Decimal("100"),
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             )
         ]
         await create_bulk(service, setup_items)
@@ -1021,6 +1031,7 @@ class TestDeleteBulkLinkedEnforcement:
                 date=date.today(),
                 quantity=Decimal("10"),
                 link_uuid=link_uuid,
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             ),
         ]
 
@@ -1052,6 +1063,7 @@ class TestDeleteBulkLinkedEnforcement:
                 type=TransactionType.ADJUSTMENT,
                 date=date.today() - timedelta(days=1),
                 quantity=Decimal("100"),
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             )
         ]
         await create_bulk(service, setup_items)
@@ -1074,6 +1086,7 @@ class TestDeleteBulkLinkedEnforcement:
                 date=date.today(),
                 quantity=Decimal("10"),
                 link_uuid=link_uuid,
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             ),
         ]
 
@@ -1416,6 +1429,7 @@ class TestLinkedPairValidation:
                     type=TransactionType.ADJUSTMENT,
                     date=date.today() - timedelta(days=1),
                     quantity=Decimal("50"),
+                    cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
                 )
             ],
         )
@@ -1435,6 +1449,7 @@ class TestLinkedPairValidation:
                 date=date.today(),
                 quantity=Decimal("10"),
                 link_uuid="same-broker-transfer",
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             ),
         ]
         response = await create_bulk(service, items)
@@ -1670,6 +1685,7 @@ class TestTransferPromotion:
                     type=TransactionType.ADJUSTMENT,
                     date=date.today() - timedelta(days=2),
                     quantity=Decimal("50"),
+                    cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
                 )
             ],
         )
@@ -1680,6 +1696,7 @@ class TestTransferPromotion:
                 new_type=TransactionType.TRANSFER,
                 asset_id=test_asset.id,
                 quantity=Decimal("10"),
+                cost_basis_override=Currency(code="EUR", amount=Decimal("50")),
             )
         )
         assert resp.rolled_back is False, resp.errors

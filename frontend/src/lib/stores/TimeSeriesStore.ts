@@ -153,9 +153,7 @@ export class TimeSeriesStore<T extends TimeSeriesPoint> {
      * preventing redundant API calls within the same session.
      */
     getMissingIntervals(start: string, end: string): DateGap[] {
-        return this.getRange(start, end).gaps.filter(
-            (gap) => !this.isRangeFetched(gap.start, gap.end),
-        );
+        return this.getRange(start, end).gaps.filter((gap) => !this.isRangeFetched(gap.start, gap.end));
     }
 
     /**
@@ -204,9 +202,7 @@ export class TimeSeriesStore<T extends TimeSeriesPoint> {
         }
 
         // Clear fetched marks that overlap the invalidated range
-        this.fetchedRanges = this.fetchedRanges.filter(
-            (r) => r.end < startDate || r.start > endDate,
-        );
+        this.fetchedRanges = this.fetchedRanges.filter((r) => r.end < startDate || r.start > endDate);
     }
 
     /**

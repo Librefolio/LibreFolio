@@ -557,6 +557,8 @@
       "description": "Description",
       "assetEvent": "Asset event",
       "assetEventNotApplicable": "Asset event link is only available for DIVIDEND, INTEREST and ADJUSTMENT after picking an asset.",
+      "linkedEvent": "Linked Event",
+      "eventPickerPlaceholder": "Select event...",
       "costBasis": "Cost basis override",
       "linkUuid": "Linked TX",
       "pairPartner": "Pair partner",
@@ -669,6 +671,13 @@
       "validateHint": "Complete the fields and validate to calculate WAC",
       "validateToRecalculate": "⚡ Validate now to recalculate the table"
     },
+    "wac": {
+      "syncFx": "🔄 Sync FX",
+      "syncSuccess": "FX rates synced successfully",
+      "syncFailed": "FX sync failed",
+      "fxStale": "FX rate from {date} ({days}d ago)",
+      "fxMissing": "FX pair {pair} not available for this date"
+    },
     "promote": {
       "title": "Promote pair",
       "stepN": "Step {n}/{total}",
@@ -780,7 +789,9 @@
       "splitIdsMismatch": "The two transactions are not a linked pair",
       "promoteRefNotFound": "Transaction referenced for promotion not found",
       "alreadyPaired": "Transaction is already linked to another transaction",
-      "noPromoteRule": "No promotion rule matches these two transaction types"
+      "noPromoteRule": "No promotion rule matches these two transaction types",
+      "wacFxUnavailable": "❌ WAC calculation failed: FX pair(s) {pairs} unavailable. Sync FX rates or switch to manual mode.",
+      "costBasisRequired": "❌ Cost basis required for {type} with positive quantity. Use Auto (WAC) or enter manually."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",

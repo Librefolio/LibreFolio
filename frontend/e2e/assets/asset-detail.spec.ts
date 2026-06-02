@@ -248,10 +248,10 @@ test.describe('Asset Detail Page', () => {
     test('chart type toggle switches between line and candlestick', async ({page}) => {
         await goToFirstAssetDetail(page);
 
-        // Chart toolbar must be visible and "Candle" button enabled
+        // Wait for chart data to load (button only renders when data is available)
         const candleBtn = page.getByTestId('chart-type-candlestick');
         const lineBtn = page.getByTestId('chart-type-line');
-        await expect(candleBtn).toBeVisible();
+        await expect(candleBtn).toBeVisible({timeout: 10_000});
         await expect(candleBtn).not.toBeDisabled();
 
         // Switch to candlestick

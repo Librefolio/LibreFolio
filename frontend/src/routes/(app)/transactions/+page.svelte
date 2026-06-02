@@ -36,6 +36,7 @@
     import {getBrokerRole} from '$lib/stores/brokerStore';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/stores/txStore.svelte';
+    import {resolveFormItemsForView, type FormModalItems} from '$lib/components/transactions/resolveFormItems';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
 
     // =========================================================================
@@ -432,7 +433,7 @@
     // Form modal (single tx: create / edit / duplicate / view).
     let formOpen = $state(false);
     let formMode = $state<'create' | 'edit' | 'duplicate' | 'view'>('create');
-    let formInitial = $state<TXReadItem | null>(null);
+    let formItems = $state<FormModalItems | null>(null);
 
     // Bulk modal (unified batch editor on DataTable).
     let bulkOpen = $state(false);
@@ -705,13 +706,13 @@
 
     function handleViewRow(row: TXReadItem) {
         formMode = 'view';
-        formInitial = row;
+        formItems = resolveFormItemsForView(row, txStoreGet as (id: number) => TXReadItem | undefined, getBrokerRole);
         formOpen = true;
     }
 
     /** Bug3-fix: determine if the view→edit switch should be allowed. */
     let formCanEdit = $derived.by(() => {
-        const row = formInitial;
+        const row = formItems?.[0] ?? null;
         if (!row) return true;
         if (row.related_transaction_id == null) return canEditBroker(row.broker_id);
         // Paired — check both brokers
@@ -1010,14 +1011,14 @@
 <TransactionFormModal
     open={formOpen}
     mode={formMode}
-    initialRow={formInitial}
+    items={formItems}
     {availableTags}
     canEdit={formCanEdit}
     onClose={() => (formOpen = false)}
     onCommitted={handleFormCommitted}
     onSwitchToEdit={() => {
         formOpen = false;
-        if (formInitial) handleEditRow(formInitial);
+        if (formItems?.[0]) handleEditRow(formItems[0]);
     }}
 />
 <TransactionBulkModal

@@ -3,7 +3,7 @@
 
   Modes:
   - 'create'   → blank form, POST /transactions/commit with 1 item in creates
-  - 'edit'     → pre-filled from initialRow (id immutable, type/broker locked),
+  - 'edit'     → pre-filled from items[0] (id immutable, type/broker locked),
                  POST /transactions/commit with 1 TXUpdateItem in updates
   - 'duplicate'→ pre-filled, id stripped, link_uuid regenerated, date=today,
                  commits as 'create'
@@ -49,6 +49,7 @@
     import CompactCashCell from '$lib/components/ui/CompactCashCell.svelte';
     import TransactionTypeSearchSelect from './TransactionTypeSearchSelect.svelte';
     import WacPreviewSection from './WacPreviewSection.svelte';
+    import AssetEventSelect from './AssetEventSelect.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
 
@@ -68,6 +69,7 @@
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/fxConversionHelper';
     import type {TXReadItem} from './types';
+    import {type FormModalItems, isInaccessible} from './resolveFormItems';
 
     // =========================================================================
     // Types
@@ -90,7 +92,10 @@
     interface Props {
         open: boolean;
         mode: Mode;
-        initialRow?: TXReadItem | null;
+        /** Unified items input: [main] | [main, partner] | [main, InaccessiblePartner] | null.
+         *  Replaces the old `initialRow` + `injectedPartnerRow` pair.
+         *  Built by resolveFormItemsForView / resolveFormItemsFromOps. */
+        items?: FormModalItems | null;
         /** When opened from the wizard: pre-select this broker. */
         forcedBroker?: number | null;
         /** Bugfix-5 §A4: when `false`, the Save button does NOT call the
@@ -109,9 +114,6 @@
         /** Z-index override — needed when the form is mounted as a stacked
          *  modal on top of another (e.g. BulkModal → FormModal). */
         zIndex?: number;
-        /** C1-fix: pre-injected partner row so the dual form can be populated
-         *  without fetching from the API. Used when opening from BulkModal. */
-        injectedPartnerRow?: TXReadItem | null;
         onClose: () => void;
         onCommitted?: (resp: {transaction_id?: number | null}) => void;
         /** Called instead of committing when `commitOnSave=false`. Receives
@@ -142,13 +144,12 @@
     let {
         open,
         mode,
-        initialRow = null,
+        items = null,
         forcedBroker = null,
         commitOnSave = true,
         unlockImmutable = false,
         availableTags = [],
         zIndex = 50,
-        injectedPartnerRow = null,
         onClose,
         onCommitted,
         onPushDraft,
@@ -160,6 +161,21 @@
         editingTempId = null,
         pendingTxIds = null,
     }: Props = $props();
+
+    // Internal derived: main row from items[0], partner info from items[1]
+    let mainRow = $derived(items?.[0] ?? null);
+    /** Extract injected partner TXReadItem from items[1] (when not inaccessible). */
+    let _injectedPartner = $derived.by<TXReadItem | null>(() => {
+        const second = items?.[1];
+        if (!second) return null;
+        return isInaccessible(second) ? null : second;
+    });
+    /** Extract inaccessible partner info from items[1] (when present). */
+    let _inaccessibleFromItems = $derived.by<{broker_id: number} | null>(() => {
+        const second = items?.[1];
+        if (!second) return null;
+        return isInaccessible(second) ? second : null;
+    });
 
     /** V5: External WAC result from BulkModal (single source of truth). */
     /** Phase D: local WAC result from FormModal's own validate response (standalone mode). */
@@ -307,28 +323,30 @@
         if (!open) return;
         // Bug15-fix: track openKey to force re-init even when `open` doesn't toggle.
         void openKey;
-        // Read props inside `untrack` — we only want to recompute when `open` flips,
-        // not on every initialRow/mode mutation that may be irrelevant.
+        // Read props — the $effect depends on open, openKey, mode, items.
         const m = mode;
-        const row = initialRow;
+        const row = items?.[0] ?? null;
         untrack(() => {
+            // Extract partner info from items[1]
+            const injected = _injectedPartner;
+            const inaccessFromItems = _inaccessibleFromItems;
+
             issues = [];
             formError = null;
             commitFailed = false;
             optionalOpen = false;
             confirmCloseOpen = false;
-            inaccessiblePartnerBrokerId = null;
+            inaccessiblePartnerBrokerId = inaccessFromItems?.broker_id ?? null;
             partnerRow = null;
             loadingPartner = false;
             formWacResult = null;
             dualTo = emptyDualTo();
             if (m === 'create') {
-                // C1-fix: when initialRow is present (e.g. editing a 'new' draft
+                // C1-fix: when items[0] is present (e.g. editing a 'new' draft
                 // from BulkModal), populate from it instead of starting blank.
                 if (row) {
                     draft = fromTx(row, {resetDate: false});
                     // Injected partner for paired drafts
-                    const injected = injectedPartnerRow;
                     if (injected) {
                         partnerRow = injected;
                         const layout = getPairFormLayout(row.type);
@@ -347,7 +365,7 @@
                         }
                     } else {
                         // Solo op (no partner) — use explicit mode from BulkModal when available
-                        costBasisMode = (row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto') ? row.cost_basis_mode : 'auto';
+                        costBasisMode = row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto' ? row.cost_basis_mode : 'auto';
                     }
                 } else {
                     draft = emptyDraft();
@@ -358,9 +376,7 @@
                 costBasisMode = draft.cost_basis_override ? 'manual' : 'auto';
             } else if ((m === 'edit' || m === 'view') && row) {
                 draft = fromTx(row);
-                // C1-fix: if a partner was injected (from BulkModal), use it
-                // directly instead of fetching from the API.
-                const injected = injectedPartnerRow;
+                // Use injected partner directly instead of fetching from the API.
                 if (injected) {
                     partnerRow = injected;
                     const layout = getPairFormLayout(row.type);
@@ -371,7 +387,7 @@
                     if (layout === 'transfer_asset') {
                         costBasisMode = (injected as any).cost_basis_mode === 'manual' ? 'manual' : 'auto';
                     } else {
-                        costBasisMode = (row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto') ? row.cost_basis_mode : 'auto';
+                        costBasisMode = row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto' ? row.cost_basis_mode : 'auto';
                     }
                     // Restore receiver's cost_basis_override into draft for WacPreviewSection
                     if (dualTo.cost_basis_override) {
@@ -395,7 +411,7 @@
                         }
                     }
                     // Use explicit mode if available (BulkModal); fallback to override heuristic for DB rows
-                    costBasisMode = (row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto') ? row.cost_basis_mode : (draft.cost_basis_override ? 'manual' : 'auto');
+                    costBasisMode = row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto' ? row.cost_basis_mode : draft.cost_basis_override ? 'manual' : 'auto';
 
                     if (layout) {
                         loadingPartner = true;
@@ -417,10 +433,10 @@
                     // form will still show (from pairLayout) but partner fields empty.
                     const layout = getPairFormLayout(row.type);
                     void layout; // dual form will activate via pairLayout derived
-                    costBasisMode = (row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto') ? row.cost_basis_mode : 'auto';
+                    costBasisMode = row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto' ? row.cost_basis_mode : 'auto';
                 } else {
                     // Standalone edit (no partner) — use explicit mode from BulkModal when available
-                    costBasisMode = (row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto') ? row.cost_basis_mode : 'auto';
+                    costBasisMode = row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto' ? row.cost_basis_mode : 'auto';
                 }
             } else {
                 draft = emptyDraft();
@@ -492,7 +508,7 @@
     }
 
     /** C1-fix: apply partner data to the dual-form "To" side. Shared by
-     *  both `fetchPartner` (API) and injectedPartnerRow (BulkModal). */
+     *  both `fetchPartner` (API) and items[1] injection. */
     function applyPartnerToDualTo(row: TXReadItem, partner: TXReadItem, layout: PairFormLayout) {
         if (layout === 'fx') {
             const myAmount = Number(row.cash?.amount ?? 0);
@@ -641,8 +657,8 @@
         // Types that ALWAYS require a pair → auto dual
         if (r.requiresPair) return r.pairFormLayout;
         // When editing an existing linked pair → use the layout
-        if (initialRow?.related_transaction_id != null) {
-            return getPairFormLayout(initialRow.type);
+        if (mainRow?.related_transaction_id != null) {
+            return getPairFormLayout(mainRow.type);
         }
         return null;
     });
@@ -660,14 +676,14 @@
     let allowedTypes = $derived.by<TransactionTypeCode[] | undefined>(() => {
         // In edit mode with unlockImmutable (deep-edit from BulkModal),
         // restrict to swap group of the original type.
-        if (mode === 'edit' && unlockImmutable && initialRow) {
-            return getSwapGroup(initialRow.type as TransactionTypeCode);
+        if (mode === 'edit' && unlockImmutable && mainRow) {
+            return getSwapGroup(mainRow.type as TransactionTypeCode);
         }
         // No restriction for create/duplicate
         return undefined;
     });
     let brokerImmutable = $derived(((mode === 'edit' || mode === 'view') && !unlockImmutable) || forcedBroker != null);
-    let canShowAssetEvent = $derived(rule.eventLinkable && draft.asset_id != null);
+    let canShowAssetEvent = $derived(rule.eventLinkable && draft.asset_id != null && draft.date !== '');
 
     /** H4-fix: true when all required fields for the current type are filled.
      *  Gates the auto-validate scheduler, the ⚡ Validate button, and the Apply/Save button.
@@ -689,7 +705,7 @@
     let showCostBasisField = $derived(draft.type === 'TRANSFER' || draft.type === 'ADJUSTMENT');
 
     // Pair partner chip (only when editing an existing linked tx — non-dual mode).
-    let pairPartnerId = $derived(pairLayout ? null : (initialRow?.related_transaction_id ?? null));
+    let pairPartnerId = $derived(pairLayout ? null : (mainRow?.related_transaction_id ?? null));
 
     // =========================================================================
     // FX Implied Rate — market rate lookup for FX conversion form
@@ -849,6 +865,8 @@
     let showIssuesBanner = $derived(issues.length > 0 && !issuesDismissed);
     let fieldIssues = $derived(issues.filter((i) => i.index >= 0));
     let balanceIssues = $derived(issues.filter((i) => i.index < 0));
+    let hasWacFxIssues = $derived(issues.some((i) => i.code === 'wacFxUnavailable'));
+    let syncingFx = $state(false);
 
     /** Context for resolving validation issue codes into translated messages. */
     let resolverCtx: ResolverContext = $derived({
@@ -905,9 +923,9 @@
     }
 
     function collectUpdate(): Record<string, unknown> {
-        if (!initialRow) return {};
-        const origRule = getTypeRule(initialRow.type as TransactionTypeCode);
-        return buildUpdateDiff(draftToTxFields(), initialRow as unknown as TxOriginal, rule, origRule);
+        if (!mainRow) return {};
+        const origRule = getTypeRule(mainRow.type as TransactionTypeCode);
+        return buildUpdateDiff(draftToTxFields(), mainRow as unknown as TxOriginal, rule, origRule);
     }
 
     /** Convert the form draft to the shared TxFields interface. */
@@ -959,26 +977,26 @@
      * Only include PATCHABLE fields that actually changed vs the original.
      */
     function collectDualUpdates(): Record<string, unknown>[] {
-        if (!initialRow || !partnerRow) return [];
+        if (!mainRow || !partnerRow) return [];
         const items = collectDualCreates();
 
         // Determine which original row maps to which item (From=items[0], To=items[1])
-        let fromOrig: TXReadItem = initialRow;
+        let fromOrig: TXReadItem = mainRow;
         let toOrig: TXReadItem = partnerRow;
         if (pairLayout === 'fx') {
-            if (Number(initialRow.cash?.amount ?? 0) > 0) {
+            if (Number(mainRow.cash?.amount ?? 0) > 0) {
                 fromOrig = partnerRow;
-                toOrig = initialRow;
+                toOrig = mainRow;
             }
         } else if (pairLayout === 'transfer_asset') {
-            if (Number(initialRow.quantity) > 0) {
+            if (Number(mainRow.quantity) > 0) {
                 fromOrig = partnerRow;
-                toOrig = initialRow;
+                toOrig = mainRow;
             }
         } else if (pairLayout === 'transfer_cash') {
-            if (Number(initialRow.cash?.amount ?? 0) >= 0) {
+            if (Number(mainRow.cash?.amount ?? 0) >= 0) {
                 fromOrig = partnerRow;
-                toOrig = initialRow;
+                toOrig = mainRow;
             }
         }
 
@@ -1115,10 +1133,6 @@
         if ((draft.tags ?? []).includes(v)) return;
         draft = {...draft, tags: [...(draft.tags ?? []), v]};
     }
-    function unlinkEvent() {
-        draft = {...draft, asset_event_id: null};
-    }
-
     function onQuantityInput(e: Event) {
         const v = (e.currentTarget as HTMLInputElement).value;
         qtyDisplay = v; // preserve raw user input mid-typing
@@ -1127,12 +1141,41 @@
     function onDescriptionInput(e: Event) {
         draft = {...draft, description: (e.currentTarget as HTMLTextAreaElement).value};
     }
-    function onAssetEventInput(e: Event) {
-        const v = (e.currentTarget as HTMLInputElement).value;
-        draft = {...draft, asset_event_id: v === '' ? null : Number(v)};
-    }
     function onCostBasisChange(next: {code: string; amount: string} | null) {
         draft = {...draft, cost_basis_override: next};
+    }
+
+    // =========================================================================
+    // Sync FX (WAC FX unavailable recovery)
+    // =========================================================================
+
+    async function handleSyncFx() {
+        // Collect pairs from wacFxUnavailable issues
+        const pairs: string[] = [];
+        for (const issue of issues) {
+            if (issue.code === 'wacFxUnavailable' && issue.params?.pairs) {
+                for (const p of issue.params.pairs) {
+                    if (!pairs.includes(p)) pairs.push(p);
+                }
+            }
+        }
+        if (pairs.length === 0) return;
+        // Convert "USD/EUR" → "EUR-USD" (alphabetical slug format for sync API)
+        const slugs = pairs.map((p) => {
+            const [a, b] = p.split('/');
+            return [a, b].sort().join('-');
+        });
+        syncingFx = true;
+        try {
+            await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({pairs: slugs, start: draft.date, end: draft.date});
+            toasts.success($t('transactions.wac.syncSuccess') || 'FX rates synced');
+            // Re-trigger validation so WAC is re-computed with new rates
+            scheduler.trigger('manual');
+        } catch (e) {
+            toasts.error($t('transactions.wac.syncFailed') || 'FX sync failed');
+        } finally {
+            syncingFx = false;
+        }
     }
 
     // =========================================================================
@@ -1246,19 +1289,19 @@
                     {#if pairLayout === 'fx'}💱{:else if pairLayout === 'transfer_asset'}📦{:else}🏦{/if}
                     {#if mode === 'edit'}
                         ✎ {dualTitle}
-                        {#if initialRow?.id != null && initialRow?.related_transaction_id != null && initialRow.related_transaction_id > 0}
-                            #{initialRow.id} ↔ #{initialRow.related_transaction_id}
-                        {:else if initialRow?.id != null}
-                            #{initialRow.id}
+                        {#if mainRow?.id != null && mainRow?.related_transaction_id != null && mainRow.related_transaction_id > 0}
+                            #{mainRow.id} ↔ #{mainRow.related_transaction_id}
+                        {:else if mainRow?.id != null}
+                            #{mainRow.id}
                         {:else}
                             (new pair)
                         {/if}
                     {:else if mode === 'view'}
                         👁 {dualTitle}
-                        {#if initialRow?.id != null && initialRow?.related_transaction_id != null && initialRow.related_transaction_id > 0}
-                            #{initialRow.id} ↔ #{initialRow.related_transaction_id}
-                        {:else if initialRow?.id != null}
-                            #{initialRow.id}
+                        {#if mainRow?.id != null && mainRow?.related_transaction_id != null && mainRow.related_transaction_id > 0}
+                            #{mainRow.id} ↔ #{mainRow.related_transaction_id}
+                        {:else if mainRow?.id != null}
+                            #{mainRow.id}
                         {/if}
                     {:else}{dualTitle}{/if}
                 {:else if mode === 'create'}
@@ -1266,9 +1309,9 @@
                 {:else if mode === 'duplicate'}
                     📋 {$t('transactions.form.titleDuplicate')}
                 {:else if mode === 'edit'}
-                    ✎ {$t('transactions.form.titleEdit')} #{initialRow?.id}
+                    ✎ {$t('transactions.form.titleEdit')} #{mainRow?.id}
                 {:else}
-                    👁 {$t('transactions.form.titleView')} #{initialRow?.id}
+                    👁 {$t('transactions.form.titleView')} #{mainRow?.id}
                 {/if}
             </h2>
             <div class="flex items-center gap-1">
@@ -1320,6 +1363,18 @@
                 </InfoBanner>
             {:else if showIssuesBanner}
                 <InfoBanner variant="warning" dismissible ondismiss={() => (issuesDismissed = true)}>
+                    {#if hasWacFxIssues}
+                        <button
+                            type="button"
+                            class="mb-2 px-3 py-1.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors disabled:opacity-50"
+                            onclick={handleSyncFx}
+                            disabled={syncingFx}
+                            data-testid="tx-form-sync-fx-btn"
+                        >
+                            {syncingFx ? '⏳' : ''}
+                            {$t('transactions.wac.syncFx')}
+                        </button>
+                    {/if}
                     {#if fieldIssues.length > 0}
                         <p class="font-semibold text-sm mb-1.5" data-testid="tx-form-issues-header">{getBulkContext ? $t('transactions.validate.contextualIssuesHeader') : $t('transactions.validate.issuesHeader')}</p>
                         <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
@@ -1848,7 +1903,20 @@
                 <details class="border border-gray-200 dark:border-slate-700 rounded-lg" bind:open={optionalOpen}>
                     <summary class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-4 py-3 cursor-pointer select-none" data-testid="tx-form-optional-toggle">{$t('transactions.form.sectionOptional')}</summary>
                     <div class="px-4 pb-4 space-y-3 text-sm">
-                        <!-- Tags -->
+                        <!-- 1. Asset event link (before tags) -->
+                        {#if canShowAssetEvent}
+                            <AssetEventSelect
+                                assetId={draft.asset_id!}
+                                txDate={draft.date}
+                                value={draft.asset_event_id}
+                                disabled={isReadonly}
+                                onChange={(id) => {
+                                    draft = {...draft, asset_event_id: id};
+                                }}
+                            />
+                        {/if}
+
+                        <!-- 2. Tags -->
                         <div class="flex flex-col gap-1">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.tags')}</span>
                             <TagInput
@@ -1862,7 +1930,7 @@
                             />
                         </div>
 
-                        <!-- Description -->
+                        <!-- 3. Description -->
                         <label class="flex flex-col gap-1">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.description')}</span>
                             <textarea
@@ -1877,28 +1945,7 @@
                             ></textarea>
                         </label>
 
-                        <!-- Asset event link -->
-                        {#if canShowAssetEvent}
-                            <div class="flex items-center gap-2">
-                                <span class="text-xs text-gray-500 dark:text-gray-400 w-32 shrink-0">{$t('transactions.form.assetEvent')}</span>
-                                <input
-                                    type="number"
-                                    autocomplete="off"
-                                    name="event-{autocompleteNonce}"
-                                    class="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg disabled:opacity-60"
-                                    placeholder="event id"
-                                    value={draft.asset_event_id ?? ''}
-                                    disabled={isReadonly}
-                                    oninput={onAssetEventInput}
-                                    data-testid="tx-form-asset-event"
-                                />
-                                {#if draft.asset_event_id != null && !isReadonly}
-                                    <button type="button" class="text-xs text-gray-500 hover:text-red-500" onclick={unlinkEvent} data-testid="tx-form-asset-event-unlink">{$t('transactions.form.unlink')}</button>
-                                {/if}
-                            </div>
-                        {/if}
-
-                        <!-- link_uuid (readonly) -->
+                        <!-- 4. link_uuid (readonly) -->
                         {#if draft.link_uuid}
                             <div class="flex items-center gap-2">
                                 <span class="text-xs text-gray-500 dark:text-gray-400 w-32 shrink-0">{$t('transactions.form.linkUuid')}</span>
@@ -1906,7 +1953,7 @@
                             </div>
                         {/if}
 
-                        <!-- Pair partner chip -->
+                        <!-- 5. Pair partner chip -->
                         {#if pairPartnerId}
                             <div class="flex items-center gap-2">
                                 <span class="text-xs text-gray-500 dark:text-gray-400 w-32 shrink-0">{$t('transactions.form.pairPartner')}</span>
@@ -1920,12 +1967,12 @@
             {/if}
 
             <!-- Read-only footer (edit/view) -->
-            {#if (mode === 'edit' || mode === 'view') && initialRow}
+            {#if (mode === 'edit' || mode === 'view') && mainRow}
                 <div class="text-[10px] text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-slate-800 pt-3" data-testid="tx-form-readonly-footer">
-                    ID #{initialRow.id}
+                    ID #{mainRow.id}
                     {#if partnerRow}+ #{partnerRow.id}{/if}
-                    {#if initialRow.created_at}· {$t('common.created')} {initialRow.created_at}{/if}
-                    {#if initialRow.updated_at}· {$t('common.updated')} {initialRow.updated_at}{/if}
+                    {#if mainRow.created_at}· {$t('common.created')} {mainRow.created_at}{/if}
+                    {#if mainRow.updated_at}· {$t('common.updated')} {mainRow.updated_at}{/if}
                 </div>
             {/if}
         </div>

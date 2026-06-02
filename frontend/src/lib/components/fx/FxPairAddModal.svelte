@@ -243,10 +243,7 @@
             // to ensure stale routes don't persist (e.g., when user removes all providers).
             // The backend auto-reinstates a MANUAL sentinel if no routes remain after delete.
             if (editMode) {
-                const deleteResult = await trySave(
-                    () => zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete([{base, quote}]),
-                    {toast: false, fallback: $_('fx.addPair.createFailed')}
-                );
+                const deleteResult = await trySave(() => zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete([{base, quote}]), {toast: false, fallback: $_('fx.addPair.createFailed')});
                 if (deleteResult.status === 'error') {
                     error = deleteResult.message;
                     saving = false;

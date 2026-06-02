@@ -59,6 +59,7 @@
     import TransactionPickerModal from './TransactionPickerModal.svelte';
     import {txStoreGet, txStoreCount} from '$lib/stores/txStore.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
+    import type {FormModalItems} from './resolveFormItems';
     import type {TXReadItem, ValidationIssue} from './types';
 
     // =========================================================================
@@ -92,7 +93,14 @@
      *  Tagged union: 'create' for new rows, 'edit' for existing DB rows.
      *  If `pairedWith` is set, this op is the hidden partner of a paired row.
      *  `link_uuid` is the shared pairing UUID for backend payloads (WAC, commit). */
-    type PendingOp = ({op: 'create'} | {op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean}) & {tempId: string; fields: DraftFields; pairedWith?: string; link_uuid?: string | null; /** W4b: partner on inaccessible broker — read-only sentinel */ inaccessible?: boolean; /** Cached WAC result from validate — transient, not sent to backend */ _wacCache?: WacResultEntry | null};
+    type PendingOp = ({op: 'create'} | {op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean}) & {
+        tempId: string;
+        fields: DraftFields;
+        pairedWith?: string;
+        link_uuid?: string | null;
+        /** W4b: partner on inaccessible broker — read-only sentinel */ inaccessible?: boolean;
+        /** Cached WAC result from validate — transient, not sent to backend */ _wacCache?: WacResultEntry | null;
+    };
 
     interface Props {
         open: boolean;
@@ -392,8 +400,7 @@
                     queueMicrotask(() => {
                         formOpen = true;
                         formMode = 'create';
-                        formInitial = null;
-                        formPartnerRow = null;
+                        formItems = null;
                         formEditingTempId = null;
                     });
                 }
@@ -433,8 +440,7 @@
             queueMicrotask(() => {
                 formOpen = true;
                 formMode = 'create';
-                formInitial = null;
-                formPartnerRow = null;
+                formItems = null;
                 formEditingTempId = null;
             });
         }
@@ -1102,13 +1108,14 @@
                     const wacVal = (wr.wac as {code: string; amount: string} | null) ?? null;
                     // Annotate qualifying_txs entries that belong to this batch (pending)
                     const rawQtxs = (wr.wac_qualifying_txs as Array<Record<string, any>>) ?? [];
-                    const qualifyingTxs = pendingIdOps.size > 0
-                        ? rawQtxs.map((q) => {
-                            if (q.tx_id == null) return q;
-                            const pendingOp = pendingIdOps.get(q.tx_id);
-                            return pendingOp ? {...q, is_pending: true, pending_op: pendingOp} : q;
-                        })
-                        : rawQtxs;
+                    const qualifyingTxs =
+                        pendingIdOps.size > 0
+                            ? rawQtxs.map((q) => {
+                                  if (q.tx_id == null) return q;
+                                  const pendingOp = pendingIdOps.get(q.tx_id);
+                                  return pendingOp ? {...q, is_pending: true, pending_op: pendingOp} : q;
+                              })
+                            : rawQtxs;
                     const cacheEntry: WacResultEntry = {
                         wac: wacVal,
                         qualifying_txs: qualifyingTxs,
@@ -1816,9 +1823,7 @@
     // -------------------------------------------------------------------------
     let formOpen = $state(false);
     let formMode = $state<'create' | 'edit'>('create');
-    let formInitial = $state<TXReadItem | null>(null);
-    /** C1-fix: injected partner row for paired drafts (avoids API fetch). */
-    let formPartnerRow = $state<TXReadItem | null>(null);
+    let formItems = $state<FormModalItems | null>(null);
     /** Set to a tempId when the FormModal is editing an existing draft row.
      *  When null, a successful Save = push as a brand-new row. */
     let formEditingTempId = $state<string | null>(null);
@@ -1867,8 +1872,7 @@
 
     function openAddRowForm() {
         formMode = 'create';
-        formInitial = null;
-        formPartnerRow = null;
+        formItems = null;
         formEditingTempId = null;
         formKey++;
         formOpen = true;
@@ -1904,9 +1908,9 @@
         // When editing a 'new' draft, open in create mode so type stays editable;
         // formEditingTempId is still set so handleFormPushed patches (not adds).
         formMode = deriveStatus(row) === 'new' ? 'create' : 'edit';
-        formInitial = opToTxLike(row);
+        let mainItem = opToTxLike(row);
         // SP-C Step 2: if split-queued, override type with post-split target
-        if (row.op === 'edit' && splitTxIdsSet.has(row.txId) && formInitial) {
+        if (row.op === 'edit' && splitTxIdsSet.has(row.txId) && mainItem) {
             const splitEntry = pendingSplits.find((s) => s.id_a === row.txId || s.id_b === row.txId);
             const origType = splitEntry?.originalType ?? row.fields.type;
             const splitTypes = SPLIT_TYPE_MAP[origType];
@@ -1914,13 +1918,14 @@
                 const qty = Number(row.fields.quantity ?? 0);
                 const cashAmt = Number(row.fields.cash?.amount ?? 0);
                 const isSender = origType === 'TRANSFER' ? qty < 0 || qty === 0 : cashAmt < 0 || cashAmt === 0;
-                formInitial.type = (isSender ? splitTypes[0] : splitTypes[1]) as string;
+                mainItem.type = (isSender ? splitTypes[0] : splitTypes[1]) as string;
             }
         }
         formEditingTempId = row.tempId;
         // Resolve partner from hidden partner op or txStore fallback
         const pOp = getPartnerOp(row.tempId);
-        formPartnerRow = pOp ? opToTxLike(pOp) : null;
+        const partnerItem = pOp ? opToTxLike(pOp) : null;
+        formItems = partnerItem ? [mainItem, partnerItem] : [mainItem];
         formKey++;
         formOpen = true;
     }
@@ -2840,8 +2845,7 @@
 <TransactionFormModal
     open={formOpen}
     mode={formMode}
-    initialRow={formInitial}
-    injectedPartnerRow={formPartnerRow}
+    items={formItems}
     commitOnSave={false}
     unlockImmutable={formMode === 'edit'}
     availableTags={aggregatedTags}
@@ -2864,7 +2868,6 @@
     onClose={() => {
         formOpen = false;
         formEditingTempId = null;
-        formPartnerRow = null;
     }}
     onPushDraft={handleFormPushed}
 />

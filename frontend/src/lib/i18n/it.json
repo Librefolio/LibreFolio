@@ -557,6 +557,8 @@
       "description": "Descrizione",
       "assetEvent": "Evento asset",
       "assetEventNotApplicable": "Il collegamento all'evento è disponibile solo per DIVIDEND, INTEREST e ADJUSTMENT dopo aver scelto un asset.",
+      "linkedEvent": "Evento Collegato",
+      "eventPickerPlaceholder": "Seleziona evento...",
       "costBasis": "Override costo medio",
       "linkUuid": "TX Collegata",
       "pairPartner": "Transazione collegata",
@@ -669,6 +671,13 @@
       "validateHint": "Completa i campi e valida per calcolare il PMC",
       "validateToRecalculate": "⚡ Esegui la validazione per ricalcolare la tabella"
     },
+    "wac": {
+      "syncFx": "🔄 Sincronizza FX",
+      "syncSuccess": "Tassi FX sincronizzati con successo",
+      "syncFailed": "Sincronizzazione FX fallita",
+      "fxStale": "Tasso FX del {date} ({days}gg fa)",
+      "fxMissing": "Coppia FX {pair} non disponibile per questa data"
+    },
     "promote": {
       "title": "Promuovi coppia",
       "stepN": "Passo {n}/{total}",
@@ -780,7 +789,9 @@
       "splitIdsMismatch": "Le due transazioni non sono una coppia collegata",
       "promoteRefNotFound": "Transazione referenziata per la promozione non trovata",
       "alreadyPaired": "La transazione è già collegata a un'altra transazione",
-      "noPromoteRule": "Nessuna regola di promozione corrisponde a questi due tipi di transazione"
+      "noPromoteRule": "Nessuna regola di promozione corrisponde a questi due tipi di transazione",
+      "wacFxUnavailable": "❌ Calcolo WAC fallito: coppia/e FX {pairs} non disponibile/i. Sincronizza i tassi FX o passa alla modalità manuale.",
+      "costBasisRequired": "❌ Costo base obbligatorio per {type} con quantità positiva. Usa Auto (PMC) o inserisci manualmente."
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",

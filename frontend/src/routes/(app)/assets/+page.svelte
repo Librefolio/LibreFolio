@@ -379,11 +379,19 @@
             const gaps = store.getMissingIntervals(dateStart, dateEnd);
             if (gaps.length === 0) {
                 const rangeData = store.getRange(dateStart, dateEnd).data;
-                cached.set(asset.id, rangeData.map((p) => ({
-                    date: p.date, close: p.close, open: p.open, high: p.high,
-                    low: p.low, volume: p.volume, currency: p.currency,
-                    backward_fill_info: p.backwardFillInfo ? {days_back: p.backwardFillInfo.daysBack} : null,
-                })));
+                cached.set(
+                    asset.id,
+                    rangeData.map((p) => ({
+                        date: p.date,
+                        close: p.close,
+                        open: p.open,
+                        high: p.high,
+                        low: p.low,
+                        volume: p.volume,
+                        currency: p.currency,
+                        backward_fill_info: p.backwardFillInfo ? {days_back: p.backwardFillInfo.daysBack} : null,
+                    })),
+                );
             } else {
                 needFetch.push(asset);
             }
@@ -1081,7 +1089,10 @@
             <!-- Refresh All -->
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                onclick={() => { for (const a of assets) invalidateAssetPriceStore(a.id); fetchAllPriceData(); }}
+                onclick={() => {
+                    for (const a of assets) invalidateAssetPriceStore(a.id);
+                    fetchAllPriceData();
+                }}
             >
                 <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
                 {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
@@ -1230,7 +1241,10 @@
     onclose={() => {
         syncModalOpen = false;
     }}
-    onsynced={() => { for (const a of assets) invalidateAssetPriceStore(a.id); fetchAllPriceData(); }}
+    onsynced={() => {
+        for (const a of assets) invalidateAssetPriceStore(a.id);
+        fetchAllPriceData();
+    }}
 />
 
 <!-- Asset Create/Edit Modal -->

@@ -228,6 +228,17 @@ class TransactionService:
             raise ValueError(f"asset_event_id={asset_event_id} belongs to asset {event.asset_id}, not {expected_asset_id}")
 
     @staticmethod
+    def _requires_cost_basis(tx: Transaction) -> bool:
+        """True if this Transaction type+quantity requires cost_basis_override to be set."""
+        if tx.quantity is None:
+            return False
+        if tx.type == TransactionType.TRANSFER and tx.quantity > 0:
+            return True
+        if tx.type == TransactionType.ADJUSTMENT and tx.quantity > 0:
+            return True
+        return False
+
+    @staticmethod
     def _validate_linked_pair(a: Transaction, b: Transaction) -> Optional[tuple[str, str, dict]]:
         """
         Validate semantic coherence of a linked pair (Block H.1).
@@ -1354,6 +1365,102 @@ class TransactionService:
         has_pydantic_errors = any(i.code not in (TXValidationCode.BALANCE_ASSET_NEGATIVE.value, TXValidationCode.BALANCE_CASH_NEGATIVE.value) for i in issues)
         if not has_pydantic_errors:
             wac_results = await self._compute_wac_for_auto_items(parsed_creates, parsed_updates, link_uuid_map)
+
+        # 6c. Emit wac_fx_unavailable issues for items where WAC auto failed due to missing FX
+        if wac_results:
+            for wr in wac_results:
+                if wr.wac is None and wr.wac_missing_pairs:
+                    issues.append(
+                        TXValidationIssue(
+                            operation=wr.operation or "create",
+                            index=wr.index if wr.index is not None else 0,
+                            ref_id=None,
+                            error=f"WAC calculation failed: missing FX pairs {', '.join(wr.wac_missing_pairs)}",
+                            code=TXValidationCode.WAC_FX_UNAVAILABLE.value,
+                            params={"pairs": wr.wac_missing_pairs},
+                            field="cost_basis_override",
+                        )
+                    )
+
+        # 6d. Verify cost_basis_override is populated for types that require it.
+        # Skip items with cost_basis_mode='auto'|'auto-detail' — those went through WAC
+        # (step 6b) and any failure is already reported via step 6c.
+        # This check catches items that have NO mode AND no manual override.
+        await self.session.flush()
+
+        # Build set of create indices that used auto WAC (already handled by 6b/6c)
+        auto_create_indices: Set[int] = set()
+        for orig_idx, item in parsed_creates:
+            if getattr(item, "cost_basis_mode", None) in ("auto", "auto-detail"):
+                auto_create_indices.add(orig_idx)
+        auto_update_indices: Set[int] = set()
+        for orig_idx, item in parsed_updates:
+            if getattr(item, "cost_basis_mode", None) in ("auto", "auto-detail"):
+                auto_update_indices.add(orig_idx)
+
+        # Build set of create indices consumed by promote (step 5c handles cost_basis)
+        promoted_create_indices: Set[int] = set()
+        for _uuid in consumed_link_uuids:
+            for orig_idx, _tx in link_uuid_map.get(_uuid, []):
+                promoted_create_indices.add(orig_idx)
+
+        # Check creates via link_uuid_map (holds (orig_idx, Transaction) tuples)
+        checked_create_indices: Set[int] = set()
+        for _uuid, pairs in link_uuid_map.items():
+            if _uuid in consumed_link_uuids:
+                continue  # Already processed by promote (step 5c)
+            for orig_idx, tx in pairs:
+                if orig_idx in auto_create_indices:
+                    continue
+                if self._requires_cost_basis(tx) and tx.cost_basis_override is None:
+                    checked_create_indices.add(orig_idx)
+                    issues.append(
+                        TXValidationIssue(
+                            operation="create",
+                            index=orig_idx,
+                            ref_id=None,
+                            error=f"{tx.type.value} with qty>0 requires cost_basis_override",
+                            code=TXValidationCode.COST_BASIS_REQUIRED.value,
+                            params={"type": tx.type.value},
+                            field="cost_basis_override",
+                        )
+                    )
+        # Standalone creates (no link_uuid) — check from results
+        for r in results:
+            if r.operation == "create" and r.status == "success" and r.index not in checked_create_indices:
+                if r.index in auto_create_indices or r.index in promoted_create_indices:
+                    continue
+                for tid in (r.ids or []):
+                    tx = await self.session.get(Transaction, tid)
+                    if tx and self._requires_cost_basis(tx) and tx.cost_basis_override is None:
+                        issues.append(
+                            TXValidationIssue(
+                                operation="create",
+                                index=r.index,
+                                ref_id=None,
+                                error=f"{tx.type.value} with qty>0 requires cost_basis_override",
+                                code=TXValidationCode.COST_BASIS_REQUIRED.value,
+                                params={"type": tx.type.value},
+                                field="cost_basis_override",
+                            )
+                        )
+        # Check updates
+        for orig_idx, item in parsed_updates:
+            if orig_idx in auto_update_indices:
+                continue
+            tx = await self.session.get(Transaction, item.id)
+            if tx and self._requires_cost_basis(tx) and tx.cost_basis_override is None:
+                issues.append(
+                    TXValidationIssue(
+                        operation="update",
+                        index=orig_idx,
+                        ref_id=item.id,
+                        error=f"{tx.type.value} with qty>0 requires cost_basis_override",
+                        code=TXValidationCode.COST_BASIS_REQUIRED.value,
+                        params={"type": tx.type.value},
+                        field="cost_basis_override",
+                    )
+                )
 
         # 7. Balance walk per affected broker
         try:

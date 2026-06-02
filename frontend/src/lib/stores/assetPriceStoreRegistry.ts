@@ -120,13 +120,7 @@ export function apiPricesToAssetPricePoints(prices: any[]): AssetPricePoint[] {
  * @param opts      Options: targetCurrency for server-side conversion
  * @returns         All cached AssetPricePoints in [start, end] after loading
  */
-export async function ensureAssetPriceRangeLoaded(
-    assetId: number,
-    currency: string,
-    start: string,
-    end: string,
-    opts?: {targetCurrency?: string},
-): Promise<AssetPricePoint[]> {
+export async function ensureAssetPriceRangeLoaded(assetId: number, currency: string, start: string, end: string, opts?: {targetCurrency?: string}): Promise<AssetPricePoint[]> {
     const store = getAssetPriceStore(assetId, currency);
     const gaps = store.getMissingIntervals(start, end);
 

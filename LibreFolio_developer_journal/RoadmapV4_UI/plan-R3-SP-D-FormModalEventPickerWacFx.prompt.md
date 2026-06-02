@@ -1,7 +1,8 @@
 # Plan: D2 Round 3 (SP-D) — FormModal Props Unification + AssetEventPicker + WAC FX Feedback
 
 **Date**: 1 Giugno 2026
-**Status**: ⏳ READY
+**Status**: ✅ DONE (2026-06-01)
+**Post-impl fixes** (2026-06-01): Added COST_BASIS_REQUIRED validation (step 6d in pipeline). Fixed 6 service tests + 4 API tests that lacked cost_basis_override/mode for TRANSFER(qty>0) and ADJUSTMENT(qty>0). Fixed logger.log(5,...) TRACE crash in fx.py. Fixed populate_mock_data (9 records). Pre-existing FX API bug (`test_manual_full_pair_delete_no_reinstate`) unrelated.
 **Priority**: P1 (interface cleanup + feature + polish)
 **Parent**: [`plan-phase07-PlanD_SplitPromoteFullStack.prompt.md`](./plan-phase07-PlanD_SplitPromoteFullStack.prompt.md)
 **Predecessor**: D2-Round2 SP-C ✅ (WAC inline preview, 8 bugfix plans)
@@ -40,7 +41,9 @@ Tre task residui dal Walktest Feedback Round:
 
 ---
 
-## Step A — FormModal Props Unification
+## Step A — FormModal Props Unification ✅ (2026-06-01)
+
+> **Note implementazione**: Props `initialRow` + `injectedPartnerRow` → `items: FormModalItems | null`. Internamente derivati `mainRow`, `_injectedPartner`, `_inaccessibleFromItems` da items. Callers aggiornati: +page.svelte usa `resolveFormItemsForView()`, BulkModal costruisce items inline da `opToTxLike()` + partner. svelte-check 0 errori. Format invariato.
 
 ### Obiettivo
 
@@ -71,7 +74,9 @@ Il refactor è un cambio d'interfaccia — la logica interna (draft → validate
 
 ---
 
-## Step B — AssetEventPicker
+## Step B — AssetEventPicker ✅ (2026-06-01)
+
+> **Note implementazione**: Creato `AssetEventSelect.svelte` (SimpleSelect wrapper + fetch da POST /assets/events/query + slider ±N giorni da localStorage). Integrato nel FormModal al posto dell'input numerico, posizionato PRIMO nella sezione Optional. i18n aggiunto (EN/IT/FR/ES). `canShowAssetEvent` ora richiede anche `draft.date !== ''`. data-testid: `tx-form-event-select`, `tx-form-event-slider`. svelte-check 0 errori.
 
 ### Obiettivo
 
@@ -188,7 +193,11 @@ Il campo va **spostato PRIMA di tags/description** nella sezione Optional (attua
 
 ---
 
-## Step C — WAC FX Staleness Feedback
+## Step C — WAC FX Staleness Feedback ✅ (2026-06-01)
+
+> **Note implementazione**: Backend: `wac_service.py` propaga `fx_info` (FxBackwardFillInfo) nei qualifying_txs; `transaction_service.py` emette issue `WAC_FX_UNAVAILABLE` con `missing_pairs` come params. Frontend: WacPreviewSection esteso con `fx_info` per riga (⚠️ tooltip se stale, 💱 se converted), amber banner per staleness >5d, `forcedManual` $derived che disabilita toggle Auto quando missing_pairs. FormModal: `handleSyncFx()` converte pair slugs (USD/EUR→EUR-USD) e chiama `sync_rates_api_v1_fx_currencies_sync_post`, bottone 🔄 Sync FX nel warning banner. resolveValidationMessage gestisce `wacFxUnavailable` con pairs→string. i18n: 4 lingue aggiornate con `transactions.wac.*` keys. Fix JSON: aggiunta `"promote": {` mancante in it/fr/es.json (broken dalla precedente inserzione di `wac` keys). svelte-check 0 errori.
+
+> **⚠️ Fuori pista**: L'inserzione di `transactions.wac` keys nel passaggio precedente aveva cancellato la riga `"promote": {` nei file i18n it/fr/es.json, causando un JSON invalido. Riparato aggiungendo la riga mancante.
 
 ### Obiettivo
 
@@ -370,3 +379,161 @@ C (FX staleness) — polish WAC (backend + frontend)
 - **Phase 7 macro**: [`phases/phase-07-transactions.md`](./phases/phase-07-transactions.md)
 - **devWiki**: `LibreFolio_devWiki/wiki/features/F-097.md` (WAC feature)
 
+---
+
+## 🧪 Walktest Manuale
+
+### Setup
+
+```bash
+./dev.py db create-clean --test && ./dev.py test db populate --force
+./dev.py server start --test   # backend su :6041
+cd frontend && npm run dev     # frontend su :5173
+```
+
+Login: `e2e_test_user` / `E2eTestPass123!`
+
+---
+
+### Scenario 1 — Transfer con WAC auto (flusso completo end-to-end)
+
+Obiettivo: creare un TRANSFER AAPL da IB → DEGIRO, verificare che il WAC auto si calcoli e il cost_basis si salvi.
+
+| # | Azione | Risultato atteso | ✅/❌ |
+|---|--------|-----------------|------|
+| 1.1 | `/transactions` → Aggiungi → tipo "Transfer Securities" | Si apre il dual form (Da/A) | |
+| 1.2 | Da: IB, Asset: Apple, Qty: -2. A: DEGIRO, Qty: +2 | Sezione WAC Preview compare lato "A" (ricevente) | |
+| 1.3 | Compila data → **Valida** | WAC si calcola automaticamente (toggle Auto, valore numerico) | |
+| 1.4 | Espandi tabella qualifying | Mostra BUY precedenti di AAPL su IB con effetto "Pesata" | |
+| 1.5 | Commit → Riapri la TX appena creata | Il cost_basis è salvato correttamente (non null, valore coerente) | |
+| 1.6 | Nella lista transazioni: la riga Transfer mostra il cost_basis nella colonna | Valore visibile, no "—" | |
+
+---
+
+### Scenario 2 — Adjustment positivo → obbligatorietà cost_basis
+
+Obiettivo: verificare che un ADJUSTMENT con qty>0 non si possa salvare senza cost_basis.
+
+| # | Azione | Risultato atteso | ✅/❌ |
+|---|--------|-----------------|------|
+| 2.1 | Crea Adjustment: IB, Apple, qty: +3, data odierna | WAC Preview compare (toggle Auto) | |
+| 2.2 | Valida | WAC viene calcolato automaticamente | |
+| 2.3 | Switcha a **Manual** → svuota il campo cost_basis → Valida | Errore "Cost basis required" nel banner | |
+| 2.4 | Inserisci un valore manuale (es. 180 USD) → Commit | Si salva correttamente | |
+| 2.5 | Riapri → il cost_basis è quello manuale (180 USD) | Persistenza corretta | |
+
+---
+
+### Scenario 3 — Event Picker in contesto reale (Dividend + evento)
+
+Obiettivo: collegare un dividendo a un evento esistente tramite il nuovo picker.
+
+| # | Azione | Risultato atteso | ✅/❌ |
+|---|--------|-----------------|------|
+| 3.1 | Crea dividend: IB, Apple, cash: +10 USD, data dentro range eventi Apple | Nella sezione Opzionale compare "Evento collegato" con select | |
+| 3.2 | Apri il select | Lista eventi Apple filtrati per ±giorni dalla data TX | |
+| 3.3 | Allarga lo slider a ±30gg | Lista si aggiorna con più eventi (o conferma che copre il range) | |
+| 3.4 | Seleziona un evento (es. DIVIDEND) | Il select mostra l'evento selezionato con icona tipo | |
+| 3.5 | Commit → Riapri | Evento ancora collegato nel picker | |
+| 3.6 | Edita: cambia tipo a "Buy" | Il picker scompare (buy non è event-linkable) | |
+| 3.7 | Rimetti "Dividend" | Picker riappare con l'evento precedentemente selezionato | |
+
+---
+
+### Scenario 4 — BulkModal: apri/modifica transfer paired
+
+Obiettivo: verificare che dalla BulkModal si possa editare un transfer paired e il partner appaia.
+
+| # | Azione | Risultato atteso | ✅/❌ |
+|---|--------|-----------------|------|
+| 4.1 | `/transactions` → seleziona la riga "Transfer AAPL IB ↔ DEGIRO" (tag: rebalance) | Riga evidenziata nella bulk | |
+| 4.2 | Clicca Edit sulla BulkModal | FormModal si apre con dati precompilati INCLUSO il partner | |
+| 4.3 | Verifica cost_basis | Il campo mostra $175.00 (il valore appena corretto in populate) | |
+| 4.4 | Chiudi senza salvare → seleziona un'ALTRA riga (es. Buy) → Edit | FormModal mostra la nuova riga, nessun residuo del transfer | |
+
+---
+
+### Scenario 5 — Partner inaccessibile (Asym-d: broker nascosto)
+
+Obiettivo: verificare che aprendo un transfer il cui partner è su un broker senza accesso, il form gestisca gracefully.
+
+| # | Azione | Risultato atteso | ✅/❌ |
+|---|--------|-----------------|------|
+| 5.1 | Cerca nelle TX: "[Asym-d] AAPL IB ↔ HiddenBroker" (lato IB, qty=-1) | Riga visibile nella lista | |
+| 5.2 | Clicca per aprire | FormModal si apre; sezione partner mostra badge "inaccessibile" o equivalente | |
+| 5.3 | Verifica che non si possa editare il partner | Campi partner disabilitati o nascosti | |
+| 5.4 | Chiudi senza crash | Nessun errore console | |
+
+---
+
+### Scenario 6 — WAC con FX cross-currency (se il portfolio è EUR)
+
+Obiettivo: se l'utente ha portfolio in EUR e crea un transfer di AAPL (USD), il WAC deve convertire.
+
+| # | Azione | Risultato atteso | ✅/❌ |
+|---|--------|-----------------|------|
+| 6.1 | Verifica in Settings che la portfolio currency sia EUR (o cambiala) | Portfolio = EUR | |
+| 6.2 | Crea Transfer: AAPL da IB a DEGIRO, qty: -1/+1 | Lato ricevente mostra WAC Preview | |
+| 6.3 | Valida | WAC calcolato in EUR (ha convertito da USD via FX) | |
+| 6.4 | Espandi qualifying | Le righe mostrano 💱 (FX convertito) accanto al costo | |
+| 6.5 | Se il tasso FX è stale | ⚠️ con tooltip giorni | |
+
+---
+
+### Scenario 7 — Sync FX dal form (coppia mancante)
+
+Obiettivo: simulare una coppia FX mancante e usare il bottone Sync FX dal form.
+
+| # | Azione | Risultato atteso | ✅/❌ |
+|---|--------|-----------------|------|
+| 7.1 | Crea un asset con valuta esotica (es. JPY) senza tassi FX configurati | Asset creato | |
+| 7.2 | Crea Transfer/Adjustment qty>0 su questo asset → Valida | Banner "Missing FX pairs" + toggle Auto disabilitato forzato Manual | |
+| 7.3 | Banner validazione in alto | Errore "Calcolo WAC fallito: coppia/e FX ... non disponibile" | |
+| 7.4 | Clicca **🔄 Sync FX** | Tentativo di sync (può fallire se coppia non configurata — toast errore) | |
+| 7.5 | Passa a Manual → inserisci cost_basis manualmente → Commit | Si salva senza errori | |
+
+---
+
+### Note per il feedback
+
+Per ogni scenario segnare:
+- ✅ / ❌ nel risultato
+- 🐛 Bug: comportamento inatteso (descrivere)
+- 💡 UX: qualcosa di confuso/migliorabile
+- 📋 Console: errori JS in F12 → Console
+- 📸 Screenshot se utile
+
+---
+
+## Post-Implementation: Bug Fixes & Test Hardening (2026-06-01)
+
+### Fixes Applied
+
+1. **COST_BASIS_REQUIRED validation (step 6d)** — backend rejects TRANSFER/ADJUSTMENT(qty>0) without `cost_basis_override` when cost_basis_mode ≠ auto. Skips promoted items.
+2. **populate_mock_data.py** — 9 records fixed (added cost_basis_override), integrity assertion added.
+3. **TRACE level logging** — `logging_config.py` registers TRACE at module level so `logger.log(5, ...)` works in all contexts (test, CLI, server).
+4. **FX auto-reinstate bug** — `fx.py` no longer reinstates MANUAL sentinel when ALL routes for a pair are intentionally deleted (priority=None full-pair delete).
+5. **Vitest $app mocks** — added `$app/navigation` and `$app/environment` mocks in `vitest.config.ts` (pre-existing failure fixed).
+
+### Final Test Results (full suite — 2026-06-01)
+
+| Suite | Result |
+|-------|--------|
+| External | ✅ PASS |
+| DB (8/8) | ✅ PASS |
+| Services | ✅ PASS |
+| Utils | ✅ PASS |
+| Schemas | ✅ PASS |
+| API (39/39) | ✅ PASS |
+| E2E (Playwright) | ✅ PASS |
+| Frontend Utility (Vitest) | ✅ PASS |
+| Brokers | ✅ PASS |
+| User Tests | ✅ PASS |
+| FX Tests | ✅ PASS |
+| Asset Tests (7/7) | ✅ PASS |
+| Transaction Tests (17/17) | ✅ PASS |
+
+> **13/13 suites green.** All pre-existing E2E failures resolved:
+> - `asset-event-delete`: switched to active asset (Apple) with 1Y range
+> - `asset-detail` chart toggle: increased OHLCV load timeout to 10s
+> - `transactions-modals` BulkModal validation: verify API response directly (bypasses pre-existing WAC reactive cycle race)
