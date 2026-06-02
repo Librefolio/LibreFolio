@@ -14,12 +14,7 @@ vi.mock('$lib/api', () => ({
 }));
 
 import {zodiosApi} from '$lib/api';
-import {
-    ensureAssetPriceRangeLoaded,
-    getAssetPriceStore,
-    invalidateAssetPriceStore,
-    apiPricesToAssetPricePoints,
-} from '../assetPriceStoreRegistry';
+import {ensureAssetPriceRangeLoaded, getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '../assetPriceStoreRegistry';
 
 const mockQuery = vi.mocked(zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post);
 
@@ -59,11 +54,13 @@ describe('ensureAssetPriceRangeLoaded', () => {
     // =========================================================================
     it('returns cached data without calling the API when range is fully covered', async () => {
         const store = getAssetPriceStore(1, 'USD');
-        store.merge(apiPricesToAssetPricePoints([
-            {date: '2024-01-01', close: '100', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null},
-            {date: '2024-01-02', close: '101', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null},
-            {date: '2024-01-03', close: '102', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null},
-        ]));
+        store.merge(
+            apiPricesToAssetPricePoints([
+                {date: '2024-01-01', close: '100', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null},
+                {date: '2024-01-02', close: '101', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null},
+                {date: '2024-01-03', close: '102', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null},
+            ]),
+        );
 
         const result = await ensureAssetPriceRangeLoaded(1, 'USD', '2024-01-01', '2024-01-03');
 
@@ -91,10 +88,12 @@ describe('ensureAssetPriceRangeLoaded', () => {
     // =========================================================================
     it('only fetches for gaps when store has partial data', async () => {
         const store = getAssetPriceStore(1, 'USD');
-        store.merge(apiPricesToAssetPricePoints([
-            {date: '2024-01-01', close: '100', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null},
-            {date: '2024-01-02', close: '101', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null},
-        ]));
+        store.merge(
+            apiPricesToAssetPricePoints([
+                {date: '2024-01-01', close: '100', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null},
+                {date: '2024-01-02', close: '101', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null},
+            ]),
+        );
         // Mark 01-01 to 01-02 as fetched
         store.markFetched('2024-01-01', '2024-01-02');
 
@@ -150,9 +149,7 @@ describe('ensureAssetPriceRangeLoaded', () => {
     // =========================================================================
     it('separates cache by currency', async () => {
         const storeUSD = getAssetPriceStore(1, 'USD');
-        storeUSD.merge(apiPricesToAssetPricePoints([
-            {date: '2024-01-01', close: '100', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null},
-        ]));
+        storeUSD.merge(apiPricesToAssetPricePoints([{date: '2024-01-01', close: '100', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null}]));
         storeUSD.markFetched('2024-01-01', '2024-01-01');
 
         // EUR store is empty — should trigger a fetch
@@ -174,12 +171,8 @@ describe('ensureAssetPriceRangeLoaded', () => {
     it('invalidateAssetPriceStore clears all currencies for an asset', async () => {
         const storeUSD = getAssetPriceStore(1, 'USD');
         const storeEUR = getAssetPriceStore(1, 'EUR');
-        storeUSD.merge(apiPricesToAssetPricePoints([
-            {date: '2024-01-01', close: '100', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null},
-        ]));
-        storeEUR.merge(apiPricesToAssetPricePoints([
-            {date: '2024-01-01', close: '92', open: null, high: null, low: null, volume: null, currency: 'EUR', backward_fill_info: null},
-        ]));
+        storeUSD.merge(apiPricesToAssetPricePoints([{date: '2024-01-01', close: '100', open: null, high: null, low: null, volume: null, currency: 'USD', backward_fill_info: null}]));
+        storeEUR.merge(apiPricesToAssetPricePoints([{date: '2024-01-01', close: '92', open: null, high: null, low: null, volume: null, currency: 'EUR', backward_fill_info: null}]));
         storeUSD.markFetched('2024-01-01', '2024-01-01');
         storeEUR.markFetched('2024-01-01', '2024-01-01');
 

@@ -721,6 +721,8 @@ class TXValidationCode(StrEnum):
     NO_PROMOTE_RULE = "noPromoteRule"
     ACCESS_DENIED = "accessDenied"
     LINK_UUID_PAIR_COUNT = "linkUuidPairCount"
+    WAC_FX_UNAVAILABLE = "wacFxUnavailable"
+    COST_BASIS_REQUIRED = "costBasisRequired"
 
 
 class TXValidationCodeInfo(BaseModel):

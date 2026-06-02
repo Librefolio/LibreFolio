@@ -1013,6 +1013,7 @@ async def test_get_transactions_partner_broker_id(test_server):
                 "date": date.today().isoformat(),
                 "quantity": "5",
                 "link_uuid": link_uuid,
+                "cost_basis_mode": "auto",
             },
         ]
         create_resp = await client.post(
@@ -1098,7 +1099,7 @@ class TestPairDescriptionTagsValidation:
             payload = {
                 "creates": [
                     {"broker_id": b1, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-10", "quantity": "-5", "link_uuid": link, "description": "Transfer A ↔ B", "tags": ["test"]},
-                    {"broker_id": b2, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-10", "quantity": "5", "link_uuid": link, "description": "Transfer A ↔ B", "tags": ["test"]},
+                    {"broker_id": b2, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-10", "quantity": "5", "link_uuid": link, "description": "Transfer A ↔ B", "tags": ["test"], "cost_basis_override": {"code": "USD", "amount": "50"}},
                 ]
             }
             resp = await client.post(f"{API_BASE}/transactions/commit", json=payload, timeout=TIMEOUT)
@@ -1157,7 +1158,7 @@ class TestPairDescriptionTagsValidation:
             payload = {
                 "creates": [
                     {"broker_id": b1, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-15", "quantity": "-2", "link_uuid": link, "description": "Original desc"},
-                    {"broker_id": b2, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-15", "quantity": "2", "link_uuid": link, "description": "Original desc"},
+                    {"broker_id": b2, "asset_id": asset_id, "type": "TRANSFER", "date": "2026-01-15", "quantity": "2", "link_uuid": link, "description": "Original desc", "cost_basis_override": {"code": "USD", "amount": "50"}},
                 ]
             }
             create_resp = await client.post(f"{API_BASE}/transactions/commit", json=payload, timeout=TIMEOUT)

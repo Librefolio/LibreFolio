@@ -557,6 +557,8 @@
       "description": "Descripción",
       "assetEvent": "Evento de activo",
       "assetEventNotApplicable": "El enlace de evento solo está disponible para DIVIDEND, INTEREST y ADJUSTMENT tras elegir un activo.",
+      "linkedEvent": "Evento Vinculado",
+      "eventPickerPlaceholder": "Seleccionar evento...",
       "costBasis": "Override de coste medio",
       "linkUuid": "TX Vinculada",
       "pairPartner": "Transacción vinculada",
@@ -669,8 +671,15 @@
       "validateHint": "Completa los campos y valida para calcular el CMP",
       "validateToRecalculate": "⚡ Valida ahora para recalcular la tabla"
     },
+    "wac": {
+      "syncFx": "🔄 Sincronizar FX",
+      "syncSuccess": "Tasas FX sincronizadas con éxito",
+      "syncFailed": "Error en la sincronización FX",
+      "fxStale": "Tasa FX del {date} ({days}d atrás)",
+      "fxMissing": "Par FX {pair} no disponible para esta fecha"
+    },
     "promote": {
-      "title": "Promocionar par",
+      "title": "Promover par",
       "stepN": "Paso {n}/{total}",
       "fromSlot": "DESDE (emisor, salida)",
       "toSlot": "A (receptor, entrada)",
@@ -780,7 +789,9 @@
       "splitIdsMismatch": "Las dos transacciones no son un par vinculado",
       "promoteRefNotFound": "Transacción referenciada para la promoción no encontrada",
       "alreadyPaired": "La transacción ya está vinculada a otra transacción",
-      "noPromoteRule": "Ninguna regla de promoción corresponde a estos dos tipos de transacción"
+      "noPromoteRule": "Ninguna regla de promoción corresponde a estos dos tipos de transacción",
+      "wacFxUnavailable": "❌ Cálculo WAC fallido: par(es) FX {pairs} no disponible(s). Sincroniza las tasas FX o cambia al modo manual.",
+      "costBasisRequired": "❌ Coste base requerido para {type} con cantidad positiva. Use Auto (CMP) o ingrese manualmente."
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",

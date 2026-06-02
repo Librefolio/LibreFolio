@@ -129,6 +129,7 @@ async def create_transfer_pair(client: httpx.AsyncClient, broker_a_id: int, brok
                     "date": "2026-01-15",
                     "quantity": qty,
                     "link_uuid": link_uuid,
+                    "cost_basis_mode": "auto",
                 },
             ],
         },
@@ -182,6 +183,7 @@ async def create_standalone_tx(
     quantity: str = "0",
     cash: Optional[dict] = None,
     tx_date: str = "2026-02-01",
+    cost_basis_override: Optional[dict] = None,
 ) -> int:
     """Create a standalone transaction and return its ID."""
     create_dict: dict = {
@@ -194,6 +196,9 @@ async def create_standalone_tx(
         create_dict["asset_id"] = asset_id
     if cash is not None:
         create_dict["cash"] = cash
+    # Auto-add cost_basis for types that require it
+    if tx_type in ("TRANSFER", "ADJUSTMENT") and not quantity.startswith("-") and float(quantity) > 0:
+        create_dict["cost_basis_override"] = cost_basis_override or {"code": "USD", "amount": "50"}
 
     resp = await client.post(
         f"{API_BASE}/transactions/commit",

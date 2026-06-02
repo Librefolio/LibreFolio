@@ -40,6 +40,7 @@
             running_wac?: string | null;
             is_pending?: boolean;
             pending_op?: string;
+            fx_info?: {fx_rate_date: string | null; fx_days_back: number | null} | null;
         }>;
         missing_pairs: string[];
         asset_price: {code: string; amount: string} | null;
@@ -105,6 +106,13 @@
         if (mode === 'manual') showQualifying = false;
     });
 
+    // Force switch to manual when missing_pairs makes auto unreliable
+    $effect(() => {
+        if (forcedManual && mode === 'auto') {
+            onModeChange?.('manual');
+        }
+    });
+
     // =========================================================================
     // Derived
     // =========================================================================
@@ -112,6 +120,10 @@
     let isAuto = $derived(mode === 'auto');
     let hasMissingPairs = $derived((previewResult?.missing_pairs?.length ?? 0) > 0);
     let qualifyingCount = $derived(previewResult?.qualifying_txs?.length ?? 0);
+    let maxFxStaleDays = $derived(previewResult?.qualifying_txs?.reduce((max, qtx) => Math.max(max, qtx.fx_info?.fx_days_back ?? 0), 0) ?? 0);
+    let hasStaleFx = $derived(maxFxStaleDays > 5);
+    // Force manual when missing pairs — auto WAC is unreliable
+    let forcedManual = $derived(hasMissingPairs);
 
     // =========================================================================
     // External result sync — WAC data from validate response
@@ -183,12 +195,16 @@
         <!-- Toggle Auto/Manual — always visible -->
         {#if !disabled}
             <div class="flex items-center gap-1 text-[10px] ml-auto" data-testid="{testid}-toggle">
-                <button type="button" class="px-1.5 py-0.5 rounded {isAuto ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={setAutoMode} {disabled} data-testid="{testid}-toggle-auto"
-                    >{$t('transactions.wacPreview.toggleAuto')}</button
+                <button type="button" class="px-1.5 py-0.5 rounded {isAuto && !forcedManual ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={setAutoMode} disabled={disabled || forcedManual} data-testid="{testid}-toggle-auto"
+                    >{$t('transactions.wacPreview.toggleAuto')}{forcedManual ? ' ⚠️' : ''}</button
                 >
                 <span class="text-gray-300 dark:text-gray-600">|</span>
-                <button type="button" class="px-1.5 py-0.5 rounded {!isAuto ? 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={switchToManual} {disabled} data-testid="{testid}-toggle-manual"
-                    >{$t('transactions.wacPreview.toggleManual')}</button
+                <button
+                    type="button"
+                    class="px-1.5 py-0.5 rounded {!isAuto || forcedManual ? 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
+                    onclick={switchToManual}
+                    {disabled}
+                    data-testid="{testid}-toggle-manual">{$t('transactions.wacPreview.toggleManual')}</button
                 >
             </div>
         {/if}
@@ -264,6 +280,14 @@
         <p class="text-[10px] text-red-500" data-testid="{testid}-error">{error}</p>
     {/if}
 
+    <!-- FX staleness warning banner (above table) -->
+    {#if hasStaleFx && isAuto && showQualifying}
+        <div class="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50/60 dark:bg-amber-900/10 rounded px-2 py-1 mt-1" data-testid="{testid}-fx-stale-banner">
+            <AlertTriangle size={10} class="shrink-0" />
+            <span>{$t('transactions.wac.fxStale', {values: {date: '', days: maxFxStaleDays}}) || `Some FX rates are ${maxFxStaleDays}+ days stale — WAC may be inaccurate`}</span>
+        </div>
+    {/if}
+
     <!-- Qualifying TXs table (expandable) -->
     {#if !hideTable && showQualifying && previewResult?.qualifying_txs?.length}
         <div class="mt-1 max-h-40 w-0 min-w-full overflow-x-auto overflow-y-auto border border-gray-200 dark:border-slate-700 rounded text-[10px] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600" data-testid="{testid}-qualifying-table">
@@ -282,7 +306,7 @@
                 <tbody>
                     {#each previewResult.qualifying_txs as qtx}
                         {@const isPending = qtx.tx_id == null || qtx.is_pending || (pendingTxIds != null && qtx.tx_id != null && pendingTxIds.has(qtx.tx_id))}
-                        {@const pendingType = qtx.pending_op === 'update' ? 'update' : (pendingTxIds != null && qtx.tx_id != null && pendingTxIds.has(qtx.tx_id)) ? 'create' : 'create'}
+                        {@const pendingType = qtx.pending_op === 'update' ? 'update' : pendingTxIds != null && qtx.tx_id != null && pendingTxIds.has(qtx.tx_id) ? 'create' : 'create'}
                         <tr class="border-t border-gray-100 dark:border-slate-800 {isPending ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}">
                             <td class="px-2 py-0.5">
                                 {#if isPending}
@@ -303,7 +327,16 @@
                             </td>
                             <td class="px-2 py-0.5">{qtx.date}</td>
                             <td class="px-2 py-0.5 text-right font-mono">{formatDecimalForDisplay(qtx.quantity)}</td>
-                            <td class="px-2 py-0.5 text-right font-mono">{qtx.unit_cost && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2}) : qtx.unit_cost ? parseFloat(qtx.unit_cost).toFixed(2) : '—'}</td>
+                            <td class="px-2 py-0.5 text-right font-mono">
+                                {qtx.unit_cost && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2}) : qtx.unit_cost ? parseFloat(qtx.unit_cost).toFixed(2) : '—'}
+                                {#if qtx.fx_info && qtx.fx_info.fx_days_back != null && qtx.fx_info.fx_days_back > 0}
+                                    <Tooltip text={$t('transactions.wac.fxStale', {values: {date: qtx.fx_info.fx_rate_date ?? '?', days: qtx.fx_info.fx_days_back}}) || `FX rate ${qtx.fx_info.fx_days_back}d stale`} position="top">
+                                        <span class="cursor-help text-amber-500 ml-0.5">⚠️</span>
+                                    </Tooltip>
+                                {:else if qtx.fx_info && qtx.fx_info.fx_days_back === 0}
+                                    <span class="ml-0.5 text-gray-400" title="FX converted">💱</span>
+                                {/if}
+                            </td>
                             <td class="px-2 py-0.5 text-right">
                                 <span
                                     class="inline-block px-1 rounded text-[9px] {qtx.effect === 'add'

@@ -837,11 +837,20 @@ async def delete_routes_bulk(
                 total_deleted += deleted_count
 
         # Auto-reinstate MANUAL sentinel for pairs that have no routes left
+        # (but NOT for pairs that were fully deleted with priority=None — that's intentional removal)
+        fully_deleted_pairs = set()
+        for route_item in routes:
+            if route_item.priority is None:
+                b = min(route_item.base, route_item.quote)
+                q = max(route_item.base, route_item.quote)
+                fully_deleted_pairs.add((b, q))
+
         affected_pairs = set()
         for route_item in routes:
             b = min(route_item.base, route_item.quote)
             q = max(route_item.base, route_item.quote)
-            affected_pairs.add((b, q))
+            if (b, q) not in fully_deleted_pairs:
+                affected_pairs.add((b, q))
 
         for base, quote in affected_pairs:
             count_stmt = select(FxConversionRoute).where(

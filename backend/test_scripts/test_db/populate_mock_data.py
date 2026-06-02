@@ -1193,6 +1193,8 @@ def populate_transactions(session: Session):
         currency="USD",
         description="Transfer AAPL IB ↔ DEGIRO",
         tags="rebalance",
+        cost_basis_override=Decimal("175.00"),
+        cost_basis_currency="USD",
     )
     session.add(tx_transfer_out)
     session.add(tx_transfer_in)
@@ -1224,6 +1226,8 @@ def populate_transactions(session: Session):
         currency="USD",
         description="Transfer BTC Coinbase ↔ IB",
         tags="rebalance",
+        cost_basis_override=Decimal("65000.00"),
+        cost_basis_currency="USD",
     )
     session.add(tx_btc_out)
     session.add(tx_btc_in)
@@ -1326,6 +1330,8 @@ def populate_transactions(session: Session):
         currency="USD",
         description="[Asym-a] AAPL IB ↔ Directa (OWNER↔EDITOR=full)",
         tags="access-test",
+        cost_basis_override=Decimal("175.00"),
+        cost_basis_currency="USD",
     )
     session.add(tx_asym_a_out)
     session.add(tx_asym_a_in)
@@ -1357,6 +1363,8 @@ def populate_transactions(session: Session):
         currency="USD",
         description="[Asym-b] BTC IB ↔ Coinbase (OWNER↔EDITOR=full)",
         tags="access-test",
+        cost_basis_override=Decimal("65000.00"),
+        cost_basis_currency="USD",
     )
     session.add(tx_asym_b_out)
     session.add(tx_asym_b_in)
@@ -1388,6 +1396,8 @@ def populate_transactions(session: Session):
         currency="USD",
         description="[Asym-c] MSFT IB ↔ DEGIRO (OWNER↔VIEWER=view-only)",
         tags="access-test",
+        cost_basis_override=Decimal("420.00"),
+        cost_basis_currency="USD",
     )
     session.add(tx_asym_c_out)
     session.add(tx_asym_c_in)
@@ -1422,6 +1432,8 @@ def populate_transactions(session: Session):
         currency="USD",
         description="[delete-safe] ETH Coinbase ↔ IB",
         tags="delete-safe,access-test",
+        cost_basis_override=Decimal("3500.00"),
+        cost_basis_currency="USD",
     )
     session.add(tx_del_pair_out)
     session.add(tx_del_pair_in)
@@ -1515,6 +1527,8 @@ def populate_transactions(session: Session):
         currency="USD",
         description="[promote-test] Adjustment in for transfer test",
         tags="promote-test",
+        cost_basis_override=Decimal("175.00"),
+        cost_basis_currency="USD",
     )
 
     session.add_all([tx_prom_withdrawal, tx_prom_deposit, tx_prom_adj_out, tx_prom_adj_in])
@@ -1615,6 +1629,8 @@ def populate_transactions(session: Session):
         currency="USD",
         description="[suggest-discover] Adj in partner (discoverable by backend)",
         tags="suggest-discover,suggest-discover-hidden",
+        cost_basis_override=Decimal("175.00"),
+        cost_basis_currency="USD",
     )
 
     # Pair C: FX Conversion discoverable — user loads WITHDRAWAL EUR, backend finds DEPOSIT USD (same broker, diff currency)
@@ -2093,6 +2109,8 @@ def link_transactions_to_events(session: Session):
             currency="USD",
             description="[Asym-d] AAPL IB ↔ HiddenBroker (OWNER↔none=locked)",
             tags="access-test",
+            cost_basis_override=Decimal("175.00"),
+            cost_basis_currency="USD",
         )
         session.add(tx_asym_d_out)
         session.add(tx_asym_d_in)
@@ -2756,6 +2774,24 @@ def main():
                 return 1
 
             print(f"\n✅ Total records: {total_records}")
+
+            # Integrity check: cost_basis_override must be set for TRANSFER(qty>0) and ADJUSTMENT(qty>0)
+            print("\n🔍 Checking cost_basis_override integrity...")
+            bad_txs = session.exec(
+                select(Transaction).where(
+                    Transaction.cost_basis_override.is_(None),  # type: ignore[union-attr]
+                    Transaction.quantity > 0,
+                    Transaction.type.in_([TransactionType.TRANSFER, TransactionType.ADJUSTMENT]),  # type: ignore[union-attr]
+                )
+            ).all()
+            if bad_txs:
+                print(f"\n❌ INTEGRITY ERROR: {len(bad_txs)} transactions with qty>0 missing cost_basis_override:")
+                for tx in bad_txs:
+                    print(f"    #{tx.id} {tx.type.value} qty={tx.quantity} asset_id={tx.asset_id} broker_id={tx.broker_id} — {tx.description}")
+                return 1
+            else:
+                print("  ✅ All TRANSFER/ADJUSTMENT(qty>0) have cost_basis_override set")
+
             return 0
 
         except Exception as e:

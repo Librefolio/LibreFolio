@@ -60,32 +60,39 @@ test.describe('Asset Event Delete', () => {
     // Scenario 1: Delete event without linked transactions → success
     // ===================================================================
     test('delete unlinked event succeeds', async ({page}) => {
-        // Navigate to assets list and find "RE Loan Milano" (has unlinked INTEREST events)
+        // Navigate to assets list and find "Apple Inc." (has unlinked DIVIDEND events)
         await navigateTo(page, '/assets');
         await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
 
-        // Click on Loan Milano card (has events without linked transactions)
-        const loanCard = page
+        // Click on Apple card (has events without linked transactions)
+        const appleCard = page
             .locator('[data-testid^="asset-card-"]')
-            .filter({hasText: /Loan Milano/i})
+            .filter({hasText: /Apple/i})
             .first();
-        await expect(loanCard).toBeVisible({timeout: 5_000});
-        await loanCard.click();
+        await expect(appleCard).toBeVisible({timeout: 5_000});
+        await appleCard.click();
 
         // Wait for asset detail page
         await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 15_000});
 
+        // Expand time range to 1Y to show all events (default 3M may hide older ones)
+        const yearBtn = page.locator('button:text("1Y")');
+        await yearBtn.click();
+        await page.waitForTimeout(500);
+
         // Open events editor
         await openEventsEditor(page);
 
-        // Events must exist (populated by mock data — Loan Milano has 4 INTEREST + 1 PRICE_ADJUSTMENT)
+        // Events must exist (populated by mock data — Apple has 3 DIVIDEND events, some unlinked)
         const eventRows = getEventRows(page);
         const initialCount = await eventRows.count();
-        expect(initialCount, 'Loan Milano must have events — check populate_mock_data.py').toBeGreaterThan(0);
+        expect(initialCount, 'Apple must have events — check populate_mock_data.py').toBeGreaterThan(1);
 
-        // Click delete action on the first event row
-        const firstRow = eventRows.first();
-        const deleteBtn = firstRow.locator('button[data-action-id="delete"]');
+        // Click delete on the oldest event row (first in ASC order).
+        // Apple has 3 DIVIDEND events; the 2 most recent are linked to transactions.
+        // Only the oldest (270 days ago) is unlinked and safe to delete.
+        const targetRow = eventRows.first();
+        const deleteBtn = targetRow.locator('button[data-action-id="delete"]');
         await expect(deleteBtn).toBeVisible({timeout: 3_000});
         await deleteBtn.click();
 

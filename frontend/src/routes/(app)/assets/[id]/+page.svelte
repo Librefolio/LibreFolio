@@ -743,12 +743,8 @@
     }
 
     async function loadChartData(force = false) {
-        const effectiveCurrency = (displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency)
-            ? displayCurrency
-            : assetInfo?.currency ?? '';
-        const targetCurrency = (displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency)
-            ? displayCurrency
-            : undefined;
+        const effectiveCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : (assetInfo?.currency ?? '');
+        const targetCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : undefined;
 
         // Cache-first: check if the price store already covers this range
         if (!force && effectiveCurrency) {
@@ -758,8 +754,13 @@
                 // Cache hit — update chart data without loading spinner
                 const cached = store.getRange(dateStart, dateEnd).data;
                 chartData = cached.map((p) => ({
-                    date: p.date, close: p.close, open: p.open, high: p.high,
-                    low: p.low, volume: p.volume, currency: p.currency,
+                    date: p.date,
+                    close: p.close,
+                    open: p.open,
+                    high: p.high,
+                    low: p.low,
+                    volume: p.volume,
+                    currency: p.currency,
                     original_close: p.originalClose,
                     backward_fill_info: p.backwardFillInfo ? {days_back: p.backwardFillInfo.daysBack} : null,
                 }));

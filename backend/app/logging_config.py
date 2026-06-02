@@ -42,6 +42,33 @@ from backend.app.config import get_data_dir
 # TRACE level constant — importable by other modules
 TRACE: int = 5
 
+# Register TRACE at import time so logger.log(TRACE, ...) works everywhere,
+# including test contexts where configure_logging() hasn't been called yet.
+logging.addLevelName(TRACE, "TRACE")
+logging.TRACE = TRACE  # type: ignore[attr-defined]
+if TRACE not in structlog.stdlib.LEVEL_TO_NAME:
+    structlog.stdlib.LEVEL_TO_NAME[TRACE] = "trace"
+
+# Add trace() method to stdlib Logger so structlog can dispatch logger.log(5, ...)
+if not hasattr(logging.Logger, "trace"):
+
+    def _trace(self: logging.Logger, message: object, *args: object, **kwargs: object) -> None:
+        if self.isEnabledFor(TRACE):
+            self._log(TRACE, message, args, **kwargs)  # type: ignore[arg-type]
+
+    logging.Logger.trace = _trace  # type: ignore[attr-defined]
+
+# Minimal structlog bootstrap: use stdlib LoggerFactory so custom levels (TRACE)
+# work immediately. Full configure_logging() overrides this later with processors,
+# handlers, and formatting. Without this, structlog defaults to PrintLogger which
+# lacks a 'trace' method.
+if not structlog.is_configured():
+    structlog.configure(
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=False,  # allow reconfiguration by configure_logging()
+    )
+
 
 def get_log_directory() -> Path:
     """Get or create the log directory based on current environment (prod/test)."""
@@ -94,22 +121,7 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL, TRACE)
         enable_file_logging: Whether to enable file logging (default: True)
     """
-    # Register TRACE level (5) as a formal named level
-    logging.addLevelName(TRACE, "TRACE")
-    logging.TRACE = TRACE  # type: ignore[attr-defined]  # needed for getattr(logging, "TRACE")
-
-    # Add trace() method to stdlib Logger so structlog can dispatch it
-    if not hasattr(logging.Logger, "trace"):
-
-        def _trace(self: logging.Logger, message: object, *args: object, **kwargs: object) -> None:
-            if self.isEnabledFor(TRACE):
-                self._log(TRACE, message, args, **kwargs)  # type: ignore[arg-type]
-
-        logging.Logger.trace = _trace  # type: ignore[attr-defined]
-
-    # Register level 5 in structlog's dispatch table (BoundLogger.log uses this dict)
-    if TRACE not in structlog.stdlib.LEVEL_TO_NAME:
-        structlog.stdlib.LEVEL_TO_NAME[TRACE] = "trace"
+    # TRACE registration already done at module level (idempotent guard)
 
     # Convert string level to logging constant (supports TRACE after addLevelName)
     numeric_level = getattr(logging, log_level.upper(), logging.getLevelName(log_level.upper()))

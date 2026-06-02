@@ -19,7 +19,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Transaction, TransactionType
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.wac import WACConversionInfo, WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.fx import convert_bulk
 from backend.app.utils.financial_utils import WACInputTX, compute_wac_from_txlist, determine_target_currency
@@ -123,20 +123,25 @@ async def compute_wac_iterative(
                 fx_requests.append((i, Currency(code=tx_ccy, amount=cost), target_currency, dt))
 
     fx_converted: dict[int, Decimal] = {}
+    fx_staleness: dict[int, FxBackwardFillInfo] = {}
     missing_pairs: list[str] = []
 
     if fx_requests:
         bulk_input = [(amt, to_ccy, dt) for _, amt, to_ccy, dt in fx_requests]
         fx_results, _fx_errors = await convert_bulk(session, bulk_input, raise_on_error=False)
-        for j, (unified_idx, amt_ccy, to_ccy, dt) in enumerate(fx_requests):
+        for j, (unified_idx, amt_ccy, _to_ccy, _dt) in enumerate(fx_requests):
             result = fx_results[j] if j < len(fx_results) else None
             if result is None:
-                pair_key = f"{amt_ccy.code}/{to_ccy}"
+                pair_key = f"{amt_ccy.code}/{_to_ccy}"
                 if pair_key not in missing_pairs:
                     missing_pairs.append(pair_key)
             else:
-                converted, _rate_date, _bf = result
+                converted, rate_date, _bf = result
                 fx_converted[unified_idx] = converted.amount
+                # Track staleness info for qualifying TX enrichment
+                tx_date = unified[unified_idx][2]  # date is at index 2
+                stale_days = (tx_date - rate_date).days if rate_date < tx_date else 0
+                fx_staleness[unified_idx] = FxBackwardFillInfo(fx_rate_date=rate_date, fx_days_back=stale_days)
 
     if missing_pairs:
         return WACPreviewResultItem(wac=None, wac_qualifying_txs=[], wac_missing_pairs=missing_pairs)
@@ -184,6 +189,11 @@ async def compute_wac_iterative(
     calc_result = compute_wac_from_txlist(input_txs, target_currency)
 
     # 7. Convert result to schema
+    # Build tx_id → fx_staleness lookup for qualifying TX enrichment
+    tx_fx_info: dict[int, FxBackwardFillInfo] = {}
+    for idx, info in fx_staleness.items():
+        tx_fx_info[unified[idx][0]] = info  # unified[idx][0] is tx_id
+
     qualifying_txs = [
         WACQualifyingTX(
             tx_id=q.tx_id,
@@ -194,6 +204,7 @@ async def compute_wac_iterative(
             currency=q.currency,
             effect=q.effect,
             running_wac=q.running_wac,
+            fx_info=tx_fx_info.get(q.tx_id) if q.tx_id is not None else None,
         )
         for q in calc_result.qualifying
     ]

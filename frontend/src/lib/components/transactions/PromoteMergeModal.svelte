@@ -47,7 +47,11 @@
     let resDescription = $state('');
     let resTags = $state<string[]>([]);
     let resCostBasis = $state<{code: string; amount: string} | null>(null);
-    let wacMode = $state<'auto' | 'manual'>(receiverIsNew ? 'auto' : 'manual');
+    let wacMode = $state<'auto' | 'manual'>('auto');
+    let wacModeDefault = $derived<'auto' | 'manual'>(receiverIsNew ? 'auto' : 'manual');
+    $effect(() => {
+        wacMode = wacModeDefault;
+    });
 
     // Dirty guard
     let showDiscardConfirm = $state(false);
@@ -73,6 +77,7 @@
         if (!open || !txA || !txB) return;
         resDescription = mergeStrings(txA.description, txB.description);
         resTags = mergeTagSets(txA.tags, txB.tags);
+        wacMode = receiverIsNew ? 'auto' : 'manual';
         interacted = false;
         // Capture initial snapshot after values are set (next tick)
         setTimeout(() => {
