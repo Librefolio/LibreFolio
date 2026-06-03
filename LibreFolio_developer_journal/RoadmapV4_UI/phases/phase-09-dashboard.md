@@ -16,6 +16,12 @@
 > Il flusso workspace editing (validate/commit) integra già il calcolo WAC inline (nessun endpoint
 > separato necessario). Vedi [`plan-WacInlineValidateCommit.prompt.md`](../PlanD_SplitPromoteFullStack/R2-WalktestFeedback/SP-C-Bugfix/WacPreview/plan-WacInlineValidateCommit.prompt.md).
 
+> **🧪 Coverage gap (2026-06-02)**: `analytics_wac` in `backend/app/api/v1/analytics.py` ha 0%
+> coverage (25 statements). L'endpoint è una predisposizione: diventerà testabile quando il
+> sistema analytics sarà sviluppato in questa fase. **TODO**: creare
+> `backend/test_scripts/test_api/test_analytics_api.py` con test per `POST /api/v1/analytics/wac`
+> (serie temporali WAC per asset, multi-currency, edge cases empty portfolio).
+
 > **📌 Riferimento principale**: [`plan-phase05-to-08-upgrade.md` §8](../plan-phase05-to-08-upgrade.md)
 > Questa sezione è stata **SUPERATA** dal piano aggiornato. Quando si arriva a implementare Phase 8,
 > ripartire da §8 di `plan-phase05-to-08-upgrade.md` che contiene:

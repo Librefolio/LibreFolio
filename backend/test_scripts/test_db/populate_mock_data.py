@@ -696,6 +696,19 @@ def populate_assets(session: Session):
                 }
             ),
         },
+        # Test KRW Stock — no EUR/KRW or USD/KRW pair configured → triggers missing pair scenario
+        {
+            "display_name": "Test KRW Stock",
+            "currency": "KRW",
+            "asset_type": AssetType.STOCK,
+            "classification_params": json.dumps(
+                {
+                    "short_description": "Test asset in KRW for WAC FX missing pair scenario",
+                    "geographic_area": {"distribution": {"KOR": 1.0}},
+                    "sector_area": {"distribution": {"Technology": 1.0}},
+                }
+            ),
+        },
     ]
 
     for asset_data in assets:
@@ -841,6 +854,7 @@ def populate_transactions(session: Session):
     loan2 = session.exec(select(Asset).where(Asset.display_name == "RE Loan Roma")).first()
     btc = session.exec(select(Asset).where(Asset.display_name == "Bitcoin")).first()
     eth = session.exec(select(Asset).where(Asset.display_name == "Ethereum")).first()
+    jpy_stock = session.exec(select(Asset).where(Asset.display_name == "Test KRW Stock")).first()
 
     today = date.today()
 
@@ -1007,6 +1021,39 @@ def populate_transactions(session: Session):
             "currency": "USD",
             "days_ago": 22,
             "description": "Acquisto TSLA",
+        },
+        # Day -10: Buy Apple on Directa in EUR (WAC FX test — EUR != asset ccy USD)
+        {
+            "broker": directa,
+            "asset": apple,
+            "type": TransactionType.BUY,
+            "quantity": Decimal("5.0"),
+            "amount": Decimal("-875.00"),  # 5 * 175.00 EUR
+            "currency": "EUR",
+            "days_ago": 10,
+            "description": "AAPL Directa EUR - WAC FX test",
+        },
+        # Day -4: Buy Apple on Directa in EUR (second lot for WAC FX)
+        {
+            "broker": directa,
+            "asset": apple,
+            "type": TransactionType.BUY,
+            "quantity": Decimal("3.0"),
+            "amount": Decimal("-540.00"),  # 3 * 180.00 EUR
+            "currency": "EUR",
+            "days_ago": 4,
+            "description": "AAPL Directa EUR - WAC FX test 2",
+        },
+        # Day -6: Buy Test KRW Stock on Directa in EUR (EUR → KRW conversion needed, no pair configured)
+        {
+            "broker": directa,
+            "asset": jpy_stock,
+            "type": TransactionType.BUY,
+            "quantity": Decimal("10.0"),
+            "amount": Decimal("-500.00"),  # 10 * 50.00 EUR
+            "currency": "EUR",
+            "days_ago": 6,
+            "description": "Test KRW stock - missing FX pair scenario",
         },
         # --- eToro transactions ---
         # Day -28: Initial deposit to eToro
@@ -1853,7 +1900,7 @@ def populate_asset_events(session: Session):
 
     # Apple — quarterly dividends (USD)
     if apple:
-        for days_ago, amount in [(90, "0.24"), (180, "0.24"), (270, "0.25")]:
+        for days_ago, amount in [(3, "0.25"), (90, "0.24"), (180, "0.24"), (270, "0.25")]:
             events_data.append(
                 AssetEvent(
                     asset_id=apple.id,
@@ -1861,7 +1908,7 @@ def populate_asset_events(session: Session):
                     type=AssetEventType.DIVIDEND,
                     value=Decimal(amount),
                     currency="USD",
-                    notes="Quarterly dividend",
+                    notes="Quarterly dividend" if days_ago > 7 else "Recent dividend (test event picker)",
                 )
             )
 

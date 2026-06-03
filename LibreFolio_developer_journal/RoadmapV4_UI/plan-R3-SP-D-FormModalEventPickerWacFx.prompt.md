@@ -537,3 +537,147 @@ Per ogni scenario segnare:
 > - `asset-event-delete`: switched to active asset (Apple) with 1Y range
 > - `asset-detail` chart toggle: increased OHLCV load timeout to 10s
 > - `transactions-modals` BulkModal validation: verify API response directly (bypasses pre-existing WAC reactive cycle race)
+
+---
+
+## 🧪 Walktest Umano (post `db populate`)
+
+> Prerequisiti: backend attivo su 6040, `./dev.py db populate` eseguito, login come `e2e_test_user`.
+
+### Scenario 1 — "Il dividendo Apple arriva: lo collego all'evento giusto"
+
+**Contesto**: Hai un asset Apple con eventi DIVIDEND dichiarati. Vuoi registrare l'incasso e collegarlo all'evento corretto.
+
+1. Vai in **Transactions → + New**
+2. Scegli tipo **DIVIDEND**, broker **Directa**, asset **Apple Inc**
+3. Metti data **oggi**, quantità lasciala 0, importo **0.25 EUR**
+4. Apri la sezione **▸ Optional** — verifica che appare il campo **"Linked Event"** (un dropdown, NON un input numerico)
+5. Il dropdown mostra gli eventi Apple vicini alla data TX (±7gg default). Se nessuno cade nel range:
+   - Sposta lo **slider** ±days verso destra (30, 60, 90) — gli eventi appaiono man mano
+   - Verifica che lo slider ricorda la tua preferenza se chiudi e riapri il form
+6. Seleziona un evento → il suo ID viene salvato
+7. Clicca **Apply** → nel workspace del BulkModal, la TX è pronta
+8. **NON committare** — chiudi il modale (stiamo solo verificando il picker)
+
+funziona solo a 90d
+L'estetica però è completamente da buttare e rifare, le card sono illegibili e anche il not found con il trattino non si può vedere:
+<div class="fixed z-[9999] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
+                   rounded-lg shadow-lg overflow-y-auto" data-simpleselect-dropdown="ss-55qzpm" style="top: 603.43px; left: 20px; min-width: 464.711px; width: max-content; max-height: 240px;"><!----><!----><button type="button" role="menuitem" class="w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors
+                               
+                               bg-libre-green/10 dark:bg-libre-green/20
+                               text-gray-900 dark:text-gray-100"><!----><span class="truncate">—</span><!----> <!----></button><button type="button" role="menuitem" class="w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors
+                               
+                               hover:bg-gray-50 dark:hover:bg-slate-700
+                               bg-libre-green/5 dark:bg-libre-green/10 text-libre-green dark:text-green-400"><!----><span class="truncate emoji-flag">💰 💰 2026-03-04 — 0.240000 USD Quarterly dividend</span><!----> <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-icon lucide lucide-check ml-2 flex-shrink-0 text-libre-green dark:text-green-400"><!----><path d="M20 6 9 17l-5-5"></path><!----><!----><!----></svg><!----></button><!----></div>
+
+Lo slider non ha senso che arrivi così lontano, mi sarei aspettato massimo 14gg di escursione massima, di conseguenza bisogna aggiornare il db populate o nel test scegliere una data adatta.
+A livello di pacchetto mi pare funzioni, visto che ricevo:
+{"creates":[{"broker_id":3,"type":"DIVIDEND","date":"2026-06-02","quantity":"0","asset_id":1,"cash":{"code":"USD","amount":"00.25"},"asset_event_id":1}]}
+
+La cella dentro il bulk modal che linka l'evento mostra l'id, dovrebbe mostrare dati sull'evento:
+<td class="td-data svelte-1utaimv"><!----><!----><!----><!----><!----><!----><!----><!----><!----><!----><!----><!----><!----><!----><!----><span class="font-mono text-xs">#1</span><!----></td>
+
+facendo edit sulla riga (ancora in stato di new) si apre correttamente e se metto not set dalla validate scompare corettamente:
+{"creates":[{"broker_id":3,"type":"DIVIDEND","date":"2026-06-02","quantity":"0","asset_id":1,"cash":{"code":"USD","amount":"00.25"}}]}
+
+anche il commit, ed edit della stessa transazione una volta che diventano salvate funzionano e si visualizzano come prima.
+
+
+direi che il problema è estetico, serve pianificare meglio delle ascii art, magari prendendo spunto da come vengono mostrati i dati sugli eventi nell'info box dell'asset, o con un idea più innovativa.
+
+**Cosa verifica**: Step B (AssetEventPicker) funziona end-to-end. Il dropdown mostra eventi reali, il range slider filtra, la persistenza localStorage funziona.
+
+---
+
+### Scenario 2 — "Trasferisco ETF da un broker all'altro, il WAC viene calcolato"
+
+**Contesto**: Vuoi simulare un TRANSFER IN (titoli che arrivano). Il sistema deve calcolare automaticamente il costo medio ponderato.
+
+1. Vai in **Transactions → + New**
+2. Scegli tipo **TRANSFER**, broker **Directa**, asset **Vanguard S&P 500** (o qualsiasi ETF con storico TX)
+3. Quantità **5**, data **oggi**
+4. Il campo "Cost Basis" dovrebbe mostrare la modalità **Auto** (toggle slider) — il WAC viene calcolato dal backend durante la validazione
+5. Clicca **Apply** → nel workspace BulkModal:
+   - La cella "Cost Basis" mostra un valore con icona 💡 (calcolato automaticamente)
+   - Se l'asset è in valuta diversa dalla base (es. USD vs EUR), la sezione WAC preview dovrebbe mostrare l'indicatore 💱 (FX conversion applied)
+6. **Ora forza il caso problematico**: torna su, modifica il TRANSFER, metti una data molto vecchia (2020-01-01)
+   - Se non ci sono rate FX per quel periodo: il WAC preview mostra **⚠️ amber banner** con messaggio tipo "FX rates unavailable for USD/EUR"
+   - Il toggle Auto si disabilita → costretto in **Manual** mode
+   - Appare un bottone **🔄 Sync FX** — cliccandolo, tenta il sync delle rate mancanti
+
+In realtà ho fatto apple su interactive broker ma ho dovuto aggiungere una buy in euro, potremmo migliorare il db populate mettendo su un altro asset, magari microsoft delle transazioni per fare apposta questo test.
+Comunuque messa la buy la riga è comparsa e ha l'icona:
+<tr class="border-t border-gray-100 dark:border-slate-800 bg-indigo-50/50 dark:bg-indigo-900/10"><td class="px-2 py-0.5"><div class="tooltip-wrapper svelte-bgl7um" role="button" tabindex="0"><!----><span class="cursor-help text-indigo-500">●</span><!----></div> <!----><!----></td><td class="px-2 py-0.5"><span class="inline-flex items-center gap-1"><img alt="" class="w-3 h-3 object-contain" src="/icons/transactions/buy.png"><!----> <span>Acquisto</span></span></td><td class="px-2 py-0.5">2026-06-01</td><td class="px-2 py-0.5 text-right font-mono">300</td><td class="px-2 py-0.5 text-right font-mono">0,11 € 🇪🇺 EUR <!----><span class="ml-0.5 text-gray-400" title="FX converted">💱</span><!----></td><td class="px-2 py-0.5 text-right"><span class="inline-block px-1 rounded text-[9px] bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400">Pesata</span></td><td class="px-2 py-0.5 text-left font-mono">9,494 € 🇪🇺 EUR</td></tr>
+Però non c'è la freccia al nuovo valore, quello post conversione, e non è facile fare i vari test senza dati.
+In oltre in cima, sul titolo della sezione sarebbe utile avere un recup che comunichi all'utente che la conversione ha richiesto altro, in questo caso una conversione, ora non mostra nulla ancora:
+<div class="flex items-center gap-2"><span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex items-center gap-1">Override costo medio <div class="tooltip-wrapper svelte-bgl7um" role="button" tabindex="0"><!----><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 dark:text-gray-500"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg><!----></div> <!----><!----></span> <div class="flex items-center gap-1 text-[10px] ml-auto" data-testid="tx-form-cost-basis-toggle"><button type="button" class="px-1.5 py-0.5 rounded bg-libre-green/10 text-libre-green font-medium" data-testid="tx-form-cost-basis-toggle-auto">Auto</button> <span class="text-gray-300 dark:text-gray-600">|</span> <button type="button" class="px-1.5 py-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" data-testid="tx-form-cost-basis-toggle-manual">Manuale</button></div><!----></div>
+
+per arrivare a fare il test strano ho creato queste 4 transazioni:
+{"creates":[{"broker_id":1,"type":"TRANSFER","date":"2005-06-01","quantity":"-3","asset_id":1,"link_uuid":"0486076f-cd3a-4cff-a07e-9db5fa4372f9"},{"broker_id":3,"type":"TRANSFER","date":"2005-06-04","quantity":"3","asset_id":1,"cost_basis_mode":"auto-detail","cost_basis_override":null,"link_uuid":"0486076f-cd3a-4cff-a07e-9db5fa4372f9"},{"broker_id":1,"type":"BUY","date":"2002-06-07","quantity":"300","asset_id":1,"cash":{"code":"EUR","amount":"-30"}},{"broker_id":1,"type":"ADJUSTMENT","date":"2000-06-02","quantity":"10","asset_id":1,"cost_basis_override":{"amount":"40","code":"USD"}},{"broker_id":1,"type":"DEPOSIT","date":"2000-06-08","quantity":"0","cash":{"code":"EUR","amount":"1000"}}]}
+e finalmente compare il banner:
+<div class="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/40 rounded-lg border p-3 text-left" data-testid="tx-bulk-issues-header"><div class="flex-1 min-w-0"><p class="font-semibold">⚠️ Sono stati identificati degli errori nei campi</p> <!----> <!----> <div class="mt-1.5"><!----><ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-issues"><li><button type="button" class="underline hover:opacity-80 text-left" data-testid="tx-bulk-issue">Riga 2: ❌ Calcolo WAC fallito: coppia/e FX EUR/USD non disponibile/i. Sincronizza i tassi FX o passa alla modalità manuale.</button></li></ul><!----> <!----><!----></div><!----></div> <button type="button" class="shrink-0 p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity" aria-label="Dismiss">✕</button><!----></div>
+che però ha problemi di visualizzazione perchè non usa l'helper che mostra bandiera e freccia oltre al codice valuta, e non compare il bottone sync fx
+
+in oltre, anche se scrive riga 2 ed è cliccabile, se la clicco, la riga non fa pulse e non scrolla su di essa, sarebbe utile che lo facesse per guidare l'utente al problema. (credo sia perchè la riga 2 è quella hidenn della doppia transazione, e questo apre uno spiraglio su una possibile classe di bug non ancora affrontatta)
+
+se entro dentro il form modal di quella riga, qualcosa compare:
+<div class="mt-3"><div class="flex flex-col gap-1.5" data-testid="tx-form-cost-basis"><div class="flex items-center gap-2"><span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex items-center gap-1">Override costo medio <div class="tooltip-wrapper svelte-bgl7um" role="button" tabindex="0"><!----><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 dark:text-gray-500"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg><!----></div> <!----><!----></span> <div class="flex items-center gap-1 text-[10px] ml-auto" data-testid="tx-form-cost-basis-toggle"><button type="button" class="px-1.5 py-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" data-testid="tx-form-cost-basis-toggle-auto" disabled="">Auto ⚠️</button> <span class="text-gray-300 dark:text-gray-600">|</span> <button type="button" class="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-medium" data-testid="tx-form-cost-basis-toggle-manual">Manuale</button></div><!----></div> <div class="flex items-center gap-2 "><div class="compact-cash svelte-1a4aanh sign-ok" data-testid="tx-form-cost-basis-input"><input type="number" step="any" inputmode="decimal" autocomplete="off" class="amount-input svelte-1a4aanh" placeholder="0.00" data-testid="tx-form-cost-basis-input-amount"> <div class="currency-wrap svelte-1a4aanh"><div class="relative "><div aria-haspopup="listbox" role="combobox" aria-controls="searchselect-listbox-tnh0b36" aria-expanded="false" class="w-full flex items-center justify-between px-3 py-2 text-sm border rounded-lg
+               transition-all text-left gap-2
+               bg-white dark:bg-slate-700 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500 cursor-pointer
+               " tabindex="0"><!----><!----><div class="flex-1 min-w-0"><!----><div class="flex items-center gap-1.5 min-w-0"><span class="text-sm shrink-0 leading-none">🇺🇸</span><!----> <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">USD&nbsp;<span class="text-gray-400 text-xs">$</span><!----></span></div><!----></div><!----> <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-icon lucide lucide-chevron-down text-gray-400 shrink-0 transition-transform "><!----><path d="m6 9 6 6 6-6"></path><!----><!----><!----></svg><!----></div> <!----></div><!----> <span class="sr-only svelte-1a4aanh" data-testid="tx-form-cost-basis-input-currency">USD</span></div></div><!----> <!----></div> <!----><!----> <div class="flex flex-col gap-1.5 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10 rounded p-2" data-testid="tx-form-cost-basis-missing-pairs"><div class="flex items-start gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-icon lucide lucide-triangle-alert mt-0.5 shrink-0"><!----><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><!----><path d="M12 9v4"></path><!----><path d="M12 17h.01"></path><!----><!----><!----></svg><!----> <div><p class="font-medium">Impossibile calcolare il PMC: tasso FX mancante</p> <p class="text-gray-500">EUR/USD</p><!----></div></div> <div class="flex flex-wrap gap-1.5 ml-4"><a href="/fx" class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 no-underline" data-testid="tx-form-cost-basis-action-add-fx">Aggiungi coppia FX →</a> <button type="button" class="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200" data-testid="tx-form-cost-basis-action-sync-fx">Sincronizza tassi FX</button> <button type="button" class="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200" data-testid="tx-form-cost-basis-action-sync-prices">Sincronizza prezzi asset</button></div></div><!----> <!----> <!----> <!----></div><!----></div>
+ma oltre ad avere anche qui un estetica sbagliata, i 3 bottoni non dovrebbero comparire assieme, ma in base alla situazione: se la coppia è mancante, mostro solo "Sync FX". Se la coppia è presente ma stale, mostro "Sync FX" + "Sync Prices". Se la coppia è presente e aggiornata, non mostro nessuno dei 2 (o eventualmente solo "Sync Prices" se vogliamo dare all'utente la possibilità di forzare un aggiornamento). o forse altro, bisogna ragionarlo
+
+e in fine abbiamo il goto all'fx global page, e se cliccato quando poi torniamo indietro ormai il contesto è perso, infatti non doveva esserci.
+
+
+**Cosa verifica**: Step C (WAC FX staleness feedback). Il backend propaga l'info FX, il frontend la mostra correttamente, il degraded mode (Manual forzato) funziona, il Sync FX triggera il download delle rate.
+
+---
+
+piccola nota extra, ho messo per errore un asset di tipo index e il backend ha giustamente dato errore, ottimo!
+ricordo che era esattamente quello che volevo. Siccome gli asset disattivi li mostriamo grigi e non selezionabili nel select degli asset, potremmo fare la stessa cosa anche per gli index in form modal?
+
+---
+
+### Scenario 3 — "Edito una TX esistente dal DataTable: il form si apre con i dati giusti"
+
+**Contesto**: Apri una TX già salvata per modificarla. Questo testa che il nuovo sistema Props (`items`) passi correttamente i dati.
+
+1. Vai in **Transactions** — nella tabella, fai **doppio click** su un TRANSFER esistente (uno che ha un partner legato, tipo BUY Directa ↔ SELL altro broker)
+2. Si apre il FormModal in modalità **Edit**:
+   - Verifica che **tutti i campi sono precompilati** (broker, asset, quantità, data, tipo)
+   - Se è una coppia, il partner è mostrato sotto (chip o riga secondaria)
+3. Modifica qualcosa (es. cambia una tag) → **Apply**
+4. Nel BulkModal workspace: la TX appare come "update" con le modifiche
+5. **Ora prova da +page**: seleziona 3 TX con le checkbox → clicca **Edit selected**
+   - Il BulkModal si apre con 3 righe → doppio click su una → FormModal la mostra correttamente
+6. Chiudi tutto senza committare
+
+mi pare che funzioni tutto, è anche confermato dal fatto che tutti i test già scritti passano.
+
+**Cosa verifica**: Step A (FormModal props unification). Il singolo `items` prop funziona per tutti i casi: singola TX, coppia con partner, edit da BulkModal. Nessuna regressione nella popolamento del form.
+
+---
+
+### Scenario Bonus — "L'ADJUSTMENT senza WAC viene bloccato"
+
+**Contesto**: Verifica che il sistema impedisca dati sporchi.
+
+1. **Transactions → + New** → ADJUSTMENT, qty **5**, asset qualsiasi
+2. Lascia Cost Basis in **Auto** → Apply → il workspace lo mostra con 💡 WAC calcolato → ✅ OK
+3. Ora rifai: ADJUSTMENT, qty **5**, togli la modalità Auto (toggle su Manual), **NON** inserire un valore di cost basis
+4. Dovresti non poter proseguire (il bottone Apply disabilitato o validazione frontend che avverte)
+5. Se riesci ad applicare: nel BulkModal, il Validate dovrebbe ritornare un **issue COST_BASIS_REQUIRED**
+
+Si funziona anche se vorrei delle proposte di messaggio più chiare:
+<div class="flex-1 min-w-0"><!----><!----><!----><!----> <p class="font-semibold text-sm mb-1.5" data-testid="tx-form-issues-header">Considerando le altre modifiche in sospeso, questa riga causa i seguenti problemi:</p> <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues"><li data-testid="tx-form-issue">❌ Costo base obbligatorio per Aggiustamento con quantità positiva. Usa Auto (PMC) o inserisci manualmente.</li></ul><!----> <!----><!----></div>
+usare "Costo base obbligatorio" come inizio frase è poco chiaro, e sarebbe meglio rendere il parametro in grassetto.
+
+ho invece trovato un bug interessante sul bulk, se faccio apply con questo errore nel bulk compare, ma invece di essere assegnato alla riga 4, che è quella corretta, mostra riga 1, che contiene una transafert che quindi è una doppia adjustment, credo possa avere a che fare con il bug di sopra:
+questo il messaggio:
+<div class="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/40 rounded-lg border p-3 text-left" data-testid="tx-bulk-issues-header"><div class="flex-1 min-w-0"><p class="font-semibold">⚠️ Sono stati identificati degli errori nei campi</p> <!----> <!----> <div class="mt-1.5"><!----><ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-issues"><li><button type="button" class="underline hover:opacity-80 text-left" data-testid="tx-bulk-issue">Riga 1: ❌ Costo base obbligatorio per Aggiustamento con quantità positiva. Usa Auto (PMC) o inserisci manualmente.</button></li></ul><!----> <!----><!----></div><!----></div> <button type="button" class="shrink-0 p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity" aria-label="Dismiss">✕</button><!----></div>
+
+e questa la serie di transazioni che triggerano l'errore:
+{"creates":[{"broker_id":5,"type":"ADJUSTMENT","date":"2026-06-02","quantity":"4","asset_id":12}],"updates":[{"id":38,"tags":["delete-safe","access-test","balance-safe"]},{"id":39,"tags":["delete-safe","access-test","balance-safe"],"cost_basis_override":{"code":"USD","amount":"3500.000000"}},{"id":34,"tags":["access-test","core"]},{"id":35,"type":"ADJUSTMENT","tags":["access-test","core"],"cost_basis_override":{"code":"USD","amount":"65000.000000"}}]}
+
+**Cosa verifica**: La validazione step 6d del backend — niente più dati sporchi nel DB.

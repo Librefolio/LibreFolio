@@ -558,7 +558,9 @@
       "assetEvent": "Asset event",
       "assetEventNotApplicable": "Asset event link is only available for DIVIDEND, INTEREST and ADJUSTMENT after picking an asset.",
       "linkedEvent": "Linked Event",
+      "eventPickerNone": "No linked event",
       "eventPickerPlaceholder": "Select event...",
+      "cashLabelTotal": "Total amount (not per share)",
       "costBasis": "Cost basis override",
       "linkUuid": "Linked TX",
       "pairPartner": "Pair partner",
@@ -626,7 +628,9 @@
       "stateDel": "del",
       "suggestLightbulb": "Show suggestion",
       "partnerInaccessible": "Partner on inaccessible broker",
-      "wacCalcFailed": "WAC calculation failed for some rows"
+      "wacCalcFailed": "WAC calculation failed for some rows",
+      "eventTooltipNotes": "Notes",
+      "eventTooltipAmount": "Amount"
     },
     "commit": {
       "serverError": "Save failed — server error"
@@ -676,7 +680,14 @@
       "syncSuccess": "FX rates synced successfully",
       "syncFailed": "FX sync failed",
       "fxStale": "FX rate from {date} ({days}d ago)",
-      "fxMissing": "FX pair {pair} not available for this date"
+      "fxMissing": "FX pair {pair} not available for this date",
+      "fxStaleBannerTitle": "FX conversions with stale rates",
+      "fxDisclaimer": "The FX rate used may differ from the one applied by your broker. Verify the average cost with your broker.",
+      "fxTooltipStale": "Rate not up to date",
+      "fxTooltipDate": "Rate date",
+      "fxDaysAgo": "d ago",
+      "convertedPairs": "Converted pairs",
+      "noRateAvailable": "no rate available"
     },
     "promote": {
       "title": "Promote pair",
@@ -791,7 +802,7 @@
       "alreadyPaired": "Transaction is already linked to another transaction",
       "noPromoteRule": "No promotion rule matches these two transaction types",
       "wacFxUnavailable": "❌ WAC calculation failed: FX pair(s) {pairs} unavailable. Sync FX rates or switch to manual mode.",
-      "costBasisRequired": "❌ Cost basis required for {type} with positive quantity. Use Auto (WAC) or enter manually."
+      "costBasisRequired": "❌ <b>{type}</b> with positive quantity requires a cost basis. Use <b>Auto</b> mode (WAC) or enter a <b>manual</b> value."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",

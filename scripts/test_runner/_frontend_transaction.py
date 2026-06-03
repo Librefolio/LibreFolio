@@ -229,6 +229,18 @@ def front_tx_wac_formmodal(verbose: bool = False, ui: bool = False, headed: bool
     return _run_playwright("transactions/tx-wac-formmodal.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_event_picker(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run TX Event Picker E2E tests (card-style dropdown, delta, slider, visibility)."""
+    print_section("Frontend TX Event Picker Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-event-picker.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Transaction E2E tests."""
     return _run_test_suite(
@@ -251,6 +263,7 @@ def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool 
             ("TX WAC Preview", lambda: front_tx_wac(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX WAC BulkModal", lambda: front_tx_wac_bulk(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX WAC FormModal", lambda: front_tx_wac_formmodal(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX Event Picker", lambda: front_tx_event_picker(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
         ],
         verbose=verbose,
         header_msg="All Transaction Tests (E2E)",
@@ -282,6 +295,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-wac", front_tx_wac, name="TX WAC Preview Tests", desc="WAC preview toggle, auto/manual, recalculate, qualifying TXs, missing FX", tests="transactions/tx-wac.spec.ts")
     add_test(cat, "tx-wac-bulk", front_tx_wac_bulk, name="TX WAC BulkModal Tests", desc="BulkModal WAC cell rendering: auto value, manual propagation, DB rows, clone link_uuid", tests="transactions/tx-wac-bulk.spec.ts")
     add_test(cat, "tx-wac-formmodal", front_tx_wac_formmodal, name="TX WAC FormModal Tests", desc="FormModal WAC payload: cost_basis_mode propagation, auto/manual toggle, partner rows", tests="transactions/tx-wac-formmodal.spec.ts")
+    add_test(cat, "tx-event-picker", front_tx_event_picker, name="TX Event Picker Tests", desc="Event picker card-style dropdown, delta, slider range, type visibility", tests="transactions/tx-event-picker.spec.ts")
     add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi", tests="vitest")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

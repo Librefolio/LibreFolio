@@ -558,7 +558,9 @@
       "assetEvent": "Événement actif",
       "assetEventNotApplicable": "Le lien d'événement n'est disponible que pour DIVIDEND, INTEREST et ADJUSTMENT après avoir choisi un actif.",
       "linkedEvent": "Événement Lié",
+      "eventPickerNone": "Aucun événement lié",
       "eventPickerPlaceholder": "Sélectionner événement...",
+      "cashLabelTotal": "Montant total (pas par action)",
       "costBasis": "Coût de revient (override)",
       "linkUuid": "TX Liée",
       "pairPartner": "Transaction liée",
@@ -626,7 +628,9 @@
       "stateDel": "suppr.",
       "suggestLightbulb": "Afficher suggestion",
       "partnerInaccessible": "Partenaire sur courtier inaccessible",
-      "wacCalcFailed": "Calcul WAC échoué pour certaines lignes"
+      "wacCalcFailed": "Calcul WAC échoué pour certaines lignes",
+      "eventTooltipNotes": "Notes",
+      "eventTooltipAmount": "Montant"
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
@@ -676,7 +680,14 @@
       "syncSuccess": "Taux FX synchronisés avec succès",
       "syncFailed": "Échec de la synchronisation FX",
       "fxStale": "Taux FX du {date} ({days}j avant)",
-      "fxMissing": "Paire FX {pair} non disponible pour cette date"
+      "fxMissing": "Paire FX {pair} non disponible pour cette date",
+      "fxStaleBannerTitle": "Conversions FX avec taux périmés",
+      "fxDisclaimer": "Le taux FX utilisé peut différer de celui appliqué par votre courtier. Vérifiez le coût moyen avec votre courtier.",
+      "fxTooltipStale": "Taux non à jour",
+      "fxTooltipDate": "Date du taux",
+      "fxDaysAgo": "j avant",
+      "convertedPairs": "Paires converties",
+      "noRateAvailable": "aucun taux disponible"
     },
     "promote": {
       "title": "Promouvoir la paire",
@@ -791,7 +802,7 @@
       "alreadyPaired": "La transaction est déjà liée à une autre transaction",
       "noPromoteRule": "Aucune règle de promotion ne correspond à ces deux types de transaction",
       "wacFxUnavailable": "❌ Calcul WAC échoué : paire(s) FX {pairs} indisponible(s). Synchronisez les taux FX ou passez en mode manuel.",
-      "costBasisRequired": "❌ Coût de base requis pour {type} avec quantité positive. Utilisez Auto (CMP) ou saisissez manuellement."
+      "costBasisRequired": "❌ <b>{type}</b> avec quantité positive nécessite un coût de base. Utilisez le mode <b>Auto</b> (CMP) ou saisissez une valeur <b>manuelle</b>."
     },
     "pydantic": {
       "greaterThan": "La valeur doit être supérieure à {gt}",

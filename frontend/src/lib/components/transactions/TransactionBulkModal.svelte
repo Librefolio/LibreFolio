@@ -41,7 +41,7 @@
     import {zodiosApi} from '$lib/api';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/brokerStore';
-    import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
+    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
     import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getTransactionTypeIconUrl, getCostBasisRule} from '$lib/stores/transactionTypeStore';
     import {findPromoteMatch, type PromoteContext} from '$lib/stores/transactionTypeStore';
     import PromoteMergeModal from './PromoteMergeModal.svelte';
@@ -238,6 +238,8 @@
         return ops.find((o) => o.pairedWith === mainTempId);
     }
     let issues = $state<ValidationIssue[]>([]);
+    /** Maps "operation:index" (from backend) → tempId. Built after each validate. */
+    let lastOpsIndexMap = $state<Map<string, string>>(new Map());
     let formError = $state<string | null>(null);
     let commitFailed = $state(false);
     let committing = $state(false);
@@ -286,6 +288,13 @@
     let wacResults = $state<Map<string, WacResultEntry>>(new Map());
     /** TX IDs from the last validate response (uncommitted batch) — for pending markers in qualifying tables */
     let pendingTxIds = $state<Set<number>>(new Set());
+
+    // =========================================================================
+    // Event cache — populated after validate for rich cell rendering
+    // =========================================================================
+
+    type EventCacheEntry = {type: string; date: string; amount: string; code: string; notes: string | null};
+    let eventCache = $state<Map<number, EventCacheEntry>>(new Map());
 
     // =========================================================================
     // Initial rows resolution
@@ -1091,12 +1100,13 @@
             }
             if (pendingIdOps.size > 0) pendingTxIds = new Set(pendingIdOps.keys());
 
+            // Always build the ops index map (needed for issue row mapping + WAC)
+            const opsMap = buildOpsIndexMap(resolved);
+            lastOpsIndexMap = opsMap;
+
             const rawWacResults = (rawResp?.wac_results as Array<Record<string, unknown>> | null | undefined) ?? null;
             if (rawWacResults && rawWacResults.length > 0) {
-                // Build mapping: "operation:index" → tempId
-                const opsMap = buildOpsIndexMap(resolved);
-
-                // Map wac_results to tempIds
+                // Map wac_results to tempIds using the opsMap
                 const nextMap = new Map<string, WacResultEntry>();
                 for (const wr of rawWacResults) {
                     const op = wr.operation as string | null;
@@ -1152,6 +1162,24 @@
                 if (wacResults.size > 0) wacResults = new Map();
             }
 
+            // ── Fetch event cache for rich cell rendering ──
+            const eventIdsToFetch = [...new Set(ops.map((o) => o.fields.asset_event_id).filter((id): id is number => id != null && !eventCache.has(id)))];
+            if (eventIdsToFetch.length > 0) {
+                try {
+                    const resp = await zodiosApi.get('/api/v1/assets/events', {queries: {ids: eventIdsToFetch}});
+                    const nextCache = new Map(eventCache);
+                    for (const item of resp.items ?? []) {
+                        for (const ev of item.events ?? []) {
+                            const val = ev.value as {code: string; amount: string};
+                            nextCache.set(ev.id, {type: ev.type, date: ev.date, amount: val.amount, code: val.code, notes: (ev as any).notes ?? null});
+                        }
+                    }
+                    eventCache = nextCache;
+                } catch {
+                    // Non-blocking: cell falls back to #ID
+                }
+            }
+
             return {issuesCount: issues.length};
         },
     });
@@ -1170,32 +1198,45 @@
 
     let isFreshlyValid = $derived(scheduler.state.lastValidatedAt != null && issues.length === 0 && lastValidatedDraftKey === lastDraftKey && lastDraftKey !== '');
     let showIssuesBanner = $derived(issues.length > 0 && !issuesDismissed);
-    let fieldIssues = $derived(issues.filter((i) => i.index >= 0));
-    let balanceIssues = $derived(issues.filter((i) => i.index < 0));
+    const BALANCE_CODES = new Set(['balanceAssetNegative', 'balanceCashNegative']);
+    let fieldIssues = $derived(issues.filter((i) => !BALANCE_CODES.has(i.code ?? '')));
+    let balanceIssues = $derived(issues.filter((i) => BALANCE_CODES.has(i.code ?? '')));
+    let hasWacFxIssues = $derived(fieldIssues.some((i) => i.code === 'wacFxUnavailable'));
 
-    /**
-     * For balance issues (index=-1), try to find the draft row that caused
-     * the violation by matching brokerId + assetId/currency from issue params.
-     * Returns the 0-based index of the last matching draft, or -1 if unresolvable.
-     */
-    function findRowForBalanceIssue(issue: ValidationIssue): number {
-        const p = issue.params;
-        if (!p) return -1;
-        const brokerId = Number(p.brokerId);
-        if (!brokerId) return -1;
-
-        if (issue.code === 'balanceAssetNegative') {
-            const assetId = Number(p.assetId);
-            for (let i = ops.length - 1; i >= 0; i--) {
-                if (ops[i].fields.broker_id === brokerId && ops[i].fields.asset_id === assetId) return i;
-            }
-        } else if (issue.code === 'balanceCashNegative') {
-            const currency = p.currency as string;
-            for (let i = ops.length - 1; i >= 0; i--) {
-                if (ops[i].fields.broker_id === brokerId && ops[i].fields.cash?.code === currency) return i;
-            }
+    /** Sync FX rates for missing pairs referenced in issues, then re-validate. */
+    let syncFxLoading = $state(false);
+    async function handleSyncFx() {
+        const fxIssues = fieldIssues.filter((i) => i.code === 'wacFxUnavailable');
+        if (fxIssues.length === 0) return;
+        // Collect all unique pairs and date ranges
+        const allPairs = [...new Set(fxIssues.flatMap((i) => (i.params?.pairs as string[]) ?? []))];
+        if (allPairs.length === 0) return;
+        // Gather dates from ops linked to these issues
+        const dates: string[] = [];
+        for (const issue of fxIssues) {
+            const key = `${issue.operation}:${issue.index}`;
+            const tempId = lastOpsIndexMap.get(key);
+            const op = tempId ? ops.find((o) => o.tempId === tempId) : null;
+            if (op?.fields.date) dates.push(op.fields.date);
         }
-        return -1;
+        const sortedDates = dates.sort();
+        const minDate = sortedDates[0] ?? new Date().toISOString().slice(0, 10);
+        const maxDate = sortedDates[sortedDates.length - 1] ?? minDate;
+        // Expand range ±7 days
+        const start = new Date(new Date(minDate).getTime() - 7 * 86400000).toISOString().slice(0, 10);
+        const end = new Date(new Date(maxDate).getTime() + 7 * 86400000).toISOString().slice(0, 10);
+        // Convert pair format: "EUR/USD" → "EUR-USD"
+        const pairs = allPairs.map((p) => p.replace('/', '-'));
+        syncFxLoading = true;
+        try {
+            await zodiosApi.post('/api/v1/fx/currencies/sync', {pairs, start, end});
+            toasts.success($t('transactions.wac.syncSuccess') || 'FX rates synced');
+            scheduler.trigger('change');
+        } catch {
+            toasts.error($t('transactions.wac.syncFailed') || 'Failed to sync FX rates');
+        } finally {
+            syncFxLoading = false;
+        }
     }
 
     /** Context for resolving validation issue codes into translated messages. */
@@ -1266,6 +1307,8 @@
             }
             if (!result.committed) {
                 issues = result.issues as unknown as ValidationIssue[];
+                // Rebuild index map for the commit payload (same resolved ops)
+                lastOpsIndexMap = buildOpsIndexMap(resolved);
                 issuesDismissed = false;
                 commitFailed = true;
                 return;
@@ -1585,6 +1628,42 @@
                 },
             },
             {
+                id: 'asset_event_id',
+                header: () => $t('transactions.form.assetEvent'),
+                type: 'text',
+                width: 160,
+                sortable: false,
+                filterable: false,
+                hiddenByDefault: false,
+                cell: (row): CellContent => {
+                    if (row.fields.asset_event_id == null) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                    const ev = eventCache.get(row.fields.asset_event_id);
+                    if (!ev) return {type: 'html', html: `<span class="font-mono text-xs">#${row.fields.asset_event_id}</span>`};
+                    const emojiMap: Record<string, string> = {DIVIDEND: '💰', INTEREST: '🏦', SPLIT: '✂️', PRICE_ADJUSTMENT: '📊', MATURITY_SETTLEMENT: '📅'};
+                    const emoji = emojiMap[ev.type] ?? '📋';
+                    const shortDate = new Date(ev.date).toLocaleDateString(undefined, {day: 'numeric', month: 'short'});
+                    const fullDate = new Date(ev.date).toLocaleDateString(undefined, {day: 'numeric', month: 'long', year: 'numeric'});
+                    const amt = parseFloat(ev.amount);
+                    let fmtAmt = '';
+                    if (amt !== 0) {
+                        const ci = getCurrencyInfo(ev.code);
+                        const sym = ci.symbol && ci.symbol !== ev.code ? `${ci.symbol} ` : '';
+                        const flag = ci.flag_emoji && ci.flag_emoji !== '🏳️' ? `<span class="emoji-flag">${ci.flag_emoji}</span> ` : '';
+                        fmtAmt = `${Number.isInteger(amt) ? amt.toString() : amt.toFixed(2)} ${sym}${flag}${ev.code}`;
+                    }
+                    // Build rich HTML tooltip
+                    const typeLabel = $t(`assetDetail.eventType.${ev.type}`) || ev.type.replace(/_/g, ' ');
+                    let tooltipHtml = `<strong>${emoji} ${typeLabel}</strong><br>${fullDate}`;
+                    if (amt !== 0) tooltipHtml += `<br>${$t('transactions.bulk.eventTooltipAmount')}: <span style="font-family:monospace">${amt.toFixed(4)} ${ev.code}</span>`;
+                    if (ev.notes) tooltipHtml += `<br>📝 ${$t('transactions.bulk.eventTooltipNotes')}: ${ev.notes}`;
+                    return {
+                        type: 'html',
+                        html: `<span class="inline-flex items-center gap-1 text-xs"><span class="text-sm">${emoji}</span><span class="text-gray-600 dark:text-gray-400">${shortDate}</span>${fmtAmt ? `<span class="font-mono text-gray-500">${fmtAmt}</span>` : ''}</span>`,
+                        tooltip: {html: tooltipHtml, position: 'top'},
+                    };
+                },
+            },
+            {
                 id: 'description',
                 header: () => $t('transactions.form.description'),
                 type: 'text',
@@ -1621,16 +1700,6 @@
                         .join('');
                     return {type: 'html', html: `<span class="flex flex-wrap gap-0.5" data-testid="tx-bulk-tags">${html}</span>`};
                 },
-            },
-            {
-                id: 'asset_event_id',
-                header: () => $t('transactions.form.assetEvent'),
-                type: 'text',
-                width: 110,
-                sortable: false,
-                filterable: false,
-                hiddenByDefault: false,
-                cell: (row): CellContent => ({type: 'html', html: row.fields.asset_event_id != null ? `<span class="font-mono text-xs">#${row.fields.asset_event_id}</span>` : '<span class="text-gray-400">—</span>'}),
             },
             {
                 id: 'link_uuid',
@@ -1797,9 +1866,43 @@
 
     function jumpToIssue(issue: ValidationIssue) {
         if (issue.index < 0) return; // broker-level error, no specific row
-        const draft = ops[issue.index];
-        if (!draft) return;
-        tableRef?.navigateToRowId(draft.tempId);
+        const key = `${issue.operation}:${issue.index}`;
+        const tempId = lastOpsIndexMap.get(key);
+        if (!tempId) {
+            // Fallback: try direct ops index
+            const draft = ops[issue.index];
+            if (draft) tableRef?.navigateToRowId(draft.tempId);
+            return;
+        }
+        // If this is a partner (hidden), navigate to its main row
+        const op = ops.find((o) => o.tempId === tempId);
+        const mainTempId = op?.pairedWith ?? tempId;
+        tableRef?.navigateToRowId(mainTempId);
+    }
+
+    /** Get visual row label for an issue (e.g. "3", "5a", "5b"). */
+    function getVisualRowLabel(issue: ValidationIssue): string {
+        if (issue.index < 0) {
+            // Global issue (balance): use broker name from params
+            if (issue.params?.brokerId) {
+                const broker = brokers.find((b) => b.id === issue.params!.brokerId);
+                return broker ? `🏦 ${broker.name}` : `🏦 #${issue.params.brokerId}`;
+            }
+            return '⚠️';
+        }
+        const key = `${issue.operation}:${issue.index}`;
+        const tempId = lastOpsIndexMap.get(key);
+        if (!tempId) return String(issue.index + 1); // fallback
+        const op = ops.find((o) => o.tempId === tempId);
+        // Determine main row (for visual position) and suffix
+        const isPartner = !!op?.pairedWith;
+        const mainTempId = isPartner ? op.pairedWith! : tempId;
+        const visIdx = visibleOps.findIndex((o) => o.tempId === mainTempId);
+        const rowNum = visIdx >= 0 ? visIdx + 1 : issue.index + 1;
+        // Suffix: "a" if main of a pair, "b" if partner
+        const hasPair = isPartner || getPartnerOp(tempId) != null;
+        const suffix = hasPair ? (isPartner ? 'b' : 'a') : '';
+        return `${rowNum}${suffix}`;
     }
 
     // =========================================================================
@@ -2467,13 +2570,22 @@
                 <TransactionResultBanner variant="error" title={`⛔ ${$t('transactions.bulk.rolledBackTitle')}`} subtitle={formError} dismissible ondismiss={() => (formError = null)} testId="tx-bulk-error" />
             {:else if commitFailed && issues.length > 0}
                 <TransactionResultBanner variant="error" title={`⛔ ${$t('transactions.bulk.rolledBackTitle')}`} dismissible ondismiss={() => (commitFailed = false)} testId="tx-bulk-error">
+                    {#snippet titleAction()}
+                        {#if hasWacFxIssues}
+                            <button type="button" class="text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-800/40 hover:bg-red-200 dark:hover:bg-red-700/50 font-medium whitespace-nowrap" onclick={handleSyncFx} disabled={syncFxLoading} data-testid="tx-bulk-sync-fx-error">
+                                {syncFxLoading ? '⏳' : '🔄'} Sync FX
+                            </button>
+                        {/if}
+                    {/snippet}
                     {#if fieldIssues.length > 0}
                         <p class="font-semibold text-sm mt-1 mb-1">{$t('transactions.validate.issuesHeader')}</p>
                         <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-issues">
                             {#each fieldIssues as issue}
                                 <li>
                                     <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
-                                        {$t('transactions.bulk.rowN', {values: {n: issue.index + 1}})}: {resolveIssueMessage(issue, $t, resolverCtx)}
+                                        {#if issue.index < 0}{getVisualRowLabel(issue)}:
+                                        {:else}{$t('transactions.bulk.rowN', {values: {n: getVisualRowLabel(issue)}})}:
+                                        {/if}{@html resolveIssueMessage(issue, $t, resolverCtx)}
                                     </button>
                                 </li>
                             {/each}
@@ -2483,21 +2595,13 @@
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
                         <ul class="list-disc pl-4 space-y-0.5 text-sm text-left">
                             {#each balanceIssues as issue}
-                                {@const resolvedRow = findRowForBalanceIssue(issue)}
                                 <li>
-                                    {#if resolvedRow >= 0}
-                                        <button
-                                            type="button"
-                                            class="underline hover:opacity-80 text-left"
-                                            onclick={() => {
-                                                const d = ops[resolvedRow];
-                                                if (d) tableRef?.navigateToRowId(d.tempId);
-                                            }}
-                                        >
-                                            {$t('transactions.bulk.rowN', {values: {n: resolvedRow + 1}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                    {#if issue.index >= 0}
+                                        <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)}>
+                                            {$t('transactions.bulk.rowN', {values: {n: getVisualRowLabel(issue)}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
                                         </button>
                                     {:else}
-                                        {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                        {getVisualRowLabel(issue)}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
                                     {/if}
                                 </li>
                             {/each}
@@ -2507,12 +2611,21 @@
             {/if}
             {#if showIssuesBanner && !formError && !commitFailed}
                 <TransactionResultBanner variant="warning" title={`⚠️ ${$t('transactions.validate.issuesHeader')}`} dismissible ondismiss={() => (issuesDismissed = true)} testId="tx-bulk-issues-header">
+                    {#snippet titleAction()}
+                        {#if hasWacFxIssues}
+                            <button type="button" class="text-xs px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/50 font-medium whitespace-nowrap" onclick={handleSyncFx} disabled={syncFxLoading} data-testid="tx-bulk-sync-fx">
+                                {syncFxLoading ? '⏳' : '🔄'} Sync FX
+                            </button>
+                        {/if}
+                    {/snippet}
                     {#if fieldIssues.length > 0}
                         <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-issues">
                             {#each fieldIssues as issue}
                                 <li>
                                     <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
-                                        {$t('transactions.bulk.rowN', {values: {n: issue.index + 1}})}: {resolveIssueMessage(issue, $t, resolverCtx)}
+                                        {#if issue.index < 0}{getVisualRowLabel(issue)}:
+                                        {:else}{$t('transactions.bulk.rowN', {values: {n: getVisualRowLabel(issue)}})}:
+                                        {/if}{@html resolveIssueMessage(issue, $t, resolverCtx)}
                                     </button>
                                 </li>
                             {/each}
@@ -2522,21 +2635,13 @@
                         <p class="font-semibold text-sm {fieldIssues.length > 0 ? 'mt-2' : ''} mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
                         <ul class="list-disc pl-4 space-y-0.5 text-sm text-left">
                             {#each balanceIssues as issue}
-                                {@const resolvedRow = findRowForBalanceIssue(issue)}
                                 <li>
-                                    {#if resolvedRow >= 0}
-                                        <button
-                                            type="button"
-                                            class="underline hover:opacity-80 text-left"
-                                            onclick={() => {
-                                                const d = ops[resolvedRow];
-                                                if (d) tableRef?.navigateToRowId(d.tempId);
-                                            }}
-                                        >
-                                            {$t('transactions.bulk.rowN', {values: {n: resolvedRow + 1}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                    {#if issue.index >= 0}
+                                        <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)}>
+                                            {$t('transactions.bulk.rowN', {values: {n: getVisualRowLabel(issue)}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
                                         </button>
                                     {:else}
-                                        {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                        {getVisualRowLabel(issue)}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
                                     {/if}
                                 </li>
                             {/each}
