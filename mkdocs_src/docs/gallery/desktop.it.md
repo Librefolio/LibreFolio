@@ -4,8 +4,8 @@ Scopri l'interfaccia desktop completa di LibreFolio. Gli screenshot si adattano 
 
 !!! tip "Tema e Lingua"
 
-Usa l'**interruttore del tema** nell'intestazione (☀️/🌙) per passare dalla modalità chiara a quella scura.
-Usa il **selettore di lingua** (🇬🇧) nell'intestazione per visualizzare gli screenshot in diverse lingue.
+    Usa l'**interruttore del tema** nell'intestazione (☀️/🌙) per passare dalla modalità chiara a quella scura.
+    Usa il **selettore di lingua** (🇬🇧) nell'intestazione per visualizzare gli screenshot in diverse lingue.
 
 ---
 

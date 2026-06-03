@@ -56,19 +56,19 @@ Lors du transfert d'actifs entre courtiers, LibreFolio **calcule automatiquement
 
 ??? note "✏️ Quand forcer la valeur manuellement"
 
- La formule automatique fonctionne pour le cas standard (même régime fiscal, pas d'événements fiscaux lors du transfert). Dans les scénarios suivants, l'utilisateur doit définir la valeur manuellement :
+    La formule automatique fonctionne pour le cas standard (même régime fiscal, pas d'événements fiscaux lors du transfert). Dans les scénarios suivants, l'utilisateur doit définir la valeur manuellement :
 
- | Scénario | Ce qu'il faut définir |
- |----------|------------|
- | **Transfert normal** | Laisser vide — calculé automatiquement |
- | **Exit Tax** | Valeur de marché à la date du transfert (spécifique à la juridiction) |
- | **Héritage** | Juste valeur marchande à la date du décès (ou base actualisée) |
- | **Don** | Prix de revient d'origine du donateur (base reportée) |
- | **Opération sur titres** | Base ajustée selon les termes de l'opération sur titres |
+    | Scénario | Ce qu'il faut définir |
+    |----------|------------|
+    | **Transfert normal** | Laisser vide — calculé automatiquement |
+    | **Exit Tax** | Valeur de marché à la date du transfert (spécifique à la juridiction) |
+    | **Héritage** | Juste valeur marchande à la date du décès (ou base actualisée) |
+    | **Don** | Prix de revient d'origine du donateur (base reportée) |
+    | **Opération sur titres** | Base ajustée selon les termes de l'opération sur titres |
 
- !!! warning "Responsabilité de l'utilisateur"
+    !!! warning "Responsabilité de l'utilisateur"
 
- Lors du forçage manuel du prix de revient, l'utilisateur est responsable de l'exactitude de la valeur. LibreFolio ne valide pas les montants de forçage par rapport aux règles fiscales — consultez un conseiller fiscal pour des directives spécifiques à votre juridiction.
+        Lors du forçage manuel du prix de revient, l'utilisateur est responsable de l'exactitude de la valeur. LibreFolio ne valide pas les montants de forçage par rapport aux règles fiscales — consultez un conseiller fiscal pour des directives spécifiques à votre juridiction.
 
 ---
 

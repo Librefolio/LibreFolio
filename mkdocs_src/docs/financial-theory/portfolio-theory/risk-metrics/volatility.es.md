@@ -50,7 +50,7 @@ $$
 Calculada a partir de datos de precios **pasados**. Esto es lo que calcula LibreFolio:
 
 $$
-\sigma_{realized} = \text{DesvEst}(\text{rendimientos históricos})
+\sigma_{realized} = \text{StdDev}(\text{rendimientos históricos})
 $$
 
 ### 🔮 Volatilidad Implícita

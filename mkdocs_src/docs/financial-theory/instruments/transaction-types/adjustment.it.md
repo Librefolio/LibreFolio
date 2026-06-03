@@ -58,22 +58,22 @@ posizione del broker di origine.
 
 ??? note "✏️ Quando Sovrascrivere Manualmente"
 
- La formula automatica funziona per il caso standard (stesso regime fiscale, nessun evento
- fiscale al momento del trasferimento). Nei seguenti scenari l'utente deve impostare il valore manualmente:
+    La formula automatica funziona per il caso standard (stesso regime fiscale, nessun evento
+    fiscale al momento del trasferimento). Nei seguenti scenari l'utente deve impostare il valore manualmente:
 
- | Scenario | Cosa impostare |
- |----------|------------|
- | **Trasferimento normale** | Lasciare vuoto — calcolato automaticamente |
- | **Exit Tax** | Valore di mercato alla data del trasferimento (specifico per giurisdizione) |
- | **Eredità** | Valore equo di mercato alla data del decesso (o stepped-up basis) |
- | **Regalo** | Cost Basis originale del donatore (carryover basis) |
- | **Operazione societaria** | Cost Basis rettificato secondo i termini dell'operazione societaria |
+    | Scenario | Cosa impostare |
+    |----------|------------|
+    | **Trasferimento normale** | Lasciare vuoto — calcolato automaticamente |
+    | **Exit Tax** | Valore di mercato alla data del trasferimento (specifico per giurisdizione) |
+    | **Eredità** | Valore equo di mercato alla data del decesso (o stepped-up basis) |
+    | **Regalo** | Cost Basis originale del donatore (carryover basis) |
+    | **Operazione societaria** | Cost Basis rettificato secondo i termini dell'operazione societaria |
 
- !!! warning "Responsabilità dell'Utente"
+    !!! warning "Responsabilità dell'Utente"
 
- Quando si sovrascrive manualmente il Cost Basis, l'utente è responsabile della
- correttezza del valore. LibreFolio non valida gli importi di override
- rispetto alle norme fiscali — consulta un consulente fiscale per indicazioni specifiche per la tua giurisdizione.
+        Quando si sovrascrive manualmente il Cost Basis, l'utente è responsabile della
+        correttezza del valore. LibreFolio non valida gli importi di override
+        rispetto alle norme fiscali — consulta un consulente fiscale per indicazioni specifiche per la tua giurisdizione.
 
 ---
 

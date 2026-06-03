@@ -4,12 +4,12 @@ Scopri l'interfaccia mobile responsive di LibreFolio. Gli screenshot si adattano
 
 !!! tip "Tema e Lingua"
 
-Usa l'**interruttore del tema** nell'intestazione (☀️/🌙) per passare dalla modalità chiara a quella scura.
-Usa il **selettore della lingua** (🇬🇧) nell'intestazione per visualizzare gli screenshot in diverse lingue.
+    Usa l'**interruttore del tema** nell'intestazione (☀️/🌙) per passare dalla modalità chiara a quella scura.
+    Usa il **selettore della lingua** (🇬🇧) nell'intestazione per visualizzare gli screenshot in diverse lingue.
 
 !!! info "Ottimizzato per Mobile"
 
-LibreFolio è completamente responsive e funziona egregiamente su smartphone e tablet. L'interfaccia si adatta automaticamente agli schermi più piccoli con un menu di navigazione collassabile.
+    LibreFolio è completamente responsive e funziona egregiamente su smartphone e tablet. L'interfaccia si adatta automaticamente agli schermi più piccoli con un menu di navigazione collassabile.
 
 ---
 

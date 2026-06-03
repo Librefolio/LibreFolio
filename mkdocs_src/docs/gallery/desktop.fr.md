@@ -4,8 +4,8 @@ Découvrez l'interface complète de LibreFolio sur bureau. Les captures d'écran
 
 !!! tip "Thème & Langue"
 
-Utilisez l'**interrupteur de thème** dans l'en-tête (☀️/🌙) pour basculer entre le mode clair et le mode sombre.
-Utilisez le **sélecteur de langue** (🇬🇧) dans l'en-tête pour visualiser les captures d'écran dans différentes langues.
+    Utilisez l'**interrupteur de thème** dans l'en-tête (☀️/🌙) pour basculer entre le mode clair et le mode sombre.
+    Utilisez le **sélecteur de langue** (🇬🇧) dans l'en-tête pour visualiser les captures d'écran dans différentes langues.
 
 ---
 

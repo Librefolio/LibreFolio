@@ -1,12 +1,12 @@
 # 🚀 Primeros Pasos
 
-¡Bienvenido a LibreFolio! Esta guía le guiará en el proceso de registro de una cuenta, el inicio de sesión y la creación de su primer bróker: todo lo que necesita para empezar a hacer el seguimiento de su cartera.
+¡Bienvenido a LibreFolio! Esta guía le llevará a través del registro de una cuenta, el inicio de sesión y la creación de su primer bróker: todo lo que necesita para comenzar a rastrear su cartera.
 
 ---
 
-## 📝 1. Registrar su Cuenta
+## 📝 1. Registre su Cuenta
 
-Navegue a la URL de LibreFolio (por ejemplo, `http://localhost:6040`) y verá la página de inicio de sesión. Haga clic en **Registrarse** para crear una cuenta nueva.
+Navegue a la URL de LibreFolio (por ejemplo, `http://localhost:6040`) y verá la página de inicio de sesión. Haga clic en **Register** para crear una cuenta nueva.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Formulario de Registro" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -14,21 +14,21 @@ Navegue a la URL de LibreFolio (por ejemplo, `http://localhost:6040`) y verá la
 
 Complete sus datos:
 
-- 👤 **Nombre de usuario**: Su nombre de usuario (único en todo el sistema)
+- 👤 **Username**: Su nombre de usuario (único en todo el sistema)
 - 📧 **Email**: Una dirección de correo electrónico válida
-- 🔑 **Contraseña**: Una contraseña segura (el indicador de fuerza le ayudará)
+- 🔑 **Password**: Una contraseña segura (el indicador de fuerza le ayudará)
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Registro con Fuerza de Contraseña" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-!!! info "Primer Usuario = Administrador"
+!!! info "Primer Usuario = Admin"
 
-    El primer usuario en registrarse se convierte automáticamente en el **administrador del sistema** (superuser). Este usuario puede gestionar la configuración global, promover a otros usuarios y acceder a todas las funciones de administración.
+    El primer usuario en registrarse se convierte automáticamente en el **administrador del sistema** (superuser). Este usuario puede gestionar la configuración global, otorgar permisos de administrador a otros usuarios y acceder a todas las funciones de administración.
 
 ---
 
-## 🔐 2. Iniciar Sesión
+## 🔐 2. Inicie Sesión
 
 Después de registrarse, será redirigido a la página de inicio de sesión. Introduzca sus credenciales para acceder a su panel de control.
 
@@ -38,13 +38,13 @@ Después de registrarse, será redirigido a la página de inicio de sesión. Int
 
 ---
 
-## 🏦 3. Crear su Primer Bróker
+## 🏦 3. Cree su Primer Bróker
 
-Un **Bróker** en LibreFolio representa una cuenta de corretaje: el lugar donde residen sus inversiones (por ejemplo, Interactive Brokers, Degiro, una cuenta bancaria, etc.).
+Un **Broker** en LibreFolio representa una cuenta de corretaje: el lugar donde residen sus inversiones (por ejemplo, Interactive Brokers, Degiro, una cuenta bancaria, etc.).
 
 !!! note "¿Por qué necesito un Bróker?"
 
-    Todas las transacciones en LibreFolio están vinculadas a un bróker. Es el contenedor que agrupa sus operaciones, importaciones e informes. Necesita al menos un bróker antes de poder empezar a hacer el seguimiento de cualquier cosa.
+    Todas las transacciones en LibreFolio están vinculadas a un bróker. Es el contenedor que agrupa sus operaciones, importaciones e informes. Necesita al menos un bróker antes de poder empezar a rastrear cualquier dato.
 
 ### 📋 Pasos
 
@@ -52,11 +52,11 @@ Un **Bróker** en LibreFolio representa una cuenta de corretaje: el lugar donde 
  <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
  <img class="gallery-img" data-category="brokers" data-name="list" alt="Lista de Brókers" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
  </div>
-2. Haga clic en el botón **"Nuevo Bróker"**
+2. Haga clic en el botón **"New Broker"**
 3. Complete los detalles del bróker:
- - 🏷️ **Nombre**: Un nombre descriptivo (por ejemplo, "Mi Cuenta de Degiro")
- - 💰 **Moneda base**: La moneda de la cuenta (por ejemplo, EUR, USD)
- - 🖼️ **Icono** *(opcional)*: Suba un logotipo o avatar del bróker
+ - 🏷️ **Name**: Un nombre descriptivo (por ejemplo, "Mi Cuenta de Degiro")
+ - 💰 **Base Currency**: La moneda de la cuenta (por ejemplo, EUR, USD)
+ - 🖼️ **Icon** *(opcional)*: Suba un logotipo o avatar del bróker
  <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
  <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Lista de Brókers" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
  </div>
@@ -71,11 +71,11 @@ Un **Bróker** en LibreFolio representa una cuenta de corretaje: el lugar donde 
 
 Ahora que tiene una cuenta y un bróker, puede:
 
-- 📤 **[Subir informes del bróker](files/index.md)** — Importe archivos CSV/Excel de su bróker para el procesamiento automático de transacciones
+- 📤 **[Subir informes del bróker](files/index.md)** — Importe archivos CSV/Excel de su bróker para el análisis automático de transacciones
 - 🤝 **[Compartir su bróker](brokers/sharing.md)** — Dé acceso a familiares, asesores o contadores
-- 💱 **[Configurar tipos de cambio FX](fx/index.md)** — Configure la conversión de moneda para carteras multidivisa
+- 💱 **[Configurar tipos de cambio](fx/index.md)** — Configure la conversión de divisa para carteras multimoneda
 - ⚙️ **[Personalizar configuración](../admin/settings.md)** — Ajuste el idioma, el tema y las preferencias del sistema
 
 !!! tip "Cálculos de Cartera"
 
-    Los brókers también se utilizan para los cálculos de agregación de la cartera. Cuando comparte un bróker con otro usuario y establece un **porcentaje de participación**, el sistema puede calcular la parte de cada usuario del valor total de la cartera. Esta función se encuentra en desarrollo activo.
+    Los brókers también se utilizan para los cálculos de agregación de cartera. Cuando comparte un bróker con otro usuario y establece un **porcentaje de participación**, el sistema puede calcular la parte de cada usuario del valor total de la cartera. Esta función se encuentra en desarrollo activo.

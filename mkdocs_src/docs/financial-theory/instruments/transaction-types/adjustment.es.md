@@ -56,19 +56,19 @@ Al transferir activos entre brókeres, LibreFolio **calcula automáticamente** l
 
 ??? note "✏️ Cuándo Anular Manualmente"
 
- La fórmula automática funciona para el caso estándar (mismo régimen fiscal, sin eventos fiscales en la transferencia). En los siguientes escenarios, el usuario debe establecer el valor manualmente:
+    La fórmula automática funciona para el caso estándar (mismo régimen fiscal, sin eventos fiscales en la transferencia). En los siguientes escenarios, el usuario debe establecer el valor manualmente:
 
- | Escenario | Qué establecer |
- |----------|------------|
- | **Transferencia normal** | Dejar vacío — calculado automáticamente |
- | **Impuesto de salida (Exit Tax)** | Valor de mercado en la fecha de transferencia (específico de la jurisdicción) |
- | **Herencia** | Valor justo de mercado en la fecha del fallecimiento (o base actualizada) |
- | **Regalo** | Base de costo original del donante (base transferida) |
- | **Acción corporativa** | Base ajustada según los términos de la acción corporativa |
+    | Escenario | Qué establecer |
+    |----------|------------|
+    | **Transferencia normal** | Dejar vacío — calculado automáticamente |
+    | **Impuesto de salida (Exit Tax)** | Valor de mercado en la fecha de transferencia (específico de la jurisdicción) |
+    | **Herencia** | Valor justo de mercado en la fecha del fallecimiento (o base actualizada) |
+    | **Regalo** | Base de costo original del donante (base transferida) |
+    | **Acción corporativa** | Base ajustada según los términos de la acción corporativa |
 
- !!! warning "Responsabilidad del Usuario"
+    !!! warning "Responsabilidad del Usuario"
 
- Al anular manualmente la base de costo, el usuario es responsable de la exactitud del valor. LibreFolio no valida los montos de anulación frente a las reglas fiscales; consulte a un asesor fiscal para obtener orientación específica de su jurisdicción.
+        Al anular manualmente la base de costo, el usuario es responsable de la exactitud del valor. LibreFolio no valida los montos de anulación frente a las reglas fiscales; consulte a un asesor fiscal para obtener orientación específica de su jurisdicción.
 
 ---
 

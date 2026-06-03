@@ -26,39 +26,39 @@ A differenza dei dividendi (che dipendono dagli utili dell'azienda), i pagamenti
 
 ??? example "📏 Interesse Semplice"
 
- Interesse calcolato solo sul capitale originale — senza capitalizzazione:
+    Interesse calcolato solo sul capitale originale — senza capitalizzazione:
 
- $$
- I = P \times r \times t
- $$
+    $$
+    I = P \times r \times t
+    $$
 
- Dove:
+    Dove:
 
- - $P$ = capitale (investimento iniziale)
- - $r$ = tasso di interesse annuale (es. 0,04 per il 4%)
- - $t$ = tempo in anni
+    - $P$ = capitale (investimento iniziale)
+    - $r$ = tasso di interesse annuale (es. 0,04 per il 4%)
+    - $t$ = tempo in anni
 
- Utilizzato per: prestiti a breve termine, alcuni conti di risparmio, buoni del tesoro.
+    Utilizzato per: prestiti a breve termine, alcuni conti di risparmio, buoni del tesoro.
 
 ??? example "📈 Interesse Composto"
 
- Interesse calcolato sul capitale **più** gli interessi precedentemente accumulati:
+    Interesse calcolato sul capitale **più** gli interessi precedentemente accumulati:
 
- $$
- A = P \times \left(1 + \frac{r}{n}\right)^{n \times t}
- $$
+    $$
+    A = P \times \left(1 + \frac{r}{n}\right)^{n \times t}
+    $$
 
- Dove:
+    Dove:
 
- - $A$ = importo finale (capitale + interessi)
- - $P$ = capitale
- - $r$ = tasso di interesse annuale
- - $n$ = frequenza di capitalizzazione per anno (12 = mensile, 4 = trimestrale, 1 = annuale)
- - $t$ = tempo in anni
+    - $A$ = importo finale (capitale + interessi)
+    - $P$ = capitale
+    - $r$ = tasso di interesse annuale
+    - $n$ = frequenza di capitalizzazione per anno (12 = mensile, 4 = trimestrale, 1 = annuale)
+    - $t$ = tempo in anni
 
- L'interesse guadagnato è: $I = A - P$
+    L'interesse guadagnato è: $I = A - P$
 
- Utilizzato per: la maggior parte delle obbligazioni, conti di risparmio con reinvestimento, piattaforme P2P.
+    Utilizzato per: la maggior parte delle obbligazioni, conti di risparmio con reinvestimento, piattaforme P2P.
 
 ---
 
@@ -72,11 +72,11 @@ Per le **obbligazioni con cedola**, i pagamenti degli interessi causano un reset
 
 ??? example "Ciclo della cedola obbligazionaria"
 
- Un'obbligazione con valore nominale 1.000 € paga una cedola annuale del 4% ogni sei mesi (20 € ogni 6 mesi).
+    Un'obbligazione con valore nominale 1.000 € paga una cedola annuale del 4% ogni sei mesi (20 € ogni 6 mesi).
 
- - **Giorno prima della cedola**: Clean price 980 €, Interesse maturato 20 € → Dirty price 1.000 €
- - **Data della cedola**: L'interesse maturato torna a 0 €, l'investitore riceve 20 € in contanti
- - **Giorno dopo la cedola**: Clean price 980 €, Interesse maturato ≈ 0,11 € → Dirty price 980,11 €
+    - **Giorno prima della cedola**: Clean price 980 €, Interesse maturato 20 € → Dirty price 1.000 €
+    - **Data della cedola**: L'interesse maturato torna a 0 €, l'investitore riceve 20 € in contanti
+    - **Giorno dopo la cedola**: Clean price 980 €, Interesse maturato ≈ 0,11 € → Dirty price 980,11 €
 
 Per gli asset di **investimento programmato** in LibreFolio, gli eventi di interesse modificano direttamente il prezzo calcolato:
 
@@ -96,38 +96,38 @@ Dove:
 
 ??? example "📐 Current Yield"
 
- La misura di rendimento più semplice — reddito annuale relativo al prezzo attuale:
+    La misura di rendimento più semplice — reddito annuale relativo al prezzo attuale:
 
- $$
- \text{Current Yield} = \frac{\text{Annual Coupon}}{\text{Current Market Price}} \times 100
- $$
+    $$
+    \text{Current Yield} = \frac{\text{Annual Coupon}}{\text{Current Market Price}} \times 100
+    $$
 
- Dove:
+    Dove:
 
- - **Annual Coupon** = pagamenti totali della cedola per anno (es. 40 € per un'obbligazione al 4% con valore nominale di 1.000 €)
- - **Current Market Price** = quanto pagheresti per comprare l'obbligazione oggi
+    - **Annual Coupon** = pagamenti totali della cedola per anno (es. 40 € per un'obbligazione al 4% con valore nominale di 1.000 €)
+    - **Current Market Price** = quanto pagheresti per comprare l'obbligazione oggi
 
- Limitazione: ignora la plusvalenza/minusvalenza se detenuta fino a scadenza.
+    Limitazione: ignora la plusvalenza/minusvalenza se detenuta fino a scadenza.
 
 ??? example "📐 Yield to Maturity (YTM)"
 
- Il rendimento totale previsto se l'obbligazione viene mantenuta fino alla scadenza, tenendo conto di **tutti** i flussi di cassa: pagamenti delle cedole, rimborso del valore nominale e la differenza tra il prezzo di acquisto e il valore nominale.
+    Il rendimento totale previsto se l'obbligazione viene mantenuta fino alla scadenza, tenendo conto di **tutti** i flussi di cassa: pagamenti delle cedole, rimborso del valore nominale e la differenza tra il prezzo di acquisto e il valore nominale.
 
- YTM è il tasso $y$ che soddisfa:
+    YTM è il tasso $y$ che soddisfa:
 
- $$
- P = \sum_{t=1}^{T} \frac{C}{(1+y)^t} + \frac{F}{(1+y)^T}
- $$
+    $$
+    P = \sum_{t=1}^{T} \frac{C}{(1+y)^t} + \frac{F}{(1+y)^T}
+    $$
 
- Dove:
+    Dove:
 
- - $P$ = prezzo di mercato attuale
- - $C$ = pagamento della cedola per periodo
- - $F$ = valore nominale (restituito a scadenza)
- - $T$ = numero di periodi fino alla scadenza
- - $y$ = rendimento a scadenza (per periodo)
+    - $P$ = prezzo di mercato attuale
+    - $C$ = pagamento della cedola per periodo
+    - $F$ = valore nominale (restituito a scadenza)
+    - $T$ = numero di periodi fino alla scadenza
+    - $y$ = rendimento a scadenza (per periodo)
 
- YTM deve essere risolto numericamente (non esiste una soluzione in forma chiusa).
+    YTM deve essere risolto numericamente (non esiste una soluzione in forma chiusa).
 
 ---
 
