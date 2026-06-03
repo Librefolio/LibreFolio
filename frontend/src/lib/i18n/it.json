@@ -558,7 +558,9 @@
       "assetEvent": "Evento asset",
       "assetEventNotApplicable": "Il collegamento all'evento è disponibile solo per DIVIDEND, INTEREST e ADJUSTMENT dopo aver scelto un asset.",
       "linkedEvent": "Evento Collegato",
+      "eventPickerNone": "Nessun evento collegato",
       "eventPickerPlaceholder": "Seleziona evento...",
+      "cashLabelTotal": "Importo totale (non per singola azione)",
       "costBasis": "Override costo medio",
       "linkUuid": "TX Collegata",
       "pairPartner": "Transazione collegata",
@@ -626,7 +628,9 @@
       "stateDel": "elimina",
       "suggestLightbulb": "Mostra suggerimento",
       "partnerInaccessible": "Partner su broker inaccessibile",
-      "wacCalcFailed": "Calcolo WAC fallito per alcune righe"
+      "wacCalcFailed": "Calcolo WAC fallito per alcune righe",
+      "eventTooltipNotes": "Note",
+      "eventTooltipAmount": "Importo"
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"
@@ -676,7 +680,14 @@
       "syncSuccess": "Tassi FX sincronizzati con successo",
       "syncFailed": "Sincronizzazione FX fallita",
       "fxStale": "Tasso FX del {date} ({days}gg fa)",
-      "fxMissing": "Coppia FX {pair} non disponibile per questa data"
+      "fxMissing": "Coppia FX {pair} non disponibile per questa data",
+      "fxStaleBannerTitle": "Conversioni FX con tassi non aggiornati",
+      "fxDisclaimer": "Il tasso FX utilizzato potrebbe differire da quello applicato dal broker. Verifica il costo medio con il broker.",
+      "fxTooltipStale": "Tasso non aggiornato",
+      "fxTooltipDate": "Data tasso",
+      "fxDaysAgo": "gg fa",
+      "convertedPairs": "Coppie convertite",
+      "noRateAvailable": "nessun tasso disponibile"
     },
     "promote": {
       "title": "Promuovi coppia",
@@ -791,7 +802,7 @@
       "alreadyPaired": "La transazione è già collegata a un'altra transazione",
       "noPromoteRule": "Nessuna regola di promozione corrisponde a questi due tipi di transazione",
       "wacFxUnavailable": "❌ Calcolo WAC fallito: coppia/e FX {pairs} non disponibile/i. Sincronizza i tassi FX o passa alla modalità manuale.",
-      "costBasisRequired": "❌ Costo base obbligatorio per {type} con quantità positiva. Usa Auto (PMC) o inserisci manualmente."
+      "costBasisRequired": "❌ <b>{type}</b> con quantità positiva richiede un costo base. Usa la modalità <b>Auto</b> (PMC) oppure inserisci un valore <b>manuale</b>."
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",

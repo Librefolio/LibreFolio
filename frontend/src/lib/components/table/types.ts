@@ -142,7 +142,9 @@ export interface HtmlCell {
      * explanatory text — it integrates with the design system and is testable.
      */
     tooltip?: {
-        text: string;
+        text?: string;
+        /** Rich HTML tooltip content (mutually exclusive with text) */
+        html?: string;
         position?: 'top' | 'bottom' | 'left' | 'right';
         maxWidth?: string;
     };

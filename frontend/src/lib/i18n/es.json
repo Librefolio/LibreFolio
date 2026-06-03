@@ -558,7 +558,9 @@
       "assetEvent": "Evento de activo",
       "assetEventNotApplicable": "El enlace de evento solo está disponible para DIVIDEND, INTEREST y ADJUSTMENT tras elegir un activo.",
       "linkedEvent": "Evento Vinculado",
+      "eventPickerNone": "Sin evento vinculado",
       "eventPickerPlaceholder": "Seleccionar evento...",
+      "cashLabelTotal": "Importe total (no por acción)",
       "costBasis": "Override de coste medio",
       "linkUuid": "TX Vinculada",
       "pairPartner": "Transacción vinculada",
@@ -626,7 +628,9 @@
       "stateDel": "eliminar",
       "suggestLightbulb": "Mostrar sugerencia",
       "partnerInaccessible": "Contraparte en bróker inaccesible",
-      "wacCalcFailed": "Cálculo WAC falló para algunas filas"
+      "wacCalcFailed": "Cálculo WAC falló para algunas filas",
+      "eventTooltipNotes": "Notas",
+      "eventTooltipAmount": "Importe"
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
@@ -676,7 +680,14 @@
       "syncSuccess": "Tasas FX sincronizadas con éxito",
       "syncFailed": "Error en la sincronización FX",
       "fxStale": "Tasa FX del {date} ({days}d atrás)",
-      "fxMissing": "Par FX {pair} no disponible para esta fecha"
+      "fxMissing": "Par FX {pair} no disponible para esta fecha",
+      "fxStaleBannerTitle": "Conversiones FX con tasas desactualizadas",
+      "fxDisclaimer": "La tasa FX utilizada puede diferir de la aplicada por su bróker. Verifique el costo promedio con su bróker.",
+      "fxTooltipStale": "Tasa no actualizada",
+      "fxTooltipDate": "Fecha de la tasa",
+      "fxDaysAgo": "d atrás",
+      "convertedPairs": "Pares convertidos",
+      "noRateAvailable": "sin tasa disponible"
     },
     "promote": {
       "title": "Promover par",
@@ -791,7 +802,7 @@
       "alreadyPaired": "La transacción ya está vinculada a otra transacción",
       "noPromoteRule": "Ninguna regla de promoción corresponde a estos dos tipos de transacción",
       "wacFxUnavailable": "❌ Cálculo WAC fallido: par(es) FX {pairs} no disponible(s). Sincroniza las tasas FX o cambia al modo manual.",
-      "costBasisRequired": "❌ Coste base requerido para {type} con cantidad positiva. Use Auto (CMP) o ingrese manualmente."
+      "costBasisRequired": "❌ <b>{type}</b> con cantidad positiva requiere un coste base. Use el modo <b>Auto</b> (CMP) o introduzca un valor <b>manual</b>."
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",

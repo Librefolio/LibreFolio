@@ -195,9 +195,16 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
         enriched.currency = formatCurrencyCodeHtml(rawParams.currency);
     }
 
-    // Resolve pairs array → comma-separated string (WAC FX issues)
+    // Resolve pairs array → formatted string with currency flags (WAC FX issues)
     if (Array.isArray(rawParams.pairs)) {
-        enriched.pairs = rawParams.pairs.join(', ');
+        enriched.pairs = rawParams.pairs
+            .map((pair: string) => {
+                const [base, quote] = pair.split('/');
+                const baseHtml = base ? formatCurrencyCodeHtml(base) : base;
+                const quoteHtml = quote ? formatCurrencyCodeHtml(quote) : quote;
+                return `${baseHtml}/${quoteHtml}`;
+            })
+            .join(', ');
     }
 
     // Extract and translate field name for prefixing

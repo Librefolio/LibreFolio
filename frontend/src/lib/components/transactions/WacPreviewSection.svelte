@@ -19,7 +19,7 @@
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
     import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
-    import {formatCurrencyAmountPlain} from '$lib/utils/currencyFormat';
+    import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '$lib/utils/currencyFormat';
 
     // =========================================================================
     // Types
@@ -41,6 +41,9 @@
             is_pending?: boolean;
             pending_op?: string;
             fx_info?: {fx_rate_date: string | null; fx_days_back: number | null} | null;
+            original_unit_cost?: string | null;
+            original_currency?: string | null;
+            fx_rate_used?: string | null;
         }>;
         missing_pairs: string[];
         asset_price: {code: string; amount: string} | null;
@@ -124,6 +127,7 @@
     let hasStaleFx = $derived(maxFxStaleDays > 5);
     // Force manual when missing pairs — auto WAC is unreliable
     let forcedManual = $derived(hasMissingPairs);
+    let hasAnyFxConversion = $derived(previewResult?.qualifying_txs?.some((q) => q.fx_info != null) ?? false);
 
     // =========================================================================
     // External result sync — WAC data from validate response
@@ -174,6 +178,39 @@
         }
         onChange(next);
     }
+
+    // =========================================================================
+    // FX tooltip helpers
+    // =========================================================================
+
+    type QtxRow = WacPreviewResult['qualifying_txs'][number];
+
+    function buildFxTooltipHtml(qtx: QtxRow): string {
+        if (!qtx.fx_info || !qtx.original_currency || !qtx.currency) return '';
+        const rate = qtx.fx_rate_used ? parseFloat(qtx.fx_rate_used).toFixed(4) : '?';
+        const fromHtml = formatCurrencyCodeHtml(qtx.original_currency);
+        const toHtml = formatCurrencyCodeHtml(qtx.currency);
+        const date = qtx.fx_info.fx_rate_date ?? '?';
+        const days = qtx.fx_info.fx_days_back ?? 0;
+        const staleNote = days > 5 ? `<br/><span class="text-amber-500">⚠️ ${$t('transactions.wac.fxTooltipStale') || 'Rate not up to date'}</span>` : '';
+        return `↳ Rate: ${rate}<br/>${fromHtml} → ${toHtml}<br/>${$t('transactions.wac.fxTooltipDate') || 'Rate date'}: ${date} (${days}${$t('transactions.wac.fxDaysAgo') || 'd ago'})${staleNote}`;
+    }
+
+    function buildBadgeTooltipHtml(): string {
+        const disclaimer = $t('transactions.wac.fxDisclaimer') || 'The FX rate used may differ from the one applied by your broker. Verify the average cost with your broker.';
+        const pairs = [...new Set((previewResult?.qualifying_txs ?? []).filter((q) => q.original_currency && q.currency && q.original_currency !== q.currency).map((q) => `${formatCurrencyCodeHtml(q.original_currency!)} → ${formatCurrencyCodeHtml(q.currency!)}`))];
+        const pairsHtml = pairs.length > 0 ? `<br/><br/><b>${$t('transactions.wac.convertedPairs') || 'Converted pairs'}:</b><ul class="list-disc pl-4 mt-1">${pairs.map((p) => `<li>${p}</li>`).join('')}</ul>` : '';
+        return `${disclaimer}${pairsHtml}`;
+    }
+
+    /** Unique stale pairs for the stale banner */
+    let stalePairs = $derived([
+        ...new Map(
+            (previewResult?.qualifying_txs ?? [])
+                .filter((q) => q.fx_info && (q.fx_info.fx_days_back ?? 0) > 5 && q.original_currency && q.currency)
+                .map((q) => [`${q.original_currency}/${q.currency}`, {from: q.original_currency!, to: q.currency!, date: q.fx_info!.fx_rate_date ?? '?', days: q.fx_info!.fx_days_back ?? 0}] as const),
+        ).values(),
+    ]);
 </script>
 
 <!-- =========================================================================
@@ -190,6 +227,11 @@
                     ><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg
                 >
             </Tooltip>
+            {#if hasAnyFxConversion}
+                <Tooltip html={buildBadgeTooltipHtml()} position="top">
+                    <span class="text-[9px] px-1 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium cursor-help">💱 FX</span>
+                </Tooltip>
+            {/if}
         </span>
 
         <!-- Toggle Auto/Manual — always visible -->
@@ -251,27 +293,17 @@
 
     <!-- Missing FX pairs error -->
     {#if hasMissingPairs}
-        <div class="flex flex-col gap-1.5 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10 rounded p-2" data-testid="{testid}-missing-pairs">
-            <div class="flex items-start gap-1">
-                <AlertTriangle size={12} class="mt-0.5 shrink-0" />
-                <div>
-                    <p class="font-medium">{$t('transactions.wacPreview.missingFx') ?? 'Cannot calculate WAC: missing FX rate'}</p>
-                    {#each previewResult?.missing_pairs ?? [] as pair}
-                        <p class="text-gray-500">{pair}</p>
-                    {/each}
-                </div>
+        <div class="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10 rounded p-2" data-testid="{testid}-missing-pairs">
+            <div class="flex items-center gap-1 font-medium mb-1">
+                <AlertTriangle size={12} class="shrink-0" />
+                <span>{$t('transactions.wacPreview.missingFx') ?? 'Cannot calculate WAC: missing FX rates'}</span>
             </div>
-            <div class="flex flex-wrap gap-1.5 ml-4">
-                <a href="/fx" class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 no-underline" data-testid="{testid}-action-add-fx">
-                    {$t('transactions.wacPreview.addFxPair') ?? 'Add FX pair →'}
-                </a>
-                <button type="button" class="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200" data-testid="{testid}-action-sync-fx">
-                    {$t('transactions.wacPreview.syncFx') ?? 'Sync FX rates'}
-                </button>
-                <button type="button" class="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200" data-testid="{testid}-action-sync-prices">
-                    {$t('transactions.wacPreview.syncPrices') ?? 'Sync asset prices'}
-                </button>
-            </div>
+            <ul class="list-disc pl-4 space-y-0.5">
+                {#each previewResult?.missing_pairs ?? [] as pair}
+                    {@const parts = pair.split('/')}
+                    <li>{@html formatCurrencyCodeHtml(parts[0])} / {@html formatCurrencyCodeHtml(parts[1])} — {$t('transactions.wac.noRateAvailable') || 'no rate available'}</li>
+                {/each}
+            </ul>
         </div>
     {/if}
 
@@ -282,9 +314,17 @@
 
     <!-- FX staleness warning banner (above table) -->
     {#if hasStaleFx && isAuto && showQualifying}
-        <div class="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50/60 dark:bg-amber-900/10 rounded px-2 py-1 mt-1" data-testid="{testid}-fx-stale-banner">
-            <AlertTriangle size={10} class="shrink-0" />
-            <span>{$t('transactions.wac.fxStale', {values: {date: '', days: maxFxStaleDays}}) || `Some FX rates are ${maxFxStaleDays}+ days stale — WAC may be inaccurate`}</span>
+        <div class="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10 rounded p-2 mt-1" data-testid="{testid}-fx-stale-banner">
+            <div class="flex items-center gap-1 font-medium mb-1">
+                <AlertTriangle size={10} class="shrink-0" />
+                <span>{$t('transactions.wac.fxStaleBannerTitle') || 'FX conversions with stale rates'}</span>
+            </div>
+            <ul class="list-disc pl-4 space-y-0.5">
+                {#each stalePairs as sp}
+                    <li>{@html formatCurrencyCodeHtml(sp.from)} / {@html formatCurrencyCodeHtml(sp.to)} — {sp.date} ({sp.days}{$t('transactions.wac.fxDaysAgo') || 'd ago'})</li>
+                {/each}
+            </ul>
+            <p class="mt-1.5 text-[9px] text-amber-600/80 dark:text-amber-500/70 italic">{$t('transactions.wac.fxDisclaimer') || 'The FX rate used may differ from the one applied by your broker. Verify the average cost with your broker.'}</p>
         </div>
     {/if}
 
@@ -328,13 +368,19 @@
                             <td class="px-2 py-0.5">{qtx.date}</td>
                             <td class="px-2 py-0.5 text-right font-mono">{formatDecimalForDisplay(qtx.quantity)}</td>
                             <td class="px-2 py-0.5 text-right font-mono">
-                                {qtx.unit_cost && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2}) : qtx.unit_cost ? parseFloat(qtx.unit_cost).toFixed(2) : '—'}
-                                {#if qtx.fx_info && qtx.fx_info.fx_days_back != null && qtx.fx_info.fx_days_back > 0}
-                                    <Tooltip text={$t('transactions.wac.fxStale', {values: {date: qtx.fx_info.fx_rate_date ?? '?', days: qtx.fx_info.fx_days_back}}) || `FX rate ${qtx.fx_info.fx_days_back}d stale`} position="top">
-                                        <span class="cursor-help text-amber-500 ml-0.5">⚠️</span>
+                                {#if qtx.original_unit_cost && qtx.original_currency && qtx.currency && qtx.original_currency !== qtx.currency}
+                                    <Tooltip html={buildFxTooltipHtml(qtx)} position="top">
+                                        <span class="cursor-help">
+                                            {formatCurrencyAmountPlain(parseFloat(qtx.original_unit_cost), qtx.original_currency, {maxFraction: 2})} → {qtx.unit_cost && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2}) : '?'}
+                                            {#if qtx.fx_info && (qtx.fx_info.fx_days_back ?? 0) > 5}
+                                                <span class="text-amber-500 ml-0.5">⚠️</span>
+                                            {:else}
+                                                <span class="text-gray-400 ml-0.5">💱</span>
+                                            {/if}
+                                        </span>
                                     </Tooltip>
-                                {:else if qtx.fx_info && qtx.fx_info.fx_days_back === 0}
-                                    <span class="ml-0.5 text-gray-400" title="FX converted">💱</span>
+                                {:else}
+                                    {qtx.unit_cost && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2}) : qtx.unit_cost ? parseFloat(qtx.unit_cost).toFixed(2) : '—'}
                                 {/if}
                             </td>
                             <td class="px-2 py-0.5 text-right">

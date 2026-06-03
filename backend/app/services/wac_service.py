@@ -15,12 +15,12 @@ from __future__ import annotations
 from datetime import date as date_type
 from decimal import Decimal
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Transaction, TransactionType
+from backend.app.db.models import Transaction
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
-from backend.app.schemas.wac import WACConversionInfo, WACPreviewResultItem, WACQualifyingTX
+from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.fx import convert_bulk
 from backend.app.utils.financial_utils import WACInputTX, compute_wac_from_txlist, determine_target_currency
 
@@ -86,7 +86,7 @@ async def compute_wac_iterative(
     # 3. Build WACInputTX list and determine target_currency
     #    First pass: determine currencies for target_currency selection
     pre_txs: list[WACInputTX] = []
-    for tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend, cbm in unified:
+    for tid, ttype, dt, qty, _amount, ccy, _cbo_amt, cbo_ccy, is_pend, _cbm in unified:
         if qty > 0:
             orig_ccy = ccy if ttype == "BUY" else (cbo_ccy or asset_currency)
         else:
@@ -108,7 +108,7 @@ async def compute_wac_iterative(
     # 4. FX conversion for acquisitions with different currency
     fx_requests: list[tuple[int, Currency, str, date_type]] = []  # (idx, cost_ccy, target, date)
 
-    for i, (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend, cbm) in enumerate(unified):
+    for i, (_tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, _is_pend, _cbm) in enumerate(unified):
         if qty <= 0:
             continue
         if ttype == "BUY":
@@ -124,6 +124,7 @@ async def compute_wac_iterative(
 
     fx_converted: dict[int, Decimal] = {}
     fx_staleness: dict[int, FxBackwardFillInfo] = {}
+    fx_rates: dict[int, Decimal] = {}  # unified_idx → derived FX rate
     missing_pairs: list[str] = []
 
     if fx_requests:
@@ -138,6 +139,9 @@ async def compute_wac_iterative(
             else:
                 converted, rate_date, _bf = result
                 fx_converted[unified_idx] = converted.amount
+                # Derive FX rate from conversion (linear)
+                if amt_ccy.amount and amt_ccy.amount != 0:
+                    fx_rates[unified_idx] = converted.amount / amt_ccy.amount
                 # Track staleness info for qualifying TX enrichment
                 tx_date = unified[unified_idx][2]  # date is at index 2
                 stale_days = (tx_date - rate_date).days if rate_date < tx_date else 0
@@ -148,6 +152,8 @@ async def compute_wac_iterative(
 
     # 5. Build final WACInputTX list with converted costs
     input_txs: list[WACInputTX] = []
+    # Track original unit costs (before FX) keyed by unified_idx
+    original_unit_costs: dict[int, tuple[Decimal, str]] = {}  # idx → (unit_cost, currency)
     for i, (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend, cbm) in enumerate(unified):
         unit_cost: Decimal | None = None
         orig_ccy = ccy or asset_currency
@@ -156,6 +162,8 @@ async def compute_wac_iterative(
             if ttype == "BUY":
                 if i in fx_converted:
                     unit_cost = fx_converted[i] / qty
+                    # Original unit cost before FX
+                    original_unit_costs[i] = (abs(amount) / qty if amount else Decimal("0"), ccy or asset_currency)
                 elif amount:
                     unit_cost = abs(amount) / qty
                 else:
@@ -164,6 +172,8 @@ async def compute_wac_iterative(
             elif cbo_amt is not None:
                 if i in fx_converted:
                     unit_cost = fx_converted[i] / qty
+                    # Original unit cost before FX
+                    original_unit_costs[i] = (cbo_amt, cbo_ccy or asset_currency)
                 else:
                     unit_cost = cbo_amt
                 orig_ccy = cbo_ccy or asset_currency
@@ -191,8 +201,17 @@ async def compute_wac_iterative(
     # 7. Convert result to schema
     # Build tx_id → fx_staleness lookup for qualifying TX enrichment
     tx_fx_info: dict[int, FxBackwardFillInfo] = {}
+    tx_original_costs: dict[int, tuple[Decimal, str]] = {}  # tx_id → (original_unit_cost, original_ccy)
+    tx_fx_rates: dict[int, Decimal] = {}  # tx_id → fx_rate
     for idx, info in fx_staleness.items():
-        tx_fx_info[unified[idx][0]] = info  # unified[idx][0] is tx_id
+        tx_id = unified[idx][0]
+        tx_fx_info[tx_id] = info
+    for idx, (orig_cost, orig_ccy) in original_unit_costs.items():
+        tx_id = unified[idx][0]
+        tx_original_costs[tx_id] = (orig_cost, orig_ccy)
+    for idx, rate in fx_rates.items():
+        tx_id = unified[idx][0]
+        tx_fx_rates[tx_id] = rate
 
     qualifying_txs = [
         WACQualifyingTX(
@@ -205,6 +224,9 @@ async def compute_wac_iterative(
             effect=q.effect,
             running_wac=q.running_wac,
             fx_info=tx_fx_info.get(q.tx_id) if q.tx_id is not None else None,
+            original_unit_cost=tx_original_costs[q.tx_id][0] if q.tx_id is not None and q.tx_id in tx_original_costs else None,
+            original_currency=tx_original_costs[q.tx_id][1] if q.tx_id is not None and q.tx_id in tx_original_costs else None,
+            fx_rate_used=tx_fx_rates.get(q.tx_id) if q.tx_id is not None else None,
         )
         for q in calc_result.qualifying
     ]

@@ -20,6 +20,7 @@
     import type {SelectOption} from './types';
     import {ensureAssetsLoaded, getAllAssets, assetStoreVersion, type AssetInfo} from '$lib/stores/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {getCurrencyInfo} from '$lib/stores/currencyStore';
 
     interface Props {
         /** Currently selected asset id (null = none). */
@@ -66,7 +67,7 @@
             value: String(a.id),
             label: a.display_name,
             searchText: [a.identifier_isin, a.identifier_ticker, a.currency, a.asset_type].filter(Boolean).join(' '),
-            disabled: !a.active,
+            disabled: !a.active || a.asset_type === 'INDEX',
             icon: a.icon_url || (a.asset_type ? getAssetTypeIconUrl(a.asset_type) : undefined),
             data: a,
         }));
@@ -103,7 +104,12 @@
                 {/if}
                 <div class="min-w-0 flex-1">
                     <div class="font-medium text-gray-900 dark:text-gray-100 truncate text-sm">{a?.identifier_ticker || option.label}</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{option.label}{a?.currency ? ` · ${a.currency}` : ''}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {option.label}{#if a?.currency}{@const ci = getCurrencyInfo(a.currency)} ·
+                            <span class="inline-flex items-center gap-0.5"
+                                >{#if ci.symbol && ci.symbol !== a.currency}<span>{ci.symbol}</span>{/if}{#if ci.flag_emoji}<span class="emoji-flag">{ci.flag_emoji}</span>{/if}<span>{a.currency}</span></span
+                            >{/if}
+                    </div>
                 </div>
             </div>
         {/snippet}
@@ -115,7 +121,12 @@
                 {/if}
                 <span class="truncate text-sm">{a?.identifier_ticker ? `${a.identifier_ticker} · ${option.label}` : option.label}</span>
                 {#if a?.currency}
-                    <span class="ml-auto text-[10px] font-mono uppercase opacity-60 shrink-0">{a.currency}</span>
+                    {@const ci = getCurrencyInfo(a.currency)}
+                    <span class="ml-auto text-[10px] font-mono opacity-60 shrink-0 inline-flex items-center gap-0.5">
+                        {#if ci.symbol && ci.symbol !== a.currency}{ci.symbol}{/if}
+                        {#if ci.flag_emoji}<span class="emoji-flag">{ci.flag_emoji}</span>{/if}
+                        {a.currency}
+                    </span>
                 {/if}
             </div>
         {/snippet}

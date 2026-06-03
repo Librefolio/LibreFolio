@@ -65,10 +65,7 @@ test.describe('Asset Event Delete', () => {
         await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
 
         // Click on Apple card (has events without linked transactions)
-        const appleCard = page
-            .locator('[data-testid^="asset-card-"]')
-            .filter({hasText: /Apple/i})
-            .first();
+        const appleCard = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
         await expect(appleCard).toBeVisible({timeout: 5_000});
         await appleCard.click();
 
