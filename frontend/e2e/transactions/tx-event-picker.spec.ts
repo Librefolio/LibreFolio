@@ -166,4 +166,47 @@ test.describe('Event Picker', () => {
         const dividendEmoji = page.locator('text=💰');
         await expect(dividendEmoji.first()).toBeVisible({timeout: 5_000});
     });
+
+    test('create new event via inline modal', async ({page}) => {
+        await setupDividendForm(page);
+        await openOptionalSection(page);
+
+        // Open event picker dropdown
+        const trigger = page.getByTestId('tx-form-event-picker-trigger');
+        await expect(trigger).toBeVisible({timeout: 5_000});
+        await trigger.click();
+        await page.waitForTimeout(500);
+
+        // Click "+ New event" button in footer
+        const createBtn = page.getByTestId('tx-form-event-create-new');
+        await expect(createBtn).toBeVisible({timeout: 3_000});
+        await createBtn.click();
+        await page.waitForTimeout(500);
+
+        // Mini modal should appear
+        const modal = page.getByTestId('event-create-mini-modal');
+        await expect(modal).toBeVisible({timeout: 3_000});
+
+        // Type should default to DIVIDEND (SimpleSelect shows text)
+        const typeSelect = page.getByTestId('event-create-type');
+        await expect(typeSelect).toContainText('Dividend', {timeout: 3_000});
+
+        // Fill amount
+        const amountInput = page.getByTestId('event-create-amount');
+        await amountInput.fill('1.50');
+
+        // Fill notes
+        const notesInput = page.getByTestId('event-create-notes');
+        await notesInput.fill('E2E test event');
+
+        // Submit
+        const submitBtn = page.getByTestId('event-create-submit');
+        await submitBtn.click();
+
+        // Modal should close and event should be auto-selected
+        await expect(modal).not.toBeVisible({timeout: 10_000});
+
+        // The trigger should now show the newly created event (with 💰 emoji)
+        await expect(trigger).toContainText('💰', {timeout: 5_000});
+    });
 });

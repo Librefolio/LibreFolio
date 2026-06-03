@@ -587,7 +587,12 @@
       "sameBrokerError": "Les courtiers doivent être différents",
       "loadingPartner": "Chargement de la transaction liée…",
       "swapSides": "Inverser les côtés",
-      "apply": "Appliquer"
+      "apply": "Appliquer",
+      "eventPickerCreateNew": "Nouvel événement",
+      "eventCreateTitle": "Créer événement pour {asset}",
+      "eventCreateSuccess": "Événement créé",
+      "eventCreateAmountRequired": "Le montant est obligatoire",
+      "eventCreateDateRequired": "La date est obligatoire"
     },
     "bulk": {
       "titleCreate": "Nouvelles transactions",

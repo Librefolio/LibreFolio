@@ -76,11 +76,11 @@
         {#snippet selectedItem(option)}
             <div class="flex items-center gap-2 min-w-0">
                 {#if option.icon}
-                    <span class="shrink-0 w-7 h-7 flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded overflow-hidden">
+                    <span class="shrink-0 {compact ? 'w-5 h-5' : 'w-7 h-7'} flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded overflow-hidden">
                         <img
                             src={option.icon}
                             alt=""
-                            class="w-5 h-5 object-contain"
+                            class="{compact ? 'w-4 h-4' : 'w-5 h-5'} object-contain"
                             onerror={(e) => {
                                 const el = e.currentTarget;
                                 if (el instanceof HTMLImageElement) el.style.display = 'none';

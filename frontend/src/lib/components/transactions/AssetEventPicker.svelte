@@ -15,6 +15,7 @@
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
+    import {Plus} from 'lucide-svelte';
 
     interface Props {
         assetId: number;
@@ -23,9 +24,10 @@
         disabled?: boolean;
         onChange: (eventId: number | null) => void;
         txCash?: {amount: string; code: string} | null;
+        onCreateNew?: () => void;
     }
 
-    let {assetId, txDate, value, disabled = false, onChange, txCash = null}: Props = $props();
+    let {assetId, txDate, value, disabled = false, onChange, txCash = null, onCreateNew}: Props = $props();
 
     // =========================================================================
     // State
@@ -193,7 +195,47 @@
     // Selected event data
     // =========================================================================
 
-    let selectedEvent = $derived(value != null ? (events.find((e) => e.id === value) ?? null) : null);
+    // Pinned event: fetched independently when value points to an event outside the slider range
+    let pinnedEvent = $state<{id: number; date: string; type: string; amount: string; code: string; notes: string | null} | null>(null);
+
+    let selectedEvent = $derived.by(() => {
+        if (value == null) return null;
+        return events.find((e) => e.id === value) ?? pinnedEvent ?? null;
+    });
+
+    // When value changes or events load, if the selected event isn't in the list, fetch it directly
+    $effect(() => {
+        if (value == null) {
+            pinnedEvent = null;
+            return;
+        }
+        if (events.find((e) => e.id === value)) {
+            pinnedEvent = null;
+            return;
+        }
+        if (loading) return;
+        // Fetch the specific event by querying a wide range around txDate
+        if (!assetId || !txDate) return;
+        const fetchPinned = async () => {
+            try {
+                const {start, end} = computeDateRange(txDate, 365);
+                const resp = (await zodiosApi.query_events_bulk_api_v1_assets_events_query_post([{asset_id: assetId, date_range: {start, end}}])) as any;
+                const items = resp?.items?.[0]?.events ?? [];
+                const found = items.find((e: any) => e.id === value);
+                if (found) {
+                    pinnedEvent = {
+                        id: found.id,
+                        date: found.date,
+                        type: found.type,
+                        amount: found.value?.amount ?? '0',
+                        code: found.value?.code ?? '',
+                        notes: found.notes ?? null,
+                    };
+                }
+            } catch {}
+        };
+        fetchPinned();
+    });
 
     // Items list: "none" first, then events
     type PickerItem = {type: 'none'} | {type: 'event'; event: (typeof events)[0]};
@@ -321,42 +363,40 @@
 </script>
 
 <div class="flex flex-col gap-1" data-testid="tx-form-event-select">
-    <div class="flex items-center gap-2">
-        <span class="text-xs text-gray-500 dark:text-gray-400 w-32 shrink-0">{$t('transactions.form.linkedEvent')}</span>
-        <div class="flex-1 relative">
-            <!-- Trigger button -->
-            <button
-                bind:this={triggerRef}
-                type="button"
-                class="w-full flex items-center gap-2 px-3 py-2 text-left bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-sm transition-colors hover:border-libre-green focus:outline-none focus:ring-2 focus:ring-libre-green/30 disabled:opacity-60 disabled:cursor-not-allowed"
-                {disabled}
-                onclick={toggle}
-                onkeydown={handleKeydown}
-                role="combobox"
-                aria-expanded={isOpen}
-                aria-controls={_uid}
-                aria-haspopup="listbox"
-                data-testid="tx-form-event-picker-trigger"
-            >
-                {#if selectedEvent}
-                    {@const cfg = getTypeConfig(selectedEvent.type)}
-                    {@const delta = computeDelta(selectedEvent.amount, selectedEvent.code)}
-                    <span class="shrink-0 w-5 h-5 flex items-center justify-center {cfg.bg} rounded text-xs">{cfg.icon}</span>
-                    <span class="truncate text-xs flex-1"
-                        >{shortDate(selectedEvent.date)}{#if selectedEvent.notes}
-                            · {selectedEvent.notes}{/if}</span
-                    >
-                    {#if delta}
-                        <span class="text-[10px] font-mono {delta.color} shrink-0">Δ{delta.label}</span>
-                    {/if}
-                {:else}
-                    <span class="text-xs text-gray-400 italic flex-1">{$t('transactions.form.eventPickerNone') || 'No linked event'}</span>
+    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.linkedEvent')}</span>
+    <div class="relative">
+        <!-- Trigger button -->
+        <button
+            bind:this={triggerRef}
+            type="button"
+            class="w-full flex items-center gap-2 px-3 py-2 text-left bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-sm transition-colors hover:border-libre-green focus:outline-none focus:ring-2 focus:ring-libre-green/30 disabled:opacity-60 disabled:cursor-not-allowed"
+            {disabled}
+            onclick={toggle}
+            onkeydown={handleKeydown}
+            role="combobox"
+            aria-expanded={isOpen}
+            aria-controls={_uid}
+            aria-haspopup="listbox"
+            data-testid="tx-form-event-picker-trigger"
+        >
+            {#if selectedEvent}
+                {@const cfg = getTypeConfig(selectedEvent.type)}
+                {@const delta = computeDelta(selectedEvent.amount, selectedEvent.code)}
+                <span class="shrink-0 w-5 h-5 flex items-center justify-center {cfg.bg} rounded text-xs">{cfg.icon}</span>
+                <span class="truncate text-xs flex-1"
+                    >{shortDate(selectedEvent.date)}{#if selectedEvent.notes}
+                        · {selectedEvent.notes}{/if}</span
+                >
+                {#if delta}
+                    <span class="text-[10px] font-mono {delta.color} shrink-0">Δ{delta.label}</span>
                 {/if}
-                <svg class="w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform {isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
-        </div>
+            {:else}
+                <span class="text-xs text-gray-400 italic flex-1">{$t('transactions.form.eventPickerNone') || 'No linked event'}</span>
+            {/if}
+            <svg class="w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform {isOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+        </button>
     </div>
 </div>
 
@@ -435,5 +475,19 @@
                 {/each}
             {/if}
         </div>
+        {#if onCreateNew}
+            <button
+                type="button"
+                class="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-libre-green hover:bg-libre-green/10 dark:hover:bg-libre-green/20 border-t border-gray-100 dark:border-slate-700 transition-colors"
+                onclick={() => {
+                    close();
+                    onCreateNew?.();
+                }}
+                data-testid="tx-form-event-create-new"
+            >
+                <Plus size={14} class="shrink-0" />
+                <span class="font-medium">{$t('transactions.form.eventPickerCreateNew') || '+ New event'}</span>
+            </button>
+        {/if}
     </div>
 {/if}

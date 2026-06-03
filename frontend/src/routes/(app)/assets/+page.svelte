@@ -1188,7 +1188,7 @@
 
 <!-- Chart Settings Modal (D4) -->
 <ChartSettingsModal
-    bind:open={settingsModalOpen}
+    open={settingsModalOpen}
     mode={settingsTargetId ? 'pair' : 'global'}
     onclose={() => {
         settingsModalOpen = false;

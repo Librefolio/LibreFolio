@@ -8,7 +8,7 @@
   - Focus trapping (backdrop gets focus to capture keyboard events)
   - Configurable z-index for modal stacking
   - Dark mode support
-  - Slot-based content injection
+  - Snippet-based content injection (Svelte 5)
 
   Z-index layers:
     50 = first-level modals (default)
@@ -17,28 +17,34 @@
 -->
 <script lang="ts">
     import {fade, scale} from 'svelte/transition';
+    import type {Snippet} from 'svelte';
 
-    // Props
-    /** Whether the modal is open */
-    export let open: boolean = false;
-    /** Z-index level: 50 (default), 60 (stacked), 70 (third-level) */
-    export let zIndex: number = 50;
-    /** Maximum width: 'sm'|'md'|'lg'|'xl'|'2xl'|'3xl'|'4xl'|'5xl'|'none' or a CSS value */
-    export let maxWidth: string = 'lg';
-    /** Whether clicking the backdrop closes the modal */
-    export let closeOnBackdropClick: boolean = true;
-    /** Whether pressing Escape closes the modal */
-    export let closeOnEscape: boolean = true;
-    /** Called when the user requests to close (backdrop click or Escape) */
-    export let onRequestClose: () => void = () => {};
-    /** Extra CSS class for the modal-content div */
-    export let contentClass: string = '';
-    /** data-testid for testing */
-    export let testId: string = '';
-    /** Disable transitions (useful for nested modals) */
-    export let noTransition: boolean = false;
-    /** Allow content overflow (for dropdowns inside compact modals) */
-    export let allowOverflow: boolean = false;
+    interface Props {
+        /** Whether the modal is open */
+        open?: boolean;
+        /** Z-index level: 50 (default), 60 (stacked), 70 (third-level) */
+        zIndex?: number;
+        /** Maximum width: 'sm'|'md'|'lg'|'xl'|'2xl'|'3xl'|'4xl'|'5xl'|'none' or a CSS value */
+        maxWidth?: string;
+        /** Whether clicking the backdrop closes the modal */
+        closeOnBackdropClick?: boolean;
+        /** Whether pressing Escape closes the modal */
+        closeOnEscape?: boolean;
+        /** Called when the user requests to close (backdrop click or Escape) */
+        onRequestClose?: () => void;
+        /** Extra CSS class for the modal-content div */
+        contentClass?: string;
+        /** data-testid for testing */
+        testId?: string;
+        /** Disable transitions (useful for nested modals) */
+        noTransition?: boolean;
+        /** Allow content overflow (for dropdowns inside compact modals) */
+        allowOverflow?: boolean;
+        /** Content snippet */
+        children?: Snippet;
+    }
+
+    let {open = false, zIndex = 50, maxWidth = 'lg', closeOnBackdropClick = true, closeOnEscape = true, onRequestClose = () => {}, contentClass = '', testId = '', noTransition = false, allowOverflow = false, children}: Props = $props();
 
     // Max-width preset map
     const maxWidthMap: Record<string, string> = {
@@ -51,7 +57,6 @@
         '4xl': '56rem',
         '5xl': '64rem',
         none: 'none',
-        // Support legacy class-name format
         'max-w-sm': '24rem',
         'max-w-md': '28rem',
         'max-w-lg': '32rem',
@@ -63,25 +68,26 @@
         'max-w-none': 'none',
     };
 
-    $: maxWidthValue = maxWidthMap[maxWidth] || maxWidth;
+    let maxWidthValue = $derived(maxWidthMap[maxWidth] || maxWidth);
 
     // Ref for backdrop focus
-    let backdropEl: HTMLDivElement;
-    let hasFocusedOnOpen = false;
+    let backdropEl = $state<HTMLDivElement | undefined>(undefined);
+    let hasFocusedOnOpen = $state(false);
 
     // Focus the backdrop ONCE when modal opens so keyboard events are captured
-    // NOTE: uses requestAnimationFrame instead of tick() to avoid triggering
-    // Svelte 5's flushSync inside a reactive block, which causes
-    // effect_update_depth_exceeded when combined with complex $effect chains.
-    $: if (open && backdropEl && !hasFocusedOnOpen) {
-        hasFocusedOnOpen = true;
-        requestAnimationFrame(() => backdropEl?.focus());
-    }
+    $effect(() => {
+        if (open && backdropEl && !hasFocusedOnOpen) {
+            hasFocusedOnOpen = true;
+            requestAnimationFrame(() => backdropEl?.focus());
+        }
+    });
 
     // Reset when modal closes
-    $: if (!open) {
-        hasFocusedOnOpen = false;
-    }
+    $effect(() => {
+        if (!open) {
+            hasFocusedOnOpen = false;
+        }
+    });
 
     // Track mousedown target to prevent false backdrop clicks during drag
     let mouseDownTarget: EventTarget | null = null;
@@ -91,8 +97,6 @@
     }
 
     function handleBackdropClick(event: MouseEvent) {
-        // Only close if BOTH mousedown and mouseup/click happened on the backdrop
-        // This prevents closing when user drags from inside modal to outside
         const clickedOnBackdrop = event.target === event.currentTarget;
         const mouseDownOnBackdrop = mouseDownTarget === event.currentTarget;
         mouseDownTarget = null;
@@ -104,8 +108,13 @@
 
     function handleKeydown(event: KeyboardEvent) {
         if (closeOnEscape && event.key === 'Escape') {
+            event.stopPropagation();
             onRequestClose();
         }
+    }
+
+    function stopPropagation(event: MouseEvent) {
+        event.stopPropagation();
     }
 </script>
 
@@ -113,27 +122,15 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     {#if noTransition}
-        <div class="modal-backdrop" style="z-index: {zIndex};" bind:this={backdropEl} tabindex="-1" on:mousedown={handleBackdropMouseDown} on:click={handleBackdropClick} on:keydown|stopPropagation={handleKeydown} role="dialog" aria-modal="true" data-testid={testId || undefined}>
-            <div class="modal-content {contentClass}" style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}" on:click|stopPropagation>
-                <slot />
+        <div class="modal-backdrop" style="z-index: {zIndex};" bind:this={backdropEl} tabindex="-1" onmousedown={handleBackdropMouseDown} onclick={handleBackdropClick} onkeydown={handleKeydown} role="dialog" aria-modal="true" data-testid={testId || undefined}>
+            <div class="modal-content {contentClass}" style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}" onclick={stopPropagation}>
+                {#if children}{@render children()}{/if}
             </div>
         </div>
     {:else}
-        <div
-            class="modal-backdrop"
-            style="z-index: {zIndex};"
-            bind:this={backdropEl}
-            tabindex="-1"
-            on:mousedown={handleBackdropMouseDown}
-            on:click={handleBackdropClick}
-            on:keydown|stopPropagation={handleKeydown}
-            role="dialog"
-            aria-modal="true"
-            data-testid={testId || undefined}
-            transition:fade={{duration: 150}}
-        >
-            <div class="modal-content {contentClass}" style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}" on:click|stopPropagation transition:scale={{duration: 200, start: 0.95}}>
-                <slot />
+        <div class="modal-backdrop" style="z-index: {zIndex};" bind:this={backdropEl} tabindex="-1" onmousedown={handleBackdropMouseDown} onclick={handleBackdropClick} onkeydown={handleKeydown} role="dialog" aria-modal="true" data-testid={testId || undefined} transition:fade={{duration: 150}}>
+            <div class="modal-content {contentClass}" style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}" onclick={stopPropagation} transition:scale={{duration: 200, start: 0.95}}>
+                {#if children}{@render children()}{/if}
             </div>
         </div>
     {/if}
@@ -148,7 +145,7 @@
         justify-content: center;
         background-color: rgba(0, 0, 0, 0.5);
         padding: 1rem;
-        outline: none; /* Remove focus ring on backdrop */
+        outline: none;
     }
 
     .modal-content {

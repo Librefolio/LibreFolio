@@ -884,7 +884,7 @@
 <ChartSettingsModal
     availableAssets={availableAssetsList}
     availablePairs={pairs.map((p) => `${p.config.base}-${p.config.quote}`)}
-    bind:open={settingsModalOpen}
+    open={settingsModalOpen}
     mode={settingsTargetSlug ? 'pair' : 'global'}
     onclose={() => {
         settingsModalOpen = false;
