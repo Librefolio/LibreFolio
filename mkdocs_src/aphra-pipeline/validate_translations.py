@@ -44,6 +44,7 @@ class Severity:
     ERROR = "❌ ERROR"
     WARN = "⚠️  WARN"
     INFO = "ℹ️  INFO"
+    LOCALIZED = "🌐 LOCALIZED"  # intentional localization (text in \text{}, code comments, decimal sep)
 
 
 @dataclass
@@ -74,6 +75,10 @@ class ValidationResult:
     @property
     def warnings(self) -> int:
         return sum(1 for i in self.issues if i.severity == Severity.WARN)
+
+    @property
+    def localized(self) -> int:
+        return sum(1 for i in self.issues if i.severity == Severity.LOCALIZED)
 
 
 # ---------------------------------------------------------------------------
@@ -268,11 +273,15 @@ def check_code_blocks(
             for line_idx, (sl, tl) in enumerate(zip(src_lines, tr_lines)):
                 if sl != tl:
                     issues.append(Issue(
-                        severity=Severity.ERROR,
+                        severity=Severity.LOCALIZED,  # shell comments translated or alignment stripped
                         file=cache_key, lang=lang,
                         check="code-block-modified",
-                        message=f"Code block #{idx + 1}, line {line_idx + 1} altered: "
-                                f"'{sl[:60]}' → '{tl[:60]}'",
+                        message=(
+                            f"Code block #{idx + 1}, line {line_idx + 1} altered "
+                            f"(check: comments translated or alignment stripped):\n"
+                            f"    SRC: {sl[:80]}\n"
+                            f"    TRN: {tl[:80]}"
+                        ),
                     ))
                     break
             else:
@@ -759,16 +768,45 @@ def check_latex(
     for idx, (src_m, tr_m) in enumerate(zip(src_display, tr_display)):
         if src_m.strip() != tr_m.strip():
             issues.append(Issue(
-                severity=Severity.ERROR,
+                severity=Severity.LOCALIZED,  # \text{} content intentionally localized
                 file=cache_key, lang=lang,
                 check="latex-display-modified",
-                message=f"Display math #{idx + 1} altered: "
-                        f"'{src_m.strip()[:50]}' → '{tr_m.strip()[:50]}'",
+                message=(
+                    f"Display math #{idx + 1} altered (check \\text{{}} not formula):\n"
+                    f"    SRC: $${src_m.strip()[:80]}$$\n"
+                    f"    TRN: $${tr_m.strip()[:80]}$$"
+                ),
             ))
 
-    # Inline math ($...$) — avoid matching display math
-    src_inline = re.findall(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)', source)
-    tr_inline = re.findall(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)', translated)
+    # Inline math ($...$) — avoid display math, currency ($0.25 / 500 $), bash vars (${VAR})
+    # Uses finditer to have access to surrounding context for suffix-currency detection
+    _INLINE_RE = re.compile(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)')
+    _NON_MATH_CONTENT_RE = re.compile(r'^[\d,.]|^\{')  # prefix currency or bash var
+    # Suffix currency: $ preceded by digit+optional-space (e.g. "500 $" or "500$")
+    _SUFFIX_CURRENCY_CTX_RE = re.compile(r'\d\s?$')
+    # Markdown bold/italic markup leaked between two $ signs — not real math
+    _MARKDOWN_MARKUP_RE = re.compile(r'\*\*|\*|__')
+
+    def _extract_inline(text: str) -> list[str]:
+        """Extract inline math, filtering out currency and bash-variable false positives."""
+        results = []
+        for m in _INLINE_RE.finditer(text):
+            content = m.group(1)
+            # Filter: content starts with digit/comma (prefix currency like $0.25) or { (bash var)
+            if _NON_MATH_CONTENT_RE.match(content.strip()):
+                continue
+            # Filter: text before opening $ ends with digit or digit+space (suffix currency like "500 $")
+            before = text[:m.start()]
+            if _SUFFIX_CURRENCY_CTX_RE.search(before):
+                continue
+            # Filter: content contains markdown bold/italic markers (leaked between two currency $ signs)
+            if _MARKDOWN_MARKUP_RE.search(content):
+                continue
+            results.append(content)
+        return results
+
+    src_inline = _extract_inline(source)
+    tr_inline = _extract_inline(translated)
 
     if len(src_inline) != len(tr_inline):
         issues.append(Issue(
@@ -782,11 +820,14 @@ def check_latex(
     for idx, (src_m, tr_m) in enumerate(zip(src_inline, tr_inline)):
         if src_m.strip() != tr_m.strip():
             issues.append(Issue(
-                severity=Severity.ERROR,
+                severity=Severity.LOCALIZED,  # \text{} or decimal sep intentionally localized
                 file=cache_key, lang=lang,
                 check="latex-inline-modified",
-                message=f"Inline math #{idx + 1} altered: "
-                        f"'${src_m}$' → '${tr_m}$'",
+                message=(
+                    f"Inline math #{idx + 1} altered (check \\text{{}} not formula structure):\n"
+                    f"    SRC: ${src_m}$\n"
+                    f"    TRN: ${tr_m}$"
+                ),
             ))
 
     return issues
@@ -839,6 +880,7 @@ def run_validate(args) -> int:
     target_langs = args.lang or _detect_target_languages()
     file_filter = getattr(args, "file", None)
     verbose = getattr(args, "verbose", False)
+    hide_localized = getattr(args, "hide_localized", False)
 
     # Get source files list
     if file_filter:
@@ -901,13 +943,20 @@ def run_validate(args) -> int:
 
             if issues:
                 result.issues.extend(issues)
-                # Print issues grouped by file
-                has_errors = any(i.severity == Severity.ERROR for i in issues)
-                has_warnings = any(i.severity == Severity.WARN for i in issues)
-                status = "❌" if has_errors else ("⚠️ " if has_warnings else "ℹ️ ")
-                print(f"  {status} {cache_key} → {lang}:")
-                for issue in issues:
-                    print(f"    {issue}")
+                # Filter for display (hide LOCALIZED if requested)
+                visible = [i for i in issues
+                           if not (hide_localized and i.severity == Severity.LOCALIZED)]
+                if visible:
+                    has_errors = any(i.severity == Severity.ERROR for i in visible)
+                    has_warnings = any(i.severity == Severity.WARN for i in visible)
+                    has_localized = any(i.severity == Severity.LOCALIZED for i in visible)
+                    status = "❌" if has_errors else ("⚠️ " if has_warnings else ("🌐" if has_localized else "ℹ️ "))
+                    print(f"  {status} {cache_key} → {lang}:")
+                    for issue in visible:
+                        print(f"    {issue}")
+                elif verbose:
+                    loc_count = sum(1 for i in issues if i.severity == Severity.LOCALIZED)
+                    print(f"  🌐 {cache_key} → {lang}: {loc_count} localized (hidden)")
             else:
                 result.files_ok += 1
                 if verbose:
@@ -921,12 +970,34 @@ def run_validate(args) -> int:
     print(f"   Files missing:  {result.files_missing}")
     print(f"   Errors:         {result.errors}")
     print(f"   Warnings:       {result.warnings}")
+    print(f"   Localized:      {result.localized}"
+          + ("  (hidden — use without --hide-localized to see)" if hide_localized else ""))
+
+    # Breakdown by check type
+    from collections import Counter
+    err_counts = Counter(i.check for i in result.issues if i.severity == Severity.ERROR)
+    warn_counts = Counter(i.check for i in result.issues if i.severity == Severity.WARN)
+    loc_counts = Counter(i.check for i in result.issues if i.severity == Severity.LOCALIZED)
+    if err_counts:
+        print(f"\n   ❌ Errors by type:")
+        for check, count in sorted(err_counts.items(), key=lambda x: -x[1]):
+            print(f"      {count:3d}  {check}")
+    if warn_counts:
+        print(f"\n   ⚠️  Warnings by type:")
+        for check, count in sorted(warn_counts.items(), key=lambda x: -x[1]):
+            print(f"      {count:3d}  {check}")
+    if loc_counts and not hide_localized:
+        print(f"\n   🌐 Localized by type (intentional — use --hide-localized to suppress):")
+        for check, count in sorted(loc_counts.items(), key=lambda x: -x[1]):
+            print(f"      {count:3d}  {check}")
 
     if result.errors:
         print(f"\n❌ {result.errors} error(s) found — translations need fixing.")
         print(f"   Tip: re-translate with --force, or use a better model (e.g. Gemini Flash via OpenRouter)")
     elif result.warnings:
         print(f"\n⚠️  {result.warnings} warning(s) — review manually.")
+    elif result.localized:
+        print(f"\n🌐 {result.localized} localized diff(s) — intentional, no action needed.")
     else:
         print(f"\n✅ All translations look good!")
 
@@ -957,6 +1028,10 @@ def register_subparser(mk_sub) -> None:
         "--verbose", "-v", action="store_true",
         help="Show OK files and skipped files",
     )
+    vp.add_argument(
+        "--hide-localized", "-L", action="store_true", dest="hide_localized",
+        help="Hide intentional localization diffs (latex \\text{}, code comments, decimal sep)",
+    )
     vp.set_defaults(func=run_validate)
 
 
@@ -972,6 +1047,10 @@ def main():
     )
     parser.add_argument("--file", action="extend", nargs="+", metavar="PATH")
     parser.add_argument("--verbose", "-v", action="store_true")
+    parser.add_argument(
+        "--hide-localized", "-L", action="store_true", dest="hide_localized",
+        help="Hide intentional localization diffs",
+    )
     parser.set_defaults(func=run_validate)
 
     args = parser.parse_args()

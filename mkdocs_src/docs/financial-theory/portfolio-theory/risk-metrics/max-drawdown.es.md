@@ -30,7 +30,7 @@ El Máximo Drawdown es el valor mínimo (más negativo) de $DD_t$ durante todo e
 | $-10\%$ a $-20\%$ | Corrección significativa |
 | $-20\%$ a $-30\%$ | Territorio de mercado bajista (Bear market) |
 | $-30\%$ a $-50\%$ | Mercado bajista severo (2008, COVID-2020) |
-| $< -50\%$ | Catastrófico (posiciones concentradas, crypto) |
+| $> -50\%$ | Catastrófico (posiciones concentradas, crypto) |
 
 !!! example "Ejemplo numérico"
 

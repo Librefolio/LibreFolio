@@ -6,53 +6,53 @@ Benvenuti nelle FAQ di LibreFolio. Qui troverete le risposte alle domande più c
 
 ### 🤔 Cos'è LibreFolio?
 
-LibreFolio è un tracker di portafoglio open-source che offre una visione completa e privata di tutti i tuoi investimenti. Potenti strumenti di analisi trasformano i tuoi dati in intuizioni concrete, così puoi prendere decisioni informate con piena fiducia e pieno controllo.
+LibreFolio è un tracker di portafoglio open-source che vi offre una visione completa e privata di tutti i vostri investimenti. Potenti strumenti di analisi trasformano i vostri dati in informazioni strategiche, permettendovi di prendere decisioni informate con piena fiducia e pieno controllo.
 
 ### 💰 LibreFolio è gratuito?
 
-Sì! LibreFolio è completamente gratuito e open-source sotto la [licenza AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html). Puoi installarlo sul tuo server e gestire tutto autonomamente senza alcun costo.
+Sì! LibreFolio è completamente gratuito e open-source sotto la [licenza AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html). Potete installarlo sul vostro server e gestire tutto autonomamente senza alcun costo.
 
 !!! info "Prossimamente: piattaforma hosted ☁️"
 
-    Stiamo lavorando a una piattaforma online per coloro che non hanno il tempo, l'interesse o le competenze tecniche per il self-hosting. La versione hosted offrirà tutte le funzionalità senza alcuna configurazione, aggiornamenti automatici e supporto dedicato — disponibile tramite abbonamento a pagamento.
+    Stiamo lavorando a una piattaforma online per coloro che non hanno il tempo, l'interesse o le competenze tecniche per il self-hosted. La versione hosted offrirà tutte le funzionalità con installazione zero, aggiornamenti automatici e supporto dedicato — disponibile tramite abbonamento a pagamento.
 
-### 🤖 Sono previste funzionalità di IA?
+### 🤖 Sono previste funzionalità di AI?
 
-Sì! La nostra roadmap include **assistenti basati su IA** per aiutarti ad analizzare il tuo portafoglio, individuare i trend e prendere decisioni meglio informate.
+Sì! La nostra roadmap include **assistenti basati su AI** per aiutarvi ad analizzare il vostro portafoglio, individuare trend e prendere decisioni meglio informate.
 
-- **Self-hosted**: puoi collegare i tuoi modelli di IA e gestire tutto indipendentemente
-- **Piattaforma hosted**: gli assistenti IA saranno completamente integrati — pronti all'uso senza necessità di configurazione, insieme a un supporto premium
+- **Self-hosted**: potete collegare i vostri modelli di AI e gestire tutto in modo indipendente
+- **Piattaforma hosted**: gli assistenti AI saranno completamente integrati — pronti all'uso senza necessità di configurazione, insieme a un supporto premium
 
 ### 📊 Quali asset posso monitorare?
 
 LibreFolio supporta:
 
-- **Azioni e ETF** — Prezzi recuperati automaticamente tramite provider (es. yfinance)
+- **Azioni & ETF** — Prezzi recuperati automaticamente tramite provider di dati (es. yfinance)
 - **Criptovalute** — Prossimamente
 - **Obbligazioni** — Supportato l'inserimento manuale
-- **P2P Lending** — Asset con rendimenti programmati
-- **Liquidità e Depositi** — Monitora la tua liquidità
+- **P2P Lending** — Asset con investimento programmato
+- **Liquidità & Depositi** — Monitorate la vostra liquidità
 
 !!! tip "Manca qualcosa? 💡"
 
-    Se c'è una classe di asset o una funzionalità che vorresti vedere e a cui non abbiamo ancora pensato, ci piacerebbe conoscere la tua opinione! Apri una [richiesta di funzionalità su GitHub](https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement) e faccelo sapere.
+    Se c'è una classe di asset o una funzionalità che vorreste vedere e a cui non abbiamo ancora pensato, ci piacerebbe saperlo! Aprite una [richiesta di funzionalità su GitHub](https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement) e fatecelo sapere.
 
-## 🚀 Primi Passi
+## 🚀 Guida Rapida
 
 ### 📦 Come installo LibreFolio?
 
-Consulta la nostra [Guida all'Installazione](../developer/dev-installation.md) per istruzioni dettagliate.
+Consultate la nostra [Guida all'Installazione](../developer/dev-installation.md) per istruzioni dettagliate.
 
 ### 👤 Come creo un account?
 
-1. Vai alla pagina di login
-2. Clicca su "Register"
-3. Inserisci i tuoi dati
-4. Il tuo account è pronto all'uso!
+1. Navigate alla pagina di login
+2. Cliccate su "Registrati"
+3. Inserite i vostri dati
+4. Il vostro account è pronto all'uso!
 
 ### 🔑 Ho dimenticato la password, cosa devo fare?
 
-Attualmente, il reset della password viene effettuato via CLI. Contatta l'amministratore della tua istanza o esegui:
+Al momento, il reset della password viene effettuato tramite CLI. Contattate l'amministratore della vostra istanza o eseguite:
 
 ```bash
 ./dev.py user reset <username> <new_password>
@@ -62,28 +62,34 @@ Attualmente, il reset della password viene effettuato via CLI. Contatta l'ammini
 
 ### 📉 I prezzi dei miei asset non si aggiornano
 
-Verifica che:
+Verificate che:
 
-1. L'auto-sync sia abilitato nelle Impostazioni Globali
-2. I tuoi asset abbiano ISIN validi o simboli riconosciuti dal **provider** configurato (es. [yfinance](https://pypi.org/project/yfinance/) per azioni ed ETF)
-3. Il servizio del provider sia disponibile (controlla i log del server per eventuali errori)
+1. La sincronizzazione automatica dei prezzi sia abilitata nelle impostazioni globali
+2. I vostri asset abbiano ISIN o simboli validi riconosciuti dal **provider** configurato (es. [yfinance](https://pypi.org/project/yfinance/) per azioni ed ETF)
+3. Il servizio del provider sia disponibile (controllate i log del server per eventuali errori)
 
-### 💱 I miei tassi FX non si aggiornano
+### 💱 I miei tassi di cambio non si aggiornano
 
-Verifica che:
+Verificate che:
 
 1. La coppia di valute abbia almeno un [provider configurato](../user/fx/detail/provider.md)
 2. L'API del provider sia raggiungibile (ECB, FED, BOE, SNB)
-3. Hai eseguito un [sync](../user/fx/sync.md) per l'intervallo di date desiderato
-4. Controlla la [catena di fallback del provider](../user/fx/detail/provider.md) per le opzioni di fallback
+3. Abbiate eseguito una [sincronizzazione](../user/fx/sync.md) per l'intervallo di date desiderato
+4. Controllate la [gerarchia dei provider](../user/fx/detail/provider.md) per le opzioni di fallback
 
 ### 🔐 Non riesco a effettuare il login
 
-- Verifica il tuo nome utente e la password
-- Controlla se il tuo account è attivato
-- Svuota i cookie del browser e riprova
+- Verificate username e password
+- Controllate se il vostro account è attivato
+- Cancellate i cookie del browser e riprovate
 
-## 🆘 Hai bisogno di ulteriore aiuto?
+### 📱 Posso usare LibreFolio come app mobile?
+
+Sì! LibreFolio supporta l'installazione come **PWA (Progressive Web App)**. Potete aggiungerlo alla schermata home su Android, iOS o desktop per un'esperienza a schermo intero simile a un'app — senza bisogno di app store.
+
+Consultate la guida [Installa come App (PWA)](../user/pwa.md) per le istruzioni passo dopo passo.
+
+## 🆘 Serve altro aiuto?
 
 - [Documentazione Completa](../index.md)
 - [Segnala un Bug](https://github.com/Alfystar/LibreFolio/issues)

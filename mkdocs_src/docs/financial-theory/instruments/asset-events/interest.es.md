@@ -26,39 +26,39 @@ A diferencia de los dividendos (que dependen de los beneficios de la empresa), l
 
 ??? example "📏 Interés Simple"
 
- Interés calculado únicamente sobre el capital original, sin capitalización:
+    Interés calculado únicamente sobre el capital original, sin capitalización:
 
- $$
- I = P \times r \times t
- $$
+    $$
+    I = P \times r \times t
+    $$
 
- Donde:
+    Donde:
 
- - $P$ = capital (inversión inicial)
- - $r$ = tasa de interés anual (p. ej., 0.04 para el 4%)
- - $t$ = tiempo en años
+    - $P$ = capital (inversión inicial)
+    - $r$ = tasa de interés anual (p. ej., 0.04 para el 4%)
+    - $t$ = tiempo en años
 
- Utilizado para: préstamos a corto plazo, algunas cuentas de ahorro, letras del tesoro.
+    Utilizado para: préstamos a corto plazo, algunas cuentas de ahorro, letras del tesoro.
 
 ??? example "📈 Interés Compuesto"
 
- Interés calculado sobre el capital **más** los intereses acumulados previamente:
+    Interés calculado sobre el capital **más** los intereses acumulados previamente:
 
- $$
- A = P \times \left(1 + \frac{r}{n}\right)^{n \times t}
- $$
+    $$
+    A = P \times \left(1 + \frac{r}{n}\right)^{n \times t}
+    $$
 
- Donde:
+    Donde:
 
- - $A$ = valor final (capital + interés)
- - $P$ = capital
- - $r$ = tasa de interés anual
- - $n$ = frecuencia de capitalización por año (12 = mensual, 4 = trimestral, 1 = anual)
- - $t$ = tiempo en años
+    - $A$ = valor final (capital + interés)
+    - $P$ = capital
+    - $r$ = tasa de interés anual
+    - $n$ = frecuencia de capitalización por año (12 = mensual, 4 = trimestral, 1 = anual)
+    - $t$ = tiempo en años
 
- El interés ganado es: $I = A - P$
+    El interés ganado es: $I = A - P$
 
- Utilizado para: la mayoría de los bonos, cuentas de ahorro con reinversión, plataformas P2P.
+    Utilizado para: la mayoría de los bonos, cuentas de ahorro con reinversión, plataformas P2P.
 
 ---
 
@@ -72,11 +72,11 @@ Para los **bonos con cupón**, los pagos de intereses provocan un reinicio peri�
 
 ??? example "Ciclo de cupón de bono"
 
- Un bono con un valor nominal de 1.000 € paga un cupón anual del 4% semestralmente (20 € cada 6 meses).
+    Un bono con un valor nominal de 1.000 € paga un cupón anual del 4% semestralmente (20 € cada 6 meses).
 
- - **Día anterior al cupón**: Precio limpio 980 €, Interés devengado 20 € → Precio sucio 1.000 €
- - **Fecha del cupón**: El interés devengado se restablece a 0 €, el inversor recibe 20 € en efectivo
- - **Día posterior al cupón**: Precio limpio 980 €, Interés devengado ≈ 0,11 € → Precio sucio 980,11 €
+    - **Día anterior al cupón**: Precio limpio 980 €, Interés devengado 20 € → Precio sucio 1.000 €
+    - **Fecha del cupón**: El interés devengado se restablece a 0 €, el inversor recibe 20 € en efectivo
+    - **Día posterior al cupón**: Precio limpio 980 €, Interés devengado ≈ 0,11 € → Precio sucio 980,11 €
 
 Para los activos de **inversión programada** en LibreFolio, los eventos de interés modifican directamente el precio calculado:
 
@@ -96,38 +96,38 @@ Donde:
 
 ??? example "📐 Rendimiento Actual"
 
- La medida de rendimiento más sencilla: los ingresos anuales en relación con el precio actual:
+    La medida de rendimiento más sencilla: los ingresos anuales en relación con el precio actual:
 
- $$
- \text{Rendimiento Actual} = \frac{\text{Cupón Anual}}{\text{Precio de Mercado Actual}} \times 100
- $$
+    $$
+    \text{Rendimiento Actual} = \frac{\text{Cupón Anual}}{\text{Precio de Mercado Actual}} \times 100
+    $$
 
- Donde:
+    Donde:
 
- - **Cupón Anual** = total de pagos de cupones por año (p. ej., 40 € para un bono del 4% con un valor nominal de 1.000 €)
- - **Precio de Mercado Actual** = lo que pagaría por comprar el bono hoy
+    - **Cupón Anual** = total de pagos de cupones por año (p. ej., 40 € para un bono del 4% con un valor nominal de 1.000 €)
+    - **Precio de Mercado Actual** = lo que pagaría por comprar el bono hoy
 
- Limitación: ignora la plusvalía o pérdida de capital si se mantiene hasta el vencimiento.
+    Limitación: ignora la plusvalía o pérdida de capital si se mantiene hasta el vencimiento.
 
 ??? example "📐 Rendimiento al Vencimiento (YTM)"
 
- El rendimiento total previsto si el bono se mantiene hasta el vencimiento, contabilizando **todos** los flujos de caja: pagos de cupones, reembolso del valor nominal y la diferencia entre el precio de compra y el valor a la par.
+    El rendimiento total previsto si el bono se mantiene hasta el vencimiento, contabilizando **todos** los flujos de caja: pagos de cupones, reembolso del valor nominal y la diferencia entre el precio de compra y el valor a la par.
 
- YTM es la tasa $y$ que satisface:
+    YTM es la tasa $y$ que satisface:
 
- $$
- P = \sum_{t=1}^{T} \frac{C}{(1+y)^t} + \frac{F}{(1+y)^T}
- $$
+    $$
+    P = \sum_{t=1}^{T} \frac{C}{(1+y)^t} + \frac{F}{(1+y)^T}
+    $$
 
- Donde:
+    Donde:
 
- - $P$ = precio de mercado actual
- - $C$ = pago de cupón por período
- - $F$ = valor nominal (devuelto al vencimiento)
- - $T$ = número de períodos hasta el vencimiento
- - $y$ = rendimiento al vencimiento (por período)
+    - $P$ = precio de mercado actual
+    - $C$ = pago de cupón por período
+    - $F$ = valor nominal (devuelto al vencimiento)
+    - $T$ = número de períodos hasta el vencimiento
+    - $y$ = rendimiento al vencimiento (por período)
 
- YTM debe resolverse numéricamente (no tiene una solución de forma cerrada).
+    YTM debe resolverse numéricamente (no tiene una solución de forma cerrada).
 
 ---
 

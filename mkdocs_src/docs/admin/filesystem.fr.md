@@ -1,6 +1,6 @@
 # 📂 Structure du système de fichiers
 
-LibreFolio stocke toutes les données persistantes dans un répertoire structuré sous `backend/data/`. Il est important de comprendre cette structure pour la sauvegarde, le débogage et la maintenance.
+LibreFolio stocke toutes les données persistantes dans un répertoire structuré sous `backend/data/`. La compréhension de cette structure est importante pour la sauvegarde, le débogage et la maintenance.
 
 ---
 
@@ -21,10 +21,10 @@ backend/data/
 │ └── 📝 logs/ # Application log files
 │
 └── 🧪 test/ # Test data (completely isolated)
- ├── 🗃️ sqlite/app.db
- ├── 🖼️ custom-uploads/
- ├── 📊 broker_reports/
- └── 📝 logs/
+    ├── 🗃️ sqlite/app.db
+    ├── 🖼️ custom-uploads/
+    ├── 📊 broker_reports/
+    └── 📝 logs/
 ```
 
 ---
@@ -61,7 +61,37 @@ Fichiers de rapports de courtiers pour le système BRIM (Broker Report Import Ma
 
 ### 📝 `logs/`
 
-Journaux de l'application au format JSON structuré (via `structlog`).
+Journaux de l'application au format JSON structuré (via `structlog`). Les fichiers de journaux font l'objet d'une rotation hebdomadaire et sont conservés pendant 1 an (compressés avec gzip).
+
+La verbosité est contrôlée par la variable d'environnement `LOG_LEVEL`.
+
+**Ce que chaque niveau capture** — chaque ligne montre quels niveaux de log sont visibles :
+
+| LOG_LEVEL | 🔬 TRACE (5) | 🐛 DEBUG (10) | ℹ️ INFO (20) | ⚠️ WARNING (30) | ❌ ERROR (40) | 💀 CRITICAL (50) |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| 🔬`TRACE` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 🐛`DEBUG` | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| ℹ️ **`INFO`** *(par défaut)* | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
+| ⚠️ `WARNING` | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| ❌`ERROR` | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| 💀`CRITICAL` | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+
+**Signification de chaque niveau :**
+
+| Niveau | Ce qu'il capture |
+|-------|-----------------|
+| 🔬`TRACE` | Données granulaires à haute fréquence : taux de change individuels analysés, points de prix par actif |
+| 🐛`DEBUG` | Internes opérationnels : quel fournisseur a été utilisé, résultats intermédiaires, décisions algorithmiques |
+| ℹ️`INFO` | Opérations utilisateur significatives : synchronisation terminée, import, connexion, ressource créée/supprimée |
+| ⚠️`WARNING` | Anomalies récupérables : fallback activé, données optionnelles manquantes, mode dégradé |
+| ❌`ERROR` | Erreurs gérées : opérations échouées, corruption de données, fournisseur injoignable |
+| 💀`CRITICAL` | Erreurs fatales qui arrêtent le processus |
+
+!!! tip "Paramètres recommandés"
+
+    - **Production** : `LOG_LEVEL=INFO` — signal clair, sans bruit
+    - **Dépannage** : `LOG_LEVEL=DEBUG` — voir les décisions du système
+    - **Débogage profond taux de change/prix** : `LOG_LEVEL=TRACE` — voir chaque point de donnée individuel
 
 ---
 
@@ -83,7 +113,7 @@ Journaux de l'application au format JSON structuré (via `structlog`).
 Le moyen le plus simple de sauvegarder LibreFolio est de copier l'intégralité du répertoire de données :
 
 ```bash
-# Arrêter d'abord le serveur (pour garantir la cohérence de la base de données)
+# Stop the server first (to ensure database consistency)
 cp -r backend/data/prod/ /path/to/backup/librefolio-$(date +%Y%m%d)/
 ```
 
@@ -99,17 +129,17 @@ docker volume inspect librefolio_data
 docker cp librefolio-container:/app/backend/data/prod/ ./backup/
 ```
 
-### ✅ Éléments à sauvegarder
+### ✅ Quoi sauvegarder
 
 Au minimum, sauvegardez :
 
 1. **`sqlite/app.db`** — Toutes vos données (utilisateurs, transactions, paramètres, taux de change)
 2. **`custom-uploads/`** — Fichiers téléversés par les utilisateurs (avatars, documents)
-3. **`broker_reports/uploaded/`** — Rapports de courtiers originaux (au cas où vous auriez besoin de les analyser à nouveau)
+3. **`broker_reports/uploaded/`** — Rapports de courtiers originaux (au cas où vous auriez besoin de les ré-analyser)
 
 !!! tip "Sauvegarde de la base de données uniquement"
 
-    Si l'espace de stockage est limité, la sauvegarde de `sqlite/app.db` seule préserve toutes les données structurées. Les fichiers peuvent toujours être téléversés à nouveau.
+    Si l'espace de stockage est limité, la sauvegarde de `sqlite/app.db` seul préserve toutes les données structurées. Les fichiers peuvent toujours être téléversés à nouveau.
 
 ---
 
@@ -127,7 +157,7 @@ docker exec -it librefolio-container /bin/bash
 ./dev.py db upgrade
 ```
 
-### 💻 Accès direct (hors Docker)
+### 💻 Accès direct (non-Docker)
 
 ```bash
 # From the project root
@@ -139,4 +169,4 @@ docker exec -it librefolio-container /bin/bash
 ./dev.py db create-clean # Reset database (WARNING: deletes all data)
 ```
 
-Pour une liste complète des commandes CLI, consultez [CLI Tools](cli_tools.md).
+Pour une liste complète des commandes CLI, voir [CLI Tools](cli_tools.md).
