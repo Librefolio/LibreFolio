@@ -49,6 +49,9 @@ class WACQualifyingTX(BaseModel):
     effect: str = Field(..., description="add | reduce | add_zero_cost")
     fx_info: Optional[FxBackwardFillInfo] = None
     running_wac: Optional[SafeDecimal] = Field(None, description="Running WAC per unit after this TX")
+    original_unit_cost: Optional[SafeDecimal] = Field(None, description="Unit cost in original currency (before FX)")
+    original_currency: Optional[str] = Field(None, description="Original currency before FX conversion")
+    fx_rate_used: Optional[SafeDecimal] = Field(None, description="FX rate applied (derived: converted/original)")
 
 
 class WACPreviewResultItem(BaseModel):

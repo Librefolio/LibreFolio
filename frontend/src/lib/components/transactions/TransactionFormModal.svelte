@@ -49,7 +49,7 @@
     import CompactCashCell from '$lib/components/ui/CompactCashCell.svelte';
     import TransactionTypeSearchSelect from './TransactionTypeSearchSelect.svelte';
     import WacPreviewSection from './WacPreviewSection.svelte';
-    import AssetEventSelect from './AssetEventSelect.svelte';
+    import AssetEventPicker from './AssetEventPicker.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
 
@@ -1803,7 +1803,6 @@
                                 <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
                                     {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel}
                                         <span class="text-amber-500">{cashLabel}</span>{/if}
-                                    <span class="text-[10px] text-gray-400 italic" data-testid="tx-form-quantity-locked">· {$t('transactions.form.hintSignZero')}</span>
                                 </span>
                                 <CompactCashCell
                                     value={draft.cash}
@@ -1817,6 +1816,7 @@
                                 {#if cashHint}
                                     <span class="text-[10px] text-gray-400">{cashHint}</span>
                                 {/if}
+                                <span class="text-[10px] text-gray-400 italic">💡 {$t('transactions.form.cashLabelTotal')}</span>
                             </div>
                         {/if}
                         <!-- Both forbidden: nothing rendered (no current type uses this) -->
@@ -1905,11 +1905,12 @@
                     <div class="px-4 pb-4 space-y-3 text-sm">
                         <!-- 1. Asset event link (before tags) -->
                         {#if canShowAssetEvent}
-                            <AssetEventSelect
+                            <AssetEventPicker
                                 assetId={draft.asset_id!}
                                 txDate={draft.date}
                                 value={draft.asset_event_id}
                                 disabled={isReadonly}
+                                txCash={draft.cash}
                                 onChange={(id) => {
                                     draft = {...draft, asset_event_id: id};
                                 }}

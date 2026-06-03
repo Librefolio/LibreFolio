@@ -71,6 +71,8 @@ class BalanceValidationError(Exception):
         message: str,
         code: str = "",
         params: dict | None = None,
+        batch_index: int = -1,
+        batch_operation: str = "create",
     ):
         self.broker_id = broker_id
         self.date = date
@@ -78,6 +80,8 @@ class BalanceValidationError(Exception):
         self.balance = balance
         self.code = code
         self.params = params or {}
+        self.batch_index = batch_index
+        self.batch_operation = batch_operation
         super().__init__(message)
 
 
@@ -213,7 +217,6 @@ class TransactionService:
             return
         for broker_id in broker_ids:
             await self._check_broker_access_or_raise(broker_id, user_id, min_role=min_role)
-
 
     # =========================================================================
     # CROSS-RECORD VALIDATION HELPERS
@@ -411,8 +414,18 @@ class TransactionService:
     # BALANCE VALIDATION
     # =========================================================================
 
-    async def _validate_broker_balances(self, broker_id: int, from_date: Optional[date_type] = None) -> None:
-        """Validate cash and asset balances for a broker from a given date."""
+    async def _validate_broker_balances(
+        self,
+        broker_id: int,
+        from_date: Optional[date_type] = None,
+        batch_tx_ids: Optional[Dict[int, tuple]] = None,
+    ) -> None:
+        """Validate cash and asset balances for a broker from a given date.
+
+        Args:
+            batch_tx_ids: mapping of tx.id → (operation, batch_index) for batch transactions.
+                When a violation is caused by a batch tx, the error carries its index.
+        """
         broker = await self.session.get(Broker, broker_id)
         if not broker:
             return
@@ -434,6 +447,8 @@ class TransactionService:
         if not txs:
             return
 
+        _batch = batch_tx_ids or {}
+
         txs_by_date: Dict[date_type, List[Transaction]] = defaultdict(list)
         for tx in txs:
             txs_by_date[tx.date].append(tx)
@@ -442,15 +457,26 @@ class TransactionService:
         end_date = max(txs_by_date.keys())
 
         while current_date <= end_date:
+            # Track last batch tx that reduced each balance on this day
+            last_cash_reducer: Dict[str, tuple] = {}
+            last_asset_reducer: Dict[int, tuple] = {}
+
             for tx in txs_by_date.get(current_date, []):
                 if tx.amount != Decimal("0") and tx.currency:
                     cash_balances[tx.currency] = cash_balances.get(tx.currency, Decimal("0")) + tx.amount
+                    # Track batch txs that reduce cash
+                    if tx.amount < Decimal("0") and tx.id in _batch:
+                        last_cash_reducer[tx.currency] = _batch[tx.id]
                 if tx.quantity != Decimal("0") and tx.asset_id:
                     asset_balances[tx.asset_id] = asset_balances.get(tx.asset_id, Decimal("0")) + tx.quantity
+                    # Track batch txs that reduce asset quantity
+                    if tx.quantity < Decimal("0") and tx.id in _batch:
+                        last_asset_reducer[tx.asset_id] = _batch[tx.id]
 
             if not broker.allow_cash_overdraft:
                 for currency, balance in cash_balances.items():
                     if balance < Decimal("0"):
+                        b_op, b_idx = last_cash_reducer.get(currency, ("create", -1))
                         raise BalanceValidationError(
                             broker_id=broker_id,
                             date=current_date,
@@ -459,11 +485,14 @@ class TransactionService:
                             message=f"Cash balance for {currency} goes negative ({balance}) on {current_date} for broker {broker_id}",
                             code=TXValidationCode.BALANCE_CASH_NEGATIVE.value,
                             params={"brokerId": broker_id, "currency": currency, "balance": str(balance), "date": str(current_date)},
+                            batch_index=b_idx,
+                            batch_operation=b_op,
                         )
 
             if not broker.allow_asset_shorting:
                 for asset_id, balance in asset_balances.items():
                     if balance < Decimal("0"):
+                        b_op, b_idx = last_asset_reducer.get(asset_id, ("create", -1))
                         raise BalanceValidationError(
                             broker_id=broker_id,
                             date=current_date,
@@ -472,6 +501,8 @@ class TransactionService:
                             message=f"Asset {asset_id} quantity goes negative ({balance}) on {current_date} for broker {broker_id}",
                             code=TXValidationCode.BALANCE_ASSET_NEGATIVE.value,
                             params={"brokerId": broker_id, "assetId": asset_id, "balance": str(balance), "date": str(current_date)},
+                            batch_index=b_idx,
+                            batch_operation=b_op,
                         )
 
             current_date += timedelta(days=1)
@@ -1106,7 +1137,7 @@ class TransactionService:
                 if item.type is not None and item.type != tx.type:
                     allowed = get_swap_group(tx.type)
                     if item.type not in allowed:
-                        raise ValueError(f"Cannot change type from {tx.type.value} to {item.type.value} " f"(allowed swaps: {', '.join(t.value for t in allowed)})")
+                        raise ValueError(f"Cannot change type from {tx.type.value} to {item.type.value} (allowed swaps: {', '.join(t.value for t in allowed)})")
                     tx.type = item.type
                 if item.date is not None:
                     check_date = min(check_date, item.date)
@@ -1430,7 +1461,7 @@ class TransactionService:
             if r.operation == "create" and r.status == "success" and r.index not in checked_create_indices:
                 if r.index in auto_create_indices or r.index in promoted_create_indices:
                     continue
-                for tid in (r.ids or []):
+                for tid in r.ids or []:
                     tx = await self.session.get(Transaction, tid)
                     if tx and self._requires_cost_basis(tx) and tx.cost_basis_override is None:
                         issues.append(
@@ -1465,10 +1496,16 @@ class TransactionService:
         # 7. Balance walk per affected broker
         try:
             await self.session.flush()
+            # Build mapping: tx.id → (operation, batch_index) for batch transactions
+            batch_tx_ids: Dict[int, tuple] = {}
+            for r in results:
+                if r.status == "success" and r.ids:
+                    for tx_id in r.ids:
+                        batch_tx_ids[tx_id] = (r.operation, r.index)
             for broker_id, from_date in earliest_date_by_broker.items():
-                await self._validate_broker_balances(broker_id, from_date)
+                await self._validate_broker_balances(broker_id, from_date, batch_tx_ids=batch_tx_ids)
         except BalanceValidationError as e:
-            issues.append(TXValidationIssue(operation="create", index=-1, ref_id=None, error=str(e), code=e.code, params=e.params))
+            issues.append(TXValidationIssue(operation=e.batch_operation, index=e.batch_index, ref_id=None, error=str(e), code=e.code, params=e.params))
         except Exception as e:  # noqa: BLE001
             issues.append(TXValidationIssue(operation="create", index=-1, ref_id=None, error=f"Balance validation error: {e}"))
 

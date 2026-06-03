@@ -1336,7 +1336,7 @@
                                             </div>
                                         {:else if cellContent.type === 'html'}
                                             {#if cellContent.tooltip}
-                                                <Tooltip text={cellContent.tooltip.text} position={cellContent.tooltip.position ?? 'top'} maxWidth={cellContent.tooltip.maxWidth ?? '320px'}>
+                                                <Tooltip text={cellContent.tooltip.text ?? ''} html={cellContent.tooltip.html ?? ''} position={cellContent.tooltip.position ?? 'top'} maxWidth={cellContent.tooltip.maxWidth ?? '320px'}>
                                                     <span>{@html cellContent.html}</span>
                                                 </Tooltip>
                                             {:else}

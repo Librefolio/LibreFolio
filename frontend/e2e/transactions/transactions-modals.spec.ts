@@ -708,10 +708,7 @@ test.describe('Transactions', () => {
             await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 5_000});
 
             // Intercept the validate API call (auto-triggered by scheduler)
-            const validateResp = await page.waitForResponse(
-                (resp) => resp.url().includes('/api/v1/transactions/validate') && resp.request().method() === 'POST',
-                {timeout: 15_000},
-            );
+            const validateResp = await page.waitForResponse((resp) => resp.url().includes('/api/v1/transactions/validate') && resp.request().method() === 'POST', {timeout: 15_000});
 
             // Verify backend processed correctly
             expect(validateResp.status()).toBe(200);

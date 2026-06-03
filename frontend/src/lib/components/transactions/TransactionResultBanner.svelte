@@ -30,10 +30,12 @@
         ondismiss?: () => void;
         /** Slot for complex content (grouped issue lists with clickable buttons) */
         children?: Snippet;
+        /** Optional action rendered inline with the title (right-aligned) */
+        titleAction?: Snippet;
         testId?: string;
     }
 
-    let {variant, title, subtitle = '', messages = [], dismissible = false, ondismiss, children, testId = 'tx-result-banner'}: Props = $props();
+    let {variant, title, subtitle = '', messages = [], dismissible = false, ondismiss, children, titleAction, testId = 'tx-result-banner'}: Props = $props();
 
     const variantStyles = {
         success: 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/40',
@@ -44,7 +46,12 @@
 
 <div class="flex items-start gap-2 text-sm {variantStyles[variant]} rounded-lg border p-3 text-left" data-testid={testId}>
     <div class="flex-1 min-w-0">
-        <p class="font-semibold">{title}</p>
+        <div class="flex items-center justify-between gap-2">
+            <p class="font-semibold">{title}</p>
+            {#if titleAction}
+                {@render titleAction()}
+            {/if}
+        </div>
         {#if subtitle}
             <p class="text-xs opacity-80 mt-0.5">{subtitle}</p>
         {/if}
