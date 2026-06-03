@@ -17,6 +17,7 @@
     import CompactCashCell from '$lib/components/ui/CompactCashCell.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
+    import CurrencyChip from './CurrencyChip.svelte';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
     import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
     import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '$lib/utils/currencyFormat';
@@ -90,9 +91,15 @@
         /** Set of TX IDs that are pending (batch-created, not yet committed).
          *  Used to annotate qualifying table rows with pending indicator at render time. */
         pendingTxIds?: Set<number> | null;
+        /** Current WAC currency (from hint or response) */
+        wacCurrency?: string | null;
+        /** Called when user changes currency via chip */
+        onCurrencyChange?: (code: string) => void;
+        /** Available currencies for the chip dropdown */
+        availableCurrencies?: string[];
     }
 
-    let {value, onChange, mode, defaultCode = 'EUR', disabled = false, testid = 'wac-preview', senderBrokerId = null, assetId = null, txDate = null, pendingTxs = [], excludedTxIds = [], hideTable = false, onModeChange, externalResult = null, pendingTxIds = null}: Props = $props();
+    let {value, onChange, mode, defaultCode = 'EUR', disabled = false, testid = 'wac-preview', senderBrokerId = null, assetId = null, txDate = null, pendingTxs = [], excludedTxIds = [], hideTable = false, onModeChange, externalResult = null, pendingTxIds = null, wacCurrency = null, onCurrencyChange, availableCurrencies = []}: Props = $props();
 
     // =========================================================================
     // State
@@ -281,6 +288,15 @@
                     {$t('transactions.wacPreview.txsUsed') ?? 'transactions used'})
                 </span>
             </button>
+            {#if onCurrencyChange && availableCurrencies.length > 0}
+                <CurrencyChip
+                    value={wacCurrency}
+                    options={availableCurrencies}
+                    loading={loading}
+                    onChange={onCurrencyChange}
+                    testid="{testid}-currency-chip"
+                />
+            {/if}
             <DocsLink path="financial-theory/portfolio-theory/weighted-average-cost/" label={$t('transactions.wacPreview.docsTooltip') ?? 'Learn how WAC (Weighted Average Cost) is calculated'} size={11} />
         </div>
     {:else if isAuto && !previewResult && !loading && !error}

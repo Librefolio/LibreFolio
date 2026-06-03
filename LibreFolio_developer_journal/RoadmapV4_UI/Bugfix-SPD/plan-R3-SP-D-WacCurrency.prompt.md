@@ -1,7 +1,7 @@
 # Plan: R3-SP-D-WacCurrency — WAC Target Currency Selector
 
 **Date**: 3 Giugno 2026
-**Status**: ⏳ TODO
+**Status**: ✅ DONE
 **Priority**: P1
 **Parent**: [`plan-R3-SP-D-BugfixRound2.prompt.md`](./plan-R3-SP-D-BugfixRound2.prompt.md)
 **Origin**: Walktest Round 1 — colonna PMC con valute miste, currency non selezionabile
@@ -151,7 +151,9 @@ Le opzioni sono le **valute uniche trovate nelle transazioni dell'asset** (tutte
 
 ---
 
-## Step 1 — Backend: `determine_target_currency` → "ultima acquisizione"
+## Step 1 — Backend: `determine_target_currency` → "ultima acquisizione" ✅ 2026-06-03
+
+> **Note implementazione**: Riscritta `determine_target_currency()` → usa `max(acquisitions, key=date)` per l'ultima acquisizione. Aggiunto `target_currency_override: str | None` a `compute_wac_iterative()`. In `transaction_service._compute_wac_for_auto_items` il hint viene estratto da `schema_item.cost_basis_override.code` e passato come override.
 
 ### File: `backend/app/utils/financial_utils.py`
 
@@ -210,7 +212,9 @@ wac_result = await compute_wac_iterative(
 
 ---
 
-## Step 2 — Backend: validazione schema (permettere override in auto)
+## Step 2 — Backend: validazione schema (permettere override in auto) ✅ 2026-06-03
+
+> **Note implementazione**: Verificato che nessun validator blocca `cost_basis_override` quando mode è auto. Il model_validator in `TXCreateItem` (Rule 12) controlla solo che `cost_basis_mode` sia usato su TRANSFER/ADJUSTMENT receiver. Nessuna modifica necessaria.
 
 ### File: `backend/app/schemas/transactions.py`
 
@@ -219,7 +223,9 @@ Attualmente c'è un validator che potrebbe rifiutare `cost_basis_override` quand
 
 ---
 
-## Step 3 — Frontend: stato `wacCurrencyHint` nel FormModal
+## Step 3 — Frontend: stato `wacCurrencyHint` nel FormModal ✅ 2026-06-03
+
+> **Note implementazione**: Aggiunto `wacCurrencyHint = $state<string | null>(null)`. Viene popolato dalla prima risposta WAC (`formWacResult.wac.code`). `draftToTxFields()` ora costruisce `cost_basis_override: {code: hint, amount: '0'}` quando in auto con hint. Aggiunto `onWacCurrencyChange(code)` che setta l'hint e triggera validate. Il draft key include `wacCurrencyHint` per dedup corretta. Reset a null su apertura modal.
 
 ### File: `TransactionFormModal.svelte`
 
@@ -258,7 +264,9 @@ const costBasisPayload = draft.cost_basis_mode?.startsWith('auto')
 
 ---
 
-## Step 4 — Frontend: chip valuta nella riga suggestion
+## Step 4 — Frontend: chip valuta nella riga suggestion ✅ 2026-06-03
+
+> **Note implementazione**: Creato `CurrencyChip.svelte` (self-contained, getCurrencyInfo per flag/symbol, dropdown con click-outside). Integrato in WacPreviewSection con nuove props: `wacCurrency`, `onCurrencyChange`, `availableCurrencies`. Chip appare dopo il button "qualifying txs" nella suggestion line. Tutte e 3 le istanze di WacPreviewSection nel FormModal aggiornate.
 
 ### File: `WacPreviewSection.svelte`
 
@@ -311,7 +319,9 @@ Rendering:
 
 ---
 
-## Step 5 — Frontend: fix sfondo semi-trasparente
+## Step 5 — Frontend: fix sfondo semi-trasparente ✅ 2026-06-03
+
+> **Note implementazione**: Già soddisfatto by design: l'`opacity-60` è solo sul div contenente `CompactCashCell` (input amount+currency). Il chip è nella riga suggestion separata, e ha `class="opacity-100"` esplicito nel suo root. Il cambio valuta nel chip chiama `onWacCurrencyChange` che non tocca `costBasisMode`.
 
 ### Root cause attuale
 
@@ -326,7 +336,9 @@ Separare il chip dalla zona opaca:
 
 ---
 
-## Step 6 — Frontend: BulkModal — currency hint per-riga
+## Step 6 — Frontend: BulkModal — currency hint per-riga ✅ 2026-06-03
+
+> **Note implementazione**: Aggiunto `wacCurrencyHint?: string | null` a `PendingOp`. `opToTxFields()` ora costruisce `cost_basis_override: {code: hint, amount: '0'}` quando in auto mode con hint. Il FormModal passa `_wac_currency_hint` nel payload push. `patchRowFromForm`, `addRowFromForm`, `addDualRowFromForm` e `patchDualRowFromForm` estraggono il campo e lo persistono sull'op appropriato (receiver per dual).
 
 ### File: `TransactionBulkModal.svelte`
 
@@ -350,7 +362,9 @@ Il chip nella WacPreview della riga aggiorna `op.wacCurrencyHint` on change.
 
 ---
 
-## Step 7 — `availableCurrencies`: da dove vengono?
+## Step 7 — `availableCurrencies`: da dove vengono? ✅ 2026-06-03
+
+> **Note implementazione**: Usata opzione (A) — derivato da `externalWacResult.qualifying_txs` in FormModal (`wacAvailableCurrencies`). Sempre include asset currency come fallback. Aggiunto anche recovery del `wacCurrencyHint` dallo sentinel override (`amount=0`) quando il FormModal si apre da BulkModal (sia create che edit mode, sia solo che dual/transfer).
 
 Due opzioni:
 
@@ -370,7 +384,9 @@ Nota: alla prima chiamata (qualifying vuoto/non ancora tornato), il dropdown mos
 
 ---
 
-## Step 8 — Test e walktest
+## Step 8 — Test e walktest ✅ 2026-06-03
+
+> **Note implementazione**: svelte-check: 0 errors, 0 warnings. Playwright tx-event-picker: 4/4 passed. Backend analytics-wac e transactions-wac: tutti passati. Files staged, commit message in `/tmp/libreFolio_commit_WacCurrency.txt`.
 
 ### Walktest manuali
 

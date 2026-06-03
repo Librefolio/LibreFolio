@@ -1576,6 +1576,12 @@ class TransactionService:
 
             # Compute WAC (session sees all flushed rows)
             excluded = [db_tx.id] if not link_uuid else []
+
+            # Extract currency hint from cost_basis_override when mode is auto
+            ccy_hint: str | None = None
+            if getattr(schema_item, "cost_basis_override", None) is not None:
+                ccy_hint = schema_item.cost_basis_override.code
+
             wac_result = await compute_wac_iterative(
                 self.session,
                 broker_id=source_broker_id,
@@ -1583,6 +1589,7 @@ class TransactionService:
                 as_of_date=db_tx.date,
                 asset_currency=asset_currency,
                 excluded_tx_ids=excluded if excluded else None,
+                target_currency_override=ccy_hint,
             )
 
             # Write cost_basis_override on the DB row

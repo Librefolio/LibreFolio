@@ -100,6 +100,7 @@
         link_uuid?: string | null;
         /** W4b: partner on inaccessible broker — read-only sentinel */ inaccessible?: boolean;
         /** Cached WAC result from validate — transient, not sent to backend */ _wacCache?: WacResultEntry | null;
+        /** Currency hint for WAC target — null = backend decides */ wacCurrencyHint?: string | null;
     };
 
     interface Props {
@@ -676,6 +677,8 @@
         const next = createOpEmpty();
         applyFormPayload(next.fields, payload);
         if (typeof payload.link_uuid === 'string' && next.op === 'create') (next as any).link_uuid = payload.link_uuid;
+        // Persist WAC currency hint
+        if (typeof payload._wac_currency_hint === 'string') next.wacCurrencyHint = payload._wac_currency_hint;
         ops = [...ops, next];
     }
 
@@ -685,6 +688,12 @@
             if (d.tempId !== tempId) return d;
             const merged = {...d, fields: {...d.fields}};
             applyFormPayload(merged.fields, payload);
+            // Persist WAC currency hint from FormModal
+            if (typeof payload._wac_currency_hint === 'string') {
+                merged.wacCurrencyHint = payload._wac_currency_hint;
+            } else if (payload._wac_currency_hint === null) {
+                merged.wacCurrencyHint = null;
+            }
             return merged;
         });
     }
@@ -963,7 +972,9 @@
 
     /** Convert a PendingOp to the shared TxFields interface. */
     function opToTxFields(d: PendingOp): TxFields {
-        return {...d.fields, link_uuid: d.link_uuid ?? null};
+        // In auto mode with currency hint, override becomes the hint sentinel
+        const cbo = d.fields.cost_basis_mode === 'auto' && d.wacCurrencyHint ? {code: d.wacCurrencyHint, amount: '0'} : (d.fields.cost_basis_override || null);
+        return {...d.fields, cost_basis_override: cbo, link_uuid: d.link_uuid ?? null};
     }
 
     /** Derive the effective display status of a draft row.
@@ -2079,6 +2090,8 @@
         applyFormPayload(toOp.fields, items[1]);
         if (typeof items[1].link_uuid === 'string' && toOp.op === 'create') toOp.link_uuid = items[1].link_uuid;
         toOp.pairedWith = fromOp.tempId;
+        // Persist WAC currency hint on receiver (the side with WAC calc)
+        if (typeof payload._wac_currency_hint === 'string') toOp.wacCurrencyHint = payload._wac_currency_hint;
 
         ops = [...ops, fromOp, toOp];
     }
@@ -2118,6 +2131,9 @@
                 // B6: sync link_uuid on partner
                 const sharedUuid = (items[0].link_uuid as string) ?? (items[1].link_uuid as string) ?? d.link_uuid;
                 if (sharedUuid) merged.link_uuid = sharedUuid;
+                // Persist WAC currency hint on receiver
+                if (typeof payload._wac_currency_hint === 'string') merged.wacCurrencyHint = payload._wac_currency_hint;
+                else if (payload._wac_currency_hint === null) merged.wacCurrencyHint = null;
                 return merged;
             });
         } else {
