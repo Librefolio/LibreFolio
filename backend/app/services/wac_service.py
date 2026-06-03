@@ -36,6 +36,7 @@ async def compute_wac_iterative(
     as_of_date: date_type,
     asset_currency: str,
     excluded_tx_ids: list[int] | None = None,
+    target_currency_override: str | None = None,
 ) -> WACPreviewResultItem:
     """Compute inventory-aware WAC (PMC) for an asset at a broker up to a date.
 
@@ -103,7 +104,7 @@ async def compute_wac_iterative(
             )
         )
 
-    target_currency = determine_target_currency(pre_txs, asset_currency)
+    target_currency = target_currency_override or determine_target_currency(pre_txs, asset_currency)
 
     # 4. FX conversion for acquisitions with different currency
     fx_requests: list[tuple[int, Currency, str, date_type]] = []  # (idx, cost_ccy, target, date)

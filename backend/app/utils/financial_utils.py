@@ -9,7 +9,6 @@ Used by transaction_service.py (WAC preview) and potentially future analytics.
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date as date_type
 from decimal import Decimal
@@ -52,25 +51,14 @@ class WACCalcResult:
 def determine_target_currency(txs: list[WACInputTX], asset_currency: str) -> str:
     """Determine target currency from acquisition TXs.
 
-    Rules:
-    1. Most frequent currency among acquisitions (qty > 0)
-    2. On tie: asset_currency if among tied
-    3. Otherwise: first alphabetically
+    Rule: currency of the most recent acquisition (deterministic).
+    Fallback: asset_currency when no acquisitions exist.
     """
-    acq_currencies = [tx.original_currency or asset_currency for tx in txs if tx.quantity > 0]
-    if not acq_currencies:
+    acquisitions = [tx for tx in txs if tx.quantity > 0]
+    if not acquisitions:
         return asset_currency
-
-    ccy_counter = Counter(acq_currencies)
-    max_count = max(ccy_counter.values())
-    top_ccys = sorted(c for c, n in ccy_counter.items() if n == max_count)
-
-    if len(top_ccys) == 1:
-        return top_ccys[0]
-    elif asset_currency in top_ccys:
-        return asset_currency
-    else:
-        return top_ccys[0]
+    latest = max(acquisitions, key=lambda t: t.date)
+    return latest.original_currency or asset_currency
 
 
 def compute_wac_from_txlist(
