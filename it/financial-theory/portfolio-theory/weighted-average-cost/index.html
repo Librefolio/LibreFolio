@@ -18,13 +18,13 @@
       
       
         
-          <link rel="alternate" href="../../../../financial-theory/portfolio-theory/weighted-average-cost/" hreflang="en">
+          <link rel="alternate" href="https://librefolio.github.io/financial-theory/portfolio-theory/weighted-average-cost/" hreflang="en">
         
-          <link rel="alternate" href="./" hreflang="it">
+          <link rel="alternate" href="https://librefolio.github.io/LibreFolio/" hreflang="it">
         
-          <link rel="alternate" href="../../../../fr/financial-theory/portfolio-theory/weighted-average-cost/" hreflang="fr">
+          <link rel="alternate" href="https://librefolio.github.io/fr/financial-theory/portfolio-theory/weighted-average-cost/" hreflang="fr">
         
-          <link rel="alternate" href="../../../../es/financial-theory/portfolio-theory/weighted-average-cost/" hreflang="es">
+          <link rel="alternate" href="https://librefolio.github.io/es/financial-theory/portfolio-theory/weighted-average-cost/" hreflang="es">
         
       
       
@@ -67,7 +67,39 @@
 
     
     
-  </head>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://librefolio.github.io/LibreFolio/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Teoria Finanziaria",
+      "item": "https://librefolio.github.io/LibreFolio/it/financial-theory/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Teoria del Portafoglio",
+      "item": "https://librefolio.github.io/LibreFolio/it/financial-theory/portfolio-theory/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 4,
+      "name": "Costo Medio Ponderato",
+      "item": "https://librefolio.github.io/LibreFolio/it/financial-theory/portfolio-theory/weighted-average-cost/"
+    }
+  ]
+}
+</script>
+</head>
   
   
     
@@ -86,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#costo-medio-ponderato-wac" class="md-skip">
+        <a href="#prezzo-medio-di-carico-wac" class="md-skip">
           Vai al contenuto
         </a>
       
@@ -243,7 +275,7 @@
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
   </div>
   <div class="md-source__repository">
-    Alfystar/LibreFolio
+    Librefolio/LibreFolio
   </div>
 </a>
       </div>
@@ -459,7 +491,7 @@
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
   </div>
   <div class="md-source__repository">
-    Alfystar/LibreFolio
+    Librefolio/LibreFolio
   </div>
 </a>
     </div>
@@ -637,6 +669,34 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../../user/pwa/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installa come App (PWA)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
     
@@ -653,10 +713,100 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5" >
         
           
-          <label class="md-nav__link" for="__nav_2_4" id="__nav_2_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_5" id="__nav_2_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Dashboard
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Panoramica
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_6" id="__nav_2_6_label" tabindex="0">
             
   
   
@@ -674,8 +824,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -771,10 +921,526 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_7" >
         
           
-          <label class="md-nav__link" for="__nav_2_5" id="__nav_2_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_7" id="__nav_2_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transazioni
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Transazioni
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Panoramica
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/form/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modulo Transazione
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_7_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_7_3" id="__nav_2_7_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importa da Broker
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_7_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_7_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Importa da Broker
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/import/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Panoramica
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/import/ibkr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interactive Brokers (IBKR)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/import/degiro/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Degiro
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/import/etoro/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eToro
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/import/directa/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Directa SIM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/import/schwab/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Charles Schwab
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/import/revolut/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Revolut
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/import/coinbase/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coinbase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/import/freetrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Freetrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/import/finpension/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Finpension
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/import/trading212/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trading212
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/transactions/import/generic-csv/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CSV Generico
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="0">
             
   
   
@@ -792,8 +1458,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -881,10 +1547,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8_3" >
         
           
-          <label class="md-nav__link" for="__nav_2_5_3" id="__nav_2_5_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_8_3" id="__nav_2_8_3_label" tabindex="0">
             
   
   
@@ -902,8 +1568,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_5_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_5_3">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_8_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1139,10 +1805,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8_4" >
         
           
-          <label class="md-nav__link" for="__nav_2_5_4" id="__nav_2_5_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_8_4" id="__nav_2_8_4_label" tabindex="0">
             
   
   
@@ -1160,8 +1826,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_5_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_5_4">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_8_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1311,6 +1977,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/assets/providers/borsa-italiana/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Borsa Italiana
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1349,10 +2043,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_9" >
         
           
-          <label class="md-nav__link" for="__nav_2_6" id="__nav_2_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_9" id="__nav_2_9_label" tabindex="0">
             
   
   
@@ -1370,8 +2064,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1487,10 +2181,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_6_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_9_4" >
         
           
-          <label class="md-nav__link" for="__nav_2_6_4" id="__nav_2_6_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_9_4" id="__nav_2_9_4_label" tabindex="0">
             
   
   
@@ -1508,8 +2202,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_6_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_6_4">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_9_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_9_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1753,10 +2447,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_10" >
         
           
-          <label class="md-nav__link" for="__nav_2_7" id="__nav_2_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_10" id="__nav_2_10_label" tabindex="0">
             
   
   
@@ -1774,8 +2468,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_10">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1843,10 +2537,100 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_11" >
         
           
-          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_11" id="__nav_2_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Impostazioni
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Impostazioni
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user/settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Panoramica
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_12" id="__nav_2_12_label" tabindex="0">
             
   
   
@@ -1864,8 +2648,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_8">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_12">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4254,7 +5038,7 @@
   <a href="#effetti-delle-transazioni" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🏷️ Effetti delle Transazioni
+        🏷️ Effetti delle transazioni
       
     </span>
   </a>
@@ -4262,10 +5046,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#ordinamento-dello-stesso-giorno" class="md-nav__link">
+  <a href="#ordinamento-nello-stesso-giorno" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📅 Ordinamento dello stesso giorno
+        📅 Ordinamento nello stesso giorno
       
     </span>
   </a>
@@ -4276,7 +5060,7 @@
   <a href="#esaurimento-del-pool" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔻 Esaurimento del Pool
+        🔻 Esaurimento del pool
       
     </span>
   </a>
@@ -4300,10 +5084,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#override-della-base-di-costo" class="md-nav__link">
+  <a href="#override-del-costo-di-carico" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔄 Override della Base di Costo
+        🔄 Override del costo di carico
       
     </span>
   </a>
@@ -4322,10 +5106,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#dove-viene-usato-il-wac-in-librefolio" class="md-nav__link">
+  <a href="#dove-viene-utilizzato-il-wac-in-librefolio" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🎯 Dove viene usato il WAC in LibreFolio
+        🎯 Dove viene utilizzato il WAC in LibreFolio
       
     </span>
   </a>
@@ -5686,7 +6470,7 @@
   <span class="md-ellipsis">
     
   
-    BRIM (Import)
+    Transactions (User Data)
   
 
     
@@ -5702,7 +6486,173 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    BRIM (Import)
+    Transactions (User Data)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/backend/transactions/service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/backend/transactions/wac/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WAC & Cost Basis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/backend/transactions/split_promote/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Split & Promote
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/backend/transactions/balance_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Balance Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_5_1_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5_1_5" id="__nav_5_5_1_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import (BRIM)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_5_1_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5_1_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Import (BRIM)
   
 
           </label>
@@ -5787,6 +6737,14 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -6063,6 +7021,34 @@
     
   
     Scheduled Investment Tech
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/backend/assets/provider_borsa_italiana/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Borsa Italiana Tech
   
 
     
@@ -6738,7 +7724,7 @@
   <span class="md-ellipsis">
     
   
-    Settings
+    Impostazioni
   
 
     
@@ -7145,6 +8131,34 @@
     
   
     Styling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/pwa/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PWA & Mobile
   
 
     
@@ -8166,7 +9180,7 @@
   <a href="#effetti-delle-transazioni" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🏷️ Effetti delle Transazioni
+        🏷️ Effetti delle transazioni
       
     </span>
   </a>
@@ -8174,10 +9188,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#ordinamento-dello-stesso-giorno" class="md-nav__link">
+  <a href="#ordinamento-nello-stesso-giorno" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📅 Ordinamento dello stesso giorno
+        📅 Ordinamento nello stesso giorno
       
     </span>
   </a>
@@ -8188,7 +9202,7 @@
   <a href="#esaurimento-del-pool" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔻 Esaurimento del Pool
+        🔻 Esaurimento del pool
       
     </span>
   </a>
@@ -8212,10 +9226,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#override-della-base-di-costo" class="md-nav__link">
+  <a href="#override-del-costo-di-carico" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔄 Override della Base di Costo
+        🔄 Override del costo di carico
       
     </span>
   </a>
@@ -8234,10 +9248,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#dove-viene-usato-il-wac-in-librefolio" class="md-nav__link">
+  <a href="#dove-viene-utilizzato-il-wac-in-librefolio" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🎯 Dove viene usato il WAC in LibreFolio
+        🎯 Dove viene utilizzato il WAC in LibreFolio
       
     </span>
   </a>
@@ -8264,16 +9278,16 @@
   
 
 
-<h1 id="costo-medio-ponderato-wac">📊 Costo Medio Ponderato (WAC)</h1>
+<h1 id="prezzo-medio-di-carico-wac">📊 Prezzo Medio di Carico (WAC)</h1>
 <h2 id="cose-il-wac">💡 Cos'è il WAC?</h2>
-<p>Il <strong>Costo Medio Ponderato</strong> (WAC - <em>Weighted Average Cost</em>) è il costo unitario medio di un asset in un portafoglio, ponderato per la quantità acquisita a ogni prezzo.</p>
+<p>Il <strong>Weighted Average Cost</strong> (WAC), o Prezzo Medio di Carico, è il costo unitario medio di un asset in un portafoglio, ponderato per la quantità acquisita a ciascun prezzo.</p>
 <p>Risponde alla domanda: <em>"In media, quanto ho pagato per singola unità di questo asset?"</em></p>
 <div class="admonition info">
-<p class="admonition-title">Other names</p>
+<p class="admonition-title">Altri nomi</p>
 <ul>
-<li><strong>PMC</strong> — Prezzo Medio di Carico (Italy)</li>
+<li><strong>PMC</strong> — Prezzo Medio di Carico (Italia)</li>
 <li><strong>ACB</strong> — Average Cost Basis (Canada, US)</li>
-<li><strong>CMP</strong> — Coût Moyen Pondéré (France)</li>
+<li><strong>CMP</strong> — Coût Moyen Pondéré (Francia)</li>
 </ul>
 </div>
 <h2 id="formula">🧮 Formula</h2>
@@ -8283,14 +9297,14 @@ WAC_{new} = \frac{WAC_{current} \times Q_{pool} + Cost_{unit} \times Q_{tx}}{Q_{
 \]</div>
 <p>Dove:</p>
 <ul>
-<li><span class="arithmatex">\(WAC_{current}\)</span> = costo medio ponderato attuale prima di questa transazione</li>
+<li><span class="arithmatex">\(WAC_{current}\)</span> = prezzo medio di carico attuale prima di questa transazione</li>
 <li><span class="arithmatex">\(Q_{pool}\)</span> = quantità totale detenuta nel pool prima di questa transazione</li>
 <li><span class="arithmatex">\(Cost_{unit}\)</span> = costo di acquisizione per unità della nuova transazione</li>
 <li><span class="arithmatex">\(Q_{tx}\)</span> = quantità aggiunta dalla nuova transazione</li>
 </ul>
 <h2 id="come-librefolio-calcola-il-wac">⚙️ Come LibreFolio calcola il WAC</h2>
-<p>LibreFolio utilizza un <strong>algoritmo iterativo consapevole dell'inventario</strong> che elabora tutte le transazioni qualificate per una determinata coppia (broker, asset) in ordine cronologico.</p>
-<h3 id="effetti-delle-transazioni">🏷️ Effetti delle Transazioni</h3>
+<p>LibreFolio utilizza un <strong>algoritmo iterativo consapevole dell'inventario</strong> che elabora tutte le transazioni idonee per una data coppia (broker, asset) in ordine cronologico.</p>
+<h3 id="effetti-delle-transazioni">🏷️ Effetti delle transazioni</h3>
 <p>Ogni transazione contribuisce al calcolo del WAC in uno di questi modi:</p>
 <table>
 <thead>
@@ -8302,12 +9316,12 @@ WAC_{new} = \frac{WAC_{current} \times Q_{pool} + Cost_{unit} \times Q_{tx}}{Q_{
 </thead>
 <tbody>
 <tr>
-<td><strong>Ponderazione</strong></td>
+<td><strong>Ponderato</strong></td>
 <td><code>qty &gt; 0</code> e <code>unit_cost &gt; 0</code></td>
 <td>Il WAC si sposta verso il nuovo costo di acquisizione</td>
 </tr>
 <tr>
-<td><strong>Riduzione quantità</strong></td>
+<td><strong>Quantità ridotta</strong></td>
 <td><code>qty &lt; 0</code></td>
 <td>Uscita al WAC attuale — WAC invariato, il pool diminuisce</td>
 </tr>
@@ -8316,37 +9330,41 @@ WAC_{new} = \frac{WAC_{current} \times Q_{pool} + Cost_{unit} \times Q_{tx}}{Q_{
 <td><code>qty &gt; 0</code> ma <code>unit_cost = 0</code></td>
 <td>Il pool cresce, il numeratore resta invariato → il WAC <strong>diminuisce</strong></td>
 </tr>
+<tr>
+<td><strong>Auto WAC</strong></td>
+<td><code>qty &gt; 0</code>, <code>cost_basis_mode = "auto"</code></td>
+<td>Il pool resta invariato — le unità entrano al WAC attuale</td>
+</tr>
 </tbody>
 </table>
-<h3 id="ordinamento-dello-stesso-giorno">📅 Ordinamento dello stesso giorno</h3>
+<h3 id="ordinamento-nello-stesso-giorno">📅 Ordinamento nello stesso giorno</h3>
 <p>Quando avvengono più transazioni nella stessa data:</p>
 <ol>
 <li><strong>Prima le aggiunte</strong> (qty &gt; 0) — elaborate prima delle riduzioni</li>
-<li><strong>Poi le riduzioni</strong> (qty &lt; 0) — garantisce che il pool non diventi transitoriamente negativo</li>
+<li><strong>Poi le riduzioni</strong> (qty &lt; 0) — assicura che il pool non diventi transitoriamente negativo</li>
 </ol>
-<h3 id="esaurimento-del-pool">🔻 Esaurimento del Pool</h3>
+<h3 id="esaurimento-del-pool">🔻 Esaurimento del pool</h3>
 <ul>
 <li>Quando <code>new_qty = 0</code>: il WAC viene resettato a 0 (posizione chiusa)</li>
-<li>Quando <code>new_qty &lt; 0</code> (caso limite di arrotondamento): viene fissato a 0</li>
+<li>Quando <code>new_qty &lt; 0</code> (caso limite di arrotondamento): bloccato a 0</li>
 </ul>
 <h2 id="esempi-pratici">📝 Esempi Pratici</h2>
 <details class="example">
-<summary>Example 1: Two Buys — WAC rises</summary>
-</details>
+<summary>Esempio 1: Due acquisti — il WAC sale</summary>
 <table>
 <thead>
 <tr>
 <th>Data</th>
 <th>Tipo</th>
-<th>Qta</th>
+<th>Qty</th>
 <th>Costo Unitario</th>
-<th>Qta Pool</th>
+<th>Qty Pool</th>
 <th>WAC</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>1 apr</td>
+<td>1 Apr</td>
 <td>BUY</td>
 <td>10</td>
 <td>$150</td>
@@ -8354,7 +9372,7 @@ WAC_{new} = \frac{WAC_{current} \times Q_{pool} + Cost_{unit} \times Q_{tx}}{Q_{
 <td>$150.00</td>
 </tr>
 <tr>
-<td>15 apr</td>
+<td>15 Apr</td>
 <td>BUY</td>
 <td>5</td>
 <td>$180</td>
@@ -8363,27 +9381,27 @@ WAC_{new} = \frac{WAC_{current} \times Q_{pool} + Cost_{unit} \times Q_{tx}}{Q_{
 </tr>
 </tbody>
 </table>
-<p>$$
- WAC = \frac{150 \times 10 + 180 \times 5}{10 + 5} = \frac{2400}{15} = 160.00
- $$</p>
-<p>Il secondo acquisto a un prezzo più alto <strong>tira verso l'alto il WAC</strong>.</p>
-<details class="example">
-<summary>Example 2: Buy then Sell — WAC unchanged</summary>
+<div class="arithmatex">\[
+WAC = \frac{150 \times 10 + 180 \times 5}{10 + 5} = \frac{2400}{15} = 160.00
+\]</div>
+<p>Il secondo acquisto a un prezzo più alto <strong>spinge il WAC verso l'alto</strong>.</p>
 </details>
+<details class="example">
+<summary>Esempio 2: Acquisto poi Vendita — WAC invariato</summary>
 <table>
 <thead>
 <tr>
 <th>Data</th>
 <th>Tipo</th>
-<th>Qta</th>
+<th>Qty</th>
 <th>Costo Unitario</th>
-<th>Qta Pool</th>
+<th>Qty Pool</th>
 <th>WAC</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>1 apr</td>
+<td>1 Apr</td>
 <td>BUY</td>
 <td>10</td>
 <td>$150</td>
@@ -8391,7 +9409,7 @@ WAC_{new} = \frac{WAC_{current} \times Q_{pool} + Cost_{unit} \times Q_{tx}}{Q_{
 <td>$150.00</td>
 </tr>
 <tr>
-<td>15 apr</td>
+<td>15 Apr</td>
 <td>SELL</td>
 <td>-5</td>
 <td>(al WAC)</td>
@@ -8400,24 +9418,24 @@ WAC_{new} = \frac{WAC_{current} \times Q_{pool} + Cost_{unit} \times Q_{tx}}{Q_{
 </tr>
 </tbody>
 </table>
-<p>La vendita (SELL) rimuove unità al WAC attuale ($150). Il WAC rimane <strong>invariato</strong> — diminuisce solo il pool.</p>
-<details class="example">
-<summary>Example 3: Zero-Cost Acquisition — Dilution</summary>
+<p>La vendita (SELL) rimuove unità al WAC attuale ($150). Il WAC rimane <strong>invariato</strong> — diminuisce solo la quantità nel pool.</p>
 </details>
+<details class="example">
+<summary>Esempio 3: Acquisizione a costo zero — Diluizione</summary>
 <table>
 <thead>
 <tr>
 <th>Data</th>
 <th>Tipo</th>
-<th>Qta</th>
+<th>Qty</th>
 <th>Costo Unitario</th>
-<th>Qta Pool</th>
+<th>Qty Pool</th>
 <th>WAC</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>1 apr</td>
+<td>1 Apr</td>
 <td>BUY</td>
 <td>10</td>
 <td>$150</td>
@@ -8425,7 +9443,7 @@ WAC_{new} = \frac{WAC_{current} \times Q_{pool} + Cost_{unit} \times Q_{tx}}{Q_{
 <td>$150.00</td>
 </tr>
 <tr>
-<td>1 mag</td>
+<td>1 Mag</td>
 <td>ADJUSTMENT</td>
 <td>+5</td>
 <td>$0</td>
@@ -8434,37 +9452,95 @@ WAC_{new} = \frac{WAC_{current} \times Q_{pool} + Cost_{unit} \times Q_{tx}}{Q_{
 </tr>
 </tbody>
 </table>
-<p>$$
- WAC = \frac{150 \times 10 + 0 \times 5}{10 + 5} = \frac{1500}{15} = 100.00
- $$</p>
+<div class="arithmatex">\[
+WAC = \frac{150 \times 10 + 0 \times 5}{10 + 5} = \frac{1500}{15} = 100.00
+\]</div>
 <p>Il WAC viene <strong>diluito</strong> perché 5 unità sono entrate a costo zero (es. frazionamento azionario, airdrop, regalo).</p>
-<h2 id="override-della-base-di-costo">🔄 Override della Base di Costo</h2>
-<p>Per i trasferimenti e gli aggiustamenti, LibreFolio supporta un <strong>cost basis override</strong>: un costo unitario specificato dall'utente che rappresenta il costo storico delle unità trasferite.</p>
-<p><strong>Quando impostato:</strong></p>
+</details>
+<h2 id="override-del-costo-di-carico">🔄 Override del costo di carico</h2>
+<p>Per trasferimenti e aggiustamenti, LibreFolio supporta un <strong>override del costo di carico</strong>: un costo unitario specificato dall'utente che rappresenta il costo storico delle unità trasferite.</p>
+<p><strong>Quando impostato (modalità manuale):</strong></p>
 <ul>
 <li>La transazione entra nel calcolo del WAC come una normale acquisizione ponderata</li>
-<li>Questo preserva la continuità del costo tra diversi broker (es. quando si trasferisce dal broker A al broker B)</li>
+<li>Questo preserva la continuità dei costi tra diversi broker (es. quando si trasferisce dal broker A al broker B)</li>
 </ul>
-<p><strong>Quando non impostato:</strong></p>
+<p><strong>Quando non impostato (nessuna modalità specificata):</strong></p>
 <ul>
 <li>La transazione entra con <code>unit_cost = 0</code> (effetto diluizione)</li>
 <li>Questo è appropriato per frazionamenti azionari, regali o airdrop dove non esiste un prezzo di acquisto</li>
 </ul>
+<p><strong>In modalità auto (<code>cost_basis_mode = "auto"</code>):</strong></p>
+<ul>
+<li>La transazione entra al <strong>WAC attuale del pool</strong> — il WAC rimane algebricamente invariato</li>
+<li>Questo è appropriato per trasferimenti o aggiustamenti in cui il costo di carico deve essere ereditato dal pool del broker di origine</li>
+</ul>
+<div class="arithmatex">\[
+WAC_{new} = \frac{WAC \times Q_{pool} + WAC \times Q_{tx}}{Q_{pool} + Q_{tx}} = WAC
+\]</div>
+<div class="admonition tip">
+<p class="admonition-title">Auto WAC nell'interfaccia utente</p>
+<p>Nel modulo della transazione, l'interruttore "Auto" utilizza questa modalità. La tabella dei risultati mostra il badge dell'effetto <strong>Auto WAC</strong> (o <strong>Auto PMC</strong> in italiano), indicando che le unità sono entrate al costo attuale del pool senza alterare il WAC.</p>
+</div>
+<details class="example">
+<summary>Esempio 4: Trasferimento in modalità Auto — WAC invariato</summary>
+<table>
+<thead>
+<tr>
+<th>Data</th>
+<th>Tipo</th>
+<th>Qty</th>
+<th>Costo Unitario</th>
+<th>Qty Pool</th>
+<th>WAC</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 Apr</td>
+<td>BUY</td>
+<td>10</td>
+<td>$150</td>
+<td>10</td>
+<td>$150.00</td>
+</tr>
+<tr>
+<td>15 Apr</td>
+<td>BUY</td>
+<td>5</td>
+<td>$180</td>
+<td>15</td>
+<td>$160.00</td>
+</tr>
+<tr>
+<td>1 Mag</td>
+<td>TRANSFER (auto)</td>
+<td>+3</td>
+<td>$160 (=WAC)</td>
+<td>18</td>
+<td>$160.00</td>
+</tr>
+</tbody>
+</table>
+<div class="arithmatex">\[
+WAC = \frac{160 \times 15 + 160 \times 3}{15 + 3} = \frac{2880}{18} = 160.00
+\]</div>
+<p>Il ricevente del trasferimento in <strong>modalità auto</strong> eredita il WAC attuale come suo costo unitario. Il pool cresce ma il WAC rimane <strong>invariato</strong>.</p>
+</details>
 <h2 id="gestione-multi-valuta">🌍 Gestione Multi-Valuta</h2>
-<p>Quando un portafoglio contiene acquisizioni in valute diverse, LibreFolio:</p>
+<p>Quando un portafoglio contiene acquisizioni in diverse valute, LibreFolio:</p>
 <ol>
 <li>Determina la <strong>valuta di destinazione</strong> (la più frequente tra le acquisizioni)</li>
 <li>Converte tutti i costi unitari nella valuta di destinazione utilizzando i tassi di cambio storici</li>
 <li>Calcola il WAC nella valuta di destinazione unificata</li>
 </ol>
 <div class="admonition warning">
-<p class="admonition-title">FX Rate Availability</p>
-<p>Se un tasso di cambio richiesto è mancante, il calcolo del WAC potrebbe essere incompleto. L'interfaccia utente avvisa circa le coppie di valute mancanti e fornisce azioni rapide per aggiungerle o sincronizzarle.</p>
+<p class="admonition-title">Disponibilità tassi FX</p>
+<p>Se un tasso FX richiesto è mancante, il calcolo del WAC potrebbe essere incompleto. L'interfaccia utente avvisa in caso di coppie FX mancanti e fornisce azioni rapide per aggiungerle o sincronizzarle.</p>
 </div>
-<h2 id="dove-viene-usato-il-wac-in-librefolio">🎯 Dove viene usato il WAC in LibreFolio</h2>
+<h2 id="dove-viene-utilizzato-il-wac-in-librefolio">🎯 Dove viene utilizzato il WAC in LibreFolio</h2>
 <ul>
 <li><strong>Modulo di trasferimento</strong>: suggerisce automaticamente il <code>cost_basis_override</code> per i trasferimenti in uscita</li>
-<li><strong>Calcolo P&amp;L</strong>: guadagni realizzati = sell_price − WAC (FIFO al runtime, WAC per la base di costo)</li>
+<li><strong>Calcolo P&amp;L</strong>: guadagni realizzati = prezzo_vendita − WAC (FIFO all'esecuzione, WAC per il costo di carico)</li>
 <li><strong>Vista portafoglio</strong>: prezzo medio di ingresso per ogni posizione</li>
 </ul>
 
