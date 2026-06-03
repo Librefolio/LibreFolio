@@ -181,6 +181,15 @@
     /** Phase D: local WAC result from FormModal's own validate response (standalone mode). */
     let formWacResult = $state<{wac: {code: string; amount: string} | null; qualifying_txs: Array<Record<string, any>>; missing_pairs: string[]} | null>(null);
     let externalWacResult = $derived((getWacResult && editingTempId ? getWacResult(editingTempId) : null) ?? formWacResult);
+    /** Derive available currencies from qualifying TXs for the currency chip */
+    let wacAvailableCurrencies = $derived.by(() => {
+        const qtxs = externalWacResult?.qualifying_txs ?? [];
+        const codes = [...new Set(qtxs.map((q) => (q.original_currency ?? q.currency) as string | null).filter(Boolean))] as string[];
+        // Always include asset currency as fallback
+        const assetCcy = draft?.cash?.code ?? 'EUR';
+        if (!codes.includes(assetCcy)) codes.push(assetCcy);
+        return codes;
+    });
 
     // =========================================================================
     // Form state
@@ -287,6 +296,8 @@
     let dualTo = $state<DualDraftTo>(emptyDualTo());
     /** Cost basis mode tracking for BulkModal propagation. */
     let costBasisMode = $state<'auto' | 'manual'>('auto');
+    /** Currency hint for WAC calculation — null = backend decides (last acquisition) */
+    let wacCurrencyHint = $state<string | null>(null);
     // Phase D: clear local WAC result when mode switches to manual
     $effect(() => {
         if (costBasisMode === 'manual') formWacResult = null;
@@ -340,6 +351,7 @@
             partnerRow = null;
             loadingPartner = false;
             formWacResult = null;
+            wacCurrencyHint = null;
             dualTo = emptyDualTo();
             if (m === 'create') {
                 // C1-fix: when items[0] is present (e.g. editing a 'new' draft
@@ -362,10 +374,19 @@
                         // Restore receiver's cost_basis_override into draft so WacPreviewSection.value is correct
                         if (dualTo.cost_basis_override) {
                             draft = {...draft, cost_basis_override: dualTo.cost_basis_override};
+                            // Recover WAC currency hint from the stored sentinel override
+                            if (costBasisMode === 'auto' && dualTo.cost_basis_override.code && String(dualTo.cost_basis_override.amount) === '0') {
+                                wacCurrencyHint = dualTo.cost_basis_override.code;
+                            }
                         }
                     } else {
                         // Solo op (no partner) — use explicit mode from BulkModal when available
                         costBasisMode = row.cost_basis_mode === 'manual' || row.cost_basis_mode === 'auto' ? row.cost_basis_mode : 'auto';
+                        // Recover WAC currency hint from stored sentinel override
+                        const cbo = row.cost_basis_override;
+                        if (costBasisMode === 'auto' && cbo && typeof cbo === 'object' && cbo.code && String(cbo.amount) === '0') {
+                            wacCurrencyHint = cbo.code;
+                        }
                     }
                 } else {
                     draft = emptyDraft();
@@ -392,6 +413,10 @@
                     // Restore receiver's cost_basis_override into draft for WacPreviewSection
                     if (dualTo.cost_basis_override) {
                         draft = {...draft, cost_basis_override: dualTo.cost_basis_override};
+                        // Recover WAC currency hint from stored sentinel override
+                        if (costBasisMode === 'auto' && dualTo.cost_basis_override.code && String(dualTo.cost_basis_override.amount) === '0') {
+                            wacCurrencyHint = dualTo.cost_basis_override.code;
+                        }
                     }
                 } else if (row.related_transaction_id != null && row.related_transaction_id > 0) {
                     // If the row has a linked partner and its type has a pairFormLayout,
@@ -842,6 +867,10 @@
                             qualifying_txs: (myWr.wac_qualifying_txs as Array<Record<string, any>>) ?? [],
                             missing_pairs: (myWr.wac_missing_pairs as string[]) ?? [],
                         };
+                        // Sync currency hint from backend response (first calc or when null)
+                        if (!wacCurrencyHint && formWacResult.wac?.code) {
+                            wacCurrencyHint = formWacResult.wac.code;
+                        }
                     } else {
                         formWacResult = null;
                     }
@@ -888,7 +917,7 @@
     });
     $effect(() => {
         if (!open || isReadonly) return;
-        const key = JSON.stringify(draft) + JSON.stringify(dualTo);
+        const key = JSON.stringify(draft) + JSON.stringify(dualTo) + (wacCurrencyHint ?? '');
         if (key === lastDraftKey) return;
         lastDraftKey = key;
         commitFailed = false;
@@ -932,6 +961,8 @@
     function draftToTxFields(): TxFields {
         // Normalize cost_basis_override: treat empty amount as null
         const cbo = draft.cost_basis_override?.amount?.trim() ? draft.cost_basis_override : null;
+        // In auto mode, use wacCurrencyHint as currency override (amount=0 sentinel)
+        const cbOverride = costBasisMode === 'auto' ? (wacCurrencyHint ? {code: wacCurrencyHint, amount: '0'} : null) : cbo;
         return {
             type: draft.type,
             broker_id: draft.broker_id,
@@ -941,11 +972,18 @@
             cash: draft.cash,
             tags: draft.tags,
             description: draft.description,
-            cost_basis_override: cbo,
+            cost_basis_override: cbOverride,
             cost_basis_mode: costBasisMode === 'auto' ? 'auto' : undefined,
             asset_event_id: draft.asset_event_id,
             link_uuid: draft.link_uuid,
         };
+    }
+
+    /** Handle WAC currency chip change — re-trigger validate without switching to manual */
+    function onWacCurrencyChange(code: string) {
+        wacCurrencyHint = code;
+        // Re-trigger validate to recompute WAC in new currency
+        scheduler.trigger('change');
     }
 
     // =========================================================================
@@ -1030,6 +1068,7 @@
                     _partnerCash: dualTo.cash,
                     _partnerDate: dualTo.date,
                     _cost_basis_mode: costBasisMode,
+                    _wac_currency_hint: wacCurrencyHint,
                 };
                 // Also carry the "from" side fields for applyFormPayload
                 Object.assign(payload, items[0]);
@@ -1037,6 +1076,7 @@
             } else {
                 const payload = collectCreate();
                 (payload as any)._cost_basis_mode = costBasisMode;
+                (payload as any)._wac_currency_hint = wacCurrencyHint;
                 onPushDraft?.(payload);
             }
             onClose();
@@ -1666,6 +1706,9 @@
                                 onModeChange={(m) => (costBasisMode = m)}
                                 externalResult={externalWacResult}
                                 {pendingTxIds}
+                                wacCurrency={wacCurrencyHint}
+                                onCurrencyChange={onWacCurrencyChange}
+                                availableCurrencies={wacAvailableCurrencies}
                             />
                         </div>
                     {/if}
@@ -1866,6 +1909,9 @@
                                 onModeChange={(m) => (costBasisMode = m)}
                                 externalResult={externalWacResult}
                                 {pendingTxIds}
+                                wacCurrency={wacCurrencyHint}
+                                onCurrencyChange={onWacCurrencyChange}
+                                availableCurrencies={wacAvailableCurrencies}
                             />
                             {#if Number(draft.quantity) > 0 && !draft.cost_basis_override?.amount?.trim()}
                                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="tx-form-cost-basis-warning">
@@ -1894,6 +1940,9 @@
                         onModeChange={(m) => (costBasisMode = m)}
                         externalResult={externalWacResult}
                         {pendingTxIds}
+                        wacCurrency={wacCurrencyHint}
+                        onCurrencyChange={onWacCurrencyChange}
+                        availableCurrencies={wacAvailableCurrencies}
                     />
                 </div>
             {/if}
