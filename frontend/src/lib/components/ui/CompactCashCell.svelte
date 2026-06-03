@@ -16,6 +16,7 @@
   the cell emits `null` (cleared). Otherwise it emits the latest combined value.
 -->
 <script lang="ts">
+    import {untrack} from 'svelte';
     import type {SignRule} from '$lib/stores/transactionTypeStore';
     import CurrencySearchSelect from './select/CurrencySearchSelect.svelte';
     import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
@@ -42,11 +43,17 @@
         originalCurrency?: string;
         /** Disable both inputs. */
         disabled?: boolean;
+        /** Disable only the amount input (currency remains interactive). */
+        amountDisabled?: boolean;
+        /** Disable only the currency selector. */
+        currencyDisabled?: boolean;
+        /** When set, restrict currency dropdown to these codes only. */
+        allowedCurrencies?: string[];
         /** Test id root — emits `${testid}-amount` and `${testid}-currency`. */
         testid?: string;
     }
 
-    let {value, onChange, signHint = 'free', amountPlaceholder = '0.00', defaultCode = '', originalCurrency, disabled = false, testid = 'compact-cash'}: Props = $props();
+    let {value, onChange, signHint = 'free', amountPlaceholder = '0.00', defaultCode = '', originalCurrency, disabled = false, amountDisabled = false, currencyDisabled = false, allowedCurrencies, testid = 'compact-cash'}: Props = $props();
 
     // Local edit buffers so an empty `amount` doesn't immediately collapse the cell to `null`
     // while the user is mid-typing. We commit `null` only when both fields are empty AND blur fires.
@@ -64,8 +71,9 @@
         const incomingAmountRaw = value?.amount ?? '';
         const incomingAmount = formatDecimalForDisplay(incomingAmountRaw);
         const incomingCode = value?.code ?? defaultCode;
-        if (incomingAmount !== amountStr) amountStr = incomingAmount;
-        if (incomingCode !== code) code = incomingCode;
+        // untrack local state reads to avoid re-running on every keystroke
+        if (incomingAmount !== untrack(() => amountStr)) amountStr = incomingAmount;
+        if (incomingCode !== untrack(() => code)) code = incomingCode;
     });
 
     function emit() {
@@ -77,6 +85,10 @@
         // W30: preserve currency selection even when amount is still empty —
         // the user may pick currency first, then type the number.
         onChange({amount: trimmed, code});
+    }
+
+    function handleBlur() {
+        emit();
     }
 
     function handleAmountInput(e: Event) {
@@ -100,10 +112,10 @@
     });
 </script>
 
-<div class="compact-cash" class:sign-ok={signOk} class:sign-bad={signBad} class:disabled data-testid={testid}>
-    <input type="number" step="any" inputmode="decimal" autocomplete="off" class="amount-input" value={amountStr} placeholder={amountPlaceholder} oninput={handleAmountInput} onblur={emit} {disabled} data-testid={`${testid}-amount`} />
+<div class="compact-cash" class:sign-ok={signOk} class:sign-bad={signBad} data-testid={testid}>
+    <input type="number" step="any" inputmode="decimal" autocomplete="off" class="amount-input" value={amountStr} oninput={handleAmountInput} onblur={handleBlur} placeholder={amountPlaceholder} disabled={disabled || amountDisabled} data-testid={`${testid}-amount`} />
     <div class="currency-wrap">
-        <CurrencySearchSelect bind:value={code} compact={true} {disabled} onchange={handleCurrencyChange} {originalCurrency} />
+        <CurrencySearchSelect bind:value={code} compact={true} disabled={disabled || currencyDisabled} onchange={handleCurrencyChange} {originalCurrency} {allowedCurrencies} />
         <span class="sr-only" data-testid={`${testid}-currency`}>{code}</span>
     </div>
 </div>
@@ -174,15 +186,10 @@
     .amount-input:disabled {
         color: rgb(156 163 175); /* gray-400 */
         background: rgb(243 244 246); /* gray-100 */
+        opacity: 0.6;
     }
     :global(.dark) .amount-input:disabled {
         background: rgb(15 23 42); /* slate-900 */
-    }
-    .currency-wrap {
-        min-width: 8rem;
-    }
-    .compact-cash.disabled {
-        opacity: 0.6;
     }
     .sr-only {
         position: absolute;

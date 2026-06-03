@@ -587,7 +587,12 @@
       "sameBrokerError": "Brokers must be different",
       "loadingPartner": "Loading paired transaction…",
       "swapSides": "Swap sides",
-      "apply": "Apply"
+      "apply": "Apply",
+      "eventPickerCreateNew": "New event",
+      "eventCreateTitle": "Create event for {asset}",
+      "eventCreateSuccess": "Event created",
+      "eventCreateAmountRequired": "Amount is required",
+      "eventCreateDateRequired": "Date is required"
     },
     "bulk": {
       "titleCreate": "New transactions",

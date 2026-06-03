@@ -51,7 +51,7 @@
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), settings, mode = 'global', availablePairs = [], availableAssets = [], pairData, pairsDataMap = {}, assetsDataMap = {}, onsave, onclose}: Props = $props();
+    let {open = false, settings, mode = 'global', availablePairs = [], availableAssets = [], pairData, pairsDataMap = {}, assetsDataMap = {}, onsave, onclose}: Props = $props();
 
     // =========================================================================
     // Local editing state (cloned from props)
@@ -130,14 +130,12 @@
             confirmCloseOpen = true;
         } else {
             onclose?.();
-            open = false;
         }
     }
 
     function confirmDiscardAndClose() {
         confirmCloseOpen = false;
         onclose?.();
-        open = false;
     }
 
     // =========================================================================
@@ -209,7 +207,7 @@
     });
 </script>
 
-<ModalBase bind:open maxWidth="3xl" onRequestClose={handleClose} testId="chart-settings-modal">
+<ModalBase {open} maxWidth="3xl" onRequestClose={handleClose} testId="chart-settings-modal">
     <div class="flex flex-col max-h-[85vh]">
         <!-- Header -->
         <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">

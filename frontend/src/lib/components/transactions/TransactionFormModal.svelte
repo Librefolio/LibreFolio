@@ -50,6 +50,7 @@
     import TransactionTypeSearchSelect from './TransactionTypeSearchSelect.svelte';
     import WacPreviewSection from './WacPreviewSection.svelte';
     import AssetEventPicker from './AssetEventPicker.svelte';
+    import EventCreateMiniModal from './EventCreateMiniModal.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
 
@@ -1282,6 +1283,7 @@
     // =========================================================================
     let createBrokerOpen = $state(false);
     let createAssetOpen = $state(false);
+    let createEventOpen = $state(false);
 
     function handleBrokerCreated(e: CustomEvent<{id: number}>) {
         // BrokerModal dispatches 'created' with {id} + already merges into brokerStore
@@ -1384,7 +1386,7 @@
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.issuesHeader')}</p>
                         <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
                             {#each fieldIssues as issue}
-                                <li data-testid="tx-form-issue">{resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                                <li data-testid="tx-form-issue">{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
                             {/each}
                         </ul>
                     {/if}
@@ -1419,7 +1421,7 @@
                         <p class="font-semibold text-sm mb-1.5" data-testid="tx-form-issues-header">{getBulkContext ? $t('transactions.validate.contextualIssuesHeader') : $t('transactions.validate.issuesHeader')}</p>
                         <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
                             {#each fieldIssues as issue}
-                                <li data-testid="tx-form-issue">{resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                                <li data-testid="tx-form-issue">{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
                             {/each}
                         </ul>
                     {/if}
@@ -1472,7 +1474,7 @@
                                     <span class="font-medium">{$t(`transactions.types.${draft.type}`) || draft.type}</span>
                                 </div>
                             {:else}
-                                <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} types={allowedTypes} testid="tx-form-type" />
+                                <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} types={allowedTypes} compact testid="tx-form-type" />
                             {/if}
                         </div>
                     </div>
@@ -1963,6 +1965,7 @@
                                 onChange={(id) => {
                                     draft = {...draft, asset_event_id: id};
                                 }}
+                                onCreateNew={isReadonly ? undefined : () => (createEventOpen = true)}
                             />
                         {/if}
 
@@ -2102,6 +2105,25 @@
 
 <!-- W39: Inline asset creation modal. AssetModal is Svelte 5 (runes). -->
 <AssetModal bind:open={createAssetOpen} zIndex={zIndex + 10} oncreated={handleAssetCreated} onclose={() => (createAssetOpen = false)} />
+
+<!-- Inline event creation mini-modal -->
+{#if draft.asset_id != null}
+    <EventCreateMiniModal
+        open={createEventOpen}
+        assetId={draft.asset_id}
+        assetName={getAssetInfo(draft.asset_id)?.display_name || ''}
+        assetCurrency={getAssetInfo(draft.asset_id)?.currency || 'USD'}
+        defaultDate={draft.date}
+        suggestedAmount={draft.cash?.amount || ''}
+        defaultEventType={draft.type}
+        zIndex={zIndex + 10}
+        oncreated={(eventId) => {
+            draft = {...draft, asset_event_id: eventId};
+            createEventOpen = false;
+        }}
+        onclose={() => (createEventOpen = false)}
+    />
+{/if}
 
 <style>
     /* Bugfix-5 walkthrough #6: numeric inputs (quantity, cost basis) — hide
