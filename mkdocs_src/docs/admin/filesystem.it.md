@@ -21,10 +21,10 @@ backend/data/
 │ └── 📝 logs/ # Application log files
 │
 └── 🧪 test/ # Test data (completely isolated)
- ├── 🗃️ sqlite/app.db
- ├── 🖼️ custom-uploads/
- ├── 📊 broker_reports/
- └── 📝 logs/
+    ├── 🗃️ sqlite/app.db
+    ├── 🖼️ custom-uploads/
+    ├── 📊 broker_reports/
+    └── 📝 logs/
 ```
 
 ---
@@ -42,26 +42,56 @@ Il database SQLite principale. Contiene tutti i dati dell'applicazione: utenti, 
 
 ### 🖼️ `custom-uploads/`
 
-File caricati dagli utenti tramite la pagina File. Ogni caricamento crea due file:
+File caricati dagli utenti tramite la pagina Files. Ogni caricamento crea due file:
 
 - 📄 `{uuid}.{ext}` — Il file binario effettivo (es. `a1b2c3d4.png`)
-- 📋 `{uuid}.json` — Metadati includenti: nome file originale, tipo MIME, dimensione del file, data di caricamento, ID dell'utente che ha caricato il file
+- 📋 `{uuid}.json` — Metadata inclusi: nome file originale, tipo MIME, dimensione file, data di caricamento, ID dell'utente che ha effettuato il caricamento
 
 :material-arrow-right: **Approfondimento per sviluppatori**: [File Upload Component](../developer/frontend/components/file-upload.md)
 
 ### 📊 `broker_reports/`
 
-File di report del broker per il sistema BRIM (Broker Report Import Manager):
+File dei report dei broker per il sistema BRIM (Broker Report Import Manager):
 
 - **📥 `uploaded/`** — File grezzi così come caricati dagli utenti (CSV, Excel)
 - **✅ `parsed/`** — File che sono stati elaborati con successo (transazioni estratte)
-- **❌ `failed/`** — File la cui elaborazione è fallita (conservati per il debugging — controllare i log per i dettagli)
+- **❌ `failed/`** — File per i quali l'analisi è fallita (conservati per il debugging — controllare i log per i dettagli)
 
 :material-arrow-right: **Approfondimento per sviluppatori**: [BRIM Architecture](../developer/backend/brim/architecture.md)
 
 ### 📝 `logs/`
 
-Log dell'applicazione in formato JSON strutturato (via `structlog`).
+Log dell'applicazione in formato JSON strutturato (via `structlog`). I file di log ruotano settimanalmente e vengono conservati per 1 anno (compressi con gzip).
+
+La verbosità è controllata dalla variabile d'ambiente `LOG_LEVEL`.
+
+**Cosa cattura ogni livello** — ogni riga mostra quali livelli di log sono visibili:
+
+| LOG_LEVEL | 🔬 TRACE (5) | 🐛 DEBUG (10) | ℹ️ INFO (20) | ⚠️ WARNING (30) | ❌ ERROR (40) | 💀 CRITICAL (50) |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| 🔬`TRACE` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 🐛`DEBUG` | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| ℹ️ **`INFO`** *(default)* | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
+| ⚠️ `WARNING` | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| ❌`ERROR` | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| 💀`CRITICAL` | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+
+**Significato di ogni livello:**
+
+| Livello | Cosa cattura |
+|-------|-----------------|
+| 🔬`TRACE` | Dati granulari ad alta frequenza: singoli tassi di cambio analizzati, punti di prezzo per asset |
+| 🐛`DEBUG` | Internali operativi: quale provider è stato utilizzato, risultati intermedi, decisioni algoritmiche |
+| ℹ️`INFO` | Operazioni utente significative: sincronizzazione completata, importazione, login, creazione/eliminazione di risorse |
+| ⚠️`WARNING` | Anomalie recuperabili: fallback attivato, dati opzionali mancanti, modalità degradata |
+| ❌`ERROR` | Errori gestiti: operazioni fallite, corruzione dei dati, provider irraggiungibile |
+| 💀`CRITICAL` | Errori fatali che interrompono il processo |
+
+!!! tip "Impostazioni consigliate"
+
+    - **Produzione**: `LOG_LEVEL=INFO` — segnale pulito, senza rumore
+    - **Risoluzione problemi**: `LOG_LEVEL=DEBUG` — per vedere cosa sta decidendo il sistema
+    - **Debugging profondo tassi di cambio/prezzi**: `LOG_LEVEL=TRACE` — per vedere ogni singolo punto dato
 
 ---
 
@@ -70,7 +100,7 @@ Log dell'applicazione in formato JSON strutturato (via `structlog`).
 | Variabile | Default | Descrizione |
 |----------|---------|-------------|
 | `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Sovrascrive il percorso della directory dei dati di produzione |
-| `LIBREFOLIO_TEST_MODE` | `0` | Imposta a `1` per usare `backend/data/test/` invece di `prod/` |
+| `LIBREFOLIO_TEST_MODE` | `0` | Impostare a `1` per usare `backend/data/test/` invece di `prod/` |
 | `PORT` | `6040` | Porta del server di produzione |
 | `TEST_PORT` | `6041` | Porta del server di test (usata quando `LIBREFOLIO_TEST_MODE=1`) |
 
@@ -83,29 +113,29 @@ Log dell'applicazione in formato JSON strutturato (via `structlog`).
 Il modo più semplice per eseguire il backup di LibreFolio è copiare l'intera directory dei dati:
 
 ```bash
-# Arrestare prima il server (per garantire la coerenza del database)
+# Stop the server first (to ensure database consistency)
 cp -r backend/data/prod/ /path/to/backup/librefolio-$(date +%Y%m%d)/
 ```
 
 ### 🐳 Backup Docker
 
-Se eseguito via Docker, la directory dei dati è tipicamente montata come volume:
+Se eseguito tramite Docker, la directory dei dati è tipicamente montata come volume:
 
 ```bash
-# Trova il volume
+# Find the volume
 docker volume inspect librefolio_data
 
-# Copia i dati all'esterno
+# Copy data out
 docker cp librefolio-container:/app/backend/data/prod/ ./backup/
 ```
 
-### ✅ Cosa includere nel backup
+### ✅ Cosa salvare nel backup
 
-Al minimo, effettua il backup di:
+Al minimo, eseguire il backup di:
 
 1. **`sqlite/app.db`** — Tutti i tuoi dati (utenti, transazioni, impostazioni, tassi di cambio)
 2. **`custom-uploads/`** — File caricati dagli utenti (avatar, documenti)
-3. **`broker_reports/uploaded/`** — Report originali dei broker (nel caso in cui sia necessario rieseguire l'analisi)
+3. **`broker_reports/uploaded/`** — Report originali dei broker (nel caso fosse necessario ri-analizzarli)
 
 !!! tip "Backup solo del database"
 
@@ -118,25 +148,25 @@ Al minimo, effettua il backup di:
 ### 🐳 Docker exec
 
 ```bash
-# Accedi alla shell del container
+# Access the container shell
 docker exec -it librefolio-container /bin/bash
 
-# Esegui i comandi di dev.py all'interno del container
+# Run dev.py commands inside the container
 ./dev.py user list
 ./dev.py user reset admin newpassword
 ./dev.py db upgrade
 ```
 
-### 💻 Accesso Diretto (non Docker)
+### 💻 Accesso Diretto (non-Docker)
 
 ```bash
-# Dalla root del progetto
-./dev.py user list # Elenca tutti gli utenti
-./dev.py user reset <user> <pw> # Resetta la password di un utente
-./dev.py user promote <user> # Concede i privilegi di superutente
-./dev.py user demote <user> # Rimuove i privilegi di superutente
-./dev.py db upgrade # Applica le migrazioni in sospeso
-./dev.py db create-clean # Resetta il database (ATTENZIONE: elimina tutti i dati)
+# From the project root
+./dev.py user list # List all users
+./dev.py user reset <user> <pw> # Reset a user's password
+./dev.py user promote <user> # Grant superuser privileges
+./dev.py user demote <user> # Remove superuser privileges
+./dev.py db upgrade # Apply pending migrations
+./dev.py db create-clean # Reset database (WARNING: deletes all data)
 ```
 
-Per un elenco completo dei comandi CLI, consulta [CLI Tools](cli_tools.md).
+Per l'elenco completo dei comandi CLI, vedi [CLI Tools](cli_tools.md).

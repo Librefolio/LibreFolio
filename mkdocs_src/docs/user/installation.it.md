@@ -1,6 +1,6 @@
 # 🐳 Installazione (Utente)
 
-Questa guida spiega come distribuire LibreFolio per l'uso regolare utilizzando Docker. Questo è il metodo consigliato per gli utenti che non intendono modificare il codice sorgente.
+Questa guida spiega come distribuire LibreFolio per l'uso regolare utilizzando Docker. Questo è il metodo raccomandato per gli utenti che non intendono modificare il codice sorgente.
 
 ## ✅ Prerequisiti
 
@@ -17,13 +17,13 @@ Questa guida spiega come distribuire LibreFolio per l'uso regolare utilizzando D
     sudo usermod -aG docker $USER
     ```
 
-    Successivamente, **effettua il logout e accedi di nuovo**, oppure esegui `newgrp docker` per attivare il gruppo nella sessione corrente.
+    Quindi **effettua il logout e accedi nuovamente**, oppure esegui `newgrp docker` per attivare il gruppo nella sessione corrente.
 
 !!! note "Perché Python e Node.js?"
 
-    LibreFolio utilizza un'**immagine Docker solo per il runtime** — il frontend e la documentazione vengono compilati sull'host prima di essere impacchettati nell'immagine Docker. Immagini pre-compilate su un registro di container sono previste per rilasci futuri.
+    LibreFolio utilizza un'**immagine Docker solo per il runtime** — il frontend e la documentazione vengono sottoposti a build sull'host prima di essere impacchettati nell'immagine Docker. Immagini pre-buildate su un registro di container sono previste per rilasci futuri.
 
-## 📥 1. Scaricare il Progetto
+## 📥 1. Scarica il Progetto
 
 Clona il repository:
 
@@ -32,23 +32,23 @@ git clone https://github.com/Alfystar/LibreFolio.git
 cd LibreFolio
 ```
 
-Oppure scarica l'ultima release da [GitHub Releases](https://github.com/Alfystar/LibreFolio/releases) e scompattala.
+Oppure scarica l'ultimo rilascio da [GitHub Releases](https://github.com/Alfystar/LibreFolio/releases) e scompattalo.
 
-## ⚙️ 2. Configurare l'Ambiente
+## ⚙️ 2. Configura l'Ambiente
 
-1. **Copia il file di esempio** (obbligatorio — la build si interromperà se manca il file `.env`):
+1. **Copia il file di esempio** (obbligatorio — la build si rifiuterà di procedere senza il file `.env`):
 
- ```bash
- cp .env.example .env
- ```
+    ```bash
+    cp .env.example .env
+    ```
 
 2. **Modifica `.env`** per personalizzare:
 
- - 🔌 `PORT`: Cambia la porta se la `6040` è già in uso.
- - 💰 `PORTFOLIO_BASE_CURRENCY`: La tua valuta di base (default: `EUR`).
- - 📊 `LOG_LEVEL`: Verbosità dei log (default: `INFO`).
+    - 🔌 `PORT`: Cambia la porta se la `6040` è già in uso.
+    - 💰 `PORTFOLIO_BASE_CURRENCY`: La valuta di base del tuo portafoglio (default: `EUR`).
+    - 📊 `LOG_LEVEL`: Verbosità del logging (default: `INFO`).
 
-## 📦 3. Installare le Dipendenze
+## 📦 3. Installa le Dipendenze
 
 ```bash
 ./dev.py install
@@ -56,7 +56,7 @@ Oppure scarica l'ultima release da [GitHub Releases](https://github.com/Alfystar
 
 Questo installa le dipendenze Python (backend) e Node.js (frontend).
 
-## 🏗️ 4. Build dell'Immagine Docker
+## 🏗️ 4. Costruisci l'Immagine Docker
 
 ```bash
 ./dev.py docker build
@@ -64,25 +64,25 @@ Questo installa le dipendenze Python (backend) e Node.js (frontend).
 
 Questo comando esegue automaticamente:
 
-1. La build del frontend (build di produzione SvelteKit)
+1. La build del frontend (SvelteKit production build)
 2. La build del sito di documentazione (MkDocs)
-3. Impacchetta tutti i componenti in un'unica immagine Docker taggata come `librefolio:latest`
+3. L'impacchettamento di tutto in un'unica immagine Docker taggata come `librefolio:latest`
 
-## 🚀 5. Avviare con Docker Compose
+## 🚀 5. Avvia con Docker Compose
 
 ```bash
 docker compose up -d
 ```
 
-- 🔄 `-d` avvia l'applicazione in modalità detached (in background).
+- 🔄 `-d` esegue l'applicazione in modalità distaccata (in background).
 
-## 🌐 6. Accedere a LibreFolio
+## 🌐 6. Accedi a LibreFolio
 
-Apri il browser e vai su:
+Apri il tuo browser e vai su:
 
 **`http://localhost:6040`**
 
-(Oppure usa la porta configurata in `.env`).
+(Oppure usa la porta che hai configurato in `.env`).
 
 La prima volta che accedi a LibreFolio, ti verrà presentata una **pagina di registrazione** — crea il tuo account direttamente dal browser. Il primo utente registrato diventa automaticamente l'amministratore.
 
@@ -91,31 +91,31 @@ Endpoint disponibili:
 - 🏠 **Frontend**: `http://localhost:6040/`
 - 📚 **Documentazione Utente**: `http://localhost:6040/mkdocs/`
 
-!!! tip "Gestione utenti via CLI"
+!!! tip "Gestione utenti da CLI"
 
-    È possibile gestire gli utenti anche dalla riga di comando. Consulta il [Manuale Amministratore — CLI Tools](../admin/cli_tools.md) per i comandi relativi alla creazione, promozione e listatura degli utenti.
+    È possibile gestire gli utenti anche dalla riga di comando. Consulta il [Manuale Amministratore — Strumenti CLI](../admin/cli_tools.md) per i comandi relativi alla creazione, promozione ed elencazione degli utenti.
 
-## 🔄 Aggiornare LibreFolio
+## 🔄 Aggiorna LibreFolio
 
 Per aggiornare a una nuova versione:
 
-1. **Recupera l'ultima versione del codice**:
+1. **Scarica l'ultimo codice**:
 
- ```bash
- git pull
- ```
+    ```bash
+    git pull
+    ```
 
-2. **Ricompila l'immagine Docker** (ricompila automaticamente frontend e docs se modificati):
+2. **Ricostruisci l'immagine Docker** (esegue automaticamente la build di frontend e documentazione se modificati):
 
- ```bash
- ./dev.py docker rebuild
- ```
+    ```bash
+    ./dev.py docker rebuild
+    ```
 
- Questo comando crea una nuova immagine, ferma i container in esecuzione e li riavvia con la nuova versione.
+    Questo comando costruisce una nuova immagine, interrompe i container in esecuzione e li riavvia con la nuova versione.
 
 3. Le **migrazioni del database** vengono applicate automaticamente all'avvio.
 
-## 🧪 Provare con Dati di Test (Opzionale)
+## 🧪 Prova con Dati di Test (Opzionale)
 
 Puoi avviare un server di test con dati mock pre-popolati per esplorare l'applicazione prima di inserire dati reali:
 
@@ -124,12 +124,12 @@ Puoi avviare un server di test con dati mock pre-popolati per esplorare l'applic
 ./dev.py docker exec server --test
 ```
 
-Accedi a **`http://localhost:6041`** con l'utente `e2e_test_user` / `E2eTestPass123!`.
+Accedi all'indirizzo **`http://localhost:6041`** con l'utente `e2e_test_user` / `E2eTestPass123!`.
 
-Il server di test gira parallelamente a quello di produzione, utilizzando un database separato. Consulta la [Guida Avanzata Docker](../admin/docker_advanced.md#test-mode) per i dettagli.
+Il server di test gira parallelamente a quello di produzione, utilizzando un database separato. Consulta la [Guida Avanzata a Docker](../admin/docker_advanced.md#test-mode) per i dettagli.
 
 ---
 
 !!! tip "Argomenti avanzati"
 
-    Per la configurazione del reverse proxy, i backup del database, i percorsi dati personalizzati e le considerazioni per la produzione, consulta la [🐳 Guida Avanzata Docker](../admin/docker_advanced.md).
+    Per la configurazione di un reverse proxy, backup del database, percorsi dati personalizzati e considerazioni per la produzione, consulta la [🐳 Guida Avanzata a Docker](../admin/docker_advanced.md).

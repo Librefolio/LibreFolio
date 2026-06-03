@@ -4,8 +4,8 @@ Experimente la interfaz completa de escritorio de LibreFolio. Las capturas de pa
 
 !!! tip "Tema e Idioma"
 
-Use el **interruptor de tema** en el encabezado (☀️/🌙) para cambiar entre el modo claro y oscuro.
-Use el **selector de idioma** (🇬🇧) en el encabezado para ver las capturas de pantalla en diferentes idiomas.
+    Use el **interruptor de tema** en el encabezado (☀️/🌙) para cambiar entre el modo claro y oscuro.
+    Use el **selector de idioma** (🇬🇧) en el encabezado para ver las capturas de pantalla en diferentes idiomas.
 
 ---
 

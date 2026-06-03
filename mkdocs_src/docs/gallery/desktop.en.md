@@ -4,8 +4,8 @@ Experience LibreFolio's full desktop interface. Screenshots automatically adapt 
 
 !!! tip "Theme & Language"
 
-Use the **theme toggle** in the header (☀️/🌙) to switch between light and dark mode.
-Use the **language selector** (🇬🇧) in the header to view screenshots in different languages.
+    Use the **theme toggle** in the header (☀️/🌙) to switch between light and dark mode.
+    Use the **language selector** (🇬🇧) in the header to view screenshots in different languages.
 
 ---
 

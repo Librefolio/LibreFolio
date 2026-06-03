@@ -96,8 +96,37 @@ plugins:
             justETF: justETF
             CSS Scraper: CSS Scraper
             Scheduled Investment: Investimento Programmato
+            Borsa Italiana: Borsa Italiana
+            # Developer provider entries — kept in English per dev-manual policy
+            Overview Providers: Overview Providers
+            Yahoo Finance Tech: Yahoo Finance Tech
+            justETF Tech: justETF Tech
+            CSS Scraper Tech: CSS Scraper Tech
+            Scheduled Investment Tech: Scheduled Investment Tech
+            Borsa Italiana Tech: Borsa Italiana Tech
+            # Developer transaction section — kept in English per dev-manual policy
+            Service Architecture: Service Architecture
+            "WAC & Cost Basis": "WAC & Cost Basis"
+            "Split & Promote": "Split & Promote"
+            Balance Validation: Balance Validation
             Misc: Varie
             Image Crop: Ritaglio Immagine
+            Transactions: Transazioni
+            Transaction Form: Modulo Transazione
+            Import from Broker: Importa da Broker
+            Interactive Brokers (IBKR): Interactive Brokers (IBKR)
+            Degiro: Degiro
+            eToro: eToro
+            Directa SIM: Directa SIM
+            Charles Schwab: Charles Schwab
+            Revolut: Revolut
+            Coinbase: Coinbase
+            Freetrade: Freetrade
+            Finpension: Finpension
+            Trading212: Trading212
+            Generic CSV: CSV Generico
+            Dashboard: Dashboard
+            Settings: Impostazioni
             Admin Manual: Manuale Admin
             CLI Tools: Strumenti CLI
             Global Settings: Impostazioni Globali
@@ -193,8 +222,37 @@ plugins:
             justETF: justETF
             CSS Scraper: CSS Scraper
             Scheduled Investment: Investissement Programmé
+            # Developer provider entries — kept in English per dev-manual policy
+            Overview Providers: Overview Providers
+            Yahoo Finance Tech: Yahoo Finance Tech
+            justETF Tech: justETF Tech
+            CSS Scraper Tech: CSS Scraper Tech
+            Scheduled Investment Tech: Scheduled Investment Tech
+            Borsa Italiana Tech: Borsa Italiana Tech
+            # Developer transaction section — kept in English per dev-manual policy
+            Service Architecture: Service Architecture
+            "WAC & Cost Basis": "WAC & Cost Basis"
+            "Split & Promote": "Split & Promote"
+            Balance Validation: Balance Validation
             Misc: Divers
             Image Crop: Recadrage d'Image
+            Transactions: Transactions
+            Transaction Form: Formulaire de Transaction
+            Import from Broker: Importer depuis le Courtier
+            Interactive Brokers (IBKR): Interactive Brokers (IBKR)
+            Degiro: Degiro
+            eToro: eToro
+            Directa SIM: Directa SIM
+            Charles Schwab: Charles Schwab
+            Revolut: Revolut
+            Coinbase: Coinbase
+            Freetrade: Freetrade
+            Finpension: Finpension
+            Trading212: Trading212
+            Generic CSV: CSV Générique
+            Dashboard: Tableau de Bord
+            Settings: Paramètres
+            Borsa Italiana: Borsa Italiana
             Admin Manual: Manuel Admin
             CLI Tools: Outils CLI
             Global Settings: Paramètres Globaux
@@ -290,8 +348,37 @@ plugins:
             justETF: justETF
             CSS Scraper: CSS Scraper
             Scheduled Investment: Inversión Programada
+            # Developer provider entries — kept in English per dev-manual policy
+            Overview Providers: Overview Providers
+            Yahoo Finance Tech: Yahoo Finance Tech
+            justETF Tech: justETF Tech
+            CSS Scraper Tech: CSS Scraper Tech
+            Scheduled Investment Tech: Scheduled Investment Tech
+            Borsa Italiana Tech: Borsa Italiana Tech
+            # Developer transaction section — kept in English per dev-manual policy
+            Service Architecture: Service Architecture
+            "WAC & Cost Basis": "WAC & Cost Basis"
+            "Split & Promote": "Split & Promote"
+            Balance Validation: Balance Validation
             Misc: Varios
             Image Crop: Recorte de Imagen
+            Transactions: Transacciones
+            Transaction Form: Formulario de Transacción
+            Import from Broker: Importar desde el Bróker
+            Interactive Brokers (IBKR): Interactive Brokers (IBKR)
+            Degiro: Degiro
+            eToro: eToro
+            Directa SIM: Directa SIM
+            Charles Schwab: Charles Schwab
+            Revolut: Revolut
+            Coinbase: Coinbase
+            Freetrade: Freetrade
+            Finpension: Finpension
+            Trading212: Trading212
+            Generic CSV: CSV Genérico
+            Dashboard: Panel Principal
+            Settings: Configuración
+            Borsa Italiana: Borsa Italiana
             Admin Manual: Manual de Admin
             CLI Tools: Herramientas CLI
             Global Settings: Configuración Global
@@ -381,9 +468,27 @@ nav:
       - Getting Started: user/getting-started.md
       - Installation (Docker): user/installation.md
       - Install as App (PWA): user/pwa.md
+      - Dashboard:
+          - Overview: user/dashboard/index.md
       - Brokers:
           - Overview: user/brokers/index.md
           - Broker Sharing: user/brokers/sharing.md
+      - Transactions:
+          - Overview: user/transactions/index.md
+          - Transaction Form: user/transactions/form.md
+          - Import from Broker:
+              - Overview: user/transactions/import/index.md
+              - Interactive Brokers (IBKR): user/transactions/import/ibkr.md
+              - Degiro: user/transactions/import/degiro.md
+              - eToro: user/transactions/import/etoro.md
+              - Directa SIM: user/transactions/import/directa.md
+              - Charles Schwab: user/transactions/import/schwab.md
+              - Revolut: user/transactions/import/revolut.md
+              - Coinbase: user/transactions/import/coinbase.md
+              - Freetrade: user/transactions/import/freetrade.md
+              - Finpension: user/transactions/import/finpension.md
+              - Trading212: user/transactions/import/trading212.md
+              - Generic CSV: user/transactions/import/generic-csv.md
       - Assets:
           - Overview: user/assets/index.md
           - Create & Edit: user/assets/create-edit.md
@@ -401,6 +506,7 @@ nav:
               - justETF: user/assets/providers/justetf.md
               - CSS Scraper: user/assets/providers/css-scraper.md
               - Scheduled Investment: user/assets/providers/scheduled-investment.md
+              - Borsa Italiana: user/assets/providers/borsa-italiana.md
       - FX Rates:
           - Overview: user/fx/index.md
           - Adding a Pair: user/fx/add-pair.md
@@ -415,6 +521,8 @@ nav:
           - Chart Settings: user/fx/chart-settings.md
       - Files:
           - Overview: user/files/index.md
+      - Settings:
+          - Overview: user/settings/index.md
       - Misc:
           - Image Crop: user/misc/image-crop.md
   - Admin Manual:
@@ -518,10 +626,15 @@ nav:
           - Reference: developer/api/index.md
           - cURL Testing: developer/api/curl-testing.md
       - Backend Development:
-          - BRIM (Import):
-              - Architecture: developer/backend/brim/architecture.md
-              - Generic CSV Provider: developer/backend/brim/generic_csv.md
-              - Providers List: developer/backend/brim/providers_list.md
+          - "Transactions (User Data)":
+              - Service Architecture: developer/backend/transactions/service.md
+              - "WAC & Cost Basis": developer/backend/transactions/wac.md
+              - "Split & Promote": developer/backend/transactions/split_promote.md
+              - Balance Validation: developer/backend/transactions/balance_validation.md
+              - Import (BRIM):
+                  - Architecture: developer/backend/brim/architecture.md
+                  - Generic CSV Provider: developer/backend/brim/generic_csv.md
+                  - Providers List: developer/backend/brim/providers_list.md
           - Assets (Pricing):
               - Architecture: developer/backend/assets/architecture.md
               - Providers:
@@ -590,6 +703,10 @@ nav:
       - FAQ: community/faq.md
       - Support the Project: community/contribute.md
       - Credits & Legal: community/credits-legal.md
+
+hooks:
+  - hooks/absolute_hreflang.py
+  - hooks/jsonld.py
 
 extra_css:
   - static/extra.css

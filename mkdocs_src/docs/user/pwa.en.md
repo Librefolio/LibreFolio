@@ -68,7 +68,7 @@ LibreFolio can be installed as a **Progressive Web App (PWA)** on your device. T
     - **iOS**: Share → "Add to Home Screen"
     - **Desktop**: Not available on HTTP (use Tailscale for HTTPS)
 
-    For full PWA support, expose your instance via [Tailscale](../../../admin/tailscale_exposure/) (free, easy HTTPS).
+    For full PWA support, expose your instance via [Tailscale](../admin/tailscale_exposure.md) (free, easy HTTPS).
 
 ---
 
