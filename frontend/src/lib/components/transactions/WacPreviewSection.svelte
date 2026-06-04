@@ -17,7 +17,6 @@
     import CompactCashCell from '$lib/components/ui/CompactCashCell.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
-    import CurrencyChip from './CurrencyChip.svelte';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
     import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
     import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '$lib/utils/currencyFormat';
@@ -46,7 +45,7 @@
             original_currency?: string | null;
             fx_rate_used?: string | null;
         }>;
-        missing_pairs: string[];
+        missing_pairs: Array<{pair: string; dates: string[]} | string>;
         asset_price: {code: string; amount: string} | null;
         asset_price_stale: {actual_rate_date: string; days_back: number} | null;
         asset_price_missing: boolean;
@@ -87,7 +86,7 @@
         onModeChange?: (mode: 'auto' | 'manual') => void;
         /** External WAC result from parent (validate response or BulkModal).
          *  When non-null and mode is 'auto', this data is displayed directly. */
-        externalResult?: {wac: {code: string; amount: string} | null; qualifying_txs: Array<Record<string, any>>; missing_pairs: string[]} | null;
+        externalResult?: {wac: {code: string; amount: string} | null; qualifying_txs: Array<Record<string, any>>; missing_pairs: Array<{pair: string; dates: string[]} | string>} | null;
         /** Set of TX IDs that are pending (batch-created, not yet committed).
          *  Used to annotate qualifying table rows with pending indicator at render time. */
         pendingTxIds?: Set<number> | null;
@@ -116,12 +115,7 @@
         if (mode === 'manual') showQualifying = false;
     });
 
-    // Force switch to manual when missing_pairs makes auto unreliable
-    $effect(() => {
-        if (forcedManual && mode === 'auto') {
-            onModeChange?.('manual');
-        }
-    });
+    // NOTE: missing_pairs no longer forces manual — user stays in auto, sees error banner
 
     // =========================================================================
     // Derived
@@ -132,9 +126,13 @@
     let qualifyingCount = $derived(previewResult?.qualifying_txs?.length ?? 0);
     let maxFxStaleDays = $derived(previewResult?.qualifying_txs?.reduce((max, qtx) => Math.max(max, qtx.fx_info?.fx_days_back ?? 0), 0) ?? 0);
     let hasStaleFx = $derived(maxFxStaleDays > 5);
-    // Force manual when missing pairs — auto WAC is unreliable
-    let forcedManual = $derived(hasMissingPairs);
+    // NOTE: hasMissingPairs no longer forces manual — only shows error banner
+    let forcedManual = false; // kept for template compat, always false
     let hasAnyFxConversion = $derived(previewResult?.qualifying_txs?.some((q) => q.fx_info != null) ?? false);
+    /** True when the user changed currency but the result hasn't caught up yet */
+    let currencyPending = $derived(
+        isAuto && wacCurrency != null && previewResult?.wac != null && previewResult.wac.code !== wacCurrency,
+    );
 
     // =========================================================================
     // External result sync — WAC data from validate response
@@ -178,9 +176,24 @@
         onModeChange?.('manual');
     }
 
-    /** Called when user types in the amount field — auto-switch to manual */
+    /** Called when user types in the amount field — auto-switch to manual.
+     *  In auto mode: currency change → WAC currency override; amount change → switch to manual. */
     function handleValueChange(next: {code: string; amount: string} | null) {
+        if (!next) {
+            onChange(next);
+            return;
+        }
+
         if (mode === 'auto') {
+            const prevCode = value?.code;
+            // Currency changed (but only if we had a previous code) → WAC currency override (stay in auto)
+            if (prevCode != null && next.code !== prevCode) {
+                onCurrencyChange?.(next.code);
+                return;
+            }
+            // Amount changed EFFECTIVELY → switch to manual
+            const currentAmount = value?.amount ?? '';
+            if (next.amount === currentAmount) return; // blur without modification → no-op
             onModeChange?.('manual');
         }
         onChange(next);
@@ -260,8 +273,8 @@
     </div>
 
     <!-- Input field -->
-    <div class="flex items-center gap-2 {isAuto && previewResult?.wac ? 'opacity-60 italic' : ''}">
-        <CompactCashCell {value} onChange={handleValueChange} signHint="positive" amountPlaceholder={isAuto ? 'auto' : '0.00'} {defaultCode} {disabled} testid="{testid}-input" />
+    <div class="flex items-center gap-2">
+        <CompactCashCell {value} onChange={handleValueChange} signHint="positive" amountPlaceholder={isAuto ? 'auto' : '0.00'} {defaultCode} currencyDisabled={disabled} disabled={disabled} testid="{testid}-input" />
 
         {#if loading}
             <span class="text-[10px] text-gray-400 animate-pulse" data-testid="{testid}-loading">
@@ -269,6 +282,13 @@
             </span>
         {/if}
     </div>
+
+    <!-- Currency pending hint -->
+    {#if currencyPending && !loading}
+        <p class="text-[10px] text-amber-600 dark:text-amber-400 italic" data-testid="{testid}-currency-pending">
+            ⏳ {$t('transactions.wacPreview.currencyChanged') ?? 'Currency changed — validating to update…'}
+        </p>
+    {/if}
 
     <!-- Auto mode: suggestion info + foldable qualifying panel -->
     {#if isAuto && previewResult && !hasMissingPairs && previewResult.wac}
@@ -288,15 +308,6 @@
                     {$t('transactions.wacPreview.txsUsed') ?? 'transactions used'})
                 </span>
             </button>
-            {#if onCurrencyChange && availableCurrencies.length > 0}
-                <CurrencyChip
-                    value={wacCurrency}
-                    options={availableCurrencies}
-                    loading={loading}
-                    onChange={onCurrencyChange}
-                    testid="{testid}-currency-chip"
-                />
-            {/if}
             <DocsLink path="financial-theory/portfolio-theory/weighted-average-cost/" label={$t('transactions.wacPreview.docsTooltip') ?? 'Learn how WAC (Weighted Average Cost) is calculated'} size={11} />
         </div>
     {:else if isAuto && !previewResult && !loading && !error}
@@ -315,9 +326,16 @@
                 <span>{$t('transactions.wacPreview.missingFx') ?? 'Cannot calculate WAC: missing FX rates'}</span>
             </div>
             <ul class="list-disc pl-4 space-y-0.5">
-                {#each previewResult?.missing_pairs ?? [] as pair}
-                    {@const parts = pair.split('/')}
-                    <li>{@html formatCurrencyCodeHtml(parts[0])} / {@html formatCurrencyCodeHtml(parts[1])} — {$t('transactions.wac.noRateAvailable') || 'no rate available'}</li>
+                {#each previewResult?.missing_pairs ?? [] as mp}
+                    {@const pairStr = typeof mp === 'string' ? mp : mp.pair}
+                    {@const dates = typeof mp === 'string' ? [] : (mp.dates ?? [])}
+                    {@const parts = pairStr.split('/')}
+                    <li>
+                        {@html formatCurrencyCodeHtml(parts[0])} / {@html formatCurrencyCodeHtml(parts[1])} — {$t('transactions.wac.noRateAvailable') || 'no rate available'}
+                        {#if dates.length > 0}
+                            <span class="text-gray-500 dark:text-gray-400">({dates.length} {dates.length === 1 ? 'date' : 'dates'})</span>
+                        {/if}
+                    </li>
                 {/each}
             </ul>
         </div>

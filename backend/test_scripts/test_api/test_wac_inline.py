@@ -547,3 +547,56 @@ class TestWACInlineValidateCommit:
             assert "add" in effects, f"Missing 'add': {effects}"
             assert "reduce" in effects, f"Missing 'reduce': {effects}"
             print_success("P28 ✓")
+
+    # ------------------------------------------------------------------ P29
+    async def test_wacp29_missing_fx_returns_pair_with_dates(self):
+        """validate auto WAC with cross-currency BUY but no FX rates → wac_missing_pairs has pair+dates."""
+        print_section("P29 — missing FX pairs returns pair + dates")
+        async with httpx.AsyncClient() as client:
+            # Create asset in EUR
+            broker_id, asset_id = await create_user_broker_asset(client, currency="EUR")
+
+            # BUY in USD — no FX rate exists for USD/EUR
+            # The ADJUSTMENT requests WAC in EUR (via cost_basis_override.code),
+            # forcing USD→EUR conversion which will fail due to missing FX rates
+            resp = await client.post(
+                f"{API_BASE}/transactions/validate",
+                json={
+                    "creates": [
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2024-03-15", "quantity": "10", "cash": {"code": "USD", "amount": "-500"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2024-04-20", "quantity": "5", "cash": {"code": "USD", "amount": "-300"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "ADJUSTMENT", "date": "2024-05-01", "quantity": "3", "cost_basis_mode": "auto-detail", "cost_basis_override": {"code": "EUR", "amount": "0"}},
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            print(f"P29 validate status: {resp.status_code}")
+            assert resp.status_code == 200, f"Validate failed ({resp.status_code}): {resp.text[:500]}"
+            data = resp.json()
+
+            # WAC should fail due to missing FX
+            assert data.get("wac_results") is not None, f"wac_results missing: {data}"
+            wr = data["wac_results"][0]
+            assert wr["wac"] is None, f"Expected wac=None due to missing FX, got: {wr['wac']}"
+            assert len(wr["wac_missing_pairs"]) > 0, "Expected wac_missing_pairs to be non-empty"
+
+            # Verify new format: list of {pair, dates}
+            mp = wr["wac_missing_pairs"][0]
+            assert "pair" in mp, f"Expected 'pair' field in wac_missing_pairs item: {mp}"
+            assert "dates" in mp, f"Expected 'dates' field in wac_missing_pairs item: {mp}"
+            assert mp["pair"] == "USD/EUR", f"Expected pair 'USD/EUR', got: {mp['pair']}"
+            # Should contain dates from both BUY transactions
+            assert len(mp["dates"]) >= 2, f"Expected at least 2 dates, got: {mp['dates']}"
+            assert "2024-03-15" in mp["dates"], f"Missing date 2024-03-15: {mp['dates']}"
+            assert "2024-04-20" in mp["dates"], f"Missing date 2024-04-20: {mp['dates']}"
+
+            # Verify issue is also emitted with pair_details
+            fx_issues = [i for i in data.get("issues", []) if i.get("code") == "wacFxUnavailable"]
+            assert len(fx_issues) > 0, f"Expected wacFxUnavailable issue, got: {data.get('issues')}"
+            issue = fx_issues[0]
+            assert "pair_details" in issue["params"], f"Expected pair_details in issue params: {issue['params']}"
+            pd = issue["params"]["pair_details"][0]
+            assert pd["pair"] == "USD/EUR"
+            assert len(pd["dates"]) >= 2
+
+            print_success("P29 ✓")

@@ -299,9 +299,18 @@
     let costBasisMode = $state<'auto' | 'manual'>('auto');
     /** Currency hint for WAC calculation — null = backend decides (last acquisition) */
     let wacCurrencyHint = $state<string | null>(null);
-    // Phase D: clear local WAC result when mode switches to manual
+    /** In auto mode, display the WAC result value (not the sentinel {code, amount:"0"}) */
+    let displayedCostBasis = $derived(
+        costBasisMode === 'auto' && externalWacResult?.wac
+            ? externalWacResult.wac
+            : costBasisMode === 'auto' && wacCurrencyHint
+              ? {code: wacCurrencyHint, amount: ''}
+              : draft.cost_basis_override,
+    );
+    // Phase D + G5: clear local WAC result on any mode change (manual: stop showing; auto: force re-fetch)
     $effect(() => {
-        if (costBasisMode === 'manual') formWacResult = null;
+        void costBasisMode; // track
+        formWacResult = null;
     });
     /** The partner TXReadItem when editing a paired transaction. */
     let partnerRow = $state<TXReadItem | null>(null);
@@ -983,6 +992,7 @@
     /** Handle WAC currency chip change — re-trigger validate without switching to manual */
     function onWacCurrencyChange(code: string) {
         wacCurrencyHint = code;
+        formWacResult = null; // clear stale result to show placeholder while recalculating
         // Re-trigger validate to recompute WAC in new currency
         scheduler.trigger('change');
     }
@@ -1191,12 +1201,20 @@
     // =========================================================================
 
     async function handleSyncFx() {
-        // Collect pairs from wacFxUnavailable issues
+        // Collect pairs and dates from wacFxUnavailable issues (pair_details has dates)
         const pairs: string[] = [];
+        const allDates: string[] = [];
         for (const issue of issues) {
-            if (issue.code === 'wacFxUnavailable' && issue.params?.pairs) {
-                for (const p of issue.params.pairs) {
-                    if (!pairs.includes(p)) pairs.push(p);
+            if (issue.code === 'wacFxUnavailable' && issue.params) {
+                if (issue.params.pairs) {
+                    for (const p of issue.params.pairs) {
+                        if (!pairs.includes(p)) pairs.push(p);
+                    }
+                }
+                if (issue.params.pair_details) {
+                    for (const pd of issue.params.pair_details as Array<{pair: string; dates: string[]}>) {
+                        allDates.push(...(pd.dates ?? []));
+                    }
                 }
             }
         }
@@ -1206,9 +1224,13 @@
             const [a, b] = p.split('/');
             return [a, b].sort().join('-');
         });
+        // Use min/max dates from backend (covers all needed dates), fallback to draft.date
+        const sortedDates = allDates.length > 0 ? allDates.sort() : [draft.date];
+        const start = sortedDates[0] ?? draft.date;
+        const end = sortedDates[sortedDates.length - 1] ?? draft.date;
         syncingFx = true;
         try {
-            await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({pairs: slugs, start: draft.date, end: draft.date});
+            await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({pairs: slugs, start, end});
             toasts.success($t('transactions.wac.syncSuccess') || 'FX rates synced');
             // Re-trigger validation so WAC is re-computed with new rates
             scheduler.trigger('manual');
@@ -1405,23 +1427,21 @@
                 </InfoBanner>
             {:else if showIssuesBanner}
                 <InfoBanner variant="warning" dismissible ondismiss={() => (issuesDismissed = true)}>
-                    {#if hasWacFxIssues}
-                        <button
-                            type="button"
-                            class="mb-2 px-3 py-1.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors disabled:opacity-50"
-                            onclick={handleSyncFx}
-                            disabled={syncingFx}
-                            data-testid="tx-form-sync-fx-btn"
-                        >
-                            {syncingFx ? '⏳' : ''}
-                            {$t('transactions.wac.syncFx')}
-                        </button>
-                    {/if}
                     {#if fieldIssues.length > 0}
                         <p class="font-semibold text-sm mb-1.5" data-testid="tx-form-issues-header">{getBulkContext ? $t('transactions.validate.contextualIssuesHeader') : $t('transactions.validate.issuesHeader')}</p>
                         <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
                             {#each fieldIssues as issue}
-                                <li data-testid="tx-form-issue">{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                                {#if issue.code === 'wacFxUnavailable'}
+                                    <li data-testid="tx-form-issue">
+                                        {$t('transactions.errors.wacFxUnavailable')}
+                                        <button type="button" class="underline text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 disabled:opacity-50" onclick={handleSyncFx} disabled={syncingFx} data-testid="tx-form-sync-fx-link">
+                                            {syncingFx ? '⏳ ' : ''}{$t('transactions.errors.wacFxUnavailableSyncLink')}
+                                        </button>
+                                        {$t('transactions.errors.wacFxUnavailableOrManual')}
+                                    </li>
+                                {:else}
+                                    <li data-testid="tx-form-issue">{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                                {/if}
                             {/each}
                         </ul>
                     {/if}
@@ -1695,7 +1715,7 @@
                     {#if pairLayout === 'transfer_asset'}
                         <div class="mt-3">
                             <WacPreviewSection
-                                value={draft.cost_basis_override}
+                                value={displayedCostBasis}
                                 onChange={onCostBasisChange}
                                 mode={costBasisMode}
                                 defaultCode={draft.cash?.code ?? 'EUR'}
@@ -1763,7 +1783,7 @@
                                     <span class="font-medium">{$t(`transactions.types.${draft.type}`) || draft.type}</span>
                                 </div>
                             {:else}
-                                <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} types={allowedTypes} testid="tx-form-type" />
+                                <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} types={allowedTypes} compact testid="tx-form-type" />
                             {/if}
                         </div>
                     </div>
@@ -1898,7 +1918,7 @@
                     {#if !pairLayout && draft.type === 'ADJUSTMENT' && showCostBasisField}
                         <div class="mt-3" data-testid="tx-form-cost-basis-inline">
                             <WacPreviewSection
-                                value={draft.cost_basis_override}
+                                value={displayedCostBasis}
                                 onChange={onCostBasisChange}
                                 mode={costBasisMode}
                                 defaultCode={draft.cash?.code ?? 'EUR'}
@@ -1915,7 +1935,7 @@
                                 onCurrencyChange={onWacCurrencyChange}
                                 availableCurrencies={wacAvailableCurrencies}
                             />
-                            {#if Number(draft.quantity) > 0 && !draft.cost_basis_override?.amount?.trim()}
+                            {#if Number(draft.quantity) > 0 && costBasisMode !== 'auto' && !draft.cost_basis_override?.amount?.trim()}
                                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="tx-form-cost-basis-warning">
                                     {$t('transactions.costBasisOverride.warningAdjustment') || 'No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift.'}
                                 </p>
@@ -1929,7 +1949,7 @@
             {#if !pairLayout && showCostBasisField && draft.type !== 'ADJUSTMENT'}
                 <div class="mt-3" data-testid="tx-form-cost-basis-inline">
                     <WacPreviewSection
-                        value={draft.cost_basis_override}
+                        value={displayedCostBasis}
                         onChange={onCostBasisChange}
                         mode={costBasisMode}
                         defaultCode={draft.cash?.code ?? 'EUR'}
