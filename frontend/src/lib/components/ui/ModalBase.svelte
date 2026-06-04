@@ -16,6 +16,7 @@
     70 = third-level modals (e.g. ConfirmModal over FileEditModal)
 -->
 <script lang="ts">
+    import {browser} from '$app/environment';
     import {fade, scale} from 'svelte/transition';
     import type {Snippet} from 'svelte';
 
@@ -73,6 +74,7 @@
     // Ref for backdrop focus
     let backdropEl = $state<HTMLDivElement | undefined>(undefined);
     let hasFocusedOnOpen = $state(false);
+    let bodyScrollLocked = false;
 
     // Focus the backdrop ONCE when modal opens so keyboard events are captured
     $effect(() => {
@@ -87,6 +89,20 @@
         if (!open) {
             hasFocusedOnOpen = false;
         }
+    });
+
+    $effect(() => {
+        if (!browser) return;
+
+        if (open) {
+            lockBodyScroll();
+        } else {
+            unlockBodyScroll();
+        }
+
+        return () => {
+            unlockBodyScroll();
+        };
     });
 
     // Track mousedown target to prevent false backdrop clicks during drag
@@ -115,6 +131,44 @@
 
     function stopPropagation(event: MouseEvent) {
         event.stopPropagation();
+    }
+
+    function lockBodyScroll() {
+        if (bodyScrollLocked) return;
+
+        const body = document.body;
+        const html = document.documentElement;
+        const currentCount = Number(body.dataset.modalScrollLockCount || '0');
+
+        if (currentCount === 0) {
+            body.dataset.modalPrevOverflow = body.style.overflow;
+            html.dataset.modalPrevOverflow = html.style.overflow;
+            body.style.overflow = 'hidden';
+            html.style.overflow = 'hidden';
+        }
+
+        body.dataset.modalScrollLockCount = String(currentCount + 1);
+        bodyScrollLocked = true;
+    }
+
+    function unlockBodyScroll() {
+        if (!bodyScrollLocked) return;
+
+        const body = document.body;
+        const html = document.documentElement;
+        const currentCount = Math.max(Number(body.dataset.modalScrollLockCount || '1') - 1, 0);
+
+        if (currentCount === 0) {
+            body.style.overflow = body.dataset.modalPrevOverflow || '';
+            html.style.overflow = html.dataset.modalPrevOverflow || '';
+            delete body.dataset.modalScrollLockCount;
+            delete body.dataset.modalPrevOverflow;
+            delete html.dataset.modalPrevOverflow;
+        } else {
+            body.dataset.modalScrollLockCount = String(currentCount);
+        }
+
+        bodyScrollLocked = false;
     }
 </script>
 

@@ -18,6 +18,16 @@ import {schemas} from '$lib/api/generated';
  */
 export type UploadedFile = z.infer<typeof schemas.UploadFileInfo>;
 
+/**
+ * Structured preview payload returned by preview endpoints.
+ */
+export type FilePreviewResponse = z.infer<typeof schemas.FilePreviewResponse>;
+
+/**
+ * Supported file preview categories.
+ */
+export type FilePreviewType = z.infer<typeof schemas.FilePreviewType>;
+
 // =============================================================================
 // BRIM TYPES (from /brokers/import endpoints)
 // =============================================================================

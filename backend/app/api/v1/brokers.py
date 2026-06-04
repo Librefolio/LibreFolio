@@ -26,6 +26,8 @@ Provides RESTful endpoints for broker report file management and parsing:
 4. Import transactions → POST /transactions (standard endpoint)
 """
 
+import asyncio
+import mimetypes
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -61,13 +63,42 @@ from backend.app.schemas.brokers import (
 from backend.app.services import brim_provider
 from backend.app.services.brim_provider import BRIMParseError, detect_tx_duplicates, search_asset_candidates
 from backend.app.services.broker_service import BrokerService
+from backend.app.services.file_preview import (
+    FilePreviewLinks,
+    UnsupportedPreviewError,
+    build_image_preview_url,
+    build_preview_response,
+)
 from backend.app.services.provider_registry import BRIMProviderRegistry
+from backend.app.schemas.uploads import FilePreviewResponse
 
 logger = get_logger(__name__)
 
 broker_router = APIRouter(prefix="/brokers", tags=["BR (Broker)"])
 
 brim_router = APIRouter(prefix="/import", tags=["BR Import"])
+
+
+async def _get_brim_file_with_access(
+    file_id: str,
+    current_user: User,
+    session: AsyncSession,
+    *,
+    min_role: Optional[UserRole] = None,
+    denied_detail: str = "Access denied",
+) -> BRIMFileInfo:
+    """Load a BRIM file and validate broker access when needed."""
+    file_info = brim_provider.get_file_info(file_id)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if file_info.target_broker_id and not current_user.is_superuser:
+        broker_service = BrokerService(session)
+        role = await broker_service._check_user_access(file_info.target_broker_id, current_user.id, min_role=min_role)
+        if role is None:
+            raise HTTPException(status_code=403, detail=denied_detail)
+
+    return file_info
 
 
 # =============================================================================
@@ -529,18 +560,47 @@ async def get_file(
 
     User must have access to the file's broker.
     """
-    file_info = brim_provider.get_file_info(file_id)
-    if not file_info:
-        raise HTTPException(status_code=404, detail="File not found")
+    return await _get_brim_file_with_access(file_id, current_user, session)
 
-    # Check access if file has a broker
-    if file_info.target_broker_id and not current_user.is_superuser:
-        broker_service = BrokerService(session)
-        role = await broker_service._check_user_access(file_info.target_broker_id, current_user.id)
-        if role is None:
-            raise HTTPException(status_code=403, detail="Access denied")
 
-    return file_info
+@brim_router.get("/files/{file_id}/preview", response_model=FilePreviewResponse)
+async def get_brim_file_preview(
+    file_id: str,
+    sheet_name: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+) -> FilePreviewResponse:
+    """Get structured preview data for a BRIM file."""
+    file_info = await _get_brim_file_with_access(file_id, current_user, session)
+
+    file_path = brim_provider.get_file_path(file_id)
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=404, detail="File content not found")
+
+    source_url = f"/api/v1/brokers/import/files/{file_id}/download?download=false"
+    links = FilePreviewLinks(
+        source_url=source_url,
+        download_url=f"/api/v1/brokers/import/files/{file_id}/download",
+        preview_url=build_image_preview_url(source_url),
+    )
+
+    try:
+        return await asyncio.to_thread(
+            build_preview_response,
+            file_path,
+            file_info.filename,
+            None,
+            file_info.size_bytes,
+            links,
+            sheet_name=sheet_name,
+        )
+    except UnsupportedPreviewError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.error("Failed to build BRIM file preview", file_id=file_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to build file preview") from e
 
 
 @brim_router.delete("/files/{file_id}")
@@ -554,17 +614,13 @@ async def delete_file(
 
     Requires EDITOR or OWNER access on the file's broker.
     """
-    file_info = brim_provider.get_file_info(file_id)
-    if not file_info:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # Check access if file has a broker
-    if file_info.target_broker_id and not current_user.is_superuser:
-        broker_service = BrokerService(session)
-        role = await broker_service._check_user_access(file_info.target_broker_id, current_user.id, min_role=UserRole.EDITOR)
-        if role is None:
-            raise HTTPException(status_code=403, detail="EDITOR or OWNER access required to delete files")
-
+    await _get_brim_file_with_access(
+        file_id,
+        current_user,
+        session,
+        min_role=UserRole.EDITOR,
+        denied_detail="EDITOR or OWNER access required to delete files",
+    )
     deleted = brim_provider.delete_file(file_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="File not found")
@@ -576,6 +632,7 @@ async def delete_file(
 @brim_router.get("/files/{file_id}/download")
 async def download_file(
     file_id: str,
+    download: bool = True,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
 ):
@@ -585,23 +642,20 @@ async def download_file(
     Returns the file content with appropriate headers for download.
     Any user with access to the broker can download files (VIEWER+).
     """
-
-    file_info = brim_provider.get_file_info(file_id)
-    if not file_info:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # Check access if file has a broker
-    if file_info.target_broker_id and not current_user.is_superuser:
-        broker_service = BrokerService(session)
-        role = await broker_service._check_user_access(file_info.target_broker_id, current_user.id)
-        if role is None:
-            raise HTTPException(status_code=403, detail="Access denied")
+    file_info = await _get_brim_file_with_access(file_id, current_user, session)
 
     file_path = brim_provider.get_file_path(file_id)
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="File content not found")
 
-    return FileResponse(path=file_path, filename=file_info.filename, media_type="application/octet-stream")
+    media_type = mimetypes.guess_type(file_info.filename)[0] or "application/octet-stream"
+
+    return FileResponse(
+        path=file_path,
+        filename=file_info.filename,
+        media_type=media_type,
+        content_disposition_type="attachment" if download else "inline",
+    )
 
 
 @brim_router.get("/files/{file_id}/last-parse")
@@ -616,17 +670,7 @@ async def get_last_parse_result(
     Useful for reloading a preview without re-parsing the file.
     Returns None if no parse result is cached.
     """
-    file_info = brim_provider.get_file_info(file_id)
-    if not file_info:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # Check access if file has a broker
-    if file_info.target_broker_id and not current_user.is_superuser:
-        broker_service = BrokerService(session)
-        role = await broker_service._check_user_access(file_info.target_broker_id, current_user.id)
-        if role is None:
-            raise HTTPException(status_code=403, detail="Access denied")
-
+    file_info = await _get_brim_file_with_access(file_id, current_user, session)
     return file_info.last_parse_result
 
 
@@ -664,16 +708,13 @@ async def parse_file(
     not in the plugin. Plugins only parse the file format.
     """
     # Get file info and check permissions
-    file_info = brim_provider.get_file_info(file_id)
-    if not file_info:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # Check access if file has a broker
-    if file_info.target_broker_id and not current_user.is_superuser:
-        broker_service = BrokerService(session)
-        role = await broker_service._check_user_access(file_info.target_broker_id, current_user.id, min_role=UserRole.EDITOR)
-        if role is None:
-            raise HTTPException(status_code=403, detail="EDITOR or OWNER access required to parse files")
+    await _get_brim_file_with_access(
+        file_id,
+        current_user,
+        session,
+        min_role=UserRole.EDITOR,
+        denied_detail="EDITOR or OWNER access required to parse files",
+    )
 
     # Determine plugin to use
     plugin_code = request.plugin_code

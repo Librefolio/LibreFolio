@@ -16,8 +16,9 @@
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/upload';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
-    import {Check, Download, File as FileIcon, FileSpreadsheet, FileText, Image as ImageIcon, Link2, Search, Trash2, X} from 'lucide-svelte';
+    import {Check, Download, Eye, File as FileIcon, FileSpreadsheet, FileText, Image as ImageIcon, Link2, Search, Trash2, X} from 'lucide-svelte';
     import type {UploadedFile} from '$lib/types';
+    import {getPreviewTypeForUploadedFile} from '$lib/utils/filePreview';
 
     interface Props {
         /** Files to display */
@@ -42,9 +43,11 @@
         ondelete?: (data: {id: string}) => void;
         /** Called when copy link is requested */
         oncopyLink?: (data: {file: UploadedFile}) => void;
+        /** Called when preview is requested */
+        onpreview?: (data: {file: UploadedFile}) => void;
     }
 
-    let {files = [], mode = 'browse', cardSize = 'full', showSearch = true, showActions = true, selectedFileId = null, previewSize = '240x240', onselect, ondblselect, ondelete, oncopyLink}: Props = $props();
+    let {files = [], mode = 'browse', cardSize = 'full', showSearch = true, showActions = true, selectedFileId = null, previewSize = '240x240', onselect, ondblselect, ondelete, oncopyLink, onpreview}: Props = $props();
 
     // Internal state
     let searchQuery = $state('');
@@ -79,11 +82,19 @@
         return `${file.url}?img_preview=${size}`;
     }
 
+    function canPreview(file: UploadedFile): boolean {
+        return getPreviewTypeForUploadedFile(file) !== null;
+    }
+
     function handleCardClick(file: UploadedFile) {
         onselect?.({file});
     }
 
     function handleCardDblClick(file: UploadedFile) {
+        if (mode === 'browse' && canPreview(file)) {
+            onpreview?.({file});
+            return;
+        }
         ondblselect?.({file});
     }
 
@@ -179,6 +190,19 @@
                         <a href={`${file.url}?download=true`} download={file.original_name} class="action-btn" title={$t('uploads.download') || 'Download'} onclick={(e) => e.stopPropagation()}>
                             <Download size={14} />
                         </a>
+                        {#if canPreview(file)}
+                            <button
+                                class="action-btn"
+                                onclick={(e) => {
+                                    e.stopPropagation();
+                                    onpreview?.({file});
+                                }}
+                                title={$t('uploads.preview') || 'Preview'}
+                                data-testid={`file-grid-preview-${file.id}`}
+                            >
+                                <Eye size={14} />
+                            </button>
+                        {/if}
                         <button
                             class="action-btn"
                             onclick={(e) => {

@@ -5,13 +5,16 @@ Tests for static file upload endpoints:
 - POST /uploads: Upload file
 - GET /uploads: List files
 - GET /uploads/{id}: File info
+- GET /uploads/{id}/preview: Structured preview payload
 - GET /uploads/file/{id}: Download file
 - DELETE /uploads/{id}: Delete file
 - GET /uploads/plugin/{type}/{path}: Serve plugin static asset
 """
 
+import io
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 
 import httpx
 import pytest
@@ -60,6 +63,58 @@ async def create_user_and_login(client: httpx.AsyncClient) -> tuple[int, str]:
 def create_test_file(name: str = "test.txt", content: bytes = b"Hello World") -> tuple[str, bytes]:
     """Create a test file for upload."""
     return name, content
+
+
+def create_png_bytes(width: int = 64, height: int = 48) -> bytes:
+    """Create a real PNG image for preview tests."""
+    from PIL import Image  # noqa: PLC0415 — test-only local import
+
+    img = Image.new("RGB", (width, height), color=(255, 0, 0))
+    out = BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()
+
+
+def create_xlsx_bytes() -> bytes:
+    """Create a workbook with sparse cells and multiple sheets."""
+    from openpyxl import Workbook  # noqa: PLC0415 — test-only local import
+
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "Summary"
+    summary["A1"] = "Name"
+    summary["B1"] = "Amount"
+    summary["A2"] = "Cash"
+    summary["C3"] = "Sparse"
+
+    details = workbook.create_sheet("Details")
+    details["A1"] = "Date"
+    details["B1"] = "Type"
+    details["A2"] = "2025-01-01"
+    details["B2"] = "BUY"
+
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def create_minimal_pdf_bytes() -> bytes:
+    """Create a tiny but valid PDF file."""
+    return (
+        b"%PDF-1.4\n"
+        b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+        b"2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n"
+        b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]/Contents 4 0 R>>endobj\n"
+        b"4 0 obj<</Length 44>>stream\nBT /F1 12 Tf 72 120 Td (Preview PDF) Tj ET\nendstream endobj\n"
+        b"xref\n0 5\n0000000000 65535 f \n"
+        b"trailer<</Size 5/Root 1 0 R>>\nstartxref\n256\n%%EOF\n"
+    )
+
+
+def read_sample_xls_bytes() -> bytes:
+    """Read committed legacy XLS sample for preview coverage."""
+    sample_path = Path(__file__).resolve().parents[3] / "backend" / "staticResources" / "FilePreviewSamples" / "file_example_XLS_10.xls"
+    return sample_path.read_bytes()
 
 
 # ============================================================================
@@ -212,6 +267,152 @@ class TestFileInfo:
             assert data["original_name"] == filename
 
             print_success("✓ Got file info")
+
+
+# ============================================================================
+# STRUCTURED PREVIEW TESTS
+# ============================================================================
+
+
+class TestStructuredPreview:
+    """Tests for GET /uploads/{id}/preview."""
+
+    @pytest.mark.asyncio
+    async def test_markdown_preview_payload(self, test_server):
+        """UPLOAD-005B: Markdown preview returns raw content and metadata."""
+        print_section("UPLOAD-005B: Markdown preview payload")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            files = {"file": ("notes.md", BytesIO(b"# Heading\n\nBody line\n"), "text/markdown")}
+            upload_resp = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
+            file_id = upload_resp.json()["file"]["id"]
+
+            response = await client.get(f"{API_BASE}/uploads/{file_id}/preview", timeout=TIMEOUT)
+
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["preview_type"] == "markdown"
+            assert data["text_content"] == "# Heading\n\nBody line\n"
+            assert data["total_lines"] == 3
+            assert data["download_url"].endswith("?download=true")
+
+            print_success("✓ Markdown preview payload returned")
+
+    @pytest.mark.asyncio
+    async def test_image_preview_payload(self, test_server):
+        """UPLOAD-005C: Image preview returns dimensions and optimized URL."""
+        print_section("UPLOAD-005C: Image preview payload")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            files = {"file": ("chart.png", BytesIO(create_png_bytes(120, 90)), "image/png")}
+            upload_resp = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
+            file_id = upload_resp.json()["file"]["id"]
+
+            response = await client.get(f"{API_BASE}/uploads/{file_id}/preview", timeout=TIMEOUT)
+
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["preview_type"] == "image"
+            assert data["image_width"] == 120
+            assert data["image_height"] == 90
+            assert data["preview_url"].endswith("img_preview=1600x1600")
+
+            print_success("✓ Image preview metadata returned")
+
+    @pytest.mark.asyncio
+    async def test_pdf_preview_payload(self, test_server):
+        """UPLOAD-005D: PDF preview returns embeddable source URL."""
+        print_section("UPLOAD-005D: PDF preview payload")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            files = {"file": ("sample.pdf", BytesIO(create_minimal_pdf_bytes()), "application/pdf")}
+            upload_resp = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
+            file_id = upload_resp.json()["file"]["id"]
+
+            response = await client.get(f"{API_BASE}/uploads/{file_id}/preview", timeout=TIMEOUT)
+
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["preview_type"] == "pdf"
+            assert data["source_url"].endswith(f"/api/v1/uploads/file/{file_id}")
+            assert data["preview_url"] is None
+
+            print_success("✓ PDF preview payload returned")
+
+    @pytest.mark.asyncio
+    async def test_excel_preview_sheet_selection(self, test_server):
+        """UPLOAD-005E: Excel preview preserves sparse cells and sheet selection."""
+        print_section("UPLOAD-005E: Excel preview sheet selection")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            files = {
+                "file": (
+                    "preview.xlsx",
+                    BytesIO(create_xlsx_bytes()),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            }
+            upload_resp = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
+            file_id = upload_resp.json()["file"]["id"]
+
+            response = await client.get(
+                f"{API_BASE}/uploads/{file_id}/preview",
+                params={"sheet_name": "Summary"},
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["preview_type"] == "table"
+            assert data["sheet_names"] == ["Summary", "Details"]
+            assert data["active_sheet_name"] == "Summary"
+            assert data["total_rows"] == 3
+            assert data["total_cols"] == 3
+            assert data["table_rows"][0] == ["Name", "Amount", ""]
+            assert data["table_rows"][2][2] == "Sparse"
+
+            print_success("✓ Excel preview respects used range")
+
+    @pytest.mark.asyncio
+    async def test_legacy_xls_preview_payload(self, test_server):
+        """UPLOAD-005F: Legacy XLS preview works when xlrd is available."""
+        print_section("UPLOAD-005F: Legacy XLS preview payload")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            files = {
+                "file": (
+                    "preview.xls",
+                    BytesIO(read_sample_xls_bytes()),
+                    "application/vnd.ms-excel",
+                )
+            }
+            upload_resp = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
+            file_id = upload_resp.json()["file"]["id"]
+
+            response = await client.get(
+                f"{API_BASE}/uploads/{file_id}/preview",
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["preview_type"] == "table"
+            assert data["total_rows"] > 0
+            assert data["total_cols"] > 0
+            assert isinstance(data["table_rows"], list)
+            assert len(data["table_rows"]) > 0
+
+            print_success("✓ Legacy XLS preview returned table payload")
 
 
 # ============================================================================

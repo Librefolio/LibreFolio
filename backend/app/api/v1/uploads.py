@@ -9,6 +9,7 @@ Security:
 - File size is checked against global settings
 """
 
+import asyncio
 import time
 from typing import Annotated, Optional
 
@@ -22,10 +23,17 @@ from backend.app.config import PROJECT_ROOT
 from backend.app.db import get_session_generator
 from backend.app.db.models import User
 from backend.app.schemas.uploads import (
+    FilePreviewResponse,
     UploadDeleteResponse,
     UploadFileInfo,
     UploadListResponse,
     UploadResponse,
+)
+from backend.app.services.file_preview import (
+    FilePreviewLinks,
+    UnsupportedPreviewError,
+    build_image_preview_url,
+    build_preview_response,
 )
 from backend.app.services.global_settings_service import get_max_upload_mb
 from backend.app.services.static_uploads import (
@@ -235,6 +243,48 @@ async def get_file_info(
     if not info:
         raise HTTPException(status_code=404, detail="File not found")
     return info
+
+
+@router.get("/{file_id}/preview", response_model=FilePreviewResponse)
+async def get_upload_file_preview(
+    file_id: str,
+    sheet_name: Optional[str] = None,
+    _current_user: Annotated[User, Depends(get_current_user)] = None,
+) -> FilePreviewResponse:
+    """Get structured preview data for an uploaded file."""
+    info = get_upload_info(file_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    file_path = get_upload_path(file_id)
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=404, detail="File content not found")
+
+    mime_type = get_upload_mime_type(file_id) or info.mime_type
+    source_url = f"/api/v1/uploads/file/{file_id}"
+    links = FilePreviewLinks(
+        source_url=source_url,
+        download_url=f"{source_url}?download=true",
+        preview_url=build_image_preview_url(source_url),
+    )
+
+    try:
+        return await asyncio.to_thread(
+            build_preview_response,
+            file_path,
+            info.original_name,
+            mime_type,
+            info.size_bytes,
+            links,
+            sheet_name=sheet_name,
+        )
+    except UnsupportedPreviewError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.error("Failed to build upload preview", error=str(e), file_id=file_id)
+        raise HTTPException(status_code=500, detail="Failed to build file preview") from e
 
 
 @router.delete("/{file_id}", response_model=UploadDeleteResponse)

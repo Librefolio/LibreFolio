@@ -23,6 +23,7 @@ import pytest
 
 from backend.app.config import PROJECT_ROOT, get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -290,6 +291,67 @@ class TestFileStorage:
                 timeout=TIMEOUT,
             )
             assert get_response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_preview_file_payload(self, test_server, sample_csv_content):
+        """FS-008: Structured preview payload for BRIM CSV files."""
+        print_section("FS-008: BRIM preview payload")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+
+            files = {"file": ("preview.csv", io.BytesIO(sample_csv_content), "text/csv")}
+            upload_response = await client.post(
+                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                files=files,
+                timeout=TIMEOUT,
+            )
+            file_id = upload_response.json()["file_id"]
+
+            response = await client.get(
+                f"{API_BASE}/brokers/import/files/{file_id}/preview",
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["preview_type"] == "table"
+            assert data["filename"] == "preview.csv"
+            assert data["csv_delimiter"] == ","
+            assert data["table_rows"][1] == ["2025-01-01", "DEPOSIT", "0", "1000.00", "EUR", "Test deposit"]
+            assert "download=false" in data["source_url"]
+
+            print_success("✓ BRIM preview payload returned")
+
+    @pytest.mark.asyncio
+    async def test_download_inline_mode(self, test_server, sample_csv_content):
+        """FS-009: BRIM download endpoint supports inline rendering."""
+        print_section("FS-009: BRIM inline download mode")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+
+            files = {"file": ("inline.csv", io.BytesIO(sample_csv_content), "text/csv")}
+            upload_response = await client.post(
+                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                files=files,
+                timeout=TIMEOUT,
+            )
+            file_id = upload_response.json()["file_id"]
+
+            response = await client.get(
+                f"{API_BASE}/brokers/import/files/{file_id}/download",
+                params={"download": "false"},
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, response.text
+            assert response.headers.get("content-type", "").startswith("text/csv")
+            assert "inline" in response.headers.get("content-disposition", "").lower()
+
+            print_success("✓ BRIM download endpoint supports inline mode")
 
 
 # ============================================================================

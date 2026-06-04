@@ -12,19 +12,21 @@
     import {t} from '$lib/i18n';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {type BulkAction, type ColumnDef, DataTable, type FilterValue, type RowAction} from '$lib/components/table';
-    import {Download, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image as ImageIcon, Link, Trash2} from 'lucide-svelte';
+    import {Download, Eye, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image as ImageIcon, Link, Trash2} from 'lucide-svelte';
     import type {BrimFile, BrokerInfo, FileData, UploadedFile} from '$lib/types';
     import {safeNumber} from '$lib/types';
     // Generate a consistent color based on broker id for visual distinction
     // Uses shared golden-ratio color utility
     import {getIndexColor} from '$lib/utils/colors';
     import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
+    import {canPreviewFileData} from '$lib/utils/filePreview';
     import {getCachedPreview} from '$lib/stores/imagePreviewCache';
 
     interface Props {
         files: FileData[];
         type: 'static' | 'brim';
         onDelete: (id: string) => void;
+        onPreview?: (file: FileData) => void;
         onDeleteMultiple?: (ids: string[]) => void;
         /** Broker map for BRIM files - key: broker_id, value: broker info */
         brokers?: Map<number, BrokerInfo>;
@@ -38,7 +40,7 @@
         onSelectionChange?: (selectedIds: string[]) => void;
     }
 
-    let {files, type, onDelete, onDeleteMultiple, brokers, showBrokerColumn = true, initialFilters, onFiltersChange, onSelectionChange}: Props = $props();
+    let {files, type, onDelete, onPreview, onDeleteMultiple, brokers, showBrokerColumn = true, initialFilters, onFiltersChange, onSelectionChange}: Props = $props();
 
     // Internal DataTable reference (for external column visibility control)
     let dataTableRef: DataTable<FileData> | undefined = $state(undefined);
@@ -94,7 +96,7 @@
 
             // Images (png, jpg, jpeg, gif, webp, svg, bmp, ico)
             if (mimeType.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff'].includes(ext)) {
-                return Image;
+                return ImageIcon;
             }
 
             // Videos
@@ -349,6 +351,14 @@
     function getRowActions(): RowAction<FileData>[] {
         const actions: RowAction<FileData>[] = [];
 
+        actions.push({
+            id: 'preview',
+            icon: Eye,
+            label: () => $t('uploads.preview'),
+            onClick: (file) => onPreview?.(file),
+            visible: (file) => Boolean(onPreview) && canPreviewFileData(file, type),
+        });
+
         // Copy Link action (only for static files)
         if (type === 'static') {
             actions.push({
@@ -435,6 +445,11 @@
         ];
     }
 
+    function handleRowDoubleClick(file: FileData) {
+        if (!onPreview || !canPreviewFileData(file, type)) return;
+        onPreview(file);
+    }
+
     // Reactive columns (to get translations updated)
     let columns = $derived(getColumns());
     let rowActions = $derived(getRowActions());
@@ -442,7 +457,22 @@
 </script>
 
 <div data-testid="files-table-{type}">
-    <DataTable bind:this={dataTableRef} {bulkActions} {columns} data={files} emptyMessage={$t('uploads.noFiles')} getRowDisplayName={getFileName} getRowId={getFileId} {initialFilters} {onFiltersChange} {onSelectionChange} {rowActions} storageKey="filesTable_{type}" tableLayout="auto" />
+    <DataTable
+        bind:this={dataTableRef}
+        {bulkActions}
+        {columns}
+        data={files}
+        emptyMessage={$t('uploads.noFiles')}
+        getRowDisplayName={getFileName}
+        getRowId={getFileId}
+        {initialFilters}
+        {onFiltersChange}
+        {onSelectionChange}
+        onRowDoubleClick={handleRowDoubleClick}
+        {rowActions}
+        storageKey="filesTable_{type}"
+        tableLayout="auto"
+    />
 </div>
 
 <style>
