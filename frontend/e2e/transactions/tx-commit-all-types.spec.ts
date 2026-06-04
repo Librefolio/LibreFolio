@@ -694,8 +694,10 @@ test.describe('Cost Basis Override', () => {
         // Cost basis is inline for ADJUSTMENT — fill it directly
         const cbInput = page.getByTestId('tx-form-cost-basis-input-amount');
         await expect(cbInput).toBeVisible({timeout: 3_000});
+        await cbInput.click();
         await cbInput.fill('99.99');
-        await page.waitForTimeout(200);
+        await cbInput.press('Tab'); // ensure blur fires and mode switches
+        await page.waitForTimeout(500);
 
         await applyFormModal(page);
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
