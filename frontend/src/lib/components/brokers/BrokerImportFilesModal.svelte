@@ -17,13 +17,15 @@
     import {fade} from 'svelte/transition';
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
+    import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal} from '$lib/components/ui/media';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import ModalBase from '$lib/components/ui/ModalBase.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
-    import type {BrimFile} from '$lib/types';
+    import type {BrimFile, FilePreviewResponse} from '$lib/types';
+    import {fetchFilePreview, getFilePreviewError} from '$lib/utils/filePreview';
 
     interface Props {
         /** Whether the modal is open */
@@ -62,6 +64,14 @@
     let filesTableRef: FilesTable | undefined = $state(undefined);
     let selectedFileIds = $state<string[]>([]);
 
+    // BRIM preview modal state
+    let showPreviewModal = $state(false);
+    let previewLoading = $state(false);
+    let previewError = $state<string | null>(null);
+    let previewData = $state<FilePreviewResponse | null>(null);
+    let previewFileId = $state<string | null>(null);
+    let previewRequestToken = 0;
+
     // Load files when modal opens or brokerId changes
     $effect(() => {
         if (open && brokerId) {
@@ -70,6 +80,8 @@
             showUploader = false;
             pendingFiles = [];
             error = null;
+        } else if (!open) {
+            closePreviewModal();
         }
     });
 
@@ -237,6 +249,52 @@
         confirmBulkDeleteOpen = false;
         pendingBulkDeleteIds = [];
     }
+
+    async function openPreview(file: BrimFile) {
+        previewFileId = file.file_id;
+        showPreviewModal = true;
+        previewData = null;
+        previewError = null;
+        await loadPreview();
+    }
+
+    async function loadPreview(sheetName?: string) {
+        if (!previewFileId) return;
+
+        const token = ++previewRequestToken;
+        previewLoading = true;
+        previewError = null;
+
+        try {
+            const response = await fetchFilePreview({source: 'brim', fileId: previewFileId}, sheetName);
+            if (token === previewRequestToken) {
+                previewData = response;
+            }
+        } catch (error) {
+            if (token === previewRequestToken) {
+                previewData = null;
+                previewError = getFilePreviewError(error, 'Preview failed');
+            }
+        } finally {
+            if (token === previewRequestToken) {
+                previewLoading = false;
+            }
+        }
+    }
+
+    async function handlePreviewSheetChange(sheetName: string) {
+        if (!sheetName) return;
+        await loadPreview(sheetName);
+    }
+
+    function closePreviewModal() {
+        previewRequestToken += 1;
+        showPreviewModal = false;
+        previewLoading = false;
+        previewError = null;
+        previewData = null;
+        previewFileId = null;
+    }
 </script>
 
 <ModalBase maxWidth="900px" onRequestClose={tryClose} {open} testId="import-files-modal" zIndex={50}>
@@ -306,7 +364,7 @@
                 <p class="text-gray-400 dark:text-gray-500 text-sm mt-1">{$_('brokers.uploadHint')}</p>
             </div>
         {:else}
-            <FilesTable bind:this={filesTableRef} {files} type="brim" onDelete={handleDelete} onDeleteMultiple={requestBulkDelete} showBrokerColumn={false} onSelectionChange={(ids) => (selectedFileIds = ids)} />
+            <FilesTable bind:this={filesTableRef} {files} type="brim" onDelete={handleDelete} onDeleteMultiple={requestBulkDelete} onPreview={(file) => openPreview(file as BrimFile)} showBrokerColumn={false} onSelectionChange={(ids) => (selectedFileIds = ids)} />
         {/if}
     </div>
 
@@ -324,6 +382,16 @@
         </div>
     </div>
 </ModalBase>
+
+<FilePreviewModal
+    open={showPreviewModal}
+    preview={previewData}
+    loading={previewLoading}
+    error={previewError}
+    onRequestClose={closePreviewModal}
+    onSheetChange={handlePreviewSheetChange}
+    zIndex={60}
+/>
 
 <!-- File Rename Modal (for BRIM files) -->
 {#if editingFile}

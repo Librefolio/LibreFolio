@@ -15,13 +15,14 @@
         error?: string | null;
         onRequestClose?: () => void;
         onSheetChange?: (sheetName: string) => void;
+        zIndex?: number;
     }
 
     type CheetahGridModule = {
         ListGrid: new (options: Record<string, unknown>) => {dispose?: () => void};
     };
 
-    let {open = false, preview = null, loading = false, error = null, onRequestClose = () => {}, onSheetChange = () => {}}: Props = $props();
+    let {open = false, preview = null, loading = false, error = null, onRequestClose = () => {}, onSheetChange = () => {}, zIndex = 50}: Props = $props();
 
     let markdownMode = $state<'rendered' | 'raw'>('rendered');
     let copied = $state(false);
@@ -493,7 +494,7 @@
     }
 </script>
 
-<ModalBase open={open} onRequestClose={onRequestClose} maxWidth="5xl" contentClass="file-preview-modal" testId="file-preview-modal">
+<ModalBase open={open} onRequestClose={onRequestClose} maxWidth="5xl" contentClass="file-preview-modal" testId="file-preview-modal" {zIndex}>
     <div class="preview-shell">
         <div class="preview-header">
             <div class="preview-heading">

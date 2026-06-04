@@ -146,4 +146,45 @@ test.describe('Broker Detail Page', () => {
         await page.keyboard.press('Escape');
         await expect(page.getByTestId('import-files-modal')).not.toBeVisible({timeout: 3000});
     });
+
+    test('import files modal can open file preview', async ({page}) => {
+        const ok = await goToFirstBrokerDetail(page);
+        if (!ok) return;
+
+        await page.route('**/api/v1/brokers/import/files/*/preview', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    preview_type: 'markdown',
+                    filename: 'coinbase-export.csv',
+                    mime_type: 'text/markdown',
+                    size_bytes: 44,
+                    source_url: '/api/v1/brokers/import/files/mock/download',
+                    download_url: '/api/v1/brokers/import/files/mock/download?download=true',
+                    preview_url: null,
+                    text_content: '# Broker preview\n\nModal reuse works.\n',
+                    total_lines: 3,
+                    detected_encoding: 'utf-8',
+                    table_rows: null,
+                    total_rows: null,
+                    total_cols: null,
+                    sheet_names: [],
+                    active_sheet_name: null,
+                    image_width: null,
+                    image_height: null,
+                }),
+            });
+        });
+
+        await page.getByTestId('import-files-button').click();
+        await expect(page.getByTestId('import-files-modal')).toBeVisible({timeout: 5000});
+
+        const previewButton = page.getByTestId('row-action-preview').first();
+        await expect(previewButton).toBeVisible({timeout: 8000});
+        await previewButton.click();
+
+        await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8000});
+        await expect(page.getByTestId('file-preview-markdown-rendered')).toContainText('Modal reuse works.', {timeout: 8000});
+    });
 });

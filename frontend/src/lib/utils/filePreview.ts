@@ -1,4 +1,6 @@
-import type {BrimFile, FileData, FilePreviewType, UploadedFile} from '$lib/types';
+import {zodiosApi} from '$lib/api';
+import type {BrimFile, FileData, FilePreviewResponse, FilePreviewType, UploadedFile} from '$lib/types';
+import {extractErrorMessage} from '$lib/utils/trySave';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff', '.tif', '.ico']);
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown', '.mdown']);
@@ -39,6 +41,25 @@ export function detectPreviewType(filename: string, mimeType?: string | null): F
         return 'text';
     }
     return null;
+}
+
+export async function fetchFilePreview(
+    target: {source: 'static'; fileId: string} | {source: 'brim'; fileId: string},
+    sheetName?: string
+): Promise<FilePreviewResponse> {
+    return target.source === 'static'
+        ? ((await zodiosApi.get_upload_file_preview_api_v1_uploads__file_id__preview_get({
+              params: {file_id: target.fileId},
+              queries: sheetName ? {sheet_name: sheetName} : undefined,
+          })) as FilePreviewResponse)
+        : ((await zodiosApi.get_brim_file_preview_api_v1_brokers_import_files__file_id__preview_get({
+              params: {file_id: target.fileId},
+              queries: sheetName ? {sheet_name: sheetName} : undefined,
+          })) as FilePreviewResponse);
+}
+
+export function getFilePreviewError(error: unknown, fallback = 'Preview failed'): string {
+    return extractErrorMessage(error, fallback);
 }
 
 function getExtension(filename: string): string {
