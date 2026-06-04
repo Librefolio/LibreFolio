@@ -666,6 +666,7 @@
       "docsTooltip": "Learn how WAC (Weighted Average Cost) is calculated",
       "toggleAuto": "Auto",
       "toggleManual": "Manual",
+      "placeholderAuto": "auto (⚡️Validate now)",
       "currencyChanged": "Currency changed — recalculating…",
       "unitCost": "Unit cost",
       "effectLabel": "Effect",
@@ -679,7 +680,7 @@
       "pendingCreate": "Pending transaction (new, not yet saved)",
       "pendingEdit": "Pending transaction (edited, not yet saved)",
       "validateHint": "Complete the fields and validate to calculate WAC",
-      "validateToRecalculate": "⚡ Validate now to recalculate the table"
+      "validateToRecalculate": "⚡️Validate now to recalculate the table"
     },
     "wac": {
       "syncFx": "🔄 Sync FX",
@@ -691,6 +692,8 @@
       "fxDisclaimer": "The FX rate used may differ from the one applied by your broker. Verify the average cost with your broker.",
       "fxTooltipStale": "Rate not up to date",
       "fxTooltipDate": "Rate date",
+      "fxTooltipSameDay": "same day",
+      "fxTooltipDaysBefore": "days before",
       "fxDaysAgo": "d ago",
       "convertedPairs": "Converted pairs",
       "noRateAvailable": "no rate available"
@@ -770,7 +773,7 @@
       "never": "not validated yet",
       "issuesHeader": "Validation errors were found",
       "balanceIssuesHeader": "This configuration causes data inconsistencies",
-      "autoOff": "Auto-validate is OFF ({n} rows > {threshold}) — press Validate now before commit",
+      "autoOff": "Auto-validate is OFF ({n} rows > {threshold}) — press ⚡️ Validate now before commit",
       "issuesCount": "{n} issues",
       "contextualIssuesHeader": "With the other pending changes, this row causes the following issues:"
     },
@@ -1104,6 +1107,16 @@
     "otherUser": "other user",
     "download": "Download",
     "copyLink": "Copy Link",
+    "preview": "Preview",
+    "previewCopy": "Copy text",
+    "previewRaw": "Raw",
+    "previewRendered": "Rendered",
+    "previewSheet": "Sheet",
+    "previewZoomIn": "Zoom in",
+    "previewZoomOut": "Zoom out",
+    "previewLines": "lines",
+    "previewFallbackPdf": "EmbedPDF failed, falling back to browser PDF view.",
+    "previewFallbackTable": "Spreadsheet renderer unavailable, falling back to a basic table view.",
     "deleteConfirm": "Are you sure you want to delete this file?",
     "deleteConfirmMultiple": "Are you sure you want to delete these files?",
     "files": "files",

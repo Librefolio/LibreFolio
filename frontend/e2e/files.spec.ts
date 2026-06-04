@@ -1,11 +1,92 @@
-import {expect, test} from '@playwright/test';
+import {expect, test, type Page} from '@playwright/test';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_USER} from './fixtures/test-users';
+import {readFileSync} from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const API = '/api/v1';
+const TEST_PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a3cAAAAASUVORK5CYII=',
+    'base64'
+);
+const TEST_AVATAR_PNG = readFileSync(path.resolve(__dirname, '../../backend/staticResources/Avatars/men_01.png'));
+const TEST_PDF = Buffer.from(
+    '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]/Contents 4 0 R>>endobj\n4 0 obj<</Length 44>>stream\nBT /F1 12 Tf 72 120 Td (Preview PDF) Tj ET\nendstream endobj\nxref\n0 5\n0000000000 65535 f \ntrailer<</Size 5/Root 1 0 R>>\nstartxref\n256\n%%EOF\n',
+    'utf-8'
+);
+
+async function uploadStaticFile(page: Page, filename: string, content: Buffer | string, mimeType: string): Promise<string> {
+    const response = await page.request.post(`${API}/uploads`, {
+        multipart: {
+            file: {
+                name: filename,
+                mimeType,
+                buffer: typeof content === 'string' ? Buffer.from(content, 'utf-8') : content,
+            },
+        },
+    });
+
+    expect(response.ok()).toBeTruthy();
+    const data = (await response.json()) as {file: {id: string}};
+    return data.file.id;
+}
+
+async function createBroker(page: Page): Promise<number> {
+    const response = await page.request.post(`${API}/brokers`, {
+        data: [
+            {
+                name: `Preview Broker ${Date.now()}`,
+                allow_cash_overdraft: true,
+            },
+        ],
+    });
+
+    expect(response.ok()).toBeTruthy();
+    const data = (await response.json()) as {results: Array<{broker_id: number}>};
+    return data.results[0].broker_id;
+}
+
+async function uploadBrimFile(page: Page, brokerId: number, filename: string, content: Buffer | string, mimeType: string): Promise<string> {
+    const response = await page.request.post(`${API}/brokers/import/upload?broker_id=${brokerId}`, {
+        multipart: {
+            file: {
+                name: filename,
+                mimeType,
+                buffer: typeof content === 'string' ? Buffer.from(content, 'utf-8') : content,
+            },
+        },
+    });
+
+    expect(response.ok()).toBeTruthy();
+    const data = (await response.json()) as {file_id: string};
+    return data.file_id;
+}
+
+async function openStaticListView(page: Page): Promise<void> {
+    await navigateTo(page, '/files?tab=static');
+    await expect(page.getByTestId('files-tab-static')).toHaveAttribute('aria-selected', 'true');
+
+    const hasViewToggle = await page
+        .getByTestId('view-mode-toggle')
+        .isVisible()
+        .catch(() => false);
+
+    if (hasViewToggle) {
+        await page.getByTestId('view-mode-list').click();
+        await expect(page.getByTestId('view-mode-list')).toHaveClass(/active/);
+    }
+}
+
+async function openStaticGridView(page: Page): Promise<void> {
+    await navigateTo(page, '/files?tab=static');
+    await expect(page.getByTestId('files-tab-static')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('view-mode-toggle')).toBeVisible({timeout: 8_000});
+    await page.getByTestId('view-mode-grid').click();
+    await expect(page.getByTestId('view-mode-grid')).toHaveClass(/active/);
+}
 
 test.describe('Files Page', () => {
     test.beforeEach(async ({page}) => {
@@ -237,6 +318,132 @@ test.describe('Files Page', () => {
 
             // Verify file is cleared
             await expect(page.locator('.file-item')).not.toBeVisible();
+        });
+    });
+
+    test.describe('File Preview', () => {
+        test('opens markdown preview from static list view', async ({page}) => {
+            const fileId = await uploadStaticFile(
+                page,
+                `preview-${Date.now()}.md`,
+                '# Hello preview\n\nThis is a markdown preview smoke test.\n',
+                'text/markdown'
+            );
+
+            await openStaticListView(page);
+
+            const row = page.locator(`[data-row-id="${fileId}"]`);
+            await expect(row).toBeVisible({timeout: 8_000});
+            await row.dblclick();
+
+            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await expect(page.getByTestId('file-preview-markdown-rendered')).toBeVisible({
+                timeout: 8_000,
+            });
+
+            await page.getByTestId('file-preview-markdown-raw-btn').click();
+            await expect(page.getByTestId('file-preview-text')).toContainText('# Hello preview', {timeout: 5_000});
+        });
+
+        test('opens image preview from static grid view', async ({page}) => {
+            const fileId = await uploadStaticFile(page, `preview-${Date.now()}.png`, TEST_PNG, 'image/png');
+
+            await openStaticGridView(page);
+
+            const previewButton = page.getByTestId(`file-grid-preview-${fileId}`);
+            await expect(previewButton).toBeVisible({timeout: 8_000});
+            await previewButton.click();
+
+            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await expect(page.getByTestId('file-preview-image')).toBeVisible({timeout: 8_000});
+        });
+
+        test('shows preview detail message when API returns detail', async ({page}) => {
+            const fileId = await uploadStaticFile(
+                page,
+                `preview-error-${Date.now()}.md`,
+                '# Broken preview\n',
+                'text/markdown'
+            );
+
+            await page.route('**/api/v1/uploads/*/preview', async (route) => {
+                await route.fulfill({
+                    status: 400,
+                    contentType: 'application/json',
+                    body: JSON.stringify({detail: 'Legacy .xls preview requires xlrd on server'}),
+                });
+            });
+
+            await openStaticListView(page);
+
+            const row = page.locator(`[data-row-id="${fileId}"]`);
+            await expect(row).toBeVisible({timeout: 8_000});
+            await row.dblclick();
+
+            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await expect(page.getByTestId('file-preview-modal')).toContainText('Legacy .xls preview requires xlrd on server');
+        });
+
+        test('zoomed image preview scrolls vertically inside the modal', async ({page}) => {
+            const fileId = await uploadStaticFile(page, `preview-scroll-${Date.now()}.png`, TEST_AVATAR_PNG, 'image/png');
+
+            await openStaticGridView(page);
+
+            const previewButton = page.getByTestId(`file-grid-preview-${fileId}`);
+            await expect(previewButton).toBeVisible({timeout: 8_000});
+            await previewButton.click();
+
+            const imageStage = page.getByTestId('file-preview-image');
+            await expect(imageStage).toBeVisible({timeout: 8_000});
+
+            await page.getByTestId('file-preview-zoom-in').click();
+            await page.getByTestId('file-preview-zoom-in').click();
+
+            await imageStage.hover();
+            await page.mouse.wheel(0, 600);
+
+            await expect
+                .poll(async () => imageStage.evaluate((node) => node.scrollTop))
+                .toBeGreaterThan(0);
+        });
+
+        test('pdf preview hides comment button', async ({page}) => {
+            const fileId = await uploadStaticFile(page, `preview-${Date.now()}.pdf`, TEST_PDF, 'application/pdf');
+
+            await openStaticGridView(page);
+
+            const previewButton = page.getByTestId(`file-grid-preview-${fileId}`);
+            await expect(previewButton).toBeVisible({timeout: 8_000});
+            await previewButton.click();
+
+            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await expect(page.locator('[data-epdf-i="comment-button"]')).toHaveCount(0, {timeout: 8_000});
+        });
+
+        test('opens table preview for BRIM files', async ({page}) => {
+            const brokerId = await createBroker(page);
+            const fileId = await uploadBrimFile(
+                page,
+                brokerId,
+                `preview-${Date.now()}.csv`,
+                [
+                    'date,type,amount,currency',
+                    '2025-01-01,DEPOSIT,1000,EUR',
+                    '2025-01-03,WITHDRAWAL,-50,EUR',
+                    '',
+                ].join('\n'),
+                'text/csv'
+            );
+
+            await navigateTo(page, '/files?tab=brim');
+            await expect(page.getByTestId('files-tab-brim')).toHaveAttribute('aria-selected', 'true');
+
+            const row = page.locator(`[data-row-id="${fileId}"]`);
+            await expect(row).toBeVisible({timeout: 8_000});
+            await row.dblclick();
+
+            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await expect(page.getByTestId('file-preview-grid')).toBeVisible({timeout: 8_000});
         });
     });
 });

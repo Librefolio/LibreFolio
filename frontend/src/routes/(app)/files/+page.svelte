@@ -31,14 +31,19 @@
     import {BrokerSearchSelect} from '$lib/components/ui/select';
     import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
+    import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import FileGrid from '$lib/components/files/FileGrid.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
-    import type {BrimFile, Broker, BrokerInfo, UploadedFile} from '$lib/types';
+    import {extractErrorMessage} from '$lib/utils/trySave';
+    import type {BrimFile, Broker, BrokerInfo, FilePreviewResponse, UploadedFile} from '$lib/types';
     import type {FilterValue} from '$lib/components/table/types';
 
     type Tab = 'static' | 'brim';
+    type PreviewTarget =
+        | {source: 'static'; file: UploadedFile}
+        | {source: 'brim'; file: BrimFile};
 
     // URL filter configuration - defines which columns can be filtered via URL
     const urlFilterColumns: UrlFilterConfig[] = [
@@ -154,6 +159,14 @@
     let showCloseUploaderConfirm = false;
     let closeUploaderCallback: (() => void) | null = null;
 
+    // File preview modal state
+    let showPreviewModal = false;
+    let previewLoading = false;
+    let previewError: string | null = null;
+    let previewData: FilePreviewResponse | null = null;
+    let previewTarget: PreviewTarget | null = null;
+    let previewRequestToken = 0;
+
     onMount(async () => {
         // Load localStorage preferences as fallback
         viewMode = loadViewMode();
@@ -212,6 +225,7 @@
     function setActiveTab(tab: Tab) {
         activeTab = tab;
         saveActiveTab(tab);
+        closePreviewModal();
         loadFiles();
 
         // Update URL with new tab (keep other filters - user can clear manually)
@@ -574,6 +588,73 @@
         }
     }
 
+    async function openStaticPreview(file: UploadedFile) {
+        previewTarget = {source: 'static', file};
+        showPreviewModal = true;
+        previewData = null;
+        previewError = null;
+        await loadPreview();
+    }
+
+    async function openBrimPreview(file: BrimFile) {
+        previewTarget = {source: 'brim', file};
+        showPreviewModal = true;
+        previewData = null;
+        previewError = null;
+        await loadPreview();
+    }
+
+    async function loadPreview(sheetName?: string) {
+        if (!previewTarget) return;
+
+        const token = ++previewRequestToken;
+        previewLoading = true;
+        previewError = null;
+
+        try {
+            if (previewTarget.source === 'static') {
+                const response = (await zodiosApi.get_upload_file_preview_api_v1_uploads__file_id__preview_get({
+                    params: {file_id: previewTarget.file.id},
+                    queries: sheetName ? {sheet_name: sheetName} : undefined,
+                })) as FilePreviewResponse;
+                if (token === previewRequestToken) {
+                    previewData = response;
+                }
+            } else {
+                const response = (await zodiosApi.get_brim_file_preview_api_v1_brokers_import_files__file_id__preview_get({
+                    params: {file_id: previewTarget.file.file_id},
+                    queries: sheetName ? {sheet_name: sheetName} : undefined,
+                })) as FilePreviewResponse;
+                if (token === previewRequestToken) {
+                    previewData = response;
+                }
+            }
+        } catch (e) {
+            if (token === previewRequestToken) {
+                previewData = null;
+                previewError = extractErrorMessage(e, 'Preview failed');
+            }
+        } finally {
+            if (token === previewRequestToken) {
+                previewLoading = false;
+            }
+        }
+    }
+
+    async function handlePreviewSheetChange(sheetName: string) {
+        if (!sheetName) return;
+        await loadPreview(sheetName);
+    }
+
+    function closePreviewModal() {
+        previewRequestToken += 1;
+        showPreviewModal = false;
+        previewLoading = false;
+        previewError = null;
+        previewData = null;
+        previewTarget = null;
+    }
+
     async function handleBulkDeleteFiles() {
         const isBrim = activeTab === 'brim';
         try {
@@ -703,10 +784,10 @@
                     <p>{$t('uploads.noFiles')}</p>
                 </div>
             {:else if viewMode === 'grid'}
-                <FileGrid files={staticFiles} mode="browse" cardSize="full" showSearch={true} showActions={true} ondelete={(e) => deleteFile(e.id, false)} />
+                <FileGrid files={staticFiles} mode="browse" cardSize="full" showSearch={true} showActions={true} ondelete={(e) => deleteFile(e.id, false)} onpreview={(e) => openStaticPreview(e.file)} />
             {:else}
                 <!-- List View with New DataTable -->
-                <FilesTable bind:this={staticTableRef} files={staticFiles} type="static" onDelete={(id) => deleteFile(id, false)} {initialFilters} onFiltersChange={handleFiltersChange} onSelectionChange={(ids) => (selectedFileIds = ids)} />
+                <FilesTable bind:this={staticTableRef} files={staticFiles} type="static" onDelete={(id) => deleteFile(id, false)} onPreview={(file) => openStaticPreview(file as UploadedFile)} {initialFilters} onFiltersChange={handleFiltersChange} onSelectionChange={(ids) => (selectedFileIds = ids)} />
             {/if}
         {:else}
             <!-- BRIM Files -->
@@ -717,11 +798,13 @@
                 </div>
             {:else}
                 <!-- BRIM Table with New DataTable -->
-                <FilesTable bind:this={brimTableRef} files={brimFiles} type="brim" onDelete={(id) => deleteFile(id, true)} brokers={brokerMap} {initialFilters} onFiltersChange={handleFiltersChange} onSelectionChange={(ids) => (selectedFileIds = ids)} />
+                <FilesTable bind:this={brimTableRef} files={brimFiles} type="brim" onDelete={(id) => deleteFile(id, true)} onPreview={(file) => openBrimPreview(file as BrimFile)} brokers={brokerMap} {initialFilters} onFiltersChange={handleFiltersChange} onSelectionChange={(ids) => (selectedFileIds = ids)} />
             {/if}
         {/if}
     </div>
 </div>
+
+<FilePreviewModal open={showPreviewModal} preview={previewData} loading={previewLoading} error={previewError} onRequestClose={closePreviewModal} onSheetChange={handlePreviewSheetChange} />
 
 <!-- BRIM Upload Modal with per-file broker assignment -->
 <ModalBase
