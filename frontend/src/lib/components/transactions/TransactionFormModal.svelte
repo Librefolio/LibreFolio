@@ -47,6 +47,7 @@
     import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
     import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
     import CompactCashCell from '$lib/components/ui/CompactCashCell.svelte';
+    import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
     import TransactionTypeSearchSelect from './TransactionTypeSearchSelect.svelte';
     import WacPreviewSection from './WacPreviewSection.svelte';
     import AssetEventPicker from './AssetEventPicker.svelte';
@@ -905,7 +906,10 @@
     let fieldIssues = $derived(issues.filter((i) => i.index >= 0));
     let balanceIssues = $derived(issues.filter((i) => i.index < 0));
     let hasWacFxIssues = $derived(issues.some((i) => i.code === 'wacFxUnavailable'));
-    let syncingFx = $state(false);
+    let showFxSyncModal = $state(false);
+    let fxSyncPairs = $state<string[]>([]);
+    let fxSyncDateStart = $state('');
+    let fxSyncDateEnd = $state('');
 
     /** Context for resolving validation issue codes into translated messages. */
     let resolverCtx: ResolverContext = $derived({
@@ -1220,25 +1224,15 @@
         }
         if (pairs.length === 0) return;
         // Convert "USD/EUR" → "EUR-USD" (alphabetical slug format for sync API)
-        const slugs = pairs.map((p) => {
+        fxSyncPairs = pairs.map((p) => {
             const [a, b] = p.split('/');
             return [a, b].sort().join('-');
         });
         // Use min/max dates from backend (covers all needed dates), fallback to draft.date
         const sortedDates = allDates.length > 0 ? allDates.sort() : [draft.date];
-        const start = sortedDates[0] ?? draft.date;
-        const end = sortedDates[sortedDates.length - 1] ?? draft.date;
-        syncingFx = true;
-        try {
-            await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({pairs: slugs, start, end});
-            toasts.success($t('transactions.wac.syncSuccess') || 'FX rates synced');
-            // Re-trigger validation so WAC is re-computed with new rates
-            scheduler.trigger('manual');
-        } catch (e) {
-            toasts.error($t('transactions.wac.syncFailed') || 'FX sync failed');
-        } finally {
-            syncingFx = false;
-        }
+        fxSyncDateStart = sortedDates[0] ?? draft.date;
+        fxSyncDateEnd = sortedDates[sortedDates.length - 1] ?? draft.date;
+        showFxSyncModal = true;
     }
 
     // =========================================================================
@@ -1432,12 +1426,21 @@
                         <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
                             {#each fieldIssues as issue}
                                 {#if issue.code === 'wacFxUnavailable'}
-                                    <li data-testid="tx-form-issue">
-                                        {$t('transactions.errors.wacFxUnavailable')}
-                                        <button type="button" class="underline text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 disabled:opacity-50" onclick={handleSyncFx} disabled={syncingFx} data-testid="tx-form-sync-fx-link">
-                                            {syncingFx ? '⏳ ' : ''}{$t('transactions.errors.wacFxUnavailableSyncLink')}
+                                    <li data-testid="tx-form-issue" class="flex flex-wrap items-center gap-1.5">
+                                        <span>{$t('transactions.errors.wacFxUnavailable')}</span>
+                                        <button
+                                            type="button"
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded
+                                                bg-libre-green/10 text-libre-green hover:bg-libre-green/20
+                                                dark:bg-libre-green/20 dark:text-green-300 dark:hover:bg-libre-green/30
+                                                transition-colors"
+                                            onclick={handleSyncFx}
+                                            data-testid="tx-form-sync-fx-link"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                                            {$t('transactions.errors.wacFxUnavailableSyncLink')}
                                         </button>
-                                        {$t('transactions.errors.wacFxUnavailableOrManual')}
+                                        <span>{$t('transactions.errors.wacFxUnavailableOrManual')}</span>
                                     </li>
                                 {:else}
                                     <li data-testid="tx-form-issue">{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
@@ -1731,6 +1734,7 @@
                                 wacCurrency={wacCurrencyHint}
                                 onCurrencyChange={onWacCurrencyChange}
                                 availableCurrencies={wacAvailableCurrencies}
+                                onOpenFxSync={handleSyncFx}
                             />
                         </div>
                     {/if}
@@ -1934,6 +1938,7 @@
                                 wacCurrency={wacCurrencyHint}
                                 onCurrencyChange={onWacCurrencyChange}
                                 availableCurrencies={wacAvailableCurrencies}
+                                onOpenFxSync={handleSyncFx}
                             />
                             {#if Number(draft.quantity) > 0 && costBasisMode !== 'auto' && !draft.cost_basis_override?.amount?.trim()}
                                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="tx-form-cost-basis-warning">
@@ -1965,6 +1970,7 @@
                         wacCurrency={wacCurrencyHint}
                         onCurrencyChange={onWacCurrencyChange}
                         availableCurrencies={wacAvailableCurrencies}
+                        onOpenFxSync={handleSyncFx}
                     />
                 </div>
             {/if}
@@ -2142,6 +2148,21 @@
             createEventOpen = false;
         }}
         onclose={() => (createEventOpen = false)}
+    />
+{/if}
+
+<!-- FxSyncModal for WAC missing pairs -->
+{#if showFxSyncModal}
+    <FxSyncModal
+        bind:open={showFxSyncModal}
+        dateStart={fxSyncDateStart}
+        dateEnd={fxSyncDateEnd}
+        pairs={fxSyncPairs}
+        zIndex={zIndex + 10}
+        onsynced={() => scheduler.trigger('manual')}
+        onclose={() => {
+            showFxSyncModal = false;
+        }}
     />
 {/if}
 
