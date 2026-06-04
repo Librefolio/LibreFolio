@@ -1357,6 +1357,7 @@
                                                     type="button"
                                                     class="action-btn"
                                                     data-action-id={action.id}
+                                                    data-testid="row-action-{action.id}"
                                                     class:danger={action.variant === 'danger'}
                                                     disabled={action.disabled?.(row)}
                                                     onclick={(e) => {

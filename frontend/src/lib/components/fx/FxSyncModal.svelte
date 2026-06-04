@@ -22,9 +22,11 @@
         pairs: string[];
         onsynced: () => void;
         onclose: () => void;
+        /** z-index for stacking above other modals */
+        zIndex?: number;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, pairs, onsynced, onclose}: Props = $props();
+    let {open = $bindable(), dateStart, dateEnd, pairs, onsynced, onclose, zIndex = 50}: Props = $props();
 
     let syncModalBase: SyncModalBase | undefined = $state(undefined);
 
@@ -80,6 +82,7 @@
     {onclose}
     {onsynced}
     {sections}
+    {zIndex}
     testId="fx-sync-modal"
     title={$t('fx.sync.title') ?? 'Sync FX Rates'}
 ></SyncModalBase>

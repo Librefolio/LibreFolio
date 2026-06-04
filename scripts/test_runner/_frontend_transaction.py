@@ -229,6 +229,30 @@ def front_tx_wac_formmodal(verbose: bool = False, ui: bool = False, headed: bool
     return _run_playwright("transactions/tx-wac-formmodal.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_wac_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run TX WAC FX Sync E2E tests (sync modal, qualifying table cross-FX, tooltip)."""
+    print_section("Frontend TX WAC FX Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-wac-fx.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_wac_mode(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run TX WAC Mode Toggle E2E tests (auto/manual, blur, placeholder)."""
+    print_section("Frontend TX WAC Mode Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-wac-mode.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_event_picker(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run TX Event Picker E2E tests (card-style dropdown, delta, slider, visibility)."""
     print_section("Frontend TX Event Picker Tests")
@@ -263,6 +287,8 @@ def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool 
             ("TX WAC Preview", lambda: front_tx_wac(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX WAC BulkModal", lambda: front_tx_wac_bulk(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX WAC FormModal", lambda: front_tx_wac_formmodal(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX WAC FX", lambda: front_tx_wac_fx(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX WAC Mode", lambda: front_tx_wac_mode(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Event Picker", lambda: front_tx_event_picker(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
         ],
         verbose=verbose,
@@ -295,6 +321,8 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-wac", front_tx_wac, name="TX WAC Preview Tests", desc="WAC preview toggle, auto/manual, recalculate, qualifying TXs, missing FX", tests="transactions/tx-wac.spec.ts")
     add_test(cat, "tx-wac-bulk", front_tx_wac_bulk, name="TX WAC BulkModal Tests", desc="BulkModal WAC cell rendering: auto value, manual propagation, DB rows, clone link_uuid", tests="transactions/tx-wac-bulk.spec.ts")
     add_test(cat, "tx-wac-formmodal", front_tx_wac_formmodal, name="TX WAC FormModal Tests", desc="FormModal WAC payload: cost_basis_mode propagation, auto/manual toggle, partner rows", tests="transactions/tx-wac-formmodal.spec.ts")
+    add_test(cat, "tx-wac-fx", front_tx_wac_fx, name="TX WAC FX Tests", desc="WAC FX sync modal, qualifying table cross-currency arrow, tooltip format, stale banner", tests="transactions/tx-wac-fx.spec.ts")
+    add_test(cat, "tx-wac-mode", front_tx_wac_mode, name="TX WAC Mode Tests", desc="WAC auto/manual toggle, blur-without-change stays auto, placeholder with validate hint", tests="transactions/tx-wac-mode.spec.ts")
     add_test(cat, "tx-event-picker", front_tx_event_picker, name="TX Event Picker Tests", desc="Event picker card-style dropdown, delta, slider range, type visibility", tests="transactions/tx-event-picker.spec.ts")
     add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi", tests="vitest")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")

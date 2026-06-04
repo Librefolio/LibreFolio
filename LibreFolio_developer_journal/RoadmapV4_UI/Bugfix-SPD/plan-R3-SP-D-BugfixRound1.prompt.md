@@ -1,7 +1,7 @@
 # Plan: R3-SP-D Bugfix Round 1 — Event Picker UX + WAC FX + Issue Index
 
 **Date**: 2 Giugno 2026
-**Status**: ⏳ IN PROGRESS
+**Status**: ✅ DONE (2026-06-04)
 **Priority**: P1
 **Parent**: [`plan-R3-SP-D-FormModalEventPickerWacFx.prompt.md`](./plan-R3-SP-D-FormModalEventPickerWacFx.prompt.md)
 **Origin**: Walktest manuale post-implementazione SP-D
