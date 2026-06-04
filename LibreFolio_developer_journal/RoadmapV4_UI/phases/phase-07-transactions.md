@@ -213,7 +213,7 @@ Tracciamento dei sub-plan che servono ma non sono ancora stati redatti:
 | Parte 1 | `plan-phase07-transaction-Part1.md` | ✅ scritto ed eseguito | — |
 | Parte 2 | `plan-phase07-transaction-Part2.prompt.md` (Revisione 2) | ✅ completato | Parte 1 |
 | Parte 3 (include 3b) | `plan-phase07-transaction-Part3.md` (API consolidation atomic per-broker + events/suggest + deferred da Part 1 §8/§9) | ✅ completato | Parte 1, Parte 2 |
-| Parte 4 | [`plan-phase07-transaction-Part4.prompt.md`](./phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md) (10 steps + 11 rounds) | ✅ completato (Round 6 ⏳ in corso) | Parte 3 |
+| Parte 4 | [`plan-phase07-transaction-Part4.prompt.md`](./phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md) (10 steps + 11 rounds) | ✅ completato (Round 6 ✅ DONE 2026-06-04) | Parte 3 |
 | Parte 4b | [`phase-07-subplan/Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md`](./phase-07-subplan/Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md) | ✅ completato | autonomo |
 | Parte 5 | `plan-phase07-transaction-Part5-staging-modal.md` (Staging Modal frontend: BRIM mode, resolve fake_id, event matching, TransactionPickerModal, Promote/Split in BulkModal) | ⏳ **da scrivere** | Parte 2, Parte 3, Parte 4 |
 
@@ -413,12 +413,12 @@ Parte 4 è completata con 10 step originali + 11 round di bugfix/polish. Il pian
 
 **Round timeline**: see [`plan-phase07-transaction-Part4.prompt.md` §Post-Implementation Rounds](./phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md).
 
-**Still open (Round 6 ⏳)**:
-- ContextMenu, TransactionDeleteModal, R7-C1/H1/H2 bug fix, TagInput polish
-- **TransactionPickerModal** (search & add existing TX to BulkModal)
-- **Backend `POST /split` + `POST /promote` endpoints** (schemas exist but API never implemented — erroneously marked done in Bugfix 1 B1-16)
-- **Promote/Split UI** in BulkModal and Main Table (depends on above endpoints)
-→ [`plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md`](./phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_ContextMenuDeletePolish.prompt.md)
+**Round 6 ✅ DONE (2026-06-04)**:
+- ~~ContextMenu, TransactionDeleteModal, R7-C1/H1/H2 bug fix, TagInput polish~~ ✅
+- ~~**TransactionPickerModal** (search & add existing TX to BulkModal)~~ ✅
+- ~~**Backend `POST /split` + `POST /promote` endpoints**~~ ✅ (migrated to batch pipeline)
+- ~~**Promote/Split UI** in BulkModal and Main Table~~ ✅
+→ [`plan-phase07-PlanD_SplitPromoteFullStack.prompt.md`](./phase-07-subplan/Parte4/Round6/plan-phase07-PlanD_SplitPromoteFullStack.prompt.md)
 
 ---
 

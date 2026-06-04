@@ -1,7 +1,7 @@
 # Plan — Phase 07 · Part 4 · Round 6 · Plan D — Split/Promote Full Stack
 
 **Date**: 2026-05-12
-**Status**: 🔄 IN PROGRESS (D1 ✅, D2 ✅ + bugfix1-4 ✅, D2-round2 SP-A/B/C ✅, D2-round3 ⏳ SP-D, D3 merged in D2-bugfix3)
+**Status**: ✅ DONE (D1 ✅, D2 ✅ + bugfix1-4 ✅, D2-round2 SP-A/B/C ✅, D2-round3 SP-D ✅, SP-E assorbito, D3 merged in D2-bugfix3)
 **Priority**: P1 (feature completion)
 **Estimated effort**: ~5-6 days
 
