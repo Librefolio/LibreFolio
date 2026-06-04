@@ -57,7 +57,7 @@ export interface ValidateScheduler {
 }
 
 export function createValidateScheduler(opts: ValidateSchedulerOptions): ValidateScheduler {
-    const debounceMs = opts.debounceMs ?? 1000;
+    const debounceMs = opts.debounceMs ?? 500;
     const idleMs = opts.idleMs ?? 60000;
     const antiBounceMs = opts.antiBounceMs ?? 10000;
 
@@ -103,7 +103,8 @@ export function createValidateScheduler(opts: ValidateSchedulerOptions): Validat
         // after predicate flipped — e.g. paired form where partner isn't ready yet).
         if (reason !== 'manual' && !opts.enabled()) return;
         // Anti-bounce: if draft hasn't changed since last validate and we're within the window, skip.
-        if (opts.draftKey) {
+        // Manual triggers bypass anti-bounce (user explicitly requested, or post-sync needs fresh data).
+        if (reason !== 'manual' && opts.draftKey) {
             const currentKey = opts.draftKey();
             if (currentKey === lastValidatedDraftKey && state.lastValidatedAt != null && Date.now() - state.lastValidatedAt < antiBounceMs) {
                 return;

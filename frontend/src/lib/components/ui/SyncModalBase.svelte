@@ -37,9 +37,11 @@
         sections: SyncSection[];
         onsynced: () => void;
         onclose: () => void;
+        /** z-index for stacking above other modals (default 50) */
+        zIndex?: number;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, title, description, testId, headerIcon: HeaderIcon = RefreshCw, headerIconBg = 'bg-amber-100 dark:bg-amber-900/30', headerIconColor = 'text-amber-600 dark:text-amber-400', sections, onsynced, onclose}: Props = $props();
+    let {open = $bindable(), dateStart, dateEnd, title, description, testId, headerIcon: HeaderIcon = RefreshCw, headerIconBg = 'bg-amber-100 dark:bg-amber-900/30', headerIconColor = 'text-amber-600 dark:text-amber-400', sections, onsynced, onclose, zIndex = 50}: Props = $props();
 
     // =========================================================================
     // State
@@ -233,7 +235,7 @@
     }
 </script>
 
-<ModalBase maxWidth="max-w-md" onRequestClose={onclose} {open} {testId}>
+<ModalBase maxWidth="max-w-md" onRequestClose={onclose} {open} {testId} {zIndex}>
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
         <div class="flex items-center gap-2.5">

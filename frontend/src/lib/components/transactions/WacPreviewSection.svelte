@@ -13,7 +13,7 @@
      * whether to accept the change.
      */
     import {t} from 'svelte-i18n';
-    import {ChevronDown, ChevronRight, Lightbulb, AlertTriangle} from 'lucide-svelte';
+    import {ChevronDown, ChevronRight, Lightbulb, AlertTriangle, RefreshCw} from 'lucide-svelte';
     import CompactCashCell from '$lib/components/ui/CompactCashCell.svelte';
     import Tooltip from '$lib/components/ui/Tooltip.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
@@ -96,9 +96,11 @@
         onCurrencyChange?: (code: string) => void;
         /** Available currencies for the chip dropdown */
         availableCurrencies?: string[];
+        /** Called when user clicks sync FX button — parent opens FxSyncModal */
+        onOpenFxSync?: () => void;
     }
 
-    let {value, onChange, mode, defaultCode = 'EUR', disabled = false, testid = 'wac-preview', senderBrokerId = null, assetId = null, txDate = null, pendingTxs = [], excludedTxIds = [], hideTable = false, onModeChange, externalResult = null, pendingTxIds = null, wacCurrency = null, onCurrencyChange, availableCurrencies = []}: Props = $props();
+    let {value, onChange, mode, defaultCode = 'EUR', disabled = false, testid = 'wac-preview', senderBrokerId = null, assetId = null, txDate = null, pendingTxs = [], excludedTxIds = [], hideTable = false, onModeChange, externalResult = null, pendingTxIds = null, wacCurrency = null, onCurrencyChange, availableCurrencies = [], onOpenFxSync}: Props = $props();
 
     // =========================================================================
     // State
@@ -111,8 +113,13 @@
     let showQualifying = $state(false);
 
     // Reset qualifying table visibility when mode switches to manual
+    // Reset previewResult when switching to auto (stale data shouldn't show while awaiting re-validate)
     $effect(() => {
         if (mode === 'manual') showQualifying = false;
+        if (mode === 'auto' && !externalResult) {
+            previewResult = null;
+            showQualifying = false;
+        }
     });
 
     // NOTE: missing_pairs no longer forces manual — user stays in auto, sees error banner
@@ -133,6 +140,7 @@
     let currencyPending = $derived(
         isAuto && wacCurrency != null && previewResult?.wac != null && previewResult.wac.code !== wacCurrency,
     );
+
 
     // =========================================================================
     // External result sync — WAC data from validate response
@@ -192,9 +200,16 @@
                 return;
             }
             // Amount changed EFFECTIVELY → switch to manual
-            const currentAmount = value?.amount ?? '';
-            if (next.amount === currentAmount) return; // blur without modification → no-op
+            // Compare the display-formatted versions: this is what the user actually sees.
+            // Backend sends full precision ("170.3261122757978..."), display truncates to 8 decimals.
+            // A blur without editing emits the truncated version — same as what was displayed.
+            const currentDisplay = formatDecimalForDisplay(value?.amount ?? '');
+            const nextDisplay = formatDecimalForDisplay(next.amount ?? '');
+            if (currentDisplay === nextDisplay) return;
+            // User genuinely changed the amount → switch to manual and propagate
             onModeChange?.('manual');
+            onChange(next);
+            return;
         }
         onChange(next);
     }
@@ -212,8 +227,12 @@
         const toHtml = formatCurrencyCodeHtml(qtx.currency);
         const date = qtx.fx_info.fx_rate_date ?? '?';
         const days = qtx.fx_info.fx_days_back ?? 0;
-        const staleNote = days > 5 ? `<br/><span class="text-amber-500">⚠️ ${$t('transactions.wac.fxTooltipStale') || 'Rate not up to date'}</span>` : '';
-        return `↳ Rate: ${rate}<br/>${fromHtml} → ${toHtml}<br/>${$t('transactions.wac.fxTooltipDate') || 'Rate date'}: ${date} (${days}${$t('transactions.wac.fxDaysAgo') || 'd ago'})${staleNote}`;
+        const daysLabel = days === 0
+            ? ($t('transactions.wac.fxTooltipSameDay') || 'same day')
+            : `${days} ${$t('transactions.wac.fxTooltipDaysBefore') || 'days before'}`;
+        const dateColor = days > 0 ? 'text-amber-500' : '';
+        const staleNote = days > 5 ? `<br/><span class="text-red-500">⚠️ ${$t('transactions.wac.fxTooltipStale') || 'Rate not up to date'}</span>` : '';
+        return `<b>FX:</b> 1 ${fromHtml} = ${rate} ${toHtml}<br/>📅 ${date} <span class="${dateColor}">(${daysLabel})</span>${staleNote}`;
     }
 
     function buildBadgeTooltipHtml(): string {
@@ -274,7 +293,7 @@
 
     <!-- Input field -->
     <div class="flex items-center gap-2">
-        <CompactCashCell {value} onChange={handleValueChange} signHint="positive" amountPlaceholder={isAuto ? 'auto' : '0.00'} {defaultCode} currencyDisabled={disabled} disabled={disabled} testid="{testid}-input" />
+        <CompactCashCell {value} onChange={handleValueChange} signHint="positive" amountPlaceholder={isAuto ? ($t('transactions.wacPreview.placeholderAuto') ?? 'auto (⚡ Validate)') : '0.00'} {defaultCode} currencyDisabled={disabled} disabled={disabled} testid="{testid}-input" />
 
         {#if loading}
             <span class="text-[10px] text-gray-400 animate-pulse" data-testid="{testid}-loading">
@@ -324,6 +343,20 @@
             <div class="flex items-center gap-1 font-medium mb-1">
                 <AlertTriangle size={12} class="shrink-0" />
                 <span>{$t('transactions.wacPreview.missingFx') ?? 'Cannot calculate WAC: missing FX rates'}</span>
+                {#if onOpenFxSync}
+                    <button
+                        type="button"
+                        class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded
+                            bg-libre-green/10 text-libre-green hover:bg-libre-green/20
+                            dark:bg-libre-green/20 dark:text-green-300 dark:hover:bg-libre-green/30
+                            transition-colors shrink-0"
+                        onclick={() => onOpenFxSync?.()}
+                        data-testid="{testid}-sync-fx-btn"
+                    >
+                        <RefreshCw size={11} />
+                        {$t('transactions.wacPreview.syncFx') ?? 'Sync FX rates'}
+                    </button>
+                {/if}
             </div>
             <ul class="list-disc pl-4 space-y-0.5">
                 {#each previewResult?.missing_pairs ?? [] as mp}
@@ -333,7 +366,7 @@
                     <li>
                         {@html formatCurrencyCodeHtml(parts[0])} / {@html formatCurrencyCodeHtml(parts[1])} — {$t('transactions.wac.noRateAvailable') || 'no rate available'}
                         {#if dates.length > 0}
-                            <span class="text-gray-500 dark:text-gray-400">({dates.length} {dates.length === 1 ? 'date' : 'dates'})</span>
+                            <span class="text-gray-500 dark:text-gray-400">: {dates.join(', ')}</span>
                         {/if}
                     </li>
                 {/each}
@@ -403,13 +436,11 @@
                             <td class="px-2 py-0.5 text-right font-mono">{formatDecimalForDisplay(qtx.quantity)}</td>
                             <td class="px-2 py-0.5 text-right font-mono">
                                 {#if qtx.original_unit_cost && qtx.original_currency && qtx.currency && qtx.original_currency !== qtx.currency}
-                                    <Tooltip html={buildFxTooltipHtml(qtx)} position="top">
+                                    <Tooltip html={buildFxTooltipHtml(qtx)} position="bottom">
                                         <span class="cursor-help">
                                             {formatCurrencyAmountPlain(parseFloat(qtx.original_unit_cost), qtx.original_currency, {maxFraction: 2})} → {qtx.unit_cost && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2}) : '?'}
                                             {#if qtx.fx_info && (qtx.fx_info.fx_days_back ?? 0) > 5}
                                                 <span class="text-amber-500 ml-0.5">⚠️</span>
-                                            {:else}
-                                                <span class="text-gray-400 ml-0.5">💱</span>
                                             {/if}
                                         </span>
                                     </Tooltip>
@@ -443,3 +474,5 @@
         </div>
     {/if}
 </div>
+
+
