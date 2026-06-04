@@ -259,7 +259,7 @@ def _generate_main_epilog() -> str:
     lines.append("")
     lines.append("Examples:")
     lines.append("  dev.py test all                 # All tests (optimal order)")
-    lines.append("  dev.py test -v all              # All tests with verbose output")
+    lines.append("  dev.py test -q all              # All tests with quiet output (no details)")
     lines.append("  dev.py test api auth            # Only auth API tests")
     lines.append("  dev.py test db create           # Create database")
     lines.append("")
@@ -333,7 +333,7 @@ def create_parser() -> argparse.ArgumentParser:
     """Create and configure argument parser using TEST_REGISTRY."""
     parser = argparse.ArgumentParser(description="LibreFolio Test Runner - Organized test execution", formatter_class=argparse.RawDescriptionHelpFormatter, epilog=_generate_main_epilog())
 
-    parser.add_argument("-v", "--verbose", action="store_true", help="Show full test output", default=False)
+    parser.add_argument("-q", "--quiet", action="store_true", help="Suppress detailed test output (default: verbose)", default=False)
     parser.add_argument("--coverage", action="store_true", help="Run tests with code coverage tracking", default=False)
     parser.add_argument("--cov-clean-backend", action="store_true", help="Clean backend coverage data", default=False)
     parser.add_argument("--cov-clean-frontend", action="store_true", help="Clean frontend coverage data", default=False)
@@ -369,7 +369,7 @@ def register_subparser(parent_subparsers):
     """Register test commands as a subparser of dev.py."""
     test_parser = parent_subparsers.add_parser("test", help="Run tests (api, db, external, schemas, services, utils, e2e, front-utility, front-broker, front-user, front-fx, front-transaction, all, all-backend, all-frontend)", description="LibreFolio Test Runner")
 
-    test_parser.add_argument("-v", "--verbose", action="store_true", help="Show full test output", default=False)
+    test_parser.add_argument("-q", "--quiet", action="store_true", help="Suppress detailed test output (default: verbose)", default=False)
     test_parser.add_argument("--coverage", action="store_true", help="Run tests with code coverage tracking", default=False)
     test_parser.add_argument("--cov-clean-backend", action="store_true", help="Clean backend coverage data", default=False)
     test_parser.add_argument("--cov-clean-frontend", action="store_true", help="Clean frontend coverage data", default=False)
@@ -475,7 +475,7 @@ def _dispatch_test_command(args):
         print("Error: test category required. Use: ./dev.py test --help")
         return 1
 
-    verbose = getattr(args, "verbose", False)
+    verbose = not getattr(args, "quiet", False)
     test_names = getattr(args, "test_names", None)
     coverage = getattr(args, "coverage", False)
     cov_clean_be = getattr(args, "cov_clean_backend", False)
@@ -557,7 +557,7 @@ def main():
         parser.print_help()
         return 1
 
-    verbose = getattr(args, "verbose", False)
+    verbose = not getattr(args, "quiet", False)
     test_names = getattr(args, "test_names", None)
     coverage = getattr(args, "coverage", False)
     cov_clean_be = getattr(args, "cov_clean_backend", False)
