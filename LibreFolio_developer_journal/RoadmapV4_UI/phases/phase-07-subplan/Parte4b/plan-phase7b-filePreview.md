@@ -7,7 +7,7 @@
 
 > **📌 Aggiornamento 18 Aprile 2026**: questo piano autonomo è stato **incorporato** come
 > **Parte 4b** del macro-plan di Phase 7. Vedere:
-> - [`phases/phase-07-transactions.md` §Parte 4b](phases/phase-07-transactions.md)
+> - [`phase-07-transactions.md` §Parte 4b](../../phase-07-transactions.md)
 >
 > Il contenuto qui sotto resta come riferimento storico per il dettaglio tecnico (step
 > backend/frontend, librerie, tipi, test E2E). Quando si implementerà la Parte 4b, usare
@@ -19,7 +19,7 @@
 > - `data-testid` per selettori E2E
 > - Integrazione in `BrokerImportFilesModal` (oltre a Files page)
 
-> **📌 Riferimento aggiornato**: [`plan-phase05-to-08-upgrade.md` §7](plan-phase05-to-08-upgrade.md)
+> **📌 Riferimento aggiornato**: [`plan-phase05-to-08-upgrade.md` §7](../../../plan-phase05-to-08-upgrade.md)
 > Questo piano è stato **spostato** da Phase 4.9 a Phase 7.5 perché ha più senso dopo che tutte
 > le entità (brokers, assets, transactions, FX) sono disponibili per dare contesto ai file BRIM.
 > Quando si arriva a implementare, aggiornare questo piano per:
@@ -463,3 +463,6 @@ test('brim file preview works in broker detail', async ({ page }) => {...});
 - Security: sanitizzare HTML markdown prima del rendering
 - Accessibilità: alt text per immagini, focus management nel modal
 
+---
+
+→ Follow-up: [`plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md`](./plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md)

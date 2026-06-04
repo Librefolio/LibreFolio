@@ -14,7 +14,7 @@ Questa directory raccoglie i sotto-piani di implementazione per la **Phase 7 (Tr
 | **Parte 2** | ✅ DONE (Revisione 2) | BRIM come parser puro — 11 plugin v2 + commit atomico |
 | **Parte 3** | ✅ **DONE 2026-04-25** | API consolidation full-bulk + Blocco I currency simplification + I-bis closure (#1..#26) + Blocco G test coverage 87.06% |
 | **Parte 4** | 🔄 **PROGRESS** | Pagina `/transactions` — DataTable, FormModal, BulkModal, ContextMenu, TxStore (10 steps + 11 rounds: R1–R6) |
-| Parte 4b | ⏳ TODO | File Preview System (assorbito da `plan-phase7b-filePreview.md`) |
+| Parte 4b | ✅ DONE 2026-06-04 | File Preview System (`/files` Static + BRIM, recovery + polish) |
 | Parte 5 | ⏳ TODO | Staging Modal unificata |
 
 
@@ -111,14 +111,19 @@ Piano master D2-Round2 + 4 sub-plan (SP-A/B/C) + 8 bugfix WAC deep-dive. Tutti c
 
 **Scope**: WAC cross-currency backend (SP-A), 13 WAC API tests (SP-B), frontend BulkModal suggest UX + 11 bugfix rounds (SP-C). Key patterns: CostBasisFieldMode, pairedWith/getPartnerOp, stateless preview, fxMarketCache.
 
+### Parte 4b — File Preview System
+
+| File | Descrizione | Status |
+|------|-------------|:------:|
+| [`Parte4b/plan-phase7b-filePreview.md`](./Parte4b/plan-phase7b-filePreview.md) | Piano storico originale del File Preview System, mantenuto come riferimento tecnico | 📚 storico |
+| [`Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md`](./Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md) | Delivery + recovery recap della preview inline su `/files` (Static + BRIM), con XLS/PDF/markdown/image stabilization | ✅ |
+
 ### Standalone Features (periodo Phase 7)
 
 | File | Descrizione | Status |
 |------|-------------|:------:|
 | [`Standalone/plan-pwa-mobile-optimizations.prompt.md`](./Standalone/plan-pwa-mobile-optimizations.prompt.md) | PWA manifest, install button, CSS mobile, docs | ✅ |
 
-## Plan companion non archiviati
+## Piani storici mantenuti per contesto
 
-→ [`./plan-phase7b-filePreview.md`](./plan-phase7b-filePreview.md) — assorbito in Parte 4b (manterrà il file fino a quando Parte 4b non sarà scritta).
-
-
+→ [`./Parte4b/plan-phase7b-filePreview.md`](./Parte4b/plan-phase7b-filePreview.md) — piano storico assorbito in Parte 4b; follow-up eseguito in [`Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md`](./Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md).

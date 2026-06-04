@@ -1,6 +1,6 @@
 # Phase 7: Transactions System — Macro Plan
 
-**Status**: 🔄 In corso (Part 1 ✅, Part 2 ✅ Revisione 2, **Part 3 ✅ DONE 2026-04-25** — backend coverage 87.06%, **Part 4 ✅ DONE 2026-05-05** — 10 steps + 11 rounds of bugfix/polish — Part 4b/5 TODO)
+**Status**: 🔄 In corso (Part 1 ✅, Part 2 ✅ Revisione 2, **Part 3 ✅ DONE 2026-04-25** — backend coverage 87.06%, **Part 4 ✅ DONE 2026-05-05** — 10 steps + 11 rounds of bugfix/polish, **Part 4b ✅ DONE 2026-06-04** — file preview delivery + recovery/polish — Part 5 TODO)
 **Sub-plans archiviati**: [`phase-07-subplan/README.md`](./phase-07-subplan/README.md)
 **Durata stimata**: ~11 giorni (multi-sprint, Parti 1+2+3+4+4b+5 = 1+2+2+2+1+3)
 **Priorità**: P0 (MVP)
@@ -14,7 +14,7 @@
 
 > **📌 Riferimenti precedenti**:
 > - [`plan-phase05-to-08-upgrade.md` §6](../plan-phase05-to-08-upgrade.md) — **obsoleto**: idea originale con regimi fiscali / cash split (posticipati a Phase 8+)
-> - [`plan-phase7b-filePreview.md`](../plan-phase7b-filePreview.md) — **assorbito in Parte 4b** di questo piano (File Preview System)
+> - [`plan-phase7b-filePreview.md`](./phase-07-subplan/Parte4b/plan-phase7b-filePreview.md) — **assorbito in Parte 4b** di questo piano (File Preview System)
 >
 > Questo documento **sostituisce** la vecchia stesura di Phase 7 con un design unificato
 > che tiene conto dell'infrastruttura completata dopo Round 12 (AssetEvent) e del
@@ -99,11 +99,11 @@ auto-linking massivo degli eventi retroattivi.
 | **2** | BRIM come parser puro (Revisione 2) | `BRIMProvider` base + refactor 11 plugin | Plugin emettono solo TX + preview metadata; `plugin_version` per cache | 2g v1 + 0.5g revisione | ✅ Completato |
 | **3** | API Consolidation — bulk atomic per-broker | endpoints, service, pytest | `POST/PATCH/DELETE /brokers/{id}/transactions/bulk` atomic, `validate` dry-run, `events/suggest`, test ≥85% | 2g | **Dettagliato** |
 | **4** | Frontend — Pagina `/transactions` | route, DataTable, filtri colonna | Lista utente con filtri header, GoTo linked pair, bulk actions | 2g | **✅ COMPLETATO** → [`plan-phase07-transaction-Part4.prompt.md`](./phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md) (10 steps + 11 rounds: R1–R6) |
-| **4b** | Frontend — File Preview System | backend service + modale multi-tipo | Preview inline (image/text/table/markdown/code) su Files page + BRIM files | 1g | **Alto livello** |
+| **4b** | Frontend — File Preview System | backend service + modale multi-tipo | Preview inline (image/text/table/markdown/pdf) su Files page + BRIM files | 1g | **✅ COMPLETATO** → [`phase-07-subplan/Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md`](./phase-07-subplan/Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md) |
 | **5** | Frontend — Staging Modal | modale unificata, asset resolver | Manual + BRIM + Clone, grouping colorato, tolerance slider 0-7, commit via /brokers/{id}/tx/bulk atomic | 3g | **Alto livello** |
 
-Le Parti 1–3 sono **dettagliate** (alta confidenza, basso rischio di cambio).
-Le Parti 4 / 4b / 5 restano **alto livello** (ASCII art + principi UX) — target e situazione
+Le Parti 1–4b sono ormai **dettagliate / archiviate**.
+La sola Parte 5 resta **alto livello** (ASCII art + principi UX) — target e situazione
 di partenza ben definiti, attività da raffinare in piano di dettaglio dedicato al
 momento dell'esecuzione.
 
@@ -214,7 +214,7 @@ Tracciamento dei sub-plan che servono ma non sono ancora stati redatti:
 | Parte 2 | `plan-phase07-transaction-Part2.prompt.md` (Revisione 2) | ✅ completato | Parte 1 |
 | Parte 3 (include 3b) | `plan-phase07-transaction-Part3.md` (API consolidation atomic per-broker + events/suggest + deferred da Part 1 §8/§9) | ✅ completato | Parte 1, Parte 2 |
 | Parte 4 | [`plan-phase07-transaction-Part4.prompt.md`](./phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md) (10 steps + 11 rounds) | ✅ completato (Round 6 ⏳ in corso) | Parte 3 |
-| Parte 4b | (TBD — File Preview System) | ⏳ da scrivere | autonomo |
+| Parte 4b | [`phase-07-subplan/Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md`](./phase-07-subplan/Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md) | ✅ completato | autonomo |
 | Parte 5 | `plan-phase07-transaction-Part5-staging-modal.md` (Staging Modal frontend: BRIM mode, resolve fake_id, event matching, TransactionPickerModal, Promote/Split in BulkModal) | ⏳ **da scrivere** | Parte 2, Parte 3, Parte 4 |
 
 ---
@@ -422,13 +422,23 @@ Parte 4 è completata con 10 step originali + 11 round di bugfix/polish. Il pian
 
 ---
 
-## 🔷 Parte 4b — Frontend: File Preview System (Alto Livello)
+## 🔷 Parte 4b — Frontend: File Preview System (storico — vedi piano archiviato)
+
+> **Nota 2026-06-04**: questa sezione resta come fotografia del design iniziale.
+> L'implementazione finale è documentata in
+> [`phase-07-subplan/Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md`](./phase-07-subplan/Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md).
+> Divergenze principali rispetto al testo sotto:
+> - scope finale limitato a `/files` (Static + BRIM), BrokerImportFilesModal rinviato
+> - preview PDF embedded viewer-only invece di "unsupported"
+> - table preview realizzata con viewer spreadsheet dedicato, non `DataTable`
+> - niente quality slider manuale; immagini passano automaticamente alla source originale oltre 1x
+> - code preview non inclusa in questo slice
 
 ### Motivazione
 Prima di cliccare "Parse" su un file BRIM uploadato, l'utente vuole poter **ispezionare il
 contenuto grezzo** per verificare encoding, separatore, intestazioni, righe di spazzatura.
 Lo stesso meccanismo serve nella pagina Files per i file statici. Questo piano era stato
-disegnato autonomamente in [`plan-phase7b-filePreview.md`](../plan-phase7b-filePreview.md)
+disegnato autonomamente in [`plan-phase7b-filePreview.md`](./phase-07-subplan/Parte4b/plan-phase7b-filePreview.md)
 e viene ora **assorbito** qui con i necessari aggiornamenti di stack.
 
 ### Situazione di partenza
@@ -727,7 +737,7 @@ Modale unificata che copre i 4 ingressi, riusa `AssetModal` / `AssetMatchingWiza
 | 7 | **Riuso endpoint esistenti** | `GET /brokers` è già filtrato per access → niente `accessible-brokers` nuovo |
 | 8 | **Smart assistant retroattivo** (matching eventi ↔ transazioni storiche) | Posticipato a Phase 8+ |
 | 9 | **Regimi fiscali / Cash Split / Over-Sell Protection** | Posticipati a Phase 8+ (erano nel piano originale `plan-phase05-to-08-upgrade.md §6` ma fuori scope MVP) |
-| 10 | **File Preview System** incorporato come Parte 4b | Assorbe il vecchio `plan-phase7b-filePreview.md`. Allineato a Svelte 5 runes + `ModalBase` + `DataTable` esistenti. Autonomo rispetto al modello transazioni: può essere implementato in parallelo a Parti 1–3 se ci sono risorse |
+| 10 | **File Preview System** incorporato come Parte 4b | Assorbe il vecchio `plan-phase7b-filePreview.md`. Allineato a Svelte 5 runes + `ModalBase`; realizzazione finale concentrata su `/files` (Static + BRIM) con viewer dedicati per spreadsheet/PDF. Autonomo rispetto al modello transazioni |
 | 11 | **🆕 BRIM = parser puro** (Revisione 2) | Smantellata l'implementazione v1 con `BRIMCapabilities` + `asset_events` + `/import/commit` atomico. Il BRIM produce solo transazioni con fake id + asset estratti. Il commit è responsabilità del frontend via endpoint standard TX. `plugin_version` introdotta per invalidare parse cached |
 | 12 | **🆕 Bulk TX atomic per-broker** (Revisione 2) | `POST/PATCH/DELETE /brokers/{broker_id}/transactions/bulk` sostituisce il precedente `POST /transactions` multi-broker best-effort. Un commit = un broker = all-or-nothing. Risposta con `rolled_back: bool`. Coerente con il principio "un import è un'unità coerente" |
 | 13 | **🆕 `bulk_upsert_events_manual` → `bulk_upsert_events`** (Revisione 2) | Rimosso suffisso `_manual` ridondante (lo scope "user events" è già implicito nell'endpoint `PUT /assets/events/bulk`) |
@@ -751,12 +761,12 @@ Modale unificata che copre i 4 ingressi, riusa `AssetModal` / `AssetMatchingWiza
 - [x] Auto-pair TRANSFER: selezione `type=TRANSFER` su una riga → auto-crea riga coppia ← Part 4 Round 5
 - [x] VIEWER su broker → no bottoni edit/delete/create ← Part 3+4
 - [ ] Duplicati BRIM: banner + checklist funziona ← Part 5
-- [ ] **Parte 4b**: Bottone 👁 visibile solo su file supportati
-- [ ] **Parte 4b**: Preview CSV BRIM mostra `DataTable` con row-range
-- [ ] **Parte 4b**: Preview immagine con quality slider funzionante
-- [ ] **Parte 4b**: Preview markdown toggle raw/rendered
-- [ ] **Parte 4b**: File binario → nessun bottone preview
-- [ ] **Parte 4b**: Preview accessibile da Files page + `BrokerImportFilesModal`
+- [x] **Parte 4b**: entry preview visibile solo su file supportati in `/files`
+- [x] **Parte 4b**: Preview tabellare BRIM/Static funziona per CSV/XLSX/XLS
+- [x] **Parte 4b**: Preview immagine con zoom stabile + switch automatico a source originale oltre 1x
+- [x] **Parte 4b**: Preview markdown con toggle raw/rendered + rendering LaTeX
+- [x] **Parte 4b**: Errori backend `detail` visibili nel modal preview
+- [x] **Parte 4b**: PDF embedded viewer-only con annotazioni/commenti disabilitati
 
 ### Test backend
 - [ ] Access matrix OWNER/EDITOR/VIEWER × verb × owned/foreign broker
@@ -802,12 +812,12 @@ phases/phase-07-subplan/
 │   ├── Round4-5/                                               (5 piani: R4, R5, R5-Bugfix1..3)
 │   └── Round6/                                                 (10 piani: PlanA..D)
 ├── Parte4b/
-│   └── (⏳ da scrivere — File Preview System)
+│   └── plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md
 └── Parte5/
     └── (⏳ da scrivere — Staging Modal unificata)
 ```
 
 ---
 
-**Prossimo passo**: **Parte 5** — Staging Modal full (BRIM import, TransactionPickerModal, Promote/Split in BulkModal) o **Parte 4b** (File Preview) in parallelo.
-Parti 1–4 completate.
+**Prossimo passo**: **Parte 5** — Staging Modal full (BRIM import, TransactionPickerModal, Promote/Split in BulkModal).
+Parti 1–4b completate.

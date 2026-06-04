@@ -47,6 +47,7 @@
     "vitest": "^4.1.0"
   },
   "dependencies": {
+    "@embedpdf/snippet": "^2.14.3",
     "@tanstack/table-core": "^8.21.3",
     "@types/cropperjs": "^1.1.5",
     "@types/topojson-client": "^3.1.5",
@@ -54,13 +55,16 @@
     "@zxcvbn-ts/core": "^3.0.4",
     "@zxcvbn-ts/language-common": "^3.0.4",
     "@zxcvbn-ts/language-en": "^3.0.2",
+    "cheetah-grid": "^1.16.6",
     "cropperjs": "^2.1.0",
     "date-fns": "^4.1.0",
+    "dompurify": "^3.4.8",
     "echarts": "^6.0.0",
     "graphology": "^0.26.0",
     "graphology-types": "^0.24.8",
     "katex": "^0.16.38",
     "lucide-svelte": "^0.559.0",
+    "marked": "^18.0.4",
     "svelte-i18n": "^4.0.1",
     "topojson-client": "^3.1.0",
     "zod": "3.24.1"

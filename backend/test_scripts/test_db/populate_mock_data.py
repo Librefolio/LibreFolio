@@ -69,7 +69,7 @@ from backend.app.db import (
 from backend.app.services.auth_service import hash_password
 from backend.app.services.brim_provider import save_uploaded_file
 from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
-from backend.app.services.static_uploads import get_uploads_dir, seed_default_avatars
+from backend.app.services.static_uploads import get_uploads_dir, save_upload, seed_default_avatars
 from backend.app.services.transaction_service import BalanceValidationError, TransactionService
 
 # Create engine AFTER setup_test_database() has set DATABASE_URL
@@ -2585,7 +2585,7 @@ def clean_data_dirs():
 
 
 def upload_static_resources(session: Session):
-    """Upload static resource files (avatars) to custom-uploads."""
+    """Upload static resource files (avatars + preview samples) to custom-uploads."""
 
     print("\n📁 Uploading static resources...")
     print("-" * 60)
@@ -2596,6 +2596,137 @@ def upload_static_resources(session: Session):
         print(f"  ✅ Seeded {count} default avatar images")
     else:
         print("  ℹ️  Avatars already seeded (marker exists)")
+
+    preview_samples_dir = PROJECT_ROOT / "backend" / "staticResources" / "FilePreviewSamples"
+    uploads_dir = get_uploads_dir()
+    existing_original_names: set[str] = set()
+
+    for meta_path in uploads_dir.glob("*.json"):
+        try:
+            meta = json.loads(meta_path.read_text())
+            original_name = meta.get("original_name")
+            if isinstance(original_name, str) and original_name:
+                existing_original_names.add(original_name)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    admin = session.exec(select(User).where(User.username == "e2e_test_admin")).first()
+    uploader_id = admin.id if admin else 0
+
+    def upload_preview_sample(original_name: str, content: bytes, description: str, mime_type: str | None = None) -> None:
+        if original_name in existing_original_names:
+            print(f"  ℹ️  Preview sample already seeded: {original_name}")
+            return
+
+        file_info = save_upload(
+            content=content,
+            original_filename=original_name,
+            user_id=uploader_id,
+            description=description,
+            mime_type=mime_type,
+        )
+        existing_original_names.add(original_name)
+        print(f"  ✅ Preview sample → {original_name} (id: {file_info.id[:8]}…)")
+
+    if preview_samples_dir.exists():
+        allowed_preview_exts = {".pdf", ".xls", ".xlsx", ".png", ".jpg", ".jpeg", ".webp"}
+        for sample_path in sorted(preview_samples_dir.iterdir()):
+            if not sample_path.is_file() or sample_path.name.startswith("."):
+                continue
+            if sample_path.suffix.lower() not in allowed_preview_exts:
+                print(f"  ℹ️  Skipping unsupported preview seed file: {sample_path.name}")
+                continue
+
+            upload_preview_sample(
+                sample_path.name,
+                sample_path.read_bytes(),
+                description="Static preview sample",
+                mime_type=None,
+            )
+    else:
+        print("  ⚠️  FilePreviewSamples directory not found")
+
+    markdown_preview = """# LibreFolio Preview Markdown Sample
+
+## Overview
+
+This file exercises the **markdown preview renderer** with multiple block types.
+
+### Bullet list
+
+- Portfolio snapshot
+- Broker imports
+- Static resource previews
+- Mobile-friendly workflows
+
+### Numbered list
+
+1. Open preview
+2. Switch between raw and rendered
+3. Check long content scrolling
+
+### Blockquote
+
+> Preview should be readable first, fancy second.
+
+### Table
+
+| Type | Purpose | Status |
+| ---- | ------- | ------ |
+| PDF | Embedded document preview | Ready |
+| XLSX | Spreadsheet-style grid preview | Ready |
+| Markdown | Raw + rendered toggle | Ready |
+
+### Code block
+
+```python
+def fifo_cost(lots):
+    return sum(lot["qty"] * lot["price"] for lot in lots)
+```
+
+### Inline code
+
+Use `./dev.py test front-utility files` to validate the files page.
+
+### LaTeX samples
+
+Inline math: $E = mc^2$
+
+Block math:
+
+$$
+\\sigma = \\sqrt{\\frac{1}{N}\\sum_{i=1}^{N}(x_i - \\mu)^2}
+$$
+"""
+
+    text_preview = """LibreFolio plain text preview sample
+
+This file is intentionally unformatted.
+It exists to validate the raw text viewer.
+
+Sections:
+- Preview metadata
+- Large text scrolling
+- Copy-to-clipboard action
+- Line numbering
+
+Notes:
+* Static Resources tab should preview this inline.
+* Markdown preview uses a separate rich sample.
+"""
+
+    upload_preview_sample(
+        "preview_markdown_sample.md",
+        markdown_preview.encode("utf-8"),
+        description="Generated markdown preview sample",
+        mime_type="text/markdown",
+    )
+    upload_preview_sample(
+        "preview_notes_sample.txt",
+        text_preview.encode("utf-8"),
+        description="Generated text preview sample",
+        mime_type="text/plain",
+    )
 
     # Note: broker icons are NOT set here on purpose — the frontend
     # automatically fetches icons from Clearbit/similar services when
