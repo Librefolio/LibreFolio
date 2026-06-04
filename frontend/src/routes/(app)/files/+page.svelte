@@ -36,7 +36,7 @@
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import FileGrid from '$lib/components/files/FileGrid.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
-    import {extractErrorMessage} from '$lib/utils/trySave';
+    import {fetchFilePreview, getFilePreviewError} from '$lib/utils/filePreview';
     import type {BrimFile, Broker, BrokerInfo, FilePreviewResponse, UploadedFile} from '$lib/types';
     import type {FilterValue} from '$lib/components/table/types';
 
@@ -588,6 +588,24 @@
         }
     }
 
+    async function handleBulkDeleteFiles() {
+        const isBrim = activeTab === 'brim';
+        try {
+            for (const fileId of selectedFileIds) {
+                if (isBrim) {
+                    await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {params: {file_id: fileId}});
+                } else {
+                    await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
+                }
+            }
+            selectedFileIds = [];
+            activeTableRef?.getTableRef()?.clearSelection();
+            await loadFiles();
+        } catch (e) {
+            error = e instanceof Error ? e.message : 'Delete failed';
+        }
+    }
+
     async function openStaticPreview(file: UploadedFile) {
         previewTarget = {source: 'static', file};
         showPreviewModal = true;
@@ -612,27 +630,19 @@
         previewError = null;
 
         try {
-            if (previewTarget.source === 'static') {
-                const response = (await zodiosApi.get_upload_file_preview_api_v1_uploads__file_id__preview_get({
-                    params: {file_id: previewTarget.file.id},
-                    queries: sheetName ? {sheet_name: sheetName} : undefined,
-                })) as FilePreviewResponse;
-                if (token === previewRequestToken) {
-                    previewData = response;
-                }
-            } else {
-                const response = (await zodiosApi.get_brim_file_preview_api_v1_brokers_import_files__file_id__preview_get({
-                    params: {file_id: previewTarget.file.file_id},
-                    queries: sheetName ? {sheet_name: sheetName} : undefined,
-                })) as FilePreviewResponse;
-                if (token === previewRequestToken) {
-                    previewData = response;
-                }
+            const response = await fetchFilePreview(
+                previewTarget.source === 'static'
+                    ? {source: 'static', fileId: previewTarget.file.id}
+                    : {source: 'brim', fileId: previewTarget.file.file_id},
+                sheetName
+            );
+            if (token === previewRequestToken) {
+                previewData = response;
             }
-        } catch (e) {
+        } catch (error) {
             if (token === previewRequestToken) {
                 previewData = null;
-                previewError = extractErrorMessage(e, 'Preview failed');
+                previewError = getFilePreviewError(error, 'Preview failed');
             }
         } finally {
             if (token === previewRequestToken) {
@@ -653,24 +663,6 @@
         previewError = null;
         previewData = null;
         previewTarget = null;
-    }
-
-    async function handleBulkDeleteFiles() {
-        const isBrim = activeTab === 'brim';
-        try {
-            for (const fileId of selectedFileIds) {
-                if (isBrim) {
-                    await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {params: {file_id: fileId}});
-                } else {
-                    await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
-                }
-            }
-            selectedFileIds = [];
-            activeTableRef?.getTableRef()?.clearSelection();
-            await loadFiles();
-        } catch (e) {
-            error = e instanceof Error ? e.message : 'Delete failed';
-        }
     }
 
     function formatDate(dateStr: string): string {
@@ -804,7 +796,14 @@
     </div>
 </div>
 
-<FilePreviewModal open={showPreviewModal} preview={previewData} loading={previewLoading} error={previewError} onRequestClose={closePreviewModal} onSheetChange={handlePreviewSheetChange} />
+<FilePreviewModal
+    open={showPreviewModal}
+    preview={previewData}
+    loading={previewLoading}
+    error={previewError}
+    onRequestClose={closePreviewModal}
+    onSheetChange={handlePreviewSheetChange}
+/>
 
 <!-- BRIM Upload Modal with per-file broker assignment -->
 <ModalBase
