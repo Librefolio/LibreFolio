@@ -112,7 +112,6 @@
 |------|-------|-------|--------|--------|
 | [[F-046]] | Transaction Model & Unified Batch API (validate + commit) | fullstack | `implemented` | [`dev/arch/database/brokers_transactions.md`](developer/architecture/database/brokers_transactions.md) |
 | [[F-047]] | Transaction List Page (DataTable + filters + dual-form modals) | frontend | `implemented` | — |
-| [[F-048]] | Transaction Modals (Form / Bulk / Delete / Promote / Split — mode-less, Round 6 Plan D done) | fullstack | `in-progress` | — |
 | [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | `in-progress` | — |
 | [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | `planned` | — |
 | [[F-051]] | Transaction ↔ AssetEvent Link | backend | `implemented` | — |
@@ -218,7 +217,7 @@
 | CALCULATIONS | 3 | 2 | 0 | 1 |
 | INFRASTRUCTURE | 16 | 15 | 0 | 1 |
 | PLANNED/IDEA | 22 | 0 | 0 | 22 |
-| **TOTAL** | **96** | **62** | **3** | **31** |
+| **TOTAL** | **96** | **63** | **2** | **31** |
 
 ## Key source files
 
