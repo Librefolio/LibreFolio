@@ -231,10 +231,11 @@
 | [[sources/phase07-part4-round6-pland2-bugfix2]] | `plan-bugfix2_PayloadSplitPreviewUX.prompt.md` ✅ DONE | 2026-05-31 | phase07, transactions, pipeline-reorder, split-preview |
 | [[sources/phase07-part4-round6-pland2-bugfix3]] | `plan-bugfix3_UXModalPayloadSuggestE2E.prompt.md` ✅ DONE (absorbed D3) | 2026-05-31 | phase07, transactions, e2e, split-schema, suggest-banner |
 | [[sources/phase07-part4-round6-pland2-bugfix4]] | `plan-bugfix4_SplitSuggestPmcOverrideUx.prompt.md` ✅ DONE | 2026-05-31 | phase07, transactions, pmc-auto-calc, cost-basis, delta-days |
-| [[sources/r2-walktest-feedback-master]] | `PlanD_SplitPromoteFullStack/plan-R2-WalktestFeedbackRound.prompt.md` (SP-A✅B✅C✅ D⏳ E🔲) | 2026-06-01 | phase07, transactions, wac, cost-basis, fx, walktest |
+| [[sources/r2-walktest-feedback-master]] | `PlanD_SplitPromoteFullStack/plan-R2-WalktestFeedbackRound.prompt.md` (SP-A✅B✅C✅ D✅ E🔲) | 2026-06-01 | phase07, transactions, wac, cost-basis, fx, walktest |
 | [[sources/r2-sp-a-cost-basis-wac]] | `R2-WalktestFeedback/plan-R2-SP-A-CostBasisWAC.prompt.md` ✅ DONE | 2026-06-01 | phase07, transactions, wac, cost-basis, currency, backend |
 | [[sources/r2-sp-b-backend-tests]] | `R2-WalktestFeedback/plan-R2-SP-B-BackendTests.prompt.md` ✅ DONE | 2026-06-01 | phase07, transactions, wac, testing, backend |
 | [[sources/r2-sp-c-bulkmodal-suggest-ux]] | `R2-WalktestFeedback/plan-R2-SP-C-BulkModalSuggestUX.prompt.md` ✅ DONE | 2026-06-01 | phase07, transactions, frontend, bulkModal, suggest, ux |
 | [[sources/r2-sp-c-bugfix-chain]] | SP-C Bugfix Chain (11 plans): BugfixRound1+2, FxSpread, UnifiedPartnerArch, ReactiveWac, FixCloneLinkUuid, FixFeedbackLoop, WacInlineValidateCommit, FixPartnerRows, StatelessPreview, BackendCleanup ✅ | 2026-06-02 | phase07, transactions, wac, bugfix, partner-architecture, stateless-preview |
 | [[sources/r2-parallel-features-pwa-borsa-fx]] | Batch 3: PWA, Port 60/40, Borsa Italiana, FX fix (parallel commits) ✅ | 2026-06-02 | pwa, mobile, ports, assets, fx, borsa-italiana |
 | [[sources/independent-batch-2026-06-01]] | Batch 4: 5 independent plans (LogAudit, Candlestick, FxRange, LazyImage, RsiBands) ✅ | 2026-06-01 | backend, frontend, logging, charts, fx, cache, signals |
+| [[sources/r3-sp-d-formmodal-wac-fx-chain]] | SP-D chain (6 plans): FormModal props + EventPicker + WAC FX feedback + currency selector + bugfixes ✅ | 2026-06-04 | phase07, transactions, wac, fx, event-picker, formmodal |

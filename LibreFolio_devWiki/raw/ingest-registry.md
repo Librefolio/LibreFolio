@@ -12,6 +12,12 @@
 >
 > For untracked files (external articles, PDFs in raw/): hash = `untracked`, no drift check possible.
 
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-R3-SP-D-FormModalEventPickerWacFx.prompt.md` | `61cc81e5` | 2026-06-04 | [[sources/r3-sp-d-formmodal-wac-fx-chain]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-BugfixRound1.prompt.md` | `61cc81e5` | 2026-06-04 | [[sources/r3-sp-d-formmodal-wac-fx-chain]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-BugfixRound2.prompt.md` | `61cc81e5` | 2026-06-04 | [[sources/r3-sp-d-formmodal-wac-fx-chain]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacCurrency.prompt.md` | `61cc81e5` | 2026-06-04 | [[sources/r3-sp-d-formmodal-wac-fx-chain]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacCurrencyFix.prompt.md` | `61cc81e5` | 2026-06-04 | [[sources/r3-sp-d-formmodal-wac-fx-chain]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacFxEnrich.prompt.md` | `61cc81e5` | 2026-06-04 | [[sources/r3-sp-d-formmodal-wac-fx-chain]] |
 | Source Path | Git Hash at Ingest | Date | Wiki Page |
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/knowledge_base/00_project_overview.md` | `f17d963` | 2026-04-24 | [[sources/knowledge-base-overview]] |

@@ -4,6 +4,31 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-06-04] ingest | SP-D Plan Chain (6 plans: FormModal + EventPicker + WAC FX + Currency + Bugfixes)
+
+Ingested 6 completed plans from the R3-SP-D sub-plan chain (FormModal props unification, AssetEventPicker, WAC FX staleness feedback, WAC target currency selector, UX polish, FxSyncModal integration) @ anchor `61cc81e5`.
+
+**Created** (1 source page):
+- [[sources/r3-sp-d-formmodal-wac-fx-chain]]
+
+**Created** (3 decision pages):
+- [[decisions/wac-target-currency-last-acquisition]] — WAC target = last acquisition's currency (deterministic)
+- [[decisions/fxsyncmodal-parent-ownership]] — Parent owns FxSyncModal, child calls onOpenFxSync
+- [[decisions/blur-detection-format-string-comparison]] — Compare formatDecimalForDisplay() strings for blur detection
+
+**Updated** (2 feature pages):
+- [[features/F-097]] — status: in-progress → **implemented** (all walktests pass, E2E added)
+- [[features/F-048]] — title updated to reflect SP-D completion
+
+**Key decisions extracted**:
+- WAC target currency = most recent acquisition's currency (not majority)
+- cost_basis_override is Currency object {code, amount}, sentinel {code, "0"} for auto hint
+- FxSyncModal reuse pattern: parent owns modal, child calls onOpenFxSync prop
+- Blur detection: compare formatDecimalForDisplay() strings (not numeric tolerance)
+- useValidateScheduler: manual triggers bypass antiBounce 10s
+- PromoteMergeModal WAC section was dead code → removed
+- FX missing does NOT force manual mode (informative error only)
+
 ## [2026-06-01] ingest | Batch 4 — Five Independent Mini-Plans
 
 Ingested 5 independent plans (BackendLogAudit, CandlestickChart, FxRangeHelper, LazyImageCache, RsiSignalBands) — all ✅ DONE 2026-06-01.

@@ -374,11 +374,6 @@
     "ast_hash": "87b2422fde9ec17e5062e5d110ad4912",
     "semantic_hash": "87b2422fde9ec17e5062e5d110ad4912"
   },
-  "/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/roadmap/phases/phase-07-subplan/plan-phase7b-filePreview.md": {
-    "mtime": 1777316019.4932096,
-    "ast_hash": "bafdafb4ca718bfa20b072767cda2827",
-    "semantic_hash": "bafdafb4ca718bfa20b072767cda2827"
-  },
   "/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/roadmap/phases/phase-07-subplan/README.md": {
     "mtime": 1779357383.1292303,
     "ast_hash": "411ce8af0b00324ddbfc13084a3790f7",
@@ -2080,14 +2075,14 @@
     "semantic_hash": "531b811b1ea6c801f14feb8359af6cf0"
   },
   "/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/gallery/desktop.en.md": {
-    "mtime": 1776432053.7373161,
-    "ast_hash": "33d8415ef8b00421b345b122a6f94f47",
-    "semantic_hash": "33d8415ef8b00421b345b122a6f94f47"
+    "mtime": 1780481031.6328995,
+    "ast_hash": "144573cc52e2579303e4503752173ef0",
+    "semantic_hash": ""
   },
   "/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/gallery/mobile.en.md": {
-    "mtime": 1776432053.738695,
-    "ast_hash": "5131932aab51378b0c31124abf502c16",
-    "semantic_hash": "5131932aab51378b0c31124abf502c16"
+    "mtime": 1780481031.6329958,
+    "ast_hash": "abca0cb39a7fdbabb57114b3d0833610",
+    "semantic_hash": ""
   },
   "/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/mkdocs-en/docs/gallery/index.en.md": {
     "mtime": 1776003950.5371633,
