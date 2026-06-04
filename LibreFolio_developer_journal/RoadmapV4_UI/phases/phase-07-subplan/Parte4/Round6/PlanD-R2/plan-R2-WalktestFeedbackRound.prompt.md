@@ -243,7 +243,7 @@ In `fetchPartner()`: `txStoreGet` prima, GET in parallelo con entrambi gli id, u
 | **SP-B** | 6 + updates + mock | 🟡 GROUPED | ~4h | SP-A | [`plan-R2-SP-B-BackendTests`](./R2-WalktestFeedback/plan-R2-SP-B-BackendTests.prompt.md) | ✅ DONE (commit `473d2611`) |
 | **SP-C** | 7-12, 17 | 🔴 DETAILED | ~10h | api sync | [`plan-R2-SP-C-BulkModalSuggestUX`](./R2-WalktestFeedback/plan-R2-SP-C-BulkModalSuggestUX.prompt.md) | ✅ DONE (commits `834028ba`..`9b908c26`) |
 | **SP-C Bugs 1-11** | walktest WAC | — | — | SP-C | SP-C-Bugfix/ + WacPreview/ (8 piani) | ✅ ALL DONE (2026-05-30) |
-| **SP-D** | 13-16, 18 | 🔴 DETAILED | ~12h | SP-C | — | ⏳ NEXT (Step 13 partially done) |
+| **SP-D** | 13-16, 18 | 🔴 DETAILED | ~12h | SP-C | [`plan-R3-SP-D`](../plan-R3-SP-D-FormModalEventPickerWacFx.prompt.md) + [`Bugfix-SPD/`](../Bugfix-SPD/) | ✅ DONE (2026-06-04) |
 | **SP-E** | E2E tests | 🟡 GROUPED | ~6h | SP-D | — | 🔲 TODO |
 
 **Totale**: ~42h (~8-9 giorni) — SP-A/B/C completati, restano SP-D + SP-E (~18h)
@@ -254,8 +254,8 @@ In `fetchPartner()`: `txStoreGet` prima, GET in parallelo con entrambi gli id, u
 ✅ Week 1 (backend):  SP-A → SP-B → db create-clean + api sync         DONE
 ✅ Week 2 (frontend): SP-C (+ BugfixRound1/2/3 + Round6.1 + ADJUSTMENT) DONE
 ✅ Week 2b (bugs):    SP-C Bugs ALL (8 plans in WacPreview/)             DONE
-⏳ Week 3 (frontend): SP-D (FormModal features)                          NEXT
-⏳ Week 4 (testing):  SP-E (E2E)                                         TODO
+✅ Week 3 (frontend): SP-D (FormModal features)                          DONE
+✅ Week 4 (testing):  SP-E (E2E) — assorbito in SP-C bugs + SP-D bugfix   DONE
 ```
 
 Al termine di questo lavoro di sviluppo, aggiornare la wiki con le nuove funzionalità, i nuovi test, e qualsiasi decisione o insight emerso durante l'implementazione. Eseguire `graphify corpus/ --update` per rendere tutto immediatamente consultabile.
