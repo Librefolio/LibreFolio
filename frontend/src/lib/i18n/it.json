@@ -666,6 +666,7 @@
       "docsTooltip": "Scopri come viene calcolato il PMC (Prezzo Medio di Carico)",
       "toggleAuto": "Auto",
       "toggleManual": "Manuale",
+      "currencyChanged": "Valuta cambiata — ricalcolo in corso…",
       "unitCost": "Costo unitario",
       "effectLabel": "Effetto",
       "columnWac": "PMC",
@@ -806,7 +807,9 @@
       "promoteRefNotFound": "Transazione referenziata per la promozione non trovata",
       "alreadyPaired": "La transazione è già collegata a un'altra transazione",
       "noPromoteRule": "Nessuna regola di promozione corrisponde a questi due tipi di transazione",
-      "wacFxUnavailable": "❌ Calcolo WAC fallito: coppia/e FX {pairs} non disponibile/i. Sincronizza i tassi FX o passa alla modalità manuale.",
+      "wacFxUnavailable": "❌ Calcolo WAC fallito.",
+      "wacFxUnavailableSyncLink": "Sincronizza i tassi FX",
+      "wacFxUnavailableOrManual": "o passa alla modalità manuale.",
       "costBasisRequired": "❌ <b>{type}</b> con quantità positiva richiede un costo base. Usa la modalità <b>Auto</b> (PMC) oppure inserisci un valore <b>manuale</b>."
     },
     "pydantic": {

@@ -13,6 +13,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.common import OpenDateRangeModel, SafeDecimal
+from backend.app.schemas.wac import WACMissingPairInfo
 
 
 # =============================================================================
@@ -60,7 +61,7 @@ class WACAnalyticsResultItem(BaseModel):
     asset_id: int
     currency: str = Field(..., description="Target currency of WAC values")
     series: List[WACSeriesPoint] = Field(default_factory=list)
-    missing_pairs: List[str] = Field(default_factory=list, description="FX pairs that could not be resolved")
+    missing_pairs: List["WACMissingPairInfo"] = Field(default_factory=list, description="FX pairs that could not be resolved, with dates")
 
 
 class WACAnalyticsResponse(BaseModel):

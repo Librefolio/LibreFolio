@@ -666,6 +666,7 @@
       "docsTooltip": "Découvrez comment le CMP (Coût Moyen Pondéré) est calculé",
       "toggleAuto": "Auto",
       "toggleManual": "Manuel",
+      "currencyChanged": "Devise modifiée — recalcul en cours…",
       "unitCost": "Coût unitaire",
       "effectLabel": "Effet",
       "columnWac": "CMP",
@@ -806,7 +807,9 @@
       "promoteRefNotFound": "Transaction référencée pour la promotion non trouvée",
       "alreadyPaired": "La transaction est déjà liée à une autre transaction",
       "noPromoteRule": "Aucune règle de promotion ne correspond à ces deux types de transaction",
-      "wacFxUnavailable": "❌ Calcul WAC échoué : paire(s) FX {pairs} indisponible(s). Synchronisez les taux FX ou passez en mode manuel.",
+      "wacFxUnavailable": "❌ Calcul WAC échoué.",
+      "wacFxUnavailableSyncLink": "Synchroniser les taux FX",
+      "wacFxUnavailableOrManual": "ou passez en mode manuel.",
       "costBasisRequired": "❌ <b>{type}</b> avec quantité positive nécessite un coût de base. Utilisez le mode <b>Auto</b> (CMP) ou saisissez une valeur <b>manuelle</b>."
     },
     "pydantic": {

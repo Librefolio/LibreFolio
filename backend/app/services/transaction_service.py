@@ -1401,14 +1401,18 @@ class TransactionService:
         if wac_results:
             for wr in wac_results:
                 if wr.wac is None and wr.wac_missing_pairs:
+                    pair_strs = [mp.pair for mp in wr.wac_missing_pairs]
                     issues.append(
                         TXValidationIssue(
                             operation=wr.operation or "create",
                             index=wr.index if wr.index is not None else 0,
                             ref_id=None,
-                            error=f"WAC calculation failed: missing FX pairs {', '.join(wr.wac_missing_pairs)}",
+                            error=f"WAC calculation failed: missing FX pairs {', '.join(pair_strs)}",
                             code=TXValidationCode.WAC_FX_UNAVAILABLE.value,
-                            params={"pairs": wr.wac_missing_pairs},
+                            params={
+                                "pairs": pair_strs,
+                                "pair_details": [{"pair": mp.pair, "dates": [d.isoformat() for d in mp.dates]} for mp in wr.wac_missing_pairs],
+                            },
                             field="cost_basis_override",
                         )
                     )

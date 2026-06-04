@@ -587,7 +587,12 @@
       "sameBrokerError": "Los brokers deben ser diferentes",
       "loadingPartner": "Cargando transacción vinculada…",
       "swapSides": "Invertir lados",
-      "apply": "Aplicar"
+      "apply": "Aplicar",
+      "eventPickerCreateNew": "Nuevo evento",
+      "eventCreateTitle": "Crear evento para {asset}",
+      "eventCreateSuccess": "Evento creado",
+      "eventCreateAmountRequired": "El importe es obligatorio",
+      "eventCreateDateRequired": "La fecha es obligatoria"
     },
     "bulk": {
       "titleCreate": "Nuevas transacciones",
@@ -661,6 +666,7 @@
       "docsTooltip": "Descubre cómo se calcula el CMP (Coste Medio Ponderado)",
       "toggleAuto": "Auto",
       "toggleManual": "Manual",
+      "currencyChanged": "Moneda cambiada — recalculando…",
       "unitCost": "Coste unitario",
       "effectLabel": "Efecto",
       "columnWac": "CMP",
@@ -801,7 +807,9 @@
       "promoteRefNotFound": "Transacción referenciada para la promoción no encontrada",
       "alreadyPaired": "La transacción ya está vinculada a otra transacción",
       "noPromoteRule": "Ninguna regla de promoción corresponde a estos dos tipos de transacción",
-      "wacFxUnavailable": "❌ Cálculo WAC fallido: par(es) FX {pairs} no disponible(s). Sincroniza las tasas FX o cambia al modo manual.",
+      "wacFxUnavailable": "❌ Cálculo WAC fallido.",
+      "wacFxUnavailableSyncLink": "Sincronizar tasas FX",
+      "wacFxUnavailableOrManual": "o cambia al modo manual.",
       "costBasisRequired": "❌ <b>{type}</b> con cantidad positiva requiere un coste base. Use el modo <b>Auto</b> (CMP) o introduzca un valor <b>manual</b>."
     },
     "pydantic": {

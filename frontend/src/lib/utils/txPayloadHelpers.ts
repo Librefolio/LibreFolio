@@ -147,7 +147,7 @@ export function buildCreatePayload(fields: TxFields, rule: TypeRule): Record<str
 
     if (fields.cost_basis_mode === 'auto' && cbAllowed) {
         out.cost_basis_mode = 'auto';
-        out.cost_basis_override = null;
+        out.cost_basis_override = fields.cost_basis_override ?? null;
     } else if (fields.cost_basis_override) {
         out.cost_basis_override = fields.cost_basis_override;
     }
@@ -296,10 +296,11 @@ export function buildDualCreatePayloads(layout: PairFormLayout, from: TxFields, 
             fromItem.asset_id = from.asset_id;
             toItem.asset_id = from.asset_id;
         }
-        // WAC: for auto mode, send mode + null override (backend calculates on receiver)
+        // WAC: for auto mode, send mode + currency hint override (or null for backend-decides)
         if (from.cost_basis_mode === 'auto') {
             toItem.cost_basis_mode = 'auto';
-            toItem.cost_basis_override = null;
+            // Pass through the currency hint sentinel ({code, amount:"0"}) if present
+            toItem.cost_basis_override = from.cost_basis_override ?? null;
         } else if (from.cost_basis_override && (from.cost_basis_override as CashValue).amount?.trim()) {
             toItem.cost_basis_override = from.cost_basis_override;
         } else if (to.cost_basis_override && to.cost_basis_override.amount?.trim()) {

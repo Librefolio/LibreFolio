@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Transaction
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
-from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
+from backend.app.schemas.wac import WACMissingPairInfo, WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.fx import convert_bulk
 from backend.app.utils.financial_utils import WACInputTX, compute_wac_from_txlist, determine_target_currency
 
@@ -126,7 +126,7 @@ async def compute_wac_iterative(
     fx_converted: dict[int, Decimal] = {}
     fx_staleness: dict[int, FxBackwardFillInfo] = {}
     fx_rates: dict[int, Decimal] = {}  # unified_idx → derived FX rate
-    missing_pairs: list[str] = []
+    missing_pair_dates: dict[str, list[date_type]] = {}
 
     if fx_requests:
         bulk_input = [(amt, to_ccy, dt) for _, amt, to_ccy, dt in fx_requests]
@@ -135,8 +135,7 @@ async def compute_wac_iterative(
             result = fx_results[j] if j < len(fx_results) else None
             if result is None:
                 pair_key = f"{amt_ccy.code}/{_to_ccy}"
-                if pair_key not in missing_pairs:
-                    missing_pairs.append(pair_key)
+                missing_pair_dates.setdefault(pair_key, []).append(_dt)
             else:
                 converted, rate_date, _bf = result
                 fx_converted[unified_idx] = converted.amount
@@ -148,8 +147,12 @@ async def compute_wac_iterative(
                 stale_days = (tx_date - rate_date).days if rate_date < tx_date else 0
                 fx_staleness[unified_idx] = FxBackwardFillInfo(fx_rate_date=rate_date, fx_days_back=stale_days)
 
-    if missing_pairs:
-        return WACPreviewResultItem(wac=None, wac_qualifying_txs=[], wac_missing_pairs=missing_pairs)
+    if missing_pair_dates:
+        missing_pairs_out = [
+            WACMissingPairInfo(pair=k, dates=sorted(set(v)))
+            for k, v in missing_pair_dates.items()
+        ]
+        return WACPreviewResultItem(wac=None, wac_qualifying_txs=[], wac_missing_pairs=missing_pairs_out)
 
     # 5. Build final WACInputTX list with converted costs
     input_txs: list[WACInputTX] = []

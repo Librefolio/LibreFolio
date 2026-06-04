@@ -55,8 +55,8 @@ test.describe('Transaction Linked Pair Tooltips', () => {
     // === Bug 8 — Tooltip contains HTML with favicon + bold name + SVG icon ===
     test('paired tooltip shows broker name in bold for OWNER↔EDITOR pair', async ({page}) => {
         // Asym-a: Apple Inc. on IB→Directa (OWNER↔EDITOR=full)
-        // findRow matches by textContent — both "Directa" and "Apple" appear in description
-        const row = await findRow(page, 'Directa', 'Apple');
+        // Use "Asym-a" to match the specific TRANSFER row (not a BUY on Directa/Apple)
+        const row = await findRow(page, 'Asym-a');
 
         // Find the link icon inside the row and scroll into view
         // The icon is inside a Tooltip wrapper → .tx-links-slot contains the .tx-link-icon button

@@ -427,9 +427,236 @@ Tempo stimato: ~2h (backend 20min, frontend chip 40min, integration 30min, test 
 
 ---
 
+## ⚠️ Correzione Post-Walktest: Eliminare CurrencyChip, usare CompactCashCell come selettore
+
+**Problema**: L'implementazione ha creato un componente `CurrencyChip` separato nella riga suggestion. L'utente si aspettava che il **selettore valuta già esistente** nel `CompactCashCell` (campo numero + ISO valuta) fosse il punto di interazione — non un chip aggiuntivo.
+
+**Comportamento atteso dall'utente:**
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Override costo medio ⓘ  [💱 FX]              [ Auto | Manuale ]     │
+│                                                                       │
+│  ┌──────────────────────────────────────────────────────────────┐    │
+│  │  50.00 (read-only, placeholder "auto")      [$ 🇺🇸 USD ▼]    │    │
+│  └──────────────────────────────────────────────────────────────┘    │
+│         ↑ amount: disabled in auto              ↑ currency: ATTIVO   │
+│                                                   cambia → ricalcola │
+│                                                   NON switcha manual │
+│                                                                       │
+│  💡 PMC suggerito (8 TX)                       ▶ dettagli            │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### Bug attuali
+
+| # | Bug | Causa |
+|---|-----|-------|
+| **A** | Cambio valuta nel CompactCashCell switcha a Manual | `handleValueChange()` (riga 182): `if (mode === 'auto') onModeChange?.('manual')` |
+| **B** | CompactCashCell semi-trasparente in auto (valuta inclusa) | Riga 263: `opacity-60` su tutto il wrapper |
+| **C** | CurrencyChip ridondante nella suggestion line | Step 4 ha aggiunto un componente non necessario |
+
+### Step 9 — Fix: CompactCashCell come selettore valuta WAC ✅ 2026-06-03
+
+> **Note implementazione**: (1) `handleValueChange` riscritta: se code cambia ma amount no e siamo in auto → `onCurrencyChange(code)` senza switch a manual. (2) Rimosso `opacity-60` dal wrapper — l'amount ha `:disabled` styling nativo, valuta resta opaca. (3) CurrencyChip rimosso dalla suggestion line + import. (4) CompactCashCell: nuove props `amountDisabled`, `currencyDisabled`, `allowedCurrencies` (passa ad inner CurrencySearchSelect). Rimossa `.compact-cash.disabled` CSS rule. (5) `displayedCostBasis` derived nel FormModal: mostra WAC result in auto, o hint code con amount vuoto pre-calcolo. svelte-check: 0 nuovi errori. Playwright tx-event-picker: 5/5 pass.
+
+#### 9.1 — Separare amount e currency change in WacPreviewSection
+
+Riscrivere `handleValueChange` per distinguere:
+- **Amount change** → switch a Manual (come prima)
+- **Currency-only change** (amount invariato) → chiama `onCurrencyChange` senza switch
+
+```typescript
+function handleValueChange(next: {code: string; amount: string} | null) {
+    if (!next) { onChange(next); return; }
+    const prevCode = value?.code;
+    const prevAmount = value?.amount;
+    
+    // Currency changed but amount didn't → WAC currency override (stay in auto)
+    if (next.code !== prevCode && next.amount === prevAmount && mode === 'auto') {
+        onCurrencyChange?.(next.code);
+        return;
+    }
+    
+    // Amount changed → switch to manual
+    if (mode === 'auto') {
+        onModeChange?.('manual');
+    }
+    onChange(next);
+}
+```
+
+#### 9.2 — Opacity solo sull'amount, non sulla valuta
+
+Attualmente (riga 263):
+```svelte
+<div class="flex items-center gap-2 {isAuto && previewResult?.wac ? 'opacity-60 italic' : ''}">
+    <CompactCashCell ... />
+</div>
+```
+
+L'opacity va applicata **solo al campo amount**, non al selettore valuta. Ma `CompactCashCell` è un componente atomico — non possiamo mettere opacity solo su metà.
+
+**Soluzione**: aggiungere una prop `currencyOpaque` (o `currencyDisabled: false`) al CompactCashCell che impedisce l'ereditarietà dell'opacity sul currency selector. 
+
+Oppure, più semplice: **non applicare opacity-60 al wrapper**. In auto, il placeholder "auto" nell'amount è sufficiente a comunicare "calcolato". La valuta deve essere sempre opaca e cliccabile.
+
+```svelte
+<!-- PRIMA -->
+<div class="flex items-center gap-2 {isAuto && previewResult?.wac ? 'opacity-60 italic' : ''}">
+
+<!-- DOPO -->
+<div class="flex items-center gap-2">
+```
+
+Se vogliamo mantenere un feedback visivo sull'amount in auto, possiamo applicare la classe direttamente all'input amount dentro CompactCashCell (via prop `amountClass` o `amountOpacity`).
+
+**Alternativa più leggera**: usare `pointer-events-none` + `opacity-60` **solo sull'amount input**, lasciando il currency selector intatto. Richiede che CompactCashCell esponga separatamente il disabled per amount vs currency.
+
+**Proposta pragmatica**: Rimuovere `opacity-60` dal wrapper. L'amount ha già `placeholder="auto"` e `disabled` in auto mode. È sufficiente come feedback visivo. La valuta resta 100% opaca e cliccabile.
+
+#### 9.3 — Rimuovere CurrencyChip dalla suggestion line
+
+Rimuovere il blocco riga 291-299 in WacPreviewSection:
+```svelte
+<!-- RIMUOVERE -->
+{#if onCurrencyChange && availableCurrencies.length > 0}
+    <CurrencyChip ... />
+{/if}
+```
+
+Il componente `CurrencyChip.svelte` può essere eliminato (o conservato per uso futuro altrove).
+
+#### 9.4 — Limitare il dropdown valuta in auto a `availableCurrencies`
+
+In modalità Auto, il selettore valuta del CompactCashCell dovrebbe mostrare **solo** le valute trovate nelle TX dell'asset (non tutte le 200+). Serve una prop `currencyOptions` su CompactCashCell:
+
+```svelte
+<CompactCashCell
+    {value}
+    onChange={handleValueChange}
+    signHint="positive"
+    amountPlaceholder={isAuto ? 'auto' : '0.00'}
+    {defaultCode}
+    disabled={isAuto}                              <!-- amount disabled -->
+    currencyDisabled={disabled}                    <!-- currency: disabled solo se readonly -->
+    currencyOptions={isAuto ? availableCurrencies : undefined}  <!-- limita opzioni in auto -->
+    testid="{testid}-input"
+/>
+```
+
+Se `currencyOptions` è fornito → il SearchSelect valuta filtra solo quelle. Se undefined → mostra tutto (come adesso in Manual).
+
+**Nota**: `disabled` diventa solo per l'amount. Il currency selector ha il suo `currencyDisabled` separato.
+
+#### 9.5 — Aggiornare il valore mostrato nel CompactCashCell in auto
+
+Quando il backend risponde con `wac: {code: "EUR", amount: "50.00"}`, il `value` passato al CompactCashCell si aggiorna. Attualmente `value={draft.cost_basis_override}` — in auto con hint questo è `{code: "EUR", amount: "0"}`. Il rendering dovrebbe mostrare il valore WAC calcolato, non "0".
+
+Il fix è nel parent (FormModal/BulkModal): quando mode è auto e il backend ha risposto, passare il WAC result come valore visualizzato:
+
+```typescript
+const displayedCostBasis = $derived(
+    costBasisMode === 'auto' && formWacResult?.wac
+        ? formWacResult.wac  // {code: "EUR", amount: "50.00"}
+        : draft.cost_basis_override
+);
+```
+
+E nella prop WacPreviewSection:
+```svelte
+<WacPreviewSection value={displayedCostBasis} ... />
+```
+
+### Design Finale
+
+**Auto, primo calcolo in volo:**
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Override costo medio ⓘ  [💱 FX]              [ Auto | Manuale ]     │
+│                                                                       │
+│  ┌──────────────────────────────────────────────────────────────┐    │
+│  │  auto                                       [🏳️ ▼]           │    │
+│  └──────────────────────────────────────────────────────────────┘    │
+│  ⏳ Calcolo in corso…                                                │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Auto, backend ha risposto:**
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Override costo medio ⓘ  [💱 FX]              [ Auto | Manuale ]     │
+│                                                                       │
+│  ┌──────────────────────────────────────────────────────────────┐    │
+│  │  50.00 (disabled, grigio)                   [🇺🇸 USD ▼]       │    │
+│  └──────────────────────────────────────────────────────────────┘    │
+│  💡 PMC suggerito (8 TX)                       ▶ dettagli            │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Auto, utente clicca [USD ▼] → dropdown LIMITATO:**
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  ┌──────────────────────────────────────────────────────────────┐    │
+│  │  50.00                                      [🇺🇸 USD ▼]       │    │
+│  └──────────────────────────────────────────────────────────────┘    │
+│                                                 ┌───────────────┐    │
+│                                                 │ 🇺🇸 USD     ✓ │    │
+│                                                 │ 🇪🇺 EUR       │    │
+│                                                 │ 🇰🇷 KRW       │    │
+│                                                 └───────────────┘    │
+│  💡 PMC suggerito (8 TX)                       ▶ dettagli            │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Auto, dopo cambio valuta → ricalcolo:**
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  ┌──────────────────────────────────────────────────────────────┐    │
+│  │  auto (disabled)                            [🇪🇺 EUR ▼]       │    │
+│  └──────────────────────────────────────────────────────────────┘    │
+│  ⏳ Calcolo in corso…                                                │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Manual (utente ha cliccato Manual o ha editato l'amount):**
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  ┌──────────────────────────────────────────────────────────────┐    │
+│  │  175.00 (editabile)                         [🇺🇸 USD ▼]       │    │
+│  └──────────────────────────────────────────────────────────────┘    │
+│         ↑ tutte le 200+ valute nel dropdown                          │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### File da modificare
+
+| File | Modifica |
+|------|----------|
+| `WacPreviewSection.svelte` | Riscrivere `handleValueChange` (9.1), rimuovere opacity wrapper (9.2), rimuovere CurrencyChip (9.3) |
+| `CompactCashCell.svelte` | Aggiungere prop `currencyDisabled?: boolean` + `currencyOptions?: string[]` per limitare il dropdown in auto |
+| `TransactionFormModal.svelte` | `displayedCostBasis` derived (9.5), passare `availableCurrencies` a WacPreview per propagarlo al CompactCashCell |
+| `CurrencyChip.svelte` | ❌ ELIMINARE (o conservare non-usato) |
+
+### Ordine sub-step
+
+```
+9.1  Riscrivere handleValueChange (separare amount vs currency change)
+  ↓
+9.2  Rimuovere opacity-60 dal wrapper CompactCashCell
+  ↓
+9.3  Rimuovere CurrencyChip dalla suggestion line
+  ↓
+9.4  Prop currencyOptions su CompactCashCell → limitare dropdown in auto
+  ↓
+9.5  displayedCostBasis → mostrare WAC calcolato nel campo
+```
+
+---
+
 ## 🔗 Cross-links
 
 - **Parent (Round 2)**: [`plan-R3-SP-D-BugfixRound2.prompt.md`](./plan-R3-SP-D-BugfixRound2.prompt.md)
 - **Grandparent (Round 1)**: [`plan-R3-SP-D-BugfixRound1.prompt.md`](./plan-R3-SP-D-BugfixRound1.prompt.md)
 - **Phase 7 macro**: [`../phases/phase-07-transactions.md`](../phases/phase-07-transactions.md)
+- **Next (UX Polish)**: [`plan-R3-SP-D-WacCurrencyFix.prompt.md`](./plan-R3-SP-D-WacCurrencyFix.prompt.md)
 

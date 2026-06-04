@@ -182,29 +182,32 @@ class TestComputeWacFromTxlist:
 
 
 class TestDetermineTargetCurrency:
-    """Tests for determine_target_currency (FU-9 to FU-10)."""
+    """Tests for determine_target_currency (FU-9 to FU-10).
+
+    Current rule: currency of the most recent acquisition (by date).
+    Fallback: asset_currency when no acquisitions exist.
+    """
 
     # ------------------------------------------------------------------ FU-9
-    def test_fu9_most_frequent_wins(self):
-        """Most frequent acquisition currency wins."""
-        print_section("FU-9 — Most frequent currency wins")
+    def test_fu9_most_recent_wins(self):
+        """Most recent acquisition currency wins."""
+        print_section("FU-9 — Most recent currency wins")
         txs = [
-            _tx(tx_id=1, quantity="10", currency="USD"),
-            _tx(tx_id=2, quantity="10", currency="USD"),
-            _tx(tx_id=3, quantity="10", currency="EUR"),
+            _tx(tx_id=1, quantity="10", currency="USD", dt="2025-01-01"),
+            _tx(tx_id=2, quantity="10", currency="USD", dt="2025-02-01"),
+            _tx(tx_id=3, quantity="10", currency="EUR", dt="2025-03-01"),
         ]
-        result = determine_target_currency(txs, "EUR")
-        assert result == "USD"
-        print_success("FU-9: Most frequent (USD) wins ✓")
+        result = determine_target_currency(txs, "USD")
+        assert result == "EUR", f"Expected EUR (most recent), got {result}"
+        print_success("FU-9: Most recent (EUR) wins ✓")
 
     # ------------------------------------------------------------------ FU-10
-    def test_fu10_tie_asset_currency_wins(self):
-        """Tie → asset_currency preferred."""
-        print_section("FU-10 — Tie → asset_currency wins")
+    def test_fu10_fallback_asset_currency(self):
+        """No acquisitions → asset_currency fallback."""
+        print_section("FU-10 — No acquisitions → asset_currency")
         txs = [
-            _tx(tx_id=1, quantity="10", currency="USD"),
-            _tx(tx_id=2, quantity="10", currency="EUR"),
+            _tx(tx_id=1, quantity="-5", currency="USD", dt="2025-01-01"),
         ]
         result = determine_target_currency(txs, "EUR")
-        assert result == "EUR"
-        print_success("FU-10: Tie → asset_currency (EUR) wins ✓")
+        assert result == "EUR", f"Expected EUR (asset_currency fallback), got {result}"
+        print_success("FU-10: No acquisitions → asset_currency (EUR) ✓")

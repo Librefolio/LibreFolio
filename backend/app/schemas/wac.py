@@ -54,6 +54,15 @@ class WACQualifyingTX(BaseModel):
     fx_rate_used: Optional[SafeDecimal] = Field(None, description="FX rate applied (derived: converted/original)")
 
 
+class WACMissingPairInfo(BaseModel):
+    """A missing FX pair with all dates that needed conversion."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pair: str = Field(..., description="FX pair code (e.g. 'USD/EUR')")
+    dates: List[date_type] = Field(default_factory=list, description="Dates for which FX rate was needed but unavailable")
+
+
 class WACPreviewResultItem(BaseModel):
     """Result for a single WAC preview item.
 
@@ -68,7 +77,7 @@ class WACPreviewResultItem(BaseModel):
     # WAC inventory-aware
     wac: Optional[Currency] = Field(None, description="Calculated WAC per unit. None if FX conversion failed.")
     wac_qualifying_txs: List[WACQualifyingTX] = Field(default_factory=list)
-    wac_missing_pairs: List[str] = Field(default_factory=list)
+    wac_missing_pairs: List[WACMissingPairInfo] = Field(default_factory=list, description="Missing FX pairs with dates that needed conversion")
     # Asset price at date (useful for ADJUSTMENT scenario)
     asset_price: Optional[Currency] = Field(None, description="Asset close price at as_of_date (backward-filled)")
     asset_price_stale: Optional[BackwardFillInfo] = Field(None, description="Staleness of asset price")

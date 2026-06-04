@@ -161,9 +161,10 @@ test.describe('Asset Event Delete', () => {
         const blockedResults = body.results?.filter((r: any) => r.status === 'in_use') ?? [];
         expect(blockedResults.length, 'At least one event should be blocked (in_use)').toBeGreaterThan(0);
 
-        // Verify the blocked result includes accessible_transactions
-        const firstBlocked = blockedResults[0];
-        expect(firstBlocked.accessible_transactions.length).toBeGreaterThan(0);
+        // Find a blocked result with accessible_transactions (some may be hidden behind broker access)
+        const withAccessible = blockedResults.find((r: any) => r.accessible_transactions?.length > 0);
+        expect(withAccessible, 'At least one in_use result should have accessible_transactions for this user').toBeTruthy();
+        expect(withAccessible.accessible_transactions.length).toBeGreaterThan(0);
     });
 
     // ===================================================================
