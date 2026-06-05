@@ -13,9 +13,9 @@
 -->
 <script lang="ts">
     import {Clock, Info, RefreshCw, SkipForward, Timer, X} from 'lucide-svelte';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
     import type {SyncResult, SyncSection} from '$lib/utils/syncHelpers';
     import {formatTime} from '$lib/utils/syncHelpers';

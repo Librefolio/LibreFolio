@@ -5,8 +5,8 @@
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {AlertTriangle, X} from 'lucide-svelte';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
 
     const dispatch = createEventDispatcher<{
         confirm: {force: boolean};

@@ -33,7 +33,7 @@
     import {_ as t} from '$lib/i18n';
     import {buildAssetSyncToast} from '$lib/utils/syncToastHelpers';
     import {extractErrorMessage} from '$lib/utils/trySave';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
 
     interface BlockerInfo {
         assetId: number;

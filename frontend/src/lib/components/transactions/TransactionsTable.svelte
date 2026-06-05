@@ -34,7 +34,7 @@
     import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
     import {getStringBadgeStyle, getStringColor} from '$lib/utils/colors';
     import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currencyFormat';
-    import {formatTxQuantity} from './txDisplayHelpers';
+    import {formatTxQuantity} from './shared/txDisplayHelpers';
     import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES, getEventTypeEmoji} from '$lib/stores/transactionTypeStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {getRoleSvgHtml} from '$lib/utils/brokerRoleHelpers';

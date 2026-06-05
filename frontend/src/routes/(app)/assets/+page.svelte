@@ -29,9 +29,9 @@
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
-    import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
+    import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import ChartSettingsModal from '$lib/components/charts/ChartSettingsModal.svelte';
-    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';

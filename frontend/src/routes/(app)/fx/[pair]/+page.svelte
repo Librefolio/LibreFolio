@@ -21,7 +21,7 @@
     import {goBack} from '$lib/stores/navigationStore';
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
-    import PageSyncModal from '$lib/components/ui/PageSyncModal.svelte';
+    import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
     import type {EventMarker} from '$lib/components/charts/PriceChartFull.svelte';
     import ChartAestheticsSection from '$lib/components/charts/ChartAestheticsSection.svelte';
@@ -31,8 +31,8 @@
     import FxDataEditorSection from '$lib/components/fx/FxDataEditorSection.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import FxPriceSummary from '$lib/components/fx/FxPriceSummary.svelte';
-    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
-    import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
+    import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {RenderedSignal, SignalConfig} from '$lib/charts/signals';
     import {signalFromConfig} from '$lib/charts/signals';

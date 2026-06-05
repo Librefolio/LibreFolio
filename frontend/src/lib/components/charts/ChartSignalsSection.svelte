@@ -12,7 +12,7 @@
 <script lang="ts">
     import {ArrowLeftRight, BarChart3, Coins, ExternalLink, Info, RotateCw, Trash2, AlertTriangle} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';

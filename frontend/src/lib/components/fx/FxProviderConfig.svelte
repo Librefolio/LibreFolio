@@ -8,7 +8,7 @@
 <script lang="ts">
     import {AlertTriangle, ArrowLeftRight, Info, Link, Plus, Save, Trash2, Undo2} from 'lucide-svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {getPriorityBadgeStyle, getProviderColor} from '$lib/utils/colors';
     import {getCachedFxProviders} from '$lib/stores/currencyGraphStore';
     import {_ as t} from '$lib/i18n';

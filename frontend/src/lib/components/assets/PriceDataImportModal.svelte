@@ -11,7 +11,7 @@
 <script lang="ts">
     import type {CsvColumnDef, ParsedRow} from '$lib/components/ui/data-editor/CsvEditor.svelte';
     import DataImportModal from '$lib/components/ui/data-editor/DataImportModal.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {BookOpen} from 'lucide-svelte';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
     import {_ as t} from '$lib/i18n';

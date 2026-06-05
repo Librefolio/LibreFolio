@@ -22,9 +22,9 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
-    import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
+    import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ErasableNumberCell from './ErasableNumberCell.svelte';
 
     // =========================================================================

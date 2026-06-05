@@ -143,6 +143,7 @@ def _check_orphan_tests() -> int:
     Checks:
     - Backend: test_*.py files in each test directory vs registered in _backend_*.py
     - Frontend: *.spec.ts files in e2e/ vs referenced in _frontend_*.py
+    - Frontend unit: src/**/*.test.ts vs explicit Vitest paths referenced in _frontend_*.py
 
     Returns 0 if no orphans, 1 if orphans found.
     """
@@ -214,6 +215,32 @@ def _check_orphan_tests() -> int:
                 print(f"     • {s}")
         else:
             print(f"  {Colors.GREEN}✓ frontend/e2e/{Colors.NC}  (all {len(actual_specs)} specs registered)")
+
+    # ── Frontend unit: scan src/**/*.test.ts ──
+    frontend_src_dir = project_root / "frontend" / "src"
+    if frontend_src_dir.exists():
+        actual_unit_tests = sorted(str(f.relative_to(project_root / "frontend")).replace("\\", "/") for f in frontend_src_dir.rglob("*.test.ts"))
+
+        # Collect explicit Vitest paths from frontend runner files.
+        # We intentionally require concrete file-path wiring here; generic
+        # `vitest run` / `npm run test:unit` commands are not enough to prove a
+        # specific unit test has been consciously registered in the CLI.
+        frontend_runner_files = list(runner_dir.glob("_frontend_*.py"))
+        registered_unit_tests = set()
+        for rf in frontend_runner_files:
+            content = rf.read_text()
+            for m in re.finditer(r"(src/[^\"']+\.test\.ts)", content):
+                registered_unit_tests.add(m.group(1))
+
+        orphan_unit_tests = [t for t in actual_unit_tests if t not in registered_unit_tests]
+
+        if orphan_unit_tests:
+            orphans_found = True
+            print(f"  {Colors.RED}❌ frontend/src/**/*.test.ts{Colors.NC}  ({len(orphan_unit_tests)} orphan{'s' if len(orphan_unit_tests) > 1 else ''})")
+            for t in orphan_unit_tests:
+                print(f"     • {t}")
+        else:
+            print(f"  {Colors.GREEN}✓ frontend/src/**/*.test.ts{Colors.NC}  (all {len(actual_unit_tests)} unit tests registered)")
 
     # ── Summary ──
     print()

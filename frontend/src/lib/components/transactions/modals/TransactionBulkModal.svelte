@@ -29,11 +29,11 @@
     import {currentLanguage} from '$lib/stores/language';
     import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save, Unlink, Link2, Lightbulb} from 'lucide-svelte';
 
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
-    import TransactionResultBanner from './TransactionResultBanner.svelte';
-    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import TransactionResultBanner from '../shared/TransactionResultBanner.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
 
@@ -59,8 +59,8 @@
     import TransactionPickerModal from './TransactionPickerModal.svelte';
     import {txStoreGet, txStoreCount} from '$lib/stores/txStore.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
-    import type {FormModalItems} from './resolveFormItems';
-    import type {TXReadItem, ValidationIssue} from './types';
+    import type {FormModalItems} from '../shared/resolveFormItems';
+    import type {TXReadItem, ValidationIssue} from '../types';
 
     // =========================================================================
     // Types

@@ -19,9 +19,9 @@
     import {zodiosApi} from '$lib/api';
     import {trySave} from '$lib/utils/trySave';
     import {ArrowDownUp, ArrowLeftRight, Lock, RotateCw, X} from 'lucide-svelte';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import {CurrencySearchSelect, FxProviderSelect} from '$lib/components/ui/select';
     import type {ChainStep} from '$lib/utils/currencyGraph';

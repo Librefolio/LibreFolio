@@ -15,7 +15,7 @@
     import {File as FileIcon, FolderOpen, Image as ImageIcon, LayoutGrid, Link, List, Search, Upload, X} from 'lucide-svelte';
     import LazyImage from './LazyImage.svelte';
     import FileGrid from '$lib/components/files/FileGrid.svelte';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import type {ColumnDef} from '$lib/components/table';
     import {DataTable} from '$lib/components/table';
     import type {UploadedFile} from '$lib/types';

@@ -7,8 +7,8 @@
     import {AlertTriangle, X} from 'lucide-svelte';
     import BrokerForm from './BrokerForm.svelte';
     import {zodiosApi} from '$lib/api';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {trySave} from '$lib/utils/trySave';
     import {mergeBrokers} from '$lib/stores/brokerStore';
 

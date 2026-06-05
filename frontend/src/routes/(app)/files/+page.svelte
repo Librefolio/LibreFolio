@@ -26,8 +26,8 @@
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/brokerStore';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal, ImageEditModal} from '$lib/components/ui/media';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
     import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
