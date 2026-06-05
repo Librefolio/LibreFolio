@@ -1,7 +1,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {Info, Shield, Sliders, User} from 'lucide-svelte';
-    import {auth} from '$lib/stores/auth';
+    import {auth} from '$lib/stores/app/auth';
     import ProfileTab from '$lib/components/settings/tabs/ProfileTab.svelte';
     import PreferencesTab from '$lib/components/settings/tabs/PreferencesTab.svelte';
     import AboutTab from '$lib/components/settings/tabs/AboutTab.svelte';

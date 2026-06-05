@@ -10,13 +10,13 @@
     import TransactionResultBanner from '../shared/TransactionResultBanner.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import {getBrokerInfo, getAllBrokers, getBrokerRole} from '$lib/stores/brokerStore';
-    import {getAssetInfo} from '$lib/stores/assetStore';
-    import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
+    import {getBrokerInfo, getAllBrokers, getBrokerRole} from '$lib/stores/reference/brokerStore';
+    import {getAssetInfo} from '$lib/stores/reference/assetStore';
+    import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {getStringBadgeStyle} from '$lib/utils/colors';
     import {formatTxQuantity, formatTxCash} from '../shared/txDisplayHelpers';
-    import type {BrokerLike} from '$lib/utils/brokerColors';
+    import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 
     interface TXReadItem {
         id: number;

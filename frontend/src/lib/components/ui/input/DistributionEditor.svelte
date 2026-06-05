@@ -29,13 +29,13 @@
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
-    import {currentLanguage} from '$lib/stores/language';
-    import type {CountryInfo} from '$lib/stores/countryStore';
-    import {ensureCountriesLoaded, getAllCountries} from '$lib/stores/countryStore';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import type {CountryInfo} from '$lib/stores/reference/countryStore';
+    import {ensureCountriesLoaded, getAllCountries} from '$lib/stores/reference/countryStore';
     import {getSectorKeysList, sectorI18nKey} from '$lib/utils/assetTypes';
-    import {ensureSectorsLoaded} from '$lib/stores/sectorStore';
+    import {ensureSectorsLoaded} from '$lib/stores/reference/sectorStore';
     import {CountrySearchSelect, SectorSearchSelect} from '$lib/components/ui/select';
-    import {generateUUID} from '$lib/utils/uuid';
+    import {generateUUID} from '$lib/utils/core/uuid';
 
     // =========================================================================
     // Types

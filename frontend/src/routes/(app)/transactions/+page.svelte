@@ -7,15 +7,14 @@
     import {Plus, Upload, Pencil, Copy, Trash2, RefreshCw, Link2, Unlink} from 'lucide-svelte';
 
     import {zodiosApi} from '$lib/api';
-    import {commitTransactions, validateTransactions} from '$lib/utils/txCommitApi';
-    import {ensureTxTypesLoaded} from '$lib/stores/txTypeStore';
-    import {ensureAssetsLoaded} from '$lib/stores/assetStore';
-    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/brokerStore';
-    import {ensurePluginIconsLoaded} from '$lib/utils/brokerHelpers';
-    import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
-    import {currentLanguage} from '$lib/stores/language';
-    import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/stores/transactionTypeStore';
-    import type {BrokerLike} from '$lib/utils/brokerColors';
+    import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
+    import {ensureAssetsLoaded} from '$lib/stores/reference/assetStore';
+    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
+    import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
+    import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/stores/transactions/transactionTypeStore';
+    import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
     import {
         PromoteMergeModal,
@@ -30,16 +29,16 @@
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
-    import {getBrokerInfo, getPairedAccessLevel, canEditBroker, canEditPaired} from '$lib/stores/brokerStore';
-    import {getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
-    import {toasts} from '$lib/stores/toastStore.svelte';
-    import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
+    import {getBrokerInfo, getPairedAccessLevel, canEditBroker, canEditPaired} from '$lib/stores/reference/brokerStore';
+    import {getAssetInfo, getAllAssets} from '$lib/stores/reference/assetStore';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
-    import {getRoleSvgHtml} from '$lib/utils/brokerRoleHelpers';
-    import {getBrokerRole} from '$lib/stores/brokerStore';
-    import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
-    import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/stores/txStore.svelte';
+    import {getBrokerIconUrlById} from '$lib/utils/broker/brokerHelpers';
+    import {getRoleSvgHtml} from '$lib/utils/broker/brokerRoleHelpers';
+    import {getBrokerRole} from '$lib/stores/reference/brokerStore';
+    import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
+    import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/stores/transactions/txStore.svelte';
     import {applyTransactionColumnFilters, buildTransactionsFiltersUrl, parseTransactionFilters, toTransactionColumnFilters, type TransactionFilterMap} from './filterState';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
 
@@ -220,7 +219,7 @@
         // tooltip) render with the proper "$ 🇺🇸 USD" format instead of the
         // bare-code fallback. `$currencyStoreVersion` is referenced inside
         // the cell builders so they re-render once data arrives.
-        await Promise.all([ensureTxTypesLoaded(), ensureTypesLoaded(), loadBrokers(), ensureCurrenciesLoaded($currentLanguage)]);
+        await Promise.all([ensureTypesLoaded(), loadBrokers(), ensureCurrenciesLoaded($currentLanguage)]);
         await reload();
         urlInitialized = true;
     });

@@ -33,9 +33,9 @@
 <script lang="ts">
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/language';
+    import {currentLanguage} from '$lib/stores/app/language';
     import {X, ArrowRight, ArrowDown, Check, Pencil, Save, Info} from 'lucide-svelte';
-    import {getRoleIcon, getRoleIconColor} from '$lib/utils/brokerRoleHelpers';
+    import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
 
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
@@ -56,20 +56,20 @@
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
 
     import {zodiosApi} from '$lib/api';
-    import {ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
-    import {ensureAssetsLoaded, getAssetInfo, getAllAssets, refreshAllAssets} from '$lib/stores/assetStore';
-    import {toasts} from '$lib/stores/toastStore.svelte';
-    import {ensureBrokersLoaded, getAllBrokers, getEditableBrokers, brokerStoreVersion, refreshAllBrokers, getBrokerInfo, getBrokerRole, type BrokerInfo} from '$lib/stores/brokerStore';
-    import {type TransactionTypeCode, type PairFormLayout, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, getSwapGroup, typesVersion} from '$lib/stores/transactionTypeStore';
-    import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
-    import {commitTransactions, validateTransactions} from '$lib/utils/txCommitApi';
-    import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
-    import {generateUUID} from '$lib/utils/uuid';
-    import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
-    import {computeSignHint} from '$lib/utils/signHintColor';
-    import {buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/txPayloadHelpers';
+    import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
+    import {ensureAssetsLoaded, getAssetInfo, getAllAssets, refreshAllAssets} from '$lib/stores/reference/assetStore';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {ensureBrokersLoaded, getAllBrokers, getEditableBrokers, brokerStoreVersion, refreshAllBrokers, getBrokerInfo, getBrokerRole, type BrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {type TransactionTypeCode, type PairFormLayout, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, getSwapGroup, typesVersion} from '$lib/stores/transactions/transactionTypeStore';
+    import {createValidateScheduler} from '$lib/utils/transactions/useValidateScheduler.svelte';
+    import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
+    import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
+    import {generateUUID} from '$lib/utils/core/uuid';
+    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {computeSignHint} from '$lib/utils/transactions/signHintColor';
+    import {buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/transactions/txPayloadHelpers';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
-    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/fxConversionHelper';
+    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
     import type {TXReadItem} from '../types';
     import {type FormModalItems, isInaccessible} from '../shared/resolveFormItems';
 
@@ -1242,7 +1242,7 @@
     // =========================================================================
 
     /** Label suffix for a sign rule: (+), (−), (≠0), or empty. */
-    function signLabel(sign: import('$lib/stores/transactionTypeStore').SignRule): string {
+    function signLabel(sign: import('$lib/stores/transactions/transactionTypeStore').SignRule): string {
         switch (sign) {
             case 'positive':
                 return '(+)';
@@ -1256,7 +1256,7 @@
     }
 
     /** Hint text below the field explaining the sign constraint. */
-    function signHintText(sign: import('$lib/stores/transactionTypeStore').SignRule): string {
+    function signHintText(sign: import('$lib/stores/transactions/transactionTypeStore').SignRule): string {
         switch (sign) {
             case 'positive':
                 return $t('transactions.form.hintSignPositive');

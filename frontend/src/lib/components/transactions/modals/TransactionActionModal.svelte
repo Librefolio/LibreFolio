@@ -10,11 +10,11 @@
     import {Unlink, Link2, ArrowDown} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
-    import {getBrokerInfo, getAllBrokers, getBrokerRole} from '$lib/stores/brokerStore';
-    import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
+    import {getBrokerInfo, getAllBrokers, getBrokerRole} from '$lib/stores/reference/brokerStore';
+    import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getStringBadgeStyle} from '$lib/utils/colors';
     import {formatTxQuantity, formatTxCash} from '../shared/txDisplayHelpers';
-    import type {BrokerLike} from '$lib/utils/brokerColors';
+    import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 
     /** Client-side mirror of backend SPLIT_TYPE_MAP. */
     const SPLIT_TYPE_MAP: Record<string, [string, string]> = {

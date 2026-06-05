@@ -18,7 +18,7 @@
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import FxDataImportModal from './FxDataImportModal.svelte';
 
     // =========================================================================

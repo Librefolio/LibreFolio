@@ -11,8 +11,8 @@
     import {createEventDispatcher} from 'svelte';
     import {t} from '$lib/i18n';
     import {AlertTriangle, File as FileIcon, ImageIcon, Pencil, RefreshCw, Upload, X} from 'lucide-svelte';
-    import {isImageFile} from '$lib/utils/imageCrop';
-    import {formatBytes} from '$lib/utils/upload';
+    import {isImageFile} from '$lib/utils/files/imageCrop';
+    import {formatBytes} from '$lib/utils/files/upload';
 
     export let maxSizeMB: number = 10;
     export let multiple: boolean = true;

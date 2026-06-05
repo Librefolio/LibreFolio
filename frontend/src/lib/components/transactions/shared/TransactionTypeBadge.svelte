@@ -11,7 +11,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
+    import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
 
     interface Props {
         /** Transaction type code (e.g. 'BUY', 'FX_CONVERSION'). */

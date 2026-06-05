@@ -15,7 +15,7 @@
     import {_ as t} from '$lib/i18n';
     import SearchSelect from '$lib/components/ui/select/SearchSelect.svelte';
     import type {SelectOption} from '$lib/components/ui/select/types';
-    import {TX_TYPES, getTransactionTypeIconUrl, getTypeRule, isTypesLoaded, typesVersion, type TransactionTypeCode} from '$lib/stores/transactionTypeStore';
+    import {TX_TYPES, getTransactionTypeIconUrl, getTypeRule, isTypesLoaded, typesVersion, type TransactionTypeCode} from '$lib/stores/transactions/transactionTypeStore';
 
     interface Props {
         /** Currently selected type. */

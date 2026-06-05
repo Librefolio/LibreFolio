@@ -13,8 +13,8 @@ import {zodiosApi} from '$lib/api';
 import {debug} from '$lib/debug';
 import type {AuthState, AuthUser} from '$lib/types';
 import {isAxiosError} from 'axios';
-import {currentLanguage} from '$lib/stores/language';
-import {userSettings} from '$lib/stores/settings';
+import {currentLanguage} from '$lib/stores/app/language';
+import {userSettings} from '$lib/stores/app/settings';
 
 // Re-export types for backward compatibility
 export type {AuthUser, AuthState} from '$lib/types';
@@ -71,7 +71,7 @@ function createAuthStore() {
 
                     // Apply theme preference
                     if (settings.theme) {
-                        const {applyTheme} = await import('$lib/stores/themeStore');
+                        const {applyTheme} = await import('$lib/stores/app/themeStore');
                         applyTheme(settings.theme as 'light' | 'dark' | 'auto');
                     }
 

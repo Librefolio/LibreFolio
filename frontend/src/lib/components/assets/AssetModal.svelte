@@ -31,12 +31,12 @@
     import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {trySave} from '$lib/utils/trySave';
     import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';
-    import {generateUUID} from '$lib/utils/uuid';
+    import {generateUUID} from '$lib/utils/core/uuid';
     import {ensureAssetProvidersCached, isParametricProvider} from '$lib/utils/providerHelpers';
-    import {mergeAssets, invalidateAfterMutation} from '$lib/stores/assetStore';
+    import {mergeAssets, invalidateAfterMutation} from '$lib/stores/reference/assetStore';
 
     // =========================================================================
     // Types

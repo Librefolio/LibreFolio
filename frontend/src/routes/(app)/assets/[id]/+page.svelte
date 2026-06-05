@@ -18,10 +18,10 @@
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
-    import {goBack} from '$lib/stores/navigationStore';
+    import {goBack} from '$lib/stores/app/navigationStore';
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Coins, ExternalLink, Info, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, X} from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
-    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
     import type {EventMarker} from '$lib/components/charts/PriceChartFull.svelte';
     import ChartAestheticsSection from '$lib/components/charts/ChartAestheticsSection.svelte';
@@ -40,21 +40,22 @@
     import type {RenderedSignal, SignalConfig} from '$lib/charts/signals';
     import {signalFromConfig} from '$lib/charts/signals';
     import {getSettingsForPair, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
-    import {currentLanguage} from '$lib/stores/language';
+    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {currentLanguage} from '$lib/stores/app/language';
     import type {ViewMode, ChartType} from '$lib/components/charts/ChartToolbar.svelte';
-    import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
+    import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
     import {ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
     import {getAssetTypeIconUrl, buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
+    import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {fetchCurrentPrices} from '$lib/services/livePriceService';
-    import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/syncToastHelpers';
+    import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
 
     // =========================================================================
@@ -1092,10 +1093,7 @@
         dateEnd = newEnd;
         setDateRange(newStart, newEnd);
         // Sync URL for shareability
-        const url = new URL(window.location.href);
-        url.searchParams.set('start', dateStart);
-        url.searchParams.set('end', dateEnd);
-        history.replaceState(history.state, '', url.toString());
+        replaceHistoryDateRange(dateStart, dateEnd);
         await loadChartData();
         await maybeLoadComparison();
     }

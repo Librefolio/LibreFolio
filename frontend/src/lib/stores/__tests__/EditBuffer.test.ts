@@ -2,8 +2,8 @@
  * Unit tests for EditBuffer — Bidirectional edit buffer for pending chart modifications.
  */
 import {describe, expect, it, vi} from 'vitest';
-import {EditBuffer} from '../EditBuffer';
-import type {TimeSeriesPoint} from '../TimeSeriesStore';
+import {EditBuffer} from '../core/EditBuffer';
+import type {TimeSeriesPoint} from '../core/TimeSeriesStore';
 
 interface TestPoint extends TimeSeriesPoint {
     date: string;

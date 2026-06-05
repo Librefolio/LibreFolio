@@ -3,10 +3,10 @@
     import {browser} from '$app/environment';
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {auth} from '$lib/stores/auth';
+    import {auth} from '$lib/stores/app/auth';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
-    import {userSettings} from '$lib/stores/settings';
-    import {resetNavDepth} from '$lib/stores/navigationStore';
+    import {userSettings} from '$lib/stores/app/settings';
+    import {resetNavDepth} from '$lib/stores/app/navigationStore';
     import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, User, X} from 'lucide-svelte';
     import {APP_VERSION} from '$lib/version';
 

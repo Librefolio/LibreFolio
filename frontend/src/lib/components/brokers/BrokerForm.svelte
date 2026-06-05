@@ -4,7 +4,7 @@
      */
     import {createEventDispatcher, onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {userSettings} from '$lib/stores/settings';
+    import {userSettings} from '$lib/stores/app/settings';
     import {CurrencySearchSelect, ImportPluginSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';

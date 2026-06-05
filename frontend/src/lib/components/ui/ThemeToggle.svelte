@@ -6,7 +6,7 @@
      */
     import {onMount} from 'svelte';
     import {Moon, Sun} from 'lucide-svelte';
-    import {applyTheme, getCurrentResolvedTheme, getStoredThemePreference, initThemeListener} from '$lib/stores/themeStore';
+    import {applyTheme, getCurrentResolvedTheme, getStoredThemePreference, initThemeListener} from '$lib/stores/app/themeStore';
 
     let theme: 'light' | 'dark' = 'light';
     let mounted = false;

@@ -10,7 +10,7 @@
 
 import {zodiosApi} from '$lib/api';
 import type {SignalConfig} from '$lib/charts/signals';
-import {getCurrencyInfo} from '$lib/stores/currencyStore';
+import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 
 export interface ComparisonAssetMeta {
     id: number;

@@ -14,11 +14,11 @@
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
-    import {formatBytes} from '$lib/utils/upload';
+    import {formatBytes} from '$lib/utils/files/upload';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import {Check, Download, Eye, File as FileIcon, FileSpreadsheet, FileText, Image as ImageIcon, Link2, Search, Trash2, X} from 'lucide-svelte';
     import type {UploadedFile} from '$lib/types';
-    import {getPreviewTypeForUploadedFile} from '$lib/utils/filePreview';
+    import {getPreviewTypeForUploadedFile} from '$lib/utils/files/filePreview';
 
     interface Props {
         /** Files to display */

@@ -10,7 +10,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {trySave} from '$lib/utils/trySave';
-    import {mergeBrokers} from '$lib/stores/brokerStore';
+    import {mergeBrokers} from '$lib/stores/reference/brokerStore';
 
     const dispatch = createEventDispatcher<{
         close: void;

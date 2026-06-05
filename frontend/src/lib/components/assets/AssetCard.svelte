@@ -12,8 +12,8 @@
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import AssetIcon from './AssetIcon.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
-    import {currentLanguage} from '$lib/stores/language';
+    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {currentLanguage} from '$lib/stores/app/language';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';

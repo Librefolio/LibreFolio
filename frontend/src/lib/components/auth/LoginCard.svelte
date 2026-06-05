@@ -1,7 +1,7 @@
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
-    import {auth, authError, isAuthLoading} from '$lib/stores/auth';
+    import {auth, authError, isAuthLoading} from '$lib/stores/app/auth';
     import {goto} from '$app/navigation';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
 

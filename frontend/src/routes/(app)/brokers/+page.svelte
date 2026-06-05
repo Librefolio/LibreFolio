@@ -6,7 +6,7 @@
     import BrokerCard from '$lib/components/brokers/BrokerCard.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import DeleteBrokerDialog from '$lib/components/brokers/DeleteBrokerDialog.svelte';
-    import {refreshAllBrokers, getAllBrokers, invalidateBroker} from '$lib/stores/brokerStore';
+    import {refreshAllBrokers, getAllBrokers, invalidateBroker} from '$lib/stores/reference/brokerStore';
     import type {Broker} from '$lib/types';
 
     // State

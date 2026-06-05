@@ -4,7 +4,7 @@
      */
     import {createEventDispatcher, onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/language';
+    import {currentLanguage} from '$lib/stores/app/language';
     import {zodiosApi} from '$lib/api';
     import {X} from 'lucide-svelte';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';

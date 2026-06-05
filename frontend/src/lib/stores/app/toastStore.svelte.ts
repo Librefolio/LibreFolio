@@ -5,14 +5,14 @@
  * Uses $state for reactivity. Auto-dismisses after configurable duration.
  *
  * Usage:
- *   import { toasts } from '$lib/stores/toastStore.svelte';
+ *   import { toasts } from '$lib/stores/app/toastStore.svelte';
  *   toasts.success('Operation completed');
  *   toasts.error('Something went wrong', 10000);
  *   toasts.warning('Partial data');
  *   toasts.info('Note: ...');
  */
 
-import {generateUUID} from '$lib/utils/uuid';
+import {generateUUID} from '$lib/utils/core/uuid';
 import {debug} from '$lib/debug';
 
 export type ToastVariant = 'success' | 'error' | 'warning' | 'info';

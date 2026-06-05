@@ -28,17 +28,17 @@
     import DataTablePagination from '$lib/components/table/DataTablePagination.svelte';
     import type {ColumnDef, CellContent, FilterValue, RowAction, SortState} from '$lib/components/table/types';
 
-    import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/assetStore';
-    import {ensureCurrenciesLoaded, currencyStoreVersion} from '$lib/stores/currencyStore';
-    import {getBrokerColor, type BrokerLike} from '$lib/utils/brokerColors';
-    import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
+    import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
+    import {ensureCurrenciesLoaded, currencyStoreVersion} from '$lib/stores/reference/currencyStore';
+    import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/broker/brokerHelpers';
     import {getStringBadgeStyle, getStringColor} from '$lib/utils/colors';
-    import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currencyFormat';
+    import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {formatTxQuantity} from './shared/txDisplayHelpers';
-    import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES, getEventTypeEmoji} from '$lib/stores/transactionTypeStore';
+    import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES, getEventTypeEmoji} from '$lib/stores/transactions/transactionTypeStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {getRoleSvgHtml} from '$lib/utils/brokerRoleHelpers';
-    import {getBrokerRole, canEditBroker, getPairedAccessLevel, getBrokerInfo, brokerStoreVersion} from '$lib/stores/brokerStore';
+    import {getRoleSvgHtml} from '$lib/utils/broker/brokerRoleHelpers';
+    import {getBrokerRole, canEditBroker, getPairedAccessLevel, getBrokerInfo, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
     import TxTooltipCell from './cells/TxTooltipCell.svelte';
     import TxLinksCell from './cells/TxLinksCell.svelte';
     import TxTypeIconCell from './cells/TxTypeIconCell.svelte';

@@ -14,11 +14,11 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {trySave} from '$lib/utils/trySave';
-    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {Check, ChevronDown, Crown, Eye, Loader2, Pencil, Plus, RotateCcw, Save, Search, Trash2, Users, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {ConfirmModal} from '$lib/components/table';
-    import {getRoleIcon as _getRoleIcon, getRoleIconColor as _getRoleIconColor, getRoleShortLabel as _getRoleShortLabel} from '$lib/utils/brokerRoleHelpers';
+    import {getRoleIcon as _getRoleIcon, getRoleIconColor as _getRoleIconColor, getRoleShortLabel as _getRoleShortLabel} from '$lib/utils/broker/brokerRoleHelpers';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import SemiDonutChart from '$lib/components/charts/SemiDonutChart.svelte';

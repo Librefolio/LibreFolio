@@ -18,9 +18,9 @@
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
-    import {goBack} from '$lib/stores/navigationStore';
+    import {goBack} from '$lib/stores/app/navigationStore';
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
-    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
     import type {EventMarker} from '$lib/components/charts/PriceChartFull.svelte';
@@ -37,18 +37,19 @@
     import type {RenderedSignal, SignalConfig} from '$lib/charts/signals';
     import {signalFromConfig} from '$lib/charts/signals';
     import {getSettingsForPair, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
-    import {currentLanguage} from '$lib/stores/language';
+    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {currentLanguage} from '$lib/stores/app/language';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
-    import {setCardInverted} from '$lib/stores/fxCardInversionStore';
+    import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
-    import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
+    import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
-    import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/syncToastHelpers';
+    import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
 
     // =========================================================================
@@ -515,10 +516,7 @@
         dateEnd = newEnd;
         setDateRange(newStart, newEnd);
         // Sync URL for shareability
-        const url = new URL(window.location.href);
-        url.searchParams.set('start', dateStart);
-        url.searchParams.set('end', dateEnd);
-        history.replaceState(history.state, '', url.toString());
+        replaceHistoryDateRange(dateStart, dateEnd);
         await loadChartData();
         await maybeLoadComparison();
     }

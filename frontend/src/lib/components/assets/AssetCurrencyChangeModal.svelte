@@ -29,9 +29,9 @@
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
     import {downloadAssetBackup, type BackupFormat, type BackupKind} from '$lib/api/backupDownload';
-    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {_ as t} from '$lib/i18n';
-    import {buildAssetSyncToast} from '$lib/utils/syncToastHelpers';
+    import {buildAssetSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {extractErrorMessage} from '$lib/utils/trySave';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
 

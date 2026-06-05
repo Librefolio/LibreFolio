@@ -11,10 +11,10 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
     import {ArrowLeftRight, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
-    import {isCardInverted, setCardInverted} from '$lib/stores/fxCardInversionStore';
-    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
+    import {isCardInverted, setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
+    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {fxProviderBadgeHtml} from '$lib/utils/providerHelpers';
-    import {currentLanguage} from '$lib/stores/language';
+    import {currentLanguage} from '$lib/stores/app/language';
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {fxProvidersVersion} from '$lib/stores/currencyGraphStore';
 

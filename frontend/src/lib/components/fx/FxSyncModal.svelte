@@ -9,10 +9,10 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
-    import type {SyncResult, SyncSection} from '$lib/utils/syncHelpers';
-    import {formatElapsed, STATUS_COLORS, STATUS_ICONS} from '$lib/utils/syncHelpers';
+    import type {SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
+    import {formatElapsed, STATUS_COLORS, STATUS_ICONS} from '$lib/utils/sync/syncHelpers';
     import {DEFAULT_PROVIDER_COLOR, formatSyncDetail, getFxProviderIconUrl, parseProviderChain, PROVIDER_COLORS} from '$lib/utils/providerHelpers';
-    import {getCurrencyInfo} from '$lib/stores/currencyStore';
+    import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
 
     interface Props {

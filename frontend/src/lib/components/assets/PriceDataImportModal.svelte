@@ -13,7 +13,7 @@
     import DataImportModal from '$lib/components/ui/data-editor/DataImportModal.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {BookOpen} from 'lucide-svelte';
-    import {getCurrencyInfo} from '$lib/stores/currencyStore';
+    import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {_ as t} from '$lib/i18n';
 
     // =========================================================================

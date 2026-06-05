@@ -13,9 +13,9 @@
  */
 
 import type MultiDirectedGraph from 'graphology';
-import {buildCurrencyGraph, type ChainStep, type EdgeAttributes, findAllPaths, type ProviderInfo} from '$lib/utils/currencyGraph';
+import {buildCurrencyGraph, type ChainStep, type EdgeAttributes, findAllPaths, type ProviderInfo} from '$lib/utils/currency/currencyGraph';
 import {zodiosApi} from '$lib/api';
-import {ensureCurrenciesLoaded, getAllCurrencies, isCurrenciesLoaded} from '$lib/stores/currencyStore';
+import {ensureCurrenciesLoaded, getAllCurrencies, isCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
 /**
  * Reactive version counter — incremented when FX providers are cached.
  * Subscribe in Svelte components to trigger re-evaluation when providers load.

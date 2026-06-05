@@ -9,7 +9,7 @@
     import LanguageSelector from '$lib/components/layout/LanguageSelector.svelte';
     import HelpMenu from '$lib/components/layout/HelpMenu.svelte';
     import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
-    import {auth} from '$lib/stores/auth';
+    import {auth} from '$lib/stores/app/auth';
     import {_} from '$lib/i18n';
     import {Coffee} from 'lucide-svelte';
     import {page} from '$app/stores';

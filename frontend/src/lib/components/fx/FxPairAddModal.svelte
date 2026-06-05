@@ -20,13 +20,13 @@
     import {trySave} from '$lib/utils/trySave';
     import {ArrowDownUp, ArrowLeftRight, Lock, RotateCw, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
-    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import {CurrencySearchSelect, FxProviderSelect} from '$lib/components/ui/select';
-    import type {ChainStep} from '$lib/utils/currencyGraph';
+    import type {ChainStep} from '$lib/utils/currency/currencyGraph';
     import {getRegisteredPairs} from '$lib/stores/fxStoreRegistry';
-    import {currentLanguage} from '$lib/stores/language';
+    import {currentLanguage} from '$lib/stores/app/language';
 
     // =========================================================================
     // Props (Svelte 5)

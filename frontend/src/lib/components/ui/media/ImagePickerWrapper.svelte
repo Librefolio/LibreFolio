@@ -21,7 +21,7 @@
 <script lang="ts">
     import AssetPickerModal from './AssetPickerModal.svelte';
     import ImageEditModal from './ImageEditModal.svelte';
-    import type {PresetName} from '$lib/utils/imageCrop';
+    import type {PresetName} from '$lib/utils/files/imageCrop';
 
     interface Props {
         /** Whether the picker modal is open */

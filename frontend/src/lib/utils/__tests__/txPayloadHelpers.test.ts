@@ -2,8 +2,8 @@
  * Unit tests for txPayloadHelpers — pure payload building functions.
  */
 import {describe, expect, it} from 'vitest';
-import {applySignRules, buildSignedCash, fieldEq, buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, buildBatchPayload, PATCHABLE_FIELDS} from '../txPayloadHelpers';
-import type {TxFields, TxOriginal, CashValue, ResolvedOp, TxDualSide} from '../txPayloadHelpers';
+import {applySignRules, buildSignedCash, fieldEq, buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, buildBatchPayload, PATCHABLE_FIELDS} from '../transactions/txPayloadHelpers';
+import type {TxFields, TxOriginal, CashValue, ResolvedOp, TxDualSide} from '../transactions/txPayloadHelpers';
 
 // =============================================================================
 //  Mock TypeRule factory

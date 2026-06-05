@@ -84,7 +84,7 @@ export function buildIdentifiersList(asset: Record<string, unknown>): [string, s
 // SECTOR KEYS — loaded from backend via GET /utilities/sectors
 // =============================================================================
 
-import {getSectorKeys} from '$lib/stores/sectorStore';
+import {getSectorKeys} from '$lib/stores/reference/sectorStore';
 
 /**
  * Static fallback used before sectorStore is loaded.

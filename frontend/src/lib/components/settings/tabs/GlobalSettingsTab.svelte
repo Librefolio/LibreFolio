@@ -7,7 +7,7 @@
     import {ChevronDown, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
     import {CurrencySearchSelect, type SelectOption, SimpleSelect} from '$lib/components/ui/select';
     import type {GlobalSetting} from '$lib/types';
-    import {globalSettings} from '$lib/stores/globalSettings';
+    import {globalSettings} from '$lib/stores/app/globalSettings';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import SettingToggle from '$lib/components/settings/SettingToggle.svelte';

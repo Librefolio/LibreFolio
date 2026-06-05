@@ -5,7 +5,7 @@
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {goBack} from '$lib/stores/navigationStore';
+    import {goBack} from '$lib/stores/app/navigationStore';
     import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileUp, Pencil, RefreshCw, Share2, TrendingUp, Wallet} from 'lucide-svelte';
     import CashBalanceCard from '$lib/components/brokers/CashBalanceCard.svelte';
     import CashTransactionModal from '$lib/components/brokers/CashTransactionModal.svelte';

@@ -8,7 +8,7 @@
 -->
 <script lang="ts">
     import {TrendingUp, TrendingDown} from 'lucide-svelte';
-    import type {LayoutMode} from '$lib/utils/responsiveLayout.svelte';
+    import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
 
     interface Props {
         /** Last exchange rate */

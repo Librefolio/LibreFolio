@@ -8,8 +8,8 @@
     import SyncModalBase from '$lib/components/ui/modals/SyncModalBase.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
-    import type {SyncResult, SyncSection} from '$lib/utils/syncHelpers';
-    import {formatElapsed, STATUS_COLORS, STATUS_ICONS} from '$lib/utils/syncHelpers';
+    import type {SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
+    import {formatElapsed, STATUS_COLORS, STATUS_ICONS} from '$lib/utils/sync/syncHelpers';
     import {DEFAULT_PROVIDER_COLOR, ensureAssetProvidersCached, getAssetProviderIconUrl, PROVIDER_COLORS} from '$lib/utils/providerHelpers';
 
     interface AssetSyncItem {

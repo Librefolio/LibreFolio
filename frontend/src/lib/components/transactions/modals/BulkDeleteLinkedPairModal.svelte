@@ -22,7 +22,7 @@
     import {_ as t} from '$lib/i18n';
     import {AlertTriangle, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
-    import {commitTransactions} from '$lib/utils/txCommitApi';
+    import {commitTransactions} from '$lib/utils/transactions/txCommitApi';
 
     // =========================================================================
     // Types

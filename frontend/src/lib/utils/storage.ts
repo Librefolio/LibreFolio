@@ -10,7 +10,7 @@
  */
 
 import {get} from 'svelte/store';
-import {currentUser} from '$lib/stores/auth';
+import {currentUser} from '$lib/stores/app/auth';
 
 /**
  * Build a user-scoped localStorage key.

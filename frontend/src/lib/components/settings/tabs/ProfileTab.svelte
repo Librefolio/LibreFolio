@@ -1,7 +1,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {auth, currentUser} from '$lib/stores/auth';
-    import {userSettings} from '$lib/stores/settings';
+    import {auth, currentUser} from '$lib/stores/app/auth';
+    import {userSettings} from '$lib/stores/app/settings';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
     import {goto} from '$app/navigation';
