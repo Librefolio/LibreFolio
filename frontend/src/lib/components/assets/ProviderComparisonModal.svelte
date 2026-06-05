@@ -17,7 +17,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {X} from 'lucide-svelte';
     import {sectorI18nKey} from '$lib/utils/assetTypes';
 

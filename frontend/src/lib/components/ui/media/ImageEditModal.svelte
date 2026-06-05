@@ -15,7 +15,7 @@
     import {Eye, EyeOff, Loader2, Lock, RefreshCw, Upload, X} from 'lucide-svelte';
     import {uploadFile} from '$lib/utils/upload';
     import ImageCropper from './ImageCropper.svelte';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {blobToFile, getCroppedImageFromCropper, IMAGE_PRESETS, type PresetName} from '$lib/utils/imageCrop';
 
     // Props

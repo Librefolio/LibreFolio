@@ -8,7 +8,7 @@
     import {debug} from '$lib/debug';
     import {Calendar, Camera, CheckCircle, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User} from 'lucide-svelte';
     import PasswordChangeModal from '$lib/components/settings/PasswordChangeModal.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {ImagePickerWrapper} from '$lib/components/ui/media';
     import {onMount} from 'svelte';
 

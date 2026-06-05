@@ -34,8 +34,8 @@
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
     import AssetPriceSummary from '$lib/components/assets/AssetPriceSummary.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
-    import PageSyncModal from '$lib/components/ui/PageSyncModal.svelte';
-    import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
+    import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
+    import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {RenderedSignal, SignalConfig} from '$lib/charts/signals';
     import {signalFromConfig} from '$lib/charts/signals';

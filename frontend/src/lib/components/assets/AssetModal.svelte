@@ -15,9 +15,9 @@
     import {untrack} from 'svelte';
     import {zodiosApi} from '$lib/api';
     import {ChevronDown, ChevronRight, ExternalLink, Loader2, Minus, Plus, RefreshCw, Trash2, Upload, X} from 'lucide-svelte';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {CurrencySearchSelect, SimpleSelect} from '$lib/components/ui/select';
     import AssetSearchAutocomplete from './AssetSearchAutocomplete.svelte';
     import AssetIcon from './AssetIcon.svelte';
@@ -30,7 +30,7 @@
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {trySave} from '$lib/utils/trySave';
     import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';

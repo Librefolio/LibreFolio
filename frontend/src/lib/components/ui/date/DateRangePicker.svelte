@@ -18,7 +18,7 @@
 <script lang="ts">
     import {Calendar, Info} from 'lucide-svelte';
     import {_} from '$lib/i18n';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import type {CalendarHighlights} from './CalendarMonth.svelte';
     import CalendarMonth from './CalendarMonth.svelte';
     import {SimpleSelect} from '$lib/components/ui/select';

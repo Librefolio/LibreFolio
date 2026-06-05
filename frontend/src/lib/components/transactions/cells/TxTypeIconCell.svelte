@@ -7,7 +7,7 @@
   Replaces the plain `<a href>` which opened the doc on every tap/click.
 -->
 <script lang="ts">
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
 
     interface Props {
         iconUrl: string;

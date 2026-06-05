@@ -10,8 +10,8 @@
     import {Check, X} from 'lucide-svelte';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
 
     const dispatch = createEventDispatcher<{
         close: void;

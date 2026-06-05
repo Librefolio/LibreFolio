@@ -13,8 +13,8 @@
     import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
     import SettingCurrency from '$lib/components/settings/SettingCurrency.svelte';
     import SettingTheme from '$lib/components/settings/SettingTheme.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
-    import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
 
     // Category definitions
     interface Category {

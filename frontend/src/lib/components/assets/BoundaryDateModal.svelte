@@ -20,7 +20,7 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import {Scissors, Trash2} from 'lucide-svelte';
-    import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
+    import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
 
     interface GapInfo {
         minDate: string;

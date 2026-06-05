@@ -11,11 +11,11 @@
     import {getEventTypeOptions, EVENT_TYPES_TX_COMPATIBLE} from '$lib/utils/eventTypes';
     import {getCurrencyInfo} from '$lib/stores/currencyStore';
     import {toasts} from '$lib/stores/toastStore.svelte';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
-    import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
+    import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {X} from 'lucide-svelte';
 
     interface Props {

@@ -1,6 +1,6 @@
 <script lang="ts">
     import {HelpCircle} from 'lucide-svelte';
-    import Tooltip from './Tooltip.svelte';
+    import Tooltip from './feedback/Tooltip.svelte';
 
     /** MkDocs path (relative to /mkdocs/) */
     export let path: string;

@@ -8,8 +8,8 @@
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {formatBytes} from '$lib/utils/upload';
     import {FileText, FileUp, RefreshCw, Trash2} from 'lucide-svelte';
-    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import type {BrimFile} from '$lib/types';
 
     // Props

@@ -26,7 +26,7 @@
     import type {ChainStep, ProviderInfo} from '$lib/utils/currencyGraph';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import {getPriorityBadgeStyle, getProviderColor} from '$lib/utils/colors';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
 
     // =========================================================================
     // Types
