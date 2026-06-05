@@ -12,7 +12,7 @@
     import {_} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {trySave} from '$lib/utils/trySave';
-    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {ExternalLink, FileUp, RefreshCw, Trash2, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
@@ -25,7 +25,7 @@
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import type {BrimFile, FilePreviewResponse} from '$lib/types';
-    import {fetchFilePreview, getFilePreviewError} from '$lib/utils/filePreview';
+    import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
 
     interface Props {
         /** Whether the modal is open */

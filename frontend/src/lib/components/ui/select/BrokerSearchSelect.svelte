@@ -7,7 +7,7 @@
 <script lang="ts">
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import {getRoleIcon, getRoleIconColor} from '$lib/utils/brokerRoleHelpers';
+    import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
     import {_} from '$lib/i18n';
 
     /**

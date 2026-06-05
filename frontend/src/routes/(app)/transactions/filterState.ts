@@ -1,4 +1,5 @@
 import type {FilterValue} from '$lib/components/table/types';
+import {getCsvNumberParam, getCsvStringParam, getOptionalNumberParam, getOptionalQueryParam, setCsvParam, setOptionalNumberParam, setOptionalQueryParam} from '$lib/utils/url/queryParams';
 
 export type TransactionFilterMap = {
     broker_id?: number;
@@ -21,35 +22,20 @@ export type TransactionFilterMap = {
 
 export function parseTransactionFilters(searchParams: URLSearchParams): TransactionFilterMap {
     const out: TransactionFilterMap = {};
-    const num = (k: string) => {
-        const v = searchParams.get(k);
-        if (v == null || v === '') return undefined;
-        const n = Number(v);
-        return Number.isFinite(n) ? n : undefined;
-    };
-    const csv = (k: string) => {
-        const v = searchParams.get(k);
-        return v ? v.split(',').filter(Boolean) : undefined;
-    };
 
-    out.broker_id = num('broker_id');
-    out.asset_id = num('asset_id');
-
-    const brokerIdsRaw = csv('broker_ids');
-    if (brokerIdsRaw) out.broker_ids = brokerIdsRaw.map(Number).filter(Number.isFinite);
-
-    const assetIdsRaw = csv('asset_ids');
-    if (assetIdsRaw) out.asset_ids = assetIdsRaw.map(Number).filter(Number.isFinite);
-
-    out.types = csv('types');
-    out.date_start = searchParams.get('date_start') || undefined;
-    out.date_end = searchParams.get('date_end') || undefined;
-    out.tags = csv('tags');
-    out.currency = searchParams.get('currency') || undefined;
-    out.id_min = num('id_min');
-    out.id_max = num('id_max');
-    out.qty_min = num('qty_min');
-    out.qty_max = num('qty_max');
+    out.broker_id = getOptionalNumberParam(searchParams, 'broker_id');
+    out.asset_id = getOptionalNumberParam(searchParams, 'asset_id');
+    out.broker_ids = getCsvNumberParam(searchParams, 'broker_ids');
+    out.asset_ids = getCsvNumberParam(searchParams, 'asset_ids');
+    out.types = getCsvStringParam(searchParams, 'types');
+    out.date_start = getOptionalQueryParam(searchParams, 'date_start');
+    out.date_end = getOptionalQueryParam(searchParams, 'date_end');
+    out.tags = getCsvStringParam(searchParams, 'tags');
+    out.currency = getOptionalQueryParam(searchParams, 'currency');
+    out.id_min = getOptionalNumberParam(searchParams, 'id_min');
+    out.id_max = getOptionalNumberParam(searchParams, 'id_max');
+    out.qty_min = getOptionalNumberParam(searchParams, 'qty_min');
+    out.qty_max = getOptionalNumberParam(searchParams, 'qty_max');
 
     const cashRaw = searchParams.get('cash');
     if (cashRaw) {
@@ -70,31 +56,31 @@ export function parseTransactionFilters(searchParams: URLSearchParams): Transact
         if (items.length > 0) out.cash = items;
     }
 
-    out.page = num('page');
-    out.page_size = num('page_size');
+    out.page = getOptionalNumberParam(searchParams, 'page');
+    out.page_size = getOptionalNumberParam(searchParams, 'page_size');
     return out;
 }
 
 export function buildTransactionsFiltersUrl(filters: TransactionFilterMap): string {
     const params = new URLSearchParams();
-    if (filters.broker_id != null) params.set('broker_id', String(filters.broker_id));
-    if (filters.broker_ids?.length) params.set('broker_ids', filters.broker_ids.join(','));
-    if (filters.asset_id != null) params.set('asset_id', String(filters.asset_id));
-    if (filters.asset_ids?.length) params.set('asset_ids', filters.asset_ids.join(','));
-    if (filters.types?.length) params.set('types', filters.types.join(','));
-    if (filters.date_start) params.set('date_start', filters.date_start);
-    if (filters.date_end) params.set('date_end', filters.date_end);
-    if (filters.tags?.length) params.set('tags', filters.tags.join(','));
-    if (filters.currency) params.set('currency', filters.currency);
-    if (filters.id_min != null) params.set('id_min', String(filters.id_min));
-    if (filters.id_max != null) params.set('id_max', String(filters.id_max));
-    if (filters.qty_min != null) params.set('qty_min', String(filters.qty_min));
-    if (filters.qty_max != null) params.set('qty_max', String(filters.qty_max));
+    setOptionalNumberParam(params, 'broker_id', filters.broker_id);
+    setCsvParam(params, 'broker_ids', filters.broker_ids);
+    setOptionalNumberParam(params, 'asset_id', filters.asset_id);
+    setCsvParam(params, 'asset_ids', filters.asset_ids);
+    setCsvParam(params, 'types', filters.types);
+    setOptionalQueryParam(params, 'date_start', filters.date_start);
+    setOptionalQueryParam(params, 'date_end', filters.date_end);
+    setCsvParam(params, 'tags', filters.tags);
+    setOptionalQueryParam(params, 'currency', filters.currency);
+    setOptionalNumberParam(params, 'id_min', filters.id_min);
+    setOptionalNumberParam(params, 'id_max', filters.id_max);
+    setOptionalNumberParam(params, 'qty_min', filters.qty_min);
+    setOptionalNumberParam(params, 'qty_max', filters.qty_max);
     if (filters.cash?.length) {
         params.set('cash', filters.cash.map((it) => `${it.code}:${it.min ?? ''}:${it.max ?? ''}`).join(','));
     }
-    if (filters.page != null && filters.page !== 1) params.set('page', String(filters.page));
-    if (filters.page_size != null && filters.page_size !== 50) params.set('page_size', String(filters.page_size));
+    setOptionalNumberParam(params, 'page', filters.page, {omitIf: 1});
+    setOptionalNumberParam(params, 'page_size', filters.page_size, {omitIf: 50});
     const qs = params.toString();
     return qs ? `/transactions?${qs}` : '/transactions';
 }
@@ -177,4 +163,3 @@ export function applyTransactionColumnFilters(filters: TransactionFilterMap, rec
     next.page = 1;
     return next;
 }
-

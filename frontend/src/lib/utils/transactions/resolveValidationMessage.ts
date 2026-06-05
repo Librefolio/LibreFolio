@@ -12,7 +12,7 @@
  * @module utils/resolveValidationMessage
  */
 
-import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from './currencyFormat';
+import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '../currency/currencyFormat';
 
 /**
  * Mapping of Pydantic built-in error types to i18n keys.

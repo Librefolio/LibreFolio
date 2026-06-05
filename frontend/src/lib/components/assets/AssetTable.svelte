@@ -11,11 +11,11 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
     import {RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
-    import {ensureCurrenciesLoaded, getCurrencyInfo, currencyStoreVersion} from '$lib/stores/currencyStore';
-    import {currentLanguage} from '$lib/stores/language';
+    import {ensureCurrenciesLoaded, getCurrencyInfo, currencyStoreVersion} from '$lib/stores/reference/currencyStore';
+    import {currentLanguage} from '$lib/stores/app/language';
     import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached} from '$lib/utils/providerHelpers';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {formatCurrencyAmountHtml} from '$lib/utils/currencyFormat';
+    import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
 
     // =========================================================================

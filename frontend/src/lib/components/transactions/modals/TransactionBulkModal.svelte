@@ -26,7 +26,7 @@
 <script lang="ts">
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/language';
+    import {currentLanguage} from '$lib/stores/app/language';
     import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save, Unlink, Link2, Lightbulb} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
@@ -39,26 +39,26 @@
 
     import type {ColumnDef, CellContent} from '$lib/components/table/types';
     import {zodiosApi} from '$lib/api';
-    import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
-    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/brokerStore';
-    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
-    import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getTransactionTypeIconUrl, getCostBasisRule} from '$lib/stores/transactionTypeStore';
-    import {findPromoteMatch, type PromoteContext} from '$lib/stores/transactionTypeStore';
+    import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/reference/assetStore';
+    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getTransactionTypeIconUrl, getCostBasisRule} from '$lib/stores/transactions/transactionTypeStore';
+    import {findPromoteMatch, type PromoteContext} from '$lib/stores/transactions/transactionTypeStore';
     import PromoteMergeModal from './PromoteMergeModal.svelte';
-    import {createValidateScheduler} from '$lib/utils/useValidateScheduler.svelte';
-    import {commitTransactions, validateTransactions} from '$lib/utils/txCommitApi';
-    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, upgradeAutoToDetail, type TxFields, type TxOriginal, type ResolvedOp} from '$lib/utils/txPayloadHelpers';
-    import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
-    import {generateUUID} from '$lib/utils/uuid';
-    import {formatCurrencyAmountHtml, formatCurrencyCodeHtml} from '$lib/utils/currencyFormat';
+    import {createValidateScheduler} from '$lib/utils/transactions/useValidateScheduler.svelte';
+    import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
+    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, upgradeAutoToDetail, type TxFields, type TxOriginal, type ResolvedOp} from '$lib/utils/transactions/txPayloadHelpers';
+    import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
+    import {generateUUID} from '$lib/utils/core/uuid';
+    import {formatCurrencyAmountHtml, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
     import {getStringColor} from '$lib/utils/colors';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
-    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/fxConversionHelper';
+    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import TransactionFormModal from './TransactionFormModal.svelte';
     import TransactionPickerModal from './TransactionPickerModal.svelte';
-    import {txStoreGet, txStoreCount} from '$lib/stores/txStore.svelte';
-    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {txStoreGet, txStoreCount} from '$lib/stores/transactions/txStore.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import type {FormModalItems} from '../shared/resolveFormItems';
     import type {TXReadItem, ValidationIssue} from '../types';
 

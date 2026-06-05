@@ -14,9 +14,9 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/language';
-    import type {CurrencyInfo} from '$lib/stores/currencyStore';
-    import {ensureCurrenciesLoaded, getAllCurrencies} from '$lib/stores/currencyStore';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import type {CurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {ensureCurrenciesLoaded, getAllCurrencies} from '$lib/stores/reference/currencyStore';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
 
     interface Props {

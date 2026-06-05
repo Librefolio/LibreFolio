@@ -13,7 +13,7 @@
 <script generics="T" lang="ts">
     import {onMount} from 'svelte';
     import {t} from '$lib/i18n';
-    import {formatBytes} from '$lib/utils/upload';
+    import {formatBytes} from '$lib/utils/files/upload';
     import {getUserStorageKey} from '$lib/utils/storage';
     import {Ban, Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon, Info} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';

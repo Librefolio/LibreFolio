@@ -6,7 +6,7 @@
  * @module utils/currencyFormat
  */
 
-import {getCurrencyInfo} from '$lib/stores/currencyStore';
+import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 
 /**
  * Escape a string for safe inclusion in an HTML attribute / text node.

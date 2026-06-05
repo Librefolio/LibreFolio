@@ -5,7 +5,7 @@
  * consistent across ActionModal, DeleteModal, BulkModal, and Table.
  */
 
-import {formatCurrencyAmountPlain} from '$lib/utils/currencyFormat';
+import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
 /**
  * Format a quantity string for display:

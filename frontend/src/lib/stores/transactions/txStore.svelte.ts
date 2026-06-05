@@ -8,7 +8,7 @@
  * Architecture: Plan C — Phase 07 Part 4 Round 6.
  */
 
-import {canEditBroker, canEditPaired} from '$lib/stores/brokerStore';
+import {canEditBroker, canEditPaired} from '$lib/stores/reference/brokerStore';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

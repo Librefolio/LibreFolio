@@ -6,7 +6,7 @@
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
-    import {formatBytes} from '$lib/utils/upload';
+    import {formatBytes} from '$lib/utils/files/upload';
     import {FileText, FileUp, RefreshCw, Trash2} from 'lucide-svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';

@@ -14,7 +14,7 @@
     import {onDestroy} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
+    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {Plus} from 'lucide-svelte';
 
     interface Props {

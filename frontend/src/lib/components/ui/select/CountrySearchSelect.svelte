@@ -13,9 +13,9 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/language';
-    import type {CountryInfo} from '$lib/stores/countryStore';
-    import {ensureCountriesLoaded, getAllCountries} from '$lib/stores/countryStore';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import type {CountryInfo} from '$lib/stores/reference/countryStore';
+    import {ensureCountriesLoaded, getAllCountries} from '$lib/stores/reference/countryStore';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
 
     interface Props {

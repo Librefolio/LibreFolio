@@ -17,9 +17,9 @@
     import CompactCashCell from '$lib/components/ui/display/CompactCashCell.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
-    import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
-    import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
-    import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '$lib/utils/currencyFormat';
+    import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
+    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
 
     // =========================================================================
     // Types
@@ -474,5 +474,4 @@
         </div>
     {/if}
 </div>
-
 

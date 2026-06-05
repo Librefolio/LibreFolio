@@ -23,8 +23,8 @@
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
     import {fetchCurrentPrices, computeDirection} from '$lib/services/livePriceService';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
-    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/currencyStore';
-    import {currentLanguage} from '$lib/stores/language';
+    import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {currentLanguage} from '$lib/stores/app/language';
 
     // =========================================================================
     // Props

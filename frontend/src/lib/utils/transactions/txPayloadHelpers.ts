@@ -6,7 +6,7 @@
  * @module utils/txPayloadHelpers
  */
 
-import {type TypeRule, getCostBasisRule} from '$lib/stores/transactionTypeStore';
+import {type TypeRule, getCostBasisRule} from '$lib/stores/transactions/transactionTypeStore';
 
 // =============================================================================
 //  Types

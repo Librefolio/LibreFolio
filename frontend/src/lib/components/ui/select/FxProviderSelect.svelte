@@ -22,8 +22,8 @@
     import {_} from '$lib/i18n';
     import {AlertTriangle, ArrowLeftRight, Check, ChevronDown, ChevronUp, Info, Link, Loader2, Plus, Search, Trash2, X} from 'lucide-svelte';
     import {findConversionPaths, getCachedFxProviders} from '$lib/stores/currencyGraphStore';
-    import {getCurrencyInfo} from '$lib/stores/currencyStore';
-    import type {ChainStep, ProviderInfo} from '$lib/utils/currencyGraph';
+    import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import type {ChainStep, ProviderInfo} from '$lib/utils/currency/currencyGraph';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import {getPriorityBadgeStyle, getProviderColor} from '$lib/utils/colors';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';

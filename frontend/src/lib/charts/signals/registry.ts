@@ -10,7 +10,7 @@
 
 import type {SignalParamDescriptor} from './ChartSignal';
 import {ChartSignal, DEFAULT_SIGNAL_COLORS, type SignalConfig, type SignalStyle} from './ChartSignal';
-import {generateUUID} from '$lib/utils/uuid';
+import {generateUUID} from '$lib/utils/core/uuid';
 import {FxPairSignal} from './FxPairSignal';
 import {AssetComparisonSignal} from './AssetComparisonSignal';
 import {LinearSignal} from './LinearSignal';

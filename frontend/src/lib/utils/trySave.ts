@@ -33,7 +33,7 @@
  * ```
  */
 
-import {toasts} from '$lib/stores/toastStore.svelte';
+import {toasts} from '$lib/stores/app/toastStore.svelte';
 
 /** Result of a ``trySave`` call — discriminated union. */
 export type SaveResult<T> = {status: 'success'; data: T} | {status: 'error'; message: string; error: unknown; status_code?: number};

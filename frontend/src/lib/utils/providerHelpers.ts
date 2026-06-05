@@ -9,7 +9,7 @@
  */
 
 import {getCachedFxProviders} from '$lib/stores/currencyGraphStore';
-import {getCurrencyInfo} from '$lib/stores/currencyStore';
+import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 import {zodiosApi} from '$lib/api';
 import {writable} from 'svelte/store';
 

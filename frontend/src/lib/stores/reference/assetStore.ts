@@ -27,7 +27,7 @@
  */
 
 import {zodiosApi} from '$lib/api';
-import {createEntityStore} from './entityStore';
+import {createEntityStore} from '../core/entityStore';
 import {derived} from 'svelte/store';
 
 // ============================================================================

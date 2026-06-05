@@ -9,7 +9,7 @@
  * 1. Uses `crypto.randomUUID()` when available (fast, native)
  * 2. Falls back to `crypto.getRandomValues()` based UUID v4 (works everywhere)
  *
- * @module utils/uuid
+ * @module utils/core/uuid
  */
 
 /**

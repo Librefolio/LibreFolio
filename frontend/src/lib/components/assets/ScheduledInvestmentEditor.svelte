@@ -28,7 +28,7 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import {generateUUID} from '$lib/utils/uuid';
+    import {generateUUID} from '$lib/utils/core/uuid';
 
     // =========================================================================
     // Types

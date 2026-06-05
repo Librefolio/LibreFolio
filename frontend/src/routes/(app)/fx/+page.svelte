@@ -29,13 +29,14 @@
     import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, ensureFxRangeLoaded, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, removeFxStore} from '$lib/stores/fxStoreRegistry';
-    import {isCardInverted} from '$lib/stores/fxCardInversionStore';
-    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
-    import {getCurrencyInfo} from '$lib/stores/currencyStore';
+    import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
-    import {buildFxSyncToast} from '$lib/utils/syncToastHelpers';
-    import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
+    import {buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
+    import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
 
     // =========================================================================
     // Types
@@ -464,10 +465,7 @@
         dateEnd = newEnd;
         setDateRange(newStart, newEnd);
         // Sync URL for shareability + navigationStore tracking
-        const url = new URL(window.location.href);
-        url.searchParams.set('start', dateStart);
-        url.searchParams.set('end', dateEnd);
-        goto(`${url.pathname}${url.search}`, {replaceState: true, noScroll: true, keepFocus: true});
+        gotoDateRange(dateStart, dateEnd);
         fetchAllPairData();
     }
 

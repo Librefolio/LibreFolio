@@ -20,10 +20,10 @@
     import {browser} from '$app/environment';
     import {t} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
-    import {formatBytes, uploadFile} from '$lib/utils/upload';
+    import {formatBytes, uploadFile} from '$lib/utils/files/upload';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
-    import {globalSettings} from '$lib/stores/globalSettings';
-    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/brokerStore';
+    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal, ImageEditModal} from '$lib/components/ui/media';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
@@ -36,7 +36,7 @@
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import FileGrid from '$lib/components/files/FileGrid.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
-    import {fetchFilePreview, getFilePreviewError} from '$lib/utils/filePreview';
+    import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
     import type {BrimFile, Broker, BrokerInfo, FilePreviewResponse, UploadedFile} from '$lib/types';
     import type {FilterValue} from '$lib/components/table/types';
 

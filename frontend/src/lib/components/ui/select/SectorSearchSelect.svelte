@@ -13,7 +13,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {ensureSectorsLoaded} from '$lib/stores/sectorStore';
+    import {ensureSectorsLoaded} from '$lib/stores/reference/sectorStore';
     import {getSectorKeysList, sectorI18nKey} from '$lib/utils/assetTypes';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
 

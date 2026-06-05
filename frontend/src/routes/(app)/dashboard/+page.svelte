@@ -1,7 +1,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {currentUser} from '$lib/stores/auth';
-    import {userSettings} from '$lib/stores/settings';
+    import {currentUser} from '$lib/stores/app/auth';
+    import {userSettings} from '$lib/stores/app/settings';
     import {ArrowRightLeft, BarChart3, Briefcase, Coins, PieChart, TrendingUp, Wallet} from 'lucide-svelte';
     import LiveTicker from '$lib/components/layout/LiveTicker.svelte';
 

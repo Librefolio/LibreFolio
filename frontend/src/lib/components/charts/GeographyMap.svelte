@@ -23,7 +23,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
-    import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/countryStore';
+    import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
 
     // =========================================================================
     // Props

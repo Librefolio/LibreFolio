@@ -14,11 +14,11 @@
     import {Search, X, Plus} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import TransactionsTable from '../TransactionsTable.svelte';
-    import type {BrokerLike} from '$lib/utils/brokerColors';
-    import {canEditBroker, getBrokerRole, getBrokerInfo, getAllBrokers} from '$lib/stores/brokerStore';
-    import {getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
-    import {getRoleSvgHtml} from '$lib/utils/brokerRoleHelpers';
-    import {txStoreGetAll, txStoreGet, type TXReadItem} from '$lib/stores/txStore.svelte';
+    import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {canEditBroker, getBrokerRole, getBrokerInfo, getAllBrokers} from '$lib/stores/reference/brokerStore';
+    import {getBrokerIconUrlById} from '$lib/utils/broker/brokerHelpers';
+    import {getRoleSvgHtml} from '$lib/utils/broker/brokerRoleHelpers';
+    import {txStoreGetAll, txStoreGet, type TXReadItem} from '$lib/stores/transactions/txStore.svelte';
 
     interface Props {
         open: boolean;

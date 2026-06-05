@@ -11,14 +11,14 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import {t} from '$lib/i18n';
-    import {formatBytes} from '$lib/utils/upload';
+    import {formatBytes} from '$lib/utils/files/upload';
     import {Check, Filter as FilterIcon, RotateCcw, Search, Trash2, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import type {ColumnType, EnumOption, FilterValue} from './types';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import {formatCurrencyCodeHtml} from '$lib/utils/currencyFormat';
-    import {currencyStoreVersion} from '$lib/stores/currencyStore';
+    import {formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
+    import {currencyStoreVersion} from '$lib/stores/reference/currencyStore';
 
     type TextMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'equals';
     type SizeUnit = 'B' | 'KB' | 'MB' | 'GB';

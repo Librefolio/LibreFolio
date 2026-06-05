@@ -18,9 +18,9 @@
     import {_ as t} from '$lib/i18n';
     import SearchSelect from './SearchSelect.svelte';
     import type {SelectOption} from './types';
-    import {ensureAssetsLoaded, getAllAssets, assetStoreVersion, type AssetInfo} from '$lib/stores/assetStore';
+    import {ensureAssetsLoaded, getAllAssets, assetStoreVersion, type AssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {getCurrencyInfo} from '$lib/stores/currencyStore';
+    import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 
     interface Props {
         /** Currently selected asset id (null = none). */

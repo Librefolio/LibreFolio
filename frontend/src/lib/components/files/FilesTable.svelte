@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
-    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {type BulkAction, type ColumnDef, DataTable, type FilterValue, type RowAction} from '$lib/components/table';
     import {Download, Eye, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image as ImageIcon, Link, Trash2} from 'lucide-svelte';
     import type {BrimFile, BrokerInfo, FileData, UploadedFile} from '$lib/types';
@@ -18,9 +18,9 @@
     // Generate a consistent color based on broker id for visual distinction
     // Uses shared golden-ratio color utility
     import {getIndexColor} from '$lib/utils/colors';
-    import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/brokerHelpers';
-    import {canPreviewFileData} from '$lib/utils/filePreview';
-    import {getCachedPreview} from '$lib/stores/imagePreviewCache';
+    import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/broker/brokerHelpers';
+    import {canPreviewFileData} from '$lib/utils/files/filePreview';
+    import {getCachedPreview} from '$lib/stores/files/imagePreviewCache';
 
     interface Props {
         files: FileData[];

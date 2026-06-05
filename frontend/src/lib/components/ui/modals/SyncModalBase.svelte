@@ -17,8 +17,8 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
-    import type {SyncResult, SyncSection} from '$lib/utils/syncHelpers';
-    import {formatTime} from '$lib/utils/syncHelpers';
+    import type {SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
+    import {formatTime} from '$lib/utils/sync/syncHelpers';
 
     interface Props {
         open: boolean;

@@ -2,7 +2,7 @@
     import '../app.css';
     import {onMount} from 'svelte';
     import {i18nLoading, initI18n} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/language';
+    import {currentLanguage} from '$lib/stores/app/language';
 
     // Initialize i18n
     initI18n();

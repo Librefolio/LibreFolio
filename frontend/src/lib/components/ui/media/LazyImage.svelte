@@ -8,7 +8,7 @@
      *   reuses higher-res cached previews for lower-res requests.
      */
 
-    import {cachePreview, extractFileIdFromUrl, getCachedPreview, parsePreviewWidth} from '$lib/stores/imagePreviewCache';
+    import {cachePreview, extractFileIdFromUrl, getCachedPreview, parsePreviewWidth} from '$lib/stores/files/imagePreviewCache';
 
     interface Props {
         /** Normal mode: direct image URL */

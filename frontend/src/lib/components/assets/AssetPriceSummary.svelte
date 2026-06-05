@@ -20,7 +20,7 @@
     import {TrendingUp, TrendingDown, AlertTriangle, Coins} from 'lucide-svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import type {LayoutMode} from '$lib/utils/responsiveLayout.svelte';
+    import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
 
     interface Props {
         /** Last (closing) price */

@@ -4,7 +4,7 @@
      * Language selector dropdown for header.
      * Uses custom dropdown styling optimized for header placement (minimal, transparent).
      */
-    import {currentLanguage} from '$lib/stores/language';
+    import {currentLanguage} from '$lib/stores/app/language';
     import {LANGUAGE_OPTIONS, type SupportedLocale} from '$lib/i18n';
     import {ChevronDown} from 'lucide-svelte';
 

@@ -19,9 +19,9 @@
     import {AlertCircle, AlertTriangle, CheckCircle2, Circle, CircleHelp, ClipboardCopy, ExternalLink, Loader2, Play} from 'lucide-svelte';
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import ScheduledInvestmentEditor from './ScheduledInvestmentEditor.svelte';
-    import {toasts} from '$lib/stores/toastStore.svelte';
-    import {getCurrencyInfo, currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/currencyStore';
-    import {currentLanguage} from '$lib/stores/language';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {getCurrencyInfo, currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
+    import {currentLanguage} from '$lib/stores/app/language';
 
     // =========================================================================
     // Types

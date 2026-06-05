@@ -13,7 +13,7 @@
 
 import {ChartSignal, type RenderedSignal, type SignalParamDescriptor} from './ChartSignal';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-import {getCurrencyInfo} from '$lib/stores/currencyStore';
+import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 
 export class AssetComparisonSignal extends ChartSignal {
     static override signalType = 'asset-comparison';

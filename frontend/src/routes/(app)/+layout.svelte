@@ -3,12 +3,12 @@
     import {browser} from '$app/environment';
     import {afterNavigate, goto, preloadCode} from '$app/navigation';
     import {i18nLoading, initI18n} from '$lib/i18n';
-    import {trackNavigation} from '$lib/stores/navigationStore';
+    import {trackNavigation} from '$lib/stores/app/navigationStore';
     import {seedFromUrl} from '$lib/stores/dateRangeStore.svelte';
-    import {currentLanguage} from '$lib/stores/language';
-    import {auth, isAuthenticated, isAuthInitialized} from '$lib/stores/auth';
-    import {userSettings} from '$lib/stores/settings';
-    import {globalSettings} from '$lib/stores/globalSettings';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {auth, isAuthenticated, isAuthInitialized} from '$lib/stores/app/auth';
+    import {userSettings} from '$lib/stores/app/settings';
+    import {globalSettings} from '$lib/stores/app/globalSettings';
     import {debug} from '$lib/debug';
     import {getUserStorage} from '$lib/utils/storage';
     import Sidebar from '$lib/components/layout/Sidebar.svelte';

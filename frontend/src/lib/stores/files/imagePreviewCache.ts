@@ -6,7 +6,7 @@
  * and CSS object-fit handles the visual downscaling.
  * objectUrls are held for page lifetime (~2MB for 100 images — acceptable).
  *
- * @module stores/imagePreviewCache
+ * @module stores/files/imagePreviewCache
  */
 
 interface CachedPreview {

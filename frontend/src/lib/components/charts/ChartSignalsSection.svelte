@@ -19,7 +19,7 @@
     import SearchSelect from '$lib/components/ui/select/SearchSelect.svelte';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
     import type {SelectOption} from '$lib/components/ui/select/types';
-    import {getCurrencyInfo} from '$lib/stores/currencyStore';
+    import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {createSignal, getRegisteredSignalTypes, type SignalConfig, type SignalStyle, type SignalTypeInfo} from '$lib/charts/signals';
 
     // =========================================================================

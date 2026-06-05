@@ -3,13 +3,13 @@
   Place once in the app layout. Toasts auto-dismiss with visual countdown bar.
 
   Usage (from any component):
-    import { toasts } from '$lib/stores/toastStore.svelte';
+    import { toasts } from '$lib/stores/app/toastStore.svelte';
     toasts.success('Done!');
     toasts.error('Failed', 10000);
 -->
 <script lang="ts">
     import {fly} from 'svelte/transition';
-    import {toasts, type ToastVariant} from '$lib/stores/toastStore.svelte';
+    import {toasts, type ToastVariant} from '$lib/stores/app/toastStore.svelte';
     import {AlertCircle, AlertTriangle, CheckCircle, Info, X} from 'lucide-svelte';
 
     const variantStyles: Record<ToastVariant, string> = {

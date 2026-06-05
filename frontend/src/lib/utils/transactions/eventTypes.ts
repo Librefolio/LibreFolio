@@ -2,7 +2,7 @@
  * Shared event type utilities — options builder for event type selects/pickers.
  * Used by AssetDataEditorSection (all 5 types) and EventCreateMiniModal (3 TX-compatible types).
  */
-import {getEventTypeEmoji} from '$lib/stores/transactionTypeStore';
+import {getEventTypeEmoji} from '$lib/stores/transactions/transactionTypeStore';
 
 /** Event types that can be linked to transactions (event_compatible rule). */
 export const EVENT_TYPES_TX_COMPATIBLE = ['DIVIDEND', 'INTEREST', 'PRICE_ADJUSTMENT'] as const;

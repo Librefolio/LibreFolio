@@ -14,9 +14,9 @@
   Svelte 5 runes. Always use `data-testid`.
 -->
 <script lang="ts">
-    import {getBrokerColor, type BrokerLike} from '$lib/utils/brokerColors';
-    import {getBrokerIconUrl} from '$lib/utils/brokerHelpers';
-    import {getRoleIcon, getRoleIconColor} from '$lib/utils/brokerRoleHelpers';
+    import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {getBrokerIconUrl} from '$lib/utils/broker/brokerHelpers';
+    import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
 
     interface Props {
         /** The broker to display */

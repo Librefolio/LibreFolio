@@ -8,9 +8,9 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {getEventTypeOptions, EVENT_TYPES_TX_COMPATIBLE} from '$lib/utils/eventTypes';
-    import {getCurrencyInfo} from '$lib/stores/currencyStore';
-    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {getEventTypeOptions, EVENT_TYPES_TX_COMPATIBLE} from '$lib/utils/transactions/eventTypes';
+    import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';

@@ -3,7 +3,7 @@
     import {t} from '$lib/i18n';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import type {FilePreviewResponse} from '$lib/types';
-    import {formatBytes} from '$lib/utils/upload';
+    import {formatBytes} from '$lib/utils/files/upload';
     import {AlertCircle, Copy, Download, Eye, FileImage, FileSpreadsheet, FileText, LoaderCircle, Minus, Plus, RotateCcw, X} from 'lucide-svelte';
     import katex from 'katex';
     import 'katex/dist/katex.min.css';

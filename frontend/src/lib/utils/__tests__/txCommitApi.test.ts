@@ -16,7 +16,7 @@ vi.mock('$lib/utils/trySave', () => ({
     extractValidationIssues: vi.fn(() => []),
 }));
 
-import {commitTransactions, validateTransactions} from '../txCommitApi';
+import {commitTransactions, validateTransactions} from '../transactions/txCommitApi';
 import {trySave, extractValidationIssues} from '$lib/utils/trySave';
 
 const mockedTrySave = vi.mocked(trySave);

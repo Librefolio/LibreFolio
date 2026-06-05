@@ -11,8 +11,8 @@
  * @module stores/assetPriceStoreRegistry
  */
 
-import type {TimeSeriesPoint} from './TimeSeriesStore';
-import {TimeSeriesStore} from './TimeSeriesStore';
+import type {TimeSeriesPoint} from './core/TimeSeriesStore';
+import {TimeSeriesStore} from './core/TimeSeriesStore';
 import {zodiosApi} from '$lib/api';
 
 // ============================================================================

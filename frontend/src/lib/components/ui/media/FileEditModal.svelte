@@ -12,7 +12,7 @@
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {Check, FileIcon, Loader2, RefreshCw, X} from 'lucide-svelte';
-    import {formatBytes, uploadFile} from '$lib/utils/upload';
+    import {formatBytes, uploadFile} from '$lib/utils/files/upload';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
 
     // Props

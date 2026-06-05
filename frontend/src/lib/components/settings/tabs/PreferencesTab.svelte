@@ -1,8 +1,8 @@
 <script lang="ts">
     import {_, LANGUAGE_OPTIONS, type SupportedLocale} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/language';
-    import {userSettings} from '$lib/stores/settings';
-    import {applyTheme, getStoredThemePreference} from '$lib/stores/themeStore';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {userSettings} from '$lib/stores/app/settings';
+    import {applyTheme, getStoredThemePreference} from '$lib/stores/app/themeStore';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
     import {onMount} from 'svelte';

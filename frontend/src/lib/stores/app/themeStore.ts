@@ -5,7 +5,7 @@
  * 'librefolio-theme' with values: 'light' | 'dark' | '' (empty = auto/system).
  *
  * Usage:
- *   import { applyTheme, getCurrentResolvedTheme, getStoredThemePreference, initThemeListener } from '$lib/stores/themeStore';
+ *   import { applyTheme, getCurrentResolvedTheme, getStoredThemePreference, initThemeListener } from '$lib/stores/app/themeStore';
  */
 
 const STORAGE_KEY = 'librefolio-theme';

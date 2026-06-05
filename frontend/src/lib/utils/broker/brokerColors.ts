@@ -11,7 +11,7 @@
  * @module utils/brokerColors
  */
 
-import {getIndexColor, type ColorSet} from './colors';
+import {getIndexColor, type ColorSet} from '../colors';
 
 /** Minimal shape required for broker color resolution and icon display. */
 export interface BrokerLike {

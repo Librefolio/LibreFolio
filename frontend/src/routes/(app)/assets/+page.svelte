@@ -25,19 +25,20 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
-    import {invalidateAfterMutation} from '$lib/stores/assetStore';
+    import {invalidateAfterMutation} from '$lib/stores/reference/assetStore';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import ChartSettingsModal from '$lib/components/charts/ChartSettingsModal.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
-    import {toasts} from '$lib/stores/toastStore.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
-    import {getCurrencyInfo} from '$lib/stores/currencyStore';
-    import {createResponsiveLayout} from '$lib/utils/responsiveLayout.svelte';
+    import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
     import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -489,10 +490,7 @@
         dateEnd = newEnd;
         setDateRange(newStart, newEnd);
         // Sync URL for shareability + navigationStore tracking
-        const url = new URL(window.location.href);
-        url.searchParams.set('start', dateStart);
-        url.searchParams.set('end', dateEnd);
-        goto(`${url.pathname}${url.search}`, {replaceState: true, noScroll: true, keepFocus: true});
+        gotoDateRange(dateStart, dateEnd);
         fetchAllPriceData();
     }
 

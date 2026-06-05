@@ -17,10 +17,10 @@
 -->
 <script lang="ts">
     import {untrack} from 'svelte';
-    import type {SignRule} from '$lib/stores/transactionTypeStore';
+    import type {SignRule} from '$lib/stores/transactions/transactionTypeStore';
     import CurrencySearchSelect from '../select/CurrencySearchSelect.svelte';
-    import {formatDecimalForDisplay} from '$lib/utils/formatDecimal';
-    import {computeSignHint} from '$lib/utils/signHintColor';
+    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {computeSignHint} from '$lib/utils/transactions/signHintColor';
 
     interface CashValue {
         amount: string;
