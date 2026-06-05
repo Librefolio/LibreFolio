@@ -7,18 +7,25 @@ from ._frontend_common import _ensure_frontend_build, _ensure_db_populated, _ens
 
 
 def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run FX unit tests (Vitest)."""
+    """Run FX/store unit tests (Vitest)."""
     print_section("Frontend FX Unit Tests (Vitest)")
-    cmd = ["npm", "run", "test:unit"]
-    print(f"\n{Colors.BLUE}Running: Vitest unit tests{Colors.NC}")
+    cmd = [
+        "npx",
+        "vitest",
+        "run",
+        "src/lib/stores/__tests__/EditBuffer.test.ts",
+        "src/lib/stores/__tests__/TimeSeriesStore.test.ts",
+        "src/lib/stores/__tests__/fxStoreRegistry.test.ts",
+    ]
+    print(f"\n{Colors.BLUE}Running: FX/store Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
     try:
         result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True)
         if result.returncode == 0:
-            print_success("Vitest unit tests - PASSED")
+            print_success("FX/store Vitest unit tests - PASSED")
             return True
         else:
-            print_error(f"Vitest unit tests - FAILED (exit code: {result.returncode})")
+            print_error(f"FX/store Vitest unit tests - FAILED (exit code: {result.returncode})")
             return False
     except Exception as e:
         print_error(f"Vitest error: {e}")
@@ -125,7 +132,7 @@ def populate_registry(registry: dict) -> None:
     cat = make_category(
         help_text="Frontend FX E2E & unit tests",
         description="""Frontend FX Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "fx-unit", front_fx_unit, test_names=False, name="FX Unit Tests", desc="Vitest unit tests", tests="vitest")
+    add_test(cat, "fx-unit", front_fx_unit, test_names=False, name="FX Unit Tests", desc="Vitest unit tests: EditBuffer, TimeSeriesStore, fxStoreRegistry", tests="vitest")
     add_test(cat, "fx-list", front_fx_list, name="FX List Page", desc="List page navigation, cards, filters", tests="fx/fx-list.spec.ts")
     add_test(cat, "fx-detail", front_fx_detail, name="FX Detail Page", desc="Detail page chart, panels, swap", tests="fx/fx-detail.spec.ts")
     add_test(cat, "fx-add-pair", front_fx_add_pair, name="FX Add Pair", desc="Add pair modal, validation", tests="fx/fx-add-pair.spec.ts")

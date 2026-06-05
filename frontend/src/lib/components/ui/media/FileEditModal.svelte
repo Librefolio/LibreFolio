@@ -13,7 +13,7 @@
     import {_} from '$lib/i18n';
     import {Check, FileIcon, Loader2, RefreshCw, X} from 'lucide-svelte';
     import {formatBytes, uploadFile} from '$lib/utils/upload';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
 
     // Props
     export let open: boolean = false;

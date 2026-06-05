@@ -15,7 +15,7 @@
     import {SimpleSelect} from '$lib/components/ui/select';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import type {SelectOption} from '$lib/components/ui/select';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {AlertCircle, AlertTriangle, CheckCircle2, Circle, CircleHelp, ClipboardCopy, ExternalLink, Loader2, Play} from 'lucide-svelte';
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import ScheduledInvestmentEditor from './ScheduledInvestmentEditor.svelte';

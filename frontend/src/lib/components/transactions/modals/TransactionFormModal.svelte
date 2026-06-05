@@ -37,21 +37,21 @@
     import {X, ArrowRight, ArrowDown, Check, Pencil, Save, Info} from 'lucide-svelte';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/brokerRoleHelpers';
 
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import BrokerSearchSelect from '$lib/components/ui/select/BrokerSearchSelect.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
-    import TagInput from '$lib/components/ui/TagInput.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
-    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
-    import CompactCashCell from '$lib/components/ui/CompactCashCell.svelte';
+    import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
+    import TagInput from '$lib/components/ui/input/TagInput.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
+    import CompactCashCell from '$lib/components/ui/display/CompactCashCell.svelte';
     import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
-    import TransactionTypeSearchSelect from './TransactionTypeSearchSelect.svelte';
-    import WacPreviewSection from './WacPreviewSection.svelte';
-    import AssetEventPicker from './AssetEventPicker.svelte';
-    import EventCreateMiniModal from './EventCreateMiniModal.svelte';
+    import TransactionTypeSearchSelect from '../shared/TransactionTypeSearchSelect.svelte';
+    import WacPreviewSection from '../wac/WacPreviewSection.svelte';
+    import AssetEventPicker from '../events/AssetEventPicker.svelte';
+    import EventCreateMiniModal from '../events/EventCreateMiniModal.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
 
@@ -70,8 +70,8 @@
     import {buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/txPayloadHelpers';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/fxConversionHelper';
-    import type {TXReadItem} from './types';
-    import {type FormModalItems, isInaccessible} from './resolveFormItems';
+    import type {TXReadItem} from '../types';
+    import {type FormModalItems, isInaccessible} from '../shared/resolveFormItems';
 
     // =========================================================================
     // Types

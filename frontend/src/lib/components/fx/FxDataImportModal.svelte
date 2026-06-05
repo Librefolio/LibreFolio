@@ -10,7 +10,7 @@
 <script lang="ts">
     import type {CsvColumnDef, ParsedRow} from '$lib/components/ui/data-editor/CsvEditor.svelte';
     import DataImportModal from '$lib/components/ui/data-editor/DataImportModal.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {ArrowRight} from 'lucide-svelte';
     import {t} from '$lib/i18n';

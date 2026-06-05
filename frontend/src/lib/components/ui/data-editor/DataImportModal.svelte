@@ -13,8 +13,8 @@
 -->
 <script lang="ts">
     import type {Snippet} from 'svelte';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import type {ParsedRow, CsvColumnDef} from './CsvEditor.svelte';
     import CsvEditor from './CsvEditor.svelte';
     import {FileText, HelpCircle, Upload} from 'lucide-svelte';

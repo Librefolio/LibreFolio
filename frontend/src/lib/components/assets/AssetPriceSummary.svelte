@@ -19,7 +19,7 @@
     import {goto} from '$app/navigation';
     import {TrendingUp, TrendingDown, AlertTriangle, Coins} from 'lucide-svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import type {LayoutMode} from '$lib/utils/responsiveLayout.svelte';
 
     interface Props {

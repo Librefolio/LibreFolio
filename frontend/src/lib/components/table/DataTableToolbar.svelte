@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
 
     interface BulkActionInfo {
         id: string;

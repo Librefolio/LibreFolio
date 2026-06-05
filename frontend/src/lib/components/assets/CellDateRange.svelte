@@ -16,7 +16,7 @@
   - onGraceDaysChange: callback for grace days changes
 -->
 <script lang="ts">
-    import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
+    import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
 
     interface Props {
         start: string;

@@ -423,20 +423,10 @@ test.describe('Transactions', () => {
             const deleteBtn = page.locator('[data-testid="tx-bulk-modal"] tbody tr').first().locator('[data-testid*="delete"], button[title*="delete"], button[title*="rimuovi"]').first();
             if (await deleteBtn.isVisible({timeout: 1_000}).catch(() => false)) {
                 await deleteBtn.click();
-                await page.waitForTimeout(500);
-                const rowsAfter = await page.locator('[data-testid="tx-bulk-modal"] tbody tr').count();
-                // Both paired halves should have been removed (count drops by at least 1 visible row)
-                expect(rowsAfter).toBeLessThan(rowsBefore);
-                // Verify no remaining row contains "Cash Transfer" type text (the pair is fully gone)
-                if (rowsAfter === 0) {
-                    // All rows removed — pair was the only content
-                    expect(rowsAfter).toBe(0);
-                } else {
-                    // If rows remain, none should be the deleted pair's type+cash
-                    const remainingHtml = await page.locator('[data-testid="tx-bulk-modal"] tbody').innerHTML();
-                    // The paired type should no longer appear as an active row
-                    expect(remainingHtml).toBeDefined();
-                }
+                await expect(page.locator('[data-testid="tx-bulk-modal"] tbody')).toContainText('No data available', {timeout: 3_000});
+                const remainingHtml = await page.locator('[data-testid="tx-bulk-modal"] tbody').innerHTML();
+                expect(remainingHtml).not.toMatch(/cash transfer|bonifico/i);
+                expect(rowsBefore).toBeGreaterThan(0);
             }
         });
     });

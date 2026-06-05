@@ -136,7 +136,7 @@ export interface HtmlCell {
     html: string;
     /**
      * Optional tooltip wrapper. When provided, the HTML content is rendered
-     * inside a <Tooltip> from `$lib/components/ui/Tooltip.svelte` (instant
+     * inside a <Tooltip> from `$lib/components/ui/feedback/Tooltip.svelte` (instant
      * hover, click on mobile, viewport-aware positioning, KaTeX-capable).
      * Prefer this over the native HTML `title` attribute for any non-trivial
      * explanatory text — it integrates with the design system and is testable.

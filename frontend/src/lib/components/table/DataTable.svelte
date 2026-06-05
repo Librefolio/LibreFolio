@@ -16,10 +16,10 @@
     import {formatBytes} from '$lib/utils/upload';
     import {getUserStorageKey} from '$lib/utils/storage';
     import {Ban, Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon, Info} from 'lucide-svelte';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import DataTablePagination from './DataTablePagination.svelte';
     import DataTableColumnFilter from './DataTableColumnFilter.svelte';
-    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
     import type {ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';

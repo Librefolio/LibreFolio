@@ -17,7 +17,7 @@
 <script lang="ts">
     import {tick} from 'svelte';
     import {t} from '$lib/i18n';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
 
     // =========================================================================
     // Types (exported for external use)

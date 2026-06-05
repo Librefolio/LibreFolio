@@ -12,7 +12,7 @@
  * Plan: BugfixRound3 — Unified Partner Architecture
  */
 
-import type {TXReadItem} from './types';
+import type {TXReadItem} from '../types';
 
 // =============================================================================
 //  Types

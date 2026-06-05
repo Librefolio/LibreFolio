@@ -6,16 +6,16 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import {Trash2, X, Info, Lock, AlertTriangle, Check} from 'lucide-svelte';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import TransactionResultBanner from './TransactionResultBanner.svelte';
-    import BrokerBadge from '$lib/components/ui/BrokerBadge.svelte';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import TransactionResultBanner from '../shared/TransactionResultBanner.svelte';
+    import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {getBrokerInfo, getAllBrokers, getBrokerRole} from '$lib/stores/brokerStore';
     import {getAssetInfo} from '$lib/stores/assetStore';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactionTypeStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {getStringBadgeStyle} from '$lib/utils/colors';
-    import {formatTxQuantity, formatTxCash} from './txDisplayHelpers';
+    import {formatTxQuantity, formatTxCash} from '../shared/txDisplayHelpers';
     import type {BrokerLike} from '$lib/utils/brokerColors';
 
     interface TXReadItem {

@@ -8,8 +8,8 @@
     import {zodiosApi} from '$lib/api';
     import {X} from 'lucide-svelte';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {trySave} from '$lib/utils/trySave';
 
     const dispatch = createEventDispatcher<{

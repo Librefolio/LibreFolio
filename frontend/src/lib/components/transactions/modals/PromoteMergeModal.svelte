@@ -13,10 +13,10 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
-    import TagInput from '$lib/components/ui/TagInput.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import TagInput from '$lib/components/ui/input/TagInput.svelte';
     import {Link2} from 'lucide-svelte';
     import {getStringBadgeStyle} from '$lib/utils/colors';
 

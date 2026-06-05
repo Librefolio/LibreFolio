@@ -12,7 +12,7 @@
     import {t} from '$lib/i18n';
     import {AlertTriangle, Check, ChevronDown, ChevronUp, X, XCircle} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
 
     interface Props {
         /** Whether modal is open */

@@ -13,8 +13,8 @@
 <script lang="ts">
     import {Settings, X} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import type {LineDataPoint} from './LineChart.svelte';
     import LineChart from './LineChart.svelte';

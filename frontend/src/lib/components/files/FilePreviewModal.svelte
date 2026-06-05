@@ -1,7 +1,7 @@
 <script lang="ts">
     import {browser} from '$app/environment';
     import {t} from '$lib/i18n';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import type {FilePreviewResponse} from '$lib/types';
     import {formatBytes} from '$lib/utils/upload';
     import {AlertCircle, Copy, Download, Eye, FileImage, FileSpreadsheet, FileText, LoaderCircle, Minus, Plus, RotateCcw, X} from 'lucide-svelte';

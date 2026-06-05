@@ -5,7 +5,7 @@
     import {isAxiosError} from 'axios';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
 
     const dispatch = createEventDispatcher<{
         gotoLogin: {message?: string};

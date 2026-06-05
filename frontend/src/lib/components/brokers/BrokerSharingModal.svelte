@@ -16,10 +16,10 @@
     import {trySave} from '$lib/utils/trySave';
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {Check, ChevronDown, Crown, Eye, Loader2, Pencil, Plus, RotateCcw, Save, Search, Trash2, Users, X} from 'lucide-svelte';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import {getRoleIcon as _getRoleIcon, getRoleIconColor as _getRoleIconColor, getRoleShortLabel as _getRoleShortLabel} from '$lib/utils/brokerRoleHelpers';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
     import SemiDonutChart from '$lib/components/charts/SemiDonutChart.svelte';
 

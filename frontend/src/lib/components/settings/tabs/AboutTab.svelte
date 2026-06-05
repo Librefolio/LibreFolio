@@ -3,7 +3,7 @@
     import {zodiosApi} from '$lib/api';
     import {onMount} from 'svelte';
     import {Check, ChevronDown, Copy, ExternalLink, Github, Globe, HardDrive, Heart, Monitor, Scale, Tag} from 'lucide-svelte';
-    import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte';
+    import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
 
     const githubUrl = 'https://github.com/Alfystar/LibreFolio';
     const websiteUrl = 'https://librefolio.io'; // Placeholder for now

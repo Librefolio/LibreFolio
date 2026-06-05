@@ -17,15 +17,19 @@
     import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/stores/transactionTypeStore';
     import type {BrokerLike} from '$lib/utils/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
-    import TransactionsTable from '$lib/components/transactions/TransactionsTable.svelte';
+    import {
+        PromoteMergeModal,
+        TransactionActionModal,
+        TransactionBulkModal,
+        TransactionDeleteModal,
+        TransactionFormModal,
+        TransactionsTable,
+        resolveFormItemsForView,
+        type FormModalItems,
+    } from '$lib/components/transactions';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import TransactionFormModal from '$lib/components/transactions/TransactionFormModal.svelte';
-    import TransactionBulkModal from '$lib/components/transactions/TransactionBulkModal.svelte';
-    import TransactionDeleteModal from '$lib/components/transactions/TransactionDeleteModal.svelte';
-    import TransactionActionModal from '$lib/components/transactions/TransactionActionModal.svelte';
-    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
-    import PromoteMergeModal from '$lib/components/transactions/PromoteMergeModal.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {getBrokerInfo, getPairedAccessLevel, canEditBroker, canEditPaired} from '$lib/stores/brokerStore';
     import {getAssetInfo, getAllAssets} from '$lib/stores/assetStore';
     import {toasts} from '$lib/stores/toastStore.svelte';
@@ -36,34 +40,12 @@
     import {getBrokerRole} from '$lib/stores/brokerStore';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/resolveValidationMessage';
     import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/stores/txStore.svelte';
-    import {resolveFormItemsForView, type FormModalItems} from '$lib/components/transactions/resolveFormItems';
+    import {applyTransactionColumnFilters, buildTransactionsFiltersUrl, parseTransactionFilters, toTransactionColumnFilters, type TransactionFilterMap} from './filterState';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
 
     // =========================================================================
     // Types (local, derived from generated.ts shapes)
     // =========================================================================
-
-    type FilterMap = {
-        broker_id?: number;
-        broker_ids?: number[];
-        asset_id?: number;
-        asset_ids?: number[];
-        types?: string[];
-        date_start?: string;
-        date_end?: string;
-        tags?: string[];
-        currency?: string;
-        /** Currency-stack filter encoded as `code:min:max` items (CSV). */
-        cash?: Array<{code: string; min?: number; max?: number}>;
-        /** ID range filter — min/max for the #N column. */
-        id_min?: number;
-        id_max?: number;
-        /** Quantity range filter — min/max. */
-        qty_min?: number;
-        qty_max?: number;
-        page?: number;
-        page_size?: number;
-    };
 
     // =========================================================================
     // State
@@ -83,93 +65,16 @@
     let loading = $state(true);
     let error = $state<string | null>(null);
 
-    let filters = $state<FilterMap>({});
+    let filters = $state<TransactionFilterMap>({});
     let urlInitialized = $state(false);
 
     // =========================================================================
     // URL ↔ filters
     // =========================================================================
 
-    function parseFiltersFromUrl(searchParams: URLSearchParams): FilterMap {
-        const out: FilterMap = {};
-        const num = (k: string) => {
-            const v = searchParams.get(k);
-            if (v == null || v === '') return undefined;
-            const n = Number(v);
-            return Number.isFinite(n) ? n : undefined;
-        };
-        const csv = (k: string) => {
-            const v = searchParams.get(k);
-            return v ? v.split(',').filter(Boolean) : undefined;
-        };
-
-        out.broker_id = num('broker_id');
-        out.asset_id = num('asset_id');
-        // Multi-select: comma-separated IDs
-        const brokerIdsRaw = csv('broker_ids');
-        if (brokerIdsRaw) out.broker_ids = brokerIdsRaw.map(Number).filter(Number.isFinite);
-        const assetIdsRaw = csv('asset_ids');
-        if (assetIdsRaw) out.asset_ids = assetIdsRaw.map(Number).filter(Number.isFinite);
-        out.types = csv('types');
-        out.date_start = searchParams.get('date_start') || undefined;
-        out.date_end = searchParams.get('date_end') || undefined;
-        out.tags = csv('tags');
-        out.currency = searchParams.get('currency') || undefined;
-        out.id_min = num('id_min');
-        out.id_max = num('id_max');
-        out.qty_min = num('qty_min');
-        out.qty_max = num('qty_max');
-        // Currency-stack: `cash=USD:0:1000,EUR::500` (min/max optional → empty token).
-        const cashRaw = searchParams.get('cash');
-        if (cashRaw) {
-            const items: Array<{code: string; min?: number; max?: number}> = [];
-            for (const s of cashRaw
-                .split(',')
-                .map((x) => x.trim())
-                .filter(Boolean)) {
-                const [code, minS, maxS] = s.split(':');
-                if (!code) continue;
-                const min = minS != null && minS !== '' ? Number(minS) : undefined;
-                const max = maxS != null && maxS !== '' ? Number(maxS) : undefined;
-                const it: {code: string; min?: number; max?: number} = {code: code.toUpperCase()};
-                if (Number.isFinite(min as number)) it.min = min as number;
-                if (Number.isFinite(max as number)) it.max = max as number;
-                items.push(it);
-            }
-            if (items.length > 0) out.cash = items;
-        }
-        out.page = num('page');
-        out.page_size = num('page_size');
-        return out;
-    }
-
-    function buildFiltersUrl(f: FilterMap): string {
-        const params = new URLSearchParams();
-        if (f.broker_id != null) params.set('broker_id', String(f.broker_id));
-        if (f.broker_ids?.length) params.set('broker_ids', f.broker_ids.join(','));
-        if (f.asset_id != null) params.set('asset_id', String(f.asset_id));
-        if (f.asset_ids?.length) params.set('asset_ids', f.asset_ids.join(','));
-        if (f.types?.length) params.set('types', f.types.join(','));
-        if (f.date_start) params.set('date_start', f.date_start);
-        if (f.date_end) params.set('date_end', f.date_end);
-        if (f.tags?.length) params.set('tags', f.tags.join(','));
-        if (f.currency) params.set('currency', f.currency);
-        if (f.id_min != null) params.set('id_min', String(f.id_min));
-        if (f.id_max != null) params.set('id_max', String(f.id_max));
-        if (f.qty_min != null) params.set('qty_min', String(f.qty_min));
-        if (f.qty_max != null) params.set('qty_max', String(f.qty_max));
-        if (f.cash?.length) {
-            params.set('cash', f.cash.map((it) => `${it.code}:${it.min ?? ''}:${it.max ?? ''}`).join(','));
-        }
-        if (f.page != null && f.page !== 1) params.set('page', String(f.page));
-        if (f.page_size != null && f.page_size !== 50) params.set('page_size', String(f.page_size));
-        const qs = params.toString();
-        return qs ? `/transactions?${qs}` : '/transactions';
-    }
-
     function syncUrl() {
         if (!browser || !urlInitialized) return;
-        const next = buildFiltersUrl(filters);
+        const next = buildTransactionsFiltersUrl(filters);
         if (next !== `${$page.url.pathname}${$page.url.search}`) {
             goto(next, {replaceState: true, noScroll: true, keepFocus: true});
         }
@@ -181,21 +86,6 @@
      * computed once at mount; subsequent UI changes flow back through
      * `handleColumnFiltersChange` instead.
      */
-    function filtersToColumnFilters(f: FilterMap): Record<string, FilterValue> {
-        const out: Record<string, FilterValue> = {};
-        if (f.types?.length) out.types = {type: 'enum', selected: f.types};
-        if (f.tags?.length) out.tags = {type: 'multi-enum', selected: f.tags};
-        if (f.broker_id != null) out.broker_id = {type: 'enum', selected: [String(f.broker_id)]};
-        else if (f.broker_ids?.length) out.broker_id = {type: 'enum', selected: f.broker_ids.map(String)};
-        if (f.asset_id != null) out.asset_id = {type: 'enum', selected: [String(f.asset_id)]};
-        else if (f.asset_ids?.length) out.asset_id = {type: 'enum', selected: f.asset_ids.map(String)};
-        if (f.date_start || f.date_end) out.date = {type: 'date', from: f.date_start, to: f.date_end};
-        if (f.cash?.length) out.cash = {type: 'currency-stack', items: f.cash.map((i) => ({...i}))};
-        if (f.id_min != null || f.id_max != null) out.id = {type: 'number', min: f.id_min, max: f.id_max};
-        if (f.qty_min != null || f.qty_max != null) out.qty = {type: 'number', min: f.qty_min, max: f.qty_max};
-        return out;
-    }
-
     /**
      * Receive header column filter changes (keyed by `urlKey`) from the
      * DataTable and reduce them into the page-level `filters` state.
@@ -211,67 +101,8 @@
         // Skip filter resets during initialization — DataTable emits an empty
         // record on first render before `initialFilters` is applied.
         if (!urlInitialized) return;
-        const next: FilterMap = {...filters};
-        // Reset the keys that are header-controlled so removing a filter clears it.
-        next.types = undefined;
-        next.tags = undefined;
-        next.broker_id = undefined;
-        next.broker_ids = undefined;
-        next.asset_id = undefined;
-        next.asset_ids = undefined;
-        next.date_start = undefined;
-        next.date_end = undefined;
-        next.cash = undefined;
-        next.id_min = undefined;
-        next.id_max = undefined;
-        next.qty_min = undefined;
-        next.qty_max = undefined;
-        for (const [k, v] of Object.entries(record)) {
-            if (!v) continue;
-            if (k === 'types' && v.type === 'enum') next.types = v.selected.length > 0 ? v.selected : undefined;
-            else if (k === 'tags' && v.type === 'multi-enum') next.tags = v.selected.length > 0 ? v.selected : undefined;
-            else if (k === 'broker_id' && v.type === 'enum') {
-                if (v.selected.length === 1) {
-                    next.broker_id = Number(v.selected[0]);
-                    next.broker_ids = undefined;
-                } else if (v.selected.length > 1) {
-                    next.broker_id = undefined;
-                    next.broker_ids = v.selected.map(Number);
-                }
-            } else if (k === 'asset_id' && v.type === 'enum') {
-                if (v.selected.length === 1) {
-                    next.asset_id = Number(v.selected[0]);
-                    next.asset_ids = undefined;
-                } else if (v.selected.length > 1) {
-                    next.asset_id = undefined;
-                    next.asset_ids = v.selected.map(Number);
-                }
-            } else if (k === 'date' && v.type === 'date') {
-                next.date_start = v.from || undefined;
-                next.date_end = v.to || undefined;
-            } else if (k === 'cash' && v.type === 'currency-stack') next.cash = v.items.length > 0 ? v.items.map((i) => ({...i})) : undefined;
-            else if (k === 'id' && v.type === 'number') {
-                next.id_min = v.min;
-                next.id_max = v.max;
-            } else if (k === 'qty' && v.type === 'number') {
-                next.qty_min = v.min;
-                next.qty_max = v.max;
-            }
-        }
-        // Bail-out: if nothing relevant changed, skip the state update.
-        // This breaks the DataTable re-emit loop triggered by upstream
-        // $derived columns prop changes.
-        const sameTypes = JSON.stringify(filters.types ?? null) === JSON.stringify(next.types ?? null);
-        const sameTags = JSON.stringify(filters.tags ?? null) === JSON.stringify(next.tags ?? null);
-        const sameBroker = (filters.broker_id ?? null) === (next.broker_id ?? null) && JSON.stringify(filters.broker_ids ?? null) === JSON.stringify(next.broker_ids ?? null);
-        const sameAsset = (filters.asset_id ?? null) === (next.asset_id ?? null) && JSON.stringify(filters.asset_ids ?? null) === JSON.stringify(next.asset_ids ?? null);
-        const sameDate = (filters.date_start ?? null) === (next.date_start ?? null) && (filters.date_end ?? null) === (next.date_end ?? null);
-        const sameCash = JSON.stringify(filters.cash ?? null) === JSON.stringify(next.cash ?? null);
-        const sameId = (filters.id_min ?? null) === (next.id_min ?? null) && (filters.id_max ?? null) === (next.id_max ?? null);
-        const sameQty = (filters.qty_min ?? null) === (next.qty_min ?? null) && (filters.qty_max ?? null) === (next.qty_max ?? null);
-        if (sameTypes && sameTags && sameBroker && sameAsset && sameDate && sameCash && sameId && sameQty) return;
-        // Reset to first page on filter change.
-        next.page = 1;
+        const next = applyTransactionColumnFilters(filters, record);
+        if (!next) return;
         filters = next;
         // No reload(): filtering is now 100% client-side (W28). Use the
         // explicit Refresh button to re-fetch from the backend.
@@ -382,7 +213,7 @@
 
     onMount(async () => {
         if (browser) {
-            filters = parseFiltersFromUrl($page.url.searchParams);
+            filters = parseTransactionFilters($page.url.searchParams);
         }
         // Hydrate currency cache so cell builders that call
         // `formatCurrencyAmountPlain/Html` (event tooltip, cash cell, link
@@ -438,7 +269,7 @@
     // Bulk modal (unified batch editor on DataTable).
     let bulkOpen = $state(false);
     /** Declarative intent for BulkModal — replaces bulkInitial/autoOpenForm/initialStatus. */
-    let bulkIntent = $state<import('$lib/components/transactions/TransactionBulkModal.svelte').WorkspaceIntent | undefined>(undefined);
+    let bulkIntent = $state<import('$lib/components/transactions/modals/TransactionBulkModal.svelte').WorkspaceIntent | undefined>(undefined);
 
     // B1-17: Selection-based promote (replaces PromotePairWizardModal).
     let promoteConfirmOpen = $state(false);
@@ -993,7 +824,7 @@
             {eventTooltipMap}
             currentPage={filters.page ?? 1}
             pageSize={filters.page_size ?? 50}
-            initialFilters={filtersToColumnFilters(filters)}
+            initialFilters={toTransactionColumnFilters(filters)}
             onSelectionChange={handleSelectionChange}
             onLinkedPairClick={handleLinkedPairClick}
             onEditRow={handleEditRow}

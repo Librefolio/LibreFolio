@@ -28,7 +28,7 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
-    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {currentLanguage} from '$lib/stores/language';
     import type {CountryInfo} from '$lib/stores/countryStore';
     import {ensureCountriesLoaded, getAllCountries} from '$lib/stores/countryStore';

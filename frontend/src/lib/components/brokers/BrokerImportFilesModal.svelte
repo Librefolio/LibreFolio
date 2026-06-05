@@ -15,13 +15,13 @@
     import {toasts} from '$lib/stores/toastStore.svelte';
     import {ExternalLink, FileUp, RefreshCw, Trash2, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal} from '$lib/components/ui/media';
-    import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
-    import ModalBase from '$lib/components/ui/ModalBase.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import type {BrimFile, FilePreviewResponse} from '$lib/types';

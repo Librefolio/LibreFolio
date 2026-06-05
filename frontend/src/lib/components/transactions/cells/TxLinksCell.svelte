@@ -9,7 +9,7 @@
   positioning, in the same cell.
 -->
 <script lang="ts">
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
 
     interface Props {
         /** HTML for the `tx-event-dot` button (asset-event linkage). Empty/undefined → not rendered. */

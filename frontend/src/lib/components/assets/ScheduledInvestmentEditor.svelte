@@ -26,8 +26,8 @@
     import BoundaryDateModal from './BoundaryDateModal.svelte';
     import {SimpleSelect} from '$lib/components/ui/select';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
-    import SingleDatePicker from '$lib/components/ui/SingleDatePicker.svelte';
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {generateUUID} from '$lib/utils/uuid';
 
     // =========================================================================

@@ -9,7 +9,7 @@
   tooltip wiring.
 -->
 <script lang="ts">
-    import Tooltip from '$lib/components/ui/Tooltip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
 
     interface Props {
         /** Inner HTML rendered inside the Tooltip trigger span. */

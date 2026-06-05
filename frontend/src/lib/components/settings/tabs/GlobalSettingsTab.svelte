@@ -8,8 +8,8 @@
     import {CurrencySearchSelect, type SelectOption, SimpleSelect} from '$lib/components/ui/select';
     import type {GlobalSetting} from '$lib/types';
     import {globalSettings} from '$lib/stores/globalSettings';
-    import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte';
-    import InfoBanner from '$lib/components/ui/InfoBanner.svelte';
+    import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
+    import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import SettingToggle from '$lib/components/settings/SettingToggle.svelte';
     import SettingNumber from '$lib/components/settings/SettingNumber.svelte';
 

@@ -15,7 +15,7 @@
     import {Check, Filter as FilterIcon, RotateCcw, Search, Trash2, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import type {ColumnType, EnumOption, FilterValue} from './types';
-    import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
+    import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {formatCurrencyCodeHtml} from '$lib/utils/currencyFormat';
     import {currencyStoreVersion} from '$lib/stores/currencyStore';

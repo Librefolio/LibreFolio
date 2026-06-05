@@ -20,7 +20,7 @@
     import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
     import ChartSettingsModal from '$lib/components/charts/ChartSettingsModal.svelte';
     import {ConfirmModal} from '$lib/components/table';
-    import DateRangePicker from '$lib/components/ui/DateRangePicker.svelte';
+    import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';

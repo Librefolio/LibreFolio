@@ -13,7 +13,7 @@
     import {getUserStorage} from '$lib/utils/storage';
     import Sidebar from '$lib/components/layout/Sidebar.svelte';
     import Header from '$lib/components/layout/Header.svelte';
-    import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
+    import ToastContainer from '$lib/components/ui/feedback/ToastContainer.svelte';
 
     // Sidebar state for mobile
     let sidebarOpen = false;
