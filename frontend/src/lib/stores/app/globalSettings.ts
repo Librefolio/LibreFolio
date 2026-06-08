@@ -16,10 +16,13 @@ export interface GlobalSettings {
     default_currency: string;
     default_theme: string;
     session_ttl_hours: number;
-    auto_sync_fx_rates: boolean;
-    auto_sync_prices: boolean;
-    price_sync_interval_hours: number;
     max_file_upload_mb: number;
+    // Scheduler
+    scheduler_enabled: boolean;
+    scheduler_current_price_frequency_minutes: number;
+    scheduler_history_sync_times: string;
+    scheduler_history_sync_days: string;
+    scheduler_history_sync_horizon_days: number;
 }
 
 const defaultGlobalSettings: GlobalSettings = {
@@ -27,10 +30,12 @@ const defaultGlobalSettings: GlobalSettings = {
     default_currency: 'EUR',
     default_theme: 'auto',
     session_ttl_hours: 24,
-    auto_sync_fx_rates: false,
-    auto_sync_prices: false,
-    price_sync_interval_hours: 24,
     max_file_upload_mb: 10,
+    scheduler_enabled: true,
+    scheduler_current_price_frequency_minutes: 10,
+    scheduler_history_sync_times: '06:00,23:00',
+    scheduler_history_sync_days: 'mon,tue,wed,thu,fri,sat',
+    scheduler_history_sync_horizon_days: 14,
 };
 
 /**
@@ -70,9 +75,9 @@ function createGlobalSettingsStore() {
                     const value = s.value;
 
                     // Parse based on expected type
-                    if (key === 'session_ttl_hours' || key === 'price_sync_interval_hours' || key === 'max_file_upload_mb') {
+                    if (key === 'session_ttl_hours' || key === 'scheduler_current_price_frequency_minutes' || key === 'max_file_upload_mb' || key === 'scheduler_history_sync_horizon_days') {
                         settingsObj[key] = parseInt(value, 10) || defaultGlobalSettings[key];
-                    } else if (key === 'auto_sync_fx_rates' || key === 'auto_sync_prices') {
+                    } else if (key === 'scheduler_enabled') {
                         settingsObj[key] = value === 'true';
                     } else {
                         (settingsObj as any)[key] = value;
@@ -98,14 +103,14 @@ function createGlobalSettingsStore() {
         async updateSetting(key: keyof GlobalSettings, value: string | number | boolean): Promise<boolean> {
             try {
                 const stringValue = String(value);
-                await zodiosApi.update_global_setting_endpoint_api_v1_settings_global__key__put({value: stringValue}, {params: {key}});
+                await zodiosApi.bulk_update_global_settings_api_v1_settings_global_bulk_patch({items: [{key, value: stringValue}]});
 
                 update((current) => {
                     const updated = {...current};
                     // Parse value based on type
-                    if (key === 'session_ttl_hours' || key === 'price_sync_interval_hours' || key === 'max_file_upload_mb') {
+                    if (key === 'session_ttl_hours' || key === 'scheduler_current_price_frequency_minutes' || key === 'max_file_upload_mb' || key === 'scheduler_history_sync_horizon_days') {
                         updated[key] = typeof value === 'number' ? value : parseInt(String(value), 10);
-                    } else if (key === 'auto_sync_fx_rates' || key === 'auto_sync_prices') {
+                    } else if (key === 'scheduler_enabled') {
                         updated[key] = value === true || value === 'true';
                     } else {
                         (updated as any)[key] = value;

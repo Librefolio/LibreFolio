@@ -4,7 +4,7 @@
     import {isAxiosError} from 'axios';
     import {onDestroy, onMount} from 'svelte';
     import {debug} from '$lib/debug';
-    import {ChevronDown, ChevronRight, Clock, FileUp, Lock, RotateCcw, Save, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
+    import {BarChart3, ChevronDown, ChevronRight, Clock, FileUp, Lock, RefreshCw, RotateCcw, Save, Settings, Shield, ShieldOff, Undo, Unlock, Users} from 'lucide-svelte';
     import {CurrencySearchSelect, type SelectOption, SimpleSelect} from '$lib/components/ui/select';
     import type {GlobalSetting} from '$lib/types';
     import {globalSettings} from '$lib/stores/app/globalSettings';
@@ -12,6 +12,8 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import SettingToggle from '$lib/components/settings/SettingToggle.svelte';
     import SettingNumber from '$lib/components/settings/SettingNumber.svelte';
+    import SchedulerConfigModal from '$lib/components/settings/SchedulerConfigModal.svelte';
+    import SchedulerLogModal from '$lib/components/settings/SchedulerLogModal.svelte';
 
     // Props
     export let canEdit: boolean = false;
@@ -22,9 +24,11 @@
         enable_registration: 'true',
         require_email_verification: 'false',
         max_file_upload_mb: '10',
-        auto_sync_fx_rates: 'true',
-        auto_sync_prices: 'true',
-        price_sync_interval_hours: '6',
+        scheduler_enabled: 'true',
+        scheduler_current_price_frequency_minutes: '10',
+        scheduler_history_sync_times: '06:00,23:00',
+        scheduler_history_sync_days: 'mon,tue,wed,thu,fri,sat',
+        scheduler_history_sync_horizon_days: '14',
         default_currency: 'EUR',
         default_language: 'en',
     };
@@ -39,7 +43,7 @@
     const categories: Category[] = [
         {id: 'session', icon: Clock, keys: ['session_ttl_hours']},
         {id: 'security', icon: Shield, keys: ['enable_registration', 'require_email_verification']},
-        {id: 'sync', icon: FileUp, keys: ['auto_sync_fx_rates', 'auto_sync_prices', 'price_sync_interval_hours', 'max_file_upload_mb']},
+        {id: 'sync', icon: RefreshCw, keys: ['scheduler_enabled', 'max_file_upload_mb']},
         {id: 'defaults', icon: Users, keys: ['default_currency', 'default_language']},
     ];
 
@@ -52,6 +56,12 @@
     let success: string | null = null;
     let selectedCategory: string = 'all';
 
+    // Scheduler UI state
+    let showConfigModal = false;
+    let showLogModal = false;
+    let schedulerState: any = null;
+    let serverTz = '';
+
     // Language options for dropdown
     const languageOptions: SelectOption[] = LANGUAGE_OPTIONS.map((l) => ({
         value: l.code,
@@ -62,7 +72,19 @@
     onMount(async () => {
         debug.log('GlobalSettingsTab', 'onMount');
         await loadSettings();
+        await loadSchedulerState();
     });
+
+    async function loadSchedulerState() {
+        try {
+            const resp = await zodiosApi.axios.get('/api/v1/settings/scheduler/state');
+            schedulerState = resp.data;
+            serverTz = schedulerState?.server_tz || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        } catch (e) {
+            debug.log('GlobalSettingsTab', 'Failed to load scheduler state', e);
+            serverTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        }
+    }
 
     async function loadSettings() {
         debug.log('GlobalSettingsTab', 'loadSettings');
@@ -94,7 +116,9 @@
         error = null;
         success = null;
         try {
-            await zodiosApi.update_global_setting_endpoint_api_v1_settings_global__key__put({value: editedValues[key]}, {params: {key}});
+            await zodiosApi.axios.patch('/api/v1/settings/global/bulk', {
+                items: [{key, value: editedValues[key]}],
+            });
             // Update local state
             const setting = settings.find((s) => s.key === key);
             if (setting) {
@@ -142,30 +166,30 @@
     // Bulk actions
     async function saveAll() {
         const keysToSave = settings.filter((s) => changedKeys.includes(s.key)).map((s) => s.key);
-        const savedLabels: string[] = [];
+        const savedLabels: string[] = keysToSave.map((key) => getSettingLabel(key));
 
-        for (const key of keysToSave) {
-            isSaving = true;
-            error = null;
-            try {
-                await zodiosApi.update_global_setting_endpoint_api_v1_settings_global__key__put({value: editedValues[key]}, {params: {key}});
-                // Update local state
+        isSaving = true;
+        error = null;
+        try {
+            await zodiosApi.axios.patch('/api/v1/settings/global/bulk', {
+                items: keysToSave.map((key) => ({key, value: editedValues[key]})),
+            });
+
+            for (const key of keysToSave) {
                 const setting = settings.find((s) => s.key === key);
                 if (setting) {
                     setting.value = editedValues[key];
                 }
-                savedLabels.push(getSettingLabel(key));
-            } catch (e) {
-                if (isAxiosError(e)) {
-                    if (e.response?.status === 403) {
-                        error = $_('settings.adminRequired');
-                    } else {
-                        error = e.message;
-                    }
+            }
+        } catch (e) {
+            if (isAxiosError(e)) {
+                if (e.response?.status === 403) {
+                    error = $_('settings.adminRequired');
                 } else {
-                    error = $_('settings.saveFailed');
+                    error = e.message;
                 }
-                break; // Stop on first error
+            } else {
+                error = $_('settings.saveFailed');
             }
         }
 
@@ -208,10 +232,12 @@
             default_currency: editedValues['default_currency'] || 'EUR',
             default_theme: editedValues['default_theme'] || 'auto',
             session_ttl_hours: parseInt(editedValues['session_ttl_hours'] || '24', 10),
-            auto_sync_fx_rates: editedValues['auto_sync_fx_rates'] === 'true',
-            auto_sync_prices: editedValues['auto_sync_prices'] === 'true',
-            price_sync_interval_hours: parseInt(editedValues['price_sync_interval_hours'] || '24', 10),
             max_file_upload_mb: parseInt(editedValues['max_file_upload_mb'] || '10', 10),
+            scheduler_enabled: editedValues['scheduler_enabled'] === 'true',
+            scheduler_current_price_frequency_minutes: parseInt(editedValues['scheduler_current_price_frequency_minutes'] || '10', 10),
+            scheduler_history_sync_times: editedValues['scheduler_history_sync_times'] || '06:00,23:00',
+            scheduler_history_sync_days: editedValues['scheduler_history_sync_days'] || 'mon,tue,wed,thu,fri,sat',
+            scheduler_history_sync_horizon_days: parseInt(editedValues['scheduler_history_sync_horizon_days'] || '14', 10),
         });
     }
 
@@ -479,6 +505,15 @@
             </InfoBanner>
         {/if}
 
+        {#if !isLocked}
+            <InfoBanner variant="warning">
+                <p class="text-sm">
+                    <strong>{$_('settings.warning')}:</strong>
+                    {$_('settings.globalSettingsWarning')}
+                </p>
+            </InfoBanner>
+        {/if}
+
         {#if isLoading}
             <LoadingSpinner />
         {:else if settings.length === 0}
@@ -647,16 +682,88 @@
                         </div>
                     {/if}
                 {/each}
-            </div>
-        {/if}
 
-        {#if !isLocked}
-            <InfoBanner variant="warning">
-                <p class="text-sm">
-                    <strong>⚠️ {$_('settings.warning')}:</strong>
-                    {$_('settings.globalSettingsWarning')}
-                </p>
-            </InfoBanner>
+                <!-- Scheduler rows: visible when sync or all category is selected -->
+                {#if selectedCategory === 'sync' || selectedCategory === 'all'}
+                    <!-- Scheduler Status Row (clickable → opens log modal) -->
+                    <div
+                        class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                        data-testid="scheduler-status-row"
+                        on:click={() => (showLogModal = true)}
+                        role="button"
+                        tabindex={0}
+                        on:keydown={(e) => {
+                            if (e.key === 'Enter') showLogModal = true;
+                        }}
+                    >
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <BarChart3 size={16} class="text-gray-500 dark:text-gray-400 shrink-0" />
+                                <div class="min-w-0">
+                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                        {$_('settings.global.scheduler.status.title')}
+                                    </span>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                        {#if schedulerState?.current_price?.last_run_at}
+                                            {$_('settings.global.scheduler.status.lastRun')}: {new Date(schedulerState.current_price.last_run_at).toLocaleString()}
+                                            <span class="inline-block w-2 h-2 rounded-full ml-1 {schedulerState.current_price.last_status === 'ok' ? 'bg-green-500' : schedulerState.current_price.last_status === 'partial' ? 'bg-yellow-500' : 'bg-red-500'}"></span>
+                                        {:else}
+                                            {$_('settings.global.scheduler.status.neverRun')}
+                                        {/if}
+                                    </p>
+                                </div>
+                            </div>
+                            <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0" type="button">
+                                {$_('settings.global.scheduler.status.details')}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Scheduler Config Row (opens config modal) -->
+                    <div class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4 py-3" data-testid="scheduler-config-row">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <Settings size={16} class="text-gray-500 dark:text-gray-400 shrink-0" />
+                                <div class="min-w-0">
+                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                        {$_('settings.global.scheduler.configTitle')}
+                                    </span>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                        {$_('settings.global.scheduler.status.configSummary', {
+                                            values: {
+                                                freq: editedValues['scheduler_current_price_frequency_minutes'] || '10',
+                                                times: editedValues['scheduler_history_sync_times'] || '06:00,23:00',
+                                                days: editedValues['scheduler_history_sync_days'] || 'mon-sat',
+                                            },
+                                        })}
+                                    </p>
+                                </div>
+                            </div>
+                            <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0 disabled:opacity-50" type="button" disabled={isLocked} on:click={() => (showConfigModal = true)}>
+                                {$_('settings.global.scheduler.status.configure')}
+                            </button>
+                        </div>
+                    </div>
+                {/if}
+            </div>
         {/if}
     </div>
 </div>
+
+<!-- Scheduler Modals -->
+<SchedulerConfigModal
+    bind:open={showConfigModal}
+    {serverTz}
+    currentValues={{
+        frequency: parseInt(editedValues['scheduler_current_price_frequency_minutes'] || '10', 10),
+        times: editedValues['scheduler_history_sync_times'] || '06:00,23:00',
+        days: editedValues['scheduler_history_sync_days'] || 'mon,tue,wed,thu,fri,sat',
+        horizon: parseInt(editedValues['scheduler_history_sync_horizon_days'] || '14', 10),
+    }}
+    onsave={async () => {
+        await loadSettings();
+        syncGlobalSettingsStore();
+    }}
+/>
+
+<SchedulerLogModal bind:open={showLogModal} />

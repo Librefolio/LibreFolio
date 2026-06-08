@@ -1,9 +1,9 @@
 # Phase 8 — Market Data Scheduler
 
-> **Status**: ⏳ Step 1+2 completati (2026-06-08), Step 3 (UI) da iniziare.
+> **Status**: ✅ Completata (2026-06-08). Step 1+2 (backend) + Step 3 (UI) tutti implementati.
 > **Giorni stimati**: 2–3
 > **Origine**: side-quest emersa durante Phase 7 dalla convergenza dei sistemi FX (Phase 5) e Asset (Phase 6). Con entrambi i pipeline di sync collaudati e stabili, ha senso automatizzare l'esecuzione periodica invece di lasciarla manuale.
-> **Ultimo aggiornamento**: 2026-06-08 — Step 1+2 completati, scheduler daemon funzionante + job log JSONL aggiunto.
+> **Ultimo aggiornamento**: 2026-06-08 — Tutti gli step completati, testati manualmente e verificati.
 
 ---
 
@@ -644,9 +644,9 @@ phase-08-subplan/
 
 ### Ordine di esecuzione
 
-1. **Step 1** (pulizia `fetch_interval` + placeholder + fix): self-contained, pulisce il terreno.
-2. **Step 2** (backend demone): foundation per la UI.
-3. **Step 3** (UI settings + stato): chiude il loop.
+1. **Step 1** (pulizia `fetch_interval` + placeholder + fix): ✅ completato.
+2. **Step 2** (backend demone): ✅ completato.
+3. **Step 3** (UI settings + stato + log modal): ✅ completato (inclusi 5 round di bugfix).
 
 ---
 
@@ -656,14 +656,22 @@ phase-08-subplan/
 - ✅ 5 nuove `GlobalSetting` keys configurabili runtime (3 placeholder vecchi rimossi).
 - ✅ Scheduling history granulare: orari multipli + selezione giorni della settimana.
 - ✅ Endpoint `GET /api/v1/settings/scheduler/state` per la UI.
-- ✅ Endpoint `GET /api/v1/settings/scheduler/log` per il job log dettagliato (paginato).
+- ✅ Endpoint `GET /api/v1/settings/scheduler/log?since=ISO` per il job log dettagliato (date-based filtering).
 - ✅ Job log JSONL (`scheduler_jobs.jsonl`) con dettaglio per-item e rotation (500 entries).
 - ✅ Campo `fetch_interval` completamente rimosso (DB + schemas + frontend + i18n).
 - ✅ Commento API "read-only" corretto su endpoint current-price.
-- ⏳ UI `GlobalSettingsTab` con sezione Scheduler + "Last execution" hint + tip orario post-chiusura. **(Step 3)**
+- ✅ UI `GlobalSettingsTab` con sezione Scheduler + "Last execution" hint + tip orario post-chiusura.
+- ✅ `SchedulerConfigModal.svelte`: configurazione frequenza/orari/giorni/horizon, bulk save via `PATCH /global/bulk`.
+- ✅ `SchedulerLogModal.svelte`: storico esecuzioni con layout tabellare, filtri job/stato/tempo, tooltip errori con copy-to-clipboard, provider chain con icone (reusa `parseProviderChain`), bandiere valute FX.
+- ✅ Vecchio endpoint `PUT /settings/global/{key}` rimosso — bulk è l'unico metodo di aggiornamento.
+- ✅ Asset.active toggle in AssetModal + pallina stato + banner archiviato nella detail page.
+- ✅ JSONL arricchito: `icon_url` per asset, `prices_changed`/`events_changed` split, `base`/`quote` per FX.
+- ✅ Route MANUAL escluse dallo scheduler (NOK-SEK non sincronizzata, non genera errori).
+- ✅ Mock data: `populate_mock_data.py` genera `scheduler_jobs.jsonl` (5 entries ieri) + `scheduler_state.json` (last runs ieri → trigger immediato).
 - ✅ Multi-worker safe via lowest-PID election con `psutil` (+ fix dev mode `--reload`).
 - ✅ Dipendenza `psutil` aggiunta a `Pipfile` + `requirements.txt`.
-- ⏳ Test suite backend + E2E frontend green. **(Step 3)**
+- ✅ `is_superuser=True` fix per `e2e_test_admin` in `populate_mock_data.py`.
+- ⏳ Test suite backend + E2E frontend — non ancora scritti (da fare in round futuro).
 
 ---
 
@@ -726,3 +734,22 @@ Problemi scoperti durante l'implementazione:
 | 16 | 🟡 | **GlobalSettingsTab layout errato** — ASCII art mostrava layout custom non coerente con la struttura reale (righe `bg-gray-50 rounded-lg px-4`) | Riscritto: righe standard nella categoria "Sincronizzazione" (stesse degli altri setting). Bottone "Configura" apre modale. Eliminati i 3 placeholder attuali |
 | 17 | 🟢 | **Componenti custom** — piano non specificava di usare i componenti UI interni | Aggiunta regola esplicita: cercare e usare SEMPRE `lib/components/ui/` prima di HTML nativi |
 
+### Step 3 UI Implementation & Bugfix Rounds (2026-06-08)
+
+| # | Severità | Issue | Fix applicato |
+|---|----------|-------|---------------|
+| 24 | 🔴 | **`is_admin` inesistente in User model** — `populate_mock_data.py` usava `is_admin=True` per e2e_test_admin, silenziosamente ignorato | Corretto a `is_superuser=True` |
+| 25 | 🔴 | **SchedulerConfigModal: $effect resetta valori editati** — Svelte 5 tracka `currentValues` (inline object dal parent) dentro `$effect` → ogni re-render resettava timeSlots ai valori originali | Fix: `untrack(() => { ... })` su `currentValues` dentro l'effect. Solo `open` è tracciato come dipendenza |
+| 26 | 🔴 | **`datetime` import mancante** in `populate_mock_data.py` — `from datetime import date, timedelta` non includeva `datetime`, crash su `populate_scheduler_mock_log()` | Aggiunto `datetime` all'import |
+| 27 | 🟡 | **Vecchio endpoint PUT /settings/global/{key}** — ridondante dopo introduzione PATCH /global/bulk | Rimosso endpoint + schema `GlobalSettingUpdate` + aggiornati 3 test API + migrata `updateSetting()` in globalSettings.ts a bulk |
+| 28 | 🟡 | **Scheduler log API: limit/offset inadeguato** — il frontend faceva sempre `?limit=20&offset=0` | Cambiato a `?since=ISO_DATETIME` — filtro temporale, nessun offset. Frontend refetchs con filtro tempo selezionato |
+| 29 | 🟡 | **Route MANUAL sincronizzate dallo scheduler** — NOK-SEK (MANUAL) generava errore e stato "partial" | `jobs.py`: filtra `chain_steps` JSON, skip route con `provider == "MANUAL"` |
+| 30 | 🟡 | **Provider chain (CHAIN:ECB+SNB) mostrato come testo raw** — nessuna icona o badge | Frontend: usa `parseProviderChain()` + `getFxProviderIconUrl()` + `PROVIDER_COLORS` badge — stesso pattern di `FxSyncModal.svelte` |
+| 31 | 🟡 | **Warning banner in fondo e con emoji duplicata** — `GlobalSettingsTab` aveva `⚠️` emoji + SVG icon alert + banner in fondo alla pagina | Spostato in cima, rimossa emoji (solo SVG) |
+| 32 | 🟡 | **Modal header/footer non in stile progetto** — SchedulerLogModal e ConfigModal usavano stile diverso | Allineati: `px-6 py-4 border-b/t`, icon badge `w-9 h-9 rounded-lg`, pulsante X, Escape chiude |
+| 33 | 🟢 | **Tooltip errori + copy-to-clipboard** — errori mostrati solo con `title=`, nessun copy | Tooltip component con `text` prop, dblclick/long-press copia in clipboard, toast "Copied!" |
+| 34 | 🟢 | **Layout dettagli non tabellare** — items in flex rows disallineati | Convertito a `<table>` con colonne: ✓/✗, Name, Provider, Delta, Errors. Headers i18n |
+| 35 | 🟢 | **FX senza bandiere valute** — pair mostrate come testo semplice | Aggiunto `getCurrencyInfo(base/quote).flag_emoji` accanto al pair name |
+| 36 | 🟢 | **JSONL arricchito** — mancava `icon_url`, `prices_changed`/`events_changed` separati, `base`/`quote` per FX | Backend: `joblog.py` builder aggiornati, `jobs.py` query `Asset.icon_url` |
+| 37 | 🟢 | **Mock data con date di oggi** — scheduler non triggera sync dopo populate | Tutte le mock entries datate **ieri** + mock `scheduler_state.json` con last_run ieri → trigger immediato |
+| 38 | 🟢 | **Bulk endpoint ignora chiavi inesistenti** — non dava errore se una key non esisteva | Aggiunto `raise HTTPException(404)` se `update_global_setting()` ritorna None |

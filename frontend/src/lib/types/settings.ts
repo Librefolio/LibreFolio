@@ -33,11 +33,6 @@ export type GlobalSetting = z.infer<typeof schemas.GlobalSettingRead>;
  */
 export type GlobalSettingsListResponse = z.infer<typeof schemas.GlobalSettingsListResponse>;
 
-/**
- * Request body for PUT /settings/global/:key
- */
-export type GlobalSettingUpdate = z.infer<typeof schemas.GlobalSettingUpdate>;
-
 // =============================================================================
 // FRONTEND-ONLY TYPES
 // =============================================================================

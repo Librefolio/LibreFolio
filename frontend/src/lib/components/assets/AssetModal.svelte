@@ -102,6 +102,7 @@
     let currency = $state('USD');
     let assetType = $state('STOCK');
     let iconUrl = $state<string | null>(null);
+    let active = $state(true);
 
     // Identifiers — dynamic rows instead of fixed fields
     interface IdentifierRow {
@@ -379,6 +380,7 @@
         currency = data.currency;
         assetType = data.asset_type ?? 'STOCK';
         iconUrl = data.icon_url ?? null;
+        active = data.active !== false;
         identifierRows = columnsToIdentifierRows(data);
         // Classification
         const cp = data.classification_params;
@@ -421,6 +423,7 @@
         currency = 'USD';
         assetType = 'STOCK';
         iconUrl = null;
+        active = true;
         identifierRows = [];
         shortDescription = '';
         sectorDistribution = {};
@@ -920,6 +923,7 @@
             currency: currency,
             asset_type: assetType,
             icon_url: iconUrl,
+            active: active,
             user_url: providerUserUrl || null,
             classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : null,
             identifier_isin: idCols.identifier_isin || null,
@@ -1274,6 +1278,31 @@
 
             {#if moreInfoExpanded}
                 <div class="px-4 py-3 space-y-4 border-t border-gray-200 dark:border-slate-700">
+                    <!-- Asset Status Toggle -->
+                    {#if editMode}
+                        <div class="flex items-center justify-between py-1">
+                            <div>
+                                <span id="asset-active-label" class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    {$t('assets.edit.status.label')}
+                                </span>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                    {$t('assets.edit.status.hint')}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={active}
+                                aria-labelledby="asset-active-label"
+                                data-testid="asset-active-toggle"
+                                onclick={() => (active = !active)}
+                                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {active ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+                            >
+                                <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform {active ? 'translate-x-6' : 'translate-x-1'}"></span>
+                            </button>
+                        </div>
+                    {/if}
+
                     <!-- Sub-section: Identifiers -->
                     <div class="space-y-2">
                         <div class="flex items-center justify-between">
