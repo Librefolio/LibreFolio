@@ -1306,6 +1306,7 @@
             <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3" data-testid="asset-detail-info">
                 <div class="flex items-center gap-3">
                     <AssetIcon iconUrl={assetInfo.icon_url} assetType={assetInfo.asset_type} altText={assetInfo.display_name} size="md" />
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0 {assetInfo.active !== false ? 'bg-green-500' : 'bg-red-400'}" data-testid="asset-status-dot" title={assetInfo.active !== false ? $t('assets.status.active') : $t('assets.status.archived')}></span>
                     <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100 truncate max-w-[15ch] sm:max-w-[30ch] lg:max-w-none" title={assetInfo.display_name}>{assetInfo.display_name}</h2>
                 </div>
 
@@ -1342,6 +1343,14 @@
             <div class="h-8 w-48 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
         {/if}
     </div>
+
+    <!-- Archived banner -->
+    {#if assetInfo && assetInfo.active === false}
+        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2" data-testid="asset-archived-banner">
+            <span>📦</span>
+            <span>{$t('assets.detail.archivedBanner')}</span>
+        </div>
+    {/if}
 
     <!-- Error banner -->
     {#if error}

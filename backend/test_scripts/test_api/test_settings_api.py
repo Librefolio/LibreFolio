@@ -383,35 +383,35 @@ class TestGlobalSettingsSingle:
 
     @pytest.mark.asyncio
     async def test_update_setting_as_admin(self, test_server):
-        """GSET-005: Update setting as admin → success."""
-        print_section("GSET-005: PUT /settings/global/{key} - As Admin")
+        """GSET-005: PATCH /settings/global/bulk - As Admin."""
+        print_section("GSET-005: PATCH /settings/global/bulk - As Admin")
 
         async with httpx.AsyncClient() as client:
             # Get admin user (creates if first user, or finds existing)
             username, email, session = await get_admin_session(client)
 
-            # Update a setting
-            resp = await client.put(
-                f"{API_BASE}/settings/global/session_ttl_hours",
-                json={"value": "48"},
+            # Update a setting via bulk endpoint
+            resp = await client.patch(
+                f"{API_BASE}/settings/global/bulk",
+                json={"items": [{"key": "session_ttl_hours", "value": "48"}]},
                 timeout=TIMEOUT,
             )
 
             assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
 
             # Restore original value
-            await client.put(
-                f"{API_BASE}/settings/global/session_ttl_hours",
-                json={"value": "24"},
+            await client.patch(
+                f"{API_BASE}/settings/global/bulk",
+                json={"items": [{"key": "session_ttl_hours", "value": "24"}]},
                 timeout=TIMEOUT,
             )
 
-            print_success("✓ Admin successfully updated setting")
+            print_success("✓ Admin successfully updated setting via bulk")
 
     @pytest.mark.asyncio
     async def test_update_setting_as_non_admin(self, test_server):
-        """GSET-006: Update setting as non-admin → 403."""
-        print_section("GSET-006: PUT /settings/global/{key} - Non-Admin")
+        """GSET-006: PATCH /settings/global/bulk as non-admin → 403."""
+        print_section("GSET-006: PATCH /settings/global/bulk - Non-Admin")
 
         async with httpx.AsyncClient() as client:
             # Create a regular user (non-admin)
@@ -430,10 +430,10 @@ class TestGlobalSettingsSingle:
 
             assert not is_admin_check, "User should not be admin for this test"
 
-            # Try to update setting
-            resp = await client.put(
-                f"{API_BASE}/settings/global/session_ttl_hours",
-                json={"value": "48"},
+            # Try to update setting via bulk
+            resp = await client.patch(
+                f"{API_BASE}/settings/global/bulk",
+                json={"items": [{"key": "session_ttl_hours", "value": "48"}]},
                 timeout=TIMEOUT,
             )
 
@@ -442,16 +442,16 @@ class TestGlobalSettingsSingle:
 
     @pytest.mark.asyncio
     async def test_update_nonexistent_setting(self, test_server):
-        """GSET-007: Update non-existent setting → 404."""
-        print_section("GSET-007: PUT /settings/global/{key} - Non-existent")
+        """GSET-007: Bulk update with non-existent setting → 404."""
+        print_section("GSET-007: PATCH /settings/global/bulk - Non-existent key")
 
         async with httpx.AsyncClient() as client:
             # Get admin user
             username, email, session = await get_admin_session(client)
 
-            resp = await client.put(
-                f"{API_BASE}/settings/global/nonexistent_setting_xyz",
-                json={"value": "test"},
+            resp = await client.patch(
+                f"{API_BASE}/settings/global/bulk",
+                json={"items": [{"key": "nonexistent_setting_xyz", "value": "test"}]},
                 timeout=TIMEOUT,
             )
 

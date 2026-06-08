@@ -6,7 +6,7 @@ Schemas for user settings and global settings management.
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.common import BaseListResponse
 from backend.app.utils.datetime_utils import UTCDateTime
@@ -52,10 +52,21 @@ class GlobalSettingRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class GlobalSettingUpdate(BaseModel):
-    """Global setting update request."""
+class GlobalSettingBulkItem(BaseModel):
+    """Single global setting update item."""
 
-    value: str = Field(..., description="New value (as string)")
+    key: str
+    value: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class GlobalSettingBulkUpdate(BaseModel):
+    """Bulk global setting update request."""
+
+    items: list[GlobalSettingBulkItem]
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class GlobalSettingsListResponse(BaseListResponse[GlobalSettingRead]):

@@ -42,12 +42,12 @@ def _rotate_if_needed(path: Path) -> None:
         pass
 
 
-def read_entries(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+def read_entries(since: str | None = None) -> list[dict[str, Any]]:
     """Read log entries in reverse chronological order (newest first).
 
     Args:
-        limit: Max entries to return.
-        offset: Number of entries to skip from the end.
+        since: ISO-8601 timestamp string. Only entries with ts >= since
+               are returned. If None, all entries are returned.
 
     Returns:
         List of parsed log entry dicts.
@@ -62,21 +62,33 @@ def read_entries(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
     except OSError:
         return []
 
-    # Reverse for newest-first
-    lines = list(reversed(lines))
-
-    # Apply pagination
-    page = lines[offset : offset + limit]
+    # Parse and optionally filter by timestamp
+    since_dt: datetime | None = None
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since)
+        except (ValueError, TypeError):
+            pass
 
     entries = []
-    for line in page:
+    for line in reversed(lines):
         line = line.strip()
         if not line:
             continue
         try:
-            entries.append(json.loads(line))
+            entry = json.loads(line)
         except json.JSONDecodeError:
             continue
+
+        if since_dt:
+            try:
+                entry_dt = datetime.fromisoformat(entry["ts"])
+                if entry_dt < since_dt:
+                    continue
+            except (KeyError, ValueError, TypeError):
+                continue
+
+        entries.append(entry)
 
     return entries
 
@@ -86,8 +98,10 @@ def build_current_price_entry(
     asset_names: dict[int, str],
     duration_s: float,
     status: str,
+    asset_icons: dict[int, str | None] | None = None,
 ) -> dict[str, Any]:
     """Build a JSONL entry for a current-price refresh run."""
+    icons = asset_icons or {}
     items = []
     for r in results:
         item: dict[str, Any] = {
@@ -95,6 +109,8 @@ def build_current_price_entry(
             "name": asset_names.get(r.asset_id, "?"),
             "ok": r.value is not None,
         }
+        if icons.get(r.asset_id):
+            item["icon_url"] = icons[r.asset_id]
         if r.error:
             item["error"] = r.error
         items.append(item)
@@ -116,8 +132,10 @@ def build_history_sync_entry(
     asset_names: dict[int, str],
     duration_s: float,
     status: str,
+    asset_icons: dict[int, str | None] | None = None,
 ) -> dict[str, Any]:
     """Build a JSONL entry for a history-sync run."""
+    icons = asset_icons or {}
     assets = []
     for r in asset_results:
         item: dict[str, Any] = {
@@ -125,19 +143,26 @@ def build_history_sync_entry(
             "name": asset_names.get(r.asset_id, "?"),
             "status": str(r.status),
         }
+        if icons.get(r.asset_id):
+            item["icon_url"] = icons[r.asset_id]
         if r.errors:
             item["errors"] = r.errors
         if r.provider_used:
             item["provider"] = r.provider_used
-        item["points_changed"] = r.points_changed
+        item["prices_changed"] = r.points_changed
+        item["events_changed"] = getattr(r, "events_changed", 0)
         assets.append(item)
 
     fx = []
     for r in fx_results:
-        item = {
+        pair_parts = r.pair.split("-") if hasattr(r, "pair") else []
+        item: dict[str, Any] = {
             "pair": r.pair,
             "status": str(r.status),
         }
+        if len(pair_parts) == 2:
+            item["base"] = pair_parts[0]
+            item["quote"] = pair_parts[1]
         if r.errors:
             item["errors"] = r.errors
         if r.provider_used:

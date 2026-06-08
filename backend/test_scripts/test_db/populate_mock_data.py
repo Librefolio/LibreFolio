@@ -36,7 +36,7 @@ import json
 import random
 import shutil
 import traceback
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -222,7 +222,7 @@ def populate_broker_user_access(session: Session):
                 email=email,
                 hashed_password=hash_password(pwd),
                 is_active=True,
-                is_admin=is_admin,
+                is_superuser=is_admin,
             )
             session.add(u)
             print(f"  ✅ Created user: {uname}{' (admin)' if is_admin else ''}")
@@ -2824,6 +2824,130 @@ async def validate_all_balances_async() -> int:
     return len(violations)
 
 
+def populate_scheduler_mock_log() -> None:
+    """Write a mock scheduler_jobs.jsonl with diverse test entries.
+
+    Deletes any existing file first. Entries cover:
+    - current_price: ok, partial (1 error), error (all failed)
+    - history_sync: ok with assets + FX, partial with mixed results
+    """
+    log_path = Path(get_data_dir()) / "logs" / "scheduler_jobs.jsonl"
+    if log_path.exists():
+        log_path.unlink()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    now = datetime.now().astimezone()
+    # All entries dated YESTERDAY so the scheduler triggers a fresh sync on first run
+    yesterday = now - timedelta(days=1)
+    entries = [
+        # 1) current_price — all ok (yesterday morning)
+        {
+            "ts": yesterday.replace(hour=6, minute=5).isoformat(),
+            "job": "current_price",
+            "duration_s": 3.21,
+            "status": "ok",
+            "summary": {"ok": 3, "err": 0},
+            "items": [
+                {"asset_id": 1, "name": "Apple Inc.", "ok": True},
+                {"asset_id": 2, "name": "Microsoft Corporation", "ok": True},
+                {"asset_id": 3, "name": "Tesla Inc.", "ok": True},
+            ],
+        },
+        # 2) current_price — partial (yesterday noon)
+        {
+            "ts": yesterday.replace(hour=12, minute=10).isoformat(),
+            "job": "current_price",
+            "duration_s": 5.87,
+            "status": "partial",
+            "summary": {"ok": 2, "err": 1},
+            "items": [
+                {"asset_id": 1, "name": "Apple Inc.", "ok": True},
+                {"asset_id": 2, "name": "Microsoft Corporation", "ok": True},
+                {"asset_id": 3, "name": "Tesla Inc.", "ok": False, "error": "Provider timeout after 30s: yfinance returned empty response for TSLA"},
+            ],
+        },
+        # 3) current_price — error (yesterday evening)
+        {
+            "ts": yesterday.replace(hour=18, minute=0).isoformat(),
+            "job": "current_price",
+            "duration_s": 31.02,
+            "status": "error",
+            "summary": {"ok": 0, "err": 3},
+            "items": [
+                {"asset_id": 1, "name": "Apple Inc.", "ok": False, "error": "ConnectionError: Unable to reach provider endpoint"},
+                {"asset_id": 2, "name": "Microsoft Corporation", "ok": False, "error": "ConnectionError: Unable to reach provider endpoint"},
+                {"asset_id": 3, "name": "Tesla Inc.", "ok": False, "error": "ConnectionError: Unable to reach provider endpoint"},
+            ],
+        },
+        # 4) history_sync — ok with assets + FX (yesterday 06:00)
+        {
+            "ts": yesterday.replace(hour=6, minute=0).isoformat(),
+            "job": "history_sync",
+            "duration_s": 12.45,
+            "status": "ok",
+            "summary": {"assets_ok": 3, "assets_err": 0, "fx_ok": 3, "fx_err": 0},
+            "assets": [
+                {"asset_id": 1, "name": "Apple Inc.", "status": "ok", "provider": "yfinance", "prices_changed": 5, "events_changed": 1},
+                {"asset_id": 2, "name": "Microsoft Corporation", "status": "ok", "provider": "yfinance", "prices_changed": 5, "events_changed": 0},
+                {"asset_id": 3, "name": "Tesla Inc.", "status": "ok", "provider": "yfinance", "prices_changed": 5, "events_changed": 2},
+            ],
+            "fx": [
+                {"pair": "EUR-USD", "base": "EUR", "quote": "USD", "status": "ok", "provider": "ecb", "points_changed": 5},
+                {"pair": "EUR-GBP", "base": "EUR", "quote": "GBP", "status": "ok", "provider": "ecb", "points_changed": 5},
+                {"pair": "EUR-CHF", "base": "EUR", "quote": "CHF", "status": "ok", "provider": "snb", "points_changed": 5},
+            ],
+        },
+        # 5) history_sync — partial with mixed results (yesterday 23:00)
+        {
+            "ts": yesterday.replace(hour=23, minute=0).isoformat(),
+            "job": "history_sync",
+            "duration_s": 18.73,
+            "status": "partial",
+            "summary": {"assets_ok": 2, "assets_err": 1, "fx_ok": 2, "fx_err": 1},
+            "assets": [
+                {"asset_id": 1, "name": "Apple Inc.", "status": "ok", "provider": "yfinance", "prices_changed": 3, "events_changed": 0},
+                {"asset_id": 2, "name": "Microsoft Corporation", "status": "ok", "provider": "yfinance", "prices_changed": 3, "events_changed": 1},
+                {"asset_id": 3, "name": "Tesla Inc.", "status": "error", "provider": "yfinance", "prices_changed": 0, "events_changed": 0, "errors": ["HTTPError 429: Too Many Requests — rate limited by Yahoo Finance API"]},
+            ],
+            "fx": [
+                {"pair": "EUR-USD", "base": "EUR", "quote": "USD", "status": "ok", "provider": "ecb", "points_changed": 3},
+                {"pair": "EUR-GBP", "base": "EUR", "quote": "GBP", "status": "ok", "provider": "ecb", "points_changed": 3},
+                {"pair": "EUR-JPY", "base": "EUR", "quote": "JPY", "status": "error", "provider": "boe", "points_changed": 0, "errors": ["Provider returned empty dataset for date range"]},
+            ],
+        },
+    ]
+
+    with open(log_path, "w", encoding="utf-8") as f:
+        for entry in entries:
+            f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+
+    # Write mock scheduler_state.json with last runs = yesterday
+    # This ensures the scheduler triggers both jobs on first startup
+    state_path = Path(get_data_dir()) / "scheduler_state.json"
+    state_data = {
+        "current_price": {
+            "last_run_at": yesterday.replace(hour=18, minute=0).isoformat(),
+            "last_duration_s": 5.87,
+            "last_status": "partial",
+            "last_items_ok": 2,
+            "last_items_err": 1,
+            "last_error": None,
+        },
+        "history_sync": {
+            "last_run_at": yesterday.replace(hour=23, minute=0).isoformat(),
+            "last_duration_s": 18.73,
+            "last_status": "partial",
+            "last_items_ok": 4,
+            "last_items_err": 2,
+            "last_error": None,
+        },
+    }
+    state_path.write_text(json.dumps(state_data, indent=2))
+
+    print(f"\n📋 Mock scheduler log: {len(entries)} entries → {log_path}")
+    print(f"📋 Mock scheduler state → {state_path}")
+
+
 def main():
     """Populate database with mock data for testing."""
     # Parse arguments
@@ -2902,6 +3026,7 @@ def main():
             populate_fx_rates(session)
             populate_fx_currency_pair_sources(session)
             configure_user_avatars(session)
+            populate_scheduler_mock_log()
 
             # Optional: upload static resources (avatars, broker icons)
             if args.with_static:

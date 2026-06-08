@@ -1,5 +1,6 @@
 """Scheduler jobs — current-price refresh and history sync."""
 
+import json
 import time as time_module
 from datetime import date, datetime, timedelta
 
@@ -30,7 +31,7 @@ async def run_current_price_refresh(state: SchedulerState) -> None:
 
     async with AsyncSession(engine) as session:
         stmt = (
-            select(Asset.id, Asset.display_name)
+            select(Asset.id, Asset.display_name, Asset.icon_url)
             .join(AssetProviderAssignment, Asset.id == AssetProviderAssignment.asset_id)
             .where(Asset.active == True)  # noqa: E712 — SQLAlchemy expression
         )
@@ -38,6 +39,7 @@ async def run_current_price_refresh(state: SchedulerState) -> None:
         rows = result.all()
         asset_ids = [r[0] for r in rows]
         asset_names: dict[int, str] = {r[0]: r[1] for r in rows}
+        asset_icons: dict[int, str | None] = {r[0]: r[2] for r in rows}
 
         if not asset_ids:
             logger.debug("Scheduler: no active assets to refresh")
@@ -63,7 +65,9 @@ async def run_current_price_refresh(state: SchedulerState) -> None:
     )
 
     # Write detailed job log entry
-    entry = build_current_price_entry(results, asset_names, round(duration, 2), status)
+    entry = build_current_price_entry(
+        results, asset_names, round(duration, 2), status, asset_icons=asset_icons
+    )
     append_entry(entry)
 
     logger.info(
@@ -92,7 +96,7 @@ async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> Non
     # --- Asset history sync ---
     async with AsyncSession(engine) as session:
         stmt = (
-            select(Asset.id, Asset.display_name)
+            select(Asset.id, Asset.display_name, Asset.icon_url)
             .join(AssetProviderAssignment, Asset.id == AssetProviderAssignment.asset_id)
             .where(Asset.active == True)  # noqa: E712
         )
@@ -100,6 +104,7 @@ async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> Non
         rows = result.all()
         asset_ids = [r[0] for r in rows]
         asset_names = {r[0]: r[1] for r in rows}
+        asset_icons: dict[int, str | None] = {r[0]: r[2] for r in rows}
 
     if asset_ids:
         refresh_items = [
@@ -126,6 +131,13 @@ async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> Non
 
         pairs_set: set[str] = set()
         for route in routes:
+            # Skip MANUAL routes — they are user-managed, not auto-synced
+            try:
+                steps = json.loads(route.chain_steps)
+                if any(s.get("provider", "").upper() == "MANUAL" for s in steps):
+                    continue
+            except (json.JSONDecodeError, TypeError):
+                pass
             slug = f"{route.base}-{route.quote}"
             pairs_set.add(slug)
 
@@ -152,7 +164,12 @@ async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> Non
 
     # Write detailed job log entry
     entry = build_history_sync_entry(
-        asset_results_list, fx_results_list, asset_names, round(duration, 2), status
+        asset_results_list,
+        fx_results_list,
+        asset_names,
+        round(duration, 2),
+        status,
+        asset_icons=asset_icons,
     )
     append_entry(entry)
 

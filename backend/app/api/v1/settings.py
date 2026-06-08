@@ -15,9 +15,9 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.settings import (
+    GlobalSettingBulkUpdate,
     GlobalSettingRead,
     GlobalSettingsListResponse,
-    GlobalSettingUpdate,
     UserSettingsRead,
     UserSettingsUpdate,
 )
@@ -117,24 +117,25 @@ async def get_global_setting_endpoint(key: str, session: AsyncSession = Depends(
     return setting
 
 
-@router.put("/global/{key}", response_model=GlobalSettingRead)
-async def update_global_setting_endpoint(
-    key: str,
-    update: GlobalSettingUpdate,
+
+@router.patch("/global/bulk", response_model=list[GlobalSettingRead])
+async def bulk_update_global_settings(
+    update: GlobalSettingBulkUpdate,
     admin: Annotated[User, Depends(require_admin)],
     session: AsyncSession = Depends(get_session_generator),
-) -> GlobalSettingRead:
-    """
-    Update a global setting.
-
-    Admin only - requires is_superuser=True.
-    """
-    logger.info("Updating global setting", key=key, value=update.value, admin_id=admin.id)
-
-    result = await update_global_setting(key, update.value, admin.id, session)
-    if not result:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Setting '{key}' not found")
-    return result
+) -> list[GlobalSettingRead]:
+    """Bulk update global settings. Admin only."""
+    results = []
+    for item in update.items:
+        result = await update_global_setting(item.key, item.value, admin.id, session)
+        if result:
+            results.append(result)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Setting '{item.key}' not found",
+            )
+    return results
 
 
 @router.post("/global/initialize", status_code=status.HTTP_200_OK)
@@ -191,16 +192,17 @@ async def get_scheduler_state(
 @router.get("/scheduler/log")
 async def get_scheduler_log(
     admin: Annotated[User, Depends(require_admin)],
-    limit: int = 50,
-    offset: int = 0,
+    since: str | None = None,
 ) -> dict:
     """
     Get scheduler job log entries (newest first) — admin only.
 
     Returns per-item detail for each scheduler job run, including
     which assets/pairs succeeded or failed and why.
-    Paginated with limit/offset (max 100 per page).
+
+    Args:
+        since: ISO-8601 timestamp. Only entries with ts >= since are returned.
+               If omitted, all entries are returned (capped at 500 by JSONL rotation).
     """
-    limit = min(limit, 100)
-    entries = read_job_log(limit=limit, offset=offset)
-    return {"entries": entries, "count": len(entries), "offset": offset}
+    entries = read_job_log(since=since)
+    return {"entries": entries}
