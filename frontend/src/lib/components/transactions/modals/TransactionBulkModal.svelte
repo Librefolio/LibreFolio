@@ -27,7 +27,7 @@
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save, Unlink, Link2, Lightbulb} from 'lucide-svelte';
+    import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save, Unlink, Link2, Lightbulb, Upload} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
@@ -57,10 +57,12 @@
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import TransactionFormModal from './TransactionFormModal.svelte';
     import TransactionPickerModal from './TransactionPickerModal.svelte';
+    import ImportWizardModal from './ImportWizardModal.svelte';
     import {txStoreGet, txStoreCount} from '$lib/stores/transactions/txStore.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import type {FormModalItems} from '../shared/resolveFormItems';
     import type {TXReadItem, ValidationIssue} from '../types';
+    import type {TransactionCreateItem} from '$lib/types';
 
     // =========================================================================
     // Types
@@ -68,7 +70,7 @@
 
     /** WorkspaceIntent — declarative API for opening the BulkModal.
      *  +page passes only action + txIds; BulkModal resolves data from txStore. */
-    export type WorkspaceIntent = {action: 'create'} | {action: 'edit'; txIds: number[]} | {action: 'delete'; txIds: number[]} | {action: 'clone'; txIds: number[]};
+    export type WorkspaceIntent = {action: 'create'} | {action: 'import'} | {action: 'edit'; txIds: number[]} | {action: 'delete'; txIds: number[]} | {action: 'clone'; txIds: number[]};
 
     /** Fields displayed & editable in the grid — pure data, no metadata. */
     interface DraftFields {
@@ -307,6 +309,9 @@
             if (intent.action === 'create') {
                 return {rows: [], autoForm: 'create'};
             }
+            if (intent.action === 'import') {
+                return {rows: [], autoForm: null};
+            }
             const txIds = intent.txIds;
             const resolved: TXReadItem[] = [];
             const seen = new Set<number>();
@@ -406,12 +411,17 @@
                 // with FALLBACK_RULE. Ops will be assigned after Promise.all.
                 ops = [];
                 initialOpsKey = '';
-                if (rows.length === 0) {
+                if (rows.length === 0 && intent?.action !== 'import') {
                     queueMicrotask(() => {
                         formOpen = true;
                         formMode = 'create';
                         formItems = null;
                         formEditingTempId = null;
+                    });
+                }
+                if (intent?.action === 'import') {
+                    queueMicrotask(() => {
+                        importWizardOpen = true;
                     });
                 }
             }
@@ -445,13 +455,17 @@
         } else if (autoForm === 'create' && opArr.length > 0) {
             // Clone: row is 'new' so openEditRowForm uses create mode
             queueMicrotask(() => openEditRowForm(opArr[0]));
-        } else if (opArr.length === 0) {
-            // Auto-open for brand-new empty grid
+        } else if (opArr.length === 0 && intent?.action !== 'import') {
+            // Auto-open for brand-new empty grid (not import — bridge opens instead)
             queueMicrotask(() => {
                 formOpen = true;
                 formMode = 'create';
                 formItems = null;
                 formEditingTempId = null;
+            });
+        } else if (opArr.length === 0 && intent?.action === 'import') {
+            queueMicrotask(() => {
+                importWizardOpen = true;
             });
         }
     }
@@ -973,7 +987,7 @@
     /** Convert a PendingOp to the shared TxFields interface. */
     function opToTxFields(d: PendingOp): TxFields {
         // In auto mode with currency hint, override becomes the hint sentinel
-        const cbo = d.fields.cost_basis_mode === 'auto' && d.wacCurrencyHint ? {code: d.wacCurrencyHint, amount: '0'} : (d.fields.cost_basis_override || null);
+        const cbo = d.fields.cost_basis_mode === 'auto' && d.wacCurrencyHint ? {code: d.wacCurrencyHint, amount: '0'} : d.fields.cost_basis_override || null;
         return {...d.fields, cost_basis_override: cbo, link_uuid: d.link_uuid ?? null};
     }
 
@@ -1950,6 +1964,16 @@
     let pickerExcludeIds = $derived(new Set(ops.filter((d) => opTxId(d) != null).map((d) => opTxId(d)!)));
     // PickerModal reads from txStore directly (Plan C Step 2)
 
+    // -------------------------------------------------------------------------
+    // ImportWizardModal (Phase 07 Part 5 v5 M1): BRIM Import Wizard → BulkModal bridge.
+    // -------------------------------------------------------------------------
+    let importWizardOpen = $state(false);
+
+    function onImportBatch(creates: TransactionCreateItem[]) {
+        toasts.success($t('importWizard.importedCount', {values: {n: creates.length}}));
+        importWizardOpen = false;
+    }
+
     // BUG-C7: Suggest picker — opens PickerModal filtered to importable candidates
     let suggestPickerOpen = $state(false);
     function openSuggestPicker() {
@@ -2815,6 +2839,15 @@
                 <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row" title={$t('transactions.bulk.addRow') || 'Add row'}>
                     <Plus size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.addRow') || 'Add row'}</span>
                 </button>
+                <button
+                    type="button"
+                    class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 border border-gray-200 dark:border-gray-600"
+                    onclick={() => (importWizardOpen = true)}
+                    data-testid="tx-bulk-import"
+                    title={$t('importWizard.import') || 'Import'}
+                >
+                    <Upload size={12} /> <span class="hidden sm:inline">{$t('importWizard.import') || 'Import'}</span>
+                </button>
                 {#if importableSuggestions.length > 0}
                     <button
                         type="button"
@@ -3012,3 +3045,6 @@
         promoteMergeData = null;
     }}
 />
+
+<!-- Phase 07 Part 5 v5 M1: BRIM Import Wizard -->
+<ImportWizardModal open={importWizardOpen} zIndex={70} onClose={() => (importWizardOpen = false)} {onImportBatch} />

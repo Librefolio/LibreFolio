@@ -16,16 +16,7 @@
     import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/stores/transactions/transactionTypeStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
-    import {
-        PromoteMergeModal,
-        TransactionActionModal,
-        TransactionBulkModal,
-        TransactionDeleteModal,
-        TransactionFormModal,
-        TransactionsTable,
-        resolveFormItemsForView,
-        type FormModalItems,
-    } from '$lib/components/transactions';
+    import {PromoteMergeModal, TransactionActionModal, TransactionBulkModal, TransactionDeleteModal, TransactionFormModal, TransactionsTable, resolveFormItemsForView, type FormModalItems} from '$lib/components/transactions';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -250,8 +241,8 @@
         bulkOpen = true;
     }
     function onImportFromBroker() {
-        // TODO Step 10: open BrokerImportFilesModal
-        console.warn('TODO Step 10: open BrokerImportFilesModal');
+        bulkIntent = {action: 'import'};
+        bulkOpen = true;
     }
 
     // =========================================================================

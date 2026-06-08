@@ -242,7 +242,6 @@
                     {/if}
                 </div>
 
-
                 <!-- Global actions — below fields, above footer -->
                 <div class="flex justify-between gap-2">
                     <Tooltip text={$t('transactions.promote.allLeft')}>

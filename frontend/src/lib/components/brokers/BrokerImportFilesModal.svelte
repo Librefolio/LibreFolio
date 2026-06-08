@@ -383,15 +383,7 @@
     </div>
 </ModalBase>
 
-<FilePreviewModal
-    open={showPreviewModal}
-    preview={previewData}
-    loading={previewLoading}
-    error={previewError}
-    onRequestClose={closePreviewModal}
-    onSheetChange={handlePreviewSheetChange}
-    zIndex={60}
-/>
+<FilePreviewModal open={showPreviewModal} preview={previewData} loading={previewLoading} error={previewError} onRequestClose={closePreviewModal} onSheetChange={handlePreviewSheetChange} zIndex={60} />
 
 <!-- File Rename Modal (for BRIM files) -->
 {#if editingFile}

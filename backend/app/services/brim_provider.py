@@ -362,6 +362,7 @@ class BRIMProvider(ABC):
             docs_url=self.docs_url,
             plugin_version=self.plugin_version,
             preview_columns=self.preview_columns(),
+            detection_priority=self.detection_priority,
         )
 
     def shutdown(self) -> None:  # pragma: no cover  # noqa: B027 — intentional no-op default

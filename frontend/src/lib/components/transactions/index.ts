@@ -4,4 +4,3 @@ export * from './shared';
 export * from './wac';
 export * from './events';
 export type {AssetEvent, TXReadItem, ValidationIssue} from './types';
-

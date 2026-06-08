@@ -222,23 +222,25 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
         Get list of plugin codes that can parse the given file.
 
         Iterates through all registered plugins and calls can_parse().
+        Results are sorted by detection_priority descending (best match first).
 
         Args:
             file_path: Path to the file to check
 
         Returns:
-            List of plugin codes that can parse this file
+            List of plugin codes that can parse this file, sorted by priority
         """
         cls.auto_discover()
-        compatible = []
+        compatible: list[tuple[str, int]] = []
         for code, plugin_cls in cls._providers.items():
             try:
                 instance = plugin_cls()
                 if instance.can_parse(file_path):
-                    compatible.append(code)
+                    compatible.append((code, instance.detection_priority))
             except Exception:
                 continue
-        return compatible
+        compatible.sort(key=lambda x: x[1], reverse=True)
+        return [code for code, _ in compatible]
 
     @classmethod
     def list_plugin_info(cls) -> list:

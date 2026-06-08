@@ -10,6 +10,10 @@
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import type {BrimPlugin} from '$lib/types';
 
+    // Module-level cache: shared across all ImportPluginSelect instances
+    let cachedPlugins: BrimPlugin[] | null = null;
+    let cachePromise: Promise<BrimPlugin[]> | null = null;
+
     interface Props {
         value?: string;
         disabled?: boolean;
@@ -45,15 +49,25 @@
     });
 
     async function loadPlugins() {
+        if (cachedPlugins) {
+            plugins = cachedPlugins;
+            loading = false;
+            return;
+        }
         loading = true;
         error = null;
 
         try {
-            const response = await zodiosApi.list_plugins_api_v1_brokers_import_plugins_get();
-            plugins = (response as BrimPlugin[]) || [];
+            if (!cachePromise) {
+                cachePromise = zodiosApi.list_plugins_api_v1_brokers_import_plugins_get().then((r) => (r as BrimPlugin[]) || []);
+            }
+            const result = await cachePromise;
+            cachedPlugins = result;
+            plugins = result;
         } catch (e) {
             console.error('Failed to load import plugins:', e);
             error = 'Failed to load plugins';
+            cachePromise = null;
         } finally {
             loading = false;
         }

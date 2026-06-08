@@ -57,6 +57,7 @@
         '3xl': '48rem',
         '4xl': '56rem',
         '5xl': '64rem',
+        '6xl': '72rem',
         none: 'none',
         'max-w-sm': '24rem',
         'max-w-md': '28rem',
@@ -66,6 +67,7 @@
         'max-w-3xl': '48rem',
         'max-w-4xl': '56rem',
         'max-w-5xl': '64rem',
+        'max-w-6xl': '72rem',
         'max-w-none': 'none',
     };
 
