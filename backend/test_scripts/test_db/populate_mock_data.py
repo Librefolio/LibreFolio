@@ -826,7 +826,6 @@ def populate_asset_provider_assignments(session: Session):
                 identifier=identifier,
                 identifier_type=id_type,
                 provider_params=json.dumps(params) if params else None,
-                fetch_interval=1440,  # 24 hours
             )
             session.add(assignment)
             print(f"  ✅ {display_name} → {provider_code} ({identifier})")

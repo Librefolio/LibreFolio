@@ -169,7 +169,6 @@ def test_asset_deletion_cascades_provider_assignment(clean_test_asset):
             identifier="TEST",
             identifier_type=IdentifierType.TICKER,
             provider_params='{"symbol": "TEST"}',
-            fetch_interval=1440,
         )
         session.add(assignment)
         session.commit()

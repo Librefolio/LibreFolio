@@ -866,8 +866,6 @@ class FxConversionRoute(SQLModel, table=True):
         description="JSON array of conversion steps [{from, to, provider}, ...]",
     )
 
-    fetch_interval: Optional[int] = Field(default=None, ge=1, description="Fetch frequency in minutes (NULL = default 1440 = 24h)")
-
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
@@ -964,7 +962,6 @@ class AssetProviderAssignment(SQLModel, table=True):
         description="JSON configuration for provider (validated by plugin)",
     )
     last_fetch_at: Optional[datetime] = Field(default=None, description="Last fetch attempt timestamp (NULL = never fetched)")
-    fetch_interval: Optional[int] = Field(default=None, description="Refresh frequency in minutes (NULL = default 1440 = 24h)")
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

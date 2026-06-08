@@ -91,21 +91,31 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "type": "int",
         "description": "Max file upload size in MB",
     },
-    # Data Sync
-    "auto_sync_fx_rates": {
+    # Market Data Scheduler
+    "scheduler_enabled": {
         "value": "true",
         "type": "bool",
-        "description": "Automatically sync FX rates daily",
+        "description": "Enable automatic market data sync (scheduler daemon)",
     },
-    "auto_sync_prices": {
-        "value": "true",
-        "type": "bool",
-        "description": "Automatically sync asset prices",
-    },
-    "price_sync_interval_hours": {
-        "value": "6",
+    "scheduler_current_price_frequency_minutes": {
+        "value": "10",
         "type": "int",
-        "description": "Asset price sync interval in hours",
+        "description": "Minutes between current-price refresh cycles (1-1440)",
+    },
+    "scheduler_history_sync_times": {
+        "value": "06:00,23:00",
+        "type": "str",
+        "description": "Comma-separated HH:MM times for daily history sync (server local time)",
+    },
+    "scheduler_history_sync_days": {
+        "value": "mon,tue,wed,thu,fri,sat",
+        "type": "str",
+        "description": "Comma-separated days of week for history sync (mon,tue,wed,thu,fri,sat,sun)",
+    },
+    "scheduler_history_sync_horizon_days": {
+        "value": "14",
+        "type": "int",
+        "description": "Rolling horizon in days for history sync (1-365)",
     },
     # Display
     "default_currency": {
