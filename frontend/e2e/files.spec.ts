@@ -8,14 +8,11 @@ import {fileURLToPath} from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const API = '/api/v1';
-const TEST_PNG = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a3cAAAAASUVORK5CYII=',
-    'base64'
-);
+const TEST_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a3cAAAAASUVORK5CYII=', 'base64');
 const TEST_AVATAR_PNG = readFileSync(path.resolve(__dirname, '../../backend/staticResources/Avatars/men_01.png'));
 const TEST_PDF = Buffer.from(
     '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]/Contents 4 0 R>>endobj\n4 0 obj<</Length 44>>stream\nBT /F1 12 Tf 72 120 Td (Preview PDF) Tj ET\nendstream endobj\nxref\n0 5\n0000000000 65535 f \ntrailer<</Size 5/Root 1 0 R>>\nstartxref\n256\n%%EOF\n',
-    'utf-8'
+    'utf-8',
 );
 
 async function uploadStaticFile(page: Page, filename: string, content: Buffer | string, mimeType: string): Promise<string> {
@@ -323,12 +320,7 @@ test.describe('Files Page', () => {
 
     test.describe('File Preview', () => {
         test('opens markdown preview from static list view', async ({page}) => {
-            const fileId = await uploadStaticFile(
-                page,
-                `preview-${Date.now()}.md`,
-                '# Hello preview\n\nThis is a markdown preview smoke test.\n',
-                'text/markdown'
-            );
+            const fileId = await uploadStaticFile(page, `preview-${Date.now()}.md`, '# Hello preview\n\nThis is a markdown preview smoke test.\n', 'text/markdown');
 
             await openStaticListView(page);
 
@@ -359,12 +351,7 @@ test.describe('Files Page', () => {
         });
 
         test('shows preview detail message when API returns detail', async ({page}) => {
-            const fileId = await uploadStaticFile(
-                page,
-                `preview-error-${Date.now()}.md`,
-                '# Broken preview\n',
-                'text/markdown'
-            );
+            const fileId = await uploadStaticFile(page, `preview-error-${Date.now()}.md`, '# Broken preview\n', 'text/markdown');
 
             await page.route('**/api/v1/uploads/*/preview', async (route) => {
                 await route.fulfill({
@@ -402,9 +389,7 @@ test.describe('Files Page', () => {
             await imageStage.hover();
             await page.mouse.wheel(0, 600);
 
-            await expect
-                .poll(async () => imageStage.evaluate((node) => node.scrollTop))
-                .toBeGreaterThan(0);
+            await expect.poll(async () => imageStage.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
         });
 
         test('pdf preview hides comment button', async ({page}) => {
@@ -422,18 +407,7 @@ test.describe('Files Page', () => {
 
         test('opens table preview for BRIM files', async ({page}) => {
             const brokerId = await createBroker(page);
-            const fileId = await uploadBrimFile(
-                page,
-                brokerId,
-                `preview-${Date.now()}.csv`,
-                [
-                    'date,type,amount,currency',
-                    '2025-01-01,DEPOSIT,1000,EUR',
-                    '2025-01-03,WITHDRAWAL,-50,EUR',
-                    '',
-                ].join('\n'),
-                'text/csv'
-            );
+            const fileId = await uploadBrimFile(page, brokerId, `preview-${Date.now()}.csv`, ['date,type,amount,currency', '2025-01-01,DEPOSIT,1000,EUR', '2025-01-03,WITHDRAWAL,-50,EUR', ''].join('\n'), 'text/csv');
 
             await navigateTo(page, '/files?tab=brim');
             await expect(page.getByTestId('files-tab-brim')).toHaveAttribute('aria-selected', 'true');

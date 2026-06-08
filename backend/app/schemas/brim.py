@@ -218,6 +218,8 @@ class BRIMPluginInfo(BaseModel):
             with ``BRIMFileInfo.parsed_plugin_version`` to decide whether a
             cached parse is stale.
         preview_columns: Columns metadata for the Staging Modal preview
+        detection_priority: Priority for auto-detection (higher = checked first).
+            100+ for broker-specific, 50-99 for semi-generic, 0-49 for fallbacks.
     """
 
     code: str = Field(..., description="Unique plugin identifier")
@@ -228,6 +230,7 @@ class BRIMPluginInfo(BaseModel):
     docs_url: Optional[str] = Field(None, description="URL to the plugin documentation page")
     plugin_version: str = Field(..., description="Semver of the parsing logic; bumped when plugin output would change for the same input")
     preview_columns: List[BRIMPreviewColumn] = Field(default_factory=list, description="Columns metadata for the Staging Modal preview table")
+    detection_priority: int = Field(100, description="Priority for auto-detection (higher = checked first). 100+ broker-specific, 50-99 semi-generic, 0-49 fallbacks")
 
 
 # =============================================================================

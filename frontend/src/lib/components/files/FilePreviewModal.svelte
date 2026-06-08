@@ -124,7 +124,7 @@
     });
 
     $effect(() => {
-        const sourceUrl = open && previewType === 'pdf' ? preview?.source_url ?? '' : '';
+        const sourceUrl = open && previewType === 'pdf' ? (preview?.source_url ?? '') : '';
         const host = pdfHost;
         if (!browser || !host || !sourceUrl) {
             if (host) host.innerHTML = '';
@@ -148,7 +148,7 @@
                         ui: {
                             disabledCategories: ['panel-comment'],
                         },
-                    })
+                    }),
                 );
             } catch (err) {
                 if (token === pdfToken) {
@@ -343,9 +343,7 @@
 
         const nestedMatrix = directRows.find((row) => row.every((cell) => Array.isArray(cell)));
         if (nestedMatrix) {
-            return nestedMatrix
-                .filter((row): row is unknown[] => Array.isArray(row))
-                .map((row) => row.map((cell) => (typeof cell === 'string' ? cell : '')));
+            return nestedMatrix.filter((row): row is unknown[] => Array.isArray(row)).map((row) => row.map((cell) => (typeof cell === 'string' ? cell : '')));
         }
 
         return directRows.map((row) => row.map((cell) => (typeof cell === 'string' ? cell : '')));
@@ -494,7 +492,7 @@
     }
 </script>
 
-<ModalBase open={open} onRequestClose={onRequestClose} maxWidth="5xl" contentClass="file-preview-modal" testId="file-preview-modal" {zIndex}>
+<ModalBase {open} {onRequestClose} maxWidth="5xl" contentClass="file-preview-modal" testId="file-preview-modal" {zIndex}>
     <div class="preview-shell">
         <div class="preview-header">
             <div class="preview-heading">
@@ -593,26 +591,9 @@
         {:else if preview}
             <div class="preview-body">
                 {#if previewType === 'image'}
-                    <div
-                        class="image-stage"
-                        class:pannable={canPanImage}
-                        class:dragging={imageDragging}
-                        bind:this={imageStage}
-                        data-testid="file-preview-image"
-                        onpointerdown={startImagePan}
-                        onpointermove={handleImagePan}
-                        onpointerup={stopImagePan}
-                        onpointercancel={stopImagePan}
-                    >
+                    <div class="image-stage" class:pannable={canPanImage} class:dragging={imageDragging} bind:this={imageStage} data-testid="file-preview-image" onpointerdown={startImagePan} onpointermove={handleImagePan} onpointerup={stopImagePan} onpointercancel={stopImagePan}>
                         <div class="image-canvas">
-                            <img
-                                src={imageSource}
-                                alt={preview.filename}
-                                width={imageDisplayWidth ?? undefined}
-                                height={imageDisplayHeight ?? undefined}
-                                draggable="false"
-                                decoding="async"
-                            />
+                            <img src={imageSource} alt={preview.filename} width={imageDisplayWidth ?? undefined} height={imageDisplayHeight ?? undefined} draggable="false" decoding="async" />
                         </div>
                     </div>
                 {:else if previewType === 'pdf'}
@@ -631,11 +612,7 @@
                             {#if showSheetSelector}
                                 <label>
                                     <span>{$t('uploads.previewSheet')}</span>
-                                    <select
-                                        value={activeSheetName}
-                                        onchange={(event) => onSheetChange((event.currentTarget as HTMLSelectElement).value)}
-                                        data-testid="file-preview-sheet-select"
-                                    >
+                                    <select value={activeSheetName} onchange={(event) => onSheetChange((event.currentTarget as HTMLSelectElement).value)} data-testid="file-preview-sheet-select">
                                         {#each sheetNames as sheetName}
                                             <option value={sheetName}>{sheetName}</option>
                                         {/each}
