@@ -4,8 +4,17 @@
 
 **Date**: 2026-06-05
 **Scope**: Connect BRIM parse flow to the existing BulkModal from `/transactions` page
-**Status**: 📋 Ready for implementation
+**Status**: ⚠️ SUPERSEDED by [plan-phase07Part5-v5-ImportWizard.prompt.md](./plan-phase07Part5-v5-ImportWizard.prompt.md)
 **Incorporates**: 17 OSS + 7 issue fixes from final review
+
+### Milestone Execution Logs
+
+| Milestone | Status | Log |
+|-----------|--------|-----|
+| **M1: Parse & See** | ✅ 2025-06-05 | [plan-phase07Part5-M1-ParseAndSee.prompt.md](./plan-phase07Part5-M1-ParseAndSee.prompt.md) |
+| **M2: Resolve Assets** | ⏳ Pending | — |
+| **M3: Review & Duplicates** | ⏳ Pending | — |
+| **M4: Wire to BulkModal** | ⏳ Pending | — |
 
 ---
 
@@ -148,7 +157,7 @@ POST /files/{id}/parse               │
 
 | Milestone | Scope | Acceptance Test |
 |-----------|-------|-----------------|
-| **M1: Parse & See** | Skeleton + Select + Parse + Result summary | "I click Import, select broker/file, parse, see summary" |
+| **M1: Parse & See** | Skeleton + Select + Parse + Result summary | ✅ Complete (2025-06-05) |
 | **M2: Resolve Assets** | Asset mapping UI complete | "I resolve unresolved assets using selector" |
 | **M3: Review & Duplicates** | Review table + duplicate handling + stub | "I see TX table, manage duplicates, click Import (toast)" |
 | **M4: Wire to BulkModal** | Handoff + conversion + multi-cycle | "TX appear in grid, validate works, commit succeeds" |

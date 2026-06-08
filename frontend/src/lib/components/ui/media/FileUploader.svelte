@@ -17,6 +17,8 @@
     export let maxSizeMB: number = 10;
     export let multiple: boolean = true;
     export let accept: string = ''; // e.g. ".csv,.xlsx,.xls" or "image/*"
+    /** Hide the built-in Clear/Upload action buttons (let parent handle those) */
+    export let hideActions: boolean = false;
 
     // Blocked extensions (same as backend)
     const BLOCKED_EXTENSIONS = new Set(['.exe', '.dll', '.so', '.dylib', '.bat', '.cmd', '.ps1', '.vbs', '.vbe', '.sh', '.bash', '.csh', '.zsh', '.py', '.pyc', '.pyo', '.pl', '.pm', '.rb', '.php', '.php3', '.php4', '.php5', '.phtml', '.js', '.mjs', '.cjs', '.jar', '.class', '.com', '.scr', '.pif']);
@@ -142,6 +144,11 @@
         dispatch('editFile', {file, index});
     }
 
+    // Public method to clear all files (used by parent to externally reset)
+    export function clearFiles() {
+        clearAll();
+    }
+
     // Public method to replace a file at a specific index (used after crop)
     export function replaceFile(index: number, newFile: File) {
         if (index >= 0 && index < selectedFiles.length) {
@@ -253,7 +260,7 @@
     {/if}
 
     <!-- Actions -->
-    {#if selectedFiles.length > 0}
+    {#if selectedFiles.length > 0 && !hideActions}
         <div class="actions">
             <button type="button" class="btn btn-secondary" on:click={clearAll} data-testid="file-clear">
                 {$t('common.clear') || 'Clear'}

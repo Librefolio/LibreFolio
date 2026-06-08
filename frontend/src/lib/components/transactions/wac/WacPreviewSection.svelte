@@ -100,7 +100,27 @@
         onOpenFxSync?: () => void;
     }
 
-    let {value, onChange, mode, defaultCode = 'EUR', disabled = false, testid = 'wac-preview', senderBrokerId = null, assetId = null, txDate = null, pendingTxs = [], excludedTxIds = [], hideTable = false, onModeChange, externalResult = null, pendingTxIds = null, wacCurrency = null, onCurrencyChange, availableCurrencies = [], onOpenFxSync}: Props = $props();
+    let {
+        value,
+        onChange,
+        mode,
+        defaultCode = 'EUR',
+        disabled = false,
+        testid = 'wac-preview',
+        senderBrokerId = null,
+        assetId = null,
+        txDate = null,
+        pendingTxs = [],
+        excludedTxIds = [],
+        hideTable = false,
+        onModeChange,
+        externalResult = null,
+        pendingTxIds = null,
+        wacCurrency = null,
+        onCurrencyChange,
+        availableCurrencies = [],
+        onOpenFxSync,
+    }: Props = $props();
 
     // =========================================================================
     // State
@@ -137,10 +157,7 @@
     let forcedManual = false; // kept for template compat, always false
     let hasAnyFxConversion = $derived(previewResult?.qualifying_txs?.some((q) => q.fx_info != null) ?? false);
     /** True when the user changed currency but the result hasn't caught up yet */
-    let currencyPending = $derived(
-        isAuto && wacCurrency != null && previewResult?.wac != null && previewResult.wac.code !== wacCurrency,
-    );
-
+    let currencyPending = $derived(isAuto && wacCurrency != null && previewResult?.wac != null && previewResult.wac.code !== wacCurrency);
 
     // =========================================================================
     // External result sync — WAC data from validate response
@@ -227,9 +244,7 @@
         const toHtml = formatCurrencyCodeHtml(qtx.currency);
         const date = qtx.fx_info.fx_rate_date ?? '?';
         const days = qtx.fx_info.fx_days_back ?? 0;
-        const daysLabel = days === 0
-            ? ($t('transactions.wac.fxTooltipSameDay') || 'same day')
-            : `${days} ${$t('transactions.wac.fxTooltipDaysBefore') || 'days before'}`;
+        const daysLabel = days === 0 ? $t('transactions.wac.fxTooltipSameDay') || 'same day' : `${days} ${$t('transactions.wac.fxTooltipDaysBefore') || 'days before'}`;
         const dateColor = days > 0 ? 'text-amber-500' : '';
         const staleNote = days > 5 ? `<br/><span class="text-red-500">⚠️ ${$t('transactions.wac.fxTooltipStale') || 'Rate not up to date'}</span>` : '';
         return `<b>FX:</b> 1 ${fromHtml} = ${rate} ${toHtml}<br/>📅 ${date} <span class="${dateColor}">(${daysLabel})</span>${staleNote}`;
@@ -293,7 +308,7 @@
 
     <!-- Input field -->
     <div class="flex items-center gap-2">
-        <CompactCashCell {value} onChange={handleValueChange} signHint="positive" amountPlaceholder={isAuto ? ($t('transactions.wacPreview.placeholderAuto') ?? 'auto (⚡ Validate)') : '0.00'} {defaultCode} currencyDisabled={disabled} disabled={disabled} testid="{testid}-input" />
+        <CompactCashCell {value} onChange={handleValueChange} signHint="positive" amountPlaceholder={isAuto ? ($t('transactions.wacPreview.placeholderAuto') ?? 'auto (⚡ Validate)') : '0.00'} {defaultCode} currencyDisabled={disabled} {disabled} testid="{testid}-input" />
 
         {#if loading}
             <span class="text-[10px] text-gray-400 animate-pulse" data-testid="{testid}-loading">
@@ -474,4 +489,3 @@
         </div>
     {/if}
 </div>
-

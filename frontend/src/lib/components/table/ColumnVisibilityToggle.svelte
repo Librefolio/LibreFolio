@@ -16,11 +16,16 @@
 
     interface Props {
         tableRef?: DataTable<any>;
+        /** Additional tables whose visibility/order should be synced */
+        additionalTableRefs?: (DataTable<any> | undefined)[];
         showLabel?: boolean;
         class?: string;
     }
 
-    let {tableRef, showLabel = false, class: extraClass = ''}: Props = $props();
+    let {tableRef, additionalTableRefs = [], showLabel = false, class: extraClass = ''}: Props = $props();
+
+    /** All refs including primary */
+    let allRefs = $derived([tableRef, ...additionalTableRefs].filter((r): r is DataTable<any> => !!r));
 
     // =========================================================================
     // Types
@@ -89,7 +94,7 @@
     });
 
     function handleToggleColumn(columnId: string) {
-        tableRef?.toggleColumnVisibilityById(columnId);
+        for (const ref of allRefs) ref.toggleColumnVisibilityById(columnId);
         const col = columnItems.find((c) => c.id === columnId);
         if (col) col.visible = !col.visible;
         columnItems = [...columnItems];
@@ -97,11 +102,12 @@
 
     function handleReorder(newItems: ColumnItem[]) {
         columnItems = newItems;
-        tableRef?.setColumnOrder(newItems.map((c) => c.id));
+        const order = newItems.map((c) => c.id);
+        for (const ref of allRefs) ref.setColumnOrder(order);
     }
 
     function handleReset() {
-        tableRef?.resetColumnLayout();
+        for (const ref of allRefs) ref.resetColumnLayout();
         refreshColumns();
     }
 </script>

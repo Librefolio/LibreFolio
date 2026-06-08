@@ -215,6 +215,41 @@ Questo da applicare sia all'asset principale che a quelli di confronto messi nel
 
 ---
 
+## 🔍 BRIM Auto-Detect Broker via Account Code
+
+**Data aggiunta**: 8 Giugno 2026  
+**Status**: 📋 PIANIFICATO  
+**Priorità**: Alta (UX import flow)
+
+### Contesto
+
+Molti broker export includono un identificativo di conto nella prima riga o header del file (es. Directa: `Conto : CONTO COGNOME NOME`). Se il plugin BRIM durante il `detect()` ritorna anche un `account_code` estratto dal file, e se un broker dell'utente ha un campo `account_code` configurato che matcha, il sistema può pre-popolare automaticamente il broker nel wizard di import.
+
+### Design
+
+1. **BRIMProvider.detect()** — estendere il return type per includere `account_code: str | None` (opzionale, backward-compatible)
+2. **Broker model** — aggiungere campo opzionale `account_code: str | None` (configurabile dall'utente nelle settings del broker)
+3. **Frontend Import Wizard Step 1** — quando un file viene uploadato:
+   - Chiama detect endpoint → riceve `{plugin, confidence, account_code?}`
+   - Se `account_code` matcha con un broker dell'utente → pre-popola il dropdown broker
+   - Se non matcha → user sceglie manualmente (comportamento attuale)
+4. **Esempio Directa**: plugin legge riga 1, estrae "CONTO" → `account_code = "CONTO"` → matcha con broker Directa dell'utente che ha `account_code = "CONTO"`
+
+### File coinvolti
+
+- `backend/app/services/brim_provider.py` — `detect()` return type
+- `backend/app/db/models.py` — `Broker.account_code`
+- `backend/app/services/brim_providers/broker_directa.py` — implementa estrazione account_code
+- `frontend/` — Import wizard Step 1 auto-fill logic
+
+### Note
+
+- Non bloccante per il wizard MVP — è un enhancement post-lancio
+- Ogni plugin implementa l'estrazione solo se il formato lo supporta
+- Il match è case-insensitive, trimmed
+
+---
+
 ## 📚 Documentazione Per-Plugin FX Provider
 
 **Data aggiunta**: 15 Marzo 2026  

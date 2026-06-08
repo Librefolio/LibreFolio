@@ -91,6 +91,8 @@
          * slice and boundaries should reflect the whole dataset.
          */
         fullData?: T[];
+        /** Called when a column is resized (for syncing across tables) */
+        onColumnResize?: (columnId: string, width: number) => void;
     }
 
     let {
@@ -132,6 +134,7 @@
         onSortChange,
         onShowSelectedOnlyChange,
         fullData,
+        onColumnResize,
     }: Props = $props();
 
     /** Dataset used for computing filter boundaries (min/max, currency ranges). */
@@ -807,7 +810,9 @@
 
     function stopResize() {
         if (resizing) {
+            const finalWidth = columnWidths[resizing.columnId];
             saveToStorage(getStorageKey('columnWidths'), columnWidths);
+            if (finalWidth != null) onColumnResize?.(resizing.columnId, finalWidth);
         }
         resizing = null;
         document.removeEventListener('mousemove', handleResize);
@@ -987,6 +992,11 @@
     /** Reset column visibility, order and widths to defaults */
     export function resetColumnLayout() {
         resetColumns();
+    }
+
+    /** Set width for a specific column (for cross-table sync) */
+    export function setColumnWidth(columnId: string, width: number) {
+        columnWidths = {...columnWidths, [columnId]: width};
     }
 
     /** Clear all selected rows (external access) */
