@@ -126,7 +126,6 @@
     let providerUrl = $state<string | null>(null);
     let providerNoProvider = $state(false);
     let providerTestStatus = $state<'not_tested' | 'testing' | 'passed' | 'failed'>('not_tested');
-    let fetchInterval = $state(1440);
 
     // UI state
     let moreInfoExpanded = $state(false);
@@ -236,7 +235,6 @@
             providerIdentifier,
             providerIdentifierType,
             providerNoProvider,
-            fetchInterval,
         ]);
     }
 
@@ -395,7 +393,6 @@
         providerUserUrl = data.provider_user_url ?? '';
         providerUrl = data.provider_url ?? null;
         providerNoProvider = !data.provider_code;
-        fetchInterval = (data as any).fetch_interval ?? 1440;
         // #R3-4 — snapshot initial params to detect scheduled_investment changes at save.
         initialProviderParamsJson = providerParams ? JSON.stringify(providerParams) : '';
         // I-bis #2 — snapshot the other three provider fields too so
@@ -435,7 +432,6 @@
         providerUserUrl = '';
         providerUrl = null;
         providerNoProvider = false;
-        fetchInterval = 1440;
         moreInfoExpanded = false;
         providerExpanded = false;
         searchResultSelected = false;
@@ -877,7 +873,6 @@
                         identifier: providerIdentifier,
                         identifier_type: providerIdentifierType,
                         provider_params: providerParams,
-                        fetch_interval: fetchInterval,
                     },
                 ];
                 await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
@@ -1005,7 +1000,6 @@
                     identifier: providerIdentifier,
                     identifier_type: providerIdentifierType,
                     provider_params: providerParams,
-                    fetch_interval: fetchInterval,
                 },
             ];
             await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
@@ -1430,7 +1424,6 @@
                         bind:providerParams
                         bind:providerUrl
                         bind:noProvider={providerNoProvider}
-                        bind:fetchInterval
                         onchange={(data) => {
                             providerTestStatus = data.testStatus;
                         }}

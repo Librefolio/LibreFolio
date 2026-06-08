@@ -804,7 +804,6 @@ async def test_provider_fallback_invalid(asset_ids: list[int]):
             identifier="INVALID_TEST",
             identifier_type=ProviderInputType.AUTO_GENERATED,
             provider_params=None,
-            fetch_interval=1440,
         )
         session.add(invalid_assignment)
         await session.commit()

@@ -29,7 +29,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.app.db.models import IdentifierType, ProviderInputType
 from backend.app.schemas.common import BaseBulkResponse, BaseDeleteResult, OldNew, SafeDecimal
@@ -152,7 +152,7 @@ class FAProviderConfigBase(BaseModel):
     """Base provider configuration — minimal set for probe/test operations.
 
     Contains only the fields needed to identify and configure a provider,
-    without persistence-related fields (asset_id, fetch_interval, etc.).
+    without persistence-related fields (asset_id, etc.).
 
     Used as input for probe/test-config endpoint.
     Child classes extend this for assignment (FAProviderAssignmentItem)
@@ -203,15 +203,6 @@ class FAProviderAssignmentItem(FAProviderConfigBase):
     """
 
     asset_id: int = Field(..., description="Asset ID")
-    fetch_interval: int = Field(1440, description="Refresh frequency in minutes (default: 1440 = 24h)")
-
-    @field_validator("fetch_interval", mode="before")
-    @classmethod
-    def set_default_fetch_interval(cls, v):
-        """Set default fetch_interval if None or empty."""
-        if v is None or v == "":
-            return 1440
-        return v
 
 
 class FAProviderAssignmentReadItem(BaseModel):
@@ -227,7 +218,6 @@ class FAProviderAssignmentReadItem(BaseModel):
     identifier: Optional[str] = Field(None, description="Asset identifier for provider (NULL for AUTO_GENERATED providers like scheduled_investment)")
     identifier_type: ProviderInputType = Field(..., description=f"Provider input type ({', '.join([a.value for a in ProviderInputType])})")
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider configuration")
-    fetch_interval: Optional[int] = Field(None, description="Refresh frequency in minutes")
     last_fetch_at: Optional[str] = Field(None, description="Last fetch timestamp (ISO format)")
     provider_url: Optional[str] = Field(None, description="Auto-generated URL to provider page")
 

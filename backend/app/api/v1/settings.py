@@ -4,6 +4,7 @@ Settings API endpoints.
 Endpoints for managing user and global settings.
 """
 
+from datetime import datetime
 from typing import Annotated
 
 import structlog
@@ -20,6 +21,8 @@ from backend.app.schemas.settings import (
     UserSettingsRead,
     UserSettingsUpdate,
 )
+from backend.app.services.scheduler import read_job_log
+from backend.app.services.scheduler.state import load_state
 from backend.app.services.settings_service import (
     get_all_global_settings,
     get_global_setting,
@@ -146,3 +149,58 @@ async def initialize_global_settings_endpoint(
     """
     created = await initialize_global_settings(session)
     return {"message": f"Initialized {created} global settings"}
+
+
+@router.get("/scheduler/state")
+async def get_scheduler_state(
+    admin: Annotated[User, Depends(require_admin)],
+) -> dict:
+    """
+    Get scheduler state (last execution info) — admin only.
+
+    Returns last run timestamps, durations, and item counts
+    for both current-price refresh and history sync jobs.
+    """
+    state = load_state()
+
+    # Determine server timezone name
+    try:
+        server_tz = datetime.now().astimezone().strftime("%Z")
+    except Exception:
+        server_tz = "UTC"
+
+    return {
+        "current_price": {
+            "last_run_at": state.current_price.last_run_at,
+            "last_duration_s": state.current_price.last_duration_s,
+            "last_status": state.current_price.last_status,
+            "last_items_ok": state.current_price.last_items_ok,
+            "last_items_err": state.current_price.last_items_err,
+        },
+        "history_sync": {
+            "last_run_at": state.history_sync.last_run_at,
+            "last_duration_s": state.history_sync.last_duration_s,
+            "last_status": state.history_sync.last_status,
+            "last_items_ok": state.history_sync.last_items_ok,
+            "last_items_err": state.history_sync.last_items_err,
+        },
+        "server_tz": server_tz,
+    }
+
+
+@router.get("/scheduler/log")
+async def get_scheduler_log(
+    admin: Annotated[User, Depends(require_admin)],
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    """
+    Get scheduler job log entries (newest first) — admin only.
+
+    Returns per-item detail for each scheduler job run, including
+    which assets/pairs succeeded or failed and why.
+    Paginated with limit/offset (max 100 per page).
+    """
+    limit = min(limit, 100)
+    entries = read_job_log(limit=limit, offset=offset)
+    return {"entries": entries, "count": len(entries), "offset": offset}
