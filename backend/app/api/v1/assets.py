@@ -567,7 +567,6 @@ async def get_provider_assignments(
         "identifier": "AAPL",
         "identifier_type": "TICKER",
         "provider_params": {},
-        "fetch_interval": 1440,
         "last_fetch_at": "2025-01-15T10:30:00Z"
       }
     ]
@@ -597,7 +596,6 @@ async def get_provider_assignments(
                     identifier=a.identifier,
                     identifier_type=a.identifier_type,
                     provider_params=params,
-                    fetch_interval=a.fetch_interval,
                     last_fetch_at=a.last_fetch_at.isoformat() if a.last_fetch_at else None,
                     provider_url=provider_url,
                 )
@@ -703,7 +701,9 @@ async def get_current_prices_bulk(
     1. If a provider is assigned → calls provider.get_current_value() (parallel)
     2. Fallback → returns the latest price from DB (PriceHistory)
 
-    This is a **read-only** operation — no data is written.
+    **Side effect**: For successful provider fetches with as_of_date == today,
+    the OHLC row for today is created or extended (F.2/F.3 intra-day upsert).
+    DB-fallback results are NOT persisted (stale data, not fresh quotes).
 
     **Example Request**:
     ```json

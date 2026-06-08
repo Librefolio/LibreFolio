@@ -41,6 +41,7 @@ from backend.app.services.provider_registry import (
     BRIMProviderRegistry,
     FXProviderRegistry,
 )
+from backend.app.services.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.settings_service import initialize_global_settings
 from backend.app.services.static_uploads import seed_default_avatars
 from backend.app.utils.cache_utils import close_all_caches
@@ -172,9 +173,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Pre-warm provider caches in background (non-blocking)
     asyncio.create_task(_prewarm_provider_caches())
 
+    # Start scheduler daemon
+    shutdown_event = get_shutdown_event()
+    scheduler_task = asyncio.create_task(scheduler_loop(shutdown_event))
+
     yield
-    # Shutdown — cleanup all provider resources (WebSocket feeds, caches, etc.)
+    # Shutdown — stop scheduler first, then cleanup providers
     logger.info("Shutting down LibreFolio")
+    shutdown_event.set()
+    await scheduler_task
+
     AssetProviderRegistry.shutdown_all_providers()
     FXProviderRegistry.shutdown_all_providers()
     BRIMProviderRegistry.shutdown_all_providers()

@@ -127,7 +127,6 @@ class FAAssetProviderAssignment(BaseModel):
     provider_code: str
     provider_params: Optional[dict] = None
     last_fetch_at: Optional[str] = None
-    fetch_interval: Optional[int] = None
 
 
 # ============================================================================

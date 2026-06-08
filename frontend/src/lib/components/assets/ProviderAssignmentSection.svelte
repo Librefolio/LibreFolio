@@ -79,13 +79,12 @@
         providerParams?: Record<string, any> | null;
         providerUrl?: string | null;
         noProvider?: boolean;
-        fetchInterval?: number;
         disabled?: boolean;
         readonly?: boolean;
         onchange?: (data: {providerCode: string; identifier: string; identifierType: string; providerParams: Record<string, any> | null; noProvider: boolean; testStatus: TestStatus}) => void;
     }
 
-    let {providerCode = $bindable(''), identifier = $bindable(''), identifierType = $bindable('TICKER'), providerParams = $bindable(null), providerUrl = $bindable(null), noProvider = $bindable(false), fetchInterval = $bindable(1440), disabled = false, readonly = false, onchange}: Props = $props();
+    let {providerCode = $bindable(''), identifier = $bindable(''), identifierType = $bindable('TICKER'), providerParams = $bindable(null), providerUrl = $bindable(null), noProvider = $bindable(false), disabled = false, readonly = false, onchange}: Props = $props();
 
     // =========================================================================
     // State
@@ -456,68 +455,6 @@
                         </a>
                     {/if}
                 </div>
-            </div>
-
-            <!-- Fetch Interval -->
-            <div>
-                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    {$t('assets.provider.fetchInterval')} *
-                </span>
-                <div class="inline-flex items-stretch">
-                    <input
-                        type="text"
-                        value={String(Math.floor(fetchInterval / 60)).padStart(2, '0') + ':' + String(fetchInterval % 60).padStart(2, '0')}
-                        placeholder="24:00"
-                        onblur={(e) => {
-                            const raw = e.currentTarget.value.trim();
-                            const match = raw.match(/^(\d{1,3}):(\d{1,2})$/);
-                            if (match) {
-                                const h = Math.max(0, Number(match[1]));
-                                const m = Math.min(59, Math.max(0, Number(match[2])));
-                                fetchInterval = h * 60 + m;
-                                e.currentTarget.value = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-                            } else {
-                                e.currentTarget.value = String(Math.floor(fetchInterval / 60)).padStart(2, '0') + ':' + String(fetchInterval % 60).padStart(2, '0');
-                            }
-                            emitChange();
-                        }}
-                        disabled={disabled || readonly}
-                        class="w-[4.5rem] px-2 py-2 text-sm text-center font-mono border border-gray-200 dark:border-slate-600 rounded-l-lg
-                                   bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                   placeholder-gray-400 dark:placeholder-gray-500
-                                   focus:outline-none focus:ring-2 focus:ring-libre-green/50
-                                   disabled:opacity-50"
-                    />
-                    <div class="flex flex-col border border-l-0 border-gray-200 dark:border-slate-600 rounded-r-lg overflow-hidden">
-                        <button
-                            type="button"
-                            tabindex="-1"
-                            aria-label="Increase"
-                            disabled={disabled || readonly}
-                            onclick={() => {
-                                fetchInterval = Math.max(1, fetchInterval + 1);
-                                emitChange();
-                            }}
-                            class="px-1.5 flex-1 flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                            <svg viewBox="0 0 10 6" class="w-2.5 h-1.5"><path d="M1 5l4-4 4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                        </button>
-                        <button
-                            type="button"
-                            tabindex="-1"
-                            aria-label="Decrease"
-                            disabled={disabled || readonly}
-                            onclick={() => {
-                                fetchInterval = Math.max(1, fetchInterval - 1);
-                                emitChange();
-                            }}
-                            class="px-1.5 flex-1 flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed border-t border-gray-200 dark:border-slate-600"
-                        >
-                            <svg viewBox="0 0 10 6" class="w-2.5 h-1.5"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                        </button>
-                    </div>
-                </div>
-                <p class="mt-1 text-[10px] text-gray-400 dark:text-gray-500">ⓘ 24:00 = daily, 01:00 = hourly, 168:00 = weekly</p>
             </div>
         </div>
 

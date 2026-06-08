@@ -950,7 +950,6 @@ class AssetSourceManager:
                 existing.identifier = identifier_val
                 existing.identifier_type = mapped_type
                 existing.provider_params = params_to_store
-                existing.fetch_interval = a.fetch_interval
             else:
                 # INSERT new assignment
                 new_assignment = AssetProviderAssignment(
@@ -959,7 +958,6 @@ class AssetSourceManager:
                     identifier=identifier_val,
                     identifier_type=mapped_type,
                     provider_params=params_to_store,
-                    fetch_interval=a.fetch_interval,
                     last_fetch_at=None,
                 )
                 session.add(new_assignment)
