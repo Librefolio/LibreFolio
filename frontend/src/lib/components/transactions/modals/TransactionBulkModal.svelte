@@ -1965,13 +1965,90 @@
     // PickerModal reads from txStore directly (Plan C Step 2)
 
     // -------------------------------------------------------------------------
-    // ImportWizardModal (Phase 07 Part 5 v5 M1): BRIM Import Wizard → BulkModal bridge.
+    // ImportWizardModal (Phase 07 Part 5 v5 M1→M4): BRIM Import Wizard → BulkModal bridge.
     // -------------------------------------------------------------------------
     let importWizardOpen = $state(false);
 
+    /** Convert a TXCreateItem (from BRIM parse) to a PendingOp 'create' row.
+     *  Signs are converted to display values (BulkModal convention: positive display,
+     *  sign applied on commit/validate via getTypeRule().quantityRule + cashSign). */
+    function txCreateItemToPendingOp(tx: TransactionCreateItem): PendingOp {
+        const rule = getTypeRule(tx.type);
+
+        // Quantity: convert storage sign → display sign
+        let qty = String(tx.quantity ?? '0');
+        if (rule.quantityRule === 'negative' && Number(qty) < 0) qty = String(Math.abs(Number(qty)));
+
+        // Cash: convert storage sign → display sign
+        let cash: {code: string; amount: string} | null = null;
+        const rawCash = tx.cash && !Array.isArray(tx.cash) ? tx.cash : null;
+        if (rawCash) {
+            const rawAmt = Number(rawCash.amount);
+            const displayAmt = rule.cashSign === 'negative' && rawAmt < 0 ? Math.abs(rawAmt) : rawAmt;
+            cash = {code: String(rawCash.code), amount: String(displayAmt)};
+        }
+
+        // cost_basis_override
+        const rawCbo = tx.cost_basis_override && !Array.isArray(tx.cost_basis_override) ? tx.cost_basis_override : null;
+        const cbo = rawCbo ? {code: String((rawCbo as any).code ?? ''), amount: String((rawCbo as any).amount ?? '')} : null;
+
+        // cost_basis_mode
+        const rawCbm = tx.cost_basis_mode && !Array.isArray(tx.cost_basis_mode) ? tx.cost_basis_mode : null;
+        const cbMode = (rawCbm as 'auto' | 'auto-detail' | 'manual' | null | undefined) ?? null;
+        // BulkModal only uses 'auto' | 'manual' | null
+        const cbDisplay: 'auto' | 'manual' | null = cbMode === 'auto-detail' ? 'auto' : (cbMode ?? null);
+
+        // asset_id: only accept plain number (no arrays, no null for typed ops)
+        const assetId = typeof tx.asset_id === 'number' ? tx.asset_id : null;
+
+        // link_uuid
+        const linkUuid = tx.link_uuid && !Array.isArray(tx.link_uuid) ? String(tx.link_uuid) : null;
+
+        return {
+            op: 'create',
+            tempId: generateUUID(),
+            link_uuid: linkUuid,
+            fields: {
+                broker_id: tx.broker_id,
+                asset_id: assetId,
+                type: tx.type as TransactionTypeCode,
+                date: tx.date,
+                quantity: qty,
+                cash,
+                tags: Array.isArray(tx.tags) ? (tx.tags as string[]).filter((t): t is string => typeof t === 'string') : [],
+                description: String(tx.description ?? ''),
+                asset_event_id: typeof tx.asset_event_id === 'number' ? tx.asset_event_id : null,
+                cost_basis_override: cbo,
+                cost_basis_mode: cbDisplay,
+            },
+        };
+    }
+
+    /** Link paired ops by shared link_uuid: second op becomes hidden partner. */
+    function linkPairedImportOps(newOps: PendingOp[]): PendingOp[] {
+        const byUuid = new Map<string, PendingOp[]>();
+        for (const op of newOps) {
+            if (op.link_uuid) {
+                const list = byUuid.get(op.link_uuid) ?? [];
+                list.push(op);
+                byUuid.set(op.link_uuid, list);
+            }
+        }
+        for (const pair of byUuid.values()) {
+            if (pair.length === 2) {
+                pair[1].pairedWith = pair[0].tempId;
+            }
+        }
+        return newOps;
+    }
+
     function onImportBatch(creates: TransactionCreateItem[]) {
-        toasts.success($t('importWizard.importedCount', {values: {n: creates.length}}));
+        const newOps = creates.map(txCreateItemToPendingOp);
+        const linked = linkPairedImportOps(newOps);
+        ops = [...ops, ...linked];
         importWizardOpen = false;
+        toasts.success($t('importWizard.importedCount', {values: {n: creates.length}}));
+        scheduler.trigger('change');
     }
 
     // BUG-C7: Suggest picker — opens PickerModal filtered to importable candidates

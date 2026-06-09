@@ -1,7 +1,7 @@
 # Phase 07 Part 5 — BRIM Import Wizard (v5 — Redesign)
 
 **Date**: 2026-06-08
-**Status**: 🚧 EXECUTING — M1 complete ✅, M2 complete ✅ (parse engine + results DataTable), M2-W complete ✅ (structured validation warnings)
+**Status**: 🔍 REVIEW — M1 ✅, M2 ✅, M2-W ✅, M2-FT ✅, M3 ✅, M4 ✅, Schwab ✅ — in attesa review utente (vedi §17)
 **Supersedes**: `plan-phase07Part5-BRIMImportBridge.prompt.md` (v4)
 **Parent milestone log**: [plan-phase07Part5-M1-ParseAndSee.prompt.md](./plan-phase07Part5-M1-ParseAndSee.prompt.md) (M1 complete, feedback incorporated)
 **M1 detailed plan**: [plan-phase07Part5-M1v2-ImportWizardRebuild.prompt.md](./plan-phase07Part5-M1v2-ImportWizardRebuild.prompt.md)
@@ -92,6 +92,19 @@ interface ParsedFileResult {
 }
 let parseResults = $state<ParsedFileResult[]>([]);
 
+// ─── Import TODO (wizard-local, from backend BRIMFieldTodo) ───
+// Plugin-emitted signal: a TXCreateItem field was intentionally left
+// incomplete (safe placeholder value set). The user must provide the
+// real value before import. This type mirrors BrimFieldTodo from the
+// Zodios client — never touches TXCreateItem or PendingOp.
+interface ImportTodo {
+    field: string;                    // TXCreateItem field name (e.g. 'cost_basis_override')
+    severity: 'blocker' | 'warning'; // blocker = import blocked, warning = proceed with caution
+    reasonCode: string;               // machine-readable (e.g. 'stock_merger', 'spin_off')
+    message: string;                  // human-readable English fallback
+    context?: Record<string, unknown>;// i18n params (e.g. {old_ticker: 'CCIV', new_ticker: 'LCID'})
+}
+
 // ─── Step 4 state ───
 interface MergedTransaction {
     index: number;              // global index across all files
@@ -100,6 +113,7 @@ interface MergedTransaction {
     selected: boolean;          // checkbox state
     duplicateStatus: 'unique' | 'possible' | 'likely';
     duplicateMatch?: string;    // description of what it matches
+    todos: ImportTodo[];        // fields needing manual user input (from backend field_todos)
 }
 let mergedTransactions = $state<MergedTransaction[]>([]);
 
@@ -686,9 +700,146 @@ importWizard.likelyDuplicates, importWizard.possibleDuplicates, importWizard.uni
 
 **Architecture**: Parent-takes-responsibility pattern — plugins provide kwargs, `_create_transaction()` creates `TXCreateItem`, catches validation errors, extracts structured issues from Pydantic `e.errors()`. Two separate channels: `validation_issues` (structured, localizable via `resolveIssueMessage`) vs `warnings` (free-text plugin messages).
 
+### 8.8 M2-FT: BRIMFieldTodo Schema + Step 3 Integration ✅
+
+**Context**: Corporate actions (stock merger, spin-off, conversion) produce valid `TXCreateItem` objects but with fields intentionally left incomplete — the plugin cannot know the correct value (e.g. inherited cost basis from old ticker). The plugin sets **safe placeholder values** that pass Pydantic and emits a `BRIMFieldTodo` to signal that the field needs user input.
+
+**Decision (2026-06-09)**: Rejected tag-based sentinel approach (`requires-cost-basis-refinement` in `TXCreateItem.tags`). Tags are user-facing for grouping/filtering and must not be polluted with system workflow metadata. Instead: dedicated `BRIMFieldTodo` type emitted by plugins, consumed by the wizard UI, never persisted.
+
+#### 8.8.1 Backend schema — `BRIMFieldTodo`
+
+**File**: `backend/app/schemas/brim.py`
+
+```python
+class BRIMFieldTodo(BaseModel):
+    """A TXCreateItem field intentionally left incomplete by the plugin.
+
+    The plugin sets a safe placeholder value that passes Pydantic validation
+    and emits this TODO so the wizard UI can guide the user to provide the
+    real value before import.
+
+    Three channels, three purposes:
+    - warnings: free-text plugin notes (skipped rows, ambiguous data)
+    - validation_issues: TX rejected — Pydantic validation failed
+    - field_todos: TX accepted but field left intentionally incomplete
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    tx_index: int = Field(..., description="Index in transactions[] list")
+    field: str = Field(..., description="TXCreateItem field name (e.g. 'cost_basis_override')")
+    severity: Literal["blocker", "warning"] = Field(...,
+        description="blocker = import blocked until resolved, warning = proceed with caution")
+    reason_code: str = Field(..., description="Machine-readable reason (e.g. 'stock_merger', 'spin_off')")
+    message: str = Field(..., description="Human-readable explanation (English fallback)")
+    context: Optional[Dict[str, Any]] = Field(default=None,
+        description="Extra context for frontend i18n (e.g. {old_ticker: 'CCIV', new_ticker: 'LCID'})")
+```
+
+Added to `BRIMParseOutput` and `BRIMParseResponse`:
+
+```python
+# In BRIMParseOutput (plugin return value):
+field_todos: List[BRIMFieldTodo] = Field(default_factory=list)
+
+# In BRIMParseResponse (API response):
+field_todos: List[BRIMFieldTodo] = Field(default_factory=list)
+```
+
+**Retrocompatibility**: `default_factory=list` → all 11 existing plugins continue to work without changes. Only plugins that have intentionally incomplete fields will emit todos.
+
+#### 8.8.2 Safe placeholder values for ADJUSTMENT (corporate actions)
+
+When a plugin creates an ADJUSTMENT for a stock merger/conversion/spin-off:
+
+| Field | Safe value | Pydantic rule | Passes? |
+|-------|-----------|---------------|─────────|
+| `cost_basis_mode` | `'manual'` | Rule 12: valid for ADJUSTMENT qty>0 | ✅ |
+| `cost_basis_override` | `None` | No rule requires non-None when mode='manual' | ✅ |
+
+The `BRIMFieldTodo` with `field='cost_basis_override'` + `severity='blocker'` signals that `None` is a placeholder, not a real value.
+
+#### 8.8.3 Step 3 UI changes
+
+**DataTable Step 3 — nuova colonna `todoCount`** (dopo `issueCount`):
+
+| Column | Header | Cell | Styling |
+|--------|--------|------|---------|
+| `todoCount` | 🔧 | Numero intero — count di `field_todos` per il file | Rosso se ≥1 blocker; amber se solo warning; 0 neutro; `'—'` se file non done |
+
+**Aggregate summary** — nuova stat (grid da 5 → 6 colonne):
+- `totalTodos` = somma di `field_todos.length` su tutti i file done
+- Label: 🔧 N fields require manual input
+
+**ParseDetailModal — sezione "Manual Fields Required"** (sotto Validation Issues):
+- `fieldTodos` derived: singolo file OR aggregato (flatMap su activeResults), stessa struttura di `validationIssues`
+- Lista: ogni entry mostra `TX #<tx_index>: <field> — <message>` con context opzionale
+- Severity `blocker` → rosso (`red-50/red-900/20`); `warning` → amber
+- Lista vuota → messaggio grigio `noFieldTodos`
+
+#### 8.8.4 i18n keys (M2-FT)
+
+```
+importWizard.fieldTodos, importWizard.fieldTodoCount
+importWizard.fieldTodoBlocker, importWizard.fieldTodoWarning
+importWizard.noFieldTodos, importWizard.todoRow
+importWizard.manualFieldsRequired
+```
+
+### M2-FT Execution Status ✅ (2026-06-09)
+
+| Task | Status | Note |
+|------|--------|------|
+| `BRIMFieldTodo` schema in `brim.py` | ✅ | Aggiunto dopo `BRIMValidationIssue`; `field_todos` su `BRIMParseOutput` + `BRIMParseResponse` |
+| Export in `__init__.py` | ✅ | `BRIMFieldTodo` + `BRIMValidationIssue` entrambi esportati |
+| API wiring in `brokers.py` | ✅ | `field_todos = parse_output.field_todos` → `BRIMParseResponse` |
+| `./dev.py api sync` | ✅ | `BRIMFieldTodo` in `generated.ts`, `field_todos` opzionale in `BRIMParseResponse` |
+| Type export `BrimFieldTodo` in `files.ts` | ✅ | Pattern identico a `BrimValidationIssue` |
+| Colonna `todoCount` in ImportWizardModal | ✅ | Badge rosso (blocker) / amber (warning) / 0 neutro |
+| `totalTodos` + `todoBlockers` in `parseAggregateStats` | ✅ | `$derived.by()` aggiornato |
+| Summary grid 5 → 6 colonne | ✅ | Nuova cella con `fieldTodoCount` i18n |
+| `fieldTodos` derived in ParseDetailModal | ✅ | Singolo file + aggregato (flatMap) |
+| Sezione "Manual Fields Required" | ✅ | Lista con severità, sotto Validation Issues |
+| i18n keys (4 lingue × 7 chiavi) | ✅ | `manualFieldsRequired`, `fieldTodoCount`, `todoRow`, ecc. |
+| svelte-check | ✅ | 0 errori, 0 warning |
+
+> **Note implementazione**: Tutti i plugin esistenti returnano `field_todos=[]` (retrocompat garantita da `default_factory=list`). La struttura è scaffolding per M3 e futuri plugin corporate actions. Le classi Tailwind con `/` (es. `bg-red-900/20`) devono usare template literal inline, non la direttiva `class:` (bug Svelte con dark: prefix).
+
 ---
 
 ## 9. Milestone 3: Step 4 (Review + Resolve + Import)
+
+### M3 Execution Status ✅ (2026-06-09)
+
+| Task | Status | Note |
+|------|--------|------|
+| Interfacce `ImportTodo`, `MergedTx`, `AssetResolution` | ✅ | In `ImportWizardModal.svelte` |
+| `mergeAllTransactions()` | ✅ | Merge da tutti parse result `done`, build `assetResolutions`, detect duplicati |
+| `loadUserAssets()` | ✅ | Carica una volta, cached in `allUserAssets[]` |
+| Zone A — candidati radio con confidence badge | ✅ | exact/high/medium/low, ordinati |
+| Zone B — search client-side su tutti asset | ✅ | `getFilteredAssets()` con debounce-like filter |
+| Zone C — "+ Create new" → `AssetModal` z:90 | ✅ | `createAssetForFakeId` state, `oncreated` callback |
+| TX table — checkbox, date/type/asset/qty/cash/status | ✅ | Amber highlight per asset non risolti, badge ⚠dup/ℹdup |
+| Select all / Deselect all | ✅ | |
+| Footer — Import button con disabled states | ✅ | Disabilitato se 0 selected O asset non risolto |
+| Back navigation → clear Step 4 state | ✅ | `goToStep()` pulisce `mergedTransactions` + `assetResolutions` |
+| i18n M3 (4 lingue × 15 chiavi) | ✅ | `allResolved`, `resolveHint`, `confidence.*`, `importToEditor`, ecc. |
+| svelte-check | ✅ | 0 errori |
+
+> **Note implementazione**: `buildFinalTxList()` sostituisce `fakeAssetId → resolvedAssetId` prima di passare a `onImportBatch`. Il check di disabilitazione usa `step4HasUnresolvedSelected` ($derived). `AssetModal` aperta a z:90 (sopra wizard z:70).
+
+### M4 Execution Status ✅ (2026-06-09)
+
+| Task | Status | Note |
+|------|--------|------|
+| `txCreateItemToPendingOp()` converter in BulkModal | ✅ | Sign inversion via `getTypeRule()`, cost_basis_mode, tags filter, link_uuid |
+| `linkPairedImportOps()` | ✅ | Pairs ops con stesso link_uuid; secondo op → `pairedWith` (hidden) |
+| `onImportBatch()` reale | ✅ | `ops = [...ops, ...linked]` → close wizard → toast → `scheduler.trigger('change')` |
+| E2E test file | ✅ | `frontend/e2e/transactions/tx-brim-import.spec.ts` — 8 scenari registrati |
+| E2E test runner registration | ✅ | `tx-brim-import` in `_frontend_transaction.py` |
+
+> **Note implementazione (segni)**: `txCreateItemToPendingOp` fa `abs()` della quantity se `quantityRule === 'negative'` E il valore è già negativo. Stessa logica per cash. Questo presuppone che i plugin BRIM emettano valori con segno "storage" (negativi per uscite/vendite). **Da verificare con transazioni reali in BulkModal.**
+
+> **⚠️ Dubbio aperto**: Vedere §17 per lista verifiche da fare con l'utente.
 
 ### 9.1 Merge logic (on entering Step 4)
 
@@ -701,7 +852,21 @@ function mergeAllTransactions() {
     let globalIndex = 0;
     
     for (const result of parseResults.filter(r => r.status === 'done')) {
-        for (const tx of result.response!.transactions) {
+        // Build a lookup: tx_index → ImportTodo[] from backend field_todos
+        const todosByTxIndex = new Map<number, ImportTodo[]>();
+        for (const ft of result.response!.field_todos ?? []) {
+            const list = todosByTxIndex.get(ft.tx_index) ?? [];
+            list.push({
+                field: ft.field,
+                severity: ft.severity,
+                reasonCode: ft.reason_code,
+                message: ft.message,
+                context: ft.context ?? undefined,
+            });
+            todosByTxIndex.set(ft.tx_index, list);
+        }
+
+        for (const [txIdx, tx] of result.response!.transactions.entries()) {
             mergedTransactions.push({
                 index: globalIndex++,
                 sourceFileId: result.fileId,
@@ -709,6 +874,7 @@ function mergeAllTransactions() {
                 selected: true,
                 duplicateStatus: 'unique',
                 duplicateMatch: undefined,
+                todos: todosByTxIndex.get(txIdx) ?? [],
             });
             
             if (isFakeAssetId(tx.asset_id) && !assetMap.has(tx.asset_id)) {
@@ -781,9 +947,15 @@ function buildFinalTxList(): TXCreateItem[] {
             return tx;
         });
 }
+
+// Blocking conditions
+const hasUnresolvedBlockers = mergedTransactions
+    .some(t => t.selected && t.todos.some(a => a.severity === 'blocker'));
 ```
 
-Disabled if: 0 selected OR any selected TX references unresolved asset.
+Disabled if: 0 selected OR any selected TX references unresolved asset OR `hasUnresolvedBlockers` is true.
+
+**TODO resolution UX (Step 4)**: Rows with blocker todos show a red ⚠️ badge. The user can click the row to open an inline editor or FormModal to fill in the missing field (e.g. `cost_basis_override`). When the user provides the value, the `ImportTodo` is removed from `todos[]` → blocker count drops → import button enables when all blockers resolved.
 
 ### 9.5 i18n keys (M3)
 
@@ -947,4 +1119,60 @@ This plan **supersedes** `plan-phase07Part5-BRIMImportBridge.prompt.md` (v4). Th
 - Single-file-per-cycle pattern
 - Mode-switching breadcrumb navigation
 - OSS.14, OSS.17 decisions
+
+
+---
+
+## 17. Review Collaborativa M3+M4 (2026-06-09)
+
+**Status**: 🔍 Da fare con l'utente
+
+Il piano M3+M4 è stato implementato in modo autonomo. L'utente non ha approvato il design prima dell'implementazione e vuole fare una review assieme.
+
+### 17.1 Verifiche da fare con l'utente
+
+#### A — Funzionamento del bridge (priorità ALTA)
+
+1. **Sign delle transazioni in BulkModal**: dopo aver risolto gli asset e importato, i valori qty/cash in BulkModal hanno il segno corretto?
+   - Caso da testare: BUY 10 azioni a -€1200 → in BulkModal dovrebbe mostrare qty=10, cash=1200 (positivo, perché BulkModal usa display sign)
+   - Se segni invertiti → bug nel `txCreateItemToPendingOp` converter
+   - File: `TransactionBulkModal.svelte` linee 1975-2024
+
+2. **Asset risolto arriva correttamente**: dopo aver selezionato un asset in Zone A/B, l'icona asset corretta compare nella riga della TX table? E in BulkModal post-import?
+
+3. **Transazione senza asset (DIVIDEND su cash)**: TX senza `asset_id` (es. interesse su conto) → non ha fakeId → deve passare direttamente senza richiedere risoluzione. Verificare che non venga bloccata.
+
+#### B — UX Step 4 (priorità MEDIA)
+
+4. **Sezione "Resolve Assets" espandibile**: l'utente vede l'elenco degli asset da risolvere? È chiaro che deve risolverli per abilitare Import?
+   - Proposta discussa ma non approvata: progress bar "N/M resolved"
+
+5. **Selezione righe TX**: il checkbox per riga funziona? Select all / Deselect all?
+
+6. **Duplicati**: le righe marcate "likely duplicate" sono deselezionate di default? L'utente può ri-selezionarle?
+
+7. **Create new asset (Zone C)**: l'AssetModal si apre correttamente a z:90? Dopo la creazione, l'asset viene pre-selezionato automaticamente come risoluzione?
+
+#### C — Cosa non è stato implementato rispetto al piano originale
+
+8. **Blocker TODO enforcement**: il piano §9.4 prevedeva che righe con `field_todos` blockers impedissero l'import. Implementato solo come filtro disableImport, ma **non c'è UI inline editor** per risolverli. Scelta deliberata (nessun plugin emette TODOs oggi), ma l'utente era a conoscenza?
+
+9. **Pending ops duplicate check** (M4 §10.3): il piano prevedeva di controllare duplicati vs ops già in BulkModal. **NON implementato**. Effort medio. Vale farlo ora?
+
+10. **Multi-file breakdown nella TX table**: il piano §9.5 prevedeva filtro `filterByFile`. Non implementato (colonna `sourceFileId` esiste nello state ma non è visibile). Manca o non serve?
+
+### 17.2 Domande di design aperte
+
+1. **Flusso dopo import**: wizard si chiude e si apre BulkModal? O wizard si chiude e BulkModal era già aperta? Attualmente: `importWizardOpen = false` → BulkModal resta aperta se era già aperta. Corretto?
+
+2. **Re-open wizard**: se l'utente fa import e poi riapre wizard, può fare un secondo import che aggiunge altre TX alla stessa sessione BulkModal? Attualmente: sì (ops vengono appendati). Desiderato?
+
+3. **Asset resolution persistenza**: se l'utente risolve un asset fakeId A → assetId 42, poi torna indietro (back navigation) e poi avanza di nuovo, le risoluzioni vengono perse (state clearato). Dovremmo preservarle in cache?
+
+### 17.3 Come procedere
+
+1. **L'utente testa il flusso**: parse un file con asset non risolti → Step 4 → risolve → Import
+2. **Segnala** cosa non funziona o non convince visivamente
+3. **Decidiamo** insieme i fix prioritari
+4. **Poi**: E2E tests da girare per regressioni
 

@@ -1,20 +1,23 @@
 <!--
-  ImportWizardModal.svelte — Phase 07 Part 5 v5 M2
+  ImportWizardModal.svelte — Phase 07 Part 5 v5 M3
 
   Wide 4-step wizard for importing broker report files into BulkModal.
   Step 1: Upload files (broker-independent) & assign broker per-file
   Step 2: Select existing broker files to parse (DataTable per broker, per-file plugin)
   Step 3: Parse engine — sequential parse with progress, results DataTable, detail modal
-  Step 4: Review & Import (M3 placeholder)
+  Step 4: Review & Import — asset resolution + TX selection + handoff to BulkModal
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {Upload, Trash2, Eye, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw} from 'lucide-svelte';
+    import {Upload, Trash2, Eye, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw, Search, X} from 'lucide-svelte';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
     import {formatBytes} from '$lib/utils/files/upload';
     import {ensureBrokersLoaded, getEditableBrokers, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {ensureAssetsLoaded, getAllAssets, type AssetInfo} from '$lib/stores/reference/assetStore';
+    import {isFakeAssetId} from '$lib/utils/brim/isFakeAssetId';
+    import AssetModal from '$lib/components/assets/AssetModal.svelte';
 
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -171,17 +174,205 @@
         const unresolvedCount = allMappings.filter((m) => m.selected_asset_id == null).length;
         const totalWarnings = doneResults.reduce((sum, r) => sum + (r.response!.warnings?.length ?? 0), 0);
         const totalIssues = doneResults.reduce((sum, r) => sum + ((r.response!.validation_issues as unknown[] | undefined)?.length ?? 0), 0);
+        const fieldTodos = doneResults.flatMap((r) => (r.response!.field_todos as {severity: string}[] | undefined) ?? []);
+        const totalTodos = fieldTodos.length;
+        const todoBlockers = fieldTodos.filter((t) => t.severity === 'blocker').length;
         const duplicates = doneResults.reduce((sum, r) => {
             const dup = r.response!.duplicates;
             if (!dup || Array.isArray(dup)) return sum;
             return sum + (dup.tx_likely_duplicates?.length ?? 0);
         }, 0);
-        return {totalTx, doneFileCount, uniqueAssets: uniqueAssetIds.size, unresolvedCount, totalWarnings, totalIssues, likelyDuplicates: duplicates};
+        return {totalTx, doneFileCount, uniqueAssets: uniqueAssetIds.size, unresolvedCount, totalWarnings, totalIssues, totalTodos, todoBlockers, likelyDuplicates: duplicates};
     });
 
     function computeParseHash(): string {
         const sorted = [...selectedFiles].sort((a, b) => a.fileId.localeCompare(b.fileId)).map((f) => `${f.fileId}:${f.pluginCode}`);
         return sorted.join('|');
+    }
+
+    // =========================================================================
+    // Step 4 State — Review & Import
+    // =========================================================================
+
+    interface ImportTodo {
+        field: string;
+        severity: 'blocker' | 'warning';
+        reasonCode: string;
+        message: string;
+    }
+
+    interface MergedTx {
+        index: number;
+        sourceFileId: string;
+        tx: TransactionCreateItem;
+        selected: boolean;
+        duplicateStatus: 'unique' | 'possible' | 'likely';
+        todos: ImportTodo[];
+    }
+
+    interface AssetResolution {
+        fakeAssetId: number;
+        extractedSymbol: string | null;
+        extractedIsin: string | null;
+        extractedName: string | null;
+        candidates: Array<{asset_id: number; symbol?: string | null; isin?: string | null; name: string; match_confidence: string}>;
+        resolvedAssetId: number | null;
+        txCount: number;
+        sourceFiles: string[];
+    }
+
+    let mergedTransactions = $state<MergedTx[]>([]);
+    let assetResolutions = $state<AssetResolution[]>([]);
+    let step4AssetQueries = $state<Record<number, string>>({});
+    let allUserAssets = $state<AssetInfo[]>([]);
+    let allUserAssetsLoaded = $state(false);
+    let createAssetForFakeId = $state<number | null>(null);
+    let step4ShowResolveSection = $state(true);
+
+    // Step 4 deriveds
+    let step4SelectedCount = $derived(mergedTransactions.filter((t) => t.selected).length);
+    let step4TotalCount = $derived(mergedTransactions.length);
+    let step4UnresolvedCount = $derived(assetResolutions.filter((r) => r.resolvedAssetId === null).length);
+    let step4HasUnresolvedSelected = $derived(
+        mergedTransactions.some((t) => {
+            if (t.selected && typeof t.tx.asset_id === 'number' && isFakeAssetId(t.tx.asset_id)) {
+                const res = assetResolutions.find((r) => r.fakeAssetId === t.tx.asset_id);
+                return res?.resolvedAssetId == null;
+            }
+            return false;
+        })
+    );
+    let step4CanImport = $derived(step4SelectedCount > 0 && !step4HasUnresolvedSelected);
+    let step4LikelyDupCount = $derived(mergedTransactions.filter((t) => t.selected && t.duplicateStatus === 'likely').length);
+
+    function mergeAllTransactions() {
+        const txArr: MergedTx[] = [];
+        const assetMap = new Map<number, AssetResolution>();
+        let globalIndex = 0;
+
+        for (const result of parseResults.filter((r) => r.status === 'done' && r.response)) {
+            const resp = result.response!;
+            // Build todos map by tx_index
+            const todosMap = new Map<number, ImportTodo[]>();
+            for (const ft of resp.field_todos ?? []) {
+                const idx = (ft as any).tx_index as number;
+                const list = todosMap.get(idx) ?? [];
+                list.push({field: (ft as any).field, severity: (ft as any).severity, reasonCode: (ft as any).reason_code, message: (ft as any).message});
+                todosMap.set(idx, list);
+            }
+
+            // Build duplicate sets (by tx_row_index)
+            const dups = resp.duplicates;
+            const likelySet = new Set<number>((dups && !Array.isArray(dups) ? (dups.tx_likely_duplicates ?? []) : []).map((d: any) => d.tx_row_index as number));
+            const possibleSet = new Set<number>((dups && !Array.isArray(dups) ? (dups.tx_possible_duplicates ?? []) : []).map((d: any) => d.tx_row_index as number));
+
+            for (const [txIdx, tx] of (resp.transactions ?? []).entries()) {
+                let dupStatus: 'unique' | 'possible' | 'likely' = 'unique';
+                if (likelySet.has(txIdx)) dupStatus = 'likely';
+                else if (possibleSet.has(txIdx)) dupStatus = 'possible';
+
+                txArr.push({
+                    index: globalIndex++,
+                    sourceFileId: result.fileId,
+                    tx: tx as TransactionCreateItem,
+                    selected: dupStatus !== 'likely',
+                    duplicateStatus: dupStatus,
+                    todos: todosMap.get(txIdx) ?? [],
+                });
+
+                const assetId = typeof tx.asset_id === 'number' ? tx.asset_id : null;
+                if (assetId !== null && isFakeAssetId(assetId) && !assetMap.has(assetId)) {
+                    const mapping = (resp.asset_mappings ?? []).find((m: any) => m.fake_asset_id === assetId);
+                    if (mapping) {
+                        assetMap.set(assetId, {
+                            fakeAssetId: assetId,
+                            extractedSymbol: (mapping.extracted_symbol as string | null) ?? null,
+                            extractedIsin: (mapping.extracted_isin as string | null) ?? null,
+                            extractedName: (mapping.extracted_name as string | null) ?? null,
+                            candidates: ((mapping.candidates ?? []) as AssetResolution['candidates']),
+                            resolvedAssetId: typeof mapping.selected_asset_id === 'number' ? (mapping.selected_asset_id as number) : null,
+                            txCount: 0,
+                            sourceFiles: [],
+                        });
+                    }
+                }
+            }
+        }
+
+        // Compute txCount and sourceFiles per asset resolution
+        for (const [fakeId, res] of assetMap) {
+            const relTx = txArr.filter((t) => t.tx.asset_id === fakeId);
+            res.txCount = relTx.length;
+            res.sourceFiles = [...new Set(relTx.map((t) => parseResults.find((r) => r.fileId === t.sourceFileId)?.fileName ?? t.sourceFileId))];
+        }
+
+        mergedTransactions = txArr;
+        assetResolutions = [...assetMap.values()];
+        step4AssetQueries = {};
+        step4ShowResolveSection = assetMap.size > 0;
+    }
+
+    async function loadUserAssets() {
+        if (allUserAssetsLoaded) return;
+        await ensureAssetsLoaded();
+        allUserAssets = getAllAssets();
+        allUserAssetsLoaded = true;
+    }
+
+    function resolveAsset(fakeAssetId: number, realAssetId: number) {
+        assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, resolvedAssetId: realAssetId} : r));
+    }
+
+    function clearResolution(fakeAssetId: number) {
+        assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, resolvedAssetId: null} : r));
+    }
+
+    function getFilteredAssets(fakeAssetId: number): AssetInfo[] {
+        const q = (step4AssetQueries[fakeAssetId] ?? '').toLowerCase().trim();
+        if (!q) return [];
+        return allUserAssets.filter((a) => {
+            const name = a.display_name?.toLowerCase() ?? '';
+            const ticker = a.identifier_ticker?.toLowerCase() ?? '';
+            const isin = a.identifier_isin ?? '';
+            return name.includes(q) || ticker.includes(q) || isin.toLowerCase().includes(q);
+        }).slice(0, 8);
+    }
+
+    function buildFinalTxList(): TransactionCreateItem[] {
+        return mergedTransactions
+            .filter((t) => t.selected)
+            .map((t) => {
+                const tx = {...t.tx} as any;
+                const assetId = typeof tx.asset_id === 'number' ? tx.asset_id : null;
+                if (assetId !== null && isFakeAssetId(assetId)) {
+                    const res = assetResolutions.find((r) => r.fakeAssetId === assetId);
+                    if (res?.resolvedAssetId) tx.asset_id = res.resolvedAssetId;
+                }
+                return tx as TransactionCreateItem;
+            });
+    }
+
+    function handleImport() {
+        const creates = buildFinalTxList();
+        onImportBatch(creates);
+    }
+
+    function getAssetDisplayName(assetId: number | null | undefined): string {
+        if (assetId == null) return '—';
+        if (isFakeAssetId(assetId)) {
+            const res = assetResolutions.find((r) => r.fakeAssetId === assetId);
+            if (!res) return `#${assetId}`;
+            return res.extractedSymbol ?? res.extractedName ?? `#${assetId}`;
+        }
+        const asset = allUserAssets.find((a) => a.id === assetId);
+        return asset?.display_name ?? `#${assetId}`;
+    }
+
+    function confidenceBadgeClass(conf: string): string {
+        if (conf === 'exact') return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
+        if (conf === 'high') return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+        if (conf === 'medium') return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300';
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
     }
 
     // =========================================================================
@@ -196,7 +387,7 @@
     // Derived
     // =========================================================================
 
-    let hasUnsavedWork = $derived(pendingFiles.length > 0 || selectedFiles.length > 0 || parseResults.length > 0);
+    let hasUnsavedWork = $derived(pendingFiles.length > 0 || selectedFiles.length > 0 || parseResults.length > 0 || mergedTransactions.length > 0);
     let selectedBrokerCount = $derived(new Set(selectedFiles.map((f) => f.brokerId)).size);
 
     // =========================================================================
@@ -234,6 +425,12 @@
         showParseDetail = false;
         parseDetailResult = null;
         showAggregateDetail = false;
+        // Step 4 reset
+        mergedTransactions = [];
+        assetResolutions = [];
+        step4AssetQueries = {};
+        step4ShowResolveSection = true;
+        createAssetForFakeId = null;
     }
 
     // =========================================================================
@@ -274,6 +471,10 @@
         if (target <= 2) {
             selectedFiles = target === 1 ? [] : selectedFiles;
         }
+        if (target <= 3) {
+            mergedTransactions = [];
+            assetResolutions = [];
+        }
         currentStep = target;
     }
 
@@ -293,6 +494,8 @@
         } else if (currentStep === 3) {
             currentStep = 4;
             if (maxReachedStep < 4) maxReachedStep = 4;
+            mergeAllTransactions();
+            loadUserAssets();
         }
     }
 
@@ -799,30 +1002,38 @@
         {
             id: 'brokerName',
             header: () => 'Broker',
-            cell: (row) =>
-                ({
-                    type: 'custom',
-                    component: BrokerIcon,
-                    props: {iconUrl: row.brokerIconUrl, portalUrl: row.brokerPortalUrl, altText: row.brokerName, size: 'sm'},
-                }) as const,
+            cell: (row) => {
+                const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                const faviconUrl = row.brokerPortalUrl ? (() => { try { return new URL(row.brokerPortalUrl!).origin + '/favicon.ico'; } catch { return null; } })() : null;
+                const imgSrc = row.brokerIconUrl || faviconUrl;
+                const icon = imgSrc
+                    ? `<img src="${esc(imgSrc)}" class="w-5 h-5 rounded-full object-cover shrink-0" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">${`<span class="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0" style="display:none">${esc(row.brokerName.charAt(0).toUpperCase())}</span>`}`
+                    : `<span class="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">${esc(row.brokerName.charAt(0).toUpperCase())}</span>`;
+                return {type: 'html', html: `<div class="flex items-center gap-1.5 min-w-0">${icon}<span class="truncate text-xs">${esc(row.brokerName)}</span></div>`} as const;
+            },
             type: 'text',
             sortable: true,
-            width: 50,
-            minWidth: 40,
+            width: 130,
+            minWidth: 90,
             getValue: (row) => row.brokerName,
         },
         {
             id: 'pluginName',
             header: () => 'Plugin',
-            cell: (row) =>
-                ({
-                    type: 'custom',
-                    component: BrokerIcon,
-                    props: {pluginCode: row.pluginUsed, altText: row.pluginName, size: 'sm'},
-                }) as const,
+            cell: (row) => {
+                const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                const plugin = (getCachedPlugins() ?? []).find((p) => p.code === row.pluginUsed);
+                const iconUrl = (plugin as {icon_url?: string | null} | undefined)?.icon_url;
+                const name = row.pluginName || row.pluginUsed;
+                const icon = iconUrl
+                    ? `<img src="${esc(iconUrl)}" class="w-5 h-5 rounded-full object-cover shrink-0" alt="">`
+                    : `<span class="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">${esc(name.charAt(0).toUpperCase())}</span>`;
+                return {type: 'html', html: `<div class="flex items-center gap-1.5 min-w-0">${icon}<span class="truncate text-xs">${esc(name)}</span></div>`} as const;
+            },
             type: 'text',
-            width: 50,
-            minWidth: 40,
+            sortable: true,
+            width: 130,
+            minWidth: 90,
             getValue: (row) => row.pluginName,
         },
         {
@@ -858,26 +1069,29 @@
         },
         {
             id: 'txCount',
-            header: () => 'TX',
+            header: () => '📊',
+            headerTooltip: () => $t('importWizard.colTip.txCount'),
             cell: (row) => (row.response?.transactions?.length != null ? row.response.transactions.length : '—'),
             type: 'number',
-            width: 60,
-            minWidth: 50,
+            width: 50,
+            minWidth: 40,
         },
         {
             id: 'assetCount',
-            header: () => $t('importWizard.assetsSection'),
+            header: () => '🏦',
+            headerTooltip: () => $t('importWizard.colTip.assetCount'),
             cell: (row) => {
                 if (!row.response?.asset_mappings?.length) return '—';
                 return row.response.asset_mappings.length;
             },
             type: 'number',
-            width: 70,
-            minWidth: 50,
+            width: 50,
+            minWidth: 40,
         },
         {
             id: 'unresolvedCount',
             header: () => '❓',
+            headerTooltip: () => $t('importWizard.colTip.unresolvedCount'),
             cell: (row) => {
                 if (!row.response?.asset_mappings?.length) return '—';
                 const unresolved = row.response.asset_mappings.filter((m) => m.selected_asset_id == null).length;
@@ -891,6 +1105,7 @@
         {
             id: 'issueCount',
             header: () => '🔴',
+            headerTooltip: () => $t('importWizard.colTip.issueCount'),
             cell: (row) => {
                 const count = (row.response?.validation_issues as unknown[] | undefined)?.length ?? 0;
                 if (row.status !== 'done') return '—';
@@ -902,8 +1117,25 @@
             minWidth: 40,
         },
         {
+            id: 'todoCount',
+            header: () => '🔧',
+            headerTooltip: () => $t('importWizard.colTip.todoCount'),
+            cell: (row) => {
+                if (row.status !== 'done') return '—';
+                const todos = (row.response?.field_todos as {severity: string}[] | undefined) ?? [];
+                if (todos.length === 0) return 0;
+                const hasBlocker = todos.some((t) => t.severity === 'blocker');
+                const color = hasBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400';
+                return {type: 'html', html: `<span class="${color} font-medium">${todos.length}</span>`} as const;
+            },
+            type: 'number',
+            width: 50,
+            minWidth: 40,
+        },
+        {
             id: 'warningCount',
             header: () => '⚠️',
+            headerTooltip: () => $t('importWizard.colTip.warningCount'),
             cell: (row) => (row.response?.warnings?.length != null ? row.response.warnings.length : '—'),
             type: 'number',
             width: 50,
@@ -1216,7 +1448,7 @@
                                             tableLayout="auto"
                                             stickyActions={false}
                                             enableContextMenu={true}
-                                            initialFilters={{status: {type: 'enum', selected: ['uploaded']}}}
+                                            initialFilters={undefined}
                                             onColumnResize={(colId, w) => handleColumnResize(brokerIdx, colId, w)}
                                         />
                                     </div>
@@ -1286,7 +1518,7 @@
                 <!-- Aggregate summary -->
                 {#if parseHasSuccess}
                     {@const stats = parseAggregateStats()}
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div class="grid grid-cols-2 md:grid-cols-8 gap-3 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                         <div class="text-center">
                             <div class="text-lg font-semibold text-gray-900 dark:text-white">{stats.totalTx}</div>
                             <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.txCount', {values: {n: stats.totalTx, k: stats.doneFileCount}})}</div>
@@ -1305,6 +1537,17 @@
                             <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.validationIssueCount', {values: {n: stats.totalIssues}})}</div>
                         </div>
                         <div class="text-center">
+                            <div
+                                class="text-lg font-semibold"
+                                class:text-red-600={stats.todoBlockers > 0}
+                                class:dark:text-red-400={stats.todoBlockers > 0}
+                                class:text-amber-500={stats.todoBlockers === 0 && stats.totalTodos > 0}
+                                class:text-gray-900={stats.totalTodos === 0}
+                                class:dark:text-white={stats.totalTodos === 0}
+                            >{stats.totalTodos}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.fieldTodoCount', {values: {n: stats.totalTodos}})}</div>
+                        </div>
+                        <div class="text-center">
                             <div class="text-lg font-semibold" class:text-amber-500={stats.totalWarnings > 0} class:text-gray-900={stats.totalWarnings === 0} class:dark:text-white={stats.totalWarnings === 0}>{stats.totalWarnings}</div>
                             <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.warningsCount', {values: {n: stats.totalWarnings}})}</div>
                         </div>
@@ -1312,34 +1555,276 @@
                             <div class="text-lg font-semibold" class:text-amber-500={stats.likelyDuplicates > 0} class:text-gray-900={stats.likelyDuplicates === 0} class:dark:text-white={stats.likelyDuplicates === 0}>{stats.likelyDuplicates}</div>
                             <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.likelyDuplicates', {values: {n: stats.likelyDuplicates}})}</div>
                         </div>
-                    </div>
-                    {#if parseDone || usingCachedResults}
-                        <div class="flex justify-center gap-3">
+                        <!-- View All action cell -->
+                        {#if parseDone || usingCachedResults}
                             <button
                                 type="button"
-                                class="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 underline flex items-center gap-1"
-                                onclick={() => {
-                                    showAggregateDetail = true;
-                                }}
+                                class="flex flex-col items-center justify-center gap-1 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 transition-colors px-2 py-1.5"
+                                onclick={() => { showAggregateDetail = true; }}
                             >
-                                <Eye size={12} />
-                                {$t('importWizard.viewAll')}
+                                <Eye size={16} />
+                                <span class="text-xs font-medium">{$t('importWizard.viewAll')}</span>
                             </button>
-                            <button type="button" class="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 underline" onclick={handleReparse}>
-                                {$t('importWizard.reparse')}
+                            <button
+                                type="button"
+                                class="flex flex-col items-center justify-center gap-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors px-2 py-1.5"
+                                onclick={handleReparse}
+                            >
+                                <RefreshCw size={16} />
+                                <span class="text-xs font-medium">{$t('importWizard.reparse')}</span>
                             </button>
-                        </div>
-                    {/if}
+                        {/if}
+                    </div>
                 {/if}
             </div>
 
             <!-- ============================================================ -->
-            <!-- Step 4: Review (M3 placeholder) -->
+            <!-- Step 4: Review & Import -->
             <!-- ============================================================ -->
         {:else if currentStep === 4}
-            <div class="py-12 text-center text-gray-400 dark:text-gray-500" data-testid="import-wizard-step4">
-                <p class="text-lg font-medium">{$t('importWizard.step4Title')}</p>
-                <p class="text-sm mt-2">Coming in Milestone 3</p>
+            <div class="flex flex-col gap-4 h-full overflow-y-auto" data-testid="import-wizard-step4">
+
+                <!-- ── Resolve Assets section ─────────────────────────── -->
+                {#if assetResolutions.length > 0}
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                        <!-- Section header -->
+                        <button
+                            type="button"
+                            class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors"
+                            onclick={() => (step4ShowResolveSection = !step4ShowResolveSection)}
+                        >
+                            <div class="flex items-center gap-2">
+                                {#if step4ShowResolveSection}<ChevronDown size={16} />{:else}<ChevronRight size={16} />{/if}
+                                <span class="font-semibold text-sm">{$t('importWizard.resolveAssets')}</span>
+                                {#if step4UnresolvedCount > 0}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                        {step4UnresolvedCount} {$t('importWizard.unresolvedCount', {values: {n: step4UnresolvedCount}})}
+                                    </span>
+                                {:else}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                        <Check size={12} class="mr-1" />{$t('importWizard.allResolved')}
+                                    </span>
+                                {/if}
+                            </div>
+                        </button>
+
+                        {#if step4ShowResolveSection}
+                            <div class="divide-y divide-gray-100 dark:divide-gray-800">
+                                {#each assetResolutions as res (res.fakeAssetId)}
+                                    {@const isResolved = res.resolvedAssetId !== null}
+                                    {@const resolvedAsset = isResolved ? allUserAssets.find((a) => a.id === res.resolvedAssetId) : null}
+                                    <div class="p-4 {isResolved ? 'bg-emerald-50/30 dark:bg-emerald-900/10' : ''}">
+                                        <!-- Card header -->
+                                        <div class="flex items-start justify-between gap-3 mb-3">
+                                            <div>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">
+                                                        {res.extractedSymbol ?? res.extractedIsin ?? '?'}
+                                                    </span>
+                                                    {#if res.extractedName && res.extractedName !== res.extractedSymbol}
+                                                        <span class="text-xs text-gray-500 dark:text-gray-400">{res.extractedName}</span>
+                                                    {/if}
+                                                    {#if res.extractedIsin}
+                                                        <span class="font-mono text-xs text-gray-400">{res.extractedIsin}</span>
+                                                    {/if}
+                                                </div>
+                                                <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                                    {res.txCount} TX · {res.sourceFiles.join(', ')}
+                                                </div>
+                                            </div>
+                                            {#if isResolved}
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                                                        <Check size={12} class="inline mr-1" />{resolvedAsset?.display_name ?? `#${res.resolvedAssetId}`}
+                                                    </span>
+                                                    <button type="button" class="text-gray-400 hover:text-red-500 transition-colors" onclick={() => clearResolution(res.fakeAssetId)} title="Clear selection">
+                                                        <X size={14} />
+                                                    </button>
+                                                </div>
+                                            {/if}
+                                        </div>
+
+                                        {#if !isResolved}
+                                            <!-- Zone A: Candidates (radio buttons) -->
+                                            {#if res.candidates.length > 0}
+                                                <div class="mb-3 space-y-1">
+                                                    <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{$t('importWizard.suggested')}</div>
+                                                    {#each res.candidates as cand (cand.asset_id)}
+                                                        <label class="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors">
+                                                            <input
+                                                                type="radio"
+                                                                name="asset-{res.fakeAssetId}"
+                                                                class="text-libre-green"
+                                                                checked={res.resolvedAssetId === cand.asset_id}
+                                                                onchange={() => resolveAsset(res.fakeAssetId, cand.asset_id)}
+                                                            />
+                                                            <span class="text-sm text-gray-800 dark:text-gray-200 flex-1">{cand.name}</span>
+                                                            {#if cand.symbol}<span class="font-mono text-xs text-gray-500">{cand.symbol}</span>{/if}
+                                                            <span class="text-xs px-1.5 py-0.5 rounded font-medium {confidenceBadgeClass(cand.match_confidence)}">
+                                                                {$t(`importWizard.confidence.${cand.match_confidence}`) || cand.match_confidence}
+                                                            </span>
+                                                        </label>
+                                                    {/each}
+                                                </div>
+                                                <div class="border-t border-gray-100 dark:border-gray-700 my-2"></div>
+                                            {/if}
+
+                                            <!-- Zone B: Search all user assets (client-side) -->
+                                            <div class="mb-2">
+                                                <div class="relative">
+                                                    <Search size={14} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                    <input
+                                                        type="text"
+                                                        class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-libre-green/40 focus:border-libre-green outline-none"
+                                                        placeholder={$t('importWizard.searchAll')}
+                                                        value={step4AssetQueries[res.fakeAssetId] ?? ''}
+                                                        oninput={(e) => {
+                                                            const q = (e.target as HTMLInputElement).value;
+                                                            step4AssetQueries = {...step4AssetQueries, [res.fakeAssetId]: q};
+                                                        }}
+                                                    />
+                                                </div>
+                                                {#if (step4AssetQueries[res.fakeAssetId] ?? '').length > 0}
+                                                    {@const filtered = getFilteredAssets(res.fakeAssetId)}
+                                                    {#if filtered.length > 0}
+                                                        <div class="mt-1 border border-gray-200 dark:border-gray-600 rounded-md overflow-hidden shadow-sm">
+                                                            {#each filtered as asset (asset.id)}
+                                                                <button
+                                                                    type="button"
+                                                                    class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-libre-green/10 text-left transition-colors border-b border-gray-100 dark:border-gray-700 last:border-0"
+                                                                    onclick={() => {
+                                                                        resolveAsset(res.fakeAssetId, asset.id);
+                                                                        step4AssetQueries = {...step4AssetQueries, [res.fakeAssetId]: ''};
+                                                                    }}
+                                                                >
+                                                                    <span class="flex-1 text-gray-800 dark:text-gray-200">{asset.display_name}</span>
+                                                                    {#if asset.identifier_ticker}<span class="font-mono text-xs text-gray-500">{asset.identifier_ticker}</span>{/if}
+                                                                    {#if asset.identifier_isin}<span class="font-mono text-xs text-gray-400">{asset.identifier_isin}</span>{/if}
+                                                                </button>
+                                                            {/each}
+                                                        </div>
+                                                    {:else}
+                                                        <div class="mt-1 text-xs text-gray-400 px-1">{$t('common.noResults') || 'No results'}</div>
+                                                    {/if}
+                                                {/if}
+                                            </div>
+
+                                            <!-- Zone C: Create new asset -->
+                                            <button
+                                                type="button"
+                                                class="flex items-center gap-1.5 text-xs text-libre-green hover:underline font-medium"
+                                                onclick={() => (createAssetForFakeId = res.fakeAssetId)}
+                                            >
+                                                <Plus size={12} />
+                                                {$t('importWizard.createNew')}
+                                            </button>
+                                        {/if}
+                                    </div>
+                                {/each}
+                            </div>
+                        {/if}
+                    </div>
+                {/if}
+
+                <!-- ── TX Table ────────────────────────────────────────── -->
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <!-- Table header row -->
+                    <div class="flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex items-center gap-3 text-sm">
+                            <span class="font-semibold">{$t('importWizard.transactionsSection') || 'Transactions'}</span>
+                            <span class="text-gray-500">{step4SelectedCount} / {step4TotalCount}</span>
+                            {#if step4LikelyDupCount > 0}
+                                <span class="text-xs text-amber-600 dark:text-amber-400">⚠ {step4LikelyDupCount} {$t('importWizard.likelyDuplicate') || 'likely dup'}</span>
+                            {/if}
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button type="button" class="text-xs text-libre-green hover:underline" onclick={() => (mergedTransactions = mergedTransactions.map((t) => ({...t, selected: true})))}>
+                                {$t('importWizard.selectAll') || 'Select all'}
+                            </button>
+                            <span class="text-gray-300 dark:text-gray-600">|</span>
+                            <button type="button" class="text-xs text-gray-500 hover:underline" onclick={() => (mergedTransactions = mergedTransactions.map((t) => ({...t, selected: false})))}>
+                                {$t('importWizard.deselectAll') || 'Deselect all'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Scrollable TX list -->
+                    <div class="max-h-[420px] overflow-y-auto">
+                        <table class="w-full text-xs">
+                            <thead class="sticky top-0 bg-white dark:bg-slate-900 z-10 border-b border-gray-200 dark:border-gray-700">
+                                <tr class="text-left text-gray-500 dark:text-gray-400">
+                                    <th class="pl-3 pr-1 py-2 w-8"></th>
+                                    <th class="px-2 py-2 whitespace-nowrap">{$t('common.date') || 'Date'}</th>
+                                    <th class="px-2 py-2">{$t('common.type') || 'Type'}</th>
+                                    <th class="px-2 py-2">{$t('common.asset') || 'Asset'}</th>
+                                    <th class="px-2 py-2 text-right">{$t('common.quantity') || 'Qty'}</th>
+                                    <th class="px-2 py-2 text-right">{$t('common.cash') || 'Cash'}</th>
+                                    <th class="px-2 py-2 text-right pr-3">{$t('common.status') || 'Status'}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {#each mergedTransactions as mt (mt.index)}
+                                    {@const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null}
+                                    {@const isUnresolvedAsset = assetId !== null && isFakeAssetId(assetId) && (assetResolutions.find((r) => r.fakeAssetId === assetId)?.resolvedAssetId == null)}
+                                    <tr
+                                        class="border-b border-gray-100 dark:border-gray-800 transition-colors
+                                            {mt.selected ? 'bg-white dark:bg-slate-900' : 'bg-gray-50 dark:bg-slate-800/40 opacity-60'}
+                                            {isUnresolvedAsset && mt.selected ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}
+                                            hover:bg-gray-50 dark:hover:bg-slate-800/60"
+                                    >
+                                        <td class="pl-3 pr-1 py-2">
+                                            <input
+                                                type="checkbox"
+                                                class="rounded text-libre-green"
+                                                checked={mt.selected}
+                                                onchange={() => {
+                                                    mergedTransactions = mergedTransactions.map((t) => (t.index === mt.index ? {...t, selected: !t.selected} : t));
+                                                }}
+                                            />
+                                        </td>
+                                        <td class="px-2 py-2 font-mono text-gray-600 dark:text-gray-400 whitespace-nowrap">{mt.tx.date}</td>
+                                        <td class="px-2 py-2">
+                                            <span class="inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                                {mt.tx.type}
+                                            </span>
+                                        </td>
+                                        <td class="px-2 py-2 max-w-[160px] truncate text-gray-800 dark:text-gray-200">
+                                            {#if isUnresolvedAsset}
+                                                <span class="text-amber-600 dark:text-amber-400">
+                                                    ❓ {getAssetDisplayName(assetId)}
+                                                </span>
+                                            {:else}
+                                                {getAssetDisplayName(assetId)}
+                                            {/if}
+                                        </td>
+                                        <td class="px-2 py-2 text-right font-mono text-gray-600 dark:text-gray-400">
+                                            {mt.tx.quantity && mt.tx.quantity !== '0' ? mt.tx.quantity : '—'}
+                                        </td>
+                                        <td class="px-2 py-2 text-right font-mono text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                                            {#if mt.tx.cash && typeof mt.tx.cash === 'object' && !Array.isArray(mt.tx.cash)}
+                                                {mt.tx.cash.code} {mt.tx.cash.amount}
+                                            {:else}—{/if}
+                                        </td>
+                                        <td class="px-2 py-2 text-right pr-3">
+                                            {#if mt.duplicateStatus === 'likely'}
+                                                <span class="text-xs text-amber-600 dark:text-amber-400" title={$t('importWizard.likelyDuplicate') || 'Likely duplicate'}>⚠ dup</span>
+                                            {:else if mt.duplicateStatus === 'possible'}
+                                                <span class="text-xs text-blue-500 dark:text-blue-400" title={$t('importWizard.possibleDuplicate') || 'Possible duplicate'}>ℹ dup</span>
+                                            {:else if isUnresolvedAsset}
+                                                <span class="text-xs text-amber-600 dark:text-amber-400">❓</span>
+                                            {:else}
+                                                <span class="text-xs text-emerald-500">✓</span>
+                                            {/if}
+                                        </td>
+                                    </tr>
+                                {/each}
+                            </tbody>
+                        </table>
+                        {#if mergedTransactions.length === 0}
+                            <div class="py-8 text-center text-gray-400 text-sm">{$t('importWizard.noFiles') || 'No transactions'}</div>
+                        {/if}
+                    </div>
+                </div>
             </div>
         {/if}
     </div>
@@ -1437,11 +1922,34 @@
                 {$t('importWizard.continue')} ▶
             </button>
         {:else}
-            <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
-                ◀ {$t('importWizard.back')}
-            </button>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" disabled data-testid="import-wizard-import">
-                {$t('importWizard.review')} ▶
+            <div class="flex items-center gap-3">
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
+                    ◀ {$t('importWizard.back')}
+                </button>
+                {#if step4HasUnresolvedSelected}
+                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                        <AlertTriangle size={14} />
+                        {$t('importWizard.importDisabledUnresolved') || 'Resolve all assets to import'}
+                    </span>
+                {:else if step4SelectedCount === 0}
+                    <span class="flex items-center gap-1 text-xs text-gray-400">
+                        {$t('importWizard.importDisabledEmpty') || 'Select at least one transaction'}
+                    </span>
+                {:else if step4LikelyDupCount > 0}
+                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                        <AlertTriangle size={14} />
+                        {step4LikelyDupCount} {$t('importWizard.likelyDuplicate') || 'likely duplicates'} {$t('importWizard.likelyDupIncluded') || 'included'}
+                    </span>
+                {/if}
+            </div>
+            <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                onclick={handleImport}
+                disabled={!step4CanImport}
+                data-testid="import-wizard-import"
+            >
+                {$t('importWizard.importToEditor', {values: {n: step4SelectedCount}})} ▶
             </button>
         {/if}
     </div>
@@ -1466,3 +1974,19 @@
         showAggregateDetail = false;
     }}
 />
+
+<!-- Asset creation modal (Step 4 Zone C) -->
+{#if createAssetForFakeId !== null}
+    <AssetModal
+        open={true}
+        editMode={false}
+        zIndex={90}
+        oncreated={(assetId) => {
+            resolveAsset(createAssetForFakeId!, assetId);
+            allUserAssetsLoaded = false;
+            loadUserAssets();
+            createAssetForFakeId = null;
+        }}
+        onclose={() => (createAssetForFakeId = null)}
+    />
+{/if}

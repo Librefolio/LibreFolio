@@ -60,6 +60,11 @@ export type BrimParseResponse = z.infer<typeof schemas.BRIMParseResponse>;
 export type BrimValidationIssue = z.infer<typeof schemas.BRIMValidationIssue>;
 
 /**
+ * Field todo: an accepted TX with a field intentionally left incomplete.
+ */
+export type BrimFieldTodo = z.infer<typeof schemas.BRIMFieldTodo>;
+
+/**
  * Asset mapping from parsed BRIM file.
  */
 export type BrimAssetMapping = z.infer<typeof schemas.BRIMAssetMapping>;

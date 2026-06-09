@@ -365,11 +365,21 @@ In seguito a una rilettura congiunta dei requisiti e dei limiti della contabilit
   * **Stock Split e Reverse Split**: Il calcolo del WAC avviene in modo **automatico (AUTO)**. Aggiungendo o rimuovendo quote (quantity +/-) tramite `ADJUSTMENT` con cassa a zero, la formula del WAC ricalcola correttamente il prezzo medio per azione (diluizione per lo split, concentrazione per il reverse split) basandosi sul costo storico complessivo che rimane invariato. Non serve intervento manuale. *Nota: è atteso che il provider dei prezzi storici adegui le quotazioni storiche a partire dalla data di split.*
   * **Stock Merger, Name Change, Conversion**: Queste transazioni avvengono cambiando asset (es. da CCIV a LCID) e quantità (rapporto non 1:1). Il WAC storico del vecchio asset non risiede nel file CSV corrente (che mostra solo il merge) ma nella storia degli acquisti del DB. Quindi, il calcolo automatico imposterà a 0 il WAC del nuovo titolo (errato). L'utente deve necessariamente interagire inserendo il PMC storico del titolo precedente.
 
-### 4. Proposta: Sentinel Value per il Frontend (Raffinamento Step 4)
-Per impedire che l'utente importi transazioni di fusione/conversione/spin-off con WAC pari a zero (conducendo a plusvalenze fittizie), abbiamo concordato l'introduzione di un **Sentinel Value**:
-1. **Tag speciale**: Durante il parsing di fusioni/conversioni/name change, il plugin inserisce nel record della transazione il tag `"requires-cost-basis-refinement"`.
-2. **Modalità manuale vuota**: La transazione viene generata con `cost_basis_mode = "manual"` e `cost_basis_override = None`.
-3. **UX del Frontend**: Nello step 4 di raffinamento (bulk modal o griglia di anteprima), il frontend intercetta questo tag o questa combinazione e contrassegna la riga con un indicatore di warning bloccante. L'utente viene costretto a fare clic sulla riga e inserire manualmente il PMC ereditato dal vecchio titolo prima di poter completare l'importazione.
+### 4. ~~Proposta: Sentinel Value per il Frontend~~ → Sostituita con BRIMFieldTodo (2026-06-09)
+
+**Proposta originale (scartata)**: tag `"requires-cost-basis-refinement"` in `TXCreateItem.tags` + `cost_basis_mode = "manual"` + `cost_basis_override = None`. Scartata perché i tags sono user-facing (raggruppamento/filtro) e non devono essere inquinati con metadati di workflow.
+
+**Architettura approvata — `BRIMFieldTodo`**:
+
+Il plugin segnala esplicitamente quali campi di quali transazioni sono stati lasciati intenzionalmente incompleti tramite un tipo dedicato `BRIMFieldTodo`, trasportato in `BRIMParseOutput.field_todos` e `BRIMParseResponse.field_todos`.
+
+1. **Safe placeholder values**: Il plugin imposta `cost_basis_mode = "manual"` e `cost_basis_override = None`. Entrambi passano il validatore Pydantic (Rule 12: mode valido per ADJUSTMENT qty>0; nessuna regola richiede override non-None quando mode='manual').
+2. **BRIMFieldTodo**: Il plugin emette un `BRIMFieldTodo(tx_index=N, field='cost_basis_override', severity='blocker', reason_code='stock_merger', message='Cost basis from OLD must be entered manually', context={...})`.
+3. **Tre canali, tre scopi**: `warnings` (note free-text) / `validation_issues` (TX rifiutate) / `field_todos` (TX accettate ma campo incompleto).
+4. **Step 3**: Mostra conteggio TODOs per file nella DataTable e nel summary aggregato.
+5. **Step 4**: Righe con blocker TODO → badge rosso ⚠️, import bloccato finché l'utente non compila il campo mancante.
+
+Dettagli completi: [Import Wizard Plan §8.8](plan-phase07Part5-v5-ImportWizard.prompt.md#88-m2-ft-brimfieldtodo-schema--step-3-integration-).
 
 ---
 

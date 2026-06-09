@@ -98,6 +98,7 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "wire funds": TransactionType.DEPOSIT,
     "moneylink transfer": TransactionType.DEPOSIT,
     "wire sent": TransactionType.WITHDRAWAL,        # outgoing wire always withdrawal
+    "internal transfer": TransactionType.DEPOSIT,   # cash transfer between accounts (sign-corrected below)
     # FEE
     "advisor fee": TransactionType.FEE,
     "adr mgmt fee": TransactionType.FEE,
@@ -116,16 +117,24 @@ CORPORATE_ACTIONS: frozenset[str] = frozenset({
     "spin-off",
     "journaled shares",
     "conversion",
-    "internal transfer",
     "stock div dist",   # stock dividend (shares, not cash)
 })
 
 
 def _parse_schwab_date(value: str) -> Optional[date_type]:
-    """Parse Schwab US date format (MM/DD/YYYY)."""
+    """Parse Schwab US date format (MM/DD/YYYY).
+
+    Also handles the "MM/DD/YYYY as of MM/DD/YYYY" notation Schwab uses
+    for corporate actions (trade date as of settlement date) — the trade
+    date (first date) is used.
+    """
     value = value.strip()
     if not value:
         return None
+
+    # Strip " as of MM/DD/YYYY" suffix if present (corporate action settlement date)
+    if " as of " in value:
+        value = value.split(" as of ")[0].strip()
 
     try:
         return datetime.strptime(value, "%m/%d/%Y").date()

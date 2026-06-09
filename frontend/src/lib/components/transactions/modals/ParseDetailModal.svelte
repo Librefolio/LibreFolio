@@ -6,12 +6,12 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {CheckCircle, AlertTriangle, HelpCircle, X, CircleAlert} from 'lucide-svelte';
+    import {CheckCircle, AlertTriangle, HelpCircle, X, CircleAlert, Wrench} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {getTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {resolveIssueMessage} from '$lib/utils/transactions/resolveValidationMessage';
-    import type {BrimParseResponse, BrimAssetMapping, BrimValidationIssue} from '$lib/types';
+    import type {BrimParseResponse, BrimAssetMapping, BrimValidationIssue, BrimFieldTodo} from '$lib/types';
 
     interface ParsedFileResult {
         fileId: string;
@@ -118,6 +118,12 @@
     let validationIssues = $derived.by((): BrimValidationIssue[] => {
         if (parseResult?.response?.validation_issues) return parseResult.response.validation_issues as BrimValidationIssue[];
         if (isAggregate) return activeResults.flatMap((r) => (r.response!.validation_issues as BrimValidationIssue[] | undefined) ?? []);
+        return [];
+    });
+
+    let fieldTodos = $derived.by((): BrimFieldTodo[] => {
+        if (parseResult?.response?.field_todos) return parseResult.response.field_todos as BrimFieldTodo[];
+        if (isAggregate) return activeResults.flatMap((r) => (r.response!.field_todos as BrimFieldTodo[] | undefined) ?? []);
         return [];
     });
 
@@ -238,6 +244,37 @@
                     </ul>
                 {:else}
                     <p class="text-xs text-gray-400">{$t('importWizard.noValidationIssues')}</p>
+                {/if}
+            </section>
+
+            <!-- Manual Fields Required (Field TODOs) -->
+            <section>
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    {$t('importWizard.manualFieldsRequired')}
+                    {#if fieldTodos.length > 0}
+                        {@const hasBlocker = fieldTodos.some((t) => t.severity === 'blocker')}
+                        <span class="ml-1 text-xs font-normal {hasBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({fieldTodos.length})</span>
+                    {/if}
+                </h3>
+                {#if fieldTodos.length > 0}
+                    <ul class="space-y-1.5">
+                        {#each fieldTodos as todo}
+                            {@const isBlocker = todo.severity === 'blocker'}
+                            <li class="flex items-start gap-2 px-3 py-1.5 rounded text-sm {isBlocker ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20'}">
+                                <Wrench size={14} class="mt-0.5 shrink-0 {isBlocker ? 'text-red-500' : 'text-amber-500'}" />
+                                <div class="min-w-0 flex-1">
+                                    <span class="font-medium {isBlocker ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'}">{$t('importWizard.todoRow', {values: {n: todo.tx_index + 1}})}</span>
+                                    <span class="text-xs ml-1 {isBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({todo.field})</span>
+                                    <span class="ml-1 {isBlocker ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}">{todo.message}</span>
+                                    {#if todo.context}
+                                        <span class="text-xs text-gray-500 dark:text-gray-400 ml-1">— {JSON.stringify(todo.context)}</span>
+                                    {/if}
+                                </div>
+                            </li>
+                        {/each}
+                    </ul>
+                {:else}
+                    <p class="text-xs text-gray-400">{$t('importWizard.noFieldTodos')}</p>
                 {/if}
             </section>
 
