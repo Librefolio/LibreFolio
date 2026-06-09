@@ -43,10 +43,7 @@ export function detectPreviewType(filename: string, mimeType?: string | null): F
     return null;
 }
 
-export async function fetchFilePreview(
-    target: {source: 'static'; fileId: string} | {source: 'brim'; fileId: string},
-    sheetName?: string
-): Promise<FilePreviewResponse> {
+export async function fetchFilePreview(target: {source: 'static'; fileId: string} | {source: 'brim'; fileId: string}, sheetName?: string): Promise<FilePreviewResponse> {
     return target.source === 'static'
         ? ((await zodiosApi.get_upload_file_preview_api_v1_uploads__file_id__preview_get({
               params: {file_id: target.fileId},

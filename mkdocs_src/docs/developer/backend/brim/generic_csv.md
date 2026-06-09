@@ -19,15 +19,15 @@ Its primary goal is to parse simple CSV files even if they don't come from a spe
 When creating a CSV file for import (or a new plugin), these are the standard columns that LibreFolio expects. The Generic CSV provider tries to map input columns to these
 concepts.
 
-| Standard Column   | Description                                 | Expected Content                                                                                                    |
-|:------------------|:--------------------------------------------|:--------------------------------------------------------------------------------------------------------------------|
-| **`date`**        | **Required**. The date of the transaction.  | A valid date string (e.g., `2023-12-31`, `31/12/2023`).                                                             |
-| **`type`**        | **Required**. The type of operation.        | One of: `BUY`, `SELL`, `DIVIDEND`, `INTEREST`, `DEPOSIT`, `WITHDRAWAL`, `FEE`, `TAX`.                               |
-| **`quantity`**    | The number of units involved.               | A number. Positive for BUY/DEPOSIT, usually negative for SELL/WITHDRAWAL (though the plugin may auto-adjust signs). |
-| **`amount`**      | The total cash value of the transaction.    | A number representing the net impact on cash balance.                                                               |
-| **`currency`**    | The currency of the `amount`.               | ISO 4217 code (e.g., `EUR`, `USD`). Defaults to `EUR` if missing.                                                   |
-| **`asset`**       | The identifier of the financial instrument. | Ticker symbol (e.g., `AAPL`), ISIN (e.g., `US0378331005`), or name. Required for BUY/SELL/DIVIDEND.                 |
-| **`description`** | Optional notes.                             | Any text string.                                                                                                    |
+| Standard Column   | Description                                 | Expected Content                                                                                                                                                                   |
+|:------------------|:--------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`date`**        | **Required**. The date of the transaction.  | A valid date string (e.g., `2023-12-31`, `31/12/2023`).                                                                                                                            |
+| **`type`**        | **Required**. The type of operation.        | One of: `BUY`, `SELL`, `DIVIDEND`, `INTEREST`, `DEPOSIT`, `WITHDRAWAL`, `FEE`, `TAX`, `TRANSFER`, `ADJUSTMENT`, `FX_CONVERSION`, `CASH_TRANSFER`.                                   |
+| **`quantity`**    | The number of units involved.               | Required for `BUY`, `SELL`, `TRANSFER`, and `ADJUSTMENT`. Must be zero for cash-only types (`DIVIDEND`, `INTEREST`, `DEPOSIT`, `WITHDRAWAL`, `FEE`, `TAX`, `CASH_TRANSFER`, `FX_CONVERSION`). |
+| **`amount`**      | The total cash value of the transaction.    | Net impact on cash balance. Required for all types except `TRANSFER` and `ADJUSTMENT` (mapped to structured `cash` object).                                                         |
+| **`currency`**    | The currency of the `amount`.               | ISO 4217 code (e.g., `EUR`, `USD`). Defaults to `EUR` if missing (mapped to structured `cash` object).                                                                               |
+| **`asset`**       | The identifier of the financial instrument. | Ticker (e.g. `AAPL`) or ISIN (e.g. `US0378331005`). Required for `BUY`, `SELL`, `DIVIDEND`, `TRANSFER`, `ADJUSTMENT`. Optional for `INTEREST`/`FEE`/`TAX`. Forbidden for cash-only types (e.g. `DEPOSIT`). |
+| **`description`** | Optional notes.                             | Any text string (can contain informational data like shares count for dividends).                                                                                                 |
 
 ## 🔍 How it Works: A Deeper Look
 

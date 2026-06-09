@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
+from pydantic import ValidationError
 from sqlalchemy import and_, select
 
 from backend.app.db.models import Transaction
@@ -54,6 +55,7 @@ from backend.app.schemas.brim import (
     BRIMPluginInfo,
     BRIMPreviewColumn,
     BRIMTXDuplicateCandidate,
+    BRIMValidationIssue,
     is_fake_asset_id,
 )
 from backend.app.schemas.transactions import TXCreateItem
@@ -364,6 +366,78 @@ class BRIMProvider(ABC):
             preview_columns=self.preview_columns(),
             detection_priority=self.detection_priority,
         )
+
+    # -------------------------------------------------------------------------
+    # Transaction construction helpers (parent responsibility)
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _loc_to_field(loc: tuple) -> Optional[str]:
+        """Convert Pydantic loc tuple to a dot-separated field path, skipping indices."""
+        parts = [str(p) for p in loc if not isinstance(p, int)]
+        return ".".join(parts) if parts else None
+
+    def _create_transaction(
+        self,
+        row_num: int,
+        transactions: List[TXCreateItem],
+        validation_issues: List[BRIMValidationIssue],
+        context: Optional[str] = None,
+        **kwargs,
+    ) -> Optional[TXCreateItem]:
+        """Create a TXCreateItem, catching ValidationErrors as structured issues.
+
+        On success: appends to ``transactions`` and returns the item.
+        On ValidationError: extracts structured issues from Pydantic, appends to
+        ``validation_issues``, and returns None.
+
+        Plugins should call this instead of ``TXCreateItem(...)`` directly so that
+        the parent class owns the error-handling contract and the frontend receives
+        structured, localizable validation messages.
+        """
+        try:
+            tx = TXCreateItem(**kwargs)
+            transactions.append(tx)
+            return tx
+        except ValidationError as e:
+            for err in e.errors():
+                err_type = err.get("type", "unknown")
+                err_ctx = err.get("ctx") or {}
+                # Unpack multipleBusinessRuleErrors into individual issues
+                if err_type == "multipleBusinessRuleErrors" and "errors" in err_ctx:
+                    for sub_err in err_ctx["errors"]:
+                        validation_issues.append(
+                            BRIMValidationIssue(
+                                row=row_num,
+                                code=sub_err.get("code", "unknown"),
+                                message=sub_err.get("msg", ""),
+                                params=sub_err.get("ctx") if sub_err.get("ctx") else None,
+                                context=context,
+                            )
+                        )
+                else:
+                    validation_issues.append(
+                        BRIMValidationIssue(
+                            row=row_num,
+                            code=err_type,
+                            message=err.get("msg", str(e)),
+                            field=self._loc_to_field(err.get("loc", ())),
+                            params=err_ctx if err_ctx else None,
+                            context=context,
+                        )
+                    )
+            return None
+        except Exception as exc:
+            # Non-validation errors (shouldn't happen, but safety net)
+            validation_issues.append(
+                BRIMValidationIssue(
+                    row=row_num,
+                    code="unexpected_error",
+                    message=str(exc),
+                    context=context,
+                )
+            )
+            return None
 
     def shutdown(self) -> None:  # pragma: no cover  # noqa: B027 — intentional no-op default
         """

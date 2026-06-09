@@ -233,6 +233,51 @@ def services_asset_sync_counts(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Asset sync counts tests", verbose=verbose)
 
 
+def services_scheduler_state(verbose: bool = False, test_names: list = None) -> bool:
+    """Test scheduler state persistence (load/save/atomic/corrupt)."""
+    print_section("Services: Scheduler State Persistence")
+    print_info("Testing: backend/app/services/scheduler/state.py")
+    print_info("Tests: load/save, atomic write, corrupt/partial JSON recovery")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_state.py", test_names)
+    return run_command(cmd, "Scheduler state persistence tests", verbose=verbose)
+
+
+def services_scheduler_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test scheduler settings parsing (_parse_times, _parse_days)."""
+    print_section("Services: Scheduler Settings Parsing")
+    print_info("Testing: backend/app/services/scheduler/settings.py")
+    print_info("Tests: _parse_times, _parse_days — pure functions, no DB")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_settings.py", test_names)
+    return run_command(cmd, "Scheduler settings parsing tests", verbose=verbose)
+
+
+def services_scheduler_due(verbose: bool = False, test_names: list = None) -> bool:
+    """Test scheduler due-check logic (due_current_price, due_history_sync)."""
+    print_section("Services: Scheduler Due-Check Logic")
+    print_info("Testing: backend/app/services/scheduler/scheduler.py")
+    print_info("Tests: SD-001..010 — never run, overdue, wrong day, multi-slot, midnight crossing")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_due.py", test_names)
+    return run_command(cmd, "Scheduler due-check tests", verbose=verbose)
+
+
+def services_scheduler_leader(verbose: bool = False, test_names: list = None) -> bool:
+    """Test scheduler leader election (mocked psutil)."""
+    print_section("Services: Scheduler Leader Election")
+    print_info("Testing: backend/app/services/scheduler/leader.py")
+    print_info("Tests: SL-001..007 — single/multi-worker, zombie, PID1, --reload, exception safe")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_leader.py", test_names)
+    return run_command(cmd, "Scheduler leader election tests", verbose=verbose)
+
+
+def services_scheduler_loop(verbose: bool = False, test_names: list = None) -> bool:
+    """Test scheduler loop integration (due_* + state roundtrip, no real loop)."""
+    print_section("Services: Scheduler Loop Integration")
+    print_info("Testing: due_* functions with real SchedulerSettings/SchedulerState objects")
+    print_info("Tests: SLO-001..003 — both jobs due, enabled flag, state serialization roundtrip")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_loop.py", test_names)
+    return run_command(cmd, "Scheduler loop integration tests", verbose=verbose)
+
+
 def services_brim_versioning(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIM provider versioning."""
     print_section("Services: BRIM Versioning")
@@ -305,6 +350,11 @@ Note: No backend server required.
     add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
+    add_test(cat, "scheduler-state", services_scheduler_state, name="Scheduler State", desc="Load/save/atomic write, corrupt/partial JSON recovery")
+    add_test(cat, "scheduler-settings", services_scheduler_settings, name="Scheduler Settings", desc="_parse_times, _parse_days pure functions")
+    add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases")
+    add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
+    add_test(cat, "scheduler-loop", services_scheduler_loop, name="Scheduler Loop Integration", desc="due_* + state roundtrip, no real loop")
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat
 

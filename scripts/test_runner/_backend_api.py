@@ -392,6 +392,18 @@ def api_settings(verbose: bool = False, test_names: list[str] | None = None) -> 
     return run_command(cmd, "Settings API tests", verbose=verbose)
 
 
+def api_scheduler(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run scheduler API tests."""
+    print_section("Scheduler API Tests")
+    print_info("Testing REST API endpoints for scheduler state and log")
+    print_info("Tests: GET /settings/scheduler/state, GET /settings/scheduler/log")
+    print_info("Tests: SAPI-001..008 — admin-only access, structure, since filter")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_scheduler_api.py", test_names)
+    return run_command(cmd, "Scheduler API tests", verbose=verbose)
+
+
 def api_uploads(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run uploads API tests."""
     print_section("Uploads API Tests")
@@ -538,6 +550,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "auth", api_auth, name="Auth API", desc="Register, login, logout, me")
     add_test(api, "profile", api_profile, name="Profile API", desc="Username/email update")
     add_test(api, "settings", api_settings, name="Settings API", desc="User and global settings")
+    add_test(api, "scheduler", api_scheduler, name="Scheduler API", desc="Scheduler state/log endpoints, admin-only auth")
     add_test(api, "uploads", api_uploads, name="Uploads API", desc="Upload, list, download, delete")
     add_test(api, "broker-access", api_broker_access, name="Broker Access API", desc="Access management, roles")
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")

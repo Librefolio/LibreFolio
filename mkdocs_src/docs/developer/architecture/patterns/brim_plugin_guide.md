@@ -21,7 +21,7 @@ graph TD
     end
 
     subgraph "Phase 2 — Parsing (user selects plugin)"
-        P1["parse(file_path, broker_id)<br/><small>Full parsing</small>"] --> P2["Returns:<br/>• transactions[]<br/>• warnings[]<br/>• extracted_assets{}"]
+        P1["parse(file_path, broker_id)<br/><small>Full parsing</small>"] --> P2["Returns:<br/>• BRIMParseOutput"]
         P2 --> P3["User reviews<br/>in preview UI"]
         P3 --> P4["POST /transactions<br/><small>Core handles persist</small>"]
     end
@@ -56,7 +56,7 @@ graph TD
 | `provider_name` | `@property → str` | Display name (e.g., `"Directa CSV"`) |
 | `description` | `@property → str` | Brief description for the UI |
 | `can_parse(file_path)` | `→ bool` | Quick check if this plugin can parse the file (check extension, header row) |
-| `parse(file_path, broker_id)` | `→ Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]` | Full parsing — returns transactions, warnings, and extracted asset info |
+| `parse(file_path, broker_id)` | `→ BRIMParseOutput` | Full parsing — returns structured BRIMParseOutput object containing transactions, warnings, and extracted asset info |
 
 ### 🔧 Optional (Override)
 
@@ -75,9 +75,9 @@ graph TD
 # backend/app/services/brim_providers/my_broker.py
 
 from pathlib import Path
-from typing import List, Tuple, Dict
-from backend.app.services.brim_provider import BRIMProvider, BRIMExtractedAssetInfo
+from backend.app.services.brim_provider import BRIMProvider
 from backend.app.services.provider_registry import register_provider, BRIMProviderRegistry
+from backend.app.schemas.brim import BRIMExtractedAssetInfo, BRIMParseOutput
 from backend.app.schemas.transactions import TXCreateItem
 
 @register_provider(BRIMProviderRegistry)
@@ -100,17 +100,26 @@ class MyBrokerProvider(BRIMProvider):
         content = self._read_file_head(file_path, num_lines=5)
         return "Date;Operation;ISIN;Amount" in content
 
-    def parse(
-        self, file_path: Path, broker_id: int
-    ) -> Tuple[List[TXCreateItem], List[str], Dict[int, BRIMExtractedAssetInfo]]:
-        """Parse the CSV and return transactions."""
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+        """Parse the CSV and return transactions in a BRIMParseOutput envelope."""
         transactions = []
         warnings = []
         extracted_assets = {}
 
         # ... your parsing logic ...
 
-        return transactions, warnings, extracted_assets
+        return BRIMParseOutput(
+            transactions=transactions,
+            warnings=warnings,
+            extracted_assets={
+                fake_id: BRIMExtractedAssetInfo(
+                    extracted_symbol=info["extracted_symbol"],
+                    extracted_isin=info["extracted_isin"],
+                    extracted_name=info["extracted_name"],
+                )
+                for fake_id, info in extracted_assets.items()
+            }
+        )
 ```
 
 ### 🔍 Auto-Discovery

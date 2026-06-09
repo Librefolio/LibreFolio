@@ -11,11 +11,19 @@ This plugin parses CSV exports from Charles Schwab.
 - Amounts may have thousands separator (comma)
 
 **Supported Transaction Types:**
-- Buy / Reinvest Shares → BUY
+- Buy / Reinvest Shares / Long Term Cap Gain Reinvest / Prior Year Reinvest → BUY
 - Sell → SELL
-- Dividend / Reinvest Dividend / Qualified Dividend → DIVIDEND
+- Dividend / Reinvest Dividend / Qualified Dividend / Cash Dividend /
+  Non-Qualified Div / Special Non-Qual Div / Prior Year Cash Div → DIVIDEND
 - Credit Interest → INTEREST
-- Wire Funds / MoneyLink Transfer → DEPOSIT/WITHDRAWAL
+- Wire Funds / MoneyLink Transfer → DEPOSIT/WITHDRAWAL (sign determines direction)
+- Wire Sent → WITHDRAWAL
+- Advisor Fee / ADR Mgmt Fee → FEE
+- Foreign Tax Paid → TAX
+
+**Skipped (no equivalent in project model):**
+- Stock Split / Reverse Split / Stock Merger / Name Change / Spin-Off
+- Journaled Shares / Conversion / Internal Transfer / Stock Div Dist
 
 **Columns:**
 - Date: MM/DD/YYYY
@@ -44,6 +52,7 @@ from backend.app.schemas.brim import (
     BRIMExtractedAssetInfo,
     BRIMParseOutput,
     BRIMPreviewColumn,
+    BRIMValidationIssue,
 )
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
@@ -64,18 +73,52 @@ COL_QUANTITY = "Quantity"
 COL_AMOUNT = "Amount"
 COL_FEES = "Fees & Comm"
 
-# Type mapping
+# Type mapping (exact lowercase match via `pattern in action`)
 TYPE_MAPPINGS: Dict[str, TransactionType] = {
+    # BUY
     "buy": TransactionType.BUY,
-    "reinvest shares": TransactionType.BUY,
+    "reinvest shares": TransactionType.BUY,       # shares purchased with reinvested dividend
+    # SELL
     "sell": TransactionType.SELL,
+    # DIVIDEND — Schwab splits reinvestment into two rows:
+    #   "reinvest dividend" (cash received) + "reinvest shares" (shares bought)
     "dividend": TransactionType.DIVIDEND,
-    "reinvest dividend": TransactionType.DIVIDEND,
     "qualified dividend": TransactionType.DIVIDEND,
+    "cash dividend": TransactionType.DIVIDEND,
+    "reinvest dividend": TransactionType.DIVIDEND, # cash portion of reinvested dividend
+    "qual div reinvest": TransactionType.DIVIDEND,
+    "non-qualified div": TransactionType.DIVIDEND,
+    "special non qual div": TransactionType.DIVIDEND,
+    "pr yr cash div": TransactionType.DIVIDEND,
+    "pr yr div reinvest": TransactionType.DIVIDEND, # prior year dividend cash portion
+    "long term cap gain reinvest": TransactionType.DIVIDEND,  # cap gains distribution
+    # INTEREST
     "credit interest": TransactionType.INTEREST,
+    # DEPOSIT / WITHDRAWAL (sign of Amount determines direction)
     "wire funds": TransactionType.DEPOSIT,
     "moneylink transfer": TransactionType.DEPOSIT,
+    "wire sent": TransactionType.WITHDRAWAL,        # outgoing wire always withdrawal
+    # FEE
+    "advisor fee": TransactionType.FEE,
+    "adr mgmt fee": TransactionType.FEE,
+    # TAX
+    "foreign tax paid": TransactionType.TAX,
 }
+
+# Corporate actions mapped to ADJUSTMENT
+# Note: stock splits and reverse splits are mapped to ADJUSTMENT.
+# It is expected that the price provider adjusts the asset historical prices accordingly starting from the action date.
+CORPORATE_ACTIONS: frozenset[str] = frozenset({
+    "stock split",
+    "reverse split",
+    "stock merger",
+    "name change",
+    "spin-off",
+    "journaled shares",
+    "conversion",
+    "internal transfer",
+    "stock div dist",   # stock dividend (shares, not cash)
+})
 
 
 def _parse_schwab_date(value: str) -> Optional[date_type]:
@@ -169,6 +212,7 @@ class SchwabBrokerProvider(BRIMProvider):
         """Parse Charles Schwab CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
+        validation_issues: List[BRIMValidationIssue] = []
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -192,9 +236,15 @@ class SchwabBrokerProvider(BRIMProvider):
                             tx_type = mapped_type
                             break
 
+                    is_corporate = False
                     if tx_type is None:
-                        warnings.append(f"Row {row_num}: unknown action '{action}', skipping")
-                        continue
+                        # Check if it's a known corporate action
+                        is_corporate = any(ca in action for ca in CORPORATE_ACTIONS)
+                        if is_corporate:
+                            tx_type = TransactionType.ADJUSTMENT
+                        else:
+                            warnings.append(f"Row {row_num}: unknown action '{action}', skipping")
+                            continue
 
                     # Parse date
                     tx_date = _parse_schwab_date(row.get(COL_DATE, ""))
@@ -212,12 +262,22 @@ class SchwabBrokerProvider(BRIMProvider):
                         TransactionType.BUY,
                         TransactionType.SELL,
                         TransactionType.DIVIDEND,
+                        TransactionType.ADJUSTMENT,
                     ]
 
                     if asset_required:
                         if not symbol:
-                            warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")
-                            continue
+                            if tx_type == TransactionType.DIVIDEND:
+                                # Dividend from a cash fund (e.g. money-market) with no ticker
+                                # → treat as INTEREST (cash yield, no asset needed)
+                                warnings.append(
+                                    f"Row {row_num}: DIVIDEND '{description}' has no ticker"
+                                    f" — reclassified as INTEREST"
+                                )
+                                tx_type = TransactionType.INTEREST
+                            else:
+                                warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")
+                                continue
 
                         if symbol in asset_to_fake_id:
                             asset_id = asset_to_fake_id[symbol]
@@ -241,45 +301,62 @@ class SchwabBrokerProvider(BRIMProvider):
                     if quantity is None:
                         quantity = Decimal("0")
 
+                    # If it's a corporate action ADJUSTMENT, it must have a non-zero quantity
+                    if tx_type == TransactionType.ADJUSTMENT and quantity == Decimal("0"):
+                        warnings.append(
+                            f"Row {row_num}: corporate action '{action}' has quantity = 0, skipping"
+                        )
+                        continue
+
                     # Adjust signs (Schwab already has correct signs in Amount)
                     if tx_type == TransactionType.SELL and quantity > 0:
                         quantity = -quantity
 
-                    # Create transaction
-                    try:
-                        tx = TXCreateItem(
-                            broker_id=broker_id,
-                            asset_id=asset_id,
-                            type=tx_type,
-                            date=tx_date,
-                            quantity=quantity,
-                            cash=Currency(code="USD", amount=amount) if amount else None,
-                            description=f"{action}: {description}" if description else action,
-                            tags=["import", "schwab"],
-                        )
-                        transactions.append(tx)
+                    # For cash movements (DEPOSIT/WITHDRAWAL), Schwab uses the Amount sign
+                    # to indicate direction. MoneyLink Transfer with -$X is a withdrawal,
+                    # with +$X is a deposit. Flip the type to match the actual cash flow.
+                    if tx_type == TransactionType.DEPOSIT and amount is not None and amount < 0:
+                        tx_type = TransactionType.WITHDRAWAL
+                    elif tx_type == TransactionType.WITHDRAWAL and amount is not None and amount > 0:
+                        tx_type = TransactionType.DEPOSIT
 
-                    except Exception as e:
-                        warnings.append(f"Row {row_num}: error creating transaction: {e}")
-                        continue
+                    # Create transaction
+                    tx_tags = ["import", "schwab"]
+                    if is_corporate:
+                        tx_tags.append("corporate-action")
+
+                    self._create_transaction(
+                        row_num=row_num,
+                        transactions=transactions,
+                        validation_issues=validation_issues,
+                        context=f"{action}: {description}" if description else action,
+                        broker_id=broker_id,
+                        asset_id=asset_id,
+                        type=tx_type,
+                        date=tx_date,
+                        quantity=quantity,
+                        cash=Currency(code="USD", amount=amount) if amount else None,
+                        description=f"{action}: {description}" if description else action,
+                        tags=tx_tags,
+                    )
 
                     # Handle fees as separate transaction
                     fees = _parse_schwab_amount(row.get(COL_FEES, ""))
                     if fees and fees != 0:
-                        try:
-                            fee_tx = TXCreateItem(
-                                broker_id=broker_id,
-                                asset_id=asset_id,
-                                type=TransactionType.FEE,
-                                date=tx_date,
-                                quantity=Decimal("0"),
-                                cash=Currency(code="USD", amount=-abs(fees)),
-                                description=f"Commission: {symbol}" if symbol else "Commission",
-                                tags=["import", "schwab", "commission"],
-                            )
-                            transactions.append(fee_tx)
-                        except Exception as e:
-                            warnings.append(f"Row {row_num}: error creating fee transaction: {e}")
+                        self._create_transaction(
+                            row_num=row_num,
+                            transactions=transactions,
+                            validation_issues=validation_issues,
+                            context=f"Commission: {symbol}" if symbol else "Commission",
+                            broker_id=broker_id,
+                            asset_id=asset_id,
+                            type=TransactionType.FEE,
+                            date=tx_date,
+                            quantity=Decimal("0"),
+                            cash=Currency(code="USD", amount=-abs(fees)),
+                            description=f"Commission: {symbol}" if symbol else "Commission",
+                            tags=["import", "schwab", "commission"],
+                        )
 
         except FileNotFoundError:
             raise BRIMParseError(f"File not found: {file_path}") from None
@@ -309,6 +386,7 @@ class SchwabBrokerProvider(BRIMProvider):
         return BRIMParseOutput(
             transactions=transactions,
             warnings=warnings,
+            validation_issues=validation_issues,
             extracted_assets=extracted_assets_typed,
         )
 

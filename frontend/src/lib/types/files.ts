@@ -55,6 +55,10 @@ export type BrimPlugin = z.infer<typeof schemas.BRIMPluginInfo>;
 export type BrimParseResponse = z.infer<typeof schemas.BRIMParseResponse>;
 
 /**
+ * Structured validation issue from BRIM parse.
+ */
+export type BrimValidationIssue = z.infer<typeof schemas.BRIMValidationIssue>;
+
 /**
  * Asset mapping from parsed BRIM file.
  */

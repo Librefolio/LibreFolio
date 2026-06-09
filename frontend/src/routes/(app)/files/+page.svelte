@@ -41,9 +41,7 @@
     import type {FilterValue} from '$lib/components/table/types';
 
     type Tab = 'static' | 'brim';
-    type PreviewTarget =
-        | {source: 'static'; file: UploadedFile}
-        | {source: 'brim'; file: BrimFile};
+    type PreviewTarget = {source: 'static'; file: UploadedFile} | {source: 'brim'; file: BrimFile};
 
     // URL filter configuration - defines which columns can be filtered via URL
     const urlFilterColumns: UrlFilterConfig[] = [
@@ -630,12 +628,7 @@
         previewError = null;
 
         try {
-            const response = await fetchFilePreview(
-                previewTarget.source === 'static'
-                    ? {source: 'static', fileId: previewTarget.file.id}
-                    : {source: 'brim', fileId: previewTarget.file.file_id},
-                sheetName
-            );
+            const response = await fetchFilePreview(previewTarget.source === 'static' ? {source: 'static', fileId: previewTarget.file.id} : {source: 'brim', fileId: previewTarget.file.file_id}, sheetName);
             if (token === previewRequestToken) {
                 previewData = response;
             }
@@ -779,7 +772,16 @@
                 <FileGrid files={staticFiles} mode="browse" cardSize="full" showSearch={true} showActions={true} ondelete={(e) => deleteFile(e.id, false)} onpreview={(e) => openStaticPreview(e.file)} />
             {:else}
                 <!-- List View with New DataTable -->
-                <FilesTable bind:this={staticTableRef} files={staticFiles} type="static" onDelete={(id) => deleteFile(id, false)} onPreview={(file) => openStaticPreview(file as UploadedFile)} {initialFilters} onFiltersChange={handleFiltersChange} onSelectionChange={(ids) => (selectedFileIds = ids)} />
+                <FilesTable
+                    bind:this={staticTableRef}
+                    files={staticFiles}
+                    type="static"
+                    onDelete={(id) => deleteFile(id, false)}
+                    onPreview={(file) => openStaticPreview(file as UploadedFile)}
+                    {initialFilters}
+                    onFiltersChange={handleFiltersChange}
+                    onSelectionChange={(ids) => (selectedFileIds = ids)}
+                />
             {/if}
         {:else}
             <!-- BRIM Files -->
@@ -790,20 +792,23 @@
                 </div>
             {:else}
                 <!-- BRIM Table with New DataTable -->
-                <FilesTable bind:this={brimTableRef} files={brimFiles} type="brim" onDelete={(id) => deleteFile(id, true)} onPreview={(file) => openBrimPreview(file as BrimFile)} brokers={brokerMap} {initialFilters} onFiltersChange={handleFiltersChange} onSelectionChange={(ids) => (selectedFileIds = ids)} />
+                <FilesTable
+                    bind:this={brimTableRef}
+                    files={brimFiles}
+                    type="brim"
+                    onDelete={(id) => deleteFile(id, true)}
+                    onPreview={(file) => openBrimPreview(file as BrimFile)}
+                    brokers={brokerMap}
+                    {initialFilters}
+                    onFiltersChange={handleFiltersChange}
+                    onSelectionChange={(ids) => (selectedFileIds = ids)}
+                />
             {/if}
         {/if}
     </div>
 </div>
 
-<FilePreviewModal
-    open={showPreviewModal}
-    preview={previewData}
-    loading={previewLoading}
-    error={previewError}
-    onRequestClose={closePreviewModal}
-    onSheetChange={handlePreviewSheetChange}
-/>
+<FilePreviewModal open={showPreviewModal} preview={previewData} loading={previewLoading} error={previewError} onRequestClose={closePreviewModal} onSheetChange={handlePreviewSheetChange} />
 
 <!-- BRIM Upload Modal with per-file broker assignment -->
 <ModalBase

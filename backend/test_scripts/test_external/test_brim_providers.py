@@ -284,7 +284,49 @@ class TestBRIMPlugin:
             for i, tx in enumerate(out.transactions):
                 assert tx.broker_id == 1, f"{code} [{sample.name}] tx[{i}] broker_id={tx.broker_id} != 1"
 
-    def test_all_parseable_samples_succeed(self, code: str, plugin: BRIMProvider):
+    def test_all_transactions_are_schema_valid(self, code: str, plugin: BRIMProvider):
+        """Every TX the plugin creates must pass schema validation (no validation_issues).
+
+        Warnings and explicit row-skips are acceptable — the plugin may choose
+        not to import a row and that is fine.  But if ``_create_transaction()``
+        is called and produces a ``BRIMValidationIssue``, the plugin has a
+        sign-rule or field-rule bug that must be fixed before the sample data
+        can be imported correctly.
+
+        Runs against **all** compatible sample files for the plugin so that
+        edge-case rows (dividends, fees, corporate actions) are exercised, not
+        just the first file that happens to parse cleanly.
+        """
+        if code == "broker_generic_csv":
+            samples = [
+                f
+                for f in get_all_sample_files()
+                if BRIMProviderRegistry.auto_detect_plugin(f) == "broker_generic_csv"
+            ]
+        else:
+            samples = get_sample_files_for_plugin(plugin)
+
+        if not samples:
+            pytest.skip(f"{code} has no compatible sample files")
+
+        for sample in samples:
+            out = plugin.parse(sample, broker_id=1)
+            if out.validation_issues:
+                details = "\n".join(
+                    f"  Row {issue.row}: {issue.code}"
+                    + (f" field={issue.field}" if issue.field else "")
+                    + (f" ctx={issue.params}" if issue.params else "")
+                    + f" — {issue.message}"
+                    for issue in out.validation_issues
+                )
+                pytest.fail(
+                    f"{code} [{sample.name}] produced {len(out.validation_issues)}"
+                    f" schema validation issue(s):\n{details}\n"
+                    f"Fix the plugin's sign rules or add an explicit skip/warning"
+                    f" for rows that cannot be imported."
+                )
+
+
         """Plugin must parse ALL its compatible sample files without raising."""
         if code == "broker_generic_csv":
             samples = [f for f in get_all_sample_files() if BRIMProviderRegistry.auto_detect_plugin(f) == "broker_generic_csv"]

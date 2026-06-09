@@ -40,7 +40,7 @@ from typing import Dict, List, Optional, Tuple
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -211,6 +211,7 @@ class EtoroBrokerProvider(BRIMProvider):
         """Parse eToro CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
+        validation_issues: List[BRIMValidationIssue] = []
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -294,22 +295,20 @@ class EtoroBrokerProvider(BRIMProvider):
                         amount = -amount
 
                     # Create transaction
-                    try:
-                        tx = TXCreateItem(
-                            broker_id=broker_id,
-                            asset_id=asset_id,
-                            type=tx_type,
-                            date=tx_date,
-                            quantity=quantity,
-                            cash=Currency(code=currency, amount=amount) if amount else None,
-                            description=f"{tx_type_raw}: {details}" if details else tx_type_raw,
-                            tags=["import", "etoro"],
-                        )
-                        transactions.append(tx)
-
-                    except Exception as e:
-                        warnings.append(f"Row {row_num}: error creating transaction: {e}")
-                        continue
+                    self._create_transaction(
+                        row_num=row_num,
+                        transactions=transactions,
+                        validation_issues=validation_issues,
+                        context=f"{tx_type_raw}: {details}" if details else tx_type_raw,
+                        broker_id=broker_id,
+                        asset_id=asset_id,
+                        type=tx_type,
+                        date=tx_date,
+                        quantity=quantity,
+                        cash=Currency(code=currency, amount=amount) if amount else None,
+                        description=f"{tx_type_raw}: {details}" if details else tx_type_raw,
+                        tags=["import", "etoro"],
+                    )
 
         except FileNotFoundError:
             raise BRIMParseError(f"File not found: {file_path}") from None
@@ -336,7 +335,12 @@ class EtoroBrokerProvider(BRIMProvider):
             asset_count=len(extracted_assets_typed),
         )
 
-        return BRIMParseOutput(transactions=transactions, warnings=warnings, extracted_assets=extracted_assets_typed)
+        return BRIMParseOutput(
+            transactions=transactions,
+            warnings=warnings,
+            validation_issues=validation_issues,
+            extracted_assets=extracted_assets_typed,
+        )
 
     @property
     def docs_url(self) -> Optional[str]:

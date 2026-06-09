@@ -44,7 +44,7 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -225,6 +225,7 @@ class DirectaBrokerProvider(BRIMProvider):
         """
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
+        validation_issues: List[BRIMValidationIssue] = []
         extracted_assets_raw: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -328,24 +329,26 @@ class DirectaBrokerProvider(BRIMProvider):
                     # Adjust quantity sign for SELL
                     if tx_type == TransactionType.SELL and quantity > 0:
                         quantity = -quantity
+                    # Directa exports dividend/interest/coupon as negative amounts (debit view);
+                    # project rules require cash > 0 for these types.
+                    if tx_type in (TransactionType.DIVIDEND, TransactionType.INTEREST) and amount is not None and amount < 0:
+                        amount = -amount
 
-                    # Create transaction
-                    try:
-                        tx = TXCreateItem(
-                            broker_id=broker_id,
-                            asset_id=asset_id,
-                            type=tx_type,
-                            date=tx_date,
-                            quantity=quantity,
-                            cash=Currency(code=currency, amount=amount) if amount else None,
-                            description=f"{tipo_raw}: {description}" if description else tipo_raw,
-                            tags=["import", "directa"],
-                        )
-                        transactions.append(tx)
-
-                    except Exception as e:
-                        warnings.append(f"Row {row_num}: error creating transaction: {e}")
-                        continue
+                    # Create transaction (parent handles validation errors)
+                    self._create_transaction(
+                        row_num=row_num,
+                        transactions=transactions,
+                        validation_issues=validation_issues,
+                        context=f"{tipo_raw}: {description}" if description else tipo_raw,
+                        broker_id=broker_id,
+                        asset_id=asset_id,
+                        type=tx_type,
+                        date=tx_date,
+                        quantity=quantity,
+                        cash=Currency(code=currency, amount=amount) if amount else None,
+                        description=f"{tipo_raw}: {description}" if description else tipo_raw,
+                        tags=["import", "directa"],
+                    )
 
         except FileNotFoundError:
             raise BRIMParseError(f"File not found: {file_path}") from None
@@ -372,7 +375,7 @@ class DirectaBrokerProvider(BRIMProvider):
             asset_count=len(extracted_assets_typed),
         )
 
-        return BRIMParseOutput(transactions=transactions, warnings=warnings, extracted_assets=extracted_assets_typed)
+        return BRIMParseOutput(transactions=transactions, warnings=warnings, validation_issues=validation_issues, extracted_assets=extracted_assets_typed)
 
     @property
     def docs_url(self) -> Optional[str]:

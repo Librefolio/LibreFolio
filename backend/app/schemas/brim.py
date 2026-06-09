@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from datetime import date
 from enum import StrEnum
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -340,6 +340,34 @@ class BRIMParseRequest(BaseModel):
     broker_id: int = Field(..., gt=0, description="Target broker ID")
 
 
+# =============================================================================
+# VALIDATION ISSUE (structured parse error)
+# =============================================================================
+
+
+class BRIMValidationIssue(BaseModel):
+    """Structured validation error from TXCreateItem construction during BRIM parse.
+
+    Produced by ``BRIMProvider._create_transaction()`` when Pydantic validation
+    fails (e.g. wrong sign on cash, missing required field).  The ``code`` and
+    ``params`` fields are designed to be consumed by the frontend's
+    ``resolveIssueMessage()`` — the same resolver used by the BulkModal — so
+    the user sees a localized, human-friendly message instead of a raw traceback.
+
+    Free-text plugin messages (unknown type, skipped row, invalid date, etc.)
+    are NOT validation issues: they stay in ``warnings: List[str]``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    row: int = Field(..., description="Source file row number (1-based)")
+    code: str = Field(..., description="Pydantic error type code (e.g. 'cashSignPositive', 'cashRequired')")
+    message: str = Field(..., description="Human-readable error message (English fallback)")
+    field: Optional[str] = Field(default=None, description="Field path that caused the error (e.g. 'cash.amount')")
+    params: Optional[Dict[str, Any]] = Field(default=None, description="Structured params for frontend i18n resolver (e.g. {type: 'DIVIDEND'})")
+    context: Optional[str] = Field(default=None, description="Extra context from plugin (e.g. row description)")
+
+
 class BRIMParseResponse(BaseModel):
     """
     Response from parsing a broker report file.
@@ -365,6 +393,7 @@ class BRIMParseResponse(BaseModel):
     asset_mappings: List[BRIMAssetMapping] = Field(default_factory=list, description="Fake asset ID → candidate real assets mapping")
     duplicates: Optional[BRIMDuplicateReport] = Field(default=None, description="Duplicate detection results")
     warnings: List[str] = Field(default_factory=list, description="Parser warnings (skipped rows, ambiguous data, etc.)")
+    validation_issues: List[BRIMValidationIssue] = Field(default_factory=list, description="Structured validation errors from TXCreateItem construction")
 
 
 # =============================================================================
@@ -389,6 +418,7 @@ class BRIMParseOutput(BaseModel):
 
     transactions: List[TXCreateItem] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
+    validation_issues: List[BRIMValidationIssue] = Field(default_factory=list)
     extracted_assets: Dict[int, BRIMExtractedAssetInfo] = Field(default_factory=dict)
 
 

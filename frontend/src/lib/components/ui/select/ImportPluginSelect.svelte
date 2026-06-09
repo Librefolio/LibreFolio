@@ -1,40 +1,67 @@
-<script lang="ts">
-    /**
-     * ImportPluginSelect - Svelte 5
-     * Reusable dropdown for selecting import plugins.
-     * Uses SearchSelect with broker icons for better UX.
-     */
-    import {_} from '$lib/i18n';
-    import {zodiosApi} from '$lib/api';
-    import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+<script module lang="ts">
     import type {BrimPlugin} from '$lib/types';
 
     // Module-level cache: shared across all ImportPluginSelect instances
     let cachedPlugins: BrimPlugin[] | null = null;
     let cachePromise: Promise<BrimPlugin[]> | null = null;
 
+    /** Export for other components to reuse the cached plugin list */
+    export function getCachedPlugins(): BrimPlugin[] | null {
+        return cachedPlugins;
+    }
+
+    /** Set cache from external source (e.g. after API call) */
+    export function setCachedPlugins(plugins: BrimPlugin[]) {
+        cachedPlugins = plugins;
+    }
+</script>
+
+<script lang="ts">
+    /**
+     * ImportPluginSelect - Svelte 5
+     * Reusable dropdown for selecting import plugins.
+     * Uses SearchSelect with broker icons for better UX.
+     * Supports filtering by compatible plugins (from BrimFile.compatible_plugins).
+     */
+    import {_} from '$lib/i18n';
+    import {zodiosApi} from '$lib/api';
+    import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
+    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+
     interface Props {
         value?: string;
         disabled?: boolean;
         placeholder?: string;
+        /** When set, only show these plugins (ordered by priority from backend) */
+        compatiblePlugins?: string[];
         onchange?: (value: string) => void;
     }
 
-    let {value = $bindable(''), disabled = false, placeholder = '', onchange}: Props = $props();
+    let {value = $bindable(''), disabled = false, placeholder = '', compatiblePlugins, onchange}: Props = $props();
 
     let plugins = $state<BrimPlugin[]>([]);
-    let loading = $state(true);
+    let loading = $state(!cachedPlugins); // Start as not-loading if cache exists
     let error = $state<string | null>(null);
+
+    // Filter and order plugins by compatible list
+    let filteredPlugins = $derived.by(() => {
+        if (!compatiblePlugins || compatiblePlugins.length === 0) return plugins;
+        // Preserve order from compatiblePlugins (sorted by priority desc from backend)
+        const pluginMap = new Map(plugins.map((p) => [p.code, p]));
+        const ordered: BrimPlugin[] = [];
+        for (const code of compatiblePlugins) {
+            const p = pluginMap.get(code);
+            if (p) ordered.push(p);
+        }
+        return ordered;
+    });
 
     // Convert plugins to SelectOption format with icon_url in data
     let pluginOptions = $derived<SelectOption[]>(
-        plugins.map((p) => ({
+        filteredPlugins.map((p) => ({
             value: p.code,
             label: p.name,
             searchText: p.description,
-            // Generator quirk: nullable fields get typed as (string | null) | Array<string | null>.
-            // At runtime the backend only ever produces (string | null).
             icon: (p.icon_url as string | null | undefined) || undefined,
             data: p,
         })),
@@ -43,17 +70,17 @@
     // Get selected plugin info
     let selectedPlugin = $derived(plugins.find((p) => p.code === value));
 
-    // Load plugins on component initialization
+    // Load plugins on component initialization — sync path for cache hits
     $effect(() => {
-        loadPlugins();
-    });
-
-    async function loadPlugins() {
         if (cachedPlugins) {
             plugins = cachedPlugins;
             loading = false;
-            return;
+        } else {
+            loadPlugins();
         }
+    });
+
+    async function loadPlugins() {
         loading = true;
         error = null;
 

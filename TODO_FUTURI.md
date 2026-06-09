@@ -702,4 +702,33 @@ The FormModal still uses the legacy `initialRow + injectedPartnerRow` props inte
 
 ---
 
-##
+## 🧹 Rimuovere `preview_columns` dai plugin BRIM
+
+**Data aggiunta**: 8 Giugno 2026
+**Priorità**: P4 (cleanup)
+
+### Contesto
+
+`BRIMPreviewColumn` e il metodo `preview_columns()` su ogni plugin BRIM (11 implementazioni) erano stati progettati per la "Staging Modal" del piano v4 — una modale che avrebbe mostrato le transazioni parsate in una tabella con colonne dinamiche per plugin.
+
+Con il redesign v5 (ImportWizard a 4 step), questa funzionalità non serve più:
+- `BRIMParseResponse.transactions` restituisce sempre `TXCreateItem[]` (schema fisso)
+- Step 4 (Review) usa una DataTable con colonne universali derivate da TXCreateItem
+- Non c'è variazione plugin-specifica nei dati restituiti
+
+### File coinvolti
+
+- `backend/app/schemas/brim.py`: classe `BRIMPreviewColumn`, campo `preview_columns` in `BRIMPluginInfo`
+- `backend/app/services/brim_provider.py`: metodo astratto `preview_columns()`
+- `backend/app/services/brim_providers/*.py`: 11 implementazioni (una per plugin)
+- `backend/test_scripts/test_external/test_brim_providers.py`: test `test_preview_columns_baseline`
+
+### Azione
+
+1. Rimuovere `BRIMPreviewColumn` dallo schema
+2. Rimuovere `preview_columns` da `BRIMPluginInfo`
+3. Rimuovere il metodo `preview_columns()` dalla base class e dai plugin
+4. Rimuovere il test relativo
+5. Rigenerare il client API (`./dev.py api sync`)
+
+**Ref**: `plan-phase07Part5-v5-ImportWizard.prompt.md` §8.5

@@ -36,7 +36,7 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -373,6 +373,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         """
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
+        validation_issues: List[BRIMValidationIssue] = []
 
         # Track asset identifiers to assign consistent fake IDs
         # Maps extracted identifier -> fake_asset_id
@@ -404,9 +405,14 @@ class GenericCSVBrokerProvider(BRIMProvider):
                 # Parse rows
                 for row_num, row in enumerate(reader, start=2):  # Start at 2 (1 is header)
                     try:
-                        tx = self._parse_row(row, column_map, broker_id, row_num)
-                        if tx:
-                            transactions.append(tx)
+                        self._parse_row(
+                            row=row,
+                            column_map=column_map,
+                            broker_id=broker_id,
+                            row_num=row_num,
+                            transactions=transactions,
+                            validation_issues=validation_issues,
+                        )
                     except Exception as e:
                         warnings.append(f"Row {row_num}: {str(e)}")
 
@@ -418,7 +424,12 @@ class GenericCSVBrokerProvider(BRIMProvider):
         if not transactions:
             warnings.append("No valid transactions found in file")
 
-        return BRIMParseOutput(transactions=transactions, warnings=warnings, extracted_assets=self._extracted_assets_raw)
+        return BRIMParseOutput(
+            transactions=transactions,
+            warnings=warnings,
+            validation_issues=validation_issues,
+            extracted_assets=self._extracted_assets_raw,
+        )
 
     def _detect_columns(self, fieldnames: List[str]) -> Dict[str, str]:
         """
@@ -445,7 +456,15 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
         return column_map
 
-    def _parse_row(self, row: Dict[str, str], column_map: Dict[str, str], broker_id: int, row_num: int) -> Optional[TXCreateItem]:
+    def _parse_row(
+        self,
+        row: Dict[str, str],
+        column_map: Dict[str, str],
+        broker_id: int,
+        row_num: int,
+        transactions: List[TXCreateItem],
+        validation_issues: List[BRIMValidationIssue],
+    ) -> Optional[TXCreateItem]:
         """
         Parse a single CSV row into a TXCreateItem.
 
@@ -454,9 +473,11 @@ class GenericCSVBrokerProvider(BRIMProvider):
             column_map: Mapping of standard names to CSV column names
             broker_id: Target broker ID
             row_num: Row number for error messages
+            transactions: Parsed transactions accumulator
+            validation_issues: Structured validation issues accumulator
 
         Returns:
-            TXCreateItem or None if row should be skipped
+            TXCreateItem or None if row should be skipped or validation fails
 
         Raises:
             Exception with descriptive message if row is invalid
@@ -552,10 +573,14 @@ class GenericCSVBrokerProvider(BRIMProvider):
         if tx_type == TransactionType.FX_CONVERSION:
             raise ValueError("FX_CONVERSION type requires paired transactions with link_uuid. " "Please use manual entry or broker-specific plugin.")
 
-        # Build TXCreateItem - validation will pass because:
+        # Build transaction - parent handles validation issues:
         # - Asset-required types now always have a fake_id assigned
         # - TRANSFER/FX_CONVERSION are rejected above (require link_uuid)
-        return TXCreateItem(
+        return self._create_transaction(
+            row_num=row_num,
+            transactions=transactions,
+            validation_issues=validation_issues,
+            context=description or type_str,
             broker_id=broker_id,
             asset_id=asset_id,
             type=tx_type,
