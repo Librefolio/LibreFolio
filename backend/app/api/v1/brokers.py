@@ -738,6 +738,7 @@ async def parse_file(
         parse_output = brim_provider.parse_file(file_id=file_id, plugin_code=plugin_code, broker_id=request.broker_id)
         transactions = parse_output.transactions
         warnings = parse_output.warnings
+        validation_issues = parse_output.validation_issues
         extracted_assets = parse_output.extracted_assets
 
         # 2. Build asset mappings (CORE responsibility)
@@ -783,6 +784,7 @@ async def parse_file(
             asset_mappings=asset_mappings,
             duplicates=duplicates,
             warnings=warnings,
+            validation_issues=validation_issues,
         )
 
         # Cache the parse result in file metadata for later retrieval.

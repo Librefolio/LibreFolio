@@ -38,7 +38,7 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -138,6 +138,7 @@ class IBKRBrokerProvider(BRIMProvider):
         """Parse IBKR CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
+        validation_issues: List[BRIMValidationIssue] = []
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -210,22 +211,20 @@ class IBKRBrokerProvider(BRIMProvider):
                         trade_money = -trade_money
 
                     # Create main transaction
-                    try:
-                        tx = TXCreateItem(
-                            broker_id=broker_id,
-                            asset_id=asset_id,
-                            type=tx_type,
-                            date=tx_date,
-                            quantity=quantity,
-                            cash=(Currency(code=currency, amount=trade_money) if trade_money else None),
-                            description=f"IBKR {direction}: {isin}",
-                            tags=["import", "ibkr"],
-                        )
-                        transactions.append(tx)
-
-                    except Exception as e:
-                        warnings.append(f"Row {row_num}: error creating transaction: {e}")
-                        continue
+                    self._create_transaction(
+                        row_num=row_num,
+                        transactions=transactions,
+                        validation_issues=validation_issues,
+                        context=f"IBKR {direction}: {isin}",
+                        broker_id=broker_id,
+                        asset_id=asset_id,
+                        type=tx_type,
+                        date=tx_date,
+                        quantity=quantity,
+                        cash=Currency(code=currency, amount=trade_money) if trade_money else None,
+                        description=f"IBKR {direction}: {isin}",
+                        tags=["import", "ibkr"],
+                    )
 
                     # Handle commission as separate FEE transaction
                     commission = _parse_ibkr_number(row.get(COL_COMMISSION, ""))
@@ -234,20 +233,20 @@ class IBKRBrokerProvider(BRIMProvider):
                         if not comm_currency:
                             comm_currency = currency
 
-                        try:
-                            fee_tx = TXCreateItem(
-                                broker_id=broker_id,
-                                asset_id=asset_id,
-                                type=TransactionType.FEE,
-                                date=tx_date,
-                                quantity=Decimal("0"),
-                                cash=Currency(code=comm_currency, amount=commission),
-                                description=f"IBKR commission: {isin}",
-                                tags=["import", "ibkr", "commission"],
-                            )
-                            transactions.append(fee_tx)
-                        except Exception as e:
-                            warnings.append(f"Row {row_num}: error creating fee transaction: {e}")
+                        self._create_transaction(
+                            row_num=row_num,
+                            transactions=transactions,
+                            validation_issues=validation_issues,
+                            context=f"IBKR commission: {isin}",
+                            broker_id=broker_id,
+                            asset_id=asset_id,
+                            type=TransactionType.FEE,
+                            date=tx_date,
+                            quantity=Decimal("0"),
+                            cash=Currency(code=comm_currency, amount=commission),
+                            description=f"IBKR commission: {isin}",
+                            tags=["import", "ibkr", "commission"],
+                        )
 
         except FileNotFoundError:
             raise BRIMParseError(f"File not found: {file_path}") from None
@@ -274,7 +273,12 @@ class IBKRBrokerProvider(BRIMProvider):
             asset_count=len(extracted_assets_typed),
         )
 
-        return BRIMParseOutput(transactions=transactions, warnings=warnings, extracted_assets=extracted_assets_typed)
+        return BRIMParseOutput(
+            transactions=transactions,
+            warnings=warnings,
+            validation_issues=validation_issues,
+            extracted_assets=extracted_assets_typed,
+        )
 
     @property
     def docs_url(self) -> Optional[str]:

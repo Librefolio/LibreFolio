@@ -41,7 +41,7 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -65,9 +65,9 @@ COL_FEES = "Fees and/or Spread"
 TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "buy": TransactionType.BUY,
     "sell": TransactionType.SELL,
-    "staking income": TransactionType.INTEREST,
-    "rewards income": TransactionType.INTEREST,
-    "learning reward": TransactionType.INTEREST,
+    "staking income": TransactionType.ADJUSTMENT,
+    "rewards income": TransactionType.ADJUSTMENT,
+    "learning reward": TransactionType.ADJUSTMENT,
     "convert": TransactionType.BUY,  # Treat as buy of target
 }
 
@@ -175,6 +175,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
         """Parse Coinbase CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
+        validation_issues: List[BRIMValidationIssue] = []
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -241,47 +242,74 @@ class CoinbaseBrokerProvider(BRIMProvider):
                     if quantity is None:
                         quantity = Decimal("0")
 
-                    # Adjust signs
+                    # Adjust signs per project rules
                     if tx_type == TransactionType.SELL and quantity > 0:
                         quantity = -quantity
                     if tx_type == TransactionType.BUY and amount and amount > 0:
                         amount = -amount
 
-                    # Create transaction
-                    try:
-                        tx = TXCreateItem(
-                            broker_id=broker_id,
-                            asset_id=asset_id,
-                            type=tx_type,
-                            date=tx_date,
-                            quantity=quantity,
-                            cash=Currency(code=currency, amount=amount) if amount else None,
-                            description=f"{tx_type_raw}: {asset}",
-                            tags=["import", "coinbase", "crypto"],
-                        )
-                        transactions.append(tx)
+                    # For ADJUSTMENT (like crypto staking rewards), quantity is kept, but cash must be zero.
+                    # We store the valuation details in the description.
+                    is_reward_adjustment = (
+                        tx_type == TransactionType.ADJUSTMENT
+                        and tx_type_raw in ("staking income", "rewards income", "learning reward")
+                    )
 
-                    except Exception as e:
-                        warnings.append(f"Row {row_num}: error creating transaction: {e}")
-                        continue
+                    desc_extra = ""
+                    if is_reward_adjustment:
+                        if amount and amount != 0:
+                            desc_extra = f" (Value: {amount} {currency})"
+                        amount = None  # cash must be None for ADJUSTMENT
+
+                    # INTEREST/DIVIDEND are pure cash — no quantity.
+                    orig_quantity = quantity
+                    if tx_type in (TransactionType.INTEREST, TransactionType.DIVIDEND):
+                        if quantity != Decimal("0"):
+                            warnings.append(
+                                f"Row {row_num}: {tx_type_raw} had quantity={quantity} {asset}"
+                                f" — recorded as cash-only INTEREST (token qty discarded, cash preserved)"
+                            )
+                        quantity = Decimal("0")
+
+                    if tx_type in (TransactionType.INTEREST, TransactionType.DIVIDEND) and orig_quantity and orig_quantity != Decimal("0"):
+                        desc_extra = f" (Original quantity: {orig_quantity} {asset})"
+
+                    desc_str = f"{tx_type_raw}: {asset}" if asset else tx_type_raw
+                    tx_desc = f"{desc_str}{desc_extra}"
+
+                    # Create transaction
+                    self._create_transaction(
+                        row_num=row_num,
+                        transactions=transactions,
+                        validation_issues=validation_issues,
+                        context=tx_desc,
+                        broker_id=broker_id,
+                        asset_id=asset_id,
+                        type=tx_type,
+                        date=tx_date,
+                        quantity=quantity,
+                        cash=Currency(code=currency, amount=amount) if amount else None,
+                        description=tx_desc,
+                        tags=["import", "coinbase", "crypto"],
+                    )
 
                     # Handle fees as separate transaction
                     fees = _parse_coinbase_amount(row.get(COL_FEES, ""))
                     if fees and fees > 0:
-                        try:
-                            fee_tx = TXCreateItem(
-                                broker_id=broker_id,
-                                asset_id=asset_id,
-                                type=TransactionType.FEE,
-                                date=tx_date,
-                                quantity=Decimal("0"),
-                                cash=Currency(code=currency, amount=-fees),
-                                description=f"Fee: {asset}",
-                                tags=["import", "coinbase", "fee"],
-                            )
-                            transactions.append(fee_tx)
-                        except Exception as e:
-                            warnings.append(f"Row {row_num}: error creating fee transaction: {e}")
+                        self._create_transaction(
+                            row_num=row_num,
+                            transactions=transactions,
+                            validation_issues=validation_issues,
+                            context=f"Fee: {asset}" if asset else "Fee",
+                            broker_id=broker_id,
+                            asset_id=asset_id,
+                            type=TransactionType.FEE,
+                            date=tx_date,
+                            quantity=Decimal("0"),
+                            cash=Currency(code=currency, amount=-fees),
+                            description=f"Fee: {asset}" if asset else "Fee",
+                            tags=["import", "coinbase", "fee"],
+                        )
 
         except FileNotFoundError:
             raise BRIMParseError(f"File not found: {file_path}") from None
@@ -308,7 +336,12 @@ class CoinbaseBrokerProvider(BRIMProvider):
             asset_count=len(extracted_assets_typed),
         )
 
-        return BRIMParseOutput(transactions=transactions, warnings=warnings, extracted_assets=extracted_assets_typed)
+        return BRIMParseOutput(
+            transactions=transactions,
+            warnings=warnings,
+            validation_issues=validation_issues,
+            extracted_assets=extracted_assets_typed,
+        )
 
     @property
     def docs_url(self) -> Optional[str]:

@@ -44,7 +44,7 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -187,6 +187,7 @@ class Trading212BrokerProvider(BRIMProvider):
         """Parse Trading212 CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
+        validation_issues: List[BRIMValidationIssue] = []
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -269,29 +270,42 @@ class Trading212BrokerProvider(BRIMProvider):
                     if quantity is None:
                         quantity = Decimal("0")
 
-                    # Adjust signs
+                    # Adjust signs per project rules
                     if tx_type == TransactionType.SELL and quantity > 0:
                         quantity = -quantity
                     if tx_type == TransactionType.BUY and amount and amount > 0:
                         amount = -amount
+                    # DIVIDEND/INTEREST are pure cash — CSV may include a shares quantity
+                    orig_quantity = quantity
+                    if tx_type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
+                        quantity = Decimal("0")
+
+                    desc_extra = ""
+                    if tx_type == TransactionType.DIVIDEND and orig_quantity and orig_quantity != Decimal("0"):
+                        if amount:
+                            per_share = abs(amount) / orig_quantity
+                            desc_extra = f" (At the time of the dividend, {orig_quantity} shares were present on the broker, yielding {per_share:.6g} {currency} per share)"
+                        else:
+                            desc_extra = f" (At the time of the dividend, {orig_quantity} shares were present on the broker)"
+
+                    desc_str = f"{action}: {name}" if name else action
+                    tx_desc = f"{desc_str}{desc_extra}"
 
                     # Create main transaction
-                    try:
-                        tx = TXCreateItem(
-                            broker_id=broker_id,
-                            asset_id=asset_id,
-                            type=tx_type,
-                            date=tx_date,
-                            quantity=quantity,
-                            cash=Currency(code=currency, amount=amount) if amount else None,
-                            description=f"{action}: {name}" if name else action,
-                            tags=["import", "trading212"],
-                        )
-                        transactions.append(tx)
-
-                    except Exception as e:
-                        warnings.append(f"Row {row_num}: error creating transaction: {e}")
-                        continue
+                    self._create_transaction(
+                        row_num=row_num,
+                        transactions=transactions,
+                        validation_issues=validation_issues,
+                        context=tx_desc,
+                        broker_id=broker_id,
+                        asset_id=asset_id,
+                        type=tx_type,
+                        date=tx_date,
+                        quantity=quantity,
+                        cash=Currency(code=currency, amount=amount) if amount else None,
+                        description=tx_desc,
+                        tags=["import", "trading212"],
+                    )
 
                     # Handle withholding tax as separate transaction
                     tax_amount = _parse_trading212_number(row.get(COL_TAX, ""))
@@ -304,20 +318,20 @@ class Trading212BrokerProvider(BRIMProvider):
                         if tax_amount > 0:
                             tax_amount = -tax_amount
 
-                        try:
-                            tax_tx = TXCreateItem(
-                                broker_id=broker_id,
-                                asset_id=asset_id,
-                                type=TransactionType.TAX,
-                                date=tx_date,
-                                quantity=Decimal("0"),
-                                cash=Currency(code=tax_currency, amount=tax_amount),
-                                description=(f"Withholding tax: {name}" if name else "Withholding tax"),
-                                tags=["import", "trading212", "tax"],
-                            )
-                            transactions.append(tax_tx)
-                        except Exception as e:
-                            warnings.append(f"Row {row_num}: error creating tax transaction: {e}")
+                        self._create_transaction(
+                            row_num=row_num,
+                            transactions=transactions,
+                            validation_issues=validation_issues,
+                            context=f"Withholding tax: {name}" if name else "Withholding tax",
+                            broker_id=broker_id,
+                            asset_id=asset_id,
+                            type=TransactionType.TAX,
+                            date=tx_date,
+                            quantity=Decimal("0"),
+                            cash=Currency(code=tax_currency, amount=tax_amount),
+                            description=f"Withholding tax: {name}" if name else "Withholding tax",
+                            tags=["import", "trading212", "tax"],
+                        )
 
         except FileNotFoundError:
             raise BRIMParseError(f"File not found: {file_path}") from None
@@ -344,7 +358,12 @@ class Trading212BrokerProvider(BRIMProvider):
             asset_count=len(extracted_assets_typed),
         )
 
-        return BRIMParseOutput(transactions=transactions, warnings=warnings, extracted_assets=extracted_assets_typed)
+        return BRIMParseOutput(
+            transactions=transactions,
+            warnings=warnings,
+            validation_issues=validation_issues,
+            extracted_assets=extracted_assets_typed,
+        )
 
     @property
     def docs_url(self) -> Optional[str]:

@@ -133,11 +133,17 @@ Where:
 
 ## 🧮 How LibreFolio Handles Interest
 
-In LibreFolio, an `INTEREST` event is recorded with:
+In LibreFolio, an `INTEREST` event (and the corresponding portfolio transaction) is recorded with:
 
 - **Date**: The interest payment date
 - **Amount**: The cash amount received
 - **Currency**: The currency of payment
+
+### The Accounting Difference: Interest vs. Dividend
+It is crucial to distinguish between an **Interest** and a **Dividend** transaction at the database level:
+
+1. **Interest (Debt/Yield-based)**: An interest payment represents yield on debt or cash deposits (e.g., bank savings accounts, P2P loans, or bond coupons). In double-entry portfolio tracking, these represent cash inflows (`cash.amount > 0`) where the underlying asset is optional. The database transaction requires `quantity = 0` because no units of the asset are transacted during a cash interest payment.
+2. **Dividend (Equity-based)**: A dividend is an utility distribution paid to shareholders. It strictly requires an underlying equity asset to exist (the asset is mandatory), and the payout depends directly on the number of shares owned at the ex-date. Just like interests, dividends are pure cash movements (`quantity = 0`).
 
 For **Scheduled Investment** provider assets, interest events are generated automatically from the configured interest schedule and directly affect the price calculation. For market-priced bonds, they serve as informational markers.
 

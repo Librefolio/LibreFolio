@@ -1,15 +1,15 @@
 <!--
-  ImportWizardModal.svelte — Phase 07 Part 5 v5 M1v2 Round 2
+  ImportWizardModal.svelte — Phase 07 Part 5 v5 M2
 
   Wide 4-step wizard for importing broker report files into BulkModal.
   Step 1: Upload files (broker-independent) & assign broker per-file
   Step 2: Select existing broker files to parse (DataTable per broker, per-file plugin)
-  Step 3: Parse (M2 placeholder)
+  Step 3: Parse engine — sequential parse with progress, results DataTable, detail modal
   Step 4: Review & Import (M3 placeholder)
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {Upload, Trash2, Eye, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle} from 'lucide-svelte';
+    import {Upload, Trash2, Eye, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw} from 'lucide-svelte';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
     import {formatBytes} from '$lib/utils/files/upload';
@@ -21,17 +21,18 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
-    import ImportPluginSelect from '$lib/components/ui/select/ImportPluginSelect.svelte';
+    import ImportPluginSelect, {getCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
+    import ParseDetailModal from '$lib/components/transactions/modals/ParseDetailModal.svelte';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
 
-    import type {TransactionCreateItem, BrimFile, FilePreviewResponse} from '$lib/types';
+    import type {TransactionCreateItem, BrimFile, BrimParseResponse, FilePreviewResponse} from '$lib/types';
 
     // =========================================================================
     // Props
@@ -126,6 +127,64 @@
     let step2CanParse = $derived(selectedFiles.length > 0 && selectedFiles.every((f) => f.pluginCode !== ''));
 
     // =========================================================================
+    // Step 3 State — Parse Engine & Results
+    // =========================================================================
+
+    interface ParsedFileResult {
+        fileId: string;
+        fileName: string;
+        brokerId: number;
+        brokerName: string;
+        brokerIconUrl: string | null;
+        brokerPortalUrl: string | null;
+        pluginUsed: string;
+        pluginName: string;
+        status: 'pending' | 'parsing' | 'done' | 'error';
+        response: BrimParseResponse | null;
+        errorMessage?: string;
+    }
+
+    let parseResults = $state<ParsedFileResult[]>([]);
+    let abortParsing = $state(false);
+    let lastParseHash = $state<string | null>(null);
+    let showParseDetail = $state(false);
+    let parseDetailResult = $state<ParsedFileResult | null>(null);
+    let showAggregateDetail = $state(false);
+
+    // Parse progress deriveds
+    let parseCompletedCount = $derived(parseResults.filter((r) => r.status === 'done' || r.status === 'error').length);
+    let parseTotalCount = $derived(parseResults.length);
+    let parseDone = $derived(parseTotalCount > 0 && parseResults.every((r) => r.status === 'done' || r.status === 'error'));
+    let parseHasSuccess = $derived(parseResults.some((r) => r.status === 'done'));
+    let parseHasErrors = $derived(parseResults.some((r) => r.status === 'error'));
+    let parseParsing = $derived(parseResults.some((r) => r.status === 'parsing'));
+    let step3CanContinue = $derived(parseDone && parseHasSuccess);
+    let usingCachedResults = $state(false);
+
+    // Aggregate stats from done results
+    let parseAggregateStats = $derived(() => {
+        const doneResults = parseResults.filter((r) => r.status === 'done' && r.response);
+        const totalTx = doneResults.reduce((sum, r) => sum + (r.response!.transactions?.length ?? 0), 0);
+        const doneFileCount = doneResults.length;
+        const allMappings = doneResults.flatMap((r) => r.response!.asset_mappings ?? []);
+        const uniqueAssetIds = new Set(allMappings.map((m) => m.fake_asset_id));
+        const unresolvedCount = allMappings.filter((m) => m.selected_asset_id == null).length;
+        const totalWarnings = doneResults.reduce((sum, r) => sum + (r.response!.warnings?.length ?? 0), 0);
+        const totalIssues = doneResults.reduce((sum, r) => sum + ((r.response!.validation_issues as unknown[] | undefined)?.length ?? 0), 0);
+        const duplicates = doneResults.reduce((sum, r) => {
+            const dup = r.response!.duplicates;
+            if (!dup || Array.isArray(dup)) return sum;
+            return sum + (dup.tx_likely_duplicates?.length ?? 0);
+        }, 0);
+        return {totalTx, doneFileCount, uniqueAssets: uniqueAssetIds.size, unresolvedCount, totalWarnings, totalIssues, likelyDuplicates: duplicates};
+    });
+
+    function computeParseHash(): string {
+        const sorted = [...selectedFiles].sort((a, b) => a.fileId.localeCompare(b.fileId)).map((f) => `${f.fileId}:${f.pluginCode}`);
+        return sorted.join('|');
+    }
+
+    // =========================================================================
     // Shared State
     // =========================================================================
 
@@ -137,7 +196,7 @@
     // Derived
     // =========================================================================
 
-    let hasUnsavedWork = $derived(pendingFiles.length > 0 || selectedFiles.length > 0);
+    let hasUnsavedWork = $derived(pendingFiles.length > 0 || selectedFiles.length > 0 || parseResults.length > 0);
     let selectedBrokerCount = $derived(new Set(selectedFiles.map((f) => f.brokerId)).size);
 
     // =========================================================================
@@ -167,6 +226,14 @@
         filePluginOverrides = new Map();
         confirmCloseOpen = false;
         step1SelectedIds = [];
+        // Step 3 reset
+        parseResults = [];
+        abortParsing = false;
+        lastParseHash = null;
+        usingCachedResults = false;
+        showParseDetail = false;
+        parseDetailResult = null;
+        showAggregateDetail = false;
     }
 
     // =========================================================================
@@ -220,6 +287,9 @@
         } else if (currentStep === 2) {
             currentStep = 3;
             if (maxReachedStep < 3) maxReachedStep = 3;
+            // Init parse results and auto-start parsing
+            initParseResults();
+            if (!usingCachedResults) doParseAll();
         } else if (currentStep === 3) {
             currentStep = 4;
             if (maxReachedStep < 4) maxReachedStep = 4;
@@ -227,6 +297,9 @@
     }
 
     function goBack() {
+        if (currentStep === 3 && parseParsing) {
+            abortParsing = true;
+        }
         if (currentStep > 1) {
             currentStep = currentStep - 1;
         }
@@ -537,7 +610,7 @@
         {
             id: 'filename',
             header: () => $t('common.name'),
-            cell: (row) => row.filename,
+            cell: (row) => ({type: 'icon-text', icon: FileText, text: row.filename}) as const,
             type: 'text',
             sortable: true,
             filterable: true,
@@ -550,11 +623,13 @@
             cell: (row) => {
                 const sel = selectedFiles.find((s) => s.fileId === row.file_id);
                 if (!sel) return '—';
+                const compatible = (row.compatible_plugins as string[] | undefined) ?? [];
                 return {
                     type: 'custom',
                     component: ImportPluginSelect,
                     props: {
                         value: sel.pluginCode,
+                        compatiblePlugins: compatible.length > 0 ? compatible : undefined,
                         onchange: (v: string) => updateFilePlugin(row.file_id, v),
                         placeholder: $t('importWizard.selectPlugin'),
                     },
@@ -618,6 +693,259 @@
         for (let i = 0; i < tableRefs.length; i++) {
             if (i !== sourceIdx) tableRefs[i]?.setColumnWidth(columnId, width);
         }
+    }
+
+    // =========================================================================
+    // Step 3: Parse Engine
+    // =========================================================================
+
+    function getBrokerName(brokerId: number): string {
+        return brokers.find((b) => b.id === brokerId)?.name ?? `Broker #${brokerId}`;
+    }
+
+    function getPluginName(pluginCode: string): string {
+        const cached = getCachedPlugins();
+        if (cached) {
+            const plugin = cached.find((p: {code: string; name: string}) => p.code === pluginCode);
+            if (plugin) return plugin.name;
+        }
+        return pluginCode;
+    }
+
+    function initParseResults() {
+        const newHash = computeParseHash();
+
+        // Cache hit: same files+plugins as last parse, all terminal → skip
+        if (lastParseHash === newHash && parseResults.length > 0 && parseDone) {
+            usingCachedResults = true;
+            return;
+        }
+
+        usingCachedResults = false;
+
+        // Build fresh ParsedFileResult[] from selectedFiles
+        const results: ParsedFileResult[] = [];
+        for (const file of selectedFiles) {
+            const pluginName = getPluginName(file.pluginCode);
+            const broker = brokers.find((b) => b.id === file.brokerId);
+            results.push({
+                fileId: file.fileId,
+                fileName: file.fileName,
+                brokerId: file.brokerId,
+                brokerName: getBrokerName(file.brokerId),
+                brokerIconUrl: broker?.icon_url ?? null,
+                brokerPortalUrl: broker?.portal_url ?? null,
+                pluginUsed: file.pluginCode,
+                pluginName,
+                status: 'pending',
+                response: null,
+            });
+        }
+        parseResults = results;
+        lastParseHash = newHash;
+    }
+
+    async function doParseAll() {
+        abortParsing = false;
+        for (const file of parseResults) {
+            if (abortParsing) break;
+            if (file.status !== 'pending') continue;
+
+            file.status = 'parsing';
+            parseResults = [...parseResults];
+
+            try {
+                const res = await zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post({plugin_code: file.pluginUsed, broker_id: file.brokerId}, {params: {file_id: file.fileId}});
+                file.response = res as BrimParseResponse;
+                file.status = 'done';
+            } catch (e) {
+                file.status = 'error';
+                file.errorMessage = extractErrorMessage(e);
+            }
+
+            parseResults = [...parseResults];
+        }
+    }
+
+    function handleReparse() {
+        usingCachedResults = false;
+        parseResults = parseResults.map((r) => ({...r, status: 'pending' as const, response: null, errorMessage: undefined}));
+        lastParseHash = computeParseHash();
+        doParseAll();
+    }
+
+    function openParseDetail(result: ParsedFileResult) {
+        parseDetailResult = result;
+        showParseDetail = true;
+    }
+
+    function closeParseDetail() {
+        showParseDetail = false;
+        parseDetailResult = null;
+    }
+
+    // Step 3 DataTable columns
+    const step3Columns: ColumnDef<ParsedFileResult>[] = [
+        {
+            id: 'fileName',
+            header: () => $t('common.name'),
+            cell: (row) => ({type: 'icon-text', icon: FileText, text: row.fileName}) as const,
+            type: 'text',
+            sortable: true,
+            width: 200,
+            minWidth: 120,
+            getValue: (row) => row.fileName,
+        },
+        {
+            id: 'brokerName',
+            header: () => 'Broker',
+            cell: (row) =>
+                ({
+                    type: 'custom',
+                    component: BrokerIcon,
+                    props: {iconUrl: row.brokerIconUrl, portalUrl: row.brokerPortalUrl, altText: row.brokerName, size: 'sm'},
+                }) as const,
+            type: 'text',
+            sortable: true,
+            width: 50,
+            minWidth: 40,
+            getValue: (row) => row.brokerName,
+        },
+        {
+            id: 'pluginName',
+            header: () => 'Plugin',
+            cell: (row) =>
+                ({
+                    type: 'custom',
+                    component: BrokerIcon,
+                    props: {pluginCode: row.pluginUsed, altText: row.pluginName, size: 'sm'},
+                }) as const,
+            type: 'text',
+            width: 50,
+            minWidth: 40,
+            getValue: (row) => row.pluginName,
+        },
+        {
+            id: 'status',
+            header: () => 'Status',
+            cell: (row) => {
+                if (row.status === 'parsing') {
+                    return {type: 'badge', text: $t('importWizard.fileParsing'), variant: 'info'} as const;
+                }
+                const variantMap: Record<string, 'default' | 'success' | 'warning' | 'error'> = {
+                    pending: 'default',
+                    done: 'success',
+                    error: 'error',
+                };
+                const labelMap: Record<string, string> = {
+                    pending: $t('importWizard.filePending'),
+                    done: $t('importWizard.fileDone'),
+                    error: $t('importWizard.fileError'),
+                };
+                return {type: 'badge', text: labelMap[row.status] ?? row.status, variant: variantMap[row.status] ?? 'default'} as const;
+            },
+            type: 'enum',
+            enumOptions: [
+                {value: 'pending', label: 'Pending'},
+                {value: 'parsing', label: 'Parsing'},
+                {value: 'done', label: 'Done'},
+                {value: 'error', label: 'Error'},
+            ],
+            getValue: (row) => row.status,
+            sortable: false,
+            width: 100,
+            minWidth: 80,
+        },
+        {
+            id: 'txCount',
+            header: () => 'TX',
+            cell: (row) => (row.response?.transactions?.length != null ? row.response.transactions.length : '—'),
+            type: 'number',
+            width: 60,
+            minWidth: 50,
+        },
+        {
+            id: 'assetCount',
+            header: () => $t('importWizard.assetsSection'),
+            cell: (row) => {
+                if (!row.response?.asset_mappings?.length) return '—';
+                return row.response.asset_mappings.length;
+            },
+            type: 'number',
+            width: 70,
+            minWidth: 50,
+        },
+        {
+            id: 'unresolvedCount',
+            header: () => '❓',
+            cell: (row) => {
+                if (!row.response?.asset_mappings?.length) return '—';
+                const unresolved = row.response.asset_mappings.filter((m) => m.selected_asset_id == null).length;
+                if (unresolved === 0) return 0;
+                return {type: 'html', html: `<span class="text-amber-600 dark:text-amber-400 font-medium">${unresolved}</span>`} as const;
+            },
+            type: 'number',
+            width: 50,
+            minWidth: 40,
+        },
+        {
+            id: 'issueCount',
+            header: () => '🔴',
+            cell: (row) => {
+                const count = (row.response?.validation_issues as unknown[] | undefined)?.length ?? 0;
+                if (row.status !== 'done') return '—';
+                if (count === 0) return 0;
+                return {type: 'html', html: `<span class="text-amber-600 dark:text-amber-400 font-medium">${count}</span>`} as const;
+            },
+            type: 'number',
+            width: 50,
+            minWidth: 40,
+        },
+        {
+            id: 'warningCount',
+            header: () => '⚠️',
+            cell: (row) => (row.response?.warnings?.length != null ? row.response.warnings.length : '—'),
+            type: 'number',
+            width: 50,
+            minWidth: 40,
+        },
+    ];
+
+    const step3RowActions: RowAction<ParsedFileResult>[] = [
+        {
+            id: 'viewDetail',
+            label: () => $t('importWizard.viewDetail'),
+            icon: Eye,
+            disabled: (row) => row.status !== 'done',
+            onClick: (row) => openParseDetail(row),
+        },
+        {
+            id: 'reparse',
+            label: () => $t('importWizard.reparse'),
+            icon: RefreshCw,
+            visible: (row) => row.status === 'done' || row.status === 'error',
+            onClick: (row) => reparseSingleFile(row),
+        },
+    ];
+
+    async function reparseSingleFile(result: ParsedFileResult) {
+        result.status = 'pending';
+        result.response = null;
+        result.errorMessage = undefined;
+        parseResults = [...parseResults];
+
+        // Parse just this one file
+        result.status = 'parsing';
+        parseResults = [...parseResults];
+        try {
+            const res = await zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post({plugin_code: result.pluginUsed, broker_id: result.brokerId}, {params: {file_id: result.fileId}});
+            result.response = res as BrimParseResponse;
+            result.status = 'done';
+        } catch (e) {
+            result.status = 'error';
+            result.errorMessage = extractErrorMessage(e);
+        }
+        parseResults = [...parseResults];
     }
 
     // =========================================================================
@@ -908,12 +1236,101 @@
             </div>
 
             <!-- ============================================================ -->
-            <!-- Step 3: Parse (M2 placeholder) -->
+            <!-- Step 3: Parse Engine -->
             <!-- ============================================================ -->
         {:else if currentStep === 3}
-            <div class="py-12 text-center text-gray-400 dark:text-gray-500" data-testid="import-wizard-step3">
-                <p class="text-lg font-medium">{$t('importWizard.step3Title')}</p>
-                <p class="text-sm mt-2">Coming in Milestone 2</p>
+            <div class="flex flex-col gap-4 p-4" data-testid="import-wizard-step3">
+                <!-- Progress bar -->
+                <div class="space-y-1">
+                    <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                        {#if usingCachedResults}
+                            <span class="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                                <CheckCircle size={14} />
+                                {$t('importWizard.cachedResults')}
+                            </span>
+                        {:else if parseDone}
+                            <span>{$t('importWizard.parseComplete')}</span>
+                        {:else}
+                            <span>{$t('importWizard.parsingProgress', {values: {done: parseCompletedCount, total: parseTotalCount}})}</span>
+                        {/if}
+                        <span>{parseCompletedCount}/{parseTotalCount}</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div class="h-full rounded-full transition-all duration-300 ease-out" class:bg-libre-green={!parseHasErrors} class:bg-amber-500={parseHasErrors} style="width: {parseTotalCount > 0 ? (parseCompletedCount / parseTotalCount) * 100 : 0}%"></div>
+                    </div>
+                </div>
+
+                <!-- Results DataTable -->
+                <DataTable
+                    data={parseResults}
+                    columns={step3Columns}
+                    getRowId={(row) => row.fileId}
+                    storageKey="import-wizard-parse-results"
+                    enableSelection={false}
+                    enableActions={true}
+                    actionsColumnWidth="60px"
+                    rowActions={step3RowActions}
+                    onRowDoubleClick={(row) => {
+                        if (row.status === 'done') openParseDetail(row);
+                    }}
+                    enableSorting={true}
+                    enableColumnFilters={false}
+                    enablePagination={false}
+                    enableColumnVisibility={false}
+                    defaultPageSize={100}
+                    tableLayout="auto"
+                    stickyActions={false}
+                    enableContextMenu={true}
+                />
+
+                <!-- Aggregate summary -->
+                {#if parseHasSuccess}
+                    {@const stats = parseAggregateStats()}
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div class="text-center">
+                            <div class="text-lg font-semibold text-gray-900 dark:text-white">{stats.totalTx}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.txCount', {values: {n: stats.totalTx, k: stats.doneFileCount}})}</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-lg font-semibold text-gray-900 dark:text-white">
+                                {stats.uniqueAssets}
+                                {#if stats.unresolvedCount > 0}
+                                    <span class="text-amber-500 text-sm">({stats.unresolvedCount}?)</span>
+                                {/if}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.assetsCount', {values: {n: stats.uniqueAssets, m: stats.unresolvedCount}})}</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-lg font-semibold" class:text-amber-500={stats.totalIssues > 0} class:text-gray-900={stats.totalIssues === 0} class:dark:text-white={stats.totalIssues === 0}>{stats.totalIssues}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.validationIssueCount', {values: {n: stats.totalIssues}})}</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-lg font-semibold" class:text-amber-500={stats.totalWarnings > 0} class:text-gray-900={stats.totalWarnings === 0} class:dark:text-white={stats.totalWarnings === 0}>{stats.totalWarnings}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.warningsCount', {values: {n: stats.totalWarnings}})}</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-lg font-semibold" class:text-amber-500={stats.likelyDuplicates > 0} class:text-gray-900={stats.likelyDuplicates === 0} class:dark:text-white={stats.likelyDuplicates === 0}>{stats.likelyDuplicates}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.likelyDuplicates', {values: {n: stats.likelyDuplicates}})}</div>
+                        </div>
+                    </div>
+                    {#if parseDone || usingCachedResults}
+                        <div class="flex justify-center gap-3">
+                            <button
+                                type="button"
+                                class="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 underline flex items-center gap-1"
+                                onclick={() => {
+                                    showAggregateDetail = true;
+                                }}
+                            >
+                                <Eye size={12} />
+                                {$t('importWizard.viewAll')}
+                            </button>
+                            <button type="button" class="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 underline" onclick={handleReparse}>
+                                {$t('importWizard.reparse')}
+                            </button>
+                        </div>
+                    {/if}
+                {/if}
             </div>
 
             <!-- ============================================================ -->
@@ -985,10 +1402,38 @@
                 {$t('importWizard.parse', {values: {n: selectedFiles.length}})} ▶
             </button>
         {:else if currentStep === 3}
-            <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
-                ◀ {$t('importWizard.back')}
-            </button>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled data-testid="import-wizard-continue">
+            <div class="flex items-center gap-3">
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
+                    ◀ {$t('importWizard.back')}
+                </button>
+                {#if parseParsing}
+                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                        <LoadingSpinner size="sm" />
+                        {$t('importWizard.parsingProgress', {values: {done: parseCompletedCount, total: parseTotalCount}})}
+                    </span>
+                {:else if parseDone && parseHasErrors && !parseHasSuccess}
+                    <span class="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+                        <AlertTriangle size={14} />
+                        {$t('importWizard.parseCompleteWithErrors')}
+                    </span>
+                {:else if parseDone && parseHasErrors}
+                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                        <AlertTriangle size={14} />
+                        {$t('importWizard.parseCompleteWithErrors')}
+                    </span>
+                {:else if parseDone && parseHasSuccess}
+                    <span class="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle size={14} />
+                        {$t('importWizard.parseComplete')}
+                    </span>
+                {:else if usingCachedResults}
+                    <span class="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle size={14} />
+                        {$t('importWizard.cachedResults')}
+                    </span>
+                {/if}
+            </div>
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step3CanContinue} data-testid="import-wizard-continue">
                 {$t('importWizard.continue')} ▶
             </button>
         {:else}
@@ -1007,3 +1452,17 @@
 
 <!-- File preview modal -->
 <FilePreviewModal open={showPreviewModal} preview={previewData} loading={previewLoading} error={previewError} onRequestClose={closePreviewModal} onSheetChange={(name) => loadPreview(name)} zIndex={80} />
+
+<!-- Parse detail modal (single file) -->
+<ParseDetailModal open={showParseDetail} parseResult={parseDetailResult} zIndex={80} onClose={closeParseDetail} />
+
+<!-- Parse detail modal (aggregate) -->
+<ParseDetailModal
+    open={showAggregateDetail}
+    parseResult={null}
+    allResults={parseResults}
+    zIndex={80}
+    onClose={() => {
+        showAggregateDetail = false;
+    }}
+/>

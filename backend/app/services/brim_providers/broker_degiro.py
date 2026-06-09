@@ -45,7 +45,7 @@ from typing import Dict, List, Optional, Tuple
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -300,6 +300,7 @@ class DegiroBrokerProvider(BRIMProvider):
         """
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
+        validation_issues: List[BRIMValidationIssue] = []
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -394,27 +395,31 @@ class DegiroBrokerProvider(BRIMProvider):
                         if quantity == 0:
                             warnings.append(f"Row {row_num}: could not extract quantity from '{description}'")
 
-                    # Adjust signs
+                    # Adjust signs per project rules
+                    # DeGiro exports amounts as positive for outflows (BUY/FEE/TAX) and
+                    # negative for inflows (DIVIDEND) — invert to match project conventions.
                     if tx_type == TransactionType.SELL and quantity > 0:
                         quantity = -quantity
+                    if tx_type in (TransactionType.BUY, TransactionType.FEE, TransactionType.TAX) and amount is not None and amount > 0:
+                        amount = -amount
+                    if tx_type == TransactionType.DIVIDEND and amount is not None and amount < 0:
+                        amount = -amount
 
                     # Create transaction
-                    try:
-                        tx = TXCreateItem(
-                            broker_id=broker_id,
-                            asset_id=asset_id,
-                            type=tx_type,
-                            date=tx_date,
-                            quantity=quantity,
-                            cash=Currency(code=currency, amount=amount) if amount else None,
-                            description=description,
-                            tags=["import", "degiro"],
-                        )
-                        transactions.append(tx)
-
-                    except Exception as e:
-                        warnings.append(f"Row {row_num}: error creating transaction: {e}")
-                        continue
+                    self._create_transaction(
+                        row_num=row_num,
+                        transactions=transactions,
+                        validation_issues=validation_issues,
+                        context=description,
+                        broker_id=broker_id,
+                        asset_id=asset_id,
+                        type=tx_type,
+                        date=tx_date,
+                        quantity=quantity,
+                        cash=Currency(code=currency, amount=amount) if amount else None,
+                        description=description,
+                        tags=["import", "degiro"],
+                    )
 
         except FileNotFoundError:
             raise BRIMParseError(f"File not found: {file_path}") from None
@@ -441,7 +446,12 @@ class DegiroBrokerProvider(BRIMProvider):
             asset_count=len(extracted_assets_typed),
         )
 
-        return BRIMParseOutput(transactions=transactions, warnings=warnings, extracted_assets=extracted_assets_typed)
+        return BRIMParseOutput(
+            transactions=transactions,
+            warnings=warnings,
+            validation_issues=validation_issues,
+            extracted_assets=extracted_assets_typed,
+        )
 
     @property
     def docs_url(self) -> Optional[str]:

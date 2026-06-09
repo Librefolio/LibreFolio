@@ -1,7 +1,7 @@
 # Phase 07 Part 5 — BRIM Import Wizard (v5 — Redesign)
 
 **Date**: 2026-06-08
-**Status**: 🚧 EXECUTING — M1 complete ✅ (Round 3 polish done)
+**Status**: 🚧 EXECUTING — M1 complete ✅, M2 complete ✅ (parse engine + results DataTable), M2-W complete ✅ (structured validation warnings)
 **Supersedes**: `plan-phase07Part5-BRIMImportBridge.prompt.md` (v4)
 **Parent milestone log**: [plan-phase07Part5-M1-ParseAndSee.prompt.md](./plan-phase07Part5-M1-ParseAndSee.prompt.md) (M1 complete, feedback incorporated)
 **M1 detailed plan**: [plan-phase07Part5-M1v2-ImportWizardRebuild.prompt.md](./plan-phase07Part5-M1v2-ImportWizardRebuild.prompt.md)
@@ -236,10 +236,10 @@ let assetMappings = $state<AssetMapping[]>([]);
 | "Parse" button | Shows count. Disabled if 0 selected |
 | Back → Step 1 | Keeps uploaded files, clears file selections |
 
-**Why per-broker plugin (not per-file)**:
-- 99% of cases: all files from one broker use the same plugin
-- Simplifies UX enormously
-- Edge case (mixed formats from same broker) → re-run wizard for the other files with different plugin
+**Per-file plugin** (M1 R2 deviation):
+- Originally per-broker, changed to per-file during M1 based on user feedback
+- Each file row in DataTable has its own `ImportPluginSelect` column
+- Smart auto-selection: sorted `compatible_plugins` by `detection_priority`, broker default preferred
 
 ---
 
@@ -511,50 +511,180 @@ importWizard.fileStatus.uploaded, .parsed, .stale, .error
 
 ---
 
-## 8. Milestone 2: Step 3 (Parse)
+## 8. Milestone 2: Step 3 (Parse) — REVISED ✅
+
+### M2 Execution Status ✅ (2026-06-08)
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| ParsedFileResult types + state | ✅ | Interface, 8 state vars, 7 derived, computeParseHash() |
+| Parse engine (doParseAll + initParseResults) | ✅ | Sequential with abortParsing flag, cache via hash |
+| Parse cache | ✅ | Hash comparison, "Using cached results" badge, re-parse button |
+| Step 3 body (progress bar + DataTable) | ✅ | 7 columns, animated progress bar, row actions |
+| Aggregate summary panel | ✅ | 4-stat grid: TX, assets, warnings, duplicates |
+| ParseDetailModal | ✅ | New file 178 lines — TX by type, assets, duplicates, warnings |
+| Step 3 footer | ✅ | Status indicator (parsing/errors/success/cached) + Continue |
+| goNext/goBack wiring | ✅ | Auto-parse on entry, abort on back, cache preserved |
+| i18n (4 languages × 27 keys) | ✅ | All M2 keys added |
+| hasUnsavedWork + header | ✅ | Extended, version bumped to M2 |
+
+**Deviations from plan**:
+- `preview_columns` → already deprecated in plan §8.5, no frontend consumption
+- No `@const` inside `<section>` in Svelte 5 → used `{#if}` wrapper pattern
+- `TXCreateItem.type` (not `tx_type`) — correct field name from schema
+
+**Related Audit**:
+- [BRIM Plugin Sign Audit (2026-06-08)](brim-plugin-sign-audit-2026-06-08.md)
+
+### 8.0 Deviations from original plan
+
+| Original | Revised | Reason |
+|----------|---------|--------|
+| Per-broker plugin code | **Per-file** `pluginCode` from `FileSelection` | User-requested in M1 R2 |
+| Manual HTML table for results | **DataTable<ParsedFileResult>** | Consistency with M1; reuse sorting/filtering/actions |
+| `preview_columns` for TX display | **Universal TXCreateItem columns** | `preview_columns` was for v4 Staging Modal; see §8.5 |
+| Parse cache in M4 | **Parse cache in M2** | Easy to implement, avoids re-parsing on back-navigation |
 
 ### 8.1 Parse engine
 
 ```ts
+interface ParsedFileResult {
+    fileId: string;
+    fileName: string;
+    brokerId: number;
+    pluginUsed: string;     // from FileSelection.pluginCode
+    status: 'pending' | 'parsing' | 'done' | 'error';
+    response: BRIMParseResponse | null;
+    errorMessage?: string;
+}
+
+let parseResults = $state<ParsedFileResult[]>([]);
+let abortParsing = $state(false);
+
 async function doParseAll() {
+    abortParsing = false;
     for (const file of parseResults) {
+        if (abortParsing) break;
         if (file.status !== 'pending') continue;
         file.status = 'parsing';
+        parseResults = [...parseResults]; // trigger reactivity
         try {
-            const res = await zodiosApi.post(`/files/${file.fileId}/parse`, {
-                plugin_code: file.pluginCode || undefined
-            });
-            file.response = res;
+            const res = await zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post(
+                {plugin_code: file.pluginUsed, broker_id: file.brokerId},
+                {params: {file_id: file.fileId}}
+            );
+            file.response = res as BRIMParseResponse;
             file.status = 'done';
         } catch (e) {
             file.status = 'error';
             file.errorMessage = extractErrorMessage(e);
         }
+        parseResults = [...parseResults]; // trigger reactivity
     }
 }
 ```
 
 - Sequential (not parallel) — avoids overloading backend
+- `abortParsing` flag: checked between files, set by Back button
 - Progress bar: `completedCount / totalCount`
 - Live summary updates after each file completes
 - "Continue" enabled when all files have terminal status AND ≥1 done
 
-### 8.2 Back from Step 3
+### 8.2 Results DataTable
 
-- If parsing in progress → stop iterating (abort flag)
-- Clear `parseResults`
-- Return to Step 2 with selections preserved
+**DataTable<ParsedFileResult>** with columns:
 
-### 8.3 i18n keys (M2)
+| Column | Type | Content |
+|--------|------|---------|
+| File | text | `fileName` |
+| Broker | custom | BrokerIcon + name |
+| Plugin | text | pluginUsed name |
+| Status | badge | pending/parsing/done/error (animated spinner for parsing) |
+| TX | number | `response?.transactions.length ?? '—'` |
+| Assets | text | `"{total} ({unresolved}?)"` from asset_mappings |
+| Warnings | number | `response?.warnings.length ?? '—'` |
+
+**Row actions**:
+- 👁️ **View Detail**: opens an inline expandable section (or sub-modal) showing that file's parse summary:
+  - Transaction count by type (BUY: N, SELL: N, DIVIDEND: N, ...)
+  - Unresolved assets list with extracted names
+  - Duplicate report summary (unique / possible / likely counts)
+  - Warning messages
+  - This is a **summary card**, not a full TX table — the full TX review is Step 4
+
+**Aggregate summary** below the table:
+- 📊 N transactions total (across K files)
+- 🔗 N unique assets, M need resolution
+- ⚠️ N warnings total
+- 📋 N likely duplicates
+
+### 8.3 Parse cache
+
+On entering Step 3, hash `selectedFiles` (sorted fileId+pluginCode). If hash matches previous parse run and all results have terminal status → skip re-parsing, show cached results with "Using cached results" badge.
+
+```ts
+let lastParseHash = $state<string | null>(null);
+
+function computeParseHash(): string {
+    const sorted = [...selectedFiles]
+        .sort((a, b) => a.fileId.localeCompare(b.fileId))
+        .map(f => `${f.fileId}:${f.pluginCode}`);
+    return sorted.join('|');
+}
+```
+
+"Re-parse" button in summary area to force re-parse even when cached.
+
+### 8.4 Back from Step 3
+
+- If parsing in progress → set `abortParsing = true`, wait for current file to finish
+- Clear `parseResults` ONLY if going back to Step 1 (file changes invalidate results)
+- Going back to Step 2 → preserve `parseResults` (cache applies on re-entry)
+
+### 8.5 Decision: `preview_columns` NOT used in v5
+
+`preview_columns` (per-plugin column metadata) was designed for the v4 "Staging Modal" — a modal that would display parsed transactions in a plugin-specific dynamic table.
+
+In v5, this role is handled by:
+- **Step 3**: per-file summary card (row action) — shows aggregated stats, not raw TX rows
+- **Step 4**: full DataTable with universal `TXCreateItem`-derived columns (date, type, asset, quantity, cash, etc.)
+
+Since `BRIMParseResponse.transactions` returns `TXCreateItem[]` (fixed schema), all plugins produce the same field set. The only "dynamic" part is the `asset` name (resolved via `asset_mappings`), which is handled by Step 4's asset resolution UI.
+
+**`preview_columns` kept in backend** (no breaking change, used by tests, useful for future lightweight previews) but **NOT consumed by the frontend wizard**.
+
+### 8.6 i18n keys (M2)
 
 ```
 importWizard.parsing, importWizard.parsingProgress
 importWizard.parseComplete, importWizard.parseFailed
 importWizard.txFound, importWizard.assetsDetected, importWizard.unresolvedAssets
-importWizard.warnings, importWizard.errors, importWizard.continue
+importWizard.warningsCount, importWizard.errorsCount, importWizard.continue
 importWizard.fileDone, importWizard.fileError, importWizard.filePending
-importWizard.summary
+importWizard.fileParsing
+importWizard.summary, importWizard.viewDetail
+importWizard.cachedResults, importWizard.reparse
+importWizard.txByType, importWizard.duplicatesSummary
+importWizard.likelyDuplicates, importWizard.possibleDuplicates, importWizard.uniqueTx
 ```
+
+### 8.7 M2-W: Structured Validation Warnings ✅ (2026-06-08)
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| `BRIMValidationIssue` schema | ✅ | row, code, message, field, params, context — in `brim.py` |
+| `_create_transaction()` base method | ✅ | In `BRIMProvider` — wraps `TXCreateItem()`, catches `ValidationError`, unpacks `multipleBusinessRuleErrors` into individual issues |
+| All 11 plugins migrated | ✅ | Replaced try/except with `self._create_transaction()` |
+| API wiring | ✅ | `validation_issues` flows through `BRIMParseResponse` |
+| Zodios client regenerated | ✅ | `BrimValidationIssue` type exported |
+| ParseDetailModal — Validation Issues section | ✅ | Uses `resolveIssueMessage()` from BulkModal, amber styling |
+| ImportWizardModal — issue count column + summary stat | ✅ | 5-col summary grid, `issueCount` in DataTable |
+| i18n keys (4 languages × 4 keys) | ✅ | validationIssues, validationIssueCount, noValidationIssues, issueRow |
+| Backend tests | ✅ | 14/14 passing (test_brim_create_transaction.py) |
+| BRIM provider integration tests | ✅ | 20/20 passing |
+| Frontend build | ✅ | 0 errors, 0 warnings |
+
+**Architecture**: Parent-takes-responsibility pattern — plugins provide kwargs, `_create_transaction()` creates `TXCreateItem`, catches validation errors, extracts structured issues from Pydantic `e.errors()`. Two separate channels: `validation_issues` (structured, localizable via `resolveIssueMessage`) vs `warnings` (free-text plugin messages).
 
 ---
 
@@ -686,12 +816,7 @@ function onStepClick(target: number) {
 }
 ```
 
-### 10.2 Parse cache
-
-If user returns to Step 3 but `selectedFiles` haven't changed since last parse:
-- Skip re-parsing, reuse `parseResults`
-- Show "Using cached results" badge
-- User can force re-parse with a "Re-parse" button
+### 10.2 ~~Parse cache~~ → Moved to M2 (§8.3)
 
 ### 10.3 Pending ops duplicate check
 
@@ -722,7 +847,6 @@ function detectPendingOpDuplicates() {
 ### 10.5 i18n keys (M4)
 
 ```
-importWizard.cachedResults, importWizard.reparse
 importWizard.importedCount, importWizard.discardConfirm
 importWizard.matchesPendingOp
 ```
