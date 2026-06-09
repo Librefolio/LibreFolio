@@ -63,6 +63,8 @@ from backend.app.schemas.brim import (
     # Duplicate detection
     BRIMDuplicateMatch,
     BRIMDuplicateReport,
+    # Field todos (intentionally incomplete fields in accepted TX)
+    BRIMFieldTodo,
     # File management
     BRIMFileInfo,
     # Enums
@@ -73,6 +75,8 @@ from backend.app.schemas.brim import (
     BRIMParseResponse,
     BRIMPluginInfo,
     BRIMTXDuplicateCandidate,
+    # Validation issues (structured errors from TXCreateItem construction)
+    BRIMValidationIssue,
     is_fake_asset_id,
 )
 from backend.app.schemas.brokers import (
@@ -316,4 +320,6 @@ __all__ = [
     "BRIMDuplicateReport",
     "BRIMParseRequest",
     "BRIMParseResponse",
+    "BRIMValidationIssue",
+    "BRIMFieldTodo",
 ]

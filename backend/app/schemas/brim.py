@@ -368,6 +368,34 @@ class BRIMValidationIssue(BaseModel):
     context: Optional[str] = Field(default=None, description="Extra context from plugin (e.g. row description)")
 
 
+# =============================================================================
+# FIELD_TODO (intentionally incomplete field in accepted TX)
+# =============================================================================
+
+
+class BRIMFieldTodo(BaseModel):
+    """A field in an accepted transaction that the plugin left intentionally incomplete.
+
+    Three output channels from a BRIM parse:
+    - ``warnings: List[str]``                      — free-text: skipped rows, unknown types
+    - ``validation_issues: List[BRIMValidationIssue]`` — TX rejected by Pydantic validation
+    - ``field_todos: List[BRIMFieldTodo]``          — TX accepted, but field needs manual input
+
+    Used for cases where the plugin cannot determine the correct value automatically
+    (e.g. corporate actions where cost_basis_override requires user input).
+    Severity ``blocker`` means Step 4 cannot proceed without resolution.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    tx_index: int = Field(..., description="Index into transactions[] (0-based)")
+    field: str = Field(..., description="TXCreateItem field name that needs input (e.g. 'cost_basis_override')")
+    severity: Literal["blocker", "warning"] = Field(..., description="blocker = Step 4 gated; warning = informational")
+    reason_code: str = Field(..., description="Machine-readable reason (e.g. 'stock_merger', 'spin_off', 'corporate_action')")
+    message: str = Field(..., description="Human-readable fallback message (English)")
+    context: Optional[Dict[str, Any]] = Field(default=None, description="Extra params for i18n (e.g. {old_ticker, new_ticker})")
+
+
 class BRIMParseResponse(BaseModel):
     """
     Response from parsing a broker report file.
@@ -394,6 +422,7 @@ class BRIMParseResponse(BaseModel):
     duplicates: Optional[BRIMDuplicateReport] = Field(default=None, description="Duplicate detection results")
     warnings: List[str] = Field(default_factory=list, description="Parser warnings (skipped rows, ambiguous data, etc.)")
     validation_issues: List[BRIMValidationIssue] = Field(default_factory=list, description="Structured validation errors from TXCreateItem construction")
+    field_todos: List[BRIMFieldTodo] = Field(default_factory=list, description="Fields in accepted transactions that require manual user input")
 
 
 # =============================================================================
@@ -419,6 +448,7 @@ class BRIMParseOutput(BaseModel):
     transactions: List[TXCreateItem] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
     validation_issues: List[BRIMValidationIssue] = Field(default_factory=list)
+    field_todos: List[BRIMFieldTodo] = Field(default_factory=list)
     extracted_assets: Dict[int, BRIMExtractedAssetInfo] = Field(default_factory=dict)
 
 

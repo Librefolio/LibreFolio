@@ -1063,35 +1063,49 @@
                         {@const hasFilter = columnFilters[column.id] !== undefined}
                         <th class="th-data" class:sortable={column.sortable !== false && enableSorting} style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {column.minWidth || 60}px;">
                             <div class="header-content">
-                                <button type="button" class="header-sort-btn" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
-                                    <span class="header-text">{getColumnLabel(column)}</span>
-                                    {#if column.sortable !== false && enableSorting}
-                                        <span class="sort-icon">
-                                            {#if sortDir === 'asc'}
-                                                <ChevronUp size={14} />
-                                            {:else if sortDir === 'desc'}
-                                                <ChevronDown size={14} />
-                                            {:else}
-                                                <ChevronsUpDown size={14} />
-                                            {/if}
-                                        </span>
-                                    {/if}
-                                </button>
-
-                                <!-- Header tooltip (info icon) -->
                                 {#if getColumnTooltip(column)}
+                                    {@const tooltipText = getColumnTooltip(column) ?? ''}
+                                    <Tooltip text={tooltipText} position="bottom">
+                                        <button type="button" class="header-sort-btn" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
+                                            <span class="header-text">{getColumnLabel(column)}</span>
+                                            {#if column.sortable !== false && enableSorting}
+                                                <span class="sort-icon">
+                                                    {#if sortDir === 'asc'}
+                                                        <ChevronUp size={14} />
+                                                    {:else if sortDir === 'desc'}
+                                                        <ChevronDown size={14} />
+                                                    {:else}
+                                                        <ChevronsUpDown size={14} />
+                                                    {/if}
+                                                </span>
+                                            {/if}
+                                        </button>
+                                    </Tooltip>
+                                {:else}
+                                    <button type="button" class="header-sort-btn" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
+                                        <span class="header-text">{getColumnLabel(column)}</span>
+                                        {#if column.sortable !== false && enableSorting}
+                                            <span class="sort-icon">
+                                                {#if sortDir === 'asc'}
+                                                    <ChevronUp size={14} />
+                                                {:else if sortDir === 'desc'}
+                                                    <ChevronDown size={14} />
+                                                {:else}
+                                                    <ChevronsUpDown size={14} />
+                                                {/if}
+                                            </span>
+                                        {/if}
+                                    </button>
+                                {/if}
+
+                                <!-- Header tooltip info icon (only when no emoji/text tooltip) -->
+                                {#if getColumnTooltip(column) && getColumnTooltipUrl(column)}
                                     {@const tooltipText = getColumnTooltip(column) ?? ''}
                                     {@const tooltipUrl = getColumnTooltipUrl(column)}
                                     <Tooltip text={tooltipText} position="bottom" math={tooltipText.includes('$')}>
-                                        {#if tooltipUrl}
-                                            <a href={tooltipUrl} target="_blank" rel="noopener noreferrer" class="header-tooltip-icon header-tooltip-link" onclick={(e) => e.stopPropagation()}>
-                                                <Info size={12} />
-                                            </a>
-                                        {:else}
-                                            <span class="header-tooltip-icon">
-                                                <Info size={12} />
-                                            </span>
-                                        {/if}
+                                        <a href={tooltipUrl} target="_blank" rel="noopener noreferrer" class="header-tooltip-icon header-tooltip-link" onclick={(e) => e.stopPropagation()}>
+                                            <Info size={12} />
+                                        </a>
                                     </Tooltip>
                                 {/if}
 

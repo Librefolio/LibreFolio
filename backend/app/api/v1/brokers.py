@@ -739,6 +739,7 @@ async def parse_file(
         transactions = parse_output.transactions
         warnings = parse_output.warnings
         validation_issues = parse_output.validation_issues
+        field_todos = parse_output.field_todos
         extracted_assets = parse_output.extracted_assets
 
         # 2. Build asset mappings (CORE responsibility)
@@ -785,6 +786,7 @@ async def parse_file(
             duplicates=duplicates,
             warnings=warnings,
             validation_issues=validation_issues,
+            field_todos=field_todos,
         )
 
         # Cache the parse result in file metadata for later retrieval.

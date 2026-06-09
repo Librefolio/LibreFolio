@@ -176,6 +176,14 @@ def populate_brokers(session: Session):
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
+        {
+            "name": "Charles Schwab",
+            "description": "US full-service broker for stocks, ETFs, and options",
+            "portal_url": "https://www.schwab.com",
+            "brim_plugin_key": "broker_schwab",
+            "allow_cash_overdraft": False,
+            "allow_asset_shorting": False,
+        },
     ]
 
     for broker_data in brokers:
@@ -2759,6 +2767,7 @@ def upload_broker_reports(session: Session):
         "eToro": "etoro-export.csv",
         "Coinbase": "coinbase-export.csv",
         "Recrowd": "generic_simple.csv",
+        "Charles Schwab": "schwab-export.csv",
     }
 
     # Get admin user for uploaded_by_user_id
