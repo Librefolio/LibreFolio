@@ -55,7 +55,7 @@ from backend.app.schemas.transactions import (
     tags_to_csv,
 )
 from backend.app.schemas.wac import WACPreviewResultItem
-from backend.app.services.wac_service import compute_wac_iterative
+from backend.app.services.portfolio_service import compute_wac_iterative
 from backend.app.utils.datetime_utils import parse_ISO_date, utcnow
 
 

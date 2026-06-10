@@ -35,12 +35,12 @@ All'apertura della modale viene mostrato un grafico a bolle per visualizzare vis
 |  DETTAGLIO TRANCHE / LOTTI (FIFO) — Apple (AAPL)                       [X]  |
 +-----------------------------------------------------------------------------+
 |                                                                             |
-|   ANDAMENTO WAC E VALORE ASSET (Stacked Chart)                              |
+|   ANDAMENTO WAC E VALORE ASSET  [EUR | %]                                   |
 |                                                                             |
-|    USD                                                                      |
-|    200 |                                            ****  <- Valore Mercato |
+|    EUR (o % se attivato)                                                    |
+|    200 |                                            ****  <- Val. Mercato / TWRR %|
 |        |                                        ****                        |
-|    150 |       ---------------------------------          <- PMC/WAC        |
+|    150 |       ---------------------------------          <- PMC / ROI %    |
 |        |      /                                                             |
 |    100 +-----+---------------------------------------------------------->   |
 |         Gen   Feb   Mar   Apr   Mag   Giu   Lug   Ago                       |
@@ -93,7 +93,7 @@ Per renderizzare questo tab, il frontend necessita delle seguenti funzionalità:
 * **Lotti FIFO (`GET /api/v1/portfolio/lots`)**: Il backend deve restituire, filtrando per `broker_id` e `asset_id`, i dati FIFO:
   * `open_lots`: Array di acquisti non completamente venduti (con `original_qty`, `remaining_qty`, data, prezzo di carico e P&L % attuale).
   * `closed_lots`: Array di transazioni di vendita collegate agli acquisti originali (data acq., data vend., qty, prezzo vend., P&L realizzato).
-* **Serie Storica WAC vs Prezzo (`GET /api/v1/portfolio/asset-history`)**: Serve una serie storica che affianchi il WAC dell'utente in ogni data al prezzo di chiusura di mercato. **(Audit Fix)**: Per evitare di fare l'overload dello schema di `GET /api/v1/portfolio/history` (che ritorna Liquidità/Investito/NAV), useremo un endpoint dedicato `asset-history`. Passando in input il `broker_id` e l'`asset_id`, questo nuovo endpoint restituirà `date`, `wac_value` e `market_price`, mantenendo gli schemi OpenAPI puliti e staticamente tipizzati.
+* **Serie Storica WAC vs Prezzo (`GET /api/v1/portfolio/asset-history`)**: Serve una serie storica che affianchi il WAC dell'utente in ogni data al prezzo di chiusura di mercato. **(Audit Fix)**: Per evitare di fare l'overload dello schema di `GET /api/v1/portfolio/history` (che ritorna Liquidità/Investito/NAV), useremo un endpoint dedicato `asset-history`. Passando in input il `broker_id` e l'`asset_id`, questo nuovo endpoint restituirà `date`, `wac_value`, `market_price` e le metriche percentuali `roi` e `twrr`, per supportare lo switch `[EUR | %]`.
 * **Componenti UI Nuovi**:
   * Grafico "Bubble Timeline" con interazione.
   * Grafico "Stacked Line" per WAC e Prezzo.

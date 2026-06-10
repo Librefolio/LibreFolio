@@ -1,5 +1,5 @@
 """
-Unit tests for backend/app/utils/financial_utils.py.
+Unit tests for backend/app/utils/financial/wac_utils.py.
 
 Pure math tests — no server, no DB, no async.
 Tests compute_wac_from_txlist() and determine_target_currency().
@@ -8,7 +8,7 @@ Tests compute_wac_from_txlist() and determine_target_currency().
 from datetime import date
 from decimal import Decimal
 
-from backend.app.utils.financial_utils import (
+from backend.app.utils.financial.wac_utils import (
     WACInputTX,
     compute_wac_from_txlist,
     determine_target_currency,

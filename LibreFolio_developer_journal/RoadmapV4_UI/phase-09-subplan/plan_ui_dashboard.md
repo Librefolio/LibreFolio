@@ -21,9 +21,9 @@ Consente di filtrare per uno o più broker tramite un pannello a comparsa (popov
 |   +--------------------------+  +--------------------------+  +--------------------------+      |
 |                                                                                                 |
 |   +------------------------------------------------+  +--------------------------------------+  |
-|   | ANDAMENTO DEL PORTAFOGLIO (GROWTH)             |  | ALLOCAZIONE PATRIMONIALE             |  |
+|   | ANDAMENTO DEL PORTAFOGLIO (GROWTH)  [EUR | % ] |  | ALLOCAZIONE PATRIMONIALE             |  |
 |   |                                                |  | [Tipo Asset] [Settore] [Geografica]  |  |
-|   |  EUR                                           |  |                                      |  |
+|   |  EUR (o Percentuale se vista %)                |  |                                      |  |
 |   |  150k +                                 ..**   |  |         _.._   [■] ETF     (45%)     |  |
 |   |       |                             ..**       |  |       .'    '. [■] AZIONI  (30%)     |  |
 |   |  100k |                         ..** - - -     |  |      /  (•)   \ [■] CRYPTO  (15%)     |  |
@@ -32,9 +32,9 @@ Consente di filtrare per uno o più broker tramite un pannello a comparsa (popov
 |   |       |             ..**                       |  |       '.__..'                        |  |
 |   |     0 +---*---*---*---*---*---*---*---*---*--->|  |  ( ) MAPPA DEL MONDO                 |  |
 |   |         Gen Feb Mar Apr Mag Giu Lug Ago Set    |  |  Mappa a calore basata sul paese     |  |
-|   |         [■] Valore Teorico NAV (Linea 3)       |  |  dell'asset, con 'Unknown' separato  |  |
-|   |         [- -] Capitale Investito (Linea 2)     |  |                                      |  |
-|   |         [....] Liquidità Disponibile (Linea 1) |  |                                      |  |
+|   |         [■] Valore NAV / MWRR                  |  |  dell'asset, con 'Unknown' separato  |  |
+|   |         [- -] Capitale Invest. / TWRR          |  |                                      |  |
+|   |         [....] Liquidità / ROI Semplice        |  |                                      |  |
 |   +------------------------------------------------+  +--------------------------------------+  |
 |                                                                                                 |
 |   +------------------------------------------------------------------------------------------+  |
@@ -68,6 +68,7 @@ Per renderizzare questa schermata, il frontend necessita delle seguenti funziona
   * Dati aggregati per le 3 allocazioni: `allocation_by_type`, `allocation_by_sector`, `allocation_by_geography`.
   * **Breakdown per Broker (Opzionale)**: Supporta il query parameter `?include_breakdown=true` (default `false`). Se attivo, include un array `by_broker: [{broker_id, net_worth, ...}]` per fornire agilmente i saldi alla pagina "Global Brokers" senza fare chiamate multiple, eseguendo i calcoli N+1 in memoria (super-veloce) dopo un solo fetch I/O.
 * **`GET /api/v1/portfolio/history`**: Endpoint che restituisce (filtrando per `broker_id` opzionali e `date_range`):
-  * Serie storica aggregata giornaliera: `date`, `cash_value`, `invested_value`, `nav_value` (per popolare il grafico a 3 linee).
+  * Serie storica aggregata giornaliera: `date`, `cash_value`, `invested_value`, `nav_value` (per la vista EUR).
+  * Serie storica percentuale: `twrr`, `mwrr`, `roi` (per la vista % attivabile dal toggle `[EUR | %]`).
 
 *Nota*: le formule matematiche core (TWRR, MWRR) dovranno essere calcolate in backend (all'interno di `roi_utils.py` orchestrato da `portfolio_service.py`) per garantire consistenza dei dati.
