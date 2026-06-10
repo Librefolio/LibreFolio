@@ -2,26 +2,39 @@
 Analytics API endpoints for LibreFolio.
 
 Provides read-only analytics on committed data:
-- POST /analytics/wac — WAC time series per (broker, asset)
+- POST /analytics/wac    — WAC time series per (broker, asset)
+- GET  /portfolio/summary      — Aggregated portfolio KPIs, allocations, holdings
+- GET  /portfolio/history      — Daily cash/invested/NAV series
+- GET  /portfolio/asset-history — WAC vs market price series for one asset
+- GET  /portfolio/lots          — FIFO open and closed lots for one (broker, asset)
 """
 
-from fastapi import APIRouter, Depends
+from datetime import date as date_type
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset
+from backend.app.api.v1.auth import get_current_user
+from backend.app.db.models import Asset, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.analytics import (
+    AssetHistoryPoint,
+    FIFOLotsResponse,
+    PortfolioHistoryPoint,
+    PortfolioSummary,
     WACAnalyticsRequest,
     WACAnalyticsResponse,
     WACAnalyticsResultItem,
     WACSeriesPoint,
 )
-from backend.app.services.wac_service import compute_wac_iterative
+from backend.app.services.portfolio_service import PortfolioService, compute_wac_iterative
 
 logger = get_logger(__name__)
 
 analytics_router = APIRouter(prefix="/analytics", tags=["Analytics"])
+portfolio_router = APIRouter(prefix="/portfolio", tags=["Portfolio"])
 
 
 @analytics_router.post(
@@ -116,4 +129,95 @@ async def analytics_wac(
         )
 
     return WACAnalyticsResponse(results=results)
+
+
+# =============================================================================
+# PORTFOLIO ENDPOINTS
+# =============================================================================
+
+
+@portfolio_router.get(
+    "/summary",
+    response_model=PortfolioSummary,
+    summary="Portfolio summary",
+    description="Aggregated portfolio KPIs: net worth, gain/loss, TWRR, MWRR, allocations, holdings.",
+)
+async def get_portfolio_summary(
+    broker_ids: Optional[list[int]] = Query(None, description="Filter by broker IDs"),
+    include_breakdown: bool = Query(False, description="Include per-broker breakdown in by_broker field"),
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> PortfolioSummary:
+    """Return aggregated portfolio summary for the authenticated user."""
+    service = PortfolioService(session)
+    return await service.get_summary(
+        user_id=current_user.id,
+        broker_ids=broker_ids,
+        include_breakdown=include_breakdown,
+    )
+
+
+@portfolio_router.get(
+    "/history",
+    response_model=list[PortfolioHistoryPoint],
+    summary="Portfolio value history",
+    description="Daily time series of cash, invested capital, and NAV for the portfolio.",
+)
+async def get_portfolio_history(
+    broker_ids: Optional[list[int]] = Query(None, description="Filter by broker IDs"),
+    date_from: Optional[date_type] = Query(None, description="Start date (inclusive)"),
+    date_to: Optional[date_type] = Query(None, description="End date (inclusive)"),
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> list[PortfolioHistoryPoint]:
+    """Return daily portfolio value series (cash, invested, NAV)."""
+    service = PortfolioService(session)
+    return await service.get_history(
+        user_id=current_user.id,
+        broker_ids=broker_ids,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@portfolio_router.get(
+    "/asset-history",
+    response_model=list[AssetHistoryPoint],
+    summary="Asset WAC vs market price history",
+    description="Time series of WAC (cost basis per unit) vs market price for a specific asset.",
+)
+async def get_asset_history(
+    asset_id: int = Query(..., description="Asset ID"),
+    broker_id: Optional[int] = Query(None, description="Optional broker filter"),
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> list[AssetHistoryPoint]:
+    """Return WAC vs market price series for a specific asset."""
+    service = PortfolioService(session)
+    return await service.get_asset_history(
+        user_id=current_user.id,
+        asset_id=asset_id,
+        broker_id=broker_id,
+    )
+
+
+@portfolio_router.get(
+    "/lots",
+    response_model=FIFOLotsResponse,
+    summary="FIFO lots for an asset",
+    description="Open and closed FIFO lots for a specific asset in a specific broker.",
+)
+async def get_fifo_lots(
+    broker_id: int = Query(..., description="Broker ID"),
+    asset_id: int = Query(..., description="Asset ID"),
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> FIFOLotsResponse:
+    """Return FIFO open and closed lots for a (broker, asset) pair."""
+    service = PortfolioService(session)
+    return await service.get_lots(
+        user_id=current_user.id,
+        broker_id=broker_id,
+        asset_id=asset_id,
+    )
 
