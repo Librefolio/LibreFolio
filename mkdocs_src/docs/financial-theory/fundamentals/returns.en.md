@@ -121,37 +121,13 @@ For more details, see [Day Count Conventions](day-count.md).
 
 ## 💰 Portfolio Return Methods
 
-When a portfolio has **cash flows** (deposits, withdrawals), a single return formula is not enough. Two methods exist to isolate performance from cash flow effects:
+When a portfolio has **cash flows** (deposits, withdrawals), a single return formula is not enough, because capital injections or withdrawals would dilute or artificially inflate the percentage return.
 
-### ⏱️ Time-Weighted Return (TWR)
+To solve this, advanced performance metrics are used:
+- **TWRR (Time-Weighted Rate of Return):** Isolates the performance of the assets, ignoring the investor's cash flow timing.
+- **MWRR (Money-Weighted Rate of Return):** Measures the investor's personal performance, taking cash flow timing into account.
 
-Eliminates the effect of cash flows by computing sub-period returns between each flow event and chaining them:
-
-$$
-R_{TWR} = \prod_{i=1}^{n} (1 + r_i) - 1
-$$
-
-- Measures **pure portfolio performance** regardless of deposit/withdrawal timing
-- Used by fund managers for benchmarking (GIPS-compliant)
-- Not affected by investor behavior (adding money at peaks, withdrawing at lows)
-
-### 💵 Money-Weighted Return (MWR / IRR)
-
-Accounts for the **timing and size** of cash flows — the internal rate of return that sets the NPV of all flows to zero:
-
-$$
-0 = \sum_{i=0}^{n} \frac{CF_i}{(1 + r)^{t_i}}
-$$
-
-where $CF_i$ is each cash flow (deposits positive, withdrawals negative, final portfolio value positive).
-
-- Measures **investor-specific experience** (your actual return given when you added/removed cash)
-- Penalizes bad timing (depositing at highs, withdrawing at lows)
-- Used for personal portfolio performance
-
-!!! info "Which one does LibreFolio use?"
-
-    LibreFolio will compute both TWR and MWR in the portfolio analytics dashboard. TWR for benchmark comparison, MWR for personal performance assessment.
+For a deep dive into how these metrics work, why they differ, and how LibreFolio uses them, see the dedicated [Performance Metrics](../technical-analysis/performance-metrics/index.md) chapter.
 
 ---
 

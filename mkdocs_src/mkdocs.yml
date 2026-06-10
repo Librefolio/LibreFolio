@@ -171,6 +171,7 @@ plugins:
             Linear Growth: Crescita Lineare
             Compound Growth: Crescita Composta
             Sine Wave: Onda Sinusoidale
+            Performance Metrics: Metriche di Performance
             Fundamentals: Fondamenti
             Day Count Conventions: Convenzioni di Conteggio Giorni
             "Returns & Growth Rates": "Rendimenti & Tassi di Crescita"
@@ -297,6 +298,7 @@ plugins:
             Linear Growth: Croissance Linéaire
             Compound Growth: Croissance Composée
             Sine Wave: Onde Sinusoïdale
+            Performance Metrics: Métriques de Performance
             Fundamentals: Fondamentaux
             Day Count Conventions: Conventions de Décompte des Jours
             "Returns & Growth Rates": "Rendements & Taux de Croissance"
@@ -423,6 +425,7 @@ plugins:
             Linear Growth: Crecimiento Lineal
             Compound Growth: Crecimiento Compuesto
             Sine Wave: Onda Sinusoidal
+            Performance Metrics: Métricas de Rendimiento
             Fundamentals: Fundamentos
             Day Count Conventions: Convenciones de Conteo de Días
             "Returns & Growth Rates": "Rendimientos & Tasas de Crecimiento"
@@ -580,6 +583,18 @@ nav:
               - Linear Growth: financial-theory/technical-analysis/synthetic-benchmarks/linear.md
               - Compound Growth: financial-theory/technical-analysis/synthetic-benchmarks/compound.md
               - Sine Wave: financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md
+          - Performance Metrics:
+              - Overview: financial-theory/technical-analysis/performance-metrics/index.md
+              - ROI: financial-theory/technical-analysis/performance-metrics/roi.md
+              - TWRR: financial-theory/technical-analysis/performance-metrics/twrr.md
+              - MWRR: financial-theory/technical-analysis/performance-metrics/mwrr.md
+              - Weighted Average Cost: financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md
+          - Risk Metrics:
+              - Overview: financial-theory/technical-analysis/risk-metrics/index.md
+              - Sharpe Ratio: financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md
+              - Sortino Ratio: financial-theory/technical-analysis/risk-metrics/sortino-ratio.md
+              - Max Drawdown: financial-theory/technical-analysis/risk-metrics/max-drawdown.md
+              - Volatility: financial-theory/technical-analysis/risk-metrics/volatility.md
       - Fundamentals:
           - Overview: financial-theory/fundamentals/index.md
           - Day Count Conventions: financial-theory/fundamentals/day-count.md
@@ -589,13 +604,6 @@ nav:
           - Overview: financial-theory/portfolio-theory/index.md
           - Diversification: financial-theory/portfolio-theory/diversification.md
           - Asset Allocation: financial-theory/portfolio-theory/asset-allocation.md
-          - Weighted Average Cost: financial-theory/portfolio-theory/weighted-average-cost.md
-          - Risk Metrics:
-              - Overview: financial-theory/portfolio-theory/risk-metrics/index.md
-              - Sharpe Ratio: financial-theory/portfolio-theory/risk-metrics/sharpe-ratio.md
-              - Sortino Ratio: financial-theory/portfolio-theory/risk-metrics/sortino-ratio.md
-              - Max Drawdown: financial-theory/portfolio-theory/risk-metrics/max-drawdown.md
-              - Volatility: financial-theory/portfolio-theory/risk-metrics/volatility.md
   - Developer Manual:
       - System Overview: developer/index.md
       - Dev Installation: developer/dev-installation.md
