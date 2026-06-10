@@ -68,6 +68,14 @@ Le allocazioni mostrate nella Dashboard e nei Broker saranno pesate in base al *
   * **Calcoli ROI e Financial Utils (`backend/app/utils/financial/`)**: Implementazione delle formule matematiche TWRR (valutazione periodale in base ai flussi) e MWRR (IRR sui flussi di cassa) in moduli dedicati, trattandoli come componenti di dominio matematico-finanziario isolati e riutilizzabili.
   * **Endpoint API (`backend/app/api/v1/analytics.py`)**: Conterrà l'esposizione web degli endpoint di portfolio/analytics.
 
+### 1.1. Backend Patch: Serie Temporali Percentuali (TWRR, MWRR, ROI)
+* **Situazione Attuale**: L'implementazione base della Milestone 1 ha correttamente erogato TWRR/MWRR come snapshot finale nel `summary`. Le serie storiche (`/history` e `/asset-history`) attualmente restituiscono i valori assoluti (EUR) in piena conformità con il piano originale.
+* **Intervento Richiesto**:
+  * Poiché abbiamo recentemente deciso di implementare un toggle `[EUR | %]`, dobbiamo aggiornare l'API per erogare anche le versioni "in serie".
+  * Modificare i modelli Pydantic `PortfolioHistoryPoint` e `AssetHistoryPoint` in `schemas/analytics.py` per accogliere i nuovi campi opzionali `twrr`, `mwrr` e `roi`.
+  * Aggiornare `portfolio_service.py` affinché invochi le funzioni `calculate_twrr_series` e `calculate_mwrr_series` (già scritte e pronte in `roi_utils.py`) per popolare questi nuovi campi nei payload di output.
+  * *Open Question per te:* Dato che il MWRR rolling iterativo è computazionalmente pesante (deve rifare il root-finding di Newton per ogni giorno del grafico), vogliamo provarci comunque o vogliamo escludere l'MWRR dalle serie storiche (lasciandolo solo nel summary), limitandoci a inviare TWRR e ROI per i grafici?
+
 ### 3. Frontend State Management & Caching (Store)
 * Per evitare il ricalcolo continuo del portafoglio durante la normale navigazione, verrà implementato un sistema di **caching lato frontend** tramite uno Svelte Store dedicato (es. `portfolioStore.ts`).
 * **Single Source of Truth Trasversale**: Questo store sarà l'unica fonte di verità e deve essere riutilizzato in tutte le viste:

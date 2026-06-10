@@ -20,8 +20,8 @@ Questa roadmap scompone la riprogettazione della Dashboard e della vista Dettagl
 3. **Nuovi Endpoint REST e KPI (`backend/app/api/v1/analytics.py`)**:
    * Sviluppo logica di aggregazione per le KPI cards della Dashboard (Net Worth totale, Liquidità, Gain/Loss totale, ROI percentuale).
    * `GET /api/v1/portfolio/summary`: Ritorna le KPI (NAV, Gain, TWRR, MWRR), aggregazioni di allocazione e **Breakdown per Broker** (necessario per la pagina Globale). *Supporta parametri filtro `broker_ids` e `date_range`.*
-   * `GET /api/v1/portfolio/history`: Ritorna la serie temporale a 3 metriche (Liquidità, Investito, Valore Teorico). *Supporta parametri filtro `broker_ids` e `date_range`.*
-   * `GET /api/v1/portfolio/asset-history`: Ritorna lo storico del WAC vs Prezzo di mercato per il singolo asset (richiede `asset_id` e opzionalmente `broker_id`).
+   * `GET /api/v1/portfolio/history`: Ritorna la serie temporale aggregata assoluta (Liquidità, Investito, NAV) e percentuale (`twrr`, `mwrr`, `roi`). *Supporta parametri filtro `broker_ids` e `date_range`.*
+   * `GET /api/v1/portfolio/asset-history`: Ritorna lo storico del WAC vs Prezzo di mercato per il singolo asset, includendo le metriche percentuali `roi` e `twrr` per supportare la visualizzazione non diluita.
 
 ### Criterio di Verifica Utente
 * Verifica tramite Swagger UI (o chiamate cURL) che gli endpoint restituiscano JSON corretti, che la matematica di TWRR/MWRR sia accurata e che le allocazioni sommino al 100%.
@@ -41,8 +41,9 @@ Questa roadmap scompone la riprogettazione della Dashboard e della vista Dettagl
 2. **Componenti UI Nuovi**:
    * **Filtro Multi-Broker**: Componente popover per selezionare/deselezionare i broker da includere nel calcolo.
    * **KPI Cards**: Per visualizzare Net Worth, Gain/Loss totale e ROI (TWRR/MWRR).
-   * **Grafico ECharts Growth 3-Lines**: Collegato a `/api/v1/portfolio/history`.
+   * **Grafico ECharts Growth [EUR | %]**: Collegato a `/api/v1/portfolio/history`, con toggle per passare dalle 3 linee assolute alle 3 percentuali.
    * **Grafici ECharts Allocazione**: Donut Chart per Tipo/Settore e **Mappa del Mondo** per la distribuzione geografica.
+   * **Svelte Store (`portfolioStore.ts`)**: Integrare il caching a livello frontend (come da implementation plan) per evitare chiamate ridondanti.
 
 ### Criterio di Verifica Utente
 * L'utente apre l'app sulla Dashboard, interagisce con il selettore date e i filtri broker, e vede tutti i grafici (Mappa inclusa) aggiornarsi fluidamente con i dati corretti. I KPI totali combaciano con le aspettative.
@@ -88,7 +89,7 @@ Questa roadmap scompone la riprogettazione della Dashboard e della vista Dettagl
 2. **Frontend Tab 2 (Posizioni)**:
    * Tabella delle holding del broker alimentata dal summary API.
 3. **Frontend Modale Overlay**:
-   * Grafico ECharts Stacked "WAC vs Valore Asset" in cima.
+   * Grafico ECharts "WAC vs Valore Asset" in cima, con toggle **[EUR | %]** per mostrare TWRR e ROI.
    * Grafico ECharts "Bubble Timeline" con interazione "Goto & Pulse" attiva.
    * Tabelle separate per Lotti Aperti e Lotti Chiusi collegate agli endpoint FIFO.
 
