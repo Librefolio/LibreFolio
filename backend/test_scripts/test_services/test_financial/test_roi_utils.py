@@ -254,6 +254,42 @@ class TestMWRRSeries:
             # Each point may or may not converge, but must not raise
             assert point.mwrr is None or isinstance(point.mwrr, Decimal)
 
+    def test_series_matches_individual_calculations(self):
+        """Iterative MWRR series must match one-shot MWRR when data is truncated."""
+        navs = [
+            NAVSnapshot(date(2025, 1, 1), Decimal("10000")),
+            NAVSnapshot(date(2025, 6, 1), Decimal("10500")),
+            NAVSnapshot(date(2025, 12, 31), Decimal("12000")),
+        ]
+        cfs = [CashFlowInput(date(2025, 6, 1), Decimal("-1000"))]
+        
+        series = calculate_mwrr_series(navs, cfs)
+        assert len(series) == 2
+
+        # Point 1: 2025-06-01
+        p1_oneshot = calculate_mwrr(
+            cash_flows=cfs[:1], # The CF on 06-01 is included
+            initial_nav=Decimal("10000"),
+            final_nav=Decimal("10500"),
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 6, 1),
+        )
+        assert series[0].date == date(2025, 6, 1)
+        if series[0].mwrr is not None and p1_oneshot.mwrr is not None:
+            assert series[0].mwrr == pytest.approx(p1_oneshot.mwrr, abs=Decimal("0.001"))
+
+        # Point 2: 2025-12-31
+        p2_oneshot = calculate_mwrr(
+            cash_flows=cfs,
+            initial_nav=Decimal("10000"),
+            final_nav=Decimal("12000"),
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 12, 31),
+        )
+        assert series[1].date == date(2025, 12, 31)
+        if series[1].mwrr is not None and p2_oneshot.mwrr is not None:
+            assert series[1].mwrr == pytest.approx(p2_oneshot.mwrr, abs=Decimal("0.001"))
+
 
 # ---------------------------------------------------------------------------
 # TestSimpleROISeries
