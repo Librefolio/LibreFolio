@@ -5,6 +5,29 @@ I TODO completati sono in `TODO_Completati.md`.
 
 ---
 
+## 📈 Gestione Stock Splits nel Calcolo FIFO
+
+**Data aggiunta**: 10 Giugno 2026
+**Priority**: Bassa (P4)
+**Scope**: Backend (Servizi Matematici)
+
+### Contesto
+Attualmente il sistema di calcolo FIFO in `fifo_utils.py` accetta in input esclusivamente operazioni di `BUY` e `SELL`. Nel mondo reale, avvengono frequentemente frazionamenti azionari (Stock Splits, es. Apple 1:4).
+A livello teorico uno Stock Split non altera i capitali investiti né crea o distrugge valore monetario, ma **altera retroattivamente i lotti**. Se non gestiti, un utente che tenta di vendere 4 azioni (nate da uno split 1:4 di 1 azione acquistata) manderà il FIFO in `ValueError` per "Oversell".
+
+### Soluzione Proposta
+1. Aggiungere un nuovo `TransactionType.SPLIT` al modello dati backend.
+2. Modificare il motore FIFO: quando incontra cronologicamente un'operazione `SPLIT` con un determinato `ratio` (es. 4):
+   - Mette in pausa il normale match BUY/SELL.
+   - Itera su tutti i lotti "aperti" (Open Lots) in quella esatta data.
+   - Moltiplica la `remaining_quantity` di ogni lotto per il `ratio`.
+   - Divide il `buy_price` originale di ogni lotto per il `ratio`.
+   - Riprende l'elaborazione cronologica.
+3. Questo garantisce che eventuali `SELL` successivi trovino le quantità corrette ed estraggano capital gain esatti.
+4. Prevedere anche la gestione di Reverse Splits (ratio < 1).
+
+---
+
 ## 🔗 Multi-Merge Promote Suggest
 
 **Data aggiunta**: 14 Maggio 2026
