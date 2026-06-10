@@ -216,12 +216,23 @@ def services_brim_provider_base(verbose: bool = False, test_names: list = None) 
 def services_financial_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test pure-math financial utilities (WAC calculation, target currency)."""
     print_section("Services: Financial Utils (WAC)")
-    print_info("Testing: backend/app/utils/financial_utils.py")
+    print_info("Testing: backend/app/utils/financial/wac_utils.py")
     print_info("Tests: compute_wac_from_txlist, determine_target_currency")
     print_info("Pure math — no server, no DB required")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial_utils.py", test_names)
     return run_command(cmd, "Financial utils tests", verbose=verbose)
+
+
+def services_roi_fifo_utils(verbose: bool = False, test_names: list = None) -> bool:
+    """Test ROI, FIFO, and PortfolioService pure-math utilities."""
+    print_section("Services: ROI / FIFO / Portfolio Utils")
+    print_info("Testing: backend/app/utils/financial/ (roi_utils, fifo_utils)")
+    print_info("Testing: backend/app/services/portfolio_service.py (_build_history_series)")
+    print_info("Tests: TWRR, MWRR warm-start series, SimpleROI series, FIFO lots, history series")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/", test_names)
+    return run_command(cmd, "ROI/FIFO/Portfolio service tests", verbose=verbose)
 
 
 def services_asset_sync_counts(verbose: bool = False, test_names: list = None) -> bool:
@@ -348,6 +359,7 @@ Note: No backend server required.
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base default properties")
     add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
+    add_test(cat, "roi-fifo-utils", services_roi_fifo_utils, name="ROI/FIFO/Portfolio Utils", desc="TWRR, MWRR warm-start, SimpleROI series, FIFO lots, _build_history_series")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
     add_test(cat, "scheduler-state", services_scheduler_state, name="Scheduler State", desc="Load/save/atomic write, corrupt/partial JSON recovery")

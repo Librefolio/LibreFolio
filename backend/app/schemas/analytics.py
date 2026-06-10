@@ -148,6 +148,9 @@ class PortfolioHistoryPoint(BaseModel):
     cash_value: SafeDecimal
     invested_value: SafeDecimal
     nav_value: SafeDecimal
+    twrr: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return series point")
+    mwrr: Optional[SafeDecimal] = Field(None, description="Money-Weighted Return series point")
+    roi: Optional[SafeDecimal] = Field(None, description="Simple ROI series point")
 
 
 class AssetHistoryPoint(BaseModel):
@@ -156,6 +159,9 @@ class AssetHistoryPoint(BaseModel):
     date: date_type
     wac: SafeDecimal
     market_price: SafeDecimal
+    twrr: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return series point")
+    mwrr: Optional[SafeDecimal] = Field(None, description="Money-Weighted Return series point")
+    roi: Optional[SafeDecimal] = Field(None, description="Simple ROI series point")
 
 
 class OpenLotSchema(BaseModel):
