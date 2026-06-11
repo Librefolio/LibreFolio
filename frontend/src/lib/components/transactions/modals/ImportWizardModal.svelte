@@ -16,7 +16,7 @@
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
     import {ensureBrokersLoaded, getEditableBrokers, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import {getAssetInfo} from '$lib/stores/reference/assetStore';
+    import {getAssetInfo, refreshAllAssets, type AssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {isFakeAssetId} from '$lib/utils/brim/isFakeAssetId';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
@@ -242,6 +242,14 @@
     let compareHighlightFields = $state<string[]>([]);
     let compareFetching = $state(false);
 
+    // Add-identifier prompt state — shown when user manually resolves an asset that is missing the extracted identifier
+    let identifierPromptOpen = $state(false);
+    let identifierPromptAssetId = $state<number | null>(null);
+    let identifierPromptField = $state<'identifier_ticker' | 'identifier_isin' | null>(null);
+    let identifierPromptValue = $state<string | null>(null);
+    let identifierPromptAssetName = $state<string | null>(null);
+    let identifierPromptSaving = $state(false);
+
     // Step 4 deriveds
     let step4SelectedCount = $derived(mergedTransactions.filter((t) => t.selected).length);
     let step4TotalCount = $derived(mergedTransactions.length);
@@ -340,6 +348,58 @@
 
     function clearResolution(fakeAssetId: number) {
         assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, resolvedAssetId: null} : r));
+    }
+
+    /**
+     * Called when the user manually picks an existing asset via AssetSelect (not a candidate chip).
+     * Resolves the asset and, if the selected asset is missing the extracted identifier, opens the
+     * "add identifier" prompt.
+     */
+    async function resolveAssetManual(fakeAssetId: number, realAssetId: number, res: AssetResolution) {
+        resolveAsset(fakeAssetId, realAssetId);
+        let info = getAssetInfo(realAssetId);
+        if (!info) {
+            // Rare: asset not in cache yet (e.g. freshly created) — force reload and retry.
+            await refreshAllAssets();
+            info = getAssetInfo(realAssetId);
+            if (!info) return;
+        }
+        // Priority: ISIN > symbol (ISIN is more precise)
+        let field: 'identifier_ticker' | 'identifier_isin' | null = null;
+        let value: string | null = null;
+        if (res.extractedIsin && !info.identifier_isin) {
+            field = 'identifier_isin';
+            value = res.extractedIsin;
+        } else if (res.extractedSymbol && !info.identifier_ticker) {
+            field = 'identifier_ticker';
+            value = res.extractedSymbol;
+        }
+        if (field && value) {
+            identifierPromptAssetId = realAssetId;
+            identifierPromptField = field;
+            identifierPromptValue = value;
+            identifierPromptAssetName = info.display_name ?? `#${realAssetId}`;
+            identifierPromptOpen = true;
+        }
+    }
+
+    /**
+     * Confirm the add-identifier prompt: PATCH the asset with the extracted identifier.
+     */
+    async function confirmAddIdentifier() {
+        if (!identifierPromptAssetId || !identifierPromptField || !identifierPromptValue) return;
+        identifierPromptSaving = true;
+        try {
+            await zodiosApi.patch_assets_bulk_api_v1_assets_patch([
+                {asset_id: identifierPromptAssetId, [identifierPromptField]: identifierPromptValue},
+            ]);
+            toasts.success($t('importWizard.addIdentifier.success'));
+        } catch {
+            toasts.error($t('importWizard.addIdentifier.error'));
+        } finally {
+            identifierPromptSaving = false;
+            identifierPromptOpen = false;
+        }
     }
 
     function buildFinalTxList(): TransactionCreateItem[] {
@@ -509,24 +569,14 @@
                 if (mt.duplicateStatus === 'likely') {
                     return {
                         type: 'html',
-                        html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"><span class="sm:hidden">⚠</span><span class="hidden sm:inline">${$t('importWizard.status.likelyDup')}</span></span>`,
-                        tooltip: {
-                            html: buildDupTooltipHtml($t('importWizard.status.tooltip.likelyDup'), mt.dupMatches, dupLabels),
-                            position: 'top',
-                            maxWidth: '260px',
-                        },
+                        html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 cursor-pointer"><span class="sm:hidden">⚠</span><span class="hidden sm:inline">${$t('importWizard.status.likelyDup')}</span></span>`,
                         onClick: () => openCompare(mt),
                     };
                 }
                 if (mt.duplicateStatus === 'possible') {
                     return {
                         type: 'html',
-                        html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"><span class="sm:hidden">ℹ</span><span class="hidden sm:inline">${$t('importWizard.status.possibleDup')}</span></span>`,
-                        tooltip: {
-                            html: buildDupTooltipHtml($t('importWizard.status.tooltip.possibleDup'), mt.dupMatches, dupLabels),
-                            position: 'top',
-                            maxWidth: '260px',
-                        },
+                        html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 cursor-pointer"><span class="sm:hidden">ℹ</span><span class="hidden sm:inline">${$t('importWizard.status.possibleDup')}</span></span>`,
                         onClick: () => openCompare(mt),
                     };
                 }
@@ -1902,15 +1952,24 @@ ${arrow}<span>${label}</span></span>`,
                                     <div class="border rounded-lg p-3 {isResolved ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/10' : 'border-gray-200 dark:border-gray-700'}">
                                         <!-- Card header -->
                                         <div class="flex items-center justify-between gap-2 mb-1">
-                                            <div class="flex items-center gap-2 min-w-0">
-                                                <span class="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">
-                                                    {res.extractedSymbol ?? res.extractedIsin ?? '?'}
-                                                </span>
-                                                {#if res.extractedName && res.extractedName !== res.extractedSymbol}
-                                                    <span class="text-xs text-gray-500 dark:text-gray-400 truncate">{res.extractedName}</span>
+                                            <div class="flex items-center gap-2 min-w-0 flex-wrap">
+                                                {#if res.extractedSymbol}
+                                                    <span class="flex items-center gap-1">
+                                                        <span class="text-xs text-gray-400 dark:text-gray-500 shrink-0">Ticker:</span>
+                                                        <span class="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">{res.extractedSymbol}</span>
+                                                    </span>
                                                 {/if}
                                                 {#if res.extractedIsin}
-                                                    <span class="font-mono text-xs text-gray-400">{res.extractedIsin}</span>
+                                                    <span class="flex items-center gap-1">
+                                                        <span class="text-xs text-gray-400 dark:text-gray-500 shrink-0">ISIN:</span>
+                                                        <span class="font-mono text-xs text-gray-500 dark:text-gray-400">{res.extractedIsin}</span>
+                                                    </span>
+                                                {/if}
+                                                {#if !res.extractedSymbol && !res.extractedIsin}
+                                                    <span class="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">{res.extractedName ?? '?'}</span>
+                                                {/if}
+                                                {#if res.extractedName && res.extractedName !== res.extractedSymbol}
+                                                    <span class="text-xs text-gray-500 dark:text-gray-400 truncate">{res.extractedName}</span>
                                                 {/if}
                                             </div>
                                             <span class="shrink-0 text-xs text-gray-500">{res.txCount} TX</span>
@@ -1947,8 +2006,13 @@ ${arrow}<span>${label}</span></span>`,
                                             compact={true}
                                             createLabel={$t('importWizard.createNew')}
                                             onCreateNew={() => (createAssetForFakeId = res.fakeAssetId)}
+                                            suggestedIds={res.candidates.map((c) => ({
+                                                id: c.asset_id,
+                                                badge: $t(`importWizard.confidence.${c.match_confidence}`) || c.match_confidence,
+                                                badgeClass: confidenceBadgeClass(c.match_confidence),
+                                            }))}
                                             onchange={(id) => {
-                                                if (id !== null) resolveAsset(res.fakeAssetId, id);
+                                                if (id !== null) resolveAssetManual(res.fakeAssetId, id, res);
                                                 else clearResolution(res.fakeAssetId);
                                             }}
                                         />
@@ -2155,9 +2219,15 @@ ${arrow}<span>${label}</span></span>`,
 
 <!-- Asset creation modal (Step 4 Zone C) -->
 {#if createAssetForFakeId !== null}
+    {@const _createRes = assetResolutions.find((r) => r.fakeAssetId === createAssetForFakeId)}
     <AssetModal
         open={true}
         editMode={false}
+        prefillData={_createRes ? {
+            display_name: _createRes.extractedName ?? '',
+            identifier_ticker: _createRes.extractedSymbol ?? undefined,
+            identifier_isin: _createRes.extractedIsin ?? undefined,
+        } : null}
         zIndex={90}
         oncreated={(assetId) => {
             resolveAsset(createAssetForFakeId!, assetId);
@@ -2183,3 +2253,19 @@ ${arrow}<span>${label}</span></span>`,
         }}
     />
 {/if}
+
+<!-- Add identifier prompt — shown when user manually resolves an asset missing the extracted identifier -->
+<ConfirmModal
+    open={identifierPromptOpen}
+    title={$t('importWizard.addIdentifier.title')}
+    message={$t('importWizard.addIdentifier.body', {values: {
+        asset: identifierPromptAssetName ?? '',
+        value: identifierPromptValue ?? '',
+        type: identifierPromptField === 'identifier_ticker' ? 'Ticker' : 'ISIN',
+    }})}
+    confirmText={$t('importWizard.addIdentifier.confirm')}
+    cancelText={$t('importWizard.addIdentifier.skip')}
+    zIndex={zIndex + 30}
+    onConfirm={confirmAddIdentifier}
+    onCancel={() => (identifierPromptOpen = false)}
+/>

@@ -5,8 +5,8 @@ date,type,quantity,amount,currency,asset,description
 2025-01-04,DIVIDEND,0,25.50,EUR,AAPL,Q4 dividend payment
 2025-01-05,DEPOSIT,0,5000.00,EUR,,Account funding
 2025-01-06,WITHDRAWAL,0,-1000.00,EUR,,Cash withdrawal
-2024-12-10,BUY,10,-250.00,USD,UNKNOWN_ETF,Unknown fund purchase
-2024-12-11,DIVIDEND,0,15.00,USD,UNKNOWN_ETF,Unknown fund dividend
+2024-12-10,BUY,10,-250.00,USD,UNETF,Unknown fund purchase
+2024-12-11,DIVIDEND,0,15.00,USD,UNETF,Unknown fund dividend
 2025-11-01,BUY,5,-862.50,USD,AAPL,BRIM dup test - likely 1
 2025-11-02,DIVIDEND,0,12.50,USD,AAPL,BRIM dup test - likely 2
 2025-11-03,BUY,3,-517.50,USD,AAPL,CSV desc for possible dup 1

@@ -456,6 +456,14 @@
         "possibleDup": "Se encontró una transacción similar en este bróker (misma fecha, tipo e importe, descripción diferente). Verifica si ya fue importada antes de continuar.",
         "likelyDup": "Ya existe una transacción idéntica en este bróker (misma fecha, tipo, importe y descripción). Probablemente ya fue importada — deselecciónala para evitar duplicados."
       }
+    },
+    "addIdentifier": {
+      "title": "¿Agregar el identificador al activo?",
+      "body": "{asset} no tiene {value} ({type}) como identificador. ¿Deseas agregarlo para que las importaciones futuras se asocien automáticamente?",
+      "confirm": "Agregar identificador",
+      "skip": "Omitir",
+      "success": "Identificador agregado con éxito",
+      "error": "No se pudo agregar el identificador"
     }
   },
   "brokers": {
@@ -811,7 +819,12 @@
     "mwrr": "MWRR",
     "twrr": "TWRR",
     "simpleRoi": "ROI Simple",
-    "twrrMwrr": "TWRR: {twrr} | MWRR: {mwrr}"
+    "twrrMwrr": "TWRR: {twrr} | MWRR: {mwrr}",
+    "holdings": "Sus Posiciones",
+    "seeAllAssets": "Ver todo →",
+    "seeAllTransactions": "Ver todo →",
+    "geoUnclassified": "Datos geográficos no disponibles para el {pct}% del valor de la cartera",
+    "roiAllZero": "Los rendimientos son del 0% en el período seleccionado"
   },
   "dataEditor": {
     "clearSelection": "Borrar selección",
@@ -842,6 +855,9 @@
     "emptyMessage": "Sin datos. Usa 'Agregar fila' o 'Importar CSV' para agregar."
   },
   "datePicker": {
+    "presets": {
+      "ytd": "YTD"
+    },
     "from": "Desde",
     "to": "Hasta",
     "selectSecondDate": "Haz clic en otra fecha para completar el rango",
@@ -1054,7 +1070,8 @@
     "ConsumerStaples": "🛒 Consumo básico",
     "Telecommunication": "📡 Telecomunicaciones",
     "Utilities": "💡 Servicios públicos",
-    "Other": "📦 Otro"
+    "Other": "📦 Otro",
+    "Unknown": "❓ Sin clasificar"
   },
   "settings": {
     "profile": "Perfil",

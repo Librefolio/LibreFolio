@@ -456,6 +456,14 @@
         "possibleDup": "A similar transaction was found in this broker (same date, type and amount, different description). Verify whether it has already been imported before proceeding.",
         "likelyDup": "An identical transaction already exists in this broker (same date, type, amount and description). It has likely already been imported — deselect it to avoid duplicates."
       }
+    },
+    "addIdentifier": {
+      "title": "Add identifier to asset?",
+      "body": "{asset} does not have {value} ({type}) as an identifier. Do you want to add it so future imports can match automatically?",
+      "confirm": "Add identifier",
+      "skip": "Skip",
+      "success": "Identifier added successfully",
+      "error": "Could not add identifier"
     }
   },
   "brokers": {
@@ -811,7 +819,12 @@
     "mwrr": "MWRR",
     "twrr": "TWRR",
     "simpleRoi": "Simple ROI",
-    "twrrMwrr": "TWRR: {twrr} | MWRR: {mwrr}"
+    "twrrMwrr": "TWRR: {twrr} | MWRR: {mwrr}",
+    "holdings": "Your Holdings",
+    "seeAllAssets": "See all →",
+    "seeAllTransactions": "See all →",
+    "geoUnclassified": "Geographic data unavailable for {pct}% of portfolio value",
+    "roiAllZero": "Returns are 0% for the selected period"
   },
   "dataEditor": {
     "clearSelection": "Clear selection",
@@ -842,6 +855,9 @@
     "emptyMessage": "No data. Use 'Add Row' or 'Import CSV' to add data."
   },
   "datePicker": {
+    "presets": {
+      "ytd": "YTD"
+    },
     "from": "From",
     "to": "To",
     "selectSecondDate": "Click another date to complete the range",
@@ -1054,7 +1070,8 @@
     "ConsumerStaples": "🛒 Consumer Staples",
     "Telecommunication": "📡 Telecommunication",
     "Utilities": "💡 Utilities",
-    "Other": "📦 Other"
+    "Other": "📦 Other",
+    "Unknown": "❓ Unknown"
   },
   "settings": {
     "profile": "Profile",

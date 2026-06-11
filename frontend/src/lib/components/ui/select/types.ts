@@ -18,6 +18,10 @@ export interface SelectOption {
     icon?: string;
     /** Custom data payload for rendering via snippet */
     data?: unknown;
+    /** Optional badge text to show alongside the label in the dropdown */
+    badge?: string;
+    /** Tailwind classes for the badge */
+    badgeClass?: string;
 }
 
 /**

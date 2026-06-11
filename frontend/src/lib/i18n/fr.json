@@ -456,6 +456,14 @@
         "possibleDup": "Une transaction similaire a été trouvée dans ce courtier (même date, type et montant, description différente). Vérifiez si elle a déjà été importée avant de continuer.",
         "likelyDup": "Une transaction identique existe déjà dans ce courtier (même date, type, montant et description). Elle a probablement déjà été importée — désélectionnez-la pour éviter les doublons."
       }
+    },
+    "addIdentifier": {
+      "title": "Ajouter l'identifiant à l'actif ?",
+      "body": "{asset} n'a pas {value} ({type}) comme identifiant. Voulez-vous l'ajouter pour que les importations futures soient associées automatiquement ?",
+      "confirm": "Ajouter l'identifiant",
+      "skip": "Ignorer",
+      "success": "Identifiant ajouté avec succès",
+      "error": "Impossible d'ajouter l'identifiant"
     }
   },
   "brokers": {
@@ -811,7 +819,12 @@
     "mwrr": "MWRR",
     "twrr": "TWRR",
     "simpleRoi": "ROI Simple",
-    "twrrMwrr": "TWRR : {twrr} | MWRR : {mwrr}"
+    "twrrMwrr": "TWRR : {twrr} | MWRR : {mwrr}",
+    "holdings": "Vos Positions",
+    "seeAllAssets": "Voir tout →",
+    "seeAllTransactions": "Voir tout →",
+    "geoUnclassified": "Données géographiques indisponibles pour {pct}% de la valeur du portefeuille",
+    "roiAllZero": "Les rendements sont à 0% sur la période sélectionnée"
   },
   "dataEditor": {
     "clearSelection": "Effacer la sélection",
@@ -842,6 +855,9 @@
     "emptyMessage": "Aucune donnée. Utilisez 'Ajouter une ligne' ou 'Importer CSV' pour en ajouter."
   },
   "datePicker": {
+    "presets": {
+      "ytd": "YTD"
+    },
     "from": "Du",
     "to": "Au",
     "selectSecondDate": "Cliquez sur une autre date pour compléter la plage",
@@ -1054,7 +1070,8 @@
     "ConsumerStaples": "🛒 Consommation de base",
     "Telecommunication": "📡 Télécommunication",
     "Utilities": "💡 Services publics",
-    "Other": "📦 Autre"
+    "Other": "📦 Autre",
+    "Unknown": "❓ Non classifié"
   },
   "settings": {
     "profile": "Profil",
