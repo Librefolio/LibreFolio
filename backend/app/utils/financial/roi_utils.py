@@ -10,10 +10,13 @@ Cash flow sign convention (standard finance):
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import NamedTuple
+
+from scipy.optimize import newton as scipy_newton
 
 
 class CashFlowInput(NamedTuple):
@@ -67,8 +70,8 @@ class MWRRPoint:
     mwrr: Decimal | None
 
 
-_PREC_PCT = Decimal("0.000001")   # 6 decimals for percentages
-_PREC_AMT = Decimal("0.01")       # 2 decimals for monetary values
+_PREC_PCT = Decimal("0.000001")  # 6 decimals for percentages
+_PREC_AMT = Decimal("0.01")  # 2 decimals for monetary values
 
 
 def calculate_simple_roi(current_nav: Decimal, total_invested: Decimal) -> Decimal:
@@ -86,7 +89,7 @@ def calculate_simple_roi_series(
 
     For each snapshot t, computes the cumulative net invested capital up to t:
     Net_Invested_t = max(0, -sum(CF_i for i <= t))  # deposits are < 0, withdrawals > 0.
-    
+
     Then: ROI_t = (NAV_t - Net_Invested_t) / Net_Invested_t.
 
     Returns:
@@ -108,7 +111,7 @@ def calculate_simple_roi_series(
         # (Assuming we accumulate them as we walk chronologically)
         cf_today = cf_by_date.get(snap.date, Decimal("0"))
         cumulative_cf += cf_today
-        
+
         # Net invested is the opposite of cumulative CF (since deposits are negative)
         # If cumulative_cf is positive, we've withdrawn more than deposited, so invested is 0.
         net_invested = -cumulative_cf if cumulative_cf < Decimal("0") else Decimal("0")
@@ -171,7 +174,7 @@ def calculate_twrr(
             continue  # No prior investment — skip sub-period
 
         hpr = (v_end_pre_cf - v_start) / v_start
-        compound *= (Decimal("1") + hpr)
+        compound *= Decimal("1") + hpr
 
     twrr = (compound - Decimal("1")).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
     return TWRRPoint(date=sorted_navs[-1].date, twrr=twrr)
@@ -210,7 +213,7 @@ def calculate_twrr_series(
 
         if v_start != Decimal("0"):
             hpr = (v_end_pre_cf - v_start) / v_start
-            compound *= (Decimal("1") + hpr)
+            compound *= Decimal("1") + hpr
 
         twrr = (compound - Decimal("1")).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
         result.append(TWRRPoint(date=snap_date, twrr=twrr))
@@ -240,15 +243,13 @@ def calculate_mwrr(
     Returns:
         MWRRPoint(date=end_date, mwrr=result) or MWRRPoint(mwrr=None) on failure.
     """
-    from scipy.optimize import newton  # deferred import — only used when called
-
     # Build cash flows as (days_from_start, amount_float) list
     total_days = (end_date - start_date).days
     if total_days <= 0:
         return MWRRPoint(date=end_date, mwrr=None)
 
     flows: list[tuple[float, float]] = [
-        (0.0, -float(initial_nav)),        # t=0: invest initial NAV
+        (0.0, -float(initial_nav)),  # t=0: invest initial NAV
         (float(total_days), float(final_nav)),  # t=T: receive final NAV
     ]
     for cf in cash_flows:
@@ -260,10 +261,12 @@ def calculate_mwrr(
         return sum(amount / (1.0 + r) ** (d / 365.0) for d, amount in flows)
 
     try:
-        rate = newton(npv, x0=0.1, tol=1e-8, maxiter=100)
+        rate = scipy_newton(npv, x0=0.1, tol=1e-8, maxiter=100)
+        if not math.isfinite(rate):
+            return MWRRPoint(date=end_date, mwrr=None)
         mwrr = Decimal(str(rate)).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
         return MWRRPoint(date=end_date, mwrr=mwrr)
-    except (RuntimeError, ValueError):
+    except (RuntimeError, ValueError, InvalidOperation):
         return MWRRPoint(date=end_date, mwrr=None)
 
 
@@ -281,8 +284,6 @@ def calculate_mwrr_series(
     Returns:
         List of MWRRPoint, one per snapshot (excluding the first).
     """
-    from scipy.optimize import newton  # deferred import
-
     if len(nav_snapshots) < 2:
         return []
 
@@ -317,11 +318,14 @@ def calculate_mwrr_series(
             return sum(amount / (1.0 + r) ** (d / 365.0) for d, amount in _flows)
 
         try:
-            rate = newton(npv, x0=prev_guess, tol=1e-8, maxiter=100)
+            rate = scipy_newton(npv, x0=prev_guess, tol=1e-8, maxiter=100)
+            if not math.isfinite(rate):
+                result.append(MWRRPoint(date=snap.date, mwrr=None))
+                continue
             prev_guess = rate  # warm-start next iteration
             mwrr = Decimal(str(rate)).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
             result.append(MWRRPoint(date=snap.date, mwrr=mwrr))
-        except (RuntimeError, ValueError):
+        except (RuntimeError, ValueError, InvalidOperation):
             result.append(MWRRPoint(date=snap.date, mwrr=None))
 
     return result
