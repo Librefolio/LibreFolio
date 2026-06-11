@@ -26,6 +26,7 @@
     import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
 
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
+    import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import AllocationPieChart from '$lib/components/charts/AllocationPieChart.svelte';
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
     import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
@@ -53,6 +54,9 @@
     /** Date range — backed by global store (shared with assets/fx pages). */
     let dateFrom = $state(getStart());
     let dateTo = $state(getEnd());
+
+    /** Display currency override — defaults to user base currency. */
+    let targetCurrency = $state('');
 
     /** Broker filter dropdown open state. */
     let brokerFilterOpen = $state(false);
@@ -131,7 +135,7 @@
     async function loadSummary(force = false) {
         summaryLoading = true;
         try {
-            summary = await fetchSummary(activeBrokerIds, false, force);
+            summary = await fetchSummary(activeBrokerIds, false, targetCurrency || undefined, force);
         } finally {
             summaryLoading = false;
         }
@@ -140,7 +144,7 @@
     async function loadHistory(force = false) {
         historyLoading = true;
         try {
-            history = await fetchHistory(activeBrokerIds, dateFrom || undefined, dateTo || undefined, force);
+            history = await fetchHistory(activeBrokerIds, dateFrom || undefined, dateTo || undefined, targetCurrency || undefined, force);
         } finally {
             historyLoading = false;
         }
@@ -222,7 +226,15 @@
         <!-- LEFT: Date range picker (wired to global store) -->
         <DateRangePicker bind:start={dateFrom} bind:end={dateTo} compact={true} onchange={handleDateChange} />
 
-        <!-- CENTER-LEFT: Broker multi-select panel -->
+        <!-- CENTER-LEFT: Currency override selector -->
+        <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <span class="whitespace-nowrap">{$_('dashboard.displayCurrency')}:</span>
+            <div class="w-28">
+                <CurrencySearchSelect bind:value={targetCurrency} compact={true} dropdownPosition="bottom" includeAll={true} placeholder={baseCurrency} onchange={() => void loadAll()} />
+            </div>
+        </div>
+
+        <!-- CENTER: Broker multi-select panel -->
         <div class="relative">
             <button
                 bind:this={brokerFilterTriggerEl}
@@ -327,7 +339,7 @@
         </div>
 
         <!-- Allocation Panel — 2/5 -->
-        <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4 flex flex-col gap-3" data-testid="allocation-panel">
+        <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4 flex flex-col gap-3 min-h-[380px] lg:min-h-0" data-testid="allocation-panel">
             <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{$_('dashboard.allocation')}</h2>
 
             <!-- Tab bar -->
@@ -345,17 +357,23 @@
 
             <!-- Chart area -->
             {#if summaryLoading}
-                <div class="flex-1 min-h-[220px] bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
+                <div class="flex-1 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
             {:else if !summary}
-                <div class="flex-1 min-h-[220px] flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+                <div class="flex-1 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
                     {$_('dashboard.noData')}
                 </div>
             {:else if allocationTab === 'type'}
-                <AllocationPieChart data={allocationByType} height="220px" mode="type" />
+                <div class="flex-1 min-h-0">
+                    <AllocationPieChart data={allocationByType} height="100%" mode="type" legendPosition="bottom" />
+                </div>
             {:else if allocationTab === 'sector'}
-                <AllocationPieChart data={allocationBySector} height="220px" />
+                <div class="flex-1 min-h-0">
+                    <AllocationPieChart data={allocationBySector} height="100%" legendPosition="bottom" />
+                </div>
             {:else}
-                <GeographyMap data={allocationByGeo} height="220px" language={$currentLanguage} />
+                <div class="flex-1 min-h-0">
+                    <GeographyMap data={allocationByGeo} height="100%" language={$currentLanguage} />
+                </div>
             {/if}
         </div>
     </div>
