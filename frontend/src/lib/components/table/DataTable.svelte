@@ -995,7 +995,7 @@
                 // Hide columns with no visible label (e.g. the checkbox selection column)
                 const h = typeof c.header === 'function' ? c.header() : c.header;
                 const dn = c.displayName ? (typeof c.displayName === 'function' ? c.displayName() : c.displayName) : undefined;
-                return (h !== '' || (dn !== undefined && dn !== ''));
+                return h !== '' || (dn !== undefined && dn !== '');
             })
             .map((c) => ({id: c.id, header: c.header, displayName: c.displayName, visible: columnVisibility[c.id] !== false}));
     }
@@ -1082,7 +1082,13 @@
                         {@const isSorted = sortState?.columnId === column.id}
                         {@const sortDir = isSorted ? sortState?.direction : null}
                         {@const hasFilter = columnFilters[column.id] !== undefined}
-                        <th class="th-data" class:sortable={column.sortable !== false && enableSorting} class:th-fixed={column.pinned != null} class:th-pinned-right={column.pinned === 'right'} style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {column.minWidth || 60}px;{column.pinned === 'left' ? ' left: 0;' : column.pinned === 'right' ? ' right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}">
+                        <th
+                            class="th-data"
+                            class:sortable={column.sortable !== false && enableSorting}
+                            class:th-fixed={column.pinned != null}
+                            class:th-pinned-right={column.pinned === 'right'}
+                            style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {column.minWidth || 60}px;{column.pinned === 'left' ? ' left: 0;' : column.pinned === 'right' ? ' right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
+                        >
                             <div class="header-content" style={column.align === 'center' ? 'justify-content:center' : column.align === 'right' ? 'justify-content:flex-end' : ''}>
                                 {#if getColumnTooltip(column)}
                                     {@const tooltipText = getColumnTooltip(column) ?? ''}

@@ -125,10 +125,7 @@ test.describe('Scheduler — Config Modal', () => {
         await freqInput.fill('15');
 
         // Intercept the PATCH request
-        const patchPromise = page.waitForRequest(
-            (req) => req.method() === 'PATCH' && req.url().includes('/settings/global/bulk'),
-            {timeout: 5_000},
-        );
+        const patchPromise = page.waitForRequest((req) => req.method() === 'PATCH' && req.url().includes('/settings/global/bulk'), {timeout: 5_000});
 
         // Save
         await page.getByTestId('scheduler-config-save').click();
@@ -231,7 +228,7 @@ test.describe('Scheduler — Config Modal', () => {
         await page.waitForTimeout(300);
 
         const afterCount = await timesSection.locator('li').count();
-        expect(afterCount).toBeLessThan(await timesSection.locator('li').count() + 1);
+        expect(afterCount).toBeLessThan((await timesSection.locator('li').count()) + 1);
         // More explicit: slot count decreased
         const newCount = await timesSection.locator('li').count();
         expect(newCount).toBeLessThan(initialCount + 1); // at most initialCount (we deleted one or started fresh)
@@ -268,9 +265,7 @@ test.describe('Scheduler — Regression (fetch_interval removed)', () => {
         }
 
         // There must be no input with name/id/placeholder related to fetch_interval
-        const fetchIntervalInput = page.locator(
-            'input[name="fetch_interval"], input[id*="fetch_interval"], input[placeholder*="fetch interval" i]',
-        );
+        const fetchIntervalInput = page.locator('input[name="fetch_interval"], input[id*="fetch_interval"], input[placeholder*="fetch interval" i]');
         await expect(fetchIntervalInput).not.toBeVisible();
     });
 });

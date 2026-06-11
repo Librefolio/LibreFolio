@@ -248,10 +248,10 @@ def calculate_mwrr(
     if total_days <= 0:
         return MWRRPoint(date=end_date, mwrr=None)
 
-    flows: list[tuple[float, float]] = [
-        (0.0, -float(initial_nav)),  # t=0: invest initial NAV
-        (float(total_days), float(final_nav)),  # t=T: receive final NAV
-    ]
+    flows: list[tuple[float, float]] = []
+    final_day_cf = sum(float(cf.amount) for cf in cash_flows if (cf.date - start_date).days == total_days)
+    flows.append((0.0, -float(initial_nav)))
+    flows.append((float(total_days), float(final_nav) + final_day_cf))
     for cf in cash_flows:
         days = (cf.date - start_date).days
         if 0 < days < total_days:
@@ -305,9 +305,10 @@ def calculate_mwrr_series(
             result.append(MWRRPoint(date=snap.date, mwrr=None))
             continue
 
+        final_day_cf = float(cf_by_date.get(snap.date, Decimal("0")))
         flows: list[tuple[float, float]] = [
             (0.0, -float(initial_nav)),
-            (float(total_days), float(snap.nav)),
+            (float(total_days), float(snap.nav) + final_day_cf),
         ]
         for cf_date, cf_amt in cf_by_date.items():
             days = (cf_date - start_date).days

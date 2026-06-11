@@ -5,9 +5,9 @@
  * - GET /api/v1/portfolio/summary  → PortfolioSummary (KPIs + allocations)
  * - GET /api/v1/portfolio/history  → PortfolioHistoryPoint[] (daily time series)
  *
- * Cache key = `broker_ids (sorted) | dateFrom | dateTo` so each unique filter
- * combination is cached independently. Calling `invalidate()` clears the entire
- * cache (used by the [↻ Sync] button and after any transaction CRUD mutation).
+ * Cache key = `broker_ids (sorted) | dateFrom | dateTo | targetCurrency` so each
+ * unique filter combination is cached independently. Calling `invalidate()` clears
+ * the entire cache (used by the [↻ Sync] button and after any transaction CRUD mutation).
  *
  * Architecture: Svelte 5 module-level $state() runes — same pattern as txStore.svelte.ts.
  *
@@ -55,8 +55,8 @@ let _error = $state<string | null>(null);
 // HELPERS
 // ============================================================================
 
-function makeCacheKey(brokerIds?: number[], dateFrom?: string, dateTo?: string): CacheKey {
-    return [brokerIds ? [...brokerIds].sort().join(',') : 'all', dateFrom ?? '', dateTo ?? ''].join('|');
+function makeCacheKey(brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string): CacheKey {
+    return [brokerIds ? [...brokerIds].sort().join(',') : 'all', dateFrom ?? '', dateTo ?? '', targetCurrency ?? ''].join('|');
 }
 
 // ============================================================================
@@ -79,12 +79,13 @@ export function portfolioError(): string | null {
 /**
  * Fetch (or return cached) portfolio summary.
  *
- * @param brokerIds  — Filter by broker IDs. Omit or pass [] for all brokers.
+ * @param brokerIds      — Filter by broker IDs. Omit or pass [] for all brokers.
  * @param includeBreakdown — Include per-broker breakdown (default false).
- * @param force      — Bypass cache and re-fetch.
+ * @param targetCurrency — Override base currency (ISO 4217, e.g. 'USD'). Defaults to user setting.
+ * @param force          — Bypass cache and re-fetch.
  */
-export async function fetchSummary(brokerIds?: number[], includeBreakdown = false, force = false): Promise<PortfolioSummary | null> {
-    const key = makeCacheKey(brokerIds);
+export async function fetchSummary(brokerIds?: number[], includeBreakdown = false, targetCurrency?: string, force = false): Promise<PortfolioSummary | null> {
+    const key = makeCacheKey(brokerIds, undefined, undefined, targetCurrency);
 
     if (!force) {
         const cached = summaryCache.get(key);
@@ -100,11 +101,12 @@ export async function fetchSummary(brokerIds?: number[], includeBreakdown = fals
 
     const promise = (async () => {
         try {
-            const params: Record<string, unknown> = {};
-            if (brokerIds && brokerIds.length > 0) params.broker_ids = brokerIds;
-            if (includeBreakdown) params.include_breakdown = true;
+            const queries: Record<string, unknown> = {};
+            if (brokerIds && brokerIds.length > 0) queries.broker_ids = brokerIds;
+            if (includeBreakdown) queries.include_breakdown = true;
+            if (targetCurrency) queries.target_currency = targetCurrency;
 
-            const data = await zodiosApi.get_portfolio_summary_api_v1_portfolio_summary_get(params);
+            const data = await zodiosApi.get_portfolio_summary_api_v1_portfolio_summary_get({queries});
             summaryCache = new Map(summaryCache).set(key, {data, timestamp: Date.now()});
             return data;
         } catch (err) {
@@ -123,13 +125,14 @@ export async function fetchSummary(brokerIds?: number[], includeBreakdown = fals
 /**
  * Fetch (or return cached) portfolio history time series.
  *
- * @param brokerIds — Filter by broker IDs. Omit or pass [] for all brokers.
- * @param dateFrom  — Start date (ISO string, e.g. '2024-01-01').
- * @param dateTo    — End date (ISO string).
- * @param force     — Bypass cache and re-fetch.
+ * @param brokerIds      — Filter by broker IDs. Omit or pass [] for all brokers.
+ * @param dateFrom       — Start date (ISO string, e.g. '2024-01-01').
+ * @param dateTo         — End date (ISO string).
+ * @param targetCurrency — Override base currency (ISO 4217, e.g. 'USD'). Defaults to user setting.
+ * @param force          — Bypass cache and re-fetch.
  */
-export async function fetchHistory(brokerIds?: number[], dateFrom?: string, dateTo?: string, force = false): Promise<PortfolioHistoryPoint[]> {
-    const key = makeCacheKey(brokerIds, dateFrom, dateTo);
+export async function fetchHistory(brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false): Promise<PortfolioHistoryPoint[]> {
+    const key = makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency);
 
     if (!force) {
         const cached = historyCache.get(key);
@@ -144,12 +147,13 @@ export async function fetchHistory(brokerIds?: number[], dateFrom?: string, date
 
     const promise = (async () => {
         try {
-            const params: Record<string, unknown> = {};
-            if (brokerIds && brokerIds.length > 0) params.broker_ids = brokerIds;
-            if (dateFrom) params.date_from = dateFrom;
-            if (dateTo) params.date_to = dateTo;
+            const queries: Record<string, unknown> = {};
+            if (brokerIds && brokerIds.length > 0) queries.broker_ids = brokerIds;
+            if (dateFrom) queries.date_from = dateFrom;
+            if (dateTo) queries.date_to = dateTo;
+            if (targetCurrency) queries.target_currency = targetCurrency;
 
-            const data = await zodiosApi.get_portfolio_history_api_v1_portfolio_history_get(params);
+            const data = await zodiosApi.get_portfolio_history_api_v1_portfolio_history_get({queries});
             historyCache = new Map(historyCache).set(key, {data, timestamp: Date.now()});
             return data;
         } catch (err) {

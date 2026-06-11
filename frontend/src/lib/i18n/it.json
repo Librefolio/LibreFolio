@@ -824,7 +824,9 @@
     "seeAllAssets": "Vedi tutti →",
     "seeAllTransactions": "Vedi tutti →",
     "geoUnclassified": "Dati geografici non disponibili per il {pct}% del valore del portafoglio",
-    "roiAllZero": "I rendimenti sono 0% nel periodo selezionato"
+    "roiAllZero": "I rendimenti sono 0% nel periodo selezionato",
+    "abs": "Abs",
+    "displayCurrency": "Valuta"
   },
   "dataEditor": {
     "clearSelection": "Deseleziona",

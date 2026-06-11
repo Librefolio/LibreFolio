@@ -261,7 +261,7 @@
                 return res?.resolvedAssetId == null;
             }
             return false;
-        })
+        }),
     );
     let step4CanImport = $derived(step4SelectedCount > 0 && !step4HasUnresolvedSelected);
     let step4LikelyDupCount = $derived(mergedTransactions.filter((t) => t.selected && t.duplicateStatus === 'likely').length);
@@ -320,7 +320,7 @@
                             extractedSymbol: (mapping.extracted_symbol as string | null) ?? null,
                             extractedIsin: (mapping.extracted_isin as string | null) ?? null,
                             extractedName: (mapping.extracted_name as string | null) ?? null,
-                            candidates: ((mapping.candidates ?? []) as AssetResolution['candidates']),
+                            candidates: (mapping.candidates ?? []) as AssetResolution['candidates'],
                             resolvedAssetId: typeof mapping.selected_asset_id === 'number' ? (mapping.selected_asset_id as number) : null,
                             txCount: 0,
                             sourceFiles: [],
@@ -390,9 +390,7 @@
         if (!identifierPromptAssetId || !identifierPromptField || !identifierPromptValue) return;
         identifierPromptSaving = true;
         try {
-            await zodiosApi.patch_assets_bulk_api_v1_assets_patch([
-                {asset_id: identifierPromptAssetId, [identifierPromptField]: identifierPromptValue},
-            ]);
+            await zodiosApi.patch_assets_bulk_api_v1_assets_patch([{asset_id: identifierPromptAssetId, [identifierPromptField]: identifierPromptValue}]);
             toasts.success($t('importWizard.addIdentifier.success'));
         } catch {
             toasts.error($t('importWizard.addIdentifier.error'));
@@ -438,11 +436,7 @@
         return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
     }
 
-    function buildDupTooltipHtml(
-        baseText: string,
-        matches: BrimDuplicateMatch[],
-        labels: {date: string; type: string; amount: string; desc: string},
-    ): string {
+    function buildDupTooltipHtml(baseText: string, matches: BrimDuplicateMatch[], labels: {date: string; type: string; amount: string; desc: string}): string {
         if (!matches.length) return `<span>${baseText}</span>`;
         const blocks = matches
             .slice(0, 3)
@@ -457,8 +451,7 @@
                 const rawDesc = m.tx_description ? (Array.isArray(m.tx_description) ? m.tx_description[0] : m.tx_description) : null;
                 const desc = rawDesc ? String(rawDesc).substring(0, 32) + (String(rawDesc).length > 32 ? '…' : '') : '—';
                 const sep = i > 0 ? `<div style="border-top:1px solid rgba(128,128,128,0.3);margin:5px 0"></div>` : '';
-                const row = (label: string, val: string) =>
-                    `<div style="display:flex;gap:6px;margin:2px 0"><span style="opacity:0.6;min-width:48px;flex-shrink:0">${label}</span><span>${val}</span></div>`;
+                const row = (label: string, val: string) => `<div style="display:flex;gap:6px;margin:2px 0"><span style="opacity:0.6;min-width:48px;flex-shrink:0">${label}</span><span>${val}</span></div>`;
                 return `${sep}${row(labels.date, date)}${row(labels.type, typeIcon + txType)}${row(labels.amount, amount)}${row(labels.desc, desc)}`;
             })
             .join('');
@@ -543,7 +536,7 @@
             getValue: (mt) => {
                 const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
                 if (assetId !== null && isFakeAssetId(assetId) && !assetResolutions.find((r) => r.fakeAssetId === assetId)?.resolvedAssetId) return 'unresolved';
-                return (mt.duplicateStatus as string);
+                return mt.duplicateStatus as string;
             },
             enumOptions: [
                 {value: 'unique', label: $t('importWizard.status.unique')},
@@ -553,7 +546,7 @@
             ],
             cell: (mt) => {
                 const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
-                const isUnresolved = assetId !== null && isFakeAssetId(assetId) && (assetResolutions.find((r) => r.fakeAssetId === assetId)?.resolvedAssetId == null);
+                const isUnresolved = assetId !== null && isFakeAssetId(assetId) && assetResolutions.find((r) => r.fakeAssetId === assetId)?.resolvedAssetId == null;
                 if (isUnresolved) {
                     return {
                         type: 'html',
@@ -1339,7 +1332,15 @@ ${arrow}<span>${label}</span></span>`,
             header: () => 'Broker',
             cell: (row) => {
                 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-                const faviconUrl = row.brokerPortalUrl ? (() => { try { return new URL(row.brokerPortalUrl!).origin + '/favicon.ico'; } catch { return null; } })() : null;
+                const faviconUrl = row.brokerPortalUrl
+                    ? (() => {
+                          try {
+                              return new URL(row.brokerPortalUrl!).origin + '/favicon.ico';
+                          } catch {
+                              return null;
+                          }
+                      })()
+                    : null;
                 const imgSrc = row.brokerIconUrl || faviconUrl;
                 const icon = imgSrc
                     ? `<img src="${esc(imgSrc)}" class="w-5 h-5 rounded-full object-cover shrink-0" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">${`<span class="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0" style="display:none">${esc(row.brokerName.charAt(0).toUpperCase())}</span>`}`
@@ -1881,7 +1882,9 @@ ${arrow}<span>${label}</span></span>`,
                                 class:text-amber-500={stats.todoBlockers === 0 && stats.totalTodos > 0}
                                 class:text-gray-900={stats.totalTodos === 0}
                                 class:dark:text-white={stats.totalTodos === 0}
-                            >{stats.totalTodos}</div>
+                            >
+                                {stats.totalTodos}
+                            </div>
                             <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.fieldTodoCount', {values: {n: stats.totalTodos}})}</div>
                         </div>
                         <div class="text-center">
@@ -1897,7 +1900,9 @@ ${arrow}<span>${label}</span></span>`,
                             <button
                                 type="button"
                                 class="flex flex-col items-center justify-center gap-1 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 transition-colors px-2 py-1.5"
-                                onclick={() => { showAggregateDetail = true; }}
+                                onclick={() => {
+                                    showAggregateDetail = true;
+                                }}
                             >
                                 <Eye size={16} />
                                 <span class="text-xs font-medium">{$t('importWizard.viewAll')}</span>
@@ -1920,22 +1925,18 @@ ${arrow}<span>${label}</span></span>`,
             <!-- ============================================================ -->
         {:else if currentStep === 4}
             <div class="flex flex-col gap-4 h-full overflow-y-auto" data-testid="import-wizard-step4">
-
                 <!-- ── Resolve Assets section ─────────────────────────── -->
                 {#if assetResolutions.length > 0}
                     <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                         <!-- Section header -->
-                        <button
-                            type="button"
-                            class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors"
-                            onclick={() => (step4ShowResolveSection = !step4ShowResolveSection)}
-                        >
+                        <button type="button" class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors" onclick={() => (step4ShowResolveSection = !step4ShowResolveSection)}>
                             <div class="flex items-center gap-2">
                                 {#if step4ShowResolveSection}<ChevronDown size={16} />{:else}<ChevronRight size={16} />{/if}
                                 <span class="font-semibold text-sm">{$t('importWizard.resolveAssets')}</span>
                                 {#if step4UnresolvedCount > 0}
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                                        {step4UnresolvedCount} {$t('importWizard.unresolvedCount', {values: {n: step4UnresolvedCount}})}
+                                        {step4UnresolvedCount}
+                                        {$t('importWizard.unresolvedCount', {values: {n: step4UnresolvedCount}})}
                                     </span>
                                 {:else}
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
@@ -2180,17 +2181,13 @@ ${arrow}<span>${label}</span></span>`,
                 {:else if step4LikelyDupCount > 0}
                     <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                         <AlertTriangle size={14} />
-                        {step4LikelyDupCount} {$t('importWizard.likelyDuplicate') || 'likely duplicates'} {$t('importWizard.likelyDupIncluded') || 'included'}
+                        {step4LikelyDupCount}
+                        {$t('importWizard.likelyDuplicate') || 'likely duplicates'}
+                        {$t('importWizard.likelyDupIncluded') || 'included'}
                     </span>
                 {/if}
             </div>
-            <button
-                type="button"
-                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                onclick={handleImport}
-                disabled={!step4CanImport}
-                data-testid="import-wizard-import"
-            >
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={handleImport} disabled={!step4CanImport} data-testid="import-wizard-import">
                 {$t('importWizard.importToEditor', {values: {n: step4SelectedCount}})} ▶
             </button>
         {/if}
@@ -2223,11 +2220,13 @@ ${arrow}<span>${label}</span></span>`,
     <AssetModal
         open={true}
         editMode={false}
-        prefillData={_createRes ? {
-            display_name: _createRes.extractedName ?? '',
-            identifier_ticker: _createRes.extractedSymbol ?? undefined,
-            identifier_isin: _createRes.extractedIsin ?? undefined,
-        } : null}
+        prefillData={_createRes
+            ? {
+                  display_name: _createRes.extractedName ?? '',
+                  identifier_ticker: _createRes.extractedSymbol ?? undefined,
+                  identifier_isin: _createRes.extractedIsin ?? undefined,
+              }
+            : null}
         zIndex={90}
         oncreated={(assetId) => {
             resolveAsset(createAssetForFakeId!, assetId);
@@ -2258,11 +2257,13 @@ ${arrow}<span>${label}</span></span>`,
 <ConfirmModal
     open={identifierPromptOpen}
     title={$t('importWizard.addIdentifier.title')}
-    message={$t('importWizard.addIdentifier.body', {values: {
-        asset: identifierPromptAssetName ?? '',
-        value: identifierPromptValue ?? '',
-        type: identifierPromptField === 'identifier_ticker' ? 'Ticker' : 'ISIN',
-    }})}
+    message={$t('importWizard.addIdentifier.body', {
+        values: {
+            asset: identifierPromptAssetName ?? '',
+            value: identifierPromptValue ?? '',
+            type: identifierPromptField === 'identifier_ticker' ? 'Ticker' : 'ISIN',
+        },
+    })}
     confirmText={$t('importWizard.addIdentifier.confirm')}
     cancelText={$t('importWizard.addIdentifier.skip')}
     zIndex={zIndex + 30}
