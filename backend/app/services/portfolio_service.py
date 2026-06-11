@@ -43,6 +43,7 @@ from backend.app.schemas.analytics import (
     PortfolioHolding,
     PortfolioSummary,
 )
+from backend.app.schemas.assets import FAClassificationParams
 from backend.app.schemas.common import Currency, FxBackwardFillInfo, SafeDecimal
 from backend.app.schemas.wac import WACMissingPairInfo, WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.fx import convert_bulk
@@ -54,6 +55,7 @@ from backend.app.utils.financial.roi_utils import (
     calculate_mwrr,
     calculate_mwrr_series,
     calculate_simple_roi,
+    calculate_simple_roi_series,
     calculate_twrr,
     calculate_twrr_series,
 )
@@ -183,10 +185,7 @@ async def compute_wac_iterative(
                 fx_staleness[unified_idx] = FxBackwardFillInfo(fx_rate_date=rate_date, fx_days_back=stale_days)
 
     if missing_pair_dates:
-        missing_pairs_out = [
-            WACMissingPairInfo(pair=k, dates=sorted(set(v)))
-            for k, v in missing_pair_dates.items()
-        ]
+        missing_pairs_out = [WACMissingPairInfo(pair=k, dates=sorted(set(v))) for k, v in missing_pair_dates.items()]
         return WACPreviewResultItem(wac=None, wac_qualifying_txs=[], wac_missing_pairs=missing_pairs_out)
 
     # 5. Build final WACInputTX list with converted costs
@@ -294,9 +293,9 @@ class _HistoryTxRow(NamedTuple):
     """
 
     date: date_type
-    type: str     # "DEPOSIT" | "WITHDRAWAL" | "BUY" | "SELL"
+    type: str  # "DEPOSIT" | "WITHDRAWAL" | "BUY" | "SELL"
     amount: Decimal  # absolute value, already converted to base currency, > 0
-    share: Decimal   # broker ownership fraction (0.0-1.0), already incorporated in amount
+    share: Decimal  # broker ownership fraction (0.0-1.0), already incorporated in amount
 
 
 def _build_history_series(
@@ -325,9 +324,7 @@ def _build_history_series(
     if not transactions:
         return []
 
-    daily: dict[date_type, dict[str, Decimal]] = defaultdict(
-        lambda: {"cash": Decimal("0"), "invested": Decimal("0"), "nav": Decimal("0")}
-    )
+    daily: dict[date_type, dict[str, Decimal]] = defaultdict(lambda: {"cash": Decimal("0"), "invested": Decimal("0"), "nav": Decimal("0")})
 
     cumulative_cash = Decimal("0")
     cumulative_invested = Decimal("0")
@@ -429,12 +426,7 @@ class PortfolioService:
 
     async def _get_latest_price(self, asset_id: int) -> Optional[tuple[Decimal, str, date_type]]:
         """Return (close_price, currency, date) for latest price history entry."""
-        stmt = (
-            select(PriceHistory.close, PriceHistory.currency, PriceHistory.date)
-            .where(PriceHistory.asset_id == asset_id, PriceHistory.close.is_not(None))
-            .order_by(PriceHistory.date.desc())
-            .limit(1)
-        )
+        stmt = select(PriceHistory.close, PriceHistory.currency, PriceHistory.date).where(PriceHistory.asset_id == asset_id, PriceHistory.close.is_not(None)).order_by(PriceHistory.date.desc()).limit(1)
         row = (await self.db.execute(stmt)).one_or_none()
         if row:
             return row.close, row.currency, row.date
@@ -484,14 +476,15 @@ class PortfolioService:
         5. Build allocation breakdown (by type, sector, geo).
         """
         from datetime import date as today_date
+
         today = today_date.today()
 
         base_currency = await self._get_base_currency()
         accesses = await self._get_user_broker_access(user_id, broker_ids)
 
         total_nav = Decimal("0")
-        total_invested = Decimal("0")   # capital deployed = deposits - withdrawals (in base currency)
-        total_cost_basis = Decimal("0") # cost basis of current holdings (for per-holding P&L)
+        total_invested = Decimal("0")  # capital deployed = deposits - withdrawals (in base currency)
+        total_cost_basis = Decimal("0")  # cost basis of current holdings (for per-holding P&L)
         total_cash = Decimal("0")
         all_cash_balances: dict[str, Decimal] = defaultdict(Decimal)
         all_holdings: list[PortfolioHolding] = []
@@ -526,11 +519,11 @@ class PortfolioService:
 
                 if tx.type == TransactionType.DEPOSIT:
                     broker_cash[tx.currency] += abs(tx.amount)
-                    total_invested += amount_base_cf * share        # capital deployed
+                    total_invested += amount_base_cf * share  # capital deployed
                     cash_flows.append(CashFlowInput(tx.date, -amount_base_cf * share))
                 elif tx.type == TransactionType.WITHDRAWAL:
                     broker_cash[tx.currency] -= abs(tx.amount)
-                    total_invested -= amount_base_cf * share        # capital returned
+                    total_invested -= amount_base_cf * share  # capital returned
                     cash_flows.append(CashFlowInput(tx.date, amount_base_cf * share))
 
             # --- Holding transactions ---
@@ -565,17 +558,10 @@ class PortfolioService:
                 wac_currency = wac_result.wac.code
 
                 # Get pool quantity
-                pool_qty = (
-                    wac_result.wac_qualifying_txs[-1].quantity
-                    if wac_result.wac_qualifying_txs
-                    else Decimal("0")
-                )
+                pool_qty = wac_result.wac_qualifying_txs[-1].quantity if wac_result.wac_qualifying_txs else Decimal("0")
                 # pool_qty is running, get actual remaining from last qualifying tx
                 # Actually compute from txns directly
-                net_qty = sum(
-                    (tx.quantity or Decimal("0")) for tx in asset_txns
-                    if tx.type in (TransactionType.BUY, TransactionType.SELL)
-                )
+                net_qty = sum((tx.quantity or Decimal("0")) for tx in asset_txns if tx.type in (TransactionType.BUY, TransactionType.SELL))
                 if net_qty <= 0:
                     continue
 
@@ -616,28 +602,43 @@ class PortfolioService:
                     gain_loss = current_value - cost_basis
                     gain_loss_pct = (gain_loss / cost_basis) if cost_basis != 0 else Decimal("0")
 
-                # Allocation data
-                asset_type = asset.type.value if asset.type else "Unknown"
-                asset_sector = asset.sector or "Unknown"
-                asset_country = asset.country or "Unknown"
+                # Allocation data — parse classification_params for sector/geo distributions
+                cp: FAClassificationParams | None = None
+                if asset.classification_params:
+                    try:
+                        cp = FAClassificationParams.model_validate_json(asset.classification_params)
+                    except Exception:
+                        pass
+
+                asset_type = asset.asset_type.value if asset.asset_type else "Unknown"
                 if current_value:
                     allocation_by_type[asset_type] += current_value
-                    allocation_by_sector[asset_sector] += current_value
-                    allocation_by_geo[asset_country] += current_value
+                    if cp and cp.sector_area and cp.sector_area.distribution:
+                        for sector, weight in cp.sector_area.distribution.items():
+                            allocation_by_sector[sector] += current_value * weight
+                    else:
+                        allocation_by_sector["Unknown"] += current_value
+                    if cp and cp.geographic_area and cp.geographic_area.distribution:
+                        for country, weight in cp.geographic_area.distribution.items():
+                            allocation_by_geo[country] += current_value * weight
+                    else:
+                        allocation_by_geo["Unknown"] += current_value
 
-                all_holdings.append(PortfolioHolding(
-                    asset_id=asset_id,
-                    asset_name=asset.name,
-                    asset_ticker=asset.ticker,
-                    asset_type=asset_type,
-                    quantity=net_qty,
-                    wac_per_unit=wac_base if wac_base else wac_per_unit,
-                    current_price=current_price,
-                    current_value=current_value,
-                    gain_loss=gain_loss,
-                    gain_loss_percent=gain_loss_pct,
-                    allocation_percent=None,  # computed after full aggregation
-                ))
+                all_holdings.append(
+                    PortfolioHolding(
+                        asset_id=asset_id,
+                        asset_name=asset.display_name,
+                        asset_ticker=asset.identifier_ticker,
+                        asset_type=asset_type,
+                        quantity=net_qty,
+                        wac_per_unit=wac_base if wac_base else wac_per_unit,
+                        current_price=current_price,
+                        current_value=current_value,
+                        gain_loss=gain_loss,
+                        gain_loss_percent=gain_loss_pct,
+                        allocation_percent=None,  # computed after full aggregation
+                    )
+                )
 
             # --- Broker-level cash in base currency ---
             broker_cash_base = Decimal("0")
@@ -653,7 +654,7 @@ class PortfolioService:
                         all_cash_balances[ccy] += amt * share
 
             total_cash += broker_cash_base
-            broker_nav = (broker_market_value + broker_cash_base)
+            broker_nav = broker_market_value + broker_cash_base
             total_nav += broker_nav
 
             # Broker breakdown
@@ -662,14 +663,16 @@ class PortfolioService:
                 broker_name = broker.name if broker else f"Broker {broker_id}"
                 broker_gain = broker_nav - total_invested  # approx per broker
                 broker_gl_pct = (broker_gain / total_invested) if total_invested else Decimal("0")
-                by_broker_list.append(BrokerBreakdown(
-                    broker_id=broker_id,
-                    broker_name=broker_name,
-                    net_worth=broker_nav,
-                    gain_loss=broker_gain,
-                    gain_loss_percent=broker_gl_pct,
-                    cash_total=broker_cash_base,
-                ))
+                by_broker_list.append(
+                    BrokerBreakdown(
+                        broker_id=broker_id,
+                        broker_name=broker_name,
+                        net_worth=broker_nav,
+                        gain_loss=broker_gain,
+                        gain_loss_percent=broker_gl_pct,
+                        cash_total=broker_cash_base,
+                    )
+                )
 
         # --- Compute allocation percentages ---
         total_market = sum(allocation_by_type.values()) or Decimal("1")
@@ -709,7 +712,7 @@ class PortfolioService:
                 mwrr_point = await asyncio.to_thread(
                     calculate_mwrr,
                     cash_flows,
-                    total_invested,   # initial capital deployed
+                    total_invested,  # initial capital deployed
                     total_nav,
                     cf_dates[0],
                     today,
@@ -720,9 +723,7 @@ class PortfolioService:
         total_gl = total_nav - total_invested
         total_gl_pct = (total_gl / total_invested) if total_invested > 0 else Decimal("0")
 
-        cash_balances_list = [
-            Currency(code=ccy, amount=amt) for ccy, amt in all_cash_balances.items()
-        ]
+        cash_balances_list = [Currency(code=ccy, amount=amt) for ccy, amt in all_cash_balances.items()]
 
         return PortfolioSummary(
             net_worth=total_nav,
@@ -789,14 +790,49 @@ class PortfolioService:
                 if amount_base is None:
                     continue
 
-                rows.append(_HistoryTxRow(
-                    date=tx.date,
-                    type=tx.type.value if hasattr(tx.type, "value") else str(tx.type),
-                    amount=amount_base,
-                    share=share,
-                ))
+                rows.append(
+                    _HistoryTxRow(
+                        date=tx.date,
+                        type=tx.type.value if hasattr(tx.type, "value") else str(tx.type),
+                        amount=amount_base,
+                        share=share,
+                    )
+                )
 
-        return _build_history_series(rows)
+        history = _build_history_series(rows)
+        if not history:
+            return history
+
+        # Build NAV snapshots from the computed history series
+        nav_snapshots = [NAVSnapshot(date=pt.date, nav=pt.nav_value) for pt in history]
+
+        # Build cash flows from DEPOSIT/WITHDRAWAL rows (already in base currency, absolute value).
+        # Sign convention (roi_utils.py): DEPOSIT → negative (investor pays in), WITHDRAWAL → positive.
+        cash_flows: list[CashFlowInput] = []
+        for row in rows:
+            if row.type == "DEPOSIT":
+                cash_flows.append(CashFlowInput(date=row.date, amount=-(row.amount * row.share)))
+            elif row.type == "WITHDRAWAL":
+                cash_flows.append(CashFlowInput(date=row.date, amount=row.amount * row.share))
+
+        if nav_snapshots and cash_flows:
+            # TWRR and Simple ROI are O(N) CPU-light — run inline.
+            twrr_series = calculate_twrr_series(nav_snapshots, cash_flows)
+            roi_series = calculate_simple_roi_series(nav_snapshots, cash_flows)
+            # MWRR runs Newton-Raphson per point — offload to thread pool.
+            mwrr_series = await asyncio.to_thread(calculate_mwrr_series, nav_snapshots, cash_flows)
+
+            # Build date-keyed lookup dicts for O(1) mapping
+            twrr_map = {pt.date: pt.twrr for pt in twrr_series}
+            roi_map = {pt.date: pt.roi for pt in roi_series}
+            mwrr_map = {pt.date: pt.mwrr for pt in mwrr_series}
+
+            for pt in history:
+                pt.twrr = twrr_map.get(pt.date)
+                pt.roi = roi_map.get(pt.date)
+                pt.mwrr = mwrr_map.get(pt.date)
+
+        return history
 
     async def get_asset_history(
         self,
@@ -809,6 +845,7 @@ class PortfolioService:
         Returns one point per date where both WAC and price are available.
         """
         from datetime import date as today_date
+
         today = today_date.today()
         base_currency = await self._get_base_currency()
 
@@ -825,11 +862,7 @@ class PortfolioService:
             return []
 
         # Get all price history for the asset
-        stmt = (
-            select(PriceHistory)
-            .where(PriceHistory.asset_id == asset_id, PriceHistory.close.is_not(None))
-            .order_by(PriceHistory.date)
-        )
+        stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_id, PriceHistory.close.is_not(None)).order_by(PriceHistory.date)
         prices = list((await self.db.execute(stmt)).scalars().all())
         if not prices:
             return []
@@ -864,6 +897,7 @@ class PortfolioService:
         Enriches open lots with unrealized P&L using the latest market price.
         """
         from datetime import date as today_date
+
         today = today_date.today()
         base_currency = await self._get_base_currency()
 
@@ -901,13 +935,15 @@ class PortfolioService:
             # Price per unit in asset currency
             price_per_unit = abs(tx.amount) / qty if qty else Decimal("0")
             tx_type = "BUY" if tx.type == TransactionType.BUY else "SELL"
-            fifo_inputs.append(FIFOTransactionInput(
-                id=tx.id,
-                type=tx_type,
-                quantity=qty,
-                price=price_per_unit,
-                date=tx.date,
-            ))
+            fifo_inputs.append(
+                FIFOTransactionInput(
+                    id=tx.id,
+                    type=tx_type,
+                    quantity=qty,
+                    price=price_per_unit,
+                    date=tx.date,
+                )
+            )
 
         fifo_result = calculate_fifo_lots(fifo_inputs)
 
@@ -920,14 +956,16 @@ class PortfolioService:
             unrealized: Decimal | None = None
             if current_price is not None:
                 unrealized = (current_price - lot.buy_price) * lot.remaining_quantity
-            open_lot_schemas.append(OpenLotSchema(
-                buy_transaction_id=lot.buy_transaction_id,
-                buy_date=lot.buy_date,
-                buy_price=lot.buy_price,
-                original_quantity=lot.original_quantity,
-                remaining_quantity=lot.remaining_quantity,
-                unrealized_pnl=unrealized,
-            ))
+            open_lot_schemas.append(
+                OpenLotSchema(
+                    buy_transaction_id=lot.buy_transaction_id,
+                    buy_date=lot.buy_date,
+                    buy_price=lot.buy_price,
+                    original_quantity=lot.original_quantity,
+                    remaining_quantity=lot.remaining_quantity,
+                    unrealized_pnl=unrealized,
+                )
+            )
 
         closed_lot_schemas: list[ClosedLotSchema] = [
             ClosedLotSchema(

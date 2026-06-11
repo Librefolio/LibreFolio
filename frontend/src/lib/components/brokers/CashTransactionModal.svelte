@@ -11,6 +11,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {trySave} from '$lib/utils/trySave';
+    import {invalidate as invalidatePortfolioCache} from '$lib/stores/portfolio/portfolioStore.svelte';
 
     const dispatch = createEventDispatcher<{
         close: void;
@@ -98,6 +99,7 @@
             error = result.message;
             return;
         }
+        invalidatePortfolioCache();
         dispatch('success');
         dispatch('close');
     }
