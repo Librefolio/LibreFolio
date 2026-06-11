@@ -706,9 +706,10 @@
     let autoNegateQty = $derived(rule.quantityRule === 'negative');
     let autoNegateCash = $derived(rule.cashSign === 'negative');
     let isReadonly = $derived(mode === 'view');
-    /** Helper: returns highlight ring classes for a given field testid. */
+    /** Helper: returns CSS classes for highlighted fields in view mode.
+     *  Uses a yellow gradient background + a brief pulse animation on first render. */
     function hl(testid: string): string {
-        return highlightFields.includes(testid) ? ' ring-2 ring-amber-400 dark:ring-amber-500 rounded-lg' : '';
+        return highlightFields.includes(testid) ? ' hl-match rounded-lg' : '';
     }
     // Bugfix-5 §A4: `unlockImmutable=true` (deep-edit from BulkModal) overrides
     // the default immutability so the user can change `type`/`broker` on an
@@ -2189,4 +2190,27 @@
         -moz-appearance: textfield;
         appearance: textfield;
     }
+
+    /* Duplicate-compare highlight: soft amber background + smooth entrance.
+       Starts transparent → peaks bright yellow → settles to a light tint.
+       animation-fill-mode: forwards keeps the resting state after the animation. */
+    @keyframes hl-pulse {
+    0%   { background-color: rgba(253, 224, 71, 0.0); }
+    40%  { background-color: rgba(253, 224, 71, 0.65); }
+    50%  { background-color: rgba(253, 224, 71, 0.65); }
+    100% { background-color: rgba(253, 224, 71, 0.18); }
+}
+:global(.hl-match) {
+    animation: hl-pulse 3s linear 1 forwards;
+    padding: 6px 8px;
+}
+:global(.dark .hl-match) {
+    animation: hl-pulse-dark 3s linear 1 forwards;
+}
+@keyframes hl-pulse-dark {
+    0%   { background-color: rgba(180, 130, 20, 0.0); }
+    40%  { background-color: rgba(180, 130, 20, 0.55); }
+    50%  { background-color: rgba(180, 130, 20, 0.55); }
+    100% { background-color: rgba(180, 130, 20, 0.22); }
+}
 </style>

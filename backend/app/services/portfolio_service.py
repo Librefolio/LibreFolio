@@ -44,7 +44,7 @@ from backend.app.schemas.analytics import (
     PortfolioSummary,
 )
 from backend.app.schemas.assets import FAClassificationParams
-from backend.app.schemas.common import Currency, FxBackwardFillInfo, SafeDecimal
+from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.wac import WACMissingPairInfo, WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.fx import convert_bulk
 from backend.app.services.settings_service import get_global_setting
@@ -475,9 +475,8 @@ class PortfolioService:
         4. Compute ROI metrics (simple ROI, TWRR, MWRR).
         5. Build allocation breakdown (by type, sector, geo).
         """
-        from datetime import date as today_date
 
-        today = today_date.today()
+        today = date_type.today()
 
         base_currency = await self._get_base_currency()
         accesses = await self._get_user_broker_access(user_id, broker_ids)
@@ -557,10 +556,7 @@ class PortfolioService:
                 wac_per_unit = wac_result.wac.amount
                 wac_currency = wac_result.wac.code
 
-                # Get pool quantity
-                pool_qty = wac_result.wac_qualifying_txs[-1].quantity if wac_result.wac_qualifying_txs else Decimal("0")
-                # pool_qty is running, get actual remaining from last qualifying tx
-                # Actually compute from txns directly
+                # Get pool quantity — compute net from txns directly
                 net_qty = sum((tx.quantity or Decimal("0")) for tx in asset_txns if tx.type in (TransactionType.BUY, TransactionType.SELL))
                 if net_qty <= 0:
                     continue
@@ -752,6 +748,12 @@ class PortfolioService:
     ) -> list[PortfolioHistoryPoint]:
         """Return daily portfolio value series (cash, invested, NAV) in base currency.
 
+        Always accumulates the full history from t=0 regardless of date_from,
+        so that NAV/invested balances are correct. The display series is then
+        sliced to [date_from, date_to] and ROI metrics are re-based to the
+        period start so that TWRR/MWRR/ROI show the return OF that specific
+        period (starting from ~0%).
+
         Only includes dates where transactions exist.
         Delegates accumulation logic to the pure function _build_history_series().
         """
@@ -764,9 +766,10 @@ class PortfolioService:
             broker_id = access.broker_id
             share = access.share_percentage or Decimal("1")
 
+            # Always fetch full history from t=0 — date_from only slices the output.
             all_txns = await self._get_transactions(
                 broker_id,
-                date_from=date_from,
+                date_from=None,
                 date_to=date_to,
             )
 
@@ -799,28 +802,53 @@ class PortfolioService:
                     )
                 )
 
-        history = _build_history_series(rows)
+        all_history = _build_history_series(rows)
+        if not all_history:
+            return all_history
+
+        # Slice display series to [date_from, date_to]
+        if date_from:
+            history = [pt for pt in all_history if pt.date >= date_from]
+        else:
+            history = all_history
+
         if not history:
             return history
 
-        # Build NAV snapshots from the computed history series
-        nav_snapshots = [NAVSnapshot(date=pt.date, nav=pt.nav_value) for pt in history]
-
-        # Build cash flows from DEPOSIT/WITHDRAWAL rows (already in base currency, absolute value).
-        # Sign convention (roi_utils.py): DEPOSIT → negative (investor pays in), WITHDRAWAL → positive.
-        cash_flows: list[CashFlowInput] = []
+        # ── Full NAV snapshots and cash flows (from t=0) ──────────────────────
+        all_nav_snapshots = [NAVSnapshot(date=pt.date, nav=pt.nav_value) for pt in all_history]
+        all_cash_flows: list[CashFlowInput] = []
         for row in rows:
             if row.type == "DEPOSIT":
-                cash_flows.append(CashFlowInput(date=row.date, amount=-(row.amount * row.share)))
+                all_cash_flows.append(CashFlowInput(date=row.date, amount=-(row.amount * row.share)))
             elif row.type == "WITHDRAWAL":
-                cash_flows.append(CashFlowInput(date=row.date, amount=row.amount * row.share))
+                all_cash_flows.append(CashFlowInput(date=row.date, amount=row.amount * row.share))
 
-        if nav_snapshots and cash_flows:
+        # ── Period re-basing for ROI metrics ─────────────────────────────────
+        # If date_from is set, inject the period-start NAV as a synthetic negative
+        # cash flow so that TWRR/MWRR/ROI represent the return OF this period.
+        if date_from and all_history:
+            # NAV at (or just before) date_from — last available point <= date_from
+            pre_period = [pt for pt in all_history if pt.date <= date_from]
+            period_start_nav = pre_period[-1].nav_value if pre_period else all_history[0].nav_value
+            period_start_date = pre_period[-1].date if pre_period else history[0].date
+
+            # Synthetic "investor starts with this NAV" cash flow
+            synthetic_cf = CashFlowInput(date=period_start_date, amount=-period_start_nav)
+            # Only keep original cash flows strictly after period start
+            period_cash_flows = [synthetic_cf] + [cf for cf in all_cash_flows if cf.date > period_start_date]
+            # NAV snapshots from the period start onwards
+            period_nav_snapshots = [s for s in all_nav_snapshots if s.date >= period_start_date]
+        else:
+            period_cash_flows = all_cash_flows
+            period_nav_snapshots = all_nav_snapshots
+
+        if period_nav_snapshots and period_cash_flows:
             # TWRR and Simple ROI are O(N) CPU-light — run inline.
-            twrr_series = calculate_twrr_series(nav_snapshots, cash_flows)
-            roi_series = calculate_simple_roi_series(nav_snapshots, cash_flows)
+            twrr_series = calculate_twrr_series(period_nav_snapshots, period_cash_flows)
+            roi_series = calculate_simple_roi_series(period_nav_snapshots, period_cash_flows)
             # MWRR runs Newton-Raphson per point — offload to thread pool.
-            mwrr_series = await asyncio.to_thread(calculate_mwrr_series, nav_snapshots, cash_flows)
+            mwrr_series = await asyncio.to_thread(calculate_mwrr_series, period_nav_snapshots, period_cash_flows)
 
             # Build date-keyed lookup dicts for O(1) mapping
             twrr_map = {pt.date: pt.twrr for pt in twrr_series}
@@ -844,9 +872,7 @@ class PortfolioService:
 
         Returns one point per date where both WAC and price are available.
         """
-        from datetime import date as today_date
 
-        today = today_date.today()
         base_currency = await self._get_base_currency()
 
         # Determine which brokers the user has access to
@@ -896,11 +922,6 @@ class PortfolioService:
 
         Enriches open lots with unrealized P&L using the latest market price.
         """
-        from datetime import date as today_date
-
-        today = today_date.today()
-        base_currency = await self._get_base_currency()
-
         # Verify access
         accesses = await self._get_user_broker_access(user_id, [broker_id])
         if not accesses:
@@ -924,8 +945,6 @@ class PortfolioService:
             )
 
         # Build FIFO inputs
-        asset = await self._get_asset(asset_id)
-        asset_ccy = (asset.currency if asset else None) or base_currency
         fifo_inputs: list[FIFOTransactionInput] = []
 
         for tx in asset_txns:

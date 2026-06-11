@@ -755,3 +755,59 @@ Con il redesign v5 (ImportWizard a 4 step), questa funzionalità non serve più:
 5. Rigenerare il client API (`./dev.py api sync`)
 
 **Ref**: `plan-phase07Part5-v5-ImportWizard.prompt.md` §8.5
+
+---
+
+## ⚡ Migrazione a ORJSONResponse per performance JSON
+
+**Data aggiunta**: 11 Giugno 2026
+**Priority**: P4 (ottimizzazione, non urgente)
+**Scope**: Backend (`app/main.py`, serializzazione)
+
+### Contesto
+
+`orjson` è un serializzatore JSON scritto in Rust, 5–10× più veloce di `json` stdlib per la serializzazione e 2–3× per la deserializzazione. FastAPI supporta nativamente `ORJSONResponse` come `default_response_class`.
+
+### Problema attuale: incompatibilità con `SafeDecimal`
+
+Il progetto usa `SafeDecimal = Annotated[Decimal, PlainSerializer(..., when_used="json")]` su tutti gli schemi di transazioni, FX e portafoglio. Questo `PlainSerializer` garantisce che i `Decimal` arrivino al frontend come stringhe senza notazione scientifica (es. `"0.00500000"` invece di `5e-3`).
+
+**`orjson` bypassa i `PlainSerializer` di Pydantic** quando serializza direttamente, convertendo i `Decimal` in float nativi — con rischio di perdita di precisione e notazione scientifica silenziosa sul frontend.
+
+### Come implementarlo correttamente
+
+Non è sicuro usare `ORJSONResponse` come `default_response_class` senza prima risolvere questo punto. Le opzioni:
+
+1. **Subclass `ORJSONResponse`** che chiama `model.model_dump(mode='json')` prima di passare a `orjson` → applica i `PlainSerializer` prima della serializzazione Rust.
+2. **Custom `orjson` default function** che intercetta `Decimal` e lo serializza come stringa.
+3. **Rendere `orjson` l'encoder di Pydantic v2** via `model_config = ConfigDict(json_encoders=...)` — ma deprecato in v2.
+
+**Approccio consigliato**: opzione 1. Creare `SafeORJSONResponse(ORJSONResponse)` che fa `jsonable_encoder(content)` prima di `orjson.dumps()`, e usarla come `default_response_class`.
+
+### Benefici attesi
+
+Endpoint pesanti (bulk import, FIFO calc, portfolio summary) potrebbero guadagnare 20–50ms su payload grandi. Serializzazione nativa di `datetime`, `UUID`, `Enum` senza `jsonable_encoder`.
+
+### Prerequisiti
+
+- Test coverage sugli endpoint con campi `SafeDecimal` per verificare output identico
+- Benchmark prima/dopo su `/api/v1/transactions` con dataset reale
+
+---
+
+## 🏷️ Centralizzazione Emoji Settori nel Backend
+
+**Data aggiunta**: 11 Giugno 2026
+**Priority**: P3
+**Status**: 📋 PIANIFICATO
+
+### Contesto
+Attualmente, le emoji associate ai settori finanziari sono hardcodate nel frontend all'interno dei file di traduzione `i18n` (es. `"Technology": "💻 Tecnologia"`). Questo costringe a estrarre programmaticamente le emoji dalle stringhe di traduzione in alcuni componenti visivi (es. `SectorPieChart` / `AllocationPieChart`) e non garantisce una singola source of truth.
+
+### Azione Futura
+1. Spostare la definizione delle emoji nel backend, associandole direttamente all'enum o alla configurazione dei settori (es. endpoint `/api/v1/utilities/sectors`).
+2. L'endpoint dovrà restituire oggetti strutturati (es. `{ "id": "Technology", "emoji": "💻" }`) invece di semplici stringhe, oppure fornire una mappa accessoria.
+3. Rimuovere le emoji dai file di traduzione `i18n` (`en.json`, `it.json`, ecc.) del frontend.
+4. Aggiornare `sectorStore.ts` per memorizzare e fornire facilmente l'abbinamento settore/emoji.
+5. Aggiornare tutti i componenti frontend che mostrano i settori per usare l'emoji fornita dal backend, garantendo un'unica source of truth.
+
