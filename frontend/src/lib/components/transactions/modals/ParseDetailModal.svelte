@@ -284,13 +284,13 @@
                 {#if duplicateStats}
                     {@const stats = duplicateStats}
                     {#if stats}
-                        <div class="flex gap-4 text-sm">
-                            <span class="text-emerald-600 dark:text-emerald-400">{$t('importWizard.uniqueTx', {values: {n: stats.unique}})}</span>
+                        <div class="flex flex-wrap gap-2 text-sm">
+                            <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">✓ {$t('importWizard.uniqueTx', {values: {n: stats.unique}})}</span>
                             {#if stats.possible > 0}
-                                <span class="text-amber-600 dark:text-amber-400">{$t('importWizard.possibleDuplicates', {values: {n: stats.possible}})}</span>
+                                <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">ℹ {$t('importWizard.possibleDuplicates', {values: {n: stats.possible}})}</span>
                             {/if}
                             {#if stats.likely > 0}
-                                <span class="text-red-600 dark:text-red-400">{$t('importWizard.likelyDuplicates', {values: {n: stats.likely}})}</span>
+                                <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">⚠ {$t('importWizard.likelyDuplicates', {values: {n: stats.likely}})}</span>
                             {/if}
                         </div>
                     {/if}

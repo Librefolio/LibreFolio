@@ -458,6 +458,7 @@ def populate_assets(session: Session):
             "display_name": "Apple Inc.",
             "currency": "USD",
             "asset_type": AssetType.STOCK,
+            "identifier_ticker": "AAPL",
             "user_url": "https://investor.apple.com",
             "classification_params": json.dumps(
                 {
@@ -471,6 +472,7 @@ def populate_assets(session: Session):
             "display_name": "Microsoft Corporation",
             "currency": "USD",
             "asset_type": AssetType.STOCK,
+            "identifier_ticker": "MSFT",
             "user_url": "https://www.microsoft.com/en-us/investor",
             "classification_params": json.dumps(
                 {
@@ -484,6 +486,7 @@ def populate_assets(session: Session):
             "display_name": "Tesla, Inc.",
             "currency": "USD",
             "asset_type": AssetType.STOCK,
+            "identifier_ticker": "TSLA",
             "classification_params": json.dumps(
                 {
                     "short_description": "Electric vehicles and clean energy",
@@ -530,6 +533,7 @@ def populate_assets(session: Session):
             "display_name": "Bitcoin",
             "currency": "USD",
             "asset_type": AssetType.CRYPTO,
+            "identifier_ticker": "BTC-USD",
             "classification_params": json.dumps(
                 {
                     "short_description": "Digital gold, store of value",
@@ -542,6 +546,7 @@ def populate_assets(session: Session):
             "display_name": "Ethereum",
             "currency": "USD",
             "asset_type": AssetType.CRYPTO,
+            "identifier_ticker": "ETH-USD",
             "classification_params": json.dumps(
                 {
                     "short_description": "Smart contract platform",
@@ -555,6 +560,7 @@ def populate_assets(session: Session):
             "display_name": "NVIDIA Corporation",
             "currency": "USD",
             "asset_type": AssetType.STOCK,
+            "identifier_ticker": "NVDA",
             "classification_params": json.dumps(
                 {
                     "short_description": "GPU and AI computing leader",
@@ -1187,6 +1193,60 @@ def populate_transactions(session: Session):
         print(f"  {tx_emoji} {tx_data['type'].value}: {asset_name} ({tx_data['amount']} {tx_data['currency']})")
 
     session.commit()
+
+    # --- Fixed-date BRIM duplicate-test transactions on IB ---
+    # These fixed dates match rows in generic_simple.csv so that when the CSV
+    # is imported (assign broker = Interactive Brokers), duplicate detection
+    # will flag the matching rows as "likely" or "possible" duplicates.
+    # Rows 2025-11-01/02 share exact description → LIKELY_WITH_ASSET
+    # Rows 2025-11-03/04 have different description → POSSIBLE_WITH_ASSET
+    brim_dup_test_txs = [
+        # Pre-fund: covers the 2 BUY amounts below (862.50 + 517.50 = 1380 USD)
+        Transaction(
+            broker_id=ib.id, asset_id=None,
+            type=TransactionType.DEPOSIT,
+            date=date(2025, 10, 31),
+            quantity=Decimal("0"), amount=Decimal("2000.00"), currency="USD",
+            description="[brim-dup-test] Pre-fund for duplicate test transactions",
+            tags="brim-dup-test",
+        ),
+        Transaction(
+            broker_id=ib.id, asset_id=apple.id,
+            type=TransactionType.BUY,
+            date=date(2025, 11, 1),
+            quantity=Decimal("5.0"), amount=Decimal("-862.50"), currency="USD",
+            description="BRIM dup test - likely 1",
+            tags="brim-dup-test",
+        ),
+        Transaction(
+            broker_id=ib.id, asset_id=apple.id,
+            type=TransactionType.DIVIDEND,
+            date=date(2025, 11, 2),
+            quantity=Decimal("0"), amount=Decimal("12.50"), currency="USD",
+            description="BRIM dup test - likely 2",
+            tags="brim-dup-test",
+        ),
+        Transaction(
+            broker_id=ib.id, asset_id=apple.id,
+            type=TransactionType.BUY,
+            date=date(2025, 11, 3),
+            quantity=Decimal("3.0"), amount=Decimal("-517.50"), currency="USD",
+            description="DB desc for possible dup 1",
+            tags="brim-dup-test",
+        ),
+        Transaction(
+            broker_id=ib.id, asset_id=apple.id,
+            type=TransactionType.SELL,
+            date=date(2025, 11, 4),
+            quantity=Decimal("-2.0"), amount=Decimal("350.00"), currency="USD",
+            description="DB desc for possible dup 2",
+            tags="brim-dup-test",
+        ),
+    ]
+    for t in brim_dup_test_txs:
+        session.add(t)
+    session.commit()
+    print(f"  📋 BRIM dup-test: 5 fixed-date IB transactions (pre-fund + 2 likely + 2 possible matches for generic_simple.csv)")
 
     # --- Standalone delete-safe transactions (for E2E delete tests) ---
     # Tagged 'delete-safe' so tests can locate them easily.
@@ -2759,15 +2819,14 @@ def upload_broker_reports(session: Session):
         print("  ⚠️  Sample reports directory not found")
         return
 
-    # Map broker names to sample report files
-    report_map = {
-        "Interactive Brokers": "ibkr-trades-export.csv",
-        "DEGIRO": "degiro-export.csv",
-        "Directa SIM": "directa-export.csv",
-        "eToro": "etoro-export.csv",
-        "Coinbase": "coinbase-export.csv",
-        "Recrowd": "generic_simple.csv",
-        "Charles Schwab": "schwab-export.csv",
+    # Map broker names to sample report files (supports list for multiple files)
+    report_map: dict[str, list[str]] = {
+        "Interactive Brokers": ["ibkr-trades-export.csv", "generic_simple.csv"],
+        "DEGIRO": ["degiro-export.csv"],
+        "Directa SIM": ["directa-export.csv"],
+        "eToro": ["etoro-export.csv"],
+        "Coinbase": ["coinbase-export.csv"],
+        "Charles Schwab": ["schwab-export.csv"],
     }
 
     # Get admin user for uploaded_by_user_id
@@ -2777,24 +2836,22 @@ def upload_broker_reports(session: Session):
     brokers = session.exec(select(Broker)).all()
 
     for broker in brokers:
-        sample_filename = report_map.get(broker.name)
-        if not sample_filename:
-            continue
+        sample_filenames = report_map.get(broker.name, [])
+        for sample_filename in sample_filenames:
+            sample_path = samples_dir / sample_filename
+            if not sample_path.exists():
+                print(f"  ⚠️  Sample not found: {sample_filename}")
+                continue
 
-        sample_path = samples_dir / sample_filename
-        if not sample_path.exists():
-            print(f"  ⚠️  Sample not found: {sample_filename}")
-            continue
-
-        # Use the real service function (UUID + sidecar JSON + broker subfolder)
-        content = sample_path.read_bytes()
-        file_info = save_uploaded_file(
-            content=content,
-            original_filename=sample_filename,
-            user_id=admin_id,
-            broker_id=broker.id,
-        )
-        print(f"  ✅ {broker.name} → {sample_filename} (id: {file_info.file_id[:8]}…)")
+            # Use the real service function (UUID + sidecar JSON + broker subfolder)
+            content = sample_path.read_bytes()
+            file_info = save_uploaded_file(
+                content=content,
+                original_filename=sample_filename,
+                user_id=admin_id,
+                broker_id=broker.id,
+            )
+            print(f"  ✅ {broker.name} → {sample_filename} (id: {file_info.file_id[:8]}…)")
 
 
 async def validate_all_balances_async() -> int:

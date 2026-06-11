@@ -11,7 +11,7 @@
   - Dark mode support
 -->
 <script generics="T" lang="ts">
-    import {onMount} from 'svelte';
+    import {onMount, untrack} from 'svelte';
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/files/upload';
     import {getUserStorageKey} from '$lib/utils/storage';
@@ -33,6 +33,8 @@
         enableSelection?: boolean;
         selectionMode?: 'multi' | 'single' | 'none';
         selectionColumnWidth?: string;
+        /** Pre-selected row IDs when the table mounts. Useful when navigating back to a step. */
+        initialSelectedIds?: string[];
         onSelectionChange?: (selectedIds: string[]) => void;
         selectedRowId?: string | null;
         onRowClick?: (row: T) => void;
@@ -103,6 +105,7 @@
         enableSelection = true,
         selectionMode = 'multi',
         selectionColumnWidth = '48px',
+        initialSelectedIds,
         onSelectionChange,
         selectedRowId = null,
         onRowClick,
@@ -172,8 +175,14 @@
     // Column order
     let columnOrder = $state<string[]>([]);
 
-    // Row selection
+    // Row selection — pre-populate from initialSelectedIds if provided (set synchronously to avoid flicker)
     let rowSelection = $state<SelectionState>({});
+    untrack(() => {
+        const ids = initialSelectedIds;
+        if (ids && ids.length > 0) {
+            rowSelection = Object.fromEntries(ids.map((id) => [id, true]));
+        }
+    });
 
     // Show selected only filter
     let showSelectedOnly = $state(false);
@@ -587,6 +596,11 @@
         return typeof col.header === 'function' ? col.header() : col.header;
     }
 
+    function getColumnHeaderHtml(col: ColumnDef<T>): string | null {
+        if (!col.headerHtml) return null;
+        return typeof col.headerHtml === 'function' ? col.headerHtml() : col.headerHtml;
+    }
+
     function getColumnTooltip(col: ColumnDef<T>): string | null {
         if (!col.headerTooltip) return null;
         return typeof col.headerTooltip === 'function' ? col.headerTooltip() : col.headerTooltip;
@@ -975,8 +989,15 @@
     }
 
     /** Get ordered columns info for external visibility control */
-    export function getColumnsForVisibility(): Array<{id: string; header: string | (() => string); visible: boolean}> {
-        return orderedColumns.map((c) => ({id: c.id, header: c.header, visible: columnVisibility[c.id] !== false}));
+    export function getColumnsForVisibility(): Array<{id: string; header: string | (() => string); displayName?: string | (() => string); visible: boolean}> {
+        return orderedColumns
+            .filter((c) => {
+                // Hide columns with no visible label (e.g. the checkbox selection column)
+                const h = typeof c.header === 'function' ? c.header() : c.header;
+                const dn = c.displayName ? (typeof c.displayName === 'function' ? c.displayName() : c.displayName) : undefined;
+                return (h !== '' || (dn !== undefined && dn !== ''));
+            })
+            .map((c) => ({id: c.id, header: c.header, displayName: c.displayName, visible: columnVisibility[c.id] !== false}));
     }
 
     /** Toggle a column's visibility (external access) */
@@ -1061,13 +1082,17 @@
                         {@const isSorted = sortState?.columnId === column.id}
                         {@const sortDir = isSorted ? sortState?.direction : null}
                         {@const hasFilter = columnFilters[column.id] !== undefined}
-                        <th class="th-data" class:sortable={column.sortable !== false && enableSorting} style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {column.minWidth || 60}px;">
-                            <div class="header-content">
+                        <th class="th-data" class:sortable={column.sortable !== false && enableSorting} class:th-fixed={column.pinned != null} class:th-pinned-right={column.pinned === 'right'} style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {column.minWidth || 60}px;{column.pinned === 'left' ? ' left: 0;' : column.pinned === 'right' ? ' right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}">
+                            <div class="header-content" style={column.align === 'center' ? 'justify-content:center' : column.align === 'right' ? 'justify-content:flex-end' : ''}>
                                 {#if getColumnTooltip(column)}
                                     {@const tooltipText = getColumnTooltip(column) ?? ''}
                                     <Tooltip text={tooltipText} position="bottom">
                                         <button type="button" class="header-sort-btn" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
-                                            <span class="header-text">{getColumnLabel(column)}</span>
+                                            {#if getColumnHeaderHtml(column)}
+                                                <span class="header-text">{@html getColumnHeaderHtml(column)}</span>
+                                            {:else}
+                                                <span class="header-text">{getColumnLabel(column)}</span>
+                                            {/if}
                                             {#if column.sortable !== false && enableSorting}
                                                 <span class="sort-icon">
                                                     {#if sortDir === 'asc'}
@@ -1083,7 +1108,11 @@
                                     </Tooltip>
                                 {:else}
                                     <button type="button" class="header-sort-btn" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
-                                        <span class="header-text">{getColumnLabel(column)}</span>
+                                        {#if getColumnHeaderHtml(column)}
+                                            <span class="header-text">{@html getColumnHeaderHtml(column)}</span>
+                                        {:else}
+                                            <span class="header-text">{getColumnLabel(column)}</span>
+                                        {/if}
                                         {#if column.sortable !== false && enableSorting}
                                             <span class="sort-icon">
                                                 {#if sortDir === 'asc'}
@@ -1234,7 +1263,7 @@
                             <!-- Data cells -->
                             {#each visibleColumns as column}
                                 {@const cellContent = column.cell(row)}
-                                <td class="td-data">
+                                <td class="td-data" class:td-fixed={column.pinned != null} class:td-pinned-right={column.pinned === 'right'} style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}">
                                     {#if typeof cellContent === 'string' || typeof cellContent === 'number'}
                                         {cellContent}
                                     {:else if cellContent && typeof cellContent === 'object' && 'type' in cellContent}
@@ -1361,8 +1390,14 @@
                                         {:else if cellContent.type === 'html'}
                                             {#if cellContent.tooltip}
                                                 <Tooltip text={cellContent.tooltip.text ?? ''} html={cellContent.tooltip.html ?? ''} position={cellContent.tooltip.position ?? 'top'} maxWidth={cellContent.tooltip.maxWidth ?? '320px'}>
-                                                    <span>{@html cellContent.html}</span>
+                                                    {#if cellContent.onClick}
+                                                        <button type="button" class="cursor-pointer" onclick={cellContent.onClick}>{@html cellContent.html}</button>
+                                                    {:else}
+                                                        <span>{@html cellContent.html}</span>
+                                                    {/if}
                                                 </Tooltip>
+                                            {:else if cellContent.onClick}
+                                                <button type="button" class="cursor-pointer" onclick={cellContent.onClick}>{@html cellContent.html}</button>
                                             {:else}
                                                 {@html cellContent.html}
                                             {/if}
@@ -1533,6 +1568,14 @@
 
     :global(.dark) .th-fixed {
         background: #1e293b;
+    }
+
+    .th-pinned-right {
+        right: 0;
+    }
+
+    .td-pinned-right {
+        right: 0;
     }
 
     .th-select {

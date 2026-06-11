@@ -148,6 +148,8 @@ export interface HtmlCell {
         position?: 'top' | 'bottom' | 'left' | 'right';
         maxWidth?: string;
     };
+    /** Optional click handler. When provided, the cell content is wrapped in a button. */
+    onClick?: () => void;
 }
 
 /**
@@ -283,6 +285,29 @@ export interface ColumnDef<T> {
 
     /** For number columns: force integer-only filter (step=1, round slider). Default: false. */
     integerOnly?: boolean;
+
+    /** Pin column to left or right edge (sticky positioning). Default: undefined (not pinned). */
+    pinned?: 'left' | 'right';
+
+    /** Cell and header text alignment. Default: 'left'. */
+    align?: 'left' | 'center' | 'right';
+
+    /**
+     * Optional HTML content for the column header cell.
+     * When provided, rendered with {@html} instead of plain `header` text.
+     * Useful for responsive show/hide via Tailwind classes (e.g. `hidden sm:inline`).
+     * The `header` field is still required (used as fallback in ColumnVisibility dropdown).
+     */
+    headerHtml?: string | (() => string);
+
+    /**
+     * Display name used in ColumnVisibilityToggle dropdown and other UI that lists columns.
+     * Falls back to `header` when not set.
+     * Set this when `header` is intentionally empty (icon-only or pinned status columns)
+     * to keep the dropdown readable. Columns where both header and displayName resolve to ''
+     * are hidden from the visibility dropdown entirely.
+     */
+    displayName?: string | (() => string);
 }
 
 // ============ Action Types ============
