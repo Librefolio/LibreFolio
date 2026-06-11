@@ -30,6 +30,7 @@
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/stores/transactions/txStore.svelte';
+    import {invalidate as invalidatePortfolioCache} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {applyTransactionColumnFilters, buildTransactionsFiltersUrl, parseTransactionFilters, toTransactionColumnFilters, type TransactionFilterMap} from './filterState';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
 
@@ -179,6 +180,8 @@
     async function reload(opts?: {soft?: boolean}): Promise<void> {
         if (!opts?.soft) loading = true;
         error = null;
+        // Any soft reload means a transaction mutation succeeded — bust the portfolio cache.
+        if (opts?.soft) invalidatePortfolioCache();
         try {
             // Stage 1: main filtered rows.
             const main = await loadMainRows();
