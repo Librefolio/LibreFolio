@@ -41,8 +41,9 @@
 
     let viewMode: 'eur' | 'pct' = $state('eur');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
-    let chartInstance: echarts.ECharts | null = null;
+    let chartInstance: echarts.ECharts | undefined = undefined;
     let resizeObserver: ResizeObserver | null = null;
+    let observedContainer: HTMLDivElement | undefined = undefined;
     let darkModeObserver: MutationObserver | null = null;
 
     // Color palettes
@@ -107,6 +108,7 @@
     ]);
 
     const hasPctData = $derived(history.some((pt) => pt.mwrr != null || pt.twrr != null || pt.roi != null));
+    const hasNonZeroPctData = $derived(history.some((pt) => Number(pt.mwrr ?? 0) !== 0 || Number(pt.twrr ?? 0) !== 0 || Number(pt.roi ?? 0) !== 0));
 
     // =========================================================================
     // Lifecycle
@@ -140,13 +142,24 @@
     // =========================================================================
 
     function setupResizeObserver() {
-        if (resizeObserver || !chartContainer) return;
+        if (!chartContainer) return;
+        // If already observing the same element, nothing to do
+        if (resizeObserver && observedContainer === chartContainer) return;
+        resizeObserver?.disconnect();
         resizeObserver = new ResizeObserver(() => chartInstance?.resize());
         resizeObserver.observe(chartContainer);
+        observedContainer = chartContainer;
     }
 
     function renderChart() {
         if (!chartContainer || loading) return;
+
+        // If chartInstance points to a stale/detached element (e.g. after {#if loading}
+        // unmounted and remounted the container), dispose it and start fresh.
+        if (chartInstance && chartInstance.getDom() !== chartContainer) {
+            chartInstance.dispose();
+            chartInstance = undefined;
+        }
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
@@ -276,5 +289,10 @@
         </div>
     {:else}
         <div bind:this={chartContainer} style="height: {height}; width: 100%;"></div>
+        {#if viewMode === 'pct' && hasPctData && !hasNonZeroPctData}
+            <p class="text-center text-xs text-gray-400 dark:text-gray-500 italic mt-1">
+                {$_('dashboard.roiAllZero')}
+            </p>
+        {/if}
     {/if}
 </div>

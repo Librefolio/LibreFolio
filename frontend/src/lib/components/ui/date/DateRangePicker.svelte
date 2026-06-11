@@ -27,7 +27,7 @@
     // Types
     // =========================================================================
 
-    export type QuickPreset = '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
+    export type QuickPreset = '1W' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '2Y';
     export type Granularity = 'days' | 'weeks' | 'months' | 'years';
 
     interface Props {
@@ -112,6 +112,7 @@
         {key: '1M', label: '1M', months: 1},
         {key: '3M', label: '3M', months: 3},
         {key: '6M', label: '6M', months: 6},
+        {key: 'YTD', label: $_('datePicker.presets.ytd')},
         {key: '1Y', label: '1Y', years: 1},
         {key: '2Y', label: '2Y', years: 2},
     ];
@@ -166,6 +167,13 @@
             case '6M':
                 d.setMonth(d.getMonth() - 6);
                 break;
+            case 'YTD': {
+                const jan1 = `${new Date().getFullYear()}-01-01`;
+                const minDate = new Date();
+                minDate.setDate(minDate.getDate() - 14);
+                const min14 = minDate.toISOString().slice(0, 10);
+                return jan1 < min14 ? jan1 : min14;
+            }
             case '1Y':
                 d.setFullYear(d.getFullYear() - 1);
                 break;

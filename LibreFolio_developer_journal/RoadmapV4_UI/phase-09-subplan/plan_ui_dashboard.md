@@ -12,7 +12,7 @@ Consente di filtrare per uno o più broker tramite un pannello a comparsa (popov
 +-------------------------------------------------------------------------------------------------+
 |                                                                                                 |
 |   DASHBOARD HOME                                                                                |
-|   Filtra Broker: [ Filtri (3) v ]        [↻ Sincronizza] Range: [1W][1M][3M][6M][1Y][2Y][Custom]|
+|   [ Range: 1W | 1M | ... | Custom ]  [ Filtra Broker (3) v ]                   [↻ Sincronizza]  |
 |                                                                                                 |
 |   +--------------------------+  +--------------------------+  +--------------------------+      |
 |   | NET WORTH COMPLESSIVO    |  | GAIN/LOSS DI PORTAFOGLIO |  | ROI PESATO (PMC/WAC)     |      |
@@ -37,13 +37,15 @@ Consente di filtrare per uno o più broker tramite un pannello a comparsa (popov
 |   |         [....] Liquidità / ROI Semplice        |  |                                      |  |
 |   +------------------------------------------------+  +--------------------------------------+  |
 |                                                                                                 |
-|   +------------------------------------------------------------------------------------------+  |
-|   | ULTIME TRANSAZIONI                                                                       |  |
-|   |  [ COMPONENTE <TransactionsTable> riutilizzato. Non re-inventare colonne.              ] |  |
-|   |  [ Mostra solo le ultime righe usando lo standard già implementato in transactions.    ] |  |
-|   |  Vedi Tutte ->                                                                           |  |
-|   +------------------------------------------------------------------------------------------+  |
-|                                                                                                 |
+|   +-----------------------------------------+  +---------------------------------------------+  |
+|   | LE TUE POSIZIONI (ASSET)                |  | ULTIME TRANSAZIONI                          |  |
+|   | Asset         Prezzo   Valore     Gain  |  | Data  Tipo   Asset   Broker   Importo       |  |
+|   | [Ic] AAPL     $291     $1.200     +67%  |  | 09-06 BUY    AAPL    IBKR     € -250,00     |  |
+|   | [Ic] VWCE     €114     €5.400     +12%  |  |                               +1 AAPL       |  |
+|   |                                         |  | 08-06 DEP    --      Directa  € +1.000,00   |  |
+|   | Vedi Tutti ->                           |  | Vedi Tutte ->                               |  |
+|   +-----------------------------------------+  +---------------------------------------------+  |
+|   *In modalità Mobile, il blocco "Transazioni" scivolerà automaticamente sotto agli "Asset"*    |
 +-------------------------------------------------------------------------------------------------+
 ```
 
