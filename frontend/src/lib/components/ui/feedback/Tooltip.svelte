@@ -100,10 +100,26 @@
     }
 
     function handleClickOutside(event: MouseEvent) {
-        if (visible && triggerElement && !triggerElement.contains(event.target as Node)) {
+        if (visible && triggerElement && !triggerElement.contains(event.target as Node) && !tooltipElement?.contains(event.target as Node)) {
             hide();
         }
     }
+
+    /**
+     * Portal: move .tooltip-fixed to document.body to escape parent stacking
+     * contexts (opacity, z-index, overflow). This prevents parent row opacity
+     * from bleeding into the tooltip and ensures z-index is always highest.
+     */
+    $effect(() => {
+        if (tooltipElement) {
+            document.body.appendChild(tooltipElement);
+            return () => {
+                if (tooltipElement?.parentNode === document.body) {
+                    tooltipElement.remove();
+                }
+            };
+        }
+    });
 
     /**
      * Calculate tooltip position in fixed (viewport) coordinates.
@@ -119,7 +135,7 @@
         const gap = 8; // gap between trigger and tooltip
         const pad = 10; // viewport edge padding
 
-        // Determine best position (flip if needed)
+        // Determine best position (flip if needed, fall back to top/bottom when horizontal space is insufficient)
         let pos = position;
         switch (position) {
             case 'top':
@@ -129,10 +145,18 @@
                 if (triggerRect.bottom + tooltipRect.height + gap > vh - pad) pos = 'top';
                 break;
             case 'left':
-                if (triggerRect.left - tooltipRect.width - gap < pad) pos = 'right';
+                if (triggerRect.left - tooltipRect.width - gap < pad) {
+                    // Try right first, fall back to bottom if right also doesn't fit
+                    if (triggerRect.right + tooltipRect.width + gap <= vw - pad) pos = 'right';
+                    else pos = 'bottom';
+                }
                 break;
             case 'right':
-                if (triggerRect.right + tooltipRect.width + gap > vw - pad) pos = 'left';
+                if (triggerRect.right + tooltipRect.width + gap > vw - pad) {
+                    // Try left first, fall back to bottom if left also doesn't fit
+                    if (triggerRect.left - tooltipRect.width - gap >= pad) pos = 'left';
+                    else pos = 'bottom';
+                }
                 break;
         }
 

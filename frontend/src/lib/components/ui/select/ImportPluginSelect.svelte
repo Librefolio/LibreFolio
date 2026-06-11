@@ -34,10 +34,12 @@
         placeholder?: string;
         /** When set, only show these plugins (ordered by priority from backend) */
         compatiblePlugins?: string[];
+        /** When true, hides the description paragraph below the select (for use in compact table cells) */
+        compact?: boolean;
         onchange?: (value: string) => void;
     }
 
-    let {value = $bindable(''), disabled = false, placeholder = '', compatiblePlugins, onchange}: Props = $props();
+    let {value = $bindable(''), disabled = false, placeholder = '', compatiblePlugins, compact = false, onchange}: Props = $props();
 
     let plugins = $state<BrimPlugin[]>([]);
     let loading = $state(!cachedPlugins); // Start as not-loading if cache exists
@@ -131,11 +133,13 @@
         {/snippet}
     </SearchSelect>
 
-    {#if loading}
-        <p class="text-xs text-gray-400 mt-1">{$_('common.loading')}</p>
-    {:else if error}
-        <p class="text-xs text-red-500 mt-1">{error}</p>
-    {:else if selectedPlugin?.description}
-        <p class="text-xs text-gray-500 mt-1">{selectedPlugin.description}</p>
+    {#if !compact}
+        {#if loading}
+            <p class="text-xs text-gray-400 mt-1">{$_('common.loading')}</p>
+        {:else if error}
+            <p class="text-xs text-red-500 mt-1">{error}</p>
+        {:else if selectedPlugin?.description}
+            <p class="text-xs text-gray-500 mt-1">{selectedPlugin.description}</p>
+        {/if}
     {/if}
 </div>

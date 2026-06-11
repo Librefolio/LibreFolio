@@ -28,11 +28,13 @@
         onReorder: (newItems: T[]) => void;
         /** Disable reordering */
         disabled?: boolean;
+        /** Use compact padding (py-1 px-2 instead of p-2) for use in tight spaces like dropdowns */
+        compact?: boolean;
         /** Snippet to render each item's content (between handle and arrows) */
         children: Snippet<[{item: T; index: number}]>;
     }
 
-    let {items = [], keyFn, onReorder, disabled = false, children}: Props = $props();
+    let {items = [], keyFn, onReorder, disabled = false, compact = false, children}: Props = $props();
 
     // =========================================================================
     // Drag & Drop State
@@ -103,7 +105,7 @@
 <div class="space-y-1">
     {#each items as item, index (keyFn(item))}
         <div
-            class="flex items-center gap-2 p-2 rounded-lg border transition-all duration-150
+            class="flex items-center gap-2 {compact ? 'py-1 px-2' : 'p-2'} rounded-lg border transition-all duration-150
                 {dragOverIndex === index && dragIndex !== index ? 'border-l-4 border-l-libre-green border-y-gray-200 dark:border-y-slate-600 border-r-gray-200 dark:border-r-slate-600 bg-green-50/50 dark:bg-green-900/10' : 'border-gray-200 dark:border-slate-600'}
                 {dragIndex === index ? 'opacity-50' : ''}
                 {disabled ? 'opacity-60' : ''}"

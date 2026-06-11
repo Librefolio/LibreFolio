@@ -141,6 +141,14 @@
         editingTempId?: string | null;
         /** Set of TX IDs from the current batch (uncommitted). Passed to WacPreviewSection for pending markers. */
         pendingTxIds?: Set<number> | null;
+        /** When true, the optional section (description, tags, etc.) is expanded when the modal opens. Default false. */
+        initialOptionalOpen?: boolean;
+        /**
+         * List of field wrapper data-testid values to visually highlight (amber ring).
+         * Used by the duplicate compare flow to mark fields that match the parsed transaction.
+         * Example: ['tx-form-date-wrap', 'tx-form-cash-wrap']
+         */
+        highlightFields?: string[];
     }
 
     let {
@@ -162,6 +170,8 @@
         getWacResult = null,
         editingTempId = null,
         pendingTxIds = null,
+        initialOptionalOpen = false,
+        highlightFields = [],
     }: Props = $props();
 
     // Internal derived: main row from items[0], partner info from items[1]
@@ -319,7 +329,7 @@
     let lastCommitDraftKey = $state('');
     let lastCommitAt = $state(0);
     const COMMIT_ANTI_BOUNCE_MS = 10000;
-    let optionalOpen = $state(false);
+    let optionalOpen = $state(untrack(() => initialOptionalOpen));
     /** Snapshot of `draft` at modal-open time, used to detect unsaved
      *  changes (Bugfix-3 §C11). */
     let initialDraftKey = $state('');
@@ -350,7 +360,7 @@
             issues = [];
             formError = null;
             commitFailed = false;
-            optionalOpen = false;
+            optionalOpen = initialOptionalOpen;
             confirmCloseOpen = false;
             inaccessiblePartnerBrokerId = inaccessFromItems?.broker_id ?? null;
             partnerRow = null;
@@ -696,6 +706,10 @@
     let autoNegateQty = $derived(rule.quantityRule === 'negative');
     let autoNegateCash = $derived(rule.cashSign === 'negative');
     let isReadonly = $derived(mode === 'view');
+    /** Helper: returns highlight ring classes for a given field testid. */
+    function hl(testid: string): string {
+        return highlightFields.includes(testid) ? ' ring-2 ring-amber-400 dark:ring-amber-500 rounded-lg' : '';
+    }
     // Bugfix-5 §A4: `unlockImmutable=true` (deep-edit from BulkModal) overrides
     // the default immutability so the user can change `type`/`broker` on an
     // existing draft. `view` mode always wins (everything stays readonly).
@@ -1472,7 +1486,7 @@
                     <!-- Type (date is now inside Da/A panels) -->
                     <div class="text-sm">
                         <!-- Type: editable in create dual mode (W41), readonly in edit/view -->
-                        <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap">
+                    <div class="flex flex-col gap-1{hl('tx-form-type-wrap')}" data-testid="tx-form-type-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
                             {#if typeImmutable}
                                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
@@ -1544,7 +1558,7 @@
 
                     <!-- Transfer Cash: shared cash -->
                     {#if pairLayout === 'transfer_cash'}
-                        <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-cash-wrap">
+                        <div class="mt-3 flex flex-col gap-1{hl('tx-form-cash-wrap')}" data-testid="tx-form-cash-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">
                                 {$t('transactions.table.cash')} *
                             </span>
@@ -1752,7 +1766,7 @@
                          full-width Cash row when the type forces quantity=0. -->
                     <div class="grid grid-cols-2 gap-3 text-sm">
                         <!-- Date -->
-                        <div class="flex flex-col gap-1" data-testid="tx-form-date-wrap">
+                        <div class="flex flex-col gap-1{hl('tx-form-date-wrap')}" data-testid="tx-form-date-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
                             {#if isReadonly}
                                 <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-date-readonly">{draft.date || '—'}</div>
@@ -1762,7 +1776,7 @@
                         </div>
 
                         <!-- Type -->
-                        <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap">
+                        <div class="flex flex-col gap-1{hl('tx-form-type-wrap')}" data-testid="tx-form-type-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
                             {#if typeImmutable}
                                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
@@ -1818,7 +1832,7 @@
                                     <span class="text-[10px] text-gray-400">{qtyHint}</span>
                                 {/if}
                             </div>
-                            <div class="flex flex-col gap-1" data-testid="tx-form-cash-wrap">
+                            <div class="flex flex-col gap-1{hl('tx-form-cash-wrap')}" data-testid="tx-form-cash-wrap">
                                 <span class="text-xs text-gray-500 dark:text-gray-400">
                                     {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel}
                                         <span class="text-amber-500">{cashLabel}</span>{/if}
@@ -1864,7 +1878,7 @@
                             </div>
                         {:else if rule.cashField !== 'forbidden'}
                             <!-- Only cash visible (quantity forbidden) → full width -->
-                            <div class="flex flex-col gap-1 col-span-2" data-testid="tx-form-cash-wrap">
+                            <div class="flex flex-col gap-1 col-span-2{hl('tx-form-cash-wrap')}" data-testid="tx-form-cash-wrap">
                                 <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
                                     {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel}
                                         <span class="text-amber-500">{cashLabel}</span>{/if}
@@ -2006,7 +2020,7 @@
                         </div>
 
                         <!-- 3. Description -->
-                        <label class="flex flex-col gap-1">
+                        <label class="flex flex-col gap-1{hl('tx-form-description')}">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.description')}</span>
                             <textarea
                                 autocomplete="off"

@@ -50,11 +50,15 @@
     function refreshColumns() {
         if (!tableRef) return;
         const cols = tableRef.getColumnsForVisibility();
-        columnItems = cols.map((c) => ({
-            id: c.id,
-            label: typeof c.header === 'function' ? c.header() : c.header,
-            visible: c.visible,
-        }));
+        columnItems = cols.map((c) => {
+            const headerLabel = typeof c.header === 'function' ? c.header() : c.header;
+            const displayLabel = c.displayName ? (typeof c.displayName === 'function' ? c.displayName() : c.displayName) : undefined;
+            return {
+                id: c.id,
+                label: displayLabel || headerLabel,
+                visible: c.visible,
+            };
+        });
     }
 
     function toggle() {
@@ -130,7 +134,7 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div bind:this={dropdownRef} class="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg p-2 max-h-[400px] overflow-y-auto w-max" style={dropdownStyle} onclick={(e) => e.stopPropagation()}>
-        <OrderableList items={columnItems} keyFn={(c) => c.id} onReorder={handleReorder}>
+        <OrderableList items={columnItems} keyFn={(c) => c.id} onReorder={handleReorder} compact={true}>
             {#snippet children({item})}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
