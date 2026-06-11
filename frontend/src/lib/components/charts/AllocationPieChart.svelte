@@ -1,34 +1,41 @@
 <!--
-  SectorPieChart — Pie chart for sector distribution visualization.
+  AllocationPieChart — Pie chart for allocation distribution (sector or asset type).
 
-  Shows sector allocation as a standard pie chart with ECharts.
-  Supports i18n sector labels, dark mode, and responsive sizing.
+  Supports two modes:
+  - 'sector' (default): translates sector keys via sectors.* i18n; shows only
+    the leading emoji inside each slice, full label in legend and tooltip.
+  - 'type': translates asset-type keys via assets.types.*; shows the PNG icon
+    inside each slice (ECharts rich text), icon + label in legend and tooltip.
 
   Props:
-  - data: Record<string, number> — sector key → weight (0–1)
+  - data: Record<string, number> — key → weight (0–1)
   - height: CSS height (default "280px")
+  - mode: 'sector' | 'type' (default 'sector')
 
   Used by:
-  - Asset Detail Page (metadata section)
+  - Dashboard page (allocation panel, both type and sector tabs)
+  - Asset Detail Page (metadata section, sector distribution)
 -->
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {_ as t} from '$lib/i18n';
-    import {sectorI18nKey} from '$lib/utils/assetTypes';
+    import {sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     // =========================================================================
     // Props
     // =========================================================================
 
     interface Props {
-        /** Sector distribution: key = sector name, value = weight (0-1) */
+        /** Allocation data: key → weight (0-1) */
         data: Record<string, number>;
         /** CSS height of the chart container */
         height?: string;
+        /** Display mode: 'sector' uses i18n sector labels with emojis; 'type' uses asset type PNG icons */
+        mode?: 'sector' | 'type';
     }
 
-    let {data = {}, height = '280px'}: Props = $props();
+    let {data = {}, height = '280px', mode = 'sector'}: Props = $props();
 
     // =========================================================================
     // State
@@ -47,7 +54,6 @@
     // =========================================================================
 
     onMount(() => {
-        // Re-render on dark mode toggle
         const observer = new MutationObserver(() => renderChart());
         observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
         return () => {
@@ -67,9 +73,7 @@
 
     function setupResizeObserver() {
         if (resizeObserver || !chartContainer) return;
-        resizeObserver = new ResizeObserver(() => {
-            renderChart();
-        });
+        resizeObserver = new ResizeObserver(() => renderChart());
         resizeObserver.observe(chartContainer);
     }
 
@@ -95,45 +99,78 @@
         const tr = $t;
         const palette = isDark ? PALETTE_DARK : PALETTE_LIGHT;
 
-        // Build chart data from Record
         const entries = Object.entries(data).filter(([, v]) => v > 0);
         if (entries.length === 0) {
             chartInstance.setOption({series: []}, true);
             return;
         }
 
+        // Build chart data.
+        // sector: name = full translated label (e.g. "💻 Technology")
+        // type:   name = raw key (e.g. "STOCK") — translated in formatters
         const chartData = entries
             .map(([key, value]) => {
-                // Try i18n translation, fallback to raw key
-                const i18nKey = `sectors.${sectorI18nKey(key)}`;
-                const label = tr(i18nKey) !== i18nKey ? tr(i18nKey) : key.replace(/_/g, ' ');
-                return {
-                    name: label,
-                    value: +(value * 100).toFixed(2),
-                };
+                let name: string;
+                if (mode === 'sector') {
+                    const i18nKey = `sectors.${sectorI18nKey(key)}`;
+                    name = tr(i18nKey) !== i18nKey ? tr(i18nKey) : key.replace(/_/g, ' ');
+                } else {
+                    name = key;
+                }
+                return {name, value: +(value * 100).toFixed(2)};
             })
             .sort((a, b) => b.value - a.value);
 
-        // Responsive: if container is narrow, put legend below instead of right
+        // Build ECharts rich-text image styles for type mode (one key per asset type)
+        const richStyles: Record<string, any> = {};
+        if (mode === 'type') {
+            for (const {name} of chartData) {
+                const safeKey = `img_${name.replace(/[^A-Z_]/g, '')}`;
+                richStyles[safeKey] = {
+                    backgroundColor: {image: getAssetTypeIconUrl(name)},
+                    width: 16,
+                    height: 16,
+                    align: 'center',
+                };
+            }
+        }
+
+        // Responsive: narrow containers → legend below the pie
         const containerWidth = chartContainer.getBoundingClientRect().width;
         const isNarrow = containerWidth < 400;
 
+        // Legend — type mode adds rich-text icon in front of each label
+        const legendBaseTextStyle: any = {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11};
+        const legendTextStyle = mode === 'type' ? {...legendBaseTextStyle, rich: richStyles} : legendBaseTextStyle;
+
+        const legendTypeExtras =
+            mode === 'type'
+                ? {
+                      formatter: (name: string) => {
+                          const safeKey = `img_${name.replace(/[^A-Z_]/g, '')}`;
+                          return `{${safeKey}|} ${tr(`assets.types.${name}`) || name}`;
+                      },
+                  }
+                : {};
+
         const legendConfig: any = isNarrow
             ? {
+                  ...legendTypeExtras,
                   type: 'plain',
                   orient: 'horizontal',
                   bottom: 0,
                   left: 'center',
                   width: '95%',
-                  textStyle: {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11},
+                  textStyle: legendTextStyle,
               }
             : {
+                  ...legendTypeExtras,
                   type: 'scroll',
                   orient: 'vertical',
                   right: 10,
                   top: 20,
                   bottom: 20,
-                  textStyle: {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11},
+                  textStyle: legendTextStyle,
                   pageTextStyle: {color: isDark ? '#94a3b8' : '#64748b'},
                   pageIconColor: isDark ? '#94a3b8' : '#64748b',
                   pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1',
@@ -142,11 +179,42 @@
         const pieCenter = isNarrow ? ['50%', '40%'] : ['35%', '50%'];
         const pieRadius = isNarrow ? ['25%', '55%'] : ['35%', '70%'];
 
+        // Inner label — sector: emoji only; type: PNG icon via rich text
+        const labelConfig: any =
+            mode === 'sector'
+                ? {
+                      show: true,
+                      position: 'inner',
+                      // Extract only the leading emoji (first token before the space)
+                      formatter: (params: any) => (params.name as string).split(' ')[0],
+                      fontSize: 13,
+                  }
+                : {
+                      show: true,
+                      position: 'inner',
+                      formatter: (params: any) => `{img_${(params.name as string).replace(/[^A-Z_]/g, '')}|}`,
+                      rich: richStyles,
+                  };
+
+        // Tooltip — icon/emoji + full translated name + percentage
+        const tooltipFormatter = (params: any) => {
+            if (mode === 'type') {
+                const translated = tr(`assets.types.${params.name}`) || params.name;
+                const iconUrl = getAssetTypeIconUrl(params.name);
+                return `<img src="${iconUrl}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">${translated}: ${params.value}%`;
+            }
+            // Sector: name already contains the leading emoji
+            return `${params.name}: ${params.value}%`;
+        };
+
+        // Emphasis label (on hover) — show full name + percentage
+        const emphasisLabelFormatter = mode === 'sector' ? '{b}\n{c}%' : (params: any) => `${tr(`assets.types.${params.name}`) || params.name}\n${params.value}%`;
+
         const option: echarts.EChartsOption = {
             color: palette,
             tooltip: {
                 trigger: 'item',
-                formatter: '{b}: {c}%',
+                formatter: tooltipFormatter,
                 backgroundColor: isDark ? '#1e293b' : '#fff',
                 borderColor: isDark ? '#334155' : '#e2e8f0',
                 textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
@@ -164,15 +232,14 @@
                         borderColor: isDark ? '#293548' : '#ffffff',
                         borderWidth: 2,
                     },
-                    label: {
-                        show: false,
-                    },
+                    label: labelConfig,
+                    labelLayout: {hideOverlap: true},
                     emphasis: {
                         label: {
                             show: true,
                             fontSize: 13,
                             fontWeight: 'bold',
-                            formatter: '{b}\n{c}%',
+                            formatter: emphasisLabelFormatter,
                             color: isDark ? '#e2e8f0' : '#1e293b',
                         },
                         scaleSize: 5,

@@ -24,6 +24,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
+    import {_ as t} from '$lib/i18n';
 
     // =========================================================================
     // Props
@@ -49,6 +50,9 @@
     let resizeObserver: ResizeObserver | null = null;
     let mapRegistered = $state(false);
     let mapError = $state<string | null>(null);
+
+    /** Percentage of value with no geographic classification (key "Unknown" in data) */
+    const unknownPct = $derived(+((data['Unknown'] ?? 0) * 100).toFixed(1));
 
     /** ISO A3 → GeoJSON feature name (built dynamically from loaded world.json) */
     let iso3ToGeoName: Record<string, string> = {};
@@ -148,35 +152,37 @@
 
         const isDark = document.documentElement.classList.contains('dark');
 
-        // Convert ISO A3 → GeoJSON country name + percentage
+        // Convert ISO A3 → GeoJSON country name + percentage (skip unclassified)
         const chartData: Array<{name: string; value: number}> = [];
         for (const [code, weight] of Object.entries(data)) {
-            if (weight <= 0) continue;
+            if (weight <= 0 || code === 'Unknown') continue;
             const countryName = iso3ToGeoName[code] ?? code;
             chartData.push({name: countryName, value: +(weight * 100).toFixed(2)});
         }
 
         const maxValue = chartData.length > 0 ? Math.max(...chartData.map((d) => d.value)) : 100;
 
+        // Restore full roam on desktop; pinch-zoom only on touch to avoid blocking page scroll
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+        const labelFormatter = (params: any) => {
+            if (params.value == null || isNaN(params.value) || params.value === 0) return '';
+            const iso3 = geoNameToIso3[params.name] ?? '';
+            const info = iso3 ? getCountryInfo(iso3) : null;
+            const flag = info?.flag_emoji ?? '';
+            const displayName = info?.name ?? params.name;
+            const prefix = flag ? `${flag} ` : '';
+            return `${prefix}${displayName}: ${params.value}%`;
+        };
+
         const option: echarts.EChartsOption = {
-            tooltip: {
-                trigger: 'item',
-                formatter: (params: any) => {
-                    // Reverse lookup: GeoJSON name → ISO A3 → countryStore info
-                    const iso3 = geoNameToIso3[params.name] ?? '';
-                    const info = iso3 ? getCountryInfo(iso3) : null;
-                    const flag = info?.flag_emoji ?? '';
-                    const displayName = info?.name ?? params.name;
-                    const prefix = flag ? `${flag} ` : '';
-                    if (params.value != null && !isNaN(params.value)) {
-                        return `${prefix}${displayName}: ${params.value}%`;
-                    }
-                    return `${prefix}${displayName}`;
-                },
-                backgroundColor: isDark ? '#1e293b' : '#fff',
-                borderColor: isDark ? '#334155' : '#e2e8f0',
-                textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
-            },
+            // tooltip: {
+            //     trigger: 'item',
+            //     formatter: tooltipFormatter,
+            //     backgroundColor: isDark ? '#1e293b' : '#fff',
+            //     borderColor: isDark ? '#334155' : '#e2e8f0',
+            //     textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+            // },
             visualMap: {
                 min: 0,
                 max: maxValue,
@@ -198,10 +204,10 @@
                     name: 'Distribution',
                     type: 'map',
                     map: 'world',
-                    roam: true,
+                    roam: isTouchDevice ? 'scale' : true, // mobile: pinch-zoom only; desktop: full pan+zoom
                     scaleLimit: {min: 1, max: 5},
                     emphasis: {
-                        label: {show: true, color: isDark ? '#e2e8f0' : '#1e293b'},
+                        label: {show: true, color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 10},
                         itemStyle: {areaColor: isDark ? '#fbbf24' : '#f59e0b'},
                     },
                     itemStyle: {
@@ -209,7 +215,13 @@
                         borderColor: isDark ? '#1e293b' : '#cbd5e1',
                         borderWidth: 0.5,
                     },
-                    label: {show: false},
+                    label: {
+                        show: true,
+                        formatter: labelFormatter,
+                        fontSize: 9,
+                        color: isDark ? '#e2e8f0' : '#1e293b',
+                    },
+                    labelLayout: {hideOverlap: true},
                     data: chartData,
                 },
             ],
@@ -226,4 +238,9 @@
     </div>
 {:else}
     <div bind:this={chartContainer} class="w-full" style="height: {height};"></div>
+    {#if unknownPct > 0}
+        <p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 italic text-center leading-snug">
+            {$t('dashboard.geoUnclassified', {values: {pct: unknownPct}})}
+        </p>
+    {/if}
 {/if}
