@@ -79,6 +79,12 @@
         open?: boolean;
         editMode?: boolean;
         editData?: AssetData | null;
+        /**
+         * Pre-fill data for create mode. When provided (and editMode=false),
+         * the form opens with these fields populated instead of all-blank.
+         * Useful for the BRIM import wizard: prefill identifier_ticker, identifier_isin, display_name.
+         */
+        prefillData?: Partial<AssetData> | null;
         /** Z-index override for stacked modal contexts. */
         zIndex?: number;
         oncreated?: (assetId: number) => void;
@@ -86,7 +92,7 @@
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), editMode = false, editData = null, zIndex = 50, oncreated, onupdated, onclose}: Props = $props();
+    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, oncreated, onupdated, onclose}: Props = $props();
 
     // =========================================================================
     // Constants
@@ -368,6 +374,8 @@
             untrack(() => {
                 if (editMode && editData) {
                     populateFromEditData(editData);
+                } else if (!editMode && prefillData) {
+                    populateFromPrefill(prefillData);
                 } else {
                     resetForm();
                 }
@@ -449,6 +457,25 @@
         setTimeout(() => {
             initialSnapshot = buildFormSnapshot();
         }, 0);
+    }
+
+    /** Pre-populate create form with partial data (e.g. from BRIM import wizard). */
+    function populateFromPrefill(data: Partial<AssetData>) {
+        resetForm();
+        if (data.display_name) displayName = data.display_name;
+        if (data.currency) currency = data.currency;
+        if (data.asset_type) assetType = data.asset_type;
+        // Build identifier rows from prefilled columns
+        const rows: IdentifierRow[] = [];
+        for (const idType of IDENTIFIER_TYPES) {
+            const key = `identifier_${idType.toLowerCase()}` as keyof AssetData;
+            const value = (data[key] as string) ?? '';
+            if (value) rows.push({id: generateUUID(), type: idType, value});
+        }
+        if (rows.length > 0) {
+            identifierRows = rows;
+            moreInfoExpanded = true;
+        }
     }
 
     // =========================================================================

@@ -41,9 +41,11 @@
         onCreateNew?: () => void;
         /** Change callback (number | null). */
         onchange?: (value: number | null) => void;
+        /** Prioritized items shown at the top of the list with a badge (e.g. BRIM candidates). */
+        suggestedIds?: Array<{id: number; badge: string; badgeClass?: string}>;
     }
 
-    let {value = $bindable(null), disabled = false, filter, placeholder, testid = 'asset-select', compact = false, createLabel, onCreateNew, onchange}: Props = $props();
+    let {value = $bindable(null), disabled = false, filter, placeholder, testid = 'asset-select', compact = false, createLabel, onCreateNew, onchange, suggestedIds}: Props = $props();
 
     let loading = $state(true);
 
@@ -63,7 +65,7 @@
             if (a.active !== b.active) return a.active ? -1 : 1;
             return a.display_name.localeCompare(b.display_name);
         });
-        return filtered.map<SelectOption>((a) => ({
+        const baseOptions = filtered.map<SelectOption>((a) => ({
             value: String(a.id),
             label: a.display_name,
             searchText: [a.identifier_isin, a.identifier_ticker, a.currency, a.asset_type].filter(Boolean).join(' '),
@@ -71,6 +73,20 @@
             icon: a.icon_url || (a.asset_type ? getAssetTypeIconUrl(a.asset_type) : undefined),
             data: a,
         }));
+        if (!suggestedIds || suggestedIds.length === 0) return baseOptions;
+        // Pin suggested items at the top with a badge.
+        const suggestedSet = new Map(suggestedIds.map((s) => [String(s.id), s]));
+        const suggested: SelectOption[] = [];
+        const rest: SelectOption[] = [];
+        for (const opt of baseOptions) {
+            const hint = suggestedSet.get(opt.value);
+            if (hint) {
+                suggested.push({...opt, badge: hint.badge, badgeClass: hint.badgeClass});
+            } else {
+                rest.push(opt);
+            }
+        }
+        return [...suggested, ...rest];
     });
 
     let stringValue = $derived(value == null ? '' : String(value));
@@ -120,6 +136,11 @@
                     <img src={option.icon} alt="" class="w-4 h-4 rounded-sm object-contain shrink-0" onerror={hideOnError} />
                 {/if}
                 <span class="truncate text-sm">{a?.identifier_ticker ? `${a.identifier_ticker} · ${option.label}` : option.label}</span>
+                {#if option.badge}
+                    <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium {option.badgeClass || 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300'}">
+                        {option.badge}
+                    </span>
+                {/if}
                 {#if a?.currency}
                     {@const ci = getCurrencyInfo(a.currency)}
                     <span class="ml-auto text-[10px] font-mono opacity-60 shrink-0 inline-flex items-center gap-0.5">
