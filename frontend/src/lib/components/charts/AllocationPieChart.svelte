@@ -33,9 +33,15 @@
         height?: string;
         /** Display mode: 'sector' uses i18n sector labels with emojis; 'type' uses asset type PNG icons */
         mode?: 'sector' | 'type';
+        /**
+         * Legend placement strategy.
+         * - 'auto' (default): legend on the right when wide, below when narrow (<400px)
+         * - 'bottom': legend always below the pie (better for constrained-height panels)
+         */
+        legendPosition?: 'auto' | 'bottom';
     }
 
-    let {data = {}, height = '280px', mode = 'sector'}: Props = $props();
+    let {data = {}, height = '280px', mode = 'sector', legendPosition = 'auto'}: Props = $props();
 
     // =========================================================================
     // State
@@ -138,6 +144,7 @@
         // Responsive: narrow containers → legend below the pie
         const containerWidth = chartContainer.getBoundingClientRect().width;
         const isNarrow = containerWidth < 400;
+        const legendBelow = legendPosition === 'bottom' || isNarrow;
 
         // Legend — type mode adds rich-text icon in front of each label
         const legendBaseTextStyle: any = {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11};
@@ -153,7 +160,7 @@
                   }
                 : {};
 
-        const legendConfig: any = isNarrow
+        const legendConfig: any = legendBelow
             ? {
                   ...legendTypeExtras,
                   type: 'plain',
@@ -176,10 +183,11 @@
                   pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1',
               };
 
-        const pieCenter = isNarrow ? ['50%', '40%'] : ['35%', '50%'];
-        const pieRadius = isNarrow ? ['25%', '55%'] : ['35%', '70%'];
+        const pieCenter = legendBelow ? ['50%', '40%'] : ['35%', '50%'];
+        const pieRadius = legendBelow ? ['25%', '55%'] : ['35%', '70%'];
 
-        // Inner label — sector: emoji only; type: PNG icon via rich text
+        // Inner label — sector: emoji only; type: PNG icon via rich text.
+        // Both modes wrap in semi-transparent white circle badge for contrast.
         const labelConfig: any =
             mode === 'sector'
                 ? {
@@ -187,13 +195,19 @@
                       position: 'inner',
                       // Extract only the leading emoji (first token before the space)
                       formatter: (params: any) => (params.name as string).split(' ')[0],
-                      fontSize: 13,
+                      fontSize: 14,
+                      backgroundColor: 'rgba(255, 255, 255, 0.75)',
+                      borderRadius: 20,
+                      padding: [4, 4],
                   }
                 : {
                       show: true,
                       position: 'inner',
                       formatter: (params: any) => `{img_${(params.name as string).replace(/[^A-Z_]/g, '')}|}`,
                       rich: richStyles,
+                      backgroundColor: 'rgba(255, 255, 255, 0.75)',
+                      borderRadius: 20,
+                      padding: [4, 4],
                   };
 
         // Tooltip — icon/emoji + full translated name + percentage
@@ -206,9 +220,6 @@
             // Sector: name already contains the leading emoji
             return `${params.name}: ${params.value}%`;
         };
-
-        // Emphasis label (on hover) — show full name + percentage
-        const emphasisLabelFormatter = mode === 'sector' ? '{b}\n{c}%' : (params: any) => `${tr(`assets.types.${params.name}`) || params.name}\n${params.value}%`;
 
         const option: echarts.EChartsOption = {
             color: palette,
@@ -235,13 +246,8 @@
                     label: labelConfig,
                     labelLayout: {hideOverlap: true},
                     emphasis: {
-                        label: {
-                            show: true,
-                            fontSize: 13,
-                            fontWeight: 'bold',
-                            formatter: emphasisLabelFormatter,
-                            color: isDark ? '#e2e8f0' : '#1e293b',
-                        },
+                        // Tooltip is sufficient on hover — hide inner label instead of replacing it with text
+                        label: {show: false},
                         scaleSize: 5,
                     },
                     labelLine: {show: false},

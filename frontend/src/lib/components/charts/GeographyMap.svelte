@@ -165,14 +165,28 @@
         // Restore full roam on desktop; pinch-zoom only on touch to avoid blocking page scroll
         const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
-        const labelFormatter = (params: any) => {
-            if (params.value == null || isNaN(params.value) || params.value === 0) return '';
+        // Base label (hidden — only used as no-op placeholder)
+        const labelFormatter = (_params: any) => '';
+
+        // Hover/select label — always shows flag + name for any country with a known mapping.
+        // Appends percentage only when the country has allocation data.
+        const emphasisLabelFormatter = (params: any) => {
             const iso3 = geoNameToIso3[params.name] ?? '';
             const info = iso3 ? getCountryInfo(iso3) : null;
             const flag = info?.flag_emoji ?? '';
             const displayName = info?.name ?? params.name;
             const prefix = flag ? `${flag} ` : '';
-            return `${prefix}${displayName}: ${params.value}%`;
+            if (params.value != null && !isNaN(params.value) && params.value > 0) {
+                return `${prefix}${displayName}: ${params.value}%`;
+            }
+            return `${prefix}${displayName}`;
+        };
+
+        const hoverLabelStyle = {
+            show: true,
+            formatter: emphasisLabelFormatter,
+            color: isDark ? '#e2e8f0' : '#1e293b',
+            fontSize: 10,
         };
 
         const option: echarts.EChartsOption = {
@@ -207,7 +221,11 @@
                     roam: isTouchDevice ? 'scale' : true, // mobile: pinch-zoom only; desktop: full pan+zoom
                     scaleLimit: {min: 1, max: 5},
                     emphasis: {
-                        label: {show: true, color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 10},
+                        label: hoverLabelStyle,
+                        itemStyle: {areaColor: isDark ? '#fbbf24' : '#f59e0b'},
+                    },
+                    select: {
+                        label: hoverLabelStyle,
                         itemStyle: {areaColor: isDark ? '#fbbf24' : '#f59e0b'},
                     },
                     itemStyle: {
@@ -215,12 +233,8 @@
                         borderColor: isDark ? '#1e293b' : '#cbd5e1',
                         borderWidth: 0.5,
                     },
-                    label: {
-                        show: true,
-                        formatter: labelFormatter,
-                        fontSize: 9,
-                        color: isDark ? '#e2e8f0' : '#1e293b',
-                    },
+                    // Base label hidden — label shown only via emphasis/select (hover/click)
+                    label: {show: false, formatter: labelFormatter},
                     labelLayout: {hideOverlap: true},
                     data: chartData,
                 },
@@ -237,10 +251,14 @@
         {mapError}
     </div>
 {:else}
-    <div bind:this={chartContainer} class="w-full" style="height: {height};"></div>
-    {#if unknownPct > 0}
-        <p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 italic text-center leading-snug">
-            {$t('dashboard.geoUnclassified', {values: {pct: unknownPct}})}
-        </p>
-    {/if}
+    <!-- Outer wrapper takes the exact allocated height; chart fills flex-1 so the
+         optional "unclassified" paragraph doesn't push the canvas outside bounds. -->
+    <div class="flex flex-col" style="height: {height};">
+        <div bind:this={chartContainer} class="w-full flex-1 min-h-0"></div>
+        {#if unknownPct > 0}
+            <p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 italic text-center leading-snug">
+                {$t('dashboard.geoUnclassified', {values: {pct: unknownPct}})}
+            </p>
+        {/if}
+    </div>
 {/if}

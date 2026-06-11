@@ -204,7 +204,7 @@
 
         const option: echarts.EChartsOption = {
             backgroundColor: 'transparent',
-            grid: {left: '3%', right: '4%', bottom: '60px', top: '10px', containLabel: true},
+            grid: {left: '3%', right: '4%', bottom: '30px', top: '10px', containLabel: true},
             tooltip: {
                 trigger: 'axis',
                 backgroundColor: tooltipBg,
@@ -229,10 +229,7 @@
                 itemWidth: 14,
                 itemHeight: 8,
             },
-            dataZoom: [
-                {type: 'inside', start: 0, end: 100},
-                {type: 'slider', bottom: 24, height: 18, textStyle: {color: textColor}, borderColor: gridColor},
-            ],
+            dataZoom: [{type: 'inside', start: 0, end: 100}],
             xAxis: {
                 type: 'category',
                 data: activeDates,
@@ -259,10 +256,10 @@
     <div class="flex items-center justify-between">
         <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{$_('dashboard.growth')}</h2>
 
-        <!-- EUR / % segmented toggle -->
+        <!-- Abs / % segmented toggle -->
         <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
             <button class="px-3 py-1 transition-colors {viewMode === 'eur' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" onclick={() => (viewMode = 'eur')} data-testid="growth-toggle-eur">
-                {$_('dashboard.eur')}
+                {$_('dashboard.abs')}
             </button>
             <button
                 class="px-3 py-1 transition-colors border-l border-gray-200 dark:border-slate-600 {viewMode === 'pct' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'} {!hasPctData
