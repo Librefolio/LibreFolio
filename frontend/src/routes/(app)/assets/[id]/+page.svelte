@@ -28,7 +28,7 @@
     import ChartSignalsSection from '$lib/components/charts/ChartSignalsSection.svelte';
     import type {SignalDataSummary} from '$lib/components/charts/ChartSignalsSection.svelte';
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
-    import SectorPieChart from '$lib/components/charts/SectorPieChart.svelte';
+    import AllocationPieChart from '$lib/components/charts/AllocationPieChart.svelte';
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
@@ -1948,7 +1948,7 @@
                                 {#if sectorDistribution && Object.keys(sectorDistribution).length > 0}
                                     <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
                                         <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.sectorDistribution')}</h5>
-                                        <SectorPieChart data={sectorDistribution} height="280px" />
+                                        <AllocationPieChart data={sectorDistribution} height="280px" />
                                     </div>
                                 {/if}
                             </div>
