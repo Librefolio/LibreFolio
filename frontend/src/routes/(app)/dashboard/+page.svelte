@@ -2,13 +2,13 @@
   Dashboard Home — Portfolio overview page.
 
   Layout (from wireframe plan_ui_dashboard.md):
-  1. Header row: Broker filter | [↻] Sync | DateRangePicker
+  1. Header row: DateRangePicker | spacer | Broker filter panel | ↻ Sync
   2. KPI row: Net Worth | Gain/Loss | Weighted ROI
   3. Charts row: GrowthChart (3/5) | Allocation tabs (2/5)
-  4. Recent Transactions
+  4. Bottom grid: Holdings (left) | Recent Transactions (right)
 
   Data sources:
-  - portfolioStore.fetchSummary() → KPI cards + allocation charts
+  - portfolioStore.fetchSummary() → KPI cards + allocation charts + holdings
   - portfolioStore.fetchHistory() → GrowthChart
 
   Pattern: Svelte 5 Runes, Tailwind CSS 4, dark mode, data-testid everywhere.
@@ -16,19 +16,22 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {RefreshCw, ChevronDown, Check} from 'lucide-svelte';
+    import {RefreshCw} from 'lucide-svelte';
 
-    import {fetchSummary, fetchHistory, invalidate, portfolioIsLoading, type PortfolioSummary, type PortfolioHistoryPoint} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {fetchSummary, fetchHistory, invalidate, type PortfolioSummary, type PortfolioHistoryPoint} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
     import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
+    import {getBrokerIconUrlById, ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
+    import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
 
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
-    import BaseDropdown from '$lib/components/ui/select/BaseDropdown.svelte';
-    import SectorPieChart from '$lib/components/charts/SectorPieChart.svelte';
+    import AllocationPieChart from '$lib/components/charts/AllocationPieChart.svelte';
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
     import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import RecentTransactionsPanel from '$lib/components/dashboard/RecentTransactionsPanel.svelte';
+    import HoldingsPanel from '$lib/components/dashboard/HoldingsPanel.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
 
     // =========================================================================
@@ -44,12 +47,32 @@
     /** Broker IDs selected in the filter (empty = all brokers). */
     let selectedBrokerIds = $state<number[]>([]);
 
-    /** Date range for history / KPI filtering. */
-    let dateFrom = $state('');
-    let dateTo = $state('');
+    /** Debounce timer for broker filter changes. */
+    let reloadTimer = $state<ReturnType<typeof setTimeout> | null>(null);
+
+    /** Date range — backed by global store (shared with assets/fx pages). */
+    let dateFrom = $state(getStart());
+    let dateTo = $state(getEnd());
+
+    /** Broker filter dropdown open state. */
+    let brokerFilterOpen = $state(false);
+    let brokerFilterTriggerEl = $state<HTMLButtonElement | null>(null);
+
+    /** Filter bar ref — for ResizeObserver. */
+    let filterBarRef = $state<HTMLDivElement | null>(null);
 
     /** Active tab in the allocation panel. */
     let allocationTab = $state<'type' | 'sector' | 'geo'>('type');
+
+    /** Responsive layout — same utility as assets/fx pages. */
+    const layout = createResponsiveLayout({wide: 900, tablet: 660, tabletS: 480, labelHide: 460});
+
+    $effect(() => {
+        const el = filterBarRef;
+        if (!el) return;
+        layout.attach(el);
+        return () => layout.detach();
+    });
 
     // =========================================================================
     // Derived
@@ -58,11 +81,20 @@
     const allBrokers = $derived(getAllBrokers());
     const baseCurrency = $derived($globalSettings.default_currency || 'EUR');
 
-    /** Which broker IDs to pass to the API (null = all). */
-    const activeBrokerIds = $derived(selectedBrokerIds.length > 0 ? selectedBrokerIds : undefined);
+    /**
+     * True when the selection covers all brokers — treated same as "no filter"
+     * so that selecting all is equivalent to deselecting all.
+     */
+    const allBrokersSelected = $derived(selectedBrokerIds.length > 0 && selectedBrokerIds.length >= allBrokers.length);
 
-    /** Broker filter label. */
-    const brokerFilterLabel = $derived(selectedBrokerIds.length === 0 ? $_('dashboard.allBrokers') : selectedBrokerIds.length === 1 ? (allBrokers.find((b) => b.id === selectedBrokerIds[0])?.name ?? String(selectedBrokerIds[0])) : `${$_('dashboard.filterBrokers')} (${selectedBrokerIds.length})`);
+    /** Which broker IDs to pass to the API (undefined = all). */
+    const activeBrokerIds = $derived(!allBrokersSelected && selectedBrokerIds.length > 0 ? selectedBrokerIds : undefined);
+
+    /** Whether the filter is "active" (some but not all brokers selected). */
+    const brokerFilterActive = $derived(selectedBrokerIds.length > 0 && !allBrokersSelected);
+
+    /** Broker filter trigger label — follows assets-page type-filter pattern (no separate badge). */
+    const brokerFilterLabel = $derived(brokerFilterActive ? (selectedBrokerIds.length === 1 ? (allBrokers.find((b) => b.id === selectedBrokerIds[0])?.name ?? String(selectedBrokerIds[0])) : `${$_('brokers.title')} (${selectedBrokerIds.length})`) : $_('dashboard.allBrokers'));
 
     /** Extract a single string from SafeDecimal (may be string | (string|null)[] | null | undefined). */
     function safeStr(v: string | (string | null)[] | null | undefined): string | null {
@@ -88,6 +120,9 @@
         return `${$_('dashboard.twrr')}: ${twrr != null ? (parseFloat(twrr) * 100).toFixed(2) + '%' : '—'} | ${$_('dashboard.mwrr')}: ${mwrr != null ? (parseFloat(mwrr) * 100).toFixed(2) + '%' : '—'}`;
     });
     const roiIsPositive = $derived(summary ? parseFloat(summary.simple_roi_percent) >= 0 : undefined);
+
+    /** URL for "See all" assets link — preserves current date range. */
+    const assetsHref = $derived(`/assets?start=${dateFrom}&end=${dateTo}`);
 
     // =========================================================================
     // Loaders
@@ -125,17 +160,22 @@
         } else {
             selectedBrokerIds = [...selectedBrokerIds, id];
         }
-        void loadAll();
+        scheduleReload();
     }
 
-    function clearBrokerFilter() {
-        selectedBrokerIds = [];
-        void loadAll();
+    /** Fires loadAll after a 2-second quiet period (anti-bounce for rapid clicks). */
+    function scheduleReload() {
+        if (reloadTimer !== null) clearTimeout(reloadTimer);
+        reloadTimer = setTimeout(() => {
+            reloadTimer = null;
+            void loadAll();
+        }, 2000);
     }
 
     function handleDateChange(from: string, to: string) {
         dateFrom = from;
         dateTo = to;
+        setDateRange(from, to);
         void loadHistory();
     }
 
@@ -146,77 +186,130 @@
         syncLoading = false;
     }
 
+    // Outside-click closes broker filter panel
+    function handleDocumentClick(e: MouseEvent) {
+        if (!brokerFilterOpen) return;
+        const target = e.target as HTMLElement;
+        if (target.closest?.('[data-broker-filter-panel]') || target === brokerFilterTriggerEl) return;
+        brokerFilterOpen = false;
+    }
+
     // =========================================================================
     // Lifecycle
     // =========================================================================
 
-    onMount(async () => {
-        await ensureBrokersLoaded();
-        await loadAll();
+    onMount(() => {
+        document.addEventListener('click', handleDocumentClick);
+        void (async () => {
+            await ensureBrokersLoaded();
+            await ensurePluginIconsLoaded();
+            await loadAll();
+        })();
+        return () => document.removeEventListener('click', handleDocumentClick);
     });
 </script>
 
 <div class="space-y-4" data-testid="dashboard-page">
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
-    <!-- ── Header row: Broker filter | Sync | DateRangePicker ── -->
-    <div class="flex flex-wrap items-center gap-3">
-        <!-- Broker multi-select popover via BaseDropdown -->
-        <BaseDropdown>
-            {#snippet trigger({isOpen})}
-                <button class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors shadow-sm" data-testid="broker-filter-trigger">
-                    <span class="truncate max-w-[160px]">{brokerFilterLabel}</span>
-                    <ChevronDown size={14} class="flex-shrink-0 text-gray-400 transition-transform {isOpen ? 'rotate-180' : ''}" />
-                </button>
-            {/snippet}
-            {#snippet content({close})}
-                <div class="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg min-w-[200px] py-1 z-50" data-testid="broker-filter-dropdown">
-                    <!-- All brokers option -->
-                    <button
-                        class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-                        onclick={() => {
-                            clearBrokerFilter();
-                            close();
-                        }}
-                    >
-                        <span class="w-4 h-4 flex-shrink-0 flex items-center justify-center">
-                            {#if selectedBrokerIds.length === 0}
-                                <Check size={14} class="text-libre-green" />
-                            {/if}
-                        </span>
-                        <span class="text-gray-700 dark:text-gray-200">{$_('dashboard.allBrokers')}</span>
-                    </button>
-                    <div class="my-1 border-t border-gray-100 dark:border-slate-700"></div>
-                    {#each allBrokers as broker (broker.id)}
-                        <button class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" onclick={() => toggleBroker(broker.id)}>
-                            <span class="w-4 h-4 flex-shrink-0 flex items-center justify-center">
-                                {#if selectedBrokerIds.includes(broker.id)}
-                                    <Check size={14} class="text-libre-green" />
-                                {/if}
-                            </span>
-                            <span class="text-gray-700 dark:text-gray-200 truncate">{broker.name}</span>
-                        </button>
-                    {/each}
-                </div>
-            {/snippet}
-        </BaseDropdown>
+    <!-- ── Header row: white card — DateRangePicker | Broker filter | spacer | Sync ── -->
+    <div
+        bind:this={filterBarRef}
+        class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
+               {layout.layoutMode === 'mobile' ? 'flex-col items-start' : 'flex-row items-center'}"
+        data-testid="dashboard-filter-bar"
+    >
+        <!-- LEFT: Date range picker (wired to global store) -->
+        <DateRangePicker bind:start={dateFrom} bind:end={dateTo} compact={true} onchange={handleDateChange} />
 
-        <!-- Sync button -->
+        <!-- CENTER-LEFT: Broker multi-select panel -->
+        <div class="relative">
+            <button
+                bind:this={brokerFilterTriggerEl}
+                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
+                       {brokerFilterActive ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                onclick={() => (brokerFilterOpen = !brokerFilterOpen)}
+                data-testid="broker-filter-trigger"
+            >
+                {brokerFilterLabel}
+                <svg class="w-3 h-3 transition-transform {brokerFilterOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                </svg>
+            </button>
+
+            {#if brokerFilterOpen}
+                <div class="absolute left-0 z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" data-broker-filter-panel>
+                    <!-- Select All / Deselect All -->
+                    <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
+                        <button
+                            type="button"
+                            class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                            onclick={() => {
+                                selectedBrokerIds = allBrokers.map((b) => b.id);
+                                scheduleReload();
+                            }}>{$_('common.selectAll')}</button
+                        >
+                        <button
+                            type="button"
+                            class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                            onclick={() => {
+                                selectedBrokerIds = [];
+                                scheduleReload();
+                            }}>{$_('common.clearAll')}</button
+                        >
+                    </div>
+                    <!-- Broker list -->
+                    <div class="max-h-52 overflow-y-auto mx-2.5 my-2 space-y-0.5">
+                        {#each allBrokers as broker (broker.id)}
+                            {@const iconUrl = getBrokerIconUrlById(broker.id, allBrokers)}
+                            {@const isSelected = selectedBrokerIds.includes(broker.id)}
+                            <button
+                                type="button"
+                                class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] rounded hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors {isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'}"
+                                onclick={() => toggleBroker(broker.id)}
+                                data-testid="broker-filter-item-{broker.id}"
+                            >
+                                {#if iconUrl}
+                                    <img
+                                        src={iconUrl}
+                                        alt=""
+                                        class="w-4 h-4 rounded-sm object-contain flex-shrink-0"
+                                        onerror={(e) => {
+                                            (e.target as HTMLElement).style.display = 'none';
+                                        }}
+                                    />
+                                {:else}
+                                    <div class="w-4 h-4 rounded-sm bg-gray-100 dark:bg-slate-700 flex-shrink-0"></div>
+                                {/if}
+                                <span class="flex-1 truncate">{broker.name}</span>
+                                {#if isSelected}
+                                    <svg class="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                                    </svg>
+                                {/if}
+                            </button>
+                        {/each}
+                    </div>
+                </div>
+            {/if}
+        </div>
+
+        <!-- Spacer -->
+        <div class="flex-1"></div>
+
+        <!-- FAR RIGHT: Sync button -->
         <button
-            class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors shadow-sm disabled:opacity-50"
+            class="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
             onclick={handleSync}
             disabled={syncLoading}
             data-testid="sync-button"
             title={$_('dashboard.syncData')}
         >
             <RefreshCw size={14} class={syncLoading ? 'animate-spin' : ''} />
-            <span class="hidden sm:inline">{$_('dashboard.syncData')}</span>
+            {#if layout.showActionLabels}
+                <span>{$_('dashboard.syncData')}</span>
+            {/if}
         </button>
-
-        <!-- Date range picker (history range) -->
-        <div class="ml-auto">
-            <DateRangePicker bind:start={dateFrom} bind:end={dateTo} compact={true} onchange={handleDateChange} />
-        </div>
     </div>
 
     <!-- ── KPI Row ── -->
@@ -258,15 +351,21 @@
                     {$_('dashboard.noData')}
                 </div>
             {:else if allocationTab === 'type'}
-                <SectorPieChart data={allocationByType} height="220px" />
+                <AllocationPieChart data={allocationByType} height="220px" mode="type" />
             {:else if allocationTab === 'sector'}
-                <SectorPieChart data={allocationBySector} height="220px" />
+                <AllocationPieChart data={allocationBySector} height="220px" />
             {:else}
                 <GeographyMap data={allocationByGeo} height="220px" language={$currentLanguage} />
             {/if}
         </div>
     </div>
 
-    <!-- ── Recent Transactions ── -->
-    <RecentTransactionsPanel limit={10} brokerIds={activeBrokerIds} />
+    <!-- ── Bottom Grid: Holdings | Transactions ── -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- LEFT: Holdings panel -->
+        <HoldingsPanel holdings={summary?.holdings ?? []} loading={summaryLoading} {assetsHref} />
+
+        <!-- RIGHT: Recent Transactions -->
+        <RecentTransactionsPanel limit={10} brokerIds={activeBrokerIds} />
+    </div>
 </div>
