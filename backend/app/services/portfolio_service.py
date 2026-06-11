@@ -16,6 +16,7 @@ PortfolioService uses:
 from __future__ import annotations
 
 import asyncio
+import bisect
 from collections import defaultdict
 from datetime import date as date_type
 from decimal import Decimal
@@ -298,6 +299,44 @@ class _HistoryTxRow(NamedTuple):
     share: Decimal  # broker ownership fraction (0.0-1.0), already incorporated in amount
 
 
+class _HistoryQtyRow(NamedTuple):
+    """Quantity delta for a single BUY or SELL transaction.
+
+    Parallel to _HistoryTxRow but carries per-asset quantity info so that
+    get_history() can compute mark-to-market holdings value.
+    qty_delta is share-adjusted and signed: positive for BUY, negative for SELL.
+    """
+
+    date: date_type
+    asset_id: int
+    qty_delta: Decimal  # share-adjusted signed quantity change
+
+
+# ---------------------------------------------------------------------------
+# Mark-to-market helpers (pure, no I/O)
+# ---------------------------------------------------------------------------
+
+
+def _price_on_date(
+    sorted_prices: list[tuple[date_type, Decimal, str]],
+    query_date: date_type,
+) -> tuple[Decimal, str] | None:
+    """Return the latest (close, currency) with date <= query_date using backward fill.
+
+    sorted_prices must be sorted ascending by date[0].
+    Returns None if no price exists at or before query_date.
+    """
+    if not sorted_prices:
+        return None
+    # bisect_right gives insertion point after all dates == query_date
+    dates = [p[0] for p in sorted_prices]
+    idx = bisect.bisect_right(dates, query_date) - 1
+    if idx < 0:
+        return None
+    _, close, ccy = sorted_prices[idx]
+    return close, ccy
+
+
 def _build_history_series(
     transactions: list[_HistoryTxRow],
 ) -> list[PortfolioHistoryPoint]:
@@ -432,6 +471,35 @@ class PortfolioService:
             return row.close, row.currency, row.date
         return None
 
+    async def _bulk_load_asset_prices(
+        self,
+        asset_ids: set[int],
+        date_from: date_type,
+        date_to: date_type,
+    ) -> dict[int, list[tuple[date_type, Decimal, str]]]:
+        """Bulk-load PriceHistory for a set of assets over a date range.
+
+        Returns {asset_id: [(date, close, currency)]} with each list sorted ascending.
+        A single SQL query for all assets — avoids N separate round-trips.
+        """
+        if not asset_ids:
+            return {}
+        stmt = (
+            select(PriceHistory.asset_id, PriceHistory.date, PriceHistory.close, PriceHistory.currency)
+            .where(
+                PriceHistory.asset_id.in_(asset_ids),
+                PriceHistory.close.is_not(None),
+                PriceHistory.date >= date_from,
+                PriceHistory.date <= date_to,
+            )
+            .order_by(PriceHistory.asset_id, PriceHistory.date)
+        )
+        rows = (await self.db.execute(stmt)).all()
+        result: dict[int, list[tuple[date_type, Decimal, str]]] = defaultdict(list)
+        for r in rows:
+            result[r.asset_id].append((r.date, r.close, r.currency))
+        return dict(result)
+
     async def _get_asset(self, asset_id: int) -> Asset | None:
         return await self.db.get(Asset, asset_id)
 
@@ -465,6 +533,7 @@ class PortfolioService:
         user_id: int,
         broker_ids: list[int] | None = None,
         include_breakdown: bool = False,
+        target_currency_override: str | None = None,
     ) -> PortfolioSummary:
         """Return aggregated portfolio summary.
 
@@ -478,7 +547,7 @@ class PortfolioService:
 
         today = date_type.today()
 
-        base_currency = await self._get_base_currency()
+        base_currency = target_currency_override or await self._get_base_currency()
         accesses = await self._get_user_broker_access(user_id, broker_ids)
 
         total_nav = Decimal("0")
@@ -745,8 +814,12 @@ class PortfolioService:
         broker_ids: list[int] | None = None,
         date_from: date_type | None = None,
         date_to: date_type | None = None,
+        target_currency_override: str | None = None,
     ) -> list[PortfolioHistoryPoint]:
         """Return daily portfolio value series (cash, invested, NAV) in base currency.
+
+        NAV is computed as mark-to-market: cumulative_cash + Σ(qty_i × price_i × FX_i).
+        This makes TWRR/ROI non-zero when asset prices change between snapshots.
 
         Always accumulates the full history from t=0 regardless of date_from,
         so that NAV/invested balances are correct. The display series is then
@@ -755,12 +828,12 @@ class PortfolioService:
         period (starting from ~0%).
 
         Only includes dates where transactions exist.
-        Delegates accumulation logic to the pure function _build_history_series().
         """
-        base_currency = await self._get_base_currency()
+        base_currency = target_currency_override or await self._get_base_currency()
         accesses = await self._get_user_broker_access(user_id, broker_ids)
 
         rows: list[_HistoryTxRow] = []
+        qty_rows: list[_HistoryQtyRow] = []
 
         for access in accesses:
             broker_id = access.broker_id
@@ -802,9 +875,85 @@ class PortfolioService:
                     )
                 )
 
+                # Track per-asset quantities for mark-to-market NAV computation.
+                if tx.type in _HOLDING_TYPES and tx.asset_id is not None and tx.quantity is not None and tx.quantity != 0:
+                    qty_sign = Decimal("1") if tx.type == TransactionType.BUY else Decimal("-1")
+                    qty_rows.append(_HistoryQtyRow(date=tx.date, asset_id=tx.asset_id, qty_delta=abs(tx.quantity) * qty_sign * share))
+
         all_history = _build_history_series(rows)
         if not all_history:
             return all_history
+
+        # ── Mark-to-market: patch invested_value / nav_value ─────────────────
+        # Build cumulative quantity snapshots keyed by snapshot date.
+        held_asset_ids = {r.asset_id for r in qty_rows}
+        if held_asset_ids:
+            date_min = all_history[0].date
+            date_max = all_history[-1].date
+            price_map = await self._bulk_load_asset_prices(held_asset_ids, date_min, date_max)
+
+            # Collect all (price_ccy → base_ccy, date) conversions needed — one bulk call.
+            # First pass: build snap_qtys (cumulative quantities at each snapshot date)
+            # and collect FX conversion requests for market values priced in non-base currency.
+            fx_inputs: list[tuple[Currency, str, date_type]] = []
+            fx_index: list[tuple[int, date_type]] = []  # (asset_id, date) for each fx_inputs entry
+
+            snap_qtys: dict[date_type, dict[int, Decimal]] = {}
+            cumulative_qtys_snapshot: dict[int, Decimal] = defaultdict(Decimal)
+            qi = 0
+            qty_rows_sorted = sorted(qty_rows, key=lambda r: r.date)
+
+            for pt in all_history:
+                while qi < len(qty_rows_sorted) and qty_rows_sorted[qi].date <= pt.date:
+                    r = qty_rows_sorted[qi]
+                    cumulative_qtys_snapshot[r.asset_id] += r.qty_delta
+                    qi += 1
+                snap_qtys[pt.date] = dict(cumulative_qtys_snapshot)
+
+                for asset_id, qty in snap_qtys[pt.date].items():
+                    if qty <= Decimal("0"):
+                        continue
+                    price_info = _price_on_date(price_map.get(asset_id, []), pt.date)
+                    if price_info is None:
+                        continue
+                    price, price_ccy = price_info
+                    if price_ccy != base_currency:
+                        fx_inputs.append((Currency(code=price_ccy, amount=price * qty), base_currency, pt.date))
+                        fx_index.append((asset_id, pt.date))
+                    # else identity — no FX conversion needed
+
+            # Bulk FX conversion for all market values that need it.
+            fx_results_bulk: list = []
+            if fx_inputs:
+                fx_results_bulk, _ = await convert_bulk(self.db, fx_inputs, raise_on_error=False)
+
+            # Build lookup: (asset_id, date) → converted_market_value (or None).
+            fx_mv_map: dict[tuple[int, date_type], Decimal] = {}
+            for i, (asset_id, snap_date) in enumerate(fx_index):
+                if i < len(fx_results_bulk) and fx_results_bulk[i] is not None:
+                    converted, _, _ = fx_results_bulk[i]
+                    fx_mv_map[(asset_id, snap_date)] = converted.amount
+                # else: no conversion available → asset excluded from market value
+
+            # Second pass: patch each history point with mark-to-market values.
+            for pt in all_history:
+                market_value = Decimal("0")
+                for asset_id, qty in snap_qtys[pt.date].items():
+                    if qty <= Decimal("0"):
+                        continue
+                    price_info = _price_on_date(price_map.get(asset_id, []), pt.date)
+                    if price_info is None:
+                        continue
+                    price, price_ccy = price_info
+                    if price_ccy == base_currency:
+                        market_value += qty * price
+                    else:
+                        mv = fx_mv_map.get((asset_id, pt.date))
+                        if mv is not None:
+                            market_value += mv
+
+                pt.invested_value = market_value
+                pt.nav_value = pt.cash_value + market_value
 
         # Slice display series to [date_from, date_to]
         if date_from:
@@ -859,6 +1008,15 @@ class PortfolioService:
                 pt.twrr = twrr_map.get(pt.date)
                 pt.roi = roi_map.get(pt.date)
                 pt.mwrr = mwrr_map.get(pt.date)
+
+            # The first history point is always index-0 in the series: both
+            # twrr_series and mwrr_series skip it by design (no prior period).
+            # For chart continuity the starting value is mathematically 0%.
+            if history:
+                if history[0].twrr is None:
+                    history[0].twrr = Decimal("0")
+                if history[0].mwrr is None:
+                    history[0].mwrr = Decimal("0")
 
         return history
 

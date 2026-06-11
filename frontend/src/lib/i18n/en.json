@@ -824,7 +824,9 @@
     "seeAllAssets": "See all →",
     "seeAllTransactions": "See all →",
     "geoUnclassified": "Geographic data unavailable for {pct}% of portfolio value",
-    "roiAllZero": "Returns are 0% for the selected period"
+    "roiAllZero": "Returns are 0% for the selected period",
+    "abs": "Abs",
+    "displayCurrency": "Currency"
   },
   "dataEditor": {
     "clearSelection": "Clear selection",

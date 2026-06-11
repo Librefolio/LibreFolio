@@ -192,7 +192,14 @@
                             <td class="py-2 pr-3 max-w-[90px]">
                                 <div class="flex items-center gap-1.5 min-w-0">
                                     {#if brokerIconUrl}
-                                        <img src={brokerIconUrl} alt="" class="w-4 h-4 rounded-sm object-contain flex-shrink-0" onerror={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                                        <img
+                                            src={brokerIconUrl}
+                                            alt=""
+                                            class="w-4 h-4 rounded-sm object-contain flex-shrink-0"
+                                            onerror={(e) => {
+                                                (e.target as HTMLElement).style.display = 'none';
+                                            }}
+                                        />
                                     {/if}
                                     <span class="truncate text-gray-500 dark:text-gray-400">{broker?.name ?? (bId ? String(bId) : '—')}</span>
                                 </div>

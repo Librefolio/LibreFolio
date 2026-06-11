@@ -41,8 +41,7 @@ portfolio_router = APIRouter(prefix="/portfolio", tags=["Portfolio"])
     "/wac",
     response_model=WACAnalyticsResponse,
     summary="WAC time series",
-    description="Compute WAC (Weighted Average Cost) time series for committed transactions. "
-    "Returns point-per-transaction data where WAC changes — useful for chart overlays and P&L.",
+    description="Compute WAC (Weighted Average Cost) time series for committed transactions. " "Returns point-per-transaction data where WAC changes — useful for chart overlays and P&L.",
 )
 async def analytics_wac(
     body: WACAnalyticsRequest,
@@ -53,7 +52,7 @@ async def analytics_wac(
 
     for query in body.queries:
         # Determine as_of_date: use query end date or today
-        from datetime import date as date_type
+        from datetime import date as date_type  # noqa: PLC0415 — shadowed import, pre-existing
 
         as_of_date = query.date_range.end if query.date_range and query.date_range.end else date_type.today()
 
@@ -145,6 +144,7 @@ async def analytics_wac(
 async def get_portfolio_summary(
     broker_ids: Optional[list[int]] = Query(None, description="Filter by broker IDs"),
     include_breakdown: bool = Query(False, description="Include per-broker breakdown in by_broker field"),
+    target_currency: Optional[str] = Query(None, description="Override base currency (ISO 4217, e.g. USD). Defaults to user setting."),
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
 ) -> PortfolioSummary:
@@ -154,6 +154,7 @@ async def get_portfolio_summary(
         user_id=current_user.id,
         broker_ids=broker_ids,
         include_breakdown=include_breakdown,
+        target_currency_override=target_currency,
     )
 
 
@@ -167,6 +168,7 @@ async def get_portfolio_history(
     broker_ids: Optional[list[int]] = Query(None, description="Filter by broker IDs"),
     date_from: Optional[date_type] = Query(None, description="Start date (inclusive)"),
     date_to: Optional[date_type] = Query(None, description="End date (inclusive)"),
+    target_currency: Optional[str] = Query(None, description="Override base currency (ISO 4217, e.g. USD). Defaults to user setting."),
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
 ) -> list[PortfolioHistoryPoint]:
@@ -177,6 +179,7 @@ async def get_portfolio_history(
         broker_ids=broker_ids,
         date_from=date_from,
         date_to=date_to,
+        target_currency_override=target_currency,
     )
 
 
@@ -220,4 +223,3 @@ async def get_fifo_lots(
         broker_id=broker_id,
         asset_id=asset_id,
     )
-

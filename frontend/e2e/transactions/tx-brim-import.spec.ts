@@ -179,7 +179,12 @@ test.describe('BRIM Import Wizard', () => {
 
         if (await resolveSection.isVisible({timeout: 2_000}).catch(() => false)) {
             // There's at least one asset to resolve
-            if (await searchInputs.first().isVisible({timeout: 1_000}).catch(() => false)) {
+            if (
+                await searchInputs
+                    .first()
+                    .isVisible({timeout: 1_000})
+                    .catch(() => false)
+            ) {
                 // Type something in the search field
                 await searchInputs.first().fill('AAPL');
                 await page.waitForTimeout(500);

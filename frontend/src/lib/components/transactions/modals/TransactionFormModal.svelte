@@ -1487,7 +1487,7 @@
                     <!-- Type (date is now inside Da/A panels) -->
                     <div class="text-sm">
                         <!-- Type: editable in create dual mode (W41), readonly in edit/view -->
-                    <div class="flex flex-col gap-1{hl('tx-form-type-wrap')}" data-testid="tx-form-type-wrap">
+                        <div class="flex flex-col gap-1{hl('tx-form-type-wrap')}" data-testid="tx-form-type-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
                             {#if typeImmutable}
                                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
@@ -2195,22 +2195,38 @@
        Starts transparent → peaks bright yellow → settles to a light tint.
        animation-fill-mode: forwards keeps the resting state after the animation. */
     @keyframes hl-pulse {
-    0%   { background-color: rgba(253, 224, 71, 0.0); }
-    40%  { background-color: rgba(253, 224, 71, 0.65); }
-    50%  { background-color: rgba(253, 224, 71, 0.65); }
-    100% { background-color: rgba(253, 224, 71, 0.18); }
-}
-:global(.hl-match) {
-    animation: hl-pulse 3s linear 1 forwards;
-    padding: 6px 8px;
-}
-:global(.dark .hl-match) {
-    animation: hl-pulse-dark 3s linear 1 forwards;
-}
-@keyframes hl-pulse-dark {
-    0%   { background-color: rgba(180, 130, 20, 0.0); }
-    40%  { background-color: rgba(180, 130, 20, 0.55); }
-    50%  { background-color: rgba(180, 130, 20, 0.55); }
-    100% { background-color: rgba(180, 130, 20, 0.22); }
-}
+        0% {
+            background-color: rgba(253, 224, 71, 0);
+        }
+        40% {
+            background-color: rgba(253, 224, 71, 0.65);
+        }
+        50% {
+            background-color: rgba(253, 224, 71, 0.65);
+        }
+        100% {
+            background-color: rgba(253, 224, 71, 0.18);
+        }
+    }
+    :global(.hl-match) {
+        animation: hl-pulse 3s linear 1 forwards;
+        padding: 6px 8px;
+    }
+    :global(.dark .hl-match) {
+        animation: hl-pulse-dark 3s linear 1 forwards;
+    }
+    @keyframes hl-pulse-dark {
+        0% {
+            background-color: rgba(180, 130, 20, 0);
+        }
+        40% {
+            background-color: rgba(180, 130, 20, 0.55);
+        }
+        50% {
+            background-color: rgba(180, 130, 20, 0.55);
+        }
+        100% {
+            background-color: rgba(180, 130, 20, 0.22);
+        }
+    }
 </style>
