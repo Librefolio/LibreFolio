@@ -11,6 +11,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
+    import {untrack} from 'svelte';
     import {zodiosApi} from '$lib/api';
     import {ExternalLink, Loader2, Search} from 'lucide-svelte';
     import AssetIcon from './AssetIcon.svelte';
@@ -46,15 +47,17 @@
     interface Props {
         onselect?: (result: SearchResult) => void;
         disabled?: boolean;
+        /** Pre-fill the search input on mount (e.g. from BRIM extracted symbol/name). */
+        initialQuery?: string;
     }
 
-    let {onselect, disabled = false}: Props = $props();
+    let {onselect, disabled = false, initialQuery = ''}: Props = $props();
 
     // =========================================================================
     // State
     // =========================================================================
 
-    let query = $state('');
+    let query = $state(untrack(() => initialQuery));
     let results = $state<SearchResult[]>([]);
     let loading = $state(false);
     let error = $state<string | null>(null);
@@ -81,6 +84,13 @@
         if (!providersLoaded) {
             loadProviders();
             ensureAssetProvidersCached();
+        }
+    });
+
+    // If initialQuery was provided, auto-trigger search after providers load.
+    $effect(() => {
+        if (providersLoaded && initialQuery.trim().length > 0 && results.length === 0 && !loading) {
+            executeSearch(initialQuery);
         }
     });
 

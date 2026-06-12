@@ -21,6 +21,7 @@
     import {ensureAssetsLoaded, getAllAssets, assetStoreVersion, type AssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
 
     interface Props {
         /** Currently selected asset id (null = none). */
@@ -42,7 +43,7 @@
         /** Change callback (number | null). */
         onchange?: (value: number | null) => void;
         /** Prioritized items shown at the top of the list with a badge (e.g. BRIM candidates). */
-        suggestedIds?: Array<{id: number; badge: string; badgeClass?: string}>;
+        suggestedIds?: Array<{id: number; badge: string; badgeClass?: string; badgeTooltip?: string}>;
     }
 
     let {value = $bindable(null), disabled = false, filter, placeholder, testid = 'asset-select', compact = false, createLabel, onCreateNew, onchange, suggestedIds}: Props = $props();
@@ -81,7 +82,7 @@
         for (const opt of baseOptions) {
             const hint = suggestedSet.get(opt.value);
             if (hint) {
-                suggested.push({...opt, badge: hint.badge, badgeClass: hint.badgeClass});
+                suggested.push({...opt, badge: hint.badge, badgeClass: hint.badgeClass, badgeTooltip: hint.badgeTooltip});
             } else {
                 rest.push(opt);
             }
@@ -137,9 +138,17 @@
                 {/if}
                 <span class="truncate text-sm">{a?.identifier_ticker ? `${a.identifier_ticker} · ${option.label}` : option.label}</span>
                 {#if option.badge}
-                    <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium {option.badgeClass || 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300'}">
-                        {option.badge}
-                    </span>
+                    {#if option.badgeTooltip}
+                        <Tooltip text={option.badgeTooltip} position="left" maxWidth="220px">
+                            <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium cursor-help {option.badgeClass || 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300'}">
+                                {option.badge}
+                            </span>
+                        </Tooltip>
+                    {:else}
+                        <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium {option.badgeClass || 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300'}">
+                            {option.badge}
+                        </span>
+                    {/if}
                 {/if}
                 {#if a?.currency}
                     {@const ci = getCurrencyInfo(a.currency)}
