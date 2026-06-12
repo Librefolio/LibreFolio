@@ -22,6 +22,8 @@ export interface SelectOption {
     badge?: string;
     /** Tailwind classes for the badge */
     badgeClass?: string;
+    /** Tooltip text shown on hover over the badge */
+    badgeTooltip?: string;
 }
 
 /**

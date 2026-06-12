@@ -87,12 +87,18 @@
         prefillData?: Partial<AssetData> | null;
         /** Z-index override for stacked modal contexts. */
         zIndex?: number;
+        /**
+         * Pre-fill the "Search Online" input with this query when the modal opens in create mode.
+         * Useful for the BRIM import wizard: pass the extracted symbol/ISIN/name so the user
+         * can immediately see provider search results without typing.
+         */
+        initialSearchQuery?: string;
         oncreated?: (assetId: number) => void;
         onupdated?: () => void;
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, oncreated, onupdated, onclose}: Props = $props();
+    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, initialSearchQuery = '', oncreated, onupdated, onclose}: Props = $props();
 
     // =========================================================================
     // Constants
@@ -1120,7 +1126,7 @@
     <!-- Body -->
     <div class="px-6 py-4 space-y-5 max-h-[70vh] overflow-y-auto" data-testid="asset-modal-form">
         <!-- Search Online -->
-        <AssetSearchAutocomplete onselect={handleSearchSelect} />
+        <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : initialSearchQuery} />
 
         <!-- Asset Details -->
         <div class="space-y-3">

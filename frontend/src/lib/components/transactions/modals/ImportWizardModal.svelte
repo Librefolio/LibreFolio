@@ -27,6 +27,7 @@
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
     import ImportPluginSelect, {getCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
@@ -240,15 +241,20 @@
     let compareOpen = $state(false);
     let compareItems = $state<[TXReadItem] | null>(null);
     let compareHighlightFields = $state<string[]>([]);
+    let compareTitle = $state<string | undefined>(undefined);
     let compareFetching = $state(false);
 
     // Add-identifier prompt state — shown when user manually resolves an asset that is missing the extracted identifier
     let identifierPromptOpen = $state(false);
     let identifierPromptAssetId = $state<number | null>(null);
+    let identifierPromptFakeAssetId = $state<number | null>(null);
     let identifierPromptField = $state<'identifier_ticker' | 'identifier_isin' | null>(null);
     let identifierPromptValue = $state<string | null>(null);
     let identifierPromptAssetName = $state<string | null>(null);
     let identifierPromptSaving = $state(false);
+    /** true = asset already has a different identifier (conflict); false = identifier missing (add) */
+    let identifierPromptIsConflict = $state(false);
+    let identifierPromptExistingValue = $state<string | null>(null);
 
     // Step 4 deriveds
     let step4SelectedCount = $derived(mergedTransactions.filter((t) => t.selected).length);
@@ -350,6 +356,34 @@
         assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, resolvedAssetId: null} : r));
     }
 
+    /** Confidence sort order for sorting candidates list. */
+    const CONF_ORDER: Record<string, number> = {EXACT: 0, HIGH: 1, MEDIUM: 2, LOW: 3};
+
+    /**
+     * Replace candidates for a specific fakeAssetId with fresh results from the backend.
+     * Called after an asset's identifier is updated so confidence reflects current DB state.
+     */
+    async function refreshCandidates(fakeAssetId: number) {
+        const res = assetResolutions.find((r) => r.fakeAssetId === fakeAssetId);
+        if (!res) return;
+        try {
+            const fresh = await zodiosApi.get_asset_candidates_api_v1_brokers_import_asset_candidates_post({
+                extracted_symbol: res.extractedSymbol ?? undefined,
+                extracted_isin: res.extractedIsin ?? undefined,
+                extracted_name: res.extractedName ?? undefined,
+            });
+            // Sort by confidence and replace candidates in state
+            const sorted: AssetResolution['candidates'] = [...fresh]
+                .sort((a, b) => (CONF_ORDER[a.match_confidence] ?? 9) - (CONF_ORDER[b.match_confidence] ?? 9))
+                .map((c) => ({asset_id: c.asset_id, symbol: (Array.isArray(c.symbol) ? (c.symbol[0] ?? null) : c.symbol) as string | null, isin: (Array.isArray(c.isin) ? (c.isin[0] ?? null) : c.isin) as string | null, name: c.name, match_confidence: c.match_confidence as string}));
+            assetResolutions = assetResolutions.map((r) =>
+                r.fakeAssetId === fakeAssetId ? {...r, candidates: sorted} : r,
+            );
+        } catch {
+            // Silently ignore — old candidates remain visible
+        }
+    }
+
     /**
      * Called when the user manually picks an existing asset via AssetSelect (not a candidate chip).
      * Resolves the asset and, if the selected asset is missing the extracted identifier, opens the
@@ -359,7 +393,6 @@
         resolveAsset(fakeAssetId, realAssetId);
         let info = getAssetInfo(realAssetId);
         if (!info) {
-            // Rare: asset not in cache yet (e.g. freshly created) — force reload and retry.
             await refreshAllAssets();
             info = getAssetInfo(realAssetId);
             if (!info) return;
@@ -367,31 +400,49 @@
         // Priority: ISIN > symbol (ISIN is more precise)
         let field: 'identifier_ticker' | 'identifier_isin' | null = null;
         let value: string | null = null;
-        if (res.extractedIsin && !info.identifier_isin) {
+        let existingValue: string | null = null;
+        if (res.extractedIsin && (!info.identifier_isin || info.identifier_isin !== res.extractedIsin)) {
             field = 'identifier_isin';
             value = res.extractedIsin;
-        } else if (res.extractedSymbol && !info.identifier_ticker) {
+            existingValue = info.identifier_isin ?? null;
+        } else if (res.extractedSymbol && (!info.identifier_ticker || info.identifier_ticker !== res.extractedSymbol)) {
             field = 'identifier_ticker';
             value = res.extractedSymbol;
+            existingValue = info.identifier_ticker ?? null;
         }
         if (field && value) {
+            // Identifier missing or different — ask the user what to do before updating candidates.
             identifierPromptAssetId = realAssetId;
+            identifierPromptFakeAssetId = fakeAssetId;
             identifierPromptField = field;
             identifierPromptValue = value;
             identifierPromptAssetName = info.display_name ?? `#${realAssetId}`;
+            identifierPromptIsConflict = existingValue !== null;
+            identifierPromptExistingValue = existingValue;
             identifierPromptOpen = true;
+        } else {
+            // Identifier already matches (or no extracted identifier) — refresh candidates from backend
+            // so confidence reflects current DB state.
+            await refreshCandidates(fakeAssetId);
         }
     }
 
     /**
      * Confirm the add-identifier prompt: PATCH the asset with the extracted identifier.
+     * After success, refresh the asset store and re-query candidates from the backend
+     * so confidence is derived from actual DB state — not assumed.
      */
     async function confirmAddIdentifier() {
-        if (!identifierPromptAssetId || !identifierPromptField || !identifierPromptValue) return;
+        if (!identifierPromptAssetId || !identifierPromptField || !identifierPromptValue || identifierPromptFakeAssetId === null) return;
         identifierPromptSaving = true;
+        const fakeId = identifierPromptFakeAssetId;
         try {
             await zodiosApi.patch_assets_bulk_api_v1_assets_patch([{asset_id: identifierPromptAssetId, [identifierPromptField]: identifierPromptValue}]);
             toasts.success($t('importWizard.addIdentifier.success'));
+            // Refresh asset store (so ticker appears in AssetSelect and prompt won't re-fire)
+            // then re-query candidates from backend to get real confidence level.
+            await refreshAllAssets();
+            await refreshCandidates(fakeId);
         } catch {
             toasts.error($t('importWizard.addIdentifier.error'));
         } finally {
@@ -504,6 +555,7 @@
 
         compareItems = [existing];
         compareHighlightFields = highlight;
+        compareTitle = `🔍 ${$t('importWizard.compareTitle', {values: {id: String(existingId)}})}`;
         compareOpen = true;
     }
     let step4Columns = $derived.by<ColumnDef<MergedTx>[]>(() => [
@@ -1977,30 +2029,7 @@ ${arrow}<span>${label}</span></span>`,
                                         </div>
                                         <div class="text-xs text-gray-400 mb-3 truncate">{res.sourceFiles.join(', ')}</div>
 
-                                        {#if res.candidates.length > 0 && !isResolved}
-                                            <!-- Candidates: clickable chips -->
-                                            <div class="mb-2">
-                                                <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{$t('importWizard.suggested')}</div>
-                                                <div class="space-y-1">
-                                                    {#each res.candidates as cand (cand.asset_id)}
-                                                        <button
-                                                            type="button"
-                                                            class="w-full flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-libre-green/10 text-left transition-colors border border-transparent hover:border-libre-green/30"
-                                                            onclick={() => resolveAsset(res.fakeAssetId, cand.asset_id)}
-                                                        >
-                                                            <span class="text-sm text-gray-800 dark:text-gray-200 flex-1 truncate">{cand.name}</span>
-                                                            {#if cand.symbol}<span class="font-mono text-xs text-gray-500 shrink-0">{cand.symbol}</span>{/if}
-                                                            <span class="text-xs px-1.5 py-0.5 rounded font-medium shrink-0 {confidenceBadgeClass(cand.match_confidence)}">
-                                                                {$t(`importWizard.confidence.${cand.match_confidence}`) || cand.match_confidence}
-                                                            </span>
-                                                        </button>
-                                                    {/each}
-                                                </div>
-                                                <div class="border-t border-gray-100 dark:border-gray-700 my-2"></div>
-                                            </div>
-                                        {/if}
-
-                                        <!-- AssetSelect: single unified control for resolved + unresolved -->
+                                        <!-- AssetSelect: candidates pinned at top via suggestedIds prop -->
                                         <AssetSelect
                                             value={res.resolvedAssetId}
                                             placeholder={$t('importWizard.searchAll')}
@@ -2009,8 +2038,9 @@ ${arrow}<span>${label}</span></span>`,
                                             onCreateNew={() => (createAssetForFakeId = res.fakeAssetId)}
                                             suggestedIds={res.candidates.map((c) => ({
                                                 id: c.asset_id,
-                                                badge: $t(`importWizard.confidence.${c.match_confidence}`) || c.match_confidence,
-                                                badgeClass: confidenceBadgeClass(c.match_confidence),
+                                                badge: $t(`importWizard.confidence.${c.match_confidence.toLowerCase()}`) || c.match_confidence,
+                                                badgeClass: confidenceBadgeClass(c.match_confidence.toLowerCase()),
+                                                badgeTooltip: $t(`importWizard.confidenceTip.${c.match_confidence.toLowerCase()}`) || c.match_confidence,
                                             }))}
                                             onchange={(id) => {
                                                 if (id !== null) resolveAssetManual(res.fakeAssetId, id, res);
@@ -2227,6 +2257,7 @@ ${arrow}<span>${label}</span></span>`,
                   identifier_isin: _createRes.extractedIsin ?? undefined,
               }
             : null}
+        initialSearchQuery={_createRes ? [_createRes.extractedSymbol, _createRes.extractedIsin, _createRes.extractedName].filter(Boolean).join(' ') : ''}
         zIndex={90}
         oncreated={(assetId) => {
             resolveAsset(createAssetForFakeId!, assetId);
@@ -2245,28 +2276,63 @@ ${arrow}<span>${label}</span></span>`,
         items={compareItems}
         initialOptionalOpen={true}
         highlightFields={compareHighlightFields}
+        titleOverride={compareTitle}
         zIndex={zIndex + 25}
         onClose={() => {
             compareOpen = false;
             compareItems = null;
+            compareTitle = undefined;
         }}
     />
 {/if}
 
-<!-- Add identifier prompt — shown when user manually resolves an asset missing the extracted identifier -->
-<ConfirmModal
-    open={identifierPromptOpen}
-    title={$t('importWizard.addIdentifier.title')}
-    message={$t('importWizard.addIdentifier.body', {
-        values: {
-            asset: identifierPromptAssetName ?? '',
-            value: identifierPromptValue ?? '',
-            type: identifierPromptField === 'identifier_ticker' ? 'Ticker' : 'ISIN',
-        },
-    })}
-    confirmText={$t('importWizard.addIdentifier.confirm')}
-    cancelText={$t('importWizard.addIdentifier.skip')}
-    zIndex={zIndex + 30}
-    onConfirm={confirmAddIdentifier}
-    onCancel={() => (identifierPromptOpen = false)}
-/>
+<!-- Add identifier prompt — 3 options: Cancel / Assign only / Assign + update -->
+<ModalBase open={identifierPromptOpen} maxWidth="lg" onRequestClose={() => (identifierPromptOpen = false)} zIndex={zIndex + 30}>
+    <div class="p-6">
+        <!-- Conflict: amber banner at top -->
+        <h2 class="text-base font-semibold {identifierPromptIsConflict ? 'text-amber-700 dark:text-amber-400' : 'text-gray-800 dark:text-gray-100'} mb-3">
+            {$t(identifierPromptIsConflict ? 'importWizard.addIdentifier.titleConflict' : 'importWizard.addIdentifier.title')}
+        </h2>
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-5 leading-relaxed">
+            {@html $t(identifierPromptIsConflict ? 'importWizard.addIdentifier.bodyConflict' : 'importWizard.addIdentifier.body', {
+                values: {
+                    asset: `<strong>${identifierPromptAssetName ?? ''}</strong>`,
+                    value: `<strong>${identifierPromptValue ?? ''}</strong>`,
+                    existing: `<strong>${identifierPromptExistingValue ?? ''}</strong>`,
+                    type: identifierPromptField === 'identifier_ticker' ? 'Ticker' : 'ISIN',
+                },
+            })}
+        </p>
+        <div class="flex justify-end gap-2 flex-nowrap">
+            <button
+                type="button"
+                class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap"
+                onclick={() => (identifierPromptOpen = false)}
+                data-testid="identifier-prompt-cancel"
+            >
+                {$t('common.cancel')}
+            </button>
+            <button
+                type="button"
+                class="px-3 py-1.5 text-sm rounded-lg border border-libre-green/40 text-libre-green hover:bg-libre-green/10 transition-colors whitespace-nowrap"
+                onclick={async () => {
+                    const fakeId = identifierPromptFakeAssetId;
+                    identifierPromptOpen = false;
+                    if (fakeId !== null) await refreshCandidates(fakeId);
+                }}
+                data-testid="identifier-prompt-skip"
+            >
+                {$t('importWizard.addIdentifier.skip')}
+            </button>
+            <button
+                type="button"
+                disabled={identifierPromptSaving}
+                class="px-3 py-1.5 text-sm rounded-lg {identifierPromptIsConflict ? 'bg-amber-500 hover:bg-amber-600' : 'bg-libre-green hover:bg-libre-green/90'} text-white disabled:opacity-50 transition-colors whitespace-nowrap"
+                onclick={confirmAddIdentifier}
+                data-testid="identifier-prompt-confirm"
+            >
+                {identifierPromptSaving ? '…' : $t(identifierPromptIsConflict ? 'importWizard.addIdentifier.confirmConflict' : 'importWizard.addIdentifier.confirm')}
+            </button>
+        </div>
+    </div>
+</ModalBase>

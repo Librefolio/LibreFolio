@@ -39,6 +39,8 @@ from backend.app.db.models import User, UserRole
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.brim import (
+    BRIMAssetCandidate,
+    BRIMAssetCandidatesRequest,
     BRIMAssetMapping,
     BRIMFileInfo,
     BRIMFileStatus,
@@ -841,6 +843,32 @@ async def list_plugins(_current_user: User = Depends(get_current_user)) -> List[
     and supported file extensions.
     """
     return BRIMProviderRegistry.list_plugin_info()
+
+
+@brim_router.post(
+    "/asset-candidates",
+    response_model=List[BRIMAssetCandidate],
+    summary="Compute asset candidates for extracted identifiers",
+)
+async def get_asset_candidates(
+    request: BRIMAssetCandidatesRequest,
+    _current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+) -> List[BRIMAssetCandidate]:
+    """
+    Re-run the asset candidate search for given extracted identifiers.
+
+    Called by the frontend after the user updates an asset's identifier so the
+    match confidence can be re-derived from the current database state rather
+    than cached parse-time data.
+    """
+    candidates, _ = await search_asset_candidates(
+        session=session,
+        extracted_symbol=request.extracted_symbol,
+        extracted_isin=request.extracted_isin,
+        extracted_name=request.extracted_name,
+    )
+    return candidates
 
 
 # ============================================================================

@@ -149,6 +149,11 @@
          * Example: ['tx-form-date-wrap', 'tx-form-cash-wrap']
          */
         highlightFields?: string[];
+        /**
+         * When set, replaces the auto-generated title in the modal header.
+         * Used by the duplicate compare flow to show a custom title.
+         */
+        titleOverride?: string;
     }
 
     let {
@@ -172,6 +177,7 @@
         pendingTxIds = null,
         initialOptionalOpen = false,
         highlightFields = [],
+        titleOverride,
     }: Props = $props();
 
     // Internal derived: main row from items[0], partner info from items[1]
@@ -1352,7 +1358,9 @@
         <!-- ============================================================= -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-form-title">
-                {#if pairLayout}
+                {#if titleOverride}
+                    {titleOverride}
+                {:else if pairLayout}
                     {#if pairLayout === 'fx'}💱{:else if pairLayout === 'transfer_asset'}📦{:else}🏦{/if}
                     {#if mode === 'edit'}
                         ✎ {dualTitle}
@@ -2211,6 +2219,13 @@
     :global(.hl-match) {
         animation: hl-pulse 3s linear 1 forwards;
         padding: 6px 8px;
+    }
+    /* Inputs inside a highlighted wrapper should be transparent so the
+       yellow background shows through instead of being covered by white bg. */
+    :global(.hl-match input),
+    :global(.hl-match textarea),
+    :global(.hl-match select) {
+        background-color: transparent !important;
     }
     :global(.dark .hl-match) {
         animation: hl-pulse-dark 3s linear 1 forwards;
