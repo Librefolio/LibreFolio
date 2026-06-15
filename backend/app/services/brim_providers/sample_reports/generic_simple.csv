@@ -11,3 +11,5 @@ date,type,quantity,amount,currency,asset,description
 2025-11-02,DIVIDEND,0,12.50,USD,AAPL,BRIM dup test - likely 2
 2025-11-03,BUY,3,-517.50,USD,AAPL,CSV desc for possible dup 1
 2025-11-04,SELL,-2,350.00,USD,AAPL,CSV desc for possible dup 2
+2025-05-01,ADJUSTMENT,10,0,EUR,TSLA,Stock Split - Manca WAC
+2025-06-01,ADJUSTMENT,5,0,EUR,NVDA,Spin-off - Manca WAC

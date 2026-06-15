@@ -28,6 +28,7 @@ This module provides:
 
 from __future__ import annotations
 
+import csv
 import json
 import uuid
 from abc import ABC, abstractmethod
@@ -450,6 +451,27 @@ class BRIMProvider(ABC):
         Default: no-op.
         """
         pass
+
+    @staticmethod
+    def detect_csv_delimiter(file_path: Path, lines_to_read: int = 15) -> str:
+        """Sniff the delimiter used in a CSV file.
+
+        Uses ``csv.Sniffer`` which handles quoted fields correctly.
+        Falls back to counting raw characters when sniffing fails.
+        """
+        sample = ""
+        try:
+            with open(file_path, "r", encoding="utf-8-sig") as f:
+                for i, line in enumerate(f):
+                    if i >= lines_to_read:
+                        break
+                    sample += line
+            dialect = csv.Sniffer().sniff(sample, delimiters=[",", ";", "\t"])
+            return dialect.delimiter
+        except Exception:
+            comma_count = sample.count(",")
+            semi_count = sample.count(";")
+            return ";" if semi_count > comma_count else ","
 
 
 # =============================================================================

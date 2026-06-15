@@ -192,9 +192,11 @@ class Trading212BrokerProvider(BRIMProvider):
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
 
+        detected_delim = self.detect_csv_delimiter(file_path)
+
         try:
             with open(file_path, encoding="utf-8-sig") as f:
-                reader = csv.DictReader(f)
+                reader = csv.DictReader(f, delimiter=detected_delim)
                 row_num = 1
 
                 for row in reader:
