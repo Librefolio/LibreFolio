@@ -29,6 +29,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
+    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
@@ -152,6 +153,7 @@
     let showFileEditModal = false;
     let fileEditFile: globalThis.File | null = null;
     let fileEditFileIndex: number | null = null;
+    let createBrokerOpen = false;
 
     // Confirm modal for closing uploader with pending files
     let showCloseUploaderConfirm = false;
@@ -865,6 +867,8 @@
                 }}
                 placeholder={$t('uploads.chooseBroker') || '-- Choose broker --'}
                 value={null}
+                createLabel={$t('common.createNew')}
+                onCreateNew={() => (createBrokerOpen = true)}
             />
         </div>
 
@@ -895,7 +899,15 @@
                         </button>
                         <span class="file-size">({formatBytes(file.size)})</span>
                     </div>
-                    <BrokerSearchSelect {brokers} value={fileBrokerAssignments.get(index) ?? null} placeholder={$t('uploads.selectBroker') || '-- Select --'} disabledIds={viewerBrokerIds} onchange={(brokerId) => assignFileBroker(index, brokerId)} />
+                    <BrokerSearchSelect
+                        {brokers}
+                        value={fileBrokerAssignments.get(index) ?? null}
+                        placeholder={$t('uploads.selectBroker') || '-- Select --'}
+                        disabledIds={viewerBrokerIds}
+                        onchange={(brokerId) => assignFileBroker(index, brokerId)}
+                        createLabel={$t('common.createNew')}
+                        onCreateNew={() => (createBrokerOpen = true)}
+                    />
                 </div>
             {/each}
         </div>
@@ -957,6 +969,8 @@
     open={showFileEditModal}
     uploadOnComplete={fileEditFileIndex === null}
 />
+
+<BrokerModal isOpen={createBrokerOpen} mode="create" onclose={() => (createBrokerOpen = false)} />
 
 <style>
     .files-page {

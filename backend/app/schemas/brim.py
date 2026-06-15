@@ -459,3 +459,11 @@ class BRIMParseOutput(BaseModel):
 #    (standard endpoint, atomic per-broker — see Phase 7 Part 3).
 # 3. The BRIM file status auto-transitions to PARSED/FAILED right after
 #    the /parse call; no additional state change is needed after commit.
+
+
+class BRIMAssetCandidatesRequest(BaseModel):
+    """Request body for POST /brokers/import/asset-candidates."""
+
+    extracted_symbol: Optional[str] = None
+    extracted_isin: Optional[str] = None
+    extracted_name: Optional[str] = None

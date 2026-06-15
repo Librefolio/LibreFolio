@@ -451,14 +451,14 @@ def api_users_search(verbose: bool = False, test_names: list[str] | None = None)
     return run_command(cmd, "User Search API tests", verbose=verbose)
 
 
-def api_analytics_wac(verbose: bool = False, test_names: list[str] | None = None) -> bool:
-    """Run analytics WAC API tests."""
-    print_section("Analytics WAC API Tests")
-    print_info("Testing POST /api/v1/analytics/wac endpoint (A1-A8)")
+def api_portfolio_wac(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run portfolio WAC API tests."""
+    print_section("Portfolio WAC API Tests")
+    print_info("Testing POST /api/v1/portfolio/wac endpoint (A1-A8)")
     print_info("Note: Server will be automatically started and stopped by test")
 
-    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_analytics_wac.py", test_names)
-    return run_command(cmd, "Analytics WAC API tests", verbose=verbose)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_portfolio_wac.py", test_names)
+    return run_command(cmd, "Portfolio WAC API tests", verbose=verbose)
 
 
 def api_test(verbose: bool = False) -> bool:
@@ -555,7 +555,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "broker-access", api_broker_access, name="Broker Access API", desc="Access management, roles")
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
-    add_test(api, "analytics-wac", api_analytics_wac, name="Analytics WAC API", desc="POST /analytics/wac endpoint (A1-A8)")
+    add_test(api, "portfolio-wac", api_portfolio_wac, name="Portfolio WAC API", desc="POST /portfolio/wac endpoint (A1-A8)")
     add_test(api, "all", api_test, test_names=False, name="All API Tests", desc="Run all API tests")
     registry["api"] = api
 

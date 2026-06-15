@@ -128,6 +128,7 @@
             "titleEdit": "Modifica Asset",
             "searchOnline": "Cerca Online",
             "assetDetails": "Dettagli Asset",
+            "searchSuggestions": "Suggerimenti",
             "createAsset": "Crea Asset",
             "saveChanges": "Salva Modifiche",
             "autoAssignInfo": "Il provider \"{provider}\" verrà assegnato automaticamente alla creazione",
@@ -142,7 +143,10 @@
             "scheduledRegenTitle": "Rigenerare i Prezzi?",
             "scheduledRegenMessage": "La modifica di questi parametri cancellerà lo storico dei prezzi esistente e lo rigenererà con la nuova pianificazione. Questa azione non può essere annullata. Continuare?",
             "scheduledRegenConfirm": "Rigenera",
-            "saveFailed": "Salvataggio asset fallito"
+            "saveFailed": "Salvataggio asset fallito",
+            "quoteBaseQuantity": "Prezzo riferito a N asset",
+            "quoteBaseTooltip": "Specifica a quanti titoli o quote fa riferimento il prezzo di mercato. Per Azioni ed ETF è generalmente 1. Per le Obbligazioni come i BTP il prezzo è spesso quotato su base 100, in questo caso inserisci 100.",
+            "activeTooltip": "Se attivo, l'asset sarà aggiornato automaticamente dallo scheduler e visibile nelle selezioni. Disabilitalo per nasconderlo se non lo possiedi più e non vuoi continuare a scaricarne i prezzi."
         },
         "provider": {
             "assignment": "Assegnazione Provider",
@@ -357,6 +361,9 @@
         "discardTitle": "Annullare importazione?",
         "discardMessage": "Hai modifiche non salvate. Sei sicuro di voler chiudere?",
         "discardConfirm": "Annulla",
+        "warningConfirmTitle": "Avvisi rilevati",
+        "warningConfirmMessage": "{n} avviso/i generati durante l'analisi. Alcune transazioni potrebbero essere state saltate. Vuoi continuare comunque?",
+        "warningConfirmOk": "Continua comunque",
         "remove": "Rimuovi",
         "ready": "Pronto",
         "preview": "Anteprima",
@@ -383,6 +390,7 @@
         "cachedResults": "Risultati dalla cache",
         "reparse": "Rianalizza tutti",
         "reparseSingle": "Rianalizza",
+        "previewFile": "Anteprima file",
         "txCount": "{n} transazioni in {k} file",
         "assetsCount": "{n} asset unici, {m} da risolvere",
         "likelyDuplicates": "{n} probabili duplicati",
@@ -441,6 +449,8 @@
         "selectAll": "Seleziona tutto",
         "deselectAll": "Deseleziona tutto",
         "transactionsSection": "Transazioni",
+        "todoBlockerCommitHint": "Completa tutti i campi obbligatori prima di salvare",
+        "sourceFile": "File",
         "importToEditor": "Importa {n} transazioni",
         "importDisabledUnresolved": "Risolvi tutti gli asset selezionati prima di importare",
         "importDisabledEmpty": "Seleziona almeno una transazione",
@@ -468,7 +478,7 @@
             "success": "Identificativo aggiunto con successo",
             "error": "Impossibile aggiungere l'identificativo"
         },
-        "compareTitle": "Confronto con esistente #{{id}}",
+        "compareTitle": "Confronto con esistente #{id}",
         "confidenceTip": {
             "exact": "Corrispondenza esatta: simbolo e tipo asset coincidono",
             "high": "Alta confidenza: forte corrispondenza di simbolo o ISIN",
@@ -836,7 +846,11 @@
         "geoUnclassified": "Dati geografici non disponibili per il {pct}% del valore del portafoglio",
         "roiAllZero": "I rendimenti sono 0% nel periodo selezionato",
         "abs": "Abs",
-        "displayCurrency": "Valuta"
+        "displayCurrency": "Valuta",
+        "missingPricesPrefix": "Nessun prezzo di mercato trovato per:",
+        "missingPricesSuffix": "Il valore di questi asset non e incluso nel NAV.",
+        "missingFxPrefix": "Mancano i tassi di conversione valuta per:",
+        "missingFxSuffix": "I totali aggregati potrebbero essere incompleti."
     },
     "dataEditor": {
         "clearSelection": "Deseleziona",

@@ -128,6 +128,7 @@
             "titleEdit": "Edit Asset",
             "searchOnline": "Search Online",
             "assetDetails": "Asset Details",
+            "searchSuggestions": "Suggestions",
             "createAsset": "Create Asset",
             "saveChanges": "Save Changes",
             "autoAssignInfo": "Provider \"{provider}\" will be auto-assigned on create",
@@ -142,7 +143,10 @@
             "scheduledRegenTitle": "Regenerate Prices?",
             "scheduledRegenMessage": "Changing these parameters will delete the existing price history and regenerate it with the new schedule. This action cannot be undone. Continue?",
             "scheduledRegenConfirm": "Regenerate",
-            "saveFailed": "Failed to save asset"
+            "saveFailed": "Failed to save asset",
+            "quoteBaseQuantity": "Price quoted for N units",
+            "quoteBaseTooltip": "Specify how many shares or units the market price refers to. For stocks and ETFs this is usually 1. For bonds the price is often quoted on a base of 100, so enter 100 in that case.",
+            "activeTooltip": "If active, the asset will be updated automatically by the scheduler and remain visible in selectors. Disable it to hide the asset when you no longer own it and do not want to keep downloading prices."
         },
         "provider": {
             "assignment": "Provider Assignment",
@@ -357,6 +361,9 @@
         "discardTitle": "Discard import?",
         "discardMessage": "You have unsaved changes. Are you sure you want to close?",
         "discardConfirm": "Discard",
+        "warningConfirmTitle": "Warnings detected",
+        "warningConfirmMessage": "{n} warning(s) were generated during parsing. Some transactions may have been skipped. Do you want to continue anyway?",
+        "warningConfirmOk": "Continue anyway",
         "remove": "Remove",
         "ready": "Ready",
         "preview": "Preview",
@@ -383,6 +390,7 @@
         "cachedResults": "Using cached results",
         "reparse": "Re-parse all",
         "reparseSingle": "Re-parse",
+        "previewFile": "Preview file",
         "txCount": "{n} transactions across {k} files",
         "assetsCount": "{n} unique assets, {m} need resolution",
         "likelyDuplicates": "{n} likely duplicates",
@@ -441,6 +449,8 @@
         "selectAll": "Select all",
         "deselectAll": "Deselect all",
         "transactionsSection": "Transactions",
+        "todoBlockerCommitHint": "Complete all required fields before saving",
+        "sourceFile": "File",
         "importToEditor": "Import {n} transactions",
         "importDisabledUnresolved": "Resolve all selected assets before importing",
         "importDisabledEmpty": "Select at least one transaction",
@@ -468,7 +478,7 @@
             "success": "Identifier added successfully",
             "error": "Could not add identifier"
         },
-        "compareTitle": "Compare with existing #{{id}}",
+        "compareTitle": "Compare with existing #{id}",
         "confidenceTip": {
             "exact": "Exact match: symbol and asset type both match precisely",
             "high": "High confidence: strong symbol or ISIN match",
@@ -836,7 +846,11 @@
         "geoUnclassified": "Geographic data unavailable for {pct}% of portfolio value",
         "roiAllZero": "Returns are 0% for the selected period",
         "abs": "Abs",
-        "displayCurrency": "Currency"
+        "displayCurrency": "Currency",
+        "missingPricesPrefix": "No market price found for:",
+        "missingPricesSuffix": "The value of these assets is not included in NAV.",
+        "missingFxPrefix": "Missing FX conversion rates for:",
+        "missingFxSuffix": "Aggregated totals may be incomplete."
     },
     "dataEditor": {
         "clearSelection": "Clear selection",

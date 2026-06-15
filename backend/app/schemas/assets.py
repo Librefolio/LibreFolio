@@ -588,6 +588,7 @@ class FAAssetMetadataResponse(BaseModel):
     currency: str
     icon_url: Optional[str] = None
     asset_type: Optional[str] = None
+    quote_base_quantity: Optional[int] = Field(1, description="How many units the raw market quote refers to")
     classification_params: Optional[FAClassificationParams] = None
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
 
@@ -649,6 +650,9 @@ class FAAssetCreateItem(BaseModel):
     currency: str = Field(..., min_length=3, max_length=3, description="Asset currency (ISO 4217)")
     asset_type: Optional[AssetType] = Field(None, description="Asset type (STOCK, ETF, BOND, CROWDFUND_LOAN, etc.)")
     icon_url: Optional[str] = Field(None, description="URL to asset icon (local or remote)")
+    quote_base_quantity: Optional[int] = Field(1, description="How many units the raw market quote refers to")
+    active: bool = Field(True, description="Whether asset is active")
+    user_url: Optional[str] = Field(None, description="User-defined URL (notes, external dashboard, etc.)")
 
     # Classification metadata (optional)
     classification_params: Optional[FAClassificationParams] = Field(None, description="Asset classification metadata")
@@ -666,6 +670,13 @@ class FAAssetCreateItem(BaseModel):
     @classmethod
     def currency_uppercase(cls, v: str) -> str:
         return Currency.validate_code(v)
+
+    @field_validator("quote_base_quantity", mode="before")
+    @classmethod
+    def normalize_quote_base_quantity(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return 1
+        return 1 if int(v) <= 0 else int(v)
 
     @field_validator("identifier_isin")
     @classmethod
@@ -779,6 +790,7 @@ class FAinfoResponse(BaseModel):
     currency: str = Field(..., description="Asset currency")
     icon_url: Optional[str] = Field(None, description="Asset icon URL")
     asset_type: Optional[str] = Field(None, description="Asset type")
+    quote_base_quantity: Optional[int] = Field(1, description="How many units the raw market quote refers to")
     active: bool = Field(..., description="Whether asset is active")
     user_url: Optional[str] = Field(None, description="User-defined URL (notes, external dashboard, etc.)")
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
@@ -844,6 +856,7 @@ class FAAssetPatchItem(BaseModel):
     currency: Optional[str] = Field(None, min_length=3, max_length=3, description="Update currency (ISO 4217)")
     asset_type: Optional[AssetType] = Field(None, description="Update asset type (STOCK, ETF, BOND, etc.)")
     icon_url: Optional[str] = Field(None, description="Update icon URL (None = clear)")
+    quote_base_quantity: Optional[int] = Field(None, description="Update quote base quantity")
     classification_params: Optional[FAClassificationParams] = Field(None, description="Update classification (None = clear)")
     active: Optional[bool] = Field(None, description="Update active status")
     user_url: Optional[str] = Field(None, description="Update user-defined URL (None = clear)")
@@ -862,6 +875,13 @@ class FAAssetPatchItem(BaseModel):
     def currency_uppercase(cls, v: Optional[str]) -> Optional[str]:
         """Normalize currency to uppercase."""
         return Currency.validate_code(v) if v else None
+
+    @field_validator("quote_base_quantity", mode="before")
+    @classmethod
+    def normalize_quote_base_quantity(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return None
+        return 1 if int(v) <= 0 else int(v)
 
     @field_validator("identifier_isin")
     @classmethod

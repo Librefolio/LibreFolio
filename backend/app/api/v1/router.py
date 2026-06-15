@@ -6,12 +6,12 @@ Aggregates all v1 endpoints.
 from fastapi import APIRouter
 
 from backend.app.api.v1 import (
-    analytics,
     assets,
     auth,
     backup,
     brokers,
     fx,
+    portfolio_api,
     settings,
     system,
     transactions,
@@ -36,6 +36,5 @@ router.include_router(assets.asset_router)
 router.include_router(transactions.tx_router)
 router.include_router(brokers.broker_router)
 router.include_router(backup.backup_router)
-router.include_router(analytics.analytics_router)
-router.include_router(analytics.portfolio_router)
+router.include_router(portfolio_api.portfolio_router)
 router.include_router(utilities_router)

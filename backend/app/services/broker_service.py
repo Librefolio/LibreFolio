@@ -51,6 +51,7 @@ from backend.app.services.transaction_service import (
     TransactionService,
 )
 from backend.app.utils.datetime_utils import today_date, utcnow
+from backend.app.utils.financial.valuation_utils import compute_holding_value
 
 
 class BrokerService:
@@ -391,7 +392,11 @@ class BrokerService:
             unrealized_pnl_percent = None
 
             if current_price is not None:
-                current_value_amount = current_price * quantity
+                current_value_amount = compute_holding_value(
+                    quantity,
+                    current_price,
+                    asset.quote_base_quantity,
+                )
                 current_value = Currency(code=asset.currency, amount=current_value_amount)
 
                 unrealized_pnl_amount = current_value_amount - total_cost_amount

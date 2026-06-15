@@ -62,21 +62,21 @@
     const eurSeries = $derived([
         {
             name: $_('dashboard.navValue'),
-            data: history.map((pt) => (pt.nav_value != null ? Number(pt.nav_value) : null)),
+            data: history.map((pt) => (pt.nav_value != null ? Number(pt.nav_value.amount) : null)),
             lineStyle: 'solid' as const,
             colorKey: 'nav' as const,
             areaOpacity: 0.1,
         },
         {
             name: $_('dashboard.investedCapital'),
-            data: history.map((pt) => (pt.invested_value != null ? Number(pt.invested_value) : null)),
+            data: history.map((pt) => (pt.invested_value != null ? Number(pt.invested_value.amount) : null)),
             lineStyle: 'dashed' as const,
             colorKey: 'invested' as const,
             areaOpacity: 0,
         },
         {
             name: $_('dashboard.cashValue'),
-            data: history.map((pt) => (pt.cash_value != null ? Number(pt.cash_value) : null)),
+            data: history.map((pt) => (pt.cash_value != null ? Number(pt.cash_value.amount) : null)),
             lineStyle: 'dotted' as const,
             colorKey: 'cash' as const,
             areaOpacity: 0,
@@ -203,6 +203,7 @@
         const yAxisFormatter = viewMode === 'eur' ? (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)) : (v: number) => `${v.toFixed(1)}%`;
 
         const option: echarts.EChartsOption = {
+            animation: false,
             backgroundColor: 'transparent',
             grid: {left: '3%', right: '4%', bottom: '30px', top: '10px', containLabel: true},
             tooltip: {

@@ -189,7 +189,7 @@
 </div>
 
 <!-- Add/Edit Modal -->
-<BrokerModal brokerId={editingBrokerId} initialData={editingBrokerData} isOpen={modalOpen} mode={modalMode} on:close={handleModalClose} on:created={handleCreated} on:updated={handleUpdated} />
+<BrokerModal brokerId={editingBrokerId} initialData={editingBrokerData} isOpen={modalOpen} mode={modalMode} onclose={handleModalClose} oncreated={handleCreated} onupdated={handleUpdated} />
 
 <!-- Delete Confirmation Dialog -->
 <DeleteBrokerDialog

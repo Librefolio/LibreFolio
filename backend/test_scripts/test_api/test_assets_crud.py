@@ -107,6 +107,40 @@ async def test_create_single_asset(test_server):
 
 
 @pytest.mark.asyncio
+async def test_create_asset_with_quote_base_quantity(test_server):
+    """Test: Create asset with quote_base_quantity, active, and user_url."""
+    print_section("Test: POST /assets - Quote Base Quantity")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        item = FAAssetCreateItem(
+            display_name=f"BTP Valore {unique_id('BTP')}",
+            currency="EUR",
+            asset_type=AssetType.BOND,
+            quote_base_quantity=100,
+            active=False,
+            user_url="https://example.test/btp",
+        )
+
+        create_response = await client.post(
+            f"{API_BASE}/assets",
+            json=[item.model_dump(mode="json")],
+            timeout=TIMEOUT,
+        )
+        assert create_response.status_code == 201, f"Expected 201, got {create_response.status_code}: {create_response.text}"
+
+        list_response = await client.get(f"{API_BASE}/assets/query", timeout=TIMEOUT)
+        assert list_response.status_code == 200
+        assets = [FAinfoResponse(**row) for row in list_response.json()]
+        created = next(a for a in assets if a.display_name == item.display_name)
+        assert created.quote_base_quantity == 100
+        assert created.active is False
+        assert created.user_url == "https://example.test/btp"
+
+        print_success("✓ quote_base_quantity persisted on create")
+
+
+@pytest.mark.asyncio
 async def test_create_multiple_assets(test_server):
     """Test 2: Create multiple assets."""
     print_section("Test 2: POST /assets - Create Multiple Assets")
@@ -394,6 +428,32 @@ async def test_list_active_filter(test_server):
         assert asset2_id in inactive_ids, f"Asset {asset2_id} should be in inactive list"
         assert asset1_id not in inactive_ids, f"Asset {asset1_id} should NOT be in inactive list"
         print_success(f"✓ active=false filter works (found {len(inactive_assets)} inactive assets)")
+
+
+@pytest.mark.asyncio
+async def test_patch_quote_base_quantity(test_server):
+    """Test: PATCH /assets updates quote_base_quantity."""
+    print_section("Test: PATCH /assets - Quote Base Quantity")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        create_item = FAAssetCreateItem(display_name=f"Patch Bond {unique_id('PBOND')}", currency="EUR", asset_type=AssetType.BOND)
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
+        assert create_resp.status_code == 201
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_id = create_data.results[0].asset_id
+
+        patch_item = FAAssetPatchItem(asset_id=asset_id, quote_base_quantity=100)
+        patch_resp = await client.patch(f"{API_BASE}/assets", json=[patch_item.model_dump(mode="json")], timeout=TIMEOUT)
+        assert patch_resp.status_code == 200, f"PATCH failed: {patch_resp.status_code}: {patch_resp.text}"
+
+        list_resp = await client.get(f"{API_BASE}/assets/query", timeout=TIMEOUT)
+        assert list_resp.status_code == 200
+        assets = [FAinfoResponse(**row) for row in list_resp.json()]
+        patched = next(a for a in assets if a.id == asset_id)
+        assert patched.quote_base_quantity == 100
+
+        print_success("✓ quote_base_quantity updated by patch")
 
 
 @pytest.mark.asyncio

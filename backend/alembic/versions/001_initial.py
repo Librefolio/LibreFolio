@@ -86,6 +86,7 @@ def upgrade() -> None:
                    icon_url              VARCHAR,
                    classification_params TEXT,
                    asset_type            VARCHAR(14) NOT NULL,
+                   quote_base_quantity   INTEGER     DEFAULT 1,
                    active                BOOLEAN     NOT NULL,
                    user_url              VARCHAR     DEFAULT NULL,
                    identifier_isin       VARCHAR(12),
