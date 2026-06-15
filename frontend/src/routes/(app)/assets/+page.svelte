@@ -349,6 +349,7 @@
                 currency: item.currency,
                 icon_url: item.icon_url ?? null,
                 asset_type: item.asset_type ?? null,
+                quote_base_quantity: item.quote_base_quantity ?? 1,
                 provider_code: item.provider_code ?? null,
                 active: item.active ?? true,
                 lastPrice: null,
@@ -534,6 +535,7 @@
             currency: asset.currency,
             asset_type: asset.asset_type ?? 'STOCK',
             icon_url: asset.icon_url,
+            quote_base_quantity: asset.quote_base_quantity ?? 1,
             active: asset.active,
             provider_code: asset.provider_code,
         };

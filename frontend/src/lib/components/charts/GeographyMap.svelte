@@ -165,38 +165,27 @@
         // Restore full roam on desktop; pinch-zoom only on touch to avoid blocking page scroll
         const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
-        // Base label (hidden — only used as no-op placeholder)
-        const labelFormatter = (_params: any) => '';
-
-        // Hover/select label — always shows flag + name for any country with a known mapping.
-        // Appends percentage only when the country has allocation data.
-        const emphasisLabelFormatter = (params: any) => {
+        // Fixed label — show flag + translated country name on countries that have data.
+        const labelFormatter = (params: any) => {
             const iso3 = geoNameToIso3[params.name] ?? '';
             const info = iso3 ? getCountryInfo(iso3) : null;
             const flag = info?.flag_emoji ?? '';
             const displayName = info?.name ?? params.name;
             const prefix = flag ? `${flag} ` : '';
-            if (params.value != null && !isNaN(params.value) && params.value > 0) {
-                return `${prefix}${displayName}: ${params.value}%`;
-            }
-            return `${prefix}${displayName}`;
+            return params.value != null && !isNaN(params.value) && params.value > 0 ? `${prefix}${displayName}: ${params.value}%` : `${prefix}${displayName}`;
         };
 
-        const hoverLabelStyle = {
+        const fixedLabelStyle = {
             show: true,
-            formatter: emphasisLabelFormatter,
+            formatter: labelFormatter,
             color: isDark ? '#e2e8f0' : '#1e293b',
             fontSize: 10,
+            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.55)' : 'rgba(255,255,255,0.72)',
+            borderRadius: 4,
+            padding: [1, 3],
         };
 
         const option: echarts.EChartsOption = {
-            // tooltip: {
-            //     trigger: 'item',
-            //     formatter: tooltipFormatter,
-            //     backgroundColor: isDark ? '#1e293b' : '#fff',
-            //     borderColor: isDark ? '#334155' : '#e2e8f0',
-            //     textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
-            // },
             visualMap: {
                 min: 0,
                 max: maxValue,
@@ -221,11 +210,11 @@
                     roam: isTouchDevice ? 'scale' : true, // mobile: pinch-zoom only; desktop: full pan+zoom
                     scaleLimit: {min: 1, max: 5},
                     emphasis: {
-                        label: hoverLabelStyle,
+                        label: fixedLabelStyle,
                         itemStyle: {areaColor: isDark ? '#fbbf24' : '#f59e0b'},
                     },
                     select: {
-                        label: hoverLabelStyle,
+                        label: fixedLabelStyle,
                         itemStyle: {areaColor: isDark ? '#fbbf24' : '#f59e0b'},
                     },
                     itemStyle: {
@@ -233,8 +222,8 @@
                         borderColor: isDark ? '#1e293b' : '#cbd5e1',
                         borderWidth: 0.5,
                     },
-                    // Base label hidden — label shown only via emphasis/select (hover/click)
-                    label: {show: false, formatter: labelFormatter},
+                    // Always show translated fixed labels for countries that have data.
+                    label: {show: false},
                     labelLayout: {hideOverlap: true},
                     data: chartData,
                 },

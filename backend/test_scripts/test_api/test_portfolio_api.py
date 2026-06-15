@@ -1,8 +1,6 @@
-"""Portfolio Analytics API Tests. GET /api/v1/portfolio/{summary,history,asset-history,lots}."""
+"""Portfolio API Tests. POST /api/v1/portfolio/{summary,history} + GET asset-history/lots."""
 
 import uuid
-from decimal import Decimal
-from datetime import date, timedelta
 
 import httpx
 import pytest
@@ -17,8 +15,9 @@ TIMEOUT = 30
 
 
 # ---------------------------------------------------------------------------
-# Helpers (reused from test_analytics_wac pattern)
+# Helpers
 # ---------------------------------------------------------------------------
+
 
 async def create_test_user(client: httpx.AsyncClient) -> str:
     username = f"pftest_{uuid.uuid4().hex[:8]}"
@@ -48,10 +47,17 @@ async def create_broker(client: httpx.AsyncClient, name: str | None = None) -> i
     return resp.json()["results"][0]["broker_id"]
 
 
-async def create_asset(client: httpx.AsyncClient, currency: str = "EUR") -> int:
+async def create_asset(client: httpx.AsyncClient, currency: str = "EUR", quote_base_quantity: int | None = None) -> int:
     resp = await client.post(
         f"{API_BASE}/assets",
-        json=[{"display_name": f"As_{uuid.uuid4().hex[:6]}", "currency": currency, "asset_type": "STOCK"}],
+        json=[
+            {
+                "display_name": f"As_{uuid.uuid4().hex[:6]}",
+                "currency": currency,
+                "asset_type": "STOCK",
+                **({"quote_base_quantity": quote_base_quantity} if quote_base_quantity is not None else {}),
+            }
+        ],
         timeout=TIMEOUT,
     )
     assert resp.status_code in (200, 201)
@@ -66,9 +72,19 @@ async def commit_batch(client: httpx.AsyncClient, **kwargs) -> dict:
     return data
 
 
+async def post_portfolio_summary(client: httpx.AsyncClient, body: dict | None = None) -> httpx.Response:
+    return await client.post(f"{API_BASE}/portfolio/summary", json=body or {}, timeout=TIMEOUT)
+
+
+async def post_portfolio_history(client: httpx.AsyncClient, body: dict | None = None) -> httpx.Response:
+    return await client.post(f"{API_BASE}/portfolio/history", json=body or {}, timeout=TIMEOUT)
+
+
 @pytest.fixture(scope="module")
 def test_server():
     with _TestingServerManager() as manager:
+        if not manager.start_server():
+            pytest.fail("Failed to start test server")
         yield manager
 
 
@@ -80,10 +96,10 @@ def test_server():
 @pytest.mark.asyncio
 class TestPortfolioSummaryEndpoint:
     async def test_unauthenticated(self, test_server):
-        """GET /portfolio/summary without auth → 401."""
+        """POST /portfolio/summary without auth -> 401."""
         print_section("Portfolio Summary: unauthenticated")
         async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{API_BASE}/portfolio/summary", timeout=TIMEOUT)
+            resp = await post_portfolio_summary(client)
         assert resp.status_code == 401
         print_success("401 as expected")
 
@@ -92,7 +108,7 @@ class TestPortfolioSummaryEndpoint:
         print_section("Portfolio Summary: empty portfolio")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
-            resp = await client.get(f"{API_BASE}/portfolio/summary", timeout=TIMEOUT)
+            resp = await post_portfolio_summary(client)
         assert resp.status_code == 200
         data = resp.json()
         assert "net_worth" in data
@@ -102,7 +118,7 @@ class TestPortfolioSummaryEndpoint:
         assert "holdings" in data
         assert isinstance(data["holdings"], list)
         assert data["by_broker"] is None
-        print_success(f"Empty summary OK, net_worth={data['net_worth']}")
+        print_success(f"Empty summary OK, net_worth={data['net_worth']['amount']}")
 
     async def test_summary_structure_with_data(self, test_server):
         """User with broker + deposit → summary has expected structure."""
@@ -114,43 +130,115 @@ class TestPortfolioSummaryEndpoint:
             # Deposit cash
             await commit_batch(
                 client,
-                broker_id=broker_id,
-                creates=[{"type": "DEPOSIT", "date": "2025-01-15", "amount": 10000, "currency": "EUR"}],
+                creates=[
+                    {
+                        "broker_id": broker_id,
+                        "type": "DEPOSIT",
+                        "date": "2025-01-15",
+                        "quantity": "0",
+                        "cash": {"code": "EUR", "amount": "10000"},
+                    }
+                ],
             )
 
-            resp = await client.get(f"{API_BASE}/portfolio/summary", timeout=TIMEOUT)
+            resp = await post_portfolio_summary(client)
         assert resp.status_code == 200
         data = resp.json()
         assert "net_worth" in data
         assert "cash_total" in data
         assert "simple_roi_percent" in data
+        assert "missing_fx_pairs" in data
+        assert "missing_prices_assets" in data
         print_success("Summary structure OK")
 
+    async def test_summary_cash_uses_full_signed_ledger(self, test_server):
+        """Cash total uses all signed transaction amounts and reports missing prices."""
+        print_section("Portfolio Summary: signed cash ledger")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_broker(client)
+            asset_id = await create_asset(client)
+
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-01-15", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-01-16", "quantity": "4", "cash": {"code": "EUR", "amount": "-400"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "DIVIDEND", "date": "2025-01-17", "quantity": "0", "cash": {"code": "EUR", "amount": "25"}},
+                    {"broker_id": broker_id, "type": "FEE", "date": "2025-01-18", "quantity": "0", "cash": {"code": "EUR", "amount": "-10"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2025-01-19", "quantity": "-1", "cash": {"code": "EUR", "amount": "150"}},
+                ],
+            )
+
+            resp = await post_portfolio_summary(client)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["cash_total"]["amount"].startswith("765")
+        assert data["net_worth"]["amount"].startswith("765")
+        assert data["total_invested"]["amount"].startswith("1000")
+        assert len(data["missing_prices_assets"]) == 1
+        assert data["holdings"][0]["current_value"] is None
+        print_success("Signed cash ledger and missing-price reporting OK")
+
+    async def test_summary_uses_quote_base_quantity(self, test_server):
+        """Summary valuation honors quote_base_quantity for raw market quotes."""
+        print_section("Portfolio Summary: quote base quantity")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_broker(client)
+            asset_id = await create_asset(client, currency="EUR", quote_base_quantity=100)
+
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-02-01", "quantity": "0", "cash": {"code": "EUR", "amount": "500"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-02-02", "quantity": "200", "cash": {"code": "EUR", "amount": "-200"}},
+                ],
+            )
+            price_resp = await client.post(
+                f"{API_BASE}/assets/prices",
+                json=[
+                    {
+                        "asset_id": asset_id,
+                        "prices": [
+                            {
+                                "date": "2025-02-03",
+                                "close": "102.00",
+                                "currency": "EUR",
+                            }
+                        ],
+                    }
+                ],
+                timeout=TIMEOUT,
+            )
+            assert price_resp.status_code == 200, f"Price upsert failed: {price_resp.status_code}: {price_resp.text}"
+
+            resp = await post_portfolio_summary(client)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["holdings"][0]["current_value"]["amount"].startswith("204")
+        assert data["net_worth"]["amount"].startswith("504")
+        print_success("quote_base_quantity summary valuation OK")
+
     async def test_filter_by_broker(self, test_server):
-        """broker_ids query param filters the response."""
+        """broker_ids body field filters the response."""
         print_section("Portfolio Summary: filter by broker")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             broker_id = await create_broker(client)
 
-            resp = await client.get(
-                f"{API_BASE}/portfolio/summary?broker_ids={broker_id}",
-                timeout=TIMEOUT,
-            )
+            resp = await post_portfolio_summary(client, {"broker_ids": [broker_id]})
         assert resp.status_code == 200
         print_success("Broker filter OK")
 
     async def test_include_breakdown(self, test_server):
-        """include_breakdown=true → by_broker is populated."""
+        """include_breakdown=true in body -> by_broker is populated."""
         print_section("Portfolio Summary: include_breakdown")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             await create_broker(client)
 
-            resp = await client.get(
-                f"{API_BASE}/portfolio/summary?include_breakdown=true",
-                timeout=TIMEOUT,
-            )
+            resp = await post_portfolio_summary(client, {"include_breakdown": True})
         assert resp.status_code == 200
         data = resp.json()
         # by_broker may be empty list if no accessible brokers, but must be a list
@@ -159,14 +247,11 @@ class TestPortfolioSummaryEndpoint:
         print_success("include_breakdown OK")
 
     async def test_invalid_broker_id_ignored(self, test_server):
-        """Non-existent broker_id → empty result (no 500)."""
+        """Non-existent broker_id in body -> empty result (no 500)."""
         print_section("Portfolio Summary: nonexistent broker")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
-            resp = await client.get(
-                f"{API_BASE}/portfolio/summary?broker_ids=999999",
-                timeout=TIMEOUT,
-            )
+            resp = await post_portfolio_summary(client, {"broker_ids": [999999]})
         assert resp.status_code == 200
         print_success("Nonexistent broker handled gracefully")
 
@@ -179,10 +264,10 @@ class TestPortfolioSummaryEndpoint:
 @pytest.mark.asyncio
 class TestPortfolioHistoryEndpoint:
     async def test_unauthenticated(self, test_server):
-        """GET /portfolio/history without auth → 401."""
+        """POST /portfolio/history without auth -> 401."""
         print_section("Portfolio History: unauthenticated")
         async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{API_BASE}/portfolio/history", timeout=TIMEOUT)
+            resp = await post_portfolio_history(client)
         assert resp.status_code == 401
         print_success("401 as expected")
 
@@ -191,7 +276,7 @@ class TestPortfolioHistoryEndpoint:
         print_section("Portfolio History: empty")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
-            resp = await client.get(f"{API_BASE}/portfolio/history", timeout=TIMEOUT)
+            resp = await post_portfolio_history(client)
         assert resp.status_code == 200
         data = resp.json()
         assert isinstance(data, list)
@@ -205,10 +290,17 @@ class TestPortfolioHistoryEndpoint:
             broker_id = await create_broker(client)
             await commit_batch(
                 client,
-                broker_id=broker_id,
-                creates=[{"type": "DEPOSIT", "date": "2025-03-01", "amount": 5000, "currency": "EUR"}],
+                creates=[
+                    {
+                        "broker_id": broker_id,
+                        "type": "DEPOSIT",
+                        "date": "2025-03-01",
+                        "quantity": "0",
+                        "cash": {"code": "EUR", "amount": "5000"},
+                    }
+                ],
             )
-            resp = await client.get(f"{API_BASE}/portfolio/history", timeout=TIMEOUT)
+            resp = await post_portfolio_history(client)
         assert resp.status_code == 200
         data = resp.json()
         assert isinstance(data, list)
@@ -221,19 +313,93 @@ class TestPortfolioHistoryEndpoint:
         print_success("History structure OK")
 
     async def test_history_date_range_filter(self, test_server):
-        """date_from/date_to filter narrows history."""
+        """date_range body filter narrows history."""
         print_section("Portfolio History: date range filter")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             await create_broker(client)
-            resp = await client.get(
-                f"{API_BASE}/portfolio/history?date_from=2025-01-01&date_to=2025-06-30",
-                timeout=TIMEOUT,
+            resp = await post_portfolio_history(
+                client,
+                {"date_range": {"start": "2025-01-01", "end": "2025-06-30"}},
             )
         assert resp.status_code == 200
         data = resp.json()
         assert isinstance(data, list)
         print_success("Date range filter OK")
+
+    async def test_history_cash_uses_all_signed_transactions(self, test_server):
+        """History cash curve includes signed BUY/DIVIDEND/FEE events."""
+        print_section("Portfolio History: signed cash ledger")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_broker(client)
+            asset_id = await create_asset(client)
+
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-03-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-03-02", "quantity": "4", "cash": {"code": "EUR", "amount": "-400"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "DIVIDEND", "date": "2025-03-03", "quantity": "0", "cash": {"code": "EUR", "amount": "25"}},
+                    {"broker_id": broker_id, "type": "FEE", "date": "2025-03-04", "quantity": "0", "cash": {"code": "EUR", "amount": "-10"}},
+                ],
+            )
+            resp = await post_portfolio_history(
+                client,
+                {"date_range": {"start": "2025-03-01", "end": "2025-03-04"}},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert [point["date"] for point in data] == ["2025-03-01", "2025-03-02", "2025-03-03", "2025-03-04"]
+        assert data[0]["cash_value"]["amount"].startswith("1000")
+        assert data[1]["cash_value"]["amount"].startswith("600")
+        assert data[2]["cash_value"]["amount"].startswith("625")
+        assert data[3]["cash_value"]["amount"].startswith("615")
+        print_success("Signed cash curve OK")
+
+    async def test_history_uses_quote_base_quantity(self, test_server):
+        """History mark-to-market uses quote_base_quantity for invested/nav values."""
+        print_section("Portfolio History: quote base quantity")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_broker(client)
+            asset_id = await create_asset(client, currency="EUR", quote_base_quantity=100)
+
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-04-01", "quantity": "0", "cash": {"code": "EUR", "amount": "500"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-04-02", "quantity": "200", "cash": {"code": "EUR", "amount": "-200"}},
+                ],
+            )
+            price_resp = await client.post(
+                f"{API_BASE}/assets/prices",
+                json=[
+                    {
+                        "asset_id": asset_id,
+                        "prices": [
+                            {
+                                "date": "2025-04-03",
+                                "close": "102.00",
+                                "currency": "EUR",
+                            }
+                        ],
+                    }
+                ],
+                timeout=TIMEOUT,
+            )
+            assert price_resp.status_code == 200, f"Price upsert failed: {price_resp.status_code}: {price_resp.text}"
+
+            resp = await post_portfolio_history(
+                client,
+                {"date_range": {"start": "2025-04-03", "end": "2025-04-03"}},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["invested_value"]["amount"].startswith("204")
+        assert data[0]["nav_value"]["amount"].startswith("504")
+        print_success("quote_base_quantity history valuation OK")
 
 
 # ---------------------------------------------------------------------------

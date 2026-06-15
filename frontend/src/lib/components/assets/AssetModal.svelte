@@ -48,6 +48,7 @@
         currency: string;
         asset_type: string;
         icon_url?: string | null;
+        quote_base_quantity?: number | null;
         active?: boolean;
         classification_params?: {
             short_description?: string | null;
@@ -93,12 +94,18 @@
          * can immediately see provider search results without typing.
          */
         initialSearchQuery?: string;
+        /**
+         * Clickable badge suggestions shown above the search input (create mode only).
+         * Each badge populates the search input when clicked. Replaces concatenated initialSearchQuery
+         * for BRIM wizard: pass [symbol, isin, name] as separate strings.
+         */
+        initialSearchBadges?: string[];
         oncreated?: (assetId: number) => void;
         onupdated?: () => void;
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, initialSearchQuery = '', oncreated, onupdated, onclose}: Props = $props();
+    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, initialSearchQuery = '', initialSearchBadges = [], oncreated, onupdated, onclose}: Props = $props();
 
     // =========================================================================
     // Constants
@@ -114,6 +121,7 @@
     let currency = $state('USD');
     let assetType = $state('STOCK');
     let iconUrl = $state<string | null>(null);
+    let quoteBaseQuantity = $state(1);
     let active = $state(true);
 
     // Identifiers — dynamic rows instead of fixed fields
@@ -153,6 +161,10 @@
     let showSaveWithoutTestConfirm = $state(false);
     let showIdentifierChangeConfirm = $state(false);
     let showDiscardConfirm = $state(false);
+
+    // Badge-driven search query — updated by clicking initialSearchBadges chips.
+    // Using a separate state allows {#key} remount of AssetSearchAutocomplete.
+    let activeSearchQuery = $state(untrack(() => initialSearchQuery));
 
     // #R3-4 — scheduled_investment regenerate confirm. Shown when the user edits an
     // existing scheduled_investment asset and changes its provider_params (schedule /
@@ -240,6 +252,9 @@
             currency,
             assetType,
             iconUrl,
+            quoteBaseQuantity,
+            active,
+            providerUserUrl,
             JSON.stringify(identifierRows.map((r) => [r.type, r.value])),
             shortDescription,
             JSON.stringify(sectorDistribution),
@@ -394,6 +409,7 @@
         currency = data.currency;
         assetType = data.asset_type ?? 'STOCK';
         iconUrl = data.icon_url ?? null;
+        quoteBaseQuantity = data.quote_base_quantity && data.quote_base_quantity > 0 ? data.quote_base_quantity : 1;
         active = data.active !== false;
         identifierRows = columnsToIdentifierRows(data);
         // Classification
@@ -437,6 +453,7 @@
         currency = 'USD';
         assetType = 'STOCK';
         iconUrl = null;
+        quoteBaseQuantity = 1;
         active = true;
         identifierRows = [];
         shortDescription = '';
@@ -471,6 +488,7 @@
         if (data.display_name) displayName = data.display_name;
         if (data.currency) currency = data.currency;
         if (data.asset_type) assetType = data.asset_type;
+        if (data.quote_base_quantity && data.quote_base_quantity > 0) quoteBaseQuantity = data.quote_base_quantity;
         // Build identifier rows from prefilled columns
         const rows: IdentifierRow[] = [];
         for (const idType of IDENTIFIER_TYPES) {
@@ -866,6 +884,7 @@
     }
 
     async function saveCreate() {
+        const normalizedQuoteBaseQuantity = !quoteBaseQuantity || quoteBaseQuantity <= 0 ? 1 : quoteBaseQuantity;
         // Build classification_params if any fields are set
         const classificationParams: any = {};
         if (shortDescription) classificationParams.short_description = shortDescription;
@@ -879,6 +898,9 @@
                 currency: currency,
                 asset_type: assetType,
                 icon_url: iconUrl || undefined,
+                quote_base_quantity: normalizedQuoteBaseQuantity,
+                active: active,
+                user_url: providerUserUrl || undefined,
                 classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : undefined,
                 ...identifierRowsToColumns(identifierRows),
             },
@@ -927,6 +949,7 @@
     }
 
     async function saveEdit(assetId: number) {
+        const normalizedQuoteBaseQuantity = !quoteBaseQuantity || quoteBaseQuantity <= 0 ? 1 : quoteBaseQuantity;
         // #R3-4 — for PARAMETRIC_GENERATION providers (e.g. scheduled_investment), if the
         // user changed `provider_params` intercept the save flow to show an explicit
         // regenerate confirmation. Confirming will: (1) PATCH/assign through the normal
@@ -956,6 +979,7 @@
             currency: currency,
             asset_type: assetType,
             icon_url: iconUrl,
+            quote_base_quantity: normalizedQuoteBaseQuantity,
             active: active,
             user_url: providerUserUrl || null,
             classification_params: Object.keys(classificationParams).length > 0 ? classificationParams : null,
@@ -1126,7 +1150,23 @@
     <!-- Body -->
     <div class="px-6 py-4 space-y-5 max-h-[70vh] overflow-y-auto" data-testid="asset-modal-form">
         <!-- Search Online -->
-        <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : initialSearchQuery} />
+        {#if !editMode && initialSearchBadges.length > 0}
+            <div class="flex flex-wrap items-center gap-1.5 -mb-1">
+                <span class="text-xs text-gray-400 dark:text-gray-500 shrink-0">{$t('assets.modal.searchSuggestions')}:</span>
+                {#each initialSearchBadges as badge}
+                    <button
+                        type="button"
+                        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-800/30 transition-colors"
+                        onclick={() => (activeSearchQuery = badge)}
+                    >
+                        {badge}
+                    </button>
+                {/each}
+            </div>
+        {/if}
+        {#key activeSearchQuery}
+            <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} />
+        {/key}
 
         <!-- Asset Details -->
         <div class="space-y-3">
@@ -1197,32 +1237,6 @@
                             {/if}
                         </div>
 
-                        <!-- User URL (custom link for this asset) -->
-                        <div>
-                            <label for="asset-user-url" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                                {$t('assets.provider.userUrl')}
-                            </label>
-                            <div class="flex gap-1.5">
-                                <input
-                                    id="asset-user-url"
-                                    type="text"
-                                    bind:value={providerUserUrl}
-                                    placeholder="https://..."
-                                    class="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                               placeholder-gray-400 dark:placeholder-gray-500
-                                               focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
-                                />
-                                {#if providerUserUrl}
-                                    <a href={providerUserUrl} target="_blank" rel="noopener noreferrer" class="shrink-0 flex items-center px-2 py-2 text-gray-400 hover:text-libre-green transition-colors">
-                                        <ExternalLink size={14} />
-                                    </a>
-                                {/if}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <!-- Asset Type -->
                         <div>
                             <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -1243,6 +1257,31 @@
                                 {/snippet}
                             </SimpleSelect>
                         </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <!-- Quote Base Quantity -->
+                        <div>
+                            <div class="flex items-center gap-1 mb-1">
+                                <label for="asset-quote-base-quantity" class="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                                    {$t('assets.modal.quoteBaseQuantity')}
+                                </label>
+                                <Tooltip text={$t('assets.modal.quoteBaseTooltip')} position="bottom" maxWidth="320px">
+                                    <span class="text-xs text-gray-400 cursor-help">ℹ️</span>
+                                </Tooltip>
+                            </div>
+                            <input
+                                id="asset-quote-base-quantity"
+                                type="number"
+                                min="1"
+                                step="1"
+                                bind:value={quoteBaseQuantity}
+                                data-testid="asset-modal-quote-base-quantity"
+                                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                                           bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                                           focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
+                            />
+                        </div>
 
                         <!-- Currency -->
                         <div>
@@ -1260,6 +1299,30 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- User URL -->
+        <div>
+            <label for="asset-user-url" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                {$t('assets.provider.userUrl')}
+            </label>
+            <div class="flex gap-1.5">
+                <input
+                    id="asset-user-url"
+                    type="text"
+                    bind:value={providerUserUrl}
+                    placeholder="https://..."
+                    class="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                               bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
+                               placeholder-gray-400 dark:placeholder-gray-500
+                               focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
+                />
+                {#if providerUserUrl}
+                    <a href={providerUserUrl} target="_blank" rel="noopener noreferrer" class="shrink-0 flex items-center px-2 py-2 text-gray-400 hover:text-libre-green transition-colors">
+                        <ExternalLink size={14} />
+                    </a>
+                {/if}
             </div>
         </div>
 
@@ -1311,31 +1374,6 @@
 
             {#if moreInfoExpanded}
                 <div class="px-4 py-3 space-y-4 border-t border-gray-200 dark:border-slate-700">
-                    <!-- Asset Status Toggle -->
-                    {#if editMode}
-                        <div class="flex items-center justify-between py-1">
-                            <div>
-                                <span id="asset-active-label" class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                                    {$t('assets.edit.status.label')}
-                                </span>
-                                <p class="text-xs text-gray-500 dark:text-gray-400">
-                                    {$t('assets.edit.status.hint')}
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                role="switch"
-                                aria-checked={active}
-                                aria-labelledby="asset-active-label"
-                                data-testid="asset-active-toggle"
-                                onclick={() => (active = !active)}
-                                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {active ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
-                            >
-                                <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform {active ? 'translate-x-6' : 'translate-x-1'}"></span>
-                            </button>
-                        </div>
-                    {/if}
-
                     <!-- Sub-section: Identifiers -->
                     <div class="space-y-2">
                         <div class="flex items-center justify-between">
@@ -1510,22 +1548,49 @@
     </div>
 
     <!-- Footer -->
-    <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700">
-        <button type="button" onclick={handleClose} data-testid="asset-modal-cancel" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
-            {$t('common.cancel')}
-        </button>
-        <button
-            type="button"
-            onclick={handleSave}
-            disabled={!isValid || saving}
-            data-testid="asset-modal-save"
-            class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-            {#if saving}
-                <Loader2 size={14} class="animate-spin" />
-            {/if}
-            <span>{editMode ? $t('assets.modal.saveChanges') : $t('assets.modal.createAsset')}</span>
-        </button>
+    <div class="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700">
+        <div class="flex items-center gap-2">
+            <span id="asset-active-label" class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                {$t('assets.edit.status.active')}
+            </span>
+            <Tooltip text={$t('assets.modal.activeTooltip')} position="top" maxWidth="320px">
+                <span class="text-xs text-gray-400 cursor-help">ℹ️</span>
+            </Tooltip>
+            <button
+                type="button"
+                role="switch"
+                aria-checked={active}
+                aria-labelledby="asset-active-label"
+                data-testid="asset-active-toggle"
+                onclick={() => (active = !active)}
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {active ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}"
+            >
+                <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform {active ? 'translate-x-6' : 'translate-x-1'}"></span>
+            </button>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button
+                type="button"
+                onclick={handleClose}
+                data-testid="asset-modal-cancel"
+                class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+            >
+                {$t('common.cancel')}
+            </button>
+            <button
+                type="button"
+                onclick={handleSave}
+                disabled={!isValid || saving}
+                data-testid="asset-modal-save"
+                class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {#if saving}
+                    <Loader2 size={14} class="animate-spin" />
+                {/if}
+                <span>{editMode ? $t('assets.modal.saveChanges') : $t('assets.modal.createAsset')}</span>
+            </button>
+        </div>
     </div>
 </ModalBase>
 

@@ -1274,6 +1274,7 @@
             currency: assetInfo.currency,
             asset_type: assetInfo.asset_type ?? '',
             icon_url: assetInfo.icon_url,
+            quote_base_quantity: assetInfo.quote_base_quantity ?? 1,
             active: assetInfo.active,
             classification_params,
             identifier_isin: assetInfo.identifier_isin,

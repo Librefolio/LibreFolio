@@ -258,6 +258,8 @@ def calculate_mwrr(
             flows.append((float(days), float(cf.amount)))
 
     def npv(r: float) -> float:
+        if 1.0 + r <= 0.0:
+            return float("inf")
         return sum(amount / (1.0 + r) ** (d / 365.0) for d, amount in flows)
 
     try:
@@ -316,6 +318,8 @@ def calculate_mwrr_series(
                 flows.append((float(days), float(cf_amt)))
 
         def npv(r: float, _flows: list[tuple[float, float]] = flows) -> float:
+            if 1.0 + r <= 0.0:
+                return float("inf")
             return sum(amount / (1.0 + r) ** (d / 365.0) for d, amount in _flows)
 
         try:

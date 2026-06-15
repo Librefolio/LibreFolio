@@ -47,7 +47,7 @@
     import PromoteMergeModal from './PromoteMergeModal.svelte';
     import {createValidateScheduler} from '$lib/utils/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
-    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, upgradeAutoToDetail, type TxFields, type TxOriginal, type ResolvedOp} from '$lib/utils/transactions/txPayloadHelpers';
+    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, upgradeAutoToDetail, type TxFields, type TxOriginal, type ResolvedOp, type ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {formatCurrencyAmountHtml, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
@@ -103,6 +103,7 @@
         /** W4b: partner on inaccessible broker — read-only sentinel */ inaccessible?: boolean;
         /** Cached WAC result from validate — transient, not sent to backend */ _wacCache?: WacResultEntry | null;
         /** Currency hint for WAC target — null = backend decides */ wacCurrencyHint?: string | null;
+        /** BRIM import field todos — blocker severity prevents commit until resolved */ todos?: ImportTodo[];
     };
 
     interface Props {
@@ -707,6 +708,14 @@
                 merged.wacCurrencyHint = payload._wac_currency_hint;
             } else if (payload._wac_currency_hint === null) {
                 merged.wacCurrencyHint = null;
+            }
+            // Auto-clear todos whose field has now been filled
+            if (merged.todos?.length) {
+                merged.todos = merged.todos.filter((todo) => {
+                    const val = merged.fields[todo.field as keyof DraftFields];
+                    return val == null || val === '';
+                });
+                if (merged.todos.length === 0) delete merged.todos;
             }
             return merged;
         });
@@ -1943,7 +1952,8 @@
     /** B23: true when at least one paired row is marked for deletion — show split hint. */
     let hasPairedDelete = $derived(visibleOps.some((d) => deriveStatus(d) === 'delete' && getPartnerOp(d.tempId) != null));
     let actionCount = $derived(newCount + editedCount + deleteCount + pendingSplits.length + pendingPromotes.length);
-    let commitDisabled = $derived(committing || ops.length === 0 || actionCount === 0);
+    let hasTodoBlockers = $derived(ops.some((op) => op.todos?.some((t) => t.severity === 'blocker')));
+    let commitDisabled = $derived(committing || ops.length === 0 || actionCount === 0 || hasTodoBlockers);
     let commitLabel = $derived(committing ? $t('common.saving') : $t('transactions.bulk.commitAll'));
 
     // -------------------------------------------------------------------------
@@ -2042,8 +2052,12 @@
         return newOps;
     }
 
-    function onImportBatch(creates: TransactionCreateItem[]) {
-        const newOps = creates.map(txCreateItemToPendingOp);
+    function onImportBatch(creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>) {
+        const newOps = creates.map((item) => {
+            const op = txCreateItemToPendingOp(item.tx);
+            if (item.todos.length > 0) op.todos = item.todos;
+            return op;
+        });
         const linked = linkPairedImportOps(newOps);
         ops = [...ops, ...linked];
         importWizardOpen = false;
@@ -2219,6 +2233,14 @@
             // B6: sync link_uuid
             const sharedUuid = (items[0].link_uuid as string) ?? (items[1].link_uuid as string) ?? d.link_uuid;
             if (sharedUuid) merged.link_uuid = sharedUuid;
+            // Auto-clear todos whose field has now been filled
+            if (merged.todos?.length) {
+                merged.todos = merged.todos.filter((todo) => {
+                    const val = merged.fields[todo.field as keyof DraftFields];
+                    return val == null || val === '';
+                });
+                if (merged.todos.length === 0) delete merged.todos;
+            }
             return merged;
         });
 
@@ -2257,6 +2279,7 @@
     /** Row background tint by status for immediate visual recognition.
      *  Color is purely status-based — paired nature is visible from Da:/A: rendering. */
     function getRowClass(row: PendingOp): string {
+        if (row.todos?.some((t) => t.severity === 'blocker')) return 'row-todo-blocker';
         const st = deriveStatus(row);
         if (st === 'delete') return 'row-deleted';
         if (st === 'new') return 'row-appended';
@@ -3032,7 +3055,14 @@
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 inline-flex items-center gap-1.5" onclick={requestClose} data-testid="tx-bulk-cancel" title={$t('common.cancel')}
                     ><X size={15} /> <span class="hidden sm:inline">{$t('common.cancel')}</span></button
                 >
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5" disabled={commitDisabled} onclick={commit} data-testid="tx-bulk-commit" title={commitLabel}>
+                <button
+                    type="button"
+                    class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5"
+                    disabled={commitDisabled}
+                    onclick={commit}
+                    data-testid="tx-bulk-commit"
+                    title={hasTodoBlockers ? $t('importWizard.todoBlockerCommitHint') : commitLabel}
+                >
                     <Save size={15} /> <span class="hidden sm:inline">{commitLabel}</span>
                 </button>
             </div>

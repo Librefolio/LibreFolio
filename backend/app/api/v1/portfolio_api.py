@@ -1,10 +1,10 @@
 """
-Analytics API endpoints for LibreFolio.
+Portfolio API endpoints for LibreFolio.
 
-Provides read-only analytics on committed data:
-- POST /analytics/wac    — WAC time series per (broker, asset)
-- GET  /portfolio/summary      — Aggregated portfolio KPIs, allocations, holdings
-- GET  /portfolio/history      — Daily cash/invested/NAV series
+Provides read-only portfolio calculations on committed data:
+- POST /portfolio/wac           — WAC time series per (broker, asset)
+- POST /portfolio/summary       — Aggregated portfolio KPIs, allocations, holdings
+- POST /portfolio/history       — Daily cash/invested/NAV series
 - GET  /portfolio/asset-history — WAC vs market price series for one asset
 - GET  /portfolio/lots          — FIFO open and closed lots for one (broker, asset)
 """
@@ -19,11 +19,13 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import Asset, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.analytics import (
+from backend.app.schemas.portfolio import (
     AssetHistoryPoint,
     FIFOLotsResponse,
     PortfolioHistoryPoint,
+    PortfolioHistoryQuery,
     PortfolioSummary,
+    PortfolioSummaryQuery,
     WACAnalyticsRequest,
     WACAnalyticsResponse,
     WACAnalyticsResultItem,
@@ -33,17 +35,16 @@ from backend.app.services.portfolio_service import PortfolioService, compute_wac
 
 logger = get_logger(__name__)
 
-analytics_router = APIRouter(prefix="/analytics", tags=["Analytics"])
 portfolio_router = APIRouter(prefix="/portfolio", tags=["Portfolio"])
 
 
-@analytics_router.post(
+@portfolio_router.post(
     "/wac",
     response_model=WACAnalyticsResponse,
     summary="WAC time series",
     description="Compute WAC (Weighted Average Cost) time series for committed transactions. " "Returns point-per-transaction data where WAC changes — useful for chart overlays and P&L.",
 )
-async def analytics_wac(
+async def get_portfolio_wac(
     body: WACAnalyticsRequest,
     session: AsyncSession = Depends(get_session_generator),
 ) -> WACAnalyticsResponse:
@@ -52,8 +53,6 @@ async def analytics_wac(
 
     for query in body.queries:
         # Determine as_of_date: use query end date or today
-        from datetime import date as date_type  # noqa: PLC0415 — shadowed import, pre-existing
-
         as_of_date = query.date_range.end if query.date_range and query.date_range.end else date_type.today()
 
         # Get asset currency
@@ -65,7 +64,7 @@ async def analytics_wac(
                     asset_id=query.asset_id,
                     currency="USD",
                     series=[],
-                    missing_pairs=[],
+                    missing_fx_pairs=[],
                 )
             )
             continue
@@ -81,7 +80,7 @@ async def analytics_wac(
             asset_currency=asset_currency,
         )
 
-        # If FX errors, return empty series with missing_pairs
+        # If FX errors, return empty series with missing_fx_pairs
         if wac_result.wac_missing_pairs:
             results.append(
                 WACAnalyticsResultItem(
@@ -89,7 +88,7 @@ async def analytics_wac(
                     asset_id=query.asset_id,
                     currency=asset_currency,
                     series=[],
-                    missing_pairs=wac_result.wac_missing_pairs,
+                    missing_fx_pairs=wac_result.wac_missing_pairs,
                 )
             )
             continue
@@ -123,7 +122,7 @@ async def analytics_wac(
                 asset_id=query.asset_id,
                 currency=target_currency,
                 series=series,
-                missing_pairs=[],
+                missing_fx_pairs=[],
             )
         )
 
@@ -135,16 +134,14 @@ async def analytics_wac(
 # =============================================================================
 
 
-@portfolio_router.get(
+@portfolio_router.post(
     "/summary",
     response_model=PortfolioSummary,
     summary="Portfolio summary",
     description="Aggregated portfolio KPIs: net worth, gain/loss, TWRR, MWRR, allocations, holdings.",
 )
 async def get_portfolio_summary(
-    broker_ids: Optional[list[int]] = Query(None, description="Filter by broker IDs"),
-    include_breakdown: bool = Query(False, description="Include per-broker breakdown in by_broker field"),
-    target_currency: Optional[str] = Query(None, description="Override base currency (ISO 4217, e.g. USD). Defaults to user setting."),
+    body: PortfolioSummaryQuery,
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
 ) -> PortfolioSummary:
@@ -152,23 +149,20 @@ async def get_portfolio_summary(
     service = PortfolioService(session)
     return await service.get_summary(
         user_id=current_user.id,
-        broker_ids=broker_ids,
-        include_breakdown=include_breakdown,
-        target_currency_override=target_currency,
+        broker_ids=body.broker_ids,
+        include_breakdown=body.include_breakdown,
+        target_currency_override=body.target_currency,
     )
 
 
-@portfolio_router.get(
+@portfolio_router.post(
     "/history",
     response_model=list[PortfolioHistoryPoint],
     summary="Portfolio value history",
     description="Daily time series of cash, invested capital, and NAV for the portfolio.",
 )
 async def get_portfolio_history(
-    broker_ids: Optional[list[int]] = Query(None, description="Filter by broker IDs"),
-    date_from: Optional[date_type] = Query(None, description="Start date (inclusive)"),
-    date_to: Optional[date_type] = Query(None, description="End date (inclusive)"),
-    target_currency: Optional[str] = Query(None, description="Override base currency (ISO 4217, e.g. USD). Defaults to user setting."),
+    body: PortfolioHistoryQuery,
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
 ) -> list[PortfolioHistoryPoint]:
@@ -176,10 +170,10 @@ async def get_portfolio_history(
     service = PortfolioService(session)
     return await service.get_history(
         user_id=current_user.id,
-        broker_ids=broker_ids,
-        date_from=date_from,
-        date_to=date_to,
-        target_currency_override=target_currency,
+        broker_ids=body.broker_ids,
+        date_from=body.date_range.start if body.date_range else None,
+        date_to=body.date_range.end if body.date_range else None,
+        target_currency_override=body.target_currency,
     )
 
 

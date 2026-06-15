@@ -844,6 +844,7 @@ async def read_assets_bulk(
                     currency=asset.currency,
                     icon_url=asset.icon_url,
                     asset_type=asset.asset_type,
+                    quote_base_quantity=asset.quote_base_quantity,
                     classification_params=classification_params,
                     provider_code=provider_map.get(asset.id),
                 )

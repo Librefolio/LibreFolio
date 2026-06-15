@@ -436,8 +436,8 @@
             is_active: broker.is_active,
             opened_at: safeString(broker.opened_at),
         }}
-        on:close={() => (editModalOpen = false)}
-        on:updated={handleUpdated}
+        onclose={() => (editModalOpen = false)}
+        onupdated={handleUpdated}
     />
 
     <!-- Cash Transaction Modal -->

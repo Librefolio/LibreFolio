@@ -1316,9 +1316,9 @@
     let createAssetOpen = $state(false);
     let createEventOpen = $state(false);
 
-    function handleBrokerCreated(e: CustomEvent<{id: number}>) {
-        // BrokerModal dispatches 'created' with {id} + already merges into brokerStore
-        draft = {...draft, broker_id: e.detail.id};
+    function handleBrokerCreated(d: {id: number}) {
+        // BrokerModal merges into brokerStore; just set the draft field
+        draft = {...draft, broker_id: d.id};
         createBrokerOpen = false;
     }
     function handleAssetCreated(assetId: number) {
@@ -2145,8 +2145,8 @@
     zIndex={70}
 />
 
-<!-- W39: Inline broker creation modal. BrokerModal is Svelte 4 (event dispatcher). -->
-<BrokerModal isOpen={createBrokerOpen} mode="create" zIndex={zIndex + 10} on:created={handleBrokerCreated} on:close={() => (createBrokerOpen = false)} />
+<!-- W39: Inline broker creation modal. -->
+<BrokerModal isOpen={createBrokerOpen} mode="create" zIndex={zIndex + 10} oncreated={(d) => handleBrokerCreated(d)} onclose={() => (createBrokerOpen = false)} />
 
 <!-- W39: Inline asset creation modal. AssetModal is Svelte 5 (runes). -->
 <AssetModal bind:open={createAssetOpen} zIndex={zIndex + 10} oncreated={handleAssetCreated} onclose={() => (createAssetOpen = false)} />

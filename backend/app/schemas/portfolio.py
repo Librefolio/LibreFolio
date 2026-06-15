@@ -1,17 +1,13 @@
 """
-Analytics schemas for LibreFolio.
-
-Schemas for the /api/v1/analytics/ endpoints:
-- WAC time series (point-per-transaction where WAC changes)
+Portfolio schemas for LibreFolio.
 
 Schemas for the /api/v1/portfolio/ endpoints:
+- WAC time series (point-per-transaction where WAC changes)
 - Portfolio summary (net worth, ROI, allocations, holdings)
 - Portfolio history (daily cash/invested/nav series)
 - Asset history (WAC vs market price series)
 - FIFO lots (open and closed lot details)
 """
-
-from __future__ import annotations
 
 from datetime import date as date_type
 from typing import List, Optional
@@ -20,7 +16,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.common import Currency, OpenDateRangeModel, SafeDecimal
 from backend.app.schemas.wac import WACMissingPairInfo
-
 
 # =============================================================================
 # WAC ANALYTICS — Time series request/response
@@ -34,13 +29,11 @@ class WACAnalyticsQuery(BaseModel):
 
     broker_id: int = Field(..., description="Broker to compute WAC for")
     asset_id: int = Field(..., description="Asset to compute WAC for")
-    date_range: Optional[OpenDateRangeModel] = Field(
-        None, description="Date range filter. None = entire history."
-    )
+    date_range: Optional[OpenDateRangeModel] = Field(None, description="Date range filter. None = entire history.")
 
 
 class WACAnalyticsRequest(BaseModel):
-    """Request body for POST /analytics/wac."""
+    """Request body for POST /portfolio/wac."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -67,11 +60,11 @@ class WACAnalyticsResultItem(BaseModel):
     asset_id: int
     currency: str = Field(..., description="Target currency of WAC values")
     series: List[WACSeriesPoint] = Field(default_factory=list)
-    missing_pairs: List["WACMissingPairInfo"] = Field(default_factory=list, description="FX pairs that could not be resolved, with dates")
+    missing_fx_pairs: List[WACMissingPairInfo] = Field(default_factory=list, description="FX pairs that could not be resolved, with dates")
 
 
 class WACAnalyticsResponse(BaseModel):
-    """Response for POST /analytics/wac."""
+    """Response for POST /portfolio/wac."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -81,6 +74,26 @@ class WACAnalyticsResponse(BaseModel):
 # =============================================================================
 # PORTFOLIO — Summary, History, Asset History, FIFO Lots
 # =============================================================================
+
+
+class PortfolioSummaryQuery(BaseModel):
+    """Request body for POST /portfolio/summary."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    broker_ids: Optional[List[int]] = Field(None, description="Optional broker filter")
+    include_breakdown: bool = Field(False, description="Include per-broker breakdown in by_broker")
+    target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217, e.g. USD)")
+
+
+class PortfolioHistoryQuery(BaseModel):
+    """Request body for POST /portfolio/history."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    broker_ids: Optional[List[int]] = Field(None, description="Optional broker filter")
+    date_range: Optional[OpenDateRangeModel] = Field(None, description="Inclusive date range. None = full history.")
+    target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217, e.g. USD)")
 
 
 class AllocationItem(BaseModel):
@@ -112,20 +125,20 @@ class BrokerBreakdown(BaseModel):
 
     broker_id: int
     broker_name: str
-    net_worth: SafeDecimal
-    gain_loss: SafeDecimal
+    net_worth: Currency
+    gain_loss: Currency
     gain_loss_percent: SafeDecimal
-    cash_total: SafeDecimal
+    cash_total: Currency
 
 
 class PortfolioSummary(BaseModel):
     """Full portfolio summary response."""
 
-    net_worth: SafeDecimal
-    total_invested: SafeDecimal
-    total_gain_loss: SafeDecimal
+    net_worth: Currency
+    total_invested: Currency
+    total_gain_loss: Currency
     total_gain_loss_percent: SafeDecimal
-    cash_total: SafeDecimal
+    cash_total: Currency
     cash_balances: List[Currency] = Field(default_factory=list)
     twrr_percent: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return (None if not calculable)")
     mwrr_percent: Optional[SafeDecimal] = Field(None, description="Money-Weighted Return / XIRR (None if not converged)")
@@ -135,9 +148,13 @@ class PortfolioSummary(BaseModel):
     allocation_by_geography: List[AllocationItem] = Field(default_factory=list)
     holdings: List[PortfolioHolding] = Field(default_factory=list)
     by_broker: Optional[List[BrokerBreakdown]] = Field(None, description="Only populated when include_breakdown=True")
-    wac_missing_pairs: List[WACMissingPairInfo] = Field(
+    missing_fx_pairs: List[WACMissingPairInfo] = Field(
         default_factory=list,
         description="FX pairs with missing rates (aggregated by range for compact payload)",
+    )
+    missing_prices_assets: List[str] = Field(
+        default_factory=list,
+        description="Assets excluded from NAV because no PriceHistory was available",
     )
 
 
@@ -145,9 +162,9 @@ class PortfolioHistoryPoint(BaseModel):
     """Single point in the portfolio value time series."""
 
     date: date_type
-    cash_value: SafeDecimal
-    invested_value: SafeDecimal
-    nav_value: SafeDecimal
+    cash_value: Currency
+    invested_value: Currency
+    nav_value: Currency
     twrr: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return series point")
     mwrr: Optional[SafeDecimal] = Field(None, description="Money-Weighted Return series point")
     roi: Optional[SafeDecimal] = Field(None, description="Simple ROI series point")
@@ -195,4 +212,3 @@ class FIFOLotsResponse(BaseModel):
     closed_lots: List[ClosedLotSchema] = Field(default_factory=list)
     total_realized_pnl: SafeDecimal
     total_unrealized_quantity: SafeDecimal
-

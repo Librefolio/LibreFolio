@@ -3279,7 +3279,9 @@ class AssetCRUDService:
                     currency=item.currency,
                     asset_type=item.asset_type or AssetType.OTHER,
                     icon_url=item.icon_url,
-                    active=True,
+                    quote_base_quantity=item.quote_base_quantity,
+                    active=item.active,
+                    user_url=item.user_url,
                     # Identifier fields
                     identifier_isin=item.identifier_isin,
                     identifier_ticker=item.identifier_ticker,
@@ -3444,6 +3446,7 @@ class AssetCRUDService:
                     currency=asset.currency,
                     icon_url=asset.icon_url,
                     asset_type=asset.asset_type,
+                    quote_base_quantity=asset.quote_base_quantity,
                     active=asset.active,
                     user_url=asset.user_url,
                     provider_code=provider_code,

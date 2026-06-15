@@ -128,6 +128,7 @@
             "titleEdit": "Editar Activo",
             "searchOnline": "Buscar en Línea",
             "assetDetails": "Detalles del Activo",
+            "searchSuggestions": "Sugerencias",
             "createAsset": "Crear Activo",
             "saveChanges": "Guardar Cambios",
             "autoAssignInfo": "El proveedor \"{provider}\" se asignará automáticamente al crear",
@@ -142,7 +143,10 @@
             "scheduledRegenTitle": "¿Regenerar precios?",
             "scheduledRegenMessage": "Cambiar estos parámetros eliminará el historial de precios existente y lo regenerará con la nueva planificación. Esta acción no se puede deshacer. ¿Continuar?",
             "scheduledRegenConfirm": "Regenerar",
-            "saveFailed": "Error al guardar el activo"
+            "saveFailed": "Error al guardar el activo",
+            "quoteBaseQuantity": "Precio cotizado para N unidades",
+            "quoteBaseTooltip": "Indique a cuántas acciones o participaciones se refiere el precio de mercado. Para acciones y ETF normalmente es 1. Para bonos, el precio suele cotizarse sobre una base 100, así que introduzca 100 en ese caso.",
+            "activeTooltip": "Si está activo, el activo se actualizará automáticamente por el programador y seguirá visible en los selectores. Desactívelo para ocultarlo cuando ya no lo posea y no quiera seguir descargando precios."
         },
         "provider": {
             "assignment": "Asignación de Proveedor",
@@ -357,6 +361,9 @@
         "discardTitle": "¿Descartar importación?",
         "discardMessage": "Tiene cambios no guardados. ¿Está seguro de que desea cerrar?",
         "discardConfirm": "Descartar",
+        "warningConfirmTitle": "Advertencias detectadas",
+        "warningConfirmMessage": "{n} advertencia(s) generadas durante el análisis. Es posible que se hayan omitido algunas transacciones. ¿Desea continuar de todos modos?",
+        "warningConfirmOk": "Continuar de todos modos",
         "remove": "Eliminar",
         "ready": "Listo",
         "preview": "Vista previa",
@@ -383,6 +390,7 @@
         "cachedResults": "Resultados en caché",
         "reparse": "Reanalizar todos",
         "reparseSingle": "Reanalizar",
+        "previewFile": "Vista previa del archivo",
         "txCount": "{n} transacciones en {k} archivos",
         "assetsCount": "{n} activos únicos, {m} por resolver",
         "likelyDuplicates": "{n} duplicados probables",
@@ -441,6 +449,8 @@
         "selectAll": "Seleccionar todo",
         "deselectAll": "Deseleccionar todo",
         "transactionsSection": "Transacciones",
+        "todoBlockerCommitHint": "Complete todos los campos requeridos antes de guardar",
+        "sourceFile": "Archivo",
         "importToEditor": "Importar {n} transacciones",
         "importDisabledUnresolved": "Resuelve todos los activos seleccionados antes de importar",
         "importDisabledEmpty": "Selecciona al menos una transacción",
@@ -468,7 +478,7 @@
             "success": "Identificador agregado con éxito",
             "error": "No se pudo agregar el identificador"
         },
-        "compareTitle": "Comparar con existente #{{id}}",
+        "compareTitle": "Comparar con existente #{id}",
         "confidenceTip": {
             "exact": "Coincidencia exacta: símbolo y tipo de activo coinciden",
             "high": "Alta confianza: fuerte coincidencia de símbolo o ISIN",
@@ -836,7 +846,11 @@
         "geoUnclassified": "Datos geográficos no disponibles para el {pct}% del valor de la cartera",
         "roiAllZero": "Los rendimientos son del 0% en el período seleccionado",
         "abs": "Abs",
-        "displayCurrency": "Divisa"
+        "displayCurrency": "Divisa",
+        "missingPricesPrefix": "No se encontró precio de mercado para:",
+        "missingPricesSuffix": "El valor de estos activos no está incluido en el NAV.",
+        "missingFxPrefix": "Faltan tipos de cambio para:",
+        "missingFxSuffix": "Los totales agregados pueden estar incompletos."
     },
     "dataEditor": {
         "clearSelection": "Borrar selección",
