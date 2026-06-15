@@ -97,6 +97,8 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "rit.": TransactionType.TAX,
     "ritenuta": TransactionType.TAX,
     "tobin": TransactionType.TAX,
+    "bollo": TransactionType.TAX,    # Bollo portafoglio titoli (stamp duty)
+    "imposta": TransactionType.TAX,  # generic tax keyword
     # FEE
     "commissioni": TransactionType.FEE,
     "commissione": TransactionType.FEE,
@@ -230,13 +232,15 @@ class DirectaBrokerProvider(BRIMProvider):
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
 
+        detected_delim = self.detect_csv_delimiter(file_path)
+
         try:
             with open(file_path, encoding="utf-8-sig") as f:
                 # Skip header lines
                 for _ in range(HEADER_LINES_TO_SKIP):
                     f.readline()
 
-                reader = csv.reader(f)
+                reader = csv.reader(f, delimiter=detected_delim)
 
                 # Read column header row
                 header = next(reader, None)
@@ -356,7 +360,7 @@ class DirectaBrokerProvider(BRIMProvider):
             raise BRIMParseError(f"Error parsing file: {e}") from e
 
         if not transactions:
-            raise BRIMParseError("No valid transactions found in file")
+            warnings.append("No valid transactions found in file")
 
         # Convert raw dict to BRIMExtractedAssetInfo
         extracted_assets_typed: Dict[int, BRIMExtractedAssetInfo] = {

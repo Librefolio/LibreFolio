@@ -725,7 +725,8 @@
                     const info = getAssetInfo(aid);
                     const name = info?.display_name ?? `#${aid}`;
                     const iconSrc = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : undefined);
-                    opts.push({value: String(aid), label: name, iconUrl: iconSrc ?? undefined});
+                    const searchText = [info?.identifier_ticker, info?.identifier_isin].filter(Boolean).join(' ');
+                    opts.push({value: String(aid), label: name, iconUrl: iconSrc ?? undefined, ...(searchText ? {searchText} : {})});
                 }
                 return opts.sort((a, b) => {
                     if (a.value === '__null__') return -1;

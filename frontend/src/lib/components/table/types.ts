@@ -203,6 +203,8 @@ export interface EnumOption {
     dotColor?: string;
     /** Optional count of rows matching this value (computed by DataTable, shown in filter UI) */
     count?: number;
+    /** Extra text searched in the filter search box (e.g. ticker + ISIN) — not displayed in UI */
+    searchText?: string;
 }
 
 /**

@@ -212,6 +212,7 @@
     }
     let multiEnums = $state<Set<string>>(getInitialMultiEnums());
     let multiEnumSearch = $state('');
+    let enumSearch = $state('');
 
     // Currency-stack filter state
     type CurrencyStackItem = {code: string; min?: number; max?: number};
@@ -445,6 +446,7 @@
         selectedEnums = new Set();
         multiEnums = new Set();
         multiEnumSearch = '';
+        enumSearch = '';
         currencyStack = [];
         currencyToAdd = '';
         currencyOpenIdx = null;
@@ -467,7 +469,7 @@
     }
 
     function selectAllEnums() {
-        selectedEnums = new Set(enumOptions.map((o) => o.value));
+        selectedEnums = new Set(filteredEnumOptions.map((o) => o.value));
         applyFilter();
     }
 
@@ -492,6 +494,14 @@
         applyFilter();
     }
     let filteredMultiEnumOptions = $derived(multiEnumSearch.trim() === '' ? enumOptions : enumOptions.filter((o) => o.label.toLowerCase().includes(multiEnumSearch.toLowerCase())));
+    let filteredEnumOptions = $derived(
+        enumSearch.trim() === ''
+            ? enumOptions
+            : enumOptions.filter((o) => {
+                  const q = enumSearch.toLowerCase();
+                  return o.label.toLowerCase().includes(q) || (o.searchText?.toLowerCase().includes(q) ?? false);
+              }),
+    );
 
     // ---- Currency-stack helpers ----
     /** Set of currency codes already in the stack (to exclude from the picker). */
@@ -813,25 +823,38 @@
                     <button type="button" class="enum-action-btn" onclick={selectAllEnums}>{$t('common.selectAll')}</button>
                     <button type="button" class="enum-action-btn" onclick={clearAllEnums}>{$t('common.clearAll')}</button>
                 </div>
-                <div class="enum-list">
-                    {#each enumOptions as option}
-                        <button type="button" class="enum-option" onclick={() => toggleEnum(option.value)} data-testid={`filter-enum-option-${option.value}`}>
-                            <span class="enum-checkbox" class:checked={selectedEnums.has(option.value)}>
-                                {#if selectedEnums.has(option.value)}
-                                    <Check size={12} />
-                                {/if}
-                            </span>
-                            {#if option.iconUrl}
-                                <img src={option.iconUrl} alt="" class="enum-option-icon" />
-                            {:else if option.dotColor}
-                                <span class="enum-option-dot" style="background:{option.dotColor}"></span>
-                            {/if}
-                            <span class="enum-label">{option.label}</span>
-                            {#if option.count != null}
-                                <span class="enum-count">{option.count}</span>
-                            {/if}
+                <div class="search-input-wrapper">
+                    <Search size={14} class="search-icon" />
+                    <input type="text" class="filter-input" placeholder={$t('common.search')} bind:value={enumSearch} />
+                    {#if enumSearch}
+                        <button type="button" class="clear-input-btn" onclick={() => (enumSearch = '')}>
+                            <X size={12} />
                         </button>
-                    {/each}
+                    {/if}
+                </div>
+                <div class="enum-list">
+                    {#if filteredEnumOptions.length === 0}
+                        <div class="enum-empty">{$t('table.filter.empty') || 'No options'}</div>
+                    {:else}
+                        {#each filteredEnumOptions as option}
+                            <button type="button" class="enum-option" onclick={() => toggleEnum(option.value)} data-testid={`filter-enum-option-${option.value}`}>
+                                <span class="enum-checkbox" class:checked={selectedEnums.has(option.value)}>
+                                    {#if selectedEnums.has(option.value)}
+                                        <Check size={12} />
+                                    {/if}
+                                </span>
+                                {#if option.iconUrl}
+                                    <img src={option.iconUrl} alt="" class="enum-option-icon" />
+                                {:else if option.dotColor}
+                                    <span class="enum-option-dot" style="background:{option.dotColor}"></span>
+                                {/if}
+                                <span class="enum-label">{option.label}</span>
+                                {#if option.count != null}
+                                    <span class="enum-count">{option.count}</span>
+                                {/if}
+                            </button>
+                        {/each}
+                    {/if}
                 </div>
             </div>
         {:else if type === 'multi-enum'}
