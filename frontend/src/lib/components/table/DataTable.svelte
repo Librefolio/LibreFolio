@@ -2292,6 +2292,14 @@
         background: rgba(16, 185, 129, 0.2) !important;
     }
 
+    :global(tr.row-todo-blocker) td {
+        background: rgba(239, 68, 68, 0.08) !important;
+    }
+
+    :global(.dark) :global(tr.row-todo-blocker) td {
+        background: rgba(239, 68, 68, 0.22) !important;
+    }
+
     :global(tr.row-stale) td {
         background: rgba(245, 158, 11, var(--stale-opacity, 0.04)) !important;
     }

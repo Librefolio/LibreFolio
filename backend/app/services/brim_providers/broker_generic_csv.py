@@ -36,7 +36,7 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMPreviewColumn, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMPreviewColumn, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -348,7 +348,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
         try:
             with open(file_path, encoding="utf-8-sig") as f:
-                reader = csv.reader(f)
+                reader = csv.reader(f, delimiter=self.detect_csv_delimiter(file_path))
                 header = next(reader, None)
                 return header is not None and len(header) > 0
         except Exception:
@@ -374,6 +374,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
         validation_issues: List[BRIMValidationIssue] = []
+        field_todos: List[BRIMFieldTodo] = []
 
         # Track asset identifiers to assign consistent fake IDs
         # Maps extracted identifier -> fake_asset_id
@@ -383,9 +384,11 @@ class GenericCSVBrokerProvider(BRIMProvider):
         # Track extracted asset info (BRIMExtractedAssetInfo objects)
         self._extracted_assets_raw: Dict[int, BRIMExtractedAssetInfo] = {}
 
+        detected_delim = self.detect_csv_delimiter(file_path)
+
         try:
             with open(file_path, encoding="utf-8-sig") as f:
-                reader = csv.DictReader(f)
+                reader = csv.DictReader(f, delimiter=detected_delim)
 
                 # Map header columns to standard names
                 column_map = self._detect_columns(reader.fieldnames or [])
@@ -404,6 +407,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
                 # Parse rows
                 for row_num, row in enumerate(reader, start=2):  # Start at 2 (1 is header)
+                    tx_count_before = len(transactions)
                     try:
                         self._parse_row(
                             row=row,
@@ -415,6 +419,26 @@ class GenericCSVBrokerProvider(BRIMProvider):
                         )
                     except Exception as e:
                         warnings.append(f"Row {row_num}: {str(e)}")
+                        continue
+
+                    # Emit field_todo for ADJUSTMENT rows missing cost_basis_override
+                    if len(transactions) > tx_count_before:
+                        added_tx = transactions[-1]
+                        if added_tx.type == TransactionType.ADJUSTMENT:
+                            cbo = added_tx.cost_basis_override
+                            has_cbo = cbo is not None and not (
+                                hasattr(cbo, "amount") and float(str(cbo.amount)) == 0
+                            )
+                            if not has_cbo:
+                                field_todos.append(
+                                    BRIMFieldTodo(
+                                        tx_index=len(transactions) - 1,
+                                        field="cost_basis_override",
+                                        severity="blocker",
+                                        reason_code="corporate_action",
+                                        message="Missing inherited cost basis (WAC). Fill this field to import.",
+                                    )
+                                )
 
         except BRIMParseError:
             raise
@@ -428,6 +452,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
             transactions=transactions,
             warnings=warnings,
             validation_issues=validation_issues,
+            field_todos=field_todos,
             extracted_assets=self._extracted_assets_raw,
         )
 
