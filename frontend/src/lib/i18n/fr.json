@@ -128,6 +128,7 @@
             "titleEdit": "Modifier l'Actif",
             "searchOnline": "Rechercher en Ligne",
             "assetDetails": "Détails de l'Actif",
+            "searchSuggestions": "Suggestions",
             "createAsset": "Créer l'Actif",
             "saveChanges": "Enregistrer",
             "autoAssignInfo": "Le fournisseur \"{provider}\" sera attribué automatiquement à la création",
@@ -142,7 +143,10 @@
             "scheduledRegenTitle": "Régénérer les Prix ?",
             "scheduledRegenMessage": "La modification de ces paramètres supprimera l'historique des prix existant et le régénérera avec le nouveau planning. Cette action est irréversible. Continuer ?",
             "scheduledRegenConfirm": "Régénérer",
-            "saveFailed": "Échec de l'enregistrement de l'actif"
+            "saveFailed": "Échec de l'enregistrement de l'actif",
+            "quoteBaseQuantity": "Prix coté pour N unités",
+            "quoteBaseTooltip": "Indiquez à combien de titres ou d'unités le prix de marché se réfère. Pour les actions et les ETF, c'est généralement 1. Pour les obligations, le prix est souvent coté sur une base 100, saisissez donc 100 dans ce cas.",
+            "activeTooltip": "Si l'actif est actif, il sera mis à jour automatiquement par le planificateur et restera visible dans les sélecteurs. Désactivez-le pour le masquer lorsque vous ne le détenez plus et que vous ne souhaitez plus télécharger ses prix."
         },
         "provider": {
             "assignment": "Attribution du Fournisseur",
@@ -357,6 +361,9 @@
         "discardTitle": "Abandonner l'import ?",
         "discardMessage": "Vous avez des modifications non sauvegardées. Êtes-vous sûr de vouloir fermer ?",
         "discardConfirm": "Abandonner",
+        "warningConfirmTitle": "Avertissements détectés",
+        "warningConfirmMessage": "{n} avertissement(s) générés lors de l'analyse. Certaines transactions ont peut-être été ignorées. Voulez-vous continuer quand même ?",
+        "warningConfirmOk": "Continuer quand même",
         "remove": "Supprimer",
         "ready": "Prêt",
         "preview": "Aperçu",
@@ -383,6 +390,7 @@
         "cachedResults": "Résultats en cache",
         "reparse": "Réanalyser tout",
         "reparseSingle": "Réanalyser",
+        "previewFile": "Aperçu du fichier",
         "txCount": "{n} transactions dans {k} fichiers",
         "assetsCount": "{n} actifs uniques, {m} à résoudre",
         "likelyDuplicates": "{n} doublons probables",
@@ -441,6 +449,8 @@
         "selectAll": "Tout sélectionner",
         "deselectAll": "Tout désélectionner",
         "transactionsSection": "Transactions",
+        "todoBlockerCommitHint": "Complétez tous les champs requis avant de sauvegarder",
+        "sourceFile": "Fichier",
         "importToEditor": "Importer {n} transactions",
         "importDisabledUnresolved": "Résolvez tous les actifs sélectionnés avant d'importer",
         "importDisabledEmpty": "Sélectionnez au moins une transaction",
@@ -468,7 +478,7 @@
             "success": "Identifiant ajouté avec succès",
             "error": "Impossible d'ajouter l'identifiant"
         },
-        "compareTitle": "Comparaison avec existant #{{id}}",
+        "compareTitle": "Comparaison avec existant #{id}",
         "confidenceTip": {
             "exact": "Correspondance exacte : symbole et type d'actif correspondent",
             "high": "Haute confiance : forte correspondance symbole ou ISIN",
@@ -836,7 +846,11 @@
         "geoUnclassified": "Données géographiques indisponibles pour {pct}% de la valeur du portefeuille",
         "roiAllZero": "Les rendements sont à 0% sur la période sélectionnée",
         "abs": "Abs",
-        "displayCurrency": "Devise"
+        "displayCurrency": "Devise",
+        "missingPricesPrefix": "Aucun prix de marché trouvé pour :",
+        "missingPricesSuffix": "La valeur de ces actifs n'est pas incluse dans la NAV.",
+        "missingFxPrefix": "Taux de conversion manquants pour :",
+        "missingFxSuffix": "Les totaux agrégés peuvent être incomplets."
     },
     "dataEditor": {
         "clearSelection": "Effacer la sélection",

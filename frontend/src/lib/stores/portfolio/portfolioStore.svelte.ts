@@ -2,8 +2,8 @@
  * portfolioStore — Session-level cache for portfolio summary and history.
  *
  * Provides reactive, parameterised caching for the two main portfolio API calls:
- * - GET /api/v1/portfolio/summary  → PortfolioSummary (KPIs + allocations)
- * - GET /api/v1/portfolio/history  → PortfolioHistoryPoint[] (daily time series)
+ * - POST /api/v1/portfolio/summary  → PortfolioSummary (KPIs + allocations)
+ * - POST /api/v1/portfolio/history  → PortfolioHistoryPoint[] (daily time series)
  *
  * Cache key = `broker_ids (sorted) | dateFrom | dateTo | targetCurrency` so each
  * unique filter combination is cached independently. Calling `invalidate()` clears
@@ -23,8 +23,8 @@ import type {z} from 'zod';
 
 type ApiReturnType<T extends (...args: never[]) => Promise<unknown>> = Awaited<ReturnType<T>>;
 
-export type PortfolioSummary = ApiReturnType<typeof zodiosApi.get_portfolio_summary_api_v1_portfolio_summary_get>;
-export type PortfolioHistoryPoint = ApiReturnType<typeof zodiosApi.get_portfolio_history_api_v1_portfolio_history_get> extends (infer U)[] ? U : never;
+export type PortfolioSummary = ApiReturnType<typeof zodiosApi.get_portfolio_summary_api_v1_portfolio_summary_post>;
+export type PortfolioHistoryPoint = ApiReturnType<typeof zodiosApi.get_portfolio_history_api_v1_portfolio_history_post> extends (infer U)[] ? U : never;
 
 // ============================================================================
 // CACHE INFRASTRUCTURE
@@ -101,12 +101,12 @@ export async function fetchSummary(brokerIds?: number[], includeBreakdown = fals
 
     const promise = (async () => {
         try {
-            const queries: Record<string, unknown> = {};
-            if (brokerIds && brokerIds.length > 0) queries.broker_ids = brokerIds;
-            if (includeBreakdown) queries.include_breakdown = true;
-            if (targetCurrency) queries.target_currency = targetCurrency;
+            const body: Record<string, unknown> = {};
+            if (brokerIds && brokerIds.length > 0) body.broker_ids = brokerIds;
+            if (includeBreakdown) body.include_breakdown = true;
+            if (targetCurrency) body.target_currency = targetCurrency;
 
-            const data = await zodiosApi.get_portfolio_summary_api_v1_portfolio_summary_get({queries});
+            const data = await zodiosApi.get_portfolio_summary_api_v1_portfolio_summary_post(body);
             summaryCache = new Map(summaryCache).set(key, {data, timestamp: Date.now()});
             return data;
         } catch (err) {
@@ -147,13 +147,17 @@ export async function fetchHistory(brokerIds?: number[], dateFrom?: string, date
 
     const promise = (async () => {
         try {
-            const queries: Record<string, unknown> = {};
-            if (brokerIds && brokerIds.length > 0) queries.broker_ids = brokerIds;
-            if (dateFrom) queries.date_from = dateFrom;
-            if (dateTo) queries.date_to = dateTo;
-            if (targetCurrency) queries.target_currency = targetCurrency;
+            const body: Record<string, unknown> = {};
+            if (brokerIds && brokerIds.length > 0) body.broker_ids = brokerIds;
+            if (dateFrom || dateTo) {
+                body.date_range = {
+                    ...(dateFrom ? {start: dateFrom} : {}),
+                    ...(dateTo ? {end: dateTo} : {}),
+                };
+            }
+            if (targetCurrency) body.target_currency = targetCurrency;
 
-            const data = await zodiosApi.get_portfolio_history_api_v1_portfolio_history_get({queries});
+            const data = await zodiosApi.get_portfolio_history_api_v1_portfolio_history_post(body);
             historyCache = new Map(historyCache).set(key, {data, timestamp: Date.now()});
             return data;
         } catch (err) {

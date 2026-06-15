@@ -2,7 +2,6 @@
     /**
      * BrokerModal - Modal wrapper for broker create/edit form
      */
-    import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {AlertTriangle, X} from 'lucide-svelte';
     import BrokerForm from './BrokerForm.svelte';
@@ -12,34 +11,34 @@
     import {trySave} from '$lib/utils/trySave';
     import {mergeBrokers} from '$lib/stores/reference/brokerStore';
 
-    const dispatch = createEventDispatcher<{
-        close: void;
-        created: {id: number};
-        updated: {id: number};
-    }>();
+    interface Props {
+        isOpen?: boolean;
+        mode?: 'create' | 'edit';
+        brokerId?: number | null;
+        /** Z-index override for stacked modal contexts (e.g. opened from FormModal). */
+        zIndex?: number;
+        initialData?: {
+            name?: string;
+            description?: string | null;
+            portal_url?: string | null;
+            icon_url?: string | null;
+            default_import_plugin?: string | null;
+            allow_cash_overdraft?: boolean;
+            allow_asset_shorting?: boolean;
+            is_active?: boolean;
+            opened_at?: string | null;
+        };
+        onclose?: () => void;
+        oncreated?: (detail: {id: number}) => void;
+        onupdated?: (detail: {id: number}) => void;
+    }
 
-    // Props
-    export let isOpen = false;
-    export let mode: 'create' | 'edit' = 'create';
-    export let brokerId: number | null = null;
-    /** Z-index override for stacked modal contexts (e.g. opened from FormModal). */
-    export let zIndex: number = 50;
-    export let initialData: {
-        name?: string;
-        description?: string | null;
-        portal_url?: string | null;
-        icon_url?: string | null;
-        default_import_plugin?: string | null;
-        allow_cash_overdraft?: boolean;
-        allow_asset_shorting?: boolean;
-        is_active?: boolean;
-        opened_at?: string | null;
-    } = {};
+    let {isOpen = false, mode = 'create', brokerId = null, zIndex = 50, initialData = {}, onclose, oncreated, onupdated}: Props = $props();
 
-    let loading = false;
-    let error: string | null = null;
-    let formTouched = false;
-    let showDiscardConfirm = false;
+    let loading = $state(false);
+    let error = $state<string | null>(null);
+    let formTouched = $state(false);
+    let showDiscardConfirm = $state(false);
 
     // Track if form has been modified
     function handleFormChange() {
@@ -84,8 +83,8 @@
                     // we merge the fields the FE just submitted.
                     mergeBrokers([{id: createdId, ...event.detail}]);
                     formTouched = false;
-                    dispatch('created', {id: createdId});
-                    dispatch('close');
+                    oncreated?.({id: createdId});
+                    onclose?.();
                 } else {
                     error = errorMsg ?? $_('brokers.createFailed');
                 }
@@ -129,8 +128,8 @@
                     },
                 ]);
                 formTouched = false;
-                dispatch('updated', {id: brokerId});
-                dispatch('close');
+                onupdated?.({id: brokerId});
+                onclose?.();
             }
         } finally {
             loading = false;
@@ -143,14 +142,14 @@
         if (formTouched) {
             showDiscardConfirm = true;
         } else {
-            dispatch('close');
+            onclose?.();
         }
     }
 
     function confirmDiscard() {
         formTouched = false;
         showDiscardConfirm = false;
-        dispatch('close');
+        onclose?.();
     }
 
     function cancelDiscard() {
@@ -160,13 +159,13 @@
 
 <ModalBase closeOnBackdropClick={!loading} closeOnEscape={!loading} maxWidth="lg" onRequestClose={handleClose} open={isOpen} testId="broker-modal" {zIndex}>
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div class="flex flex-col max-h-[85vh]" on:input={handleFormChange}>
+    <div class="flex flex-col max-h-[85vh]" oninput={handleFormChange}>
         <!-- Header (sticky top) -->
         <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
             <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">
                 {mode === 'create' ? $_('brokers.addBroker') : $_('brokers.editBroker')}
             </h2>
-            <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50" disabled={loading} on:click={handleClose}>
+            <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50" disabled={loading} onclick={handleClose}>
                 <X size={20} />
             </button>
         </div>
@@ -198,10 +197,10 @@
             {$_('brokers.discardChangesWarning')}
         </p>
         <div class="flex justify-end gap-3">
-            <button class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" on:click={cancelDiscard}>
+            <button class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={cancelDiscard}>
                 {$_('common.continueEditing')}
             </button>
-            <button class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors" on:click={confirmDiscard}>
+            <button class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors" onclick={confirmDiscard}>
                 {$_('common.discardAndClose')}
             </button>
         </div>

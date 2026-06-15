@@ -18,7 +18,9 @@ from __future__ import annotations
 import asyncio
 import bisect
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
 from typing import NamedTuple, Optional
 
@@ -33,7 +35,9 @@ from backend.app.db.models import (
     Transaction,
     TransactionType,
 )
-from backend.app.schemas.analytics import (
+from backend.app.schemas.assets import FAClassificationParams
+from backend.app.schemas.common import Currency, FxBackwardFillInfo
+from backend.app.schemas.portfolio import (
     AllocationItem,
     AssetHistoryPoint,
     BrokerBreakdown,
@@ -44,8 +48,6 @@ from backend.app.schemas.analytics import (
     PortfolioHolding,
     PortfolioSummary,
 )
-from backend.app.schemas.assets import FAClassificationParams
-from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.wac import WACMissingPairInfo, WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.fx import convert_bulk
 from backend.app.services.settings_service import get_global_setting
@@ -60,6 +62,7 @@ from backend.app.utils.financial.roi_utils import (
     calculate_twrr,
     calculate_twrr_series,
 )
+from backend.app.utils.financial.valuation_utils import compute_holding_value
 from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_txlist, determine_target_currency
 
 # =============================================================================
@@ -290,13 +293,13 @@ class _HistoryTxRow(NamedTuple):
     - Converting amounts to base currency
     - Applying share_percentage per broker
 
-    This NamedTuple represents a single already-converted, already-scaled row.
+    This NamedTuple represents a single already-converted row.
     """
 
     date: date_type
-    type: str  # "DEPOSIT" | "WITHDRAWAL" | "BUY" | "SELL"
-    amount: Decimal  # absolute value, already converted to base currency, > 0
-    share: Decimal  # broker ownership fraction (0.0-1.0), already incorporated in amount
+    type: str
+    amount: Decimal  # signed amount, already converted to base currency
+    share: Decimal  # broker ownership fraction (0.0-1.0), applied during aggregation
 
 
 class _HistoryQtyRow(NamedTuple):
@@ -310,6 +313,19 @@ class _HistoryQtyRow(NamedTuple):
     date: date_type
     asset_id: int
     qty_delta: Decimal  # share-adjusted signed quantity change
+
+
+@dataclass
+class _HistoryCalcPoint:
+    """Mutable internal history point for backend calculations before API serialization."""
+
+    date: date_type
+    cash_value: Decimal
+    invested_value: Decimal
+    nav_value: Decimal
+    twrr: Decimal | None = None
+    mwrr: Decimal | None = None
+    roi: Decimal | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -339,62 +355,56 @@ def _price_on_date(
 
 def _build_history_series(
     transactions: list[_HistoryTxRow],
-) -> list[PortfolioHistoryPoint]:
-    """Build daily portfolio value series from pre-processed transaction rows.
+    date_to: date_type | None = None,
+) -> list[_HistoryCalcPoint]:
+    """Build a dense daily cash/NAV baseline series from pre-processed transaction rows.
 
     Pure function — no I/O, no DB, no async. Deterministic given the same input.
 
     Rules:
-    - DEPOSIT    → cumulative_cash += amount * share
-    - WITHDRAWAL → cumulative_cash -= amount * share
-    - BUY        → cumulative_cash -= amount * share; cumulative_invested += amount * share
-    - SELL       → cumulative_cash += amount * share; cumulative_invested -= amount * share
-    - NAV = cash + invested (approximation — no live prices)
-    - Output is sorted by date ascending.
-    - Multiple transactions on the same date: each updates the daily snapshot cumulatively.
-      The snapshot for a date records the state AFTER all transactions of that day.
+    - Cash follows the signed transaction ledger exactly.
+    - One output point per calendar day from first transaction to `date_to` (or the
+      last transaction date if `date_to` is omitted).
+    - `invested_value`/`nav_value` are temporary placeholders at this stage and
+      are patched later by the mark-to-market layer in `get_history()`.
 
     Args:
         transactions: List of _HistoryTxRow, may be in any order (will be sorted).
+        date_to: Optional inclusive end date for dense expansion.
 
     Returns:
-        List of PortfolioHistoryPoint, one per distinct date, sorted ascending.
+        List of _HistoryCalcPoint, one per calendar day, sorted ascending.
     """
     if not transactions:
         return []
 
-    daily: dict[date_type, dict[str, Decimal]] = defaultdict(lambda: {"cash": Decimal("0"), "invested": Decimal("0"), "nav": Decimal("0")})
-
-    cumulative_cash = Decimal("0")
-    cumulative_invested = Decimal("0")
+    cash_delta_by_date: dict[date_type, Decimal] = defaultdict(Decimal)
 
     for row in sorted(transactions, key=lambda r: r.date):
-        effective = row.amount * row.share
-        if row.type == "DEPOSIT":
-            cumulative_cash += effective
-        elif row.type == "WITHDRAWAL":
-            cumulative_cash -= effective
-        elif row.type == "BUY":
-            cumulative_cash -= effective
-            cumulative_invested += effective
-        elif row.type == "SELL":
-            cumulative_cash += effective
-            cumulative_invested -= effective
-        # Unknown types are silently skipped.
+        cash_delta_by_date[row.date] += row.amount * row.share
 
-        daily[row.date]["cash"] = cumulative_cash
-        daily[row.date]["invested"] = cumulative_invested
-        daily[row.date]["nav"] = cumulative_cash + cumulative_invested
+    sorted_rows = sorted(transactions, key=lambda r: r.date)
+    start_date = sorted_rows[0].date
+    final_date = date_to or sorted_rows[-1].date
+    if final_date < start_date:
+        return []
 
-    return [
-        PortfolioHistoryPoint(
-            date=dt,
-            cash_value=daily[dt]["cash"],
-            invested_value=daily[dt]["invested"],
-            nav_value=daily[dt]["nav"],
+    history: list[_HistoryCalcPoint] = []
+    cumulative_cash = Decimal("0")
+    current_date = start_date
+    while current_date <= final_date:
+        cumulative_cash += cash_delta_by_date.get(current_date, Decimal("0"))
+        history.append(
+            _HistoryCalcPoint(
+                date=current_date,
+                cash_value=cumulative_cash,
+                invested_value=Decimal("0"),
+                nav_value=cumulative_cash,
+            )
         )
-        for dt in sorted(daily.keys())
-    ]
+        current_date += timedelta(days=1)
+
+    return history
 
 
 # =============================================================================
@@ -408,7 +418,7 @@ _HOLDING_TYPES = {TransactionType.BUY, TransactionType.SELL}
 
 
 class PortfolioService:
-    """Orchestrator for portfolio-level analytics.
+    """Orchestrator for portfolio-level calculations.
 
     Aggregates WAC, prices, allocations, ROI metrics (TWRR/MWRR) and FIFO lots
     across brokers, applying share_percentage before cross-broker aggregation.
@@ -503,6 +513,13 @@ class PortfolioService:
     async def _get_asset(self, asset_id: int) -> Asset | None:
         return await self.db.get(Asset, asset_id)
 
+    async def _get_quote_base_map(self, asset_ids: set[int]) -> dict[int, int | None]:
+        if not asset_ids:
+            return {}
+        stmt = select(Asset.id, Asset.quote_base_quantity).where(Asset.id.in_(asset_ids))
+        rows = (await self.db.execute(stmt)).all()
+        return dict(rows)
+
     async def _convert_to_base(
         self,
         amount: Decimal,
@@ -523,6 +540,13 @@ class PortfolioService:
             return converted.amount, []
         pair_key = f"{currency}/{base_currency}"
         return None, [WACMissingPairInfo(pair=pair_key, dates=[as_of_date])]
+
+    @staticmethod
+    def _merge_missing_pairs(items: list[WACMissingPairInfo]) -> list[WACMissingPairInfo]:
+        merged: dict[str, set[date_type]] = defaultdict(set)
+        for item in items:
+            merged[item.pair].update(item.dates)
+        return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(merged.items())]
 
     # ------------------------------------------------------------------
     # Public API
@@ -560,6 +584,7 @@ class PortfolioService:
         nav_snapshots: list[NAVSnapshot] = []
         cash_flows: list[CashFlowInput] = []
         all_missing_pairs: list[WACMissingPairInfo] = []
+        missing_prices_assets: set[str] = set()
         allocation_by_type: dict[str, Decimal] = defaultdict(Decimal)
         allocation_by_sector: dict[str, Decimal] = defaultdict(Decimal)
         allocation_by_geo: dict[str, Decimal] = defaultdict(Decimal)
@@ -568,37 +593,40 @@ class PortfolioService:
             broker_id = access.broker_id
             share = access.share_percentage or Decimal("1")
 
-            # --- Cash transactions ---
-            cash_txns = await self._get_transactions(broker_id, tx_types=_CASH_FLOW_TYPES)
+            # --- All signed transaction amounts contribute to residual cash ---
+            broker_txns = await self._get_transactions(broker_id)
             broker_cash: dict[str, Decimal] = defaultdict(Decimal)
-            for tx in cash_txns:
+            for tx in broker_txns:
                 if tx.amount is None or tx.currency is None:
                     continue
-                # Convert to base currency for capital tracking
+
+                broker_cash[tx.currency] += tx.amount * share
+
                 if tx.currency == base_currency:
-                    amount_base_cf = abs(tx.amount)
+                    amount_base_signed: Decimal | None = tx.amount
                 else:
                     cf_results, _ = await convert_bulk(
                         self.db,
-                        [(Currency(code=tx.currency, amount=abs(tx.amount)), base_currency, tx.date)],
+                        [(Currency(code=tx.currency, amount=tx.amount), base_currency, tx.date)],
                         raise_on_error=False,
                     )
-                    amount_base_cf = cf_results[0][0].amount if cf_results and cf_results[0] is not None else Decimal("0")
+                    amount_base_signed = cf_results[0][0].amount if cf_results and cf_results[0] is not None else None
 
-                if tx.type == TransactionType.DEPOSIT:
-                    broker_cash[tx.currency] += abs(tx.amount)
-                    total_invested += amount_base_cf * share  # capital deployed
-                    cash_flows.append(CashFlowInput(tx.date, -amount_base_cf * share))
-                elif tx.type == TransactionType.WITHDRAWAL:
-                    broker_cash[tx.currency] -= abs(tx.amount)
-                    total_invested -= amount_base_cf * share  # capital returned
-                    cash_flows.append(CashFlowInput(tx.date, amount_base_cf * share))
+                if amount_base_signed is None:
+                    pair_key = f"{tx.currency}/{base_currency}"
+                    all_missing_pairs.append(WACMissingPairInfo(pair=pair_key, dates=[tx.date]))
+                    continue
+
+                if tx.type in _CASH_FLOW_TYPES:
+                    total_invested += amount_base_signed * share
+                    cash_flows.append(CashFlowInput(tx.date, -(amount_base_signed * share)))
 
             # --- Holding transactions ---
-            hold_txns = await self._get_transactions(broker_id, tx_types=_HOLDING_TYPES)
             # Group by asset
             txns_by_asset: dict[int, list[Transaction]] = defaultdict(list)
-            for tx in hold_txns:
+            for tx in broker_txns:
+                if tx.type not in _HOLDING_TYPES:
+                    continue
                 if tx.asset_id is not None:
                     txns_by_asset[tx.asset_id].append(tx)
 
@@ -650,8 +678,17 @@ class PortfolioService:
                         current_price = raw_price
 
                 if current_price is not None:
-                    current_value = current_price * net_qty * share
+                    current_value = (
+                        compute_holding_value(
+                            net_qty,
+                            current_price,
+                            asset.quote_base_quantity,
+                        )
+                        * share
+                    )
                     broker_market_value += current_value
+                elif price_data is None:
+                    missing_prices_assets.add(asset.display_name)
 
                 # Convert WAC to base_currency for comparisons
                 if wac_currency != base_currency:
@@ -709,14 +746,14 @@ class PortfolioService:
             broker_cash_base = Decimal("0")
             for ccy, amt in broker_cash.items():
                 if ccy == base_currency:
-                    broker_cash_base += amt * share
-                    all_cash_balances[ccy] += amt * share
+                    broker_cash_base += amt
+                    all_cash_balances[ccy] += amt
                 else:
                     converted, mp = await self._convert_to_base(amt, ccy, base_currency, today)
                     all_missing_pairs.extend(mp)
                     if converted is not None:
-                        broker_cash_base += converted * share
-                        all_cash_balances[ccy] += amt * share
+                        broker_cash_base += converted
+                        all_cash_balances[ccy] += amt
 
             total_cash += broker_cash_base
             broker_nav = broker_market_value + broker_cash_base
@@ -732,10 +769,10 @@ class PortfolioService:
                     BrokerBreakdown(
                         broker_id=broker_id,
                         broker_name=broker_name,
-                        net_worth=broker_nav,
-                        gain_loss=broker_gain,
+                        net_worth=Currency(code=base_currency, amount=broker_nav),
+                        gain_loss=Currency(code=base_currency, amount=broker_gain),
                         gain_loss_percent=broker_gl_pct,
-                        cash_total=broker_cash_base,
+                        cash_total=Currency(code=base_currency, amount=broker_cash_base),
                     )
                 )
 
@@ -791,11 +828,11 @@ class PortfolioService:
         cash_balances_list = [Currency(code=ccy, amount=amt) for ccy, amt in all_cash_balances.items()]
 
         return PortfolioSummary(
-            net_worth=total_nav,
-            total_invested=total_invested,
-            total_gain_loss=total_gl,
+            net_worth=Currency(code=base_currency, amount=total_nav),
+            total_invested=Currency(code=base_currency, amount=total_invested),
+            total_gain_loss=Currency(code=base_currency, amount=total_gl),
             total_gain_loss_percent=total_gl_pct,
-            cash_total=total_cash,
+            cash_total=Currency(code=base_currency, amount=total_cash),
             cash_balances=cash_balances_list,
             twrr_percent=twrr_result,
             mwrr_percent=mwrr_result,
@@ -805,7 +842,8 @@ class PortfolioService:
             allocation_by_geography=_alloc(allocation_by_geo),
             holdings=all_holdings,
             by_broker=by_broker_list if include_breakdown else None,
-            wac_missing_pairs=all_missing_pairs,
+            missing_fx_pairs=self._merge_missing_pairs(all_missing_pairs),
+            missing_prices_assets=sorted(missing_prices_assets),
         )
 
     async def get_history(
@@ -821,13 +859,11 @@ class PortfolioService:
         NAV is computed as mark-to-market: cumulative_cash + Σ(qty_i × price_i × FX_i).
         This makes TWRR/ROI non-zero when asset prices change between snapshots.
 
-        Always accumulates the full history from t=0 regardless of date_from,
-        so that NAV/invested balances are correct. The display series is then
-        sliced to [date_from, date_to] and ROI metrics are re-based to the
-        period start so that TWRR/MWRR/ROI show the return OF that specific
-        period (starting from ~0%).
-
-        Only includes dates where transactions exist.
+        The engine builds a dense daily calendar from the first transaction date
+        through `date_to` (or today), then marks holdings to market on each day.
+        The visible series is sliced afterwards and ROI metrics are re-based to
+        the selected period start so that TWRR/MWRR/ROI show the return OF that
+        specific period (starting from ~0%).
         """
         base_currency = target_currency_override or await self._get_base_currency()
         accesses = await self._get_user_broker_access(user_id, broker_ids)
@@ -847,18 +883,16 @@ class PortfolioService:
             )
 
             for tx in all_txns:
-                if tx.amount is None:
-                    continue
-                if tx.type not in (_DEPOSIT_TYPES | _WITHDRAWAL_TYPES | _HOLDING_TYPES):
+                if tx.amount is None or tx.currency is None:
                     continue
 
                 # Convert to base currency
                 if tx.currency == base_currency:
-                    amount_base: Decimal | None = abs(tx.amount)
+                    amount_base: Decimal | None = tx.amount
                 else:
                     fx_results, _ = await convert_bulk(
                         self.db,
-                        [(Currency(code=tx.currency, amount=abs(tx.amount)), base_currency, tx.date)],
+                        [(Currency(code=tx.currency, amount=tx.amount), base_currency, tx.date)],
                         raise_on_error=False,
                     )
                     amount_base = fx_results[0][0].amount if fx_results and fx_results[0] is not None else None
@@ -880,9 +914,9 @@ class PortfolioService:
                     qty_sign = Decimal("1") if tx.type == TransactionType.BUY else Decimal("-1")
                     qty_rows.append(_HistoryQtyRow(date=tx.date, asset_id=tx.asset_id, qty_delta=abs(tx.quantity) * qty_sign * share))
 
-        all_history = _build_history_series(rows)
+        all_history = _build_history_series(rows, date_to=date_to or date_type.today())
         if not all_history:
-            return all_history
+            return []
 
         # ── Mark-to-market: patch invested_value / nav_value ─────────────────
         # Build cumulative quantity snapshots keyed by snapshot date.
@@ -891,6 +925,7 @@ class PortfolioService:
             date_min = all_history[0].date
             date_max = all_history[-1].date
             price_map = await self._bulk_load_asset_prices(held_asset_ids, date_min, date_max)
+            quote_base_map = await self._get_quote_base_map(held_asset_ids)
 
             # Collect all (price_ccy → base_ccy, date) conversions needed — one bulk call.
             # First pass: build snap_qtys (cumulative quantities at each snapshot date)
@@ -917,8 +952,13 @@ class PortfolioService:
                     if price_info is None:
                         continue
                     price, price_ccy = price_info
+                    raw_market_value = compute_holding_value(
+                        qty,
+                        price,
+                        quote_base_map.get(asset_id),
+                    )
                     if price_ccy != base_currency:
-                        fx_inputs.append((Currency(code=price_ccy, amount=price * qty), base_currency, pt.date))
+                        fx_inputs.append((Currency(code=price_ccy, amount=raw_market_value), base_currency, pt.date))
                         fx_index.append((asset_id, pt.date))
                     # else identity — no FX conversion needed
 
@@ -946,7 +986,11 @@ class PortfolioService:
                         continue
                     price, price_ccy = price_info
                     if price_ccy == base_currency:
-                        market_value += qty * price
+                        market_value += compute_holding_value(
+                            qty,
+                            price,
+                            quote_base_map.get(asset_id),
+                        )
                     else:
                         mv = fx_mv_map.get((asset_id, pt.date))
                         if mv is not None:
@@ -962,16 +1006,14 @@ class PortfolioService:
             history = all_history
 
         if not history:
-            return history
+            return []
 
         # ── Full NAV snapshots and cash flows (from t=0) ──────────────────────
         all_nav_snapshots = [NAVSnapshot(date=pt.date, nav=pt.nav_value) for pt in all_history]
         all_cash_flows: list[CashFlowInput] = []
         for row in rows:
-            if row.type == "DEPOSIT":
+            if row.type in {"DEPOSIT", "WITHDRAWAL"}:
                 all_cash_flows.append(CashFlowInput(date=row.date, amount=-(row.amount * row.share)))
-            elif row.type == "WITHDRAWAL":
-                all_cash_flows.append(CashFlowInput(date=row.date, amount=row.amount * row.share))
 
         # ── Period re-basing for ROI metrics ─────────────────────────────────
         # If date_from is set, inject the period-start NAV as a synthetic negative
@@ -1017,8 +1059,21 @@ class PortfolioService:
                     history[0].twrr = Decimal("0")
                 if history[0].mwrr is None:
                     history[0].mwrr = Decimal("0")
+                if history[0].roi is None:
+                    history[0].roi = Decimal("0")
 
-        return history
+        return [
+            PortfolioHistoryPoint(
+                date=pt.date,
+                cash_value=Currency(code=base_currency, amount=pt.cash_value),
+                invested_value=Currency(code=base_currency, amount=pt.invested_value),
+                nav_value=Currency(code=base_currency, amount=pt.nav_value),
+                twrr=pt.twrr,
+                mwrr=pt.mwrr,
+                roi=pt.roi,
+            )
+            for pt in history
+        ]
 
     async def get_asset_history(
         self,

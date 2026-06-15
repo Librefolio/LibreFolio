@@ -12,6 +12,15 @@ import {type TypeRule, getCostBasisRule} from '$lib/stores/transactions/transact
 //  Types
 // =============================================================================
 
+/** A field todo emitted by a BRIM plugin for an accepted transaction.
+ *  Severity 'blocker' prevents the row from being committed until resolved. */
+export interface ImportTodo {
+    field: string;
+    severity: 'blocker' | 'warning';
+    reasonCode: string;
+    message: string;
+}
+
 /** Minimal cash shape used throughout transaction payloads. */
 export interface CashValue {
     code: string;

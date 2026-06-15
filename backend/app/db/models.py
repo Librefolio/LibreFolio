@@ -494,6 +494,7 @@ class Asset(SQLModel, table=True):
     # Classification and metadata (JSON TEXT)
     classification_params: Optional[str] = Field(default=None, sa_column=Column(Text))
     asset_type: AssetType = Field(default=AssetType.OTHER)
+    quote_base_quantity: Optional[int] = Field(default=1, description="How many units the raw market quote refers to (e.g. 100 for bonds quoted on base 100)")
 
     active: bool = Field(default=True)
     user_url: Optional[str] = Field(default=None, description="User-defined URL (notes, external dashboard, etc.)")

@@ -32,11 +32,13 @@ setup_test_database()
 # Get database path from config
 import argparse
 import asyncio
+import hashlib
 import json
 import math
 import random
 import shutil
 import traceback
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -90,6 +92,8 @@ _ANNUAL_VOL = {
     "CROWDFUND_LOAN": 0.00,
 }
 _DEFAULT_VOL = 0.25
+_INITIAL_DEPOSIT_DATE = date(2025, 9, 30)
+_MARKET_ACTIVITY_LOOKBACK_DAYS = 365
 
 
 def _earliest_transaction_date(session: Session) -> date:
@@ -100,6 +104,51 @@ def _earliest_transaction_date(session: Session) -> date:
     """
     result = session.exec(select(func.min(Transaction.date))).first()
     return result if result else date.today() - timedelta(days=30)
+
+
+def _seed_market_start_date() -> date:
+    """Return the earliest date market data must cover for deterministic seeds."""
+    today = date.today()
+    earliest_seed_date = min(_INITIAL_DEPOSIT_DATE, today - timedelta(days=_MARKET_ACTIVITY_LOOKBACK_DAYS))
+    return earliest_seed_date - timedelta(days=7)
+
+
+def _get_latest_price_on_or_before(session: Session, asset_id: int, as_of: date) -> PriceHistory | None:
+    """Return the latest simulated close for an asset on or before a date."""
+    stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_id, PriceHistory.date <= as_of, PriceHistory.close.is_not(None)).order_by(PriceHistory.date.desc())
+    return session.exec(stmt).first()
+
+
+def _derive_market_amount(
+    session: Session,
+    tx_type: TransactionType,
+    asset: Asset | None,
+    tx_date: date,
+    currency: str,
+    quantity: Decimal,
+    fallback_amount: Decimal,
+    fee: Decimal | None = None,
+) -> Decimal:
+    """Price market transactions off simulated history when the quote currency matches."""
+    if tx_type not in {TransactionType.BUY, TransactionType.SELL} or asset is None:
+        return fallback_amount
+
+    price_row = _get_latest_price_on_or_before(session, asset.id, tx_date)
+    if price_row is None or price_row.currency != currency:
+        return fallback_amount
+
+    gross = (abs(quantity) * price_row.close).quantize(Decimal("0.01"))
+    fee_amount = (fee or Decimal("0")).quantize(Decimal("0.01"))
+
+    if tx_type == TransactionType.BUY:
+        return -(gross + fee_amount)
+    return gross - fee_amount
+
+
+def _stable_seed(*parts: object) -> int:
+    """Return a deterministic RNG seed independent from Python hash randomization."""
+    payload = "|".join(str(part) for part in parts).encode("utf-8")
+    return int(hashlib.sha256(payload).hexdigest()[:16], 16)
 
 
 def cleanup_all_tables(session: Session):
@@ -140,6 +189,71 @@ def cleanup_all_tables(session: Session):
         print(f"  ❌ Error during cleanup: {e}")
         session.rollback()
         raise
+
+
+def add_balance_safe_cash_prefunds(session: Session):
+    """Insert deterministic prefunds for any broker/currency cash walk that goes negative."""
+    print("\n🛡️ Checking cash prefund safety...")
+    print("-" * 60)
+
+    brokers = session.exec(select(Broker)).all()
+    created: list[tuple[str, str, Decimal, date]] = []
+
+    for broker in brokers:
+        if broker.allow_cash_overdraft:
+            continue
+
+        txs = session.exec(
+            select(Transaction)
+            .where(
+                Transaction.broker_id == broker.id,
+                Transaction.currency.is_not(None),
+                Transaction.amount.is_not(None),
+            )
+            .order_by(Transaction.date, Transaction.id)
+        ).all()
+
+        balances: dict[str, Decimal] = defaultdict(Decimal)
+        min_balances: dict[str, Decimal] = defaultdict(Decimal)
+        min_dates: dict[str, date] = {}
+
+        for tx in txs:
+            if tx.currency is None or tx.amount is None:
+                continue
+            balances[tx.currency] += tx.amount
+            if balances[tx.currency] < min_balances[tx.currency]:
+                min_balances[tx.currency] = balances[tx.currency]
+                min_dates[tx.currency] = tx.date
+
+        for currency, min_balance in min_balances.items():
+            if min_balance >= 0:
+                continue
+
+            prefund_amount = (-min_balance).quantize(Decimal("0.01"))
+            prefund_date = min_dates[currency] - timedelta(days=1)
+            session.add(
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=None,
+                    type=TransactionType.DEPOSIT,
+                    date=prefund_date,
+                    quantity=Decimal("0"),
+                    amount=prefund_amount,
+                    currency=currency,
+                    description="[balance-safe] Auto-prefund after market repricing",
+                    tags="balance-safe,auto-prefund",
+                )
+            )
+            created.append((broker.name, currency, prefund_amount, prefund_date))
+
+    session.commit()
+
+    if not created:
+        print("  ✅ No automatic cash prefunds needed")
+        return
+
+    for broker_name, currency, amount, prefund_date in created:
+        print(f"  ✅ Auto-prefund {broker_name} {currency}: +{amount} on {prefund_date}")
 
 
 def populate_brokers(session: Session):
@@ -891,13 +1005,6 @@ def populate_transactions(session: Session):
 
     today = date.today()
 
-    # Anchor date for all initial broker deposits.
-    # Must be BEFORE the BRIM dup-test (2025-10-31) so that those fixed-date
-    # transactions are properly captured as intermediate cash flows in the MWRR
-    # series, avoiding the boundary-condition artefact (deposits at t==T excluded
-    # from cash flows but included in post-flow NAV).
-    _INITIAL_DEPOSIT_DATE = date(2025, 9, 30)
-
     transactions = [
         # 2025-09-30: Initial deposits — placed in the PAST before BRIM dup-test
         # so the portfolio history starts with a realistic NAV and all subsequent
@@ -955,6 +1062,7 @@ def populate_transactions(session: Session):
             "amount": Decimal("-2633.50"),  # 15 * 175.50 + 1.00 fee
             "currency": "USD",
             "days_ago": 28,
+            "fee": Decimal("1.00"),
             "description": "Initial AAPL purchase",
         },
         # Day -20: Invest in loan 1 on Recrowd
@@ -977,6 +1085,7 @@ def populate_transactions(session: Session):
             "amount": Decimal("-3803.50"),  # 10 * 380.25 + 1.00 fee
             "currency": "USD",
             "days_ago": 18,
+            "fee": Decimal("1.00"),
             "description": "Diversification into MSFT",
         },
         # Day -15: Invest in loan 2 on Recrowd
@@ -1010,6 +1119,7 @@ def populate_transactions(session: Session):
             "amount": Decimal("909.00"),  # 5 * 182.00 - 1.00 fee
             "currency": "USD",
             "days_ago": 5,
+            "fee": Decimal("1.00"),
             "description": "Taking profits",
         },
         # Day -3: Interest payment from loan 1
@@ -1068,6 +1178,7 @@ def populate_transactions(session: Session):
             "amount": Decimal("-1845.00"),  # 8 * 230.00 + 5.00 fee
             "currency": "USD",
             "days_ago": 22,
+            "fee": Decimal("5.00"),
             "description": "Acquisto TSLA",
         },
         # Day -10: Buy Apple on Directa in EUR (WAC FX test — EUR != asset ccy USD)
@@ -1134,7 +1245,7 @@ def populate_transactions(session: Session):
             "asset": None,
             "type": TransactionType.DEPOSIT,
             "quantity": Decimal("0"),
-            "amount": Decimal("10000.00"),
+            "amount": Decimal("15000.00"),
             "currency": "USD",
             "tx_date": _INITIAL_DEPOSIT_DATE,
             "days_ago": 0,
@@ -1206,13 +1317,24 @@ def populate_transactions(session: Session):
 
         tx_date = tx_data.get("tx_date") or (today - timedelta(days=tx_data["days_ago"]))
 
+        amount = _derive_market_amount(
+            session=session,
+            tx_type=tx_data["type"],
+            asset=tx_data.get("asset"),
+            tx_date=tx_date,
+            currency=tx_data["currency"],
+            quantity=tx_data["quantity"],
+            fallback_amount=tx_data["amount"],
+            fee=tx_data.get("fee"),
+        )
+
         tx = Transaction(
             broker_id=tx_data["broker"].id,
             asset_id=tx_data["asset"].id if tx_data["asset"] else None,
             type=tx_data["type"],
             date=tx_date,
             quantity=tx_data["quantity"],
-            amount=tx_data["amount"],
+            amount=amount,
             currency=tx_data["currency"],
             description=tx_data["description"],
             tags=tags_csv,
@@ -1229,78 +1351,11 @@ def populate_transactions(session: Session):
         }.get(tx_data["type"], "📊")
 
         asset_name = tx_data["asset"].display_name if tx_data["asset"] else "Cash"
-        print(f"  {tx_emoji} {tx_data['type'].value}: {asset_name} ({tx_data['amount']} {tx_data['currency']})")
+        print(f"  {tx_emoji} {tx_data['type'].value}: {asset_name} ({amount} {tx_data['currency']})")
 
     session.commit()
 
-    # --- Fixed-date BRIM duplicate-test transactions on IB ---
-    # These fixed dates match rows in generic_simple.csv so that when the CSV
-    # is imported (assign broker = Interactive Brokers), duplicate detection
-    # will flag the matching rows as "likely" or "possible" duplicates.
-    # Rows 2025-11-01/02 share exact description → LIKELY_WITH_ASSET
-    # Rows 2025-11-03/04 have different description → POSSIBLE_WITH_ASSET
-    brim_dup_test_txs = [
-        # Pre-fund: covers the 2 BUY amounts below (862.50 + 517.50 = 1380 USD)
-        Transaction(
-            broker_id=ib.id,
-            asset_id=None,
-            type=TransactionType.DEPOSIT,
-            date=date(2025, 10, 31),
-            quantity=Decimal("0"),
-            amount=Decimal("2000.00"),
-            currency="USD",
-            description="[brim-dup-test] Pre-fund for duplicate test transactions",
-            tags="brim-dup-test",
-        ),
-        Transaction(
-            broker_id=ib.id,
-            asset_id=apple.id,
-            type=TransactionType.BUY,
-            date=date(2025, 11, 1),
-            quantity=Decimal("5.0"),
-            amount=Decimal("-862.50"),
-            currency="USD",
-            description="BRIM dup test - likely 1",
-            tags="brim-dup-test",
-        ),
-        Transaction(
-            broker_id=ib.id,
-            asset_id=apple.id,
-            type=TransactionType.DIVIDEND,
-            date=date(2025, 11, 2),
-            quantity=Decimal("0"),
-            amount=Decimal("12.50"),
-            currency="USD",
-            description="BRIM dup test - likely 2",
-            tags="brim-dup-test",
-        ),
-        Transaction(
-            broker_id=ib.id,
-            asset_id=apple.id,
-            type=TransactionType.BUY,
-            date=date(2025, 11, 3),
-            quantity=Decimal("3.0"),
-            amount=Decimal("-517.50"),
-            currency="USD",
-            description="DB desc for possible dup 1",
-            tags="brim-dup-test",
-        ),
-        Transaction(
-            broker_id=ib.id,
-            asset_id=apple.id,
-            type=TransactionType.SELL,
-            date=date(2025, 11, 4),
-            quantity=Decimal("-2.0"),
-            amount=Decimal("350.00"),
-            currency="USD",
-            description="DB desc for possible dup 2",
-            tags="brim-dup-test",
-        ),
-    ]
-    for t in brim_dup_test_txs:
-        session.add(t)
-    session.commit()
-    print("  📋 BRIM dup-test: 5 fixed-date IB transactions (pre-fund + 2 likely + 2 possible matches for generic_simple.csv)")
+
 
     # --- Standalone delete-safe transactions (for E2E delete tests) ---
     # Tagged 'delete-safe' so tests can locate them easily.
@@ -1936,9 +1991,9 @@ def populate_wac_test_transactions(session: Session):
 def populate_price_history(session: Session):
     """Create price history for market-priced assets.
 
-    Covers from the earliest transaction date in the DB (minus a 7-day buffer)
-    to today, ensuring that all historical NAV calculations have price data and
-    avoid backward-fill artefacts that would produce astronomically large MWRR.
+    Covers from the deterministic seed start date (minus a 7-day buffer) to
+    today, so mock transactions can be priced off the simulated market before
+    they are inserted into the database.
 
     Uses a geometric drift model:
       price[t+1] = price[t] × (1 + drift + noise)
@@ -1955,12 +2010,12 @@ def populate_price_history(session: Session):
     tesla = session.exec(select(Asset).where(Asset.display_name == "Tesla, Inc.")).first()
     btc = session.exec(select(Asset).where(Asset.display_name == "Bitcoin")).first()
     eth = session.exec(select(Asset).where(Asset.display_name == "Ethereum")).first()
+    loan1 = session.exec(select(Asset).where(Asset.display_name == "RE Loan Milano")).first()
+    loan2 = session.exec(select(Asset).where(Asset.display_name == "RE Loan Roma")).first()
 
     today = date.today()
 
-    # Start a week before the earliest transaction so backward-fill never needed
-    earliest = _earliest_transaction_date(session)
-    start_date = max(earliest - timedelta(days=7), today - timedelta(days=3 * 365))
+    start_date = max(_seed_market_start_date(), today - timedelta(days=3 * 365))
     total_calendar_days = (today - start_date).days + 1
 
     print(f"  📅 Coverage: {start_date} → {today} ({total_calendar_days} calendar days)")
@@ -1995,7 +2050,7 @@ def populate_price_history(session: Session):
         count = 0
 
         for price_date in trading_days:
-            random.seed(hash(f"{asset.id}-{price_date}"))
+            random.seed(_stable_seed("price", asset.id, price_date.isoformat()))
             # Uniform ≈ ±2σ noise (simple, deterministic-friendly)
             noise_range = 2.0 * daily_vol
             variation = Decimal(str(random.uniform(-noise_range, noise_range)))
@@ -2018,6 +2073,31 @@ def populate_price_history(session: Session):
             count += 1
 
         print(f"  ✅ {asset.display_name}: {count} price points ({start_date} → {today})")
+
+    loan_price_points = [
+        (loan1, Decimal("10000.00"), today - timedelta(days=20)),
+        (loan2, Decimal("5000.00"), today - timedelta(days=15)),
+    ]
+    for asset, nominal_price, first_buy_date in loan_price_points:
+        if not asset:
+            continue
+
+        price_date = max(first_buy_date, start_date)
+        session.add(
+            PriceHistory(
+                asset_id=asset.id,
+                date=price_date,
+                open=nominal_price,
+                high=nominal_price,
+                low=nominal_price,
+                close=nominal_price,
+                volume=Decimal("1"),
+                adjusted_close=nominal_price,
+                currency="EUR",
+                source_plugin_key="manual_seed",
+            )
+        )
+        print(f"  ✅ {asset.display_name}: 1 nominal price point ({price_date})")
 
     session.commit()
 
@@ -2438,7 +2518,7 @@ def populate_fx_rates(session: Session):
         count = 0
 
         for rate_date in trading_days:
-            random.seed(hash(f"{base}-{quote}-{rate_date}"))
+            random.seed(_stable_seed("fx", base, quote, rate_date.isoformat()))
             variation = Decimal(str(random.uniform(-fx_daily_noise, fx_daily_noise)))
             daily_factor = Decimal(str(1.0 + drift_per_day)) + variation
             rate = max(rate * daily_factor, Decimal("0.0001"))
@@ -3103,23 +3183,26 @@ def populate_scheduler_mock_log() -> None:
 
 
 async def validate_portfolio_math_async() -> int:
-    """Validate MWRR sanity for the admin user's portfolio via PortfolioService.
+    """Validate portfolio return sanity for the admin user's portfolio.
 
-    Calls get_history() for e2e_test_admin across all brokers (no date filter)
-    and checks that no MWRR point exceeds ±1000% annualized (Decimal("10.0")).
+    Calls get_summary() and get_history() for e2e_test_admin across all brokers
+    (no date filter) and checks:
+      1. no TWRR/MWRR point exceeds ±1000% annualized
+      2. the global summary TWRR/MWRR stays within a realistic ±20% range
 
-    Annualized MWRR > 10× indicates either:
+    Annualized returns > 10× indicate either:
       - Price history gaps (backward-fill from a distant date)
       - Transactions placed at dates without matching price data
 
-    Returns the number of anomalous MWRR values found.
+    Returns the number of anomalies found, including realism-range violations.
     """
     settings = get_settings()
     async_url = settings.DATABASE_URL.replace("sqlite:///", "sqlite+aiosqlite:///")
     async_eng = create_async_engine(async_url, echo=False, poolclass=NullPool)
 
     anomalies: list[str] = []
-    MAX_MWRR = Decimal("10.0")  # 1000% annualized
+    MAX_RETURN = Decimal("10.0")  # 1000% annualized
+    REALISM_BOUND = Decimal("0.20")
 
     async with AsyncSession(async_eng, expire_on_commit=False) as session:
         result = await session.execute(select(User).where(User.username == "e2e_test_admin"))
@@ -3130,24 +3213,46 @@ async def validate_portfolio_math_async() -> int:
             return 0
 
         svc = PortfolioService(session)
+        summary = await svc.get_summary(user_id=admin.id)
         history = await svc.get_history(user_id=admin.id, date_from=None, date_to=None)
 
+        if summary.twrr_percent is not None and abs(summary.twrr_percent) > MAX_RETURN:
+            anomalies.append(f"    summary: TWRR = {summary.twrr_percent} (> {MAX_RETURN}× = 1 000 %)")
+        if summary.mwrr_percent is not None and abs(summary.mwrr_percent) > MAX_RETURN:
+            anomalies.append(f"    summary: MWRR = {summary.mwrr_percent} (> {MAX_RETURN}× = 1 000 %)")
+
         for point in history:
-            if point.mwrr is not None and abs(point.mwrr) > MAX_MWRR:
-                anomalies.append(f"    {point.date}: MWRR = {point.mwrr} (> {MAX_MWRR}× = 1 000 %)")
+            if point.twrr is not None and abs(point.twrr) > MAX_RETURN:
+                anomalies.append(f"    {point.date}: TWRR = {point.twrr} (> {MAX_RETURN}× = 1 000 %)")
+            if point.mwrr is not None and abs(point.mwrr) > MAX_RETURN:
+                anomalies.append(f"    {point.date}: MWRR = {point.mwrr} (> {MAX_RETURN}× = 1 000 %)")
 
     await async_eng.dispose()
 
     if anomalies:
-        print(f"\n  ⚠️  {len(anomalies)} MWRR anomalies found (annualized rate > {MAX_MWRR}×):")
+        print(f"\n  ⚠️  {len(anomalies)} return anomalies found (annualized rate > {MAX_RETURN}×):")
         for a in anomalies:
             print(a)
         print("\n  💡 Likely cause: price_history or fx_rates do not cover all transaction dates.")
-        print("     Check _earliest_transaction_date() and populate_price_history() coverage.")
+        print("     Check market-data coverage and the price/fx seed horizon.")
     else:
-        print(f"  ✅ MWRR sanity check passed — 0 anomalies (threshold: {MAX_MWRR}× = 1 000 %)")
+        print(f"  ✅ Portfolio math sanity check passed — 0 anomalies (threshold: {MAX_RETURN}× = 1 000 %)")
 
-    return len(anomalies)
+    realism_violations: list[str] = []
+    if summary.twrr_percent is not None and abs(summary.twrr_percent) > REALISM_BOUND:
+        realism_violations.append(f"    summary: TWRR = {summary.twrr_percent} (outside ±{REALISM_BOUND} realistic range)")
+    if summary.mwrr_percent is not None and abs(summary.mwrr_percent) > REALISM_BOUND:
+        realism_violations.append(f"    summary: MWRR = {summary.mwrr_percent} (outside ±{REALISM_BOUND} realistic range)")
+
+    if realism_violations:
+        print(f"\n  ⚠️  {len(realism_violations)} realism violations found (target range: ±{REALISM_BOUND}):")
+        for violation in realism_violations:
+            print(violation)
+        print("     Failing fast because the seed must stay within the agreed realism range.")
+    else:
+        print(f"  ✅ Global TWRR/MWRR stay within the realism range ±{REALISM_BOUND}")
+
+    return len(anomalies) + len(realism_violations)
 
 
 def main():
@@ -3220,11 +3325,12 @@ def main():
             populate_broker_user_access(session)  # Associate brokers with test users
             populate_assets(session)
             populate_asset_provider_assignments(session)
+            populate_price_history(session)
             populate_transactions(session)
             populate_wac_test_transactions(session)
-            populate_price_history(session)
             populate_asset_events(session)
             link_transactions_to_events(session)
+            add_balance_safe_cash_prefunds(session)
             populate_fx_rates(session)
             populate_fx_currency_pair_sources(session)
             configure_user_avatars(session)

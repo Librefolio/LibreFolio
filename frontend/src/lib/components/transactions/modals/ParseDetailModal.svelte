@@ -192,12 +192,21 @@
                         {#each assetMappings as mapping}
                             <div class="flex items-center justify-between px-3 py-1.5 rounded bg-gray-50 dark:bg-slate-800 text-sm">
                                 <div class="flex-1 min-w-0">
-                                    <span class="font-medium text-gray-900 dark:text-white">
-                                        {(mapping.extracted_symbol as string | null) ?? (mapping.extracted_isin as string | null) ?? (mapping.extracted_name as string | null) ?? `ID ${mapping.fake_asset_id}`}
-                                    </span>
-                                    {#if mapping.extracted_name && mapping.extracted_symbol}
-                                        <span class="text-xs text-gray-500 ml-1">({mapping.extracted_name})</span>
-                                    {/if}
+                                    <p class="font-medium text-gray-900 dark:text-white truncate">
+                                        {(mapping.extracted_name as string | null) ?? (mapping.extracted_symbol as string | null) ?? (mapping.extracted_isin as string | null) ?? `ID ${mapping.fake_asset_id}`}
+                                    </p>
+                                    <div class="flex flex-wrap gap-1 mt-0.5">
+                                        {#if mapping.extracted_symbol}
+                                            <span class="font-mono text-xs px-1 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300">
+                                                Ticker: {mapping.extracted_symbol as string}
+                                            </span>
+                                        {/if}
+                                        {#if mapping.extracted_isin}
+                                            <span class="font-mono text-xs px-1 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400">
+                                                ISIN: {mapping.extracted_isin as string}
+                                            </span>
+                                        {/if}
+                                    </div>
                                 </div>
                                 <div class="flex items-center gap-1 ml-2 shrink-0">
                                     {#if mapping.selected_asset_id != null}

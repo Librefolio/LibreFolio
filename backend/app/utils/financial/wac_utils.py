@@ -4,7 +4,7 @@ Financial utility functions — pure math, no I/O.
 This module contains calculation functions that operate on pre-fetched data.
 No database access, no async, no side effects.
 
-Used by transaction_service.py (WAC preview) and potentially future analytics.
+Used by transaction_service.py (WAC preview) and portfolio calculations.
 """
 
 from __future__ import annotations

@@ -36,9 +36,11 @@
         limit?: number;
         /** If provided, only show transactions for these broker IDs. */
         brokerIds?: number[];
+        /** Pre-built href for "See all" link (includes date range params). */
+        transactionsHref?: string;
     }
 
-    let {limit = 10, brokerIds}: Props = $props();
+    let {limit = 10, brokerIds, transactionsHref = '/transactions'}: Props = $props();
 
     // =========================================================================
     // State
@@ -47,26 +49,37 @@
     let rows: ApiTXRow[] = $state([]);
     let loading = $state(true);
     let error = $state<string | null>(null);
+    let lastLoadKey = $state('');
 
     // =========================================================================
     // Data loading
     // =========================================================================
 
     onMount(async () => {
-        await load();
+        await ensureAssetsLoaded();
+        await ensureBrokersLoaded();
+        await ensurePluginIconsLoaded();
+    });
+
+    $effect(() => {
+        const key = `${limit}|${brokerIds ? [...brokerIds].sort((a, b) => a - b).join(',') : 'all'}`;
+        if (key !== lastLoadKey) {
+            lastLoadKey = key;
+            void load();
+        }
     });
 
     async function load() {
         loading = true;
         error = null;
         try {
-            // Hydrate reference stores before rendering cell content
-            await Promise.all([ensureAssetsLoaded(), ensureBrokersLoaded(), ensurePluginIconsLoaded()]);
+            const fetchForBroker = async (brokerId?: number): Promise<ApiTXRow[]> => {
+                const params: Record<string, unknown> = {limit: limit * 3}; // fetch extra to filter partners
+                if (brokerId != null) params.broker_id = brokerId;
+                return await zodiosApi.query_transactions_api_v1_transactions_get(params as never);
+            };
 
-            const params: Record<string, unknown> = {limit: limit * 3}; // fetch extra to filter partners
-            if (brokerIds && brokerIds.length > 0) params.broker_id = brokerIds[0]; // simple single-broker filter
-
-            const all = await zodiosApi.query_transactions_api_v1_transactions_get(params as never);
+            const all = brokerIds && brokerIds.length > 1 ? Array.from(new Map((await Promise.all(brokerIds.map((id) => fetchForBroker(id)))).flat().map((tx) => [tx.id, tx])).values()) : await fetchForBroker(brokerIds?.[0]);
 
             // Sort by date descending, then by id descending as tiebreaker
             const sorted = [...all].sort((a, b) => {
@@ -135,7 +148,7 @@
         <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
             {$_('dashboard.recentTransactions')}
         </h2>
-        <a href="/transactions" class="text-xs text-libre-green dark:text-green-400 hover:underline font-medium" data-testid="recent-transactions-see-all">
+        <a href={transactionsHref} class="text-xs text-libre-green dark:text-green-400 hover:underline font-medium" data-testid="recent-transactions-see-all">
             {$_('dashboard.seeAllTransactions')}
         </a>
     </div>

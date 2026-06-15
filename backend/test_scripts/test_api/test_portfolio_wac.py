@@ -1,4 +1,4 @@
-"""Analytics WAC API Tests (A1-A8). POST /api/v1/analytics/wac."""
+"""Portfolio WAC API Tests (A1-A8). POST /api/v1/portfolio/wac."""
 
 import uuid
 from decimal import Decimal
@@ -50,9 +50,9 @@ async def commit_batch(client: httpx.AsyncClient, **kwargs) -> dict:
     return data
 
 
-async def analytics_wac(client: httpx.AsyncClient, queries: list[dict]) -> dict:
-    resp = await client.post(f"{API_BASE}/analytics/wac", json={"queries": queries}, timeout=TIMEOUT)
-    assert resp.status_code == 200, f"Analytics WAC failed: {resp.status_code}: {resp.text}"
+async def portfolio_wac(client: httpx.AsyncClient, queries: list[dict]) -> dict:
+    resp = await client.post(f"{API_BASE}/portfolio/wac", json={"queries": queries}, timeout=TIMEOUT)
+    assert resp.status_code == 200, f"Portfolio WAC failed: {resp.status_code}: {resp.text}"
     return resp.json()
 
 
@@ -65,7 +65,7 @@ def test_server():
 
 
 @pytest.mark.asyncio
-class TestAnalyticsWAC:
+class TestPortfolioWAC:
     @pytest.fixture(autouse=True)
     def _server(self, test_server):
         pass
@@ -75,7 +75,7 @@ class TestAnalyticsWAC:
         print_section("A1: Empty pool")
         async with httpx.AsyncClient() as client:
             broker_id, asset_id = await setup_env(client)
-            result = await analytics_wac(client, [{"broker_id": broker_id, "asset_id": asset_id}])
+            result = await portfolio_wac(client, [{"broker_id": broker_id, "asset_id": asset_id}])
             assert result["results"][0]["series"] == []
             print_success("OK empty series")
 
@@ -84,11 +84,14 @@ class TestAnalyticsWAC:
         print_section("A2: Single BUY")
         async with httpx.AsyncClient() as client:
             broker_id, asset_id = await setup_env(client)
-            await commit_batch(client, creates=[
-                {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
-                {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-15", "quantity": "10", "cash": {"code": "EUR", "amount": "-500"}},
-            ])
-            result = await analytics_wac(client, [{"broker_id": broker_id, "asset_id": asset_id}])
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-15", "quantity": "10", "cash": {"code": "EUR", "amount": "-500"}},
+                ],
+            )
+            result = await portfolio_wac(client, [{"broker_id": broker_id, "asset_id": asset_id}])
             s = result["results"][0]["series"]
             assert len(s) == 1
             assert s[0]["date"] == "2026-01-15"
@@ -102,12 +105,15 @@ class TestAnalyticsWAC:
         print_section("A3: Evolving WAC")
         async with httpx.AsyncClient() as client:
             broker_id, asset_id = await setup_env(client)
-            await commit_batch(client, creates=[
-                {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
-                {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-02-01", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
-                {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-02-15", "quantity": "5", "cash": {"code": "EUR", "amount": "-800"}},
-            ])
-            result = await analytics_wac(client, [{"broker_id": broker_id, "asset_id": asset_id}])
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-02-01", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-02-15", "quantity": "5", "cash": {"code": "EUR", "amount": "-800"}},
+                ],
+            )
+            result = await portfolio_wac(client, [{"broker_id": broker_id, "asset_id": asset_id}])
             s = result["results"][0]["series"]
             assert len(s) == 2
             assert Decimal(s[0]["wac"]) == Decimal("100")
@@ -120,13 +126,16 @@ class TestAnalyticsWAC:
         print_section("A4: date_range filter")
         async with httpx.AsyncClient() as client:
             broker_id, asset_id = await setup_env(client)
-            await commit_batch(client, creates=[
-                {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
-                {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
-                {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-02-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-600"}},
-                {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-03-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-700"}},
-            ])
-            result = await analytics_wac(client, [{"broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-02-01", "end": "2026-03-31"}}])
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-02-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-600"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-03-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-700"}},
+                ],
+            )
+            result = await portfolio_wac(client, [{"broker_id": broker_id, "asset_id": asset_id, "date_range": {"start": "2026-02-01", "end": "2026-03-31"}}])
             s = result["results"][0]["series"]
             assert len(s) == 2
             assert s[0]["date"] == "2026-02-10"
@@ -138,12 +147,15 @@ class TestAnalyticsWAC:
         print_section("A5: SELL reduces pool")
         async with httpx.AsyncClient() as client:
             broker_id, asset_id = await setup_env(client)
-            await commit_batch(client, creates=[
-                {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
-                {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
-                {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2026-01-20", "quantity": "-3", "cash": {"code": "EUR", "amount": "450"}},
-            ])
-            result = await analytics_wac(client, [{"broker_id": broker_id, "asset_id": asset_id}])
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2026-01-20", "quantity": "-3", "cash": {"code": "EUR", "amount": "450"}},
+                ],
+            )
+            result = await portfolio_wac(client, [{"broker_id": broker_id, "asset_id": asset_id}])
             s = result["results"][0]["series"]
             assert len(s) == 2
             assert Decimal(s[1]["wac"]) == Decimal("100")
@@ -156,7 +168,7 @@ class TestAnalyticsWAC:
         print_section("A6: Non-existent asset")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
-            result = await analytics_wac(client, [{"broker_id": 99999, "asset_id": 99999}])
+            result = await portfolio_wac(client, [{"broker_id": 99999, "asset_id": 99999}])
             assert result["results"][0]["series"] == []
             print_success("OK graceful empty")
 
@@ -165,12 +177,15 @@ class TestAnalyticsWAC:
         print_section("A7: Open range (end only)")
         async with httpx.AsyncClient() as client:
             broker_id, asset_id = await setup_env(client)
-            await commit_batch(client, creates=[
-                {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
-                {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
-                {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-03-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-600"}},
-            ])
-            result = await analytics_wac(client, [{"broker_id": broker_id, "asset_id": asset_id, "date_range": {"end": "2026-02-01"}}])
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-03-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-600"}},
+                ],
+            )
+            result = await portfolio_wac(client, [{"broker_id": broker_id, "asset_id": asset_id, "date_range": {"end": "2026-02-01"}}])
             s = result["results"][0]["series"]
             assert len(s) == 1
             assert s[0]["date"] == "2026-01-10"
@@ -184,14 +199,20 @@ class TestAnalyticsWAC:
             broker_id = await create_broker(client)
             asset1 = await create_asset(client, currency="EUR")
             asset2 = await create_asset(client, currency="USD")
-            await commit_batch(client, creates=[
-                {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
-                {"broker_id": broker_id, "asset_id": asset1, "type": "BUY", "date": "2026-01-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-500"}},
-            ])
-            result = await analytics_wac(client, [
-                {"broker_id": broker_id, "asset_id": asset1},
-                {"broker_id": broker_id, "asset_id": asset2},
-            ])
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "50000"}},
+                    {"broker_id": broker_id, "asset_id": asset1, "type": "BUY", "date": "2026-01-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-500"}},
+                ],
+            )
+            result = await portfolio_wac(
+                client,
+                [
+                    {"broker_id": broker_id, "asset_id": asset1},
+                    {"broker_id": broker_id, "asset_id": asset2},
+                ],
+            )
             assert len(result["results"]) == 2
             assert len(result["results"][0]["series"]) == 1
             assert len(result["results"][1]["series"]) == 0

@@ -31,6 +31,7 @@
     import {BrokerSearchSelect} from '$lib/components/ui/select';
     import ImportPluginSelect, {getCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
     import ParseDetailModal from '$lib/components/transactions/modals/ParseDetailModal.svelte';
@@ -43,6 +44,7 @@
     import TransactionFormModal from '$lib/components/transactions/modals/TransactionFormModal.svelte';
     import type {TXReadItem} from '$lib/components/transactions';
     import {txStoreGet} from '$lib/stores/transactions/txStore.svelte';
+    import type {ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
 
     import type {TransactionCreateItem, BrimFile, BrimParseResponse, FilePreviewResponse} from '$lib/types';
 
@@ -54,7 +56,7 @@
         open: boolean;
         zIndex?: number;
         onClose: () => void;
-        onImportBatch: (creates: TransactionCreateItem[]) => void;
+        onImportBatch: (creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>) => void;
     }
 
     let {open, zIndex = 70, onClose, onImportBatch}: Props = $props();
@@ -203,13 +205,6 @@
     // Step 4 State — Review & Import
     // =========================================================================
 
-    interface ImportTodo {
-        field: string;
-        severity: 'blocker' | 'warning';
-        reasonCode: string;
-        message: string;
-    }
-
     interface MergedTx {
         index: number;
         sourceFileId: string;
@@ -234,6 +229,7 @@
     let mergedTransactions = $state<MergedTx[]>([]);
     let assetResolutions = $state<AssetResolution[]>([]);
     let createAssetForFakeId = $state<number | null>(null);
+    let createBrokerOpen = $state(false);
     let step4ShowResolveSection = $state(true);
     let step4TableRef = $state<DataTable<MergedTx> | undefined>(undefined);
 
@@ -376,9 +372,7 @@
             const sorted: AssetResolution['candidates'] = [...fresh]
                 .sort((a, b) => (CONF_ORDER[a.match_confidence] ?? 9) - (CONF_ORDER[b.match_confidence] ?? 9))
                 .map((c) => ({asset_id: c.asset_id, symbol: (Array.isArray(c.symbol) ? (c.symbol[0] ?? null) : c.symbol) as string | null, isin: (Array.isArray(c.isin) ? (c.isin[0] ?? null) : c.isin) as string | null, name: c.name, match_confidence: c.match_confidence as string}));
-            assetResolutions = assetResolutions.map((r) =>
-                r.fakeAssetId === fakeAssetId ? {...r, candidates: sorted} : r,
-            );
+            assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, candidates: sorted} : r));
         } catch {
             // Silently ignore — old candidates remain visible
         }
@@ -451,7 +445,7 @@
         }
     }
 
-    function buildFinalTxList(): TransactionCreateItem[] {
+    function buildFinalTxList(): Array<{tx: TransactionCreateItem; todos: ImportTodo[]}> {
         return mergedTransactions
             .filter((t) => t.selected)
             .map((t) => {
@@ -461,7 +455,7 @@
                     const res = assetResolutions.find((r) => r.fakeAssetId === assetId);
                     if (res?.resolvedAssetId) tx.asset_id = res.resolvedAssetId;
                 }
-                return tx as TransactionCreateItem;
+                return {tx: tx as TransactionCreateItem, todos: t.todos};
             });
     }
 
@@ -558,196 +552,221 @@
         compareTitle = `🔍 ${$t('importWizard.compareTitle', {values: {id: String(existingId)}})}`;
         compareOpen = true;
     }
-    let step4Columns = $derived.by<ColumnDef<MergedTx>[]>(() => [
-        {
-            id: 'status',
-            header: () => $t('common.status'),
-            displayName: () => $t('common.status'),
-            headerHtml: () => `<span class="hidden sm:inline">${$t('common.status')}</span>`,
-            type: 'enum',
-            sortable: true,
-            filterable: true,
-            width: 65,
-            minWidth: 50,
-            align: 'center' as const,
-            pinned: 'left' as const,
-            sortFn: (a: MergedTx, b: MergedTx) => {
-                const order = {unresolved: 0, likely: 1, possible: 2, unique: 3};
-                const aKey = (() => {
-                    const id = typeof a.tx.asset_id === 'number' ? a.tx.asset_id : null;
-                    if (id !== null && isFakeAssetId(id) && !assetResolutions.find((r) => r.fakeAssetId === id)?.resolvedAssetId) return 'unresolved';
-                    return a.duplicateStatus;
-                })();
-                const bKey = (() => {
-                    const id = typeof b.tx.asset_id === 'number' ? b.tx.asset_id : null;
-                    if (id !== null && isFakeAssetId(id) && !assetResolutions.find((r) => r.fakeAssetId === id)?.resolvedAssetId) return 'unresolved';
-                    return b.duplicateStatus;
-                })();
-                return (order[aKey as keyof typeof order] ?? 3) - (order[bKey as keyof typeof order] ?? 3);
-            },
-            getValue: (mt) => {
-                const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
-                if (assetId !== null && isFakeAssetId(assetId) && !assetResolutions.find((r) => r.fakeAssetId === assetId)?.resolvedAssetId) return 'unresolved';
-                return mt.duplicateStatus as string;
-            },
-            enumOptions: [
-                {value: 'unique', label: $t('importWizard.status.unique')},
-                {value: 'possible', label: $t('importWizard.status.possibleDup')},
-                {value: 'likely', label: $t('importWizard.status.likelyDup')},
-                {value: 'unresolved', label: $t('importWizard.status.unresolved')},
-            ],
-            cell: (mt) => {
-                const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
-                const isUnresolved = assetId !== null && isFakeAssetId(assetId) && assetResolutions.find((r) => r.fakeAssetId === assetId)?.resolvedAssetId == null;
-                if (isUnresolved) {
-                    return {
-                        type: 'html',
-                        html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"><span class="sm:hidden">✗</span><span class="hidden sm:inline">${$t('importWizard.status.unresolved')}</span></span>`,
-                        tooltip: {
-                            html: `<strong>${$t('importWizard.status.tooltip.unresolvedReason')}</strong> ${$t('importWizard.status.tooltip.unresolvedAction')}`,
-                            position: 'top',
-                            maxWidth: '280px',
-                        },
-                    };
-                }
-                const dupLabels = {date: $t('common.date'), type: $t('common.type'), amount: $t('common.amount'), desc: $t('common.description')};
-                if (mt.duplicateStatus === 'likely') {
-                    return {
-                        type: 'html',
-                        html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 cursor-pointer"><span class="sm:hidden">⚠</span><span class="hidden sm:inline">${$t('importWizard.status.likelyDup')}</span></span>`,
-                        onClick: () => openCompare(mt),
-                    };
-                }
-                if (mt.duplicateStatus === 'possible') {
-                    return {
-                        type: 'html',
-                        html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 cursor-pointer"><span class="sm:hidden">ℹ</span><span class="hidden sm:inline">${$t('importWizard.status.possibleDup')}</span></span>`,
-                        onClick: () => openCompare(mt),
-                    };
-                }
-                return {
-                    type: 'html',
-                    html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"><span class="sm:hidden">✓</span><span class="hidden sm:inline">${$t('importWizard.status.unique')}</span></span>`,
-                };
-            },
-        },
-        {
-            id: 'selected',
-            header: '',
-            type: 'custom',
-            sortable: false,
-            filterable: false,
-            width: 44,
-            minWidth: 44,
-            cell: (mt) => ({
-                type: 'editable-checkbox',
-                value: mt.selected,
-                onchange: (v: boolean) => {
-                    mergedTransactions = mergedTransactions.map((t) => (t.index === mt.index ? {...t, selected: v} : t));
+    let step4Columns = $derived.by<ColumnDef<MergedTx>[]>(() => {
+        const doneFilesCount = parseResults.filter((r) => r.status === 'done').length;
+        const columns: ColumnDef<MergedTx>[] = [
+            {
+                id: 'status',
+                header: () => $t('common.status'),
+                displayName: () => $t('common.status'),
+                headerHtml: () => `<span class="hidden sm:inline">${$t('common.status')}</span>`,
+                type: 'enum',
+                sortable: true,
+                filterable: true,
+                width: 65,
+                minWidth: 50,
+                align: 'center' as const,
+                pinned: 'left' as const,
+                sortFn: (a: MergedTx, b: MergedTx) => {
+                    const order = {unresolved: 0, likely: 1, possible: 2, unique: 3};
+                    const aKey = (() => {
+                        const id = typeof a.tx.asset_id === 'number' ? a.tx.asset_id : null;
+                        if (id !== null && isFakeAssetId(id) && !assetResolutions.find((r) => r.fakeAssetId === id)?.resolvedAssetId) return 'unresolved';
+                        return a.duplicateStatus;
+                    })();
+                    const bKey = (() => {
+                        const id = typeof b.tx.asset_id === 'number' ? b.tx.asset_id : null;
+                        if (id !== null && isFakeAssetId(id) && !assetResolutions.find((r) => r.fakeAssetId === id)?.resolvedAssetId) return 'unresolved';
+                        return b.duplicateStatus;
+                    })();
+                    return (order[aKey as keyof typeof order] ?? 3) - (order[bKey as keyof typeof order] ?? 3);
                 },
-            }),
-        },
-        {
-            id: 'date',
-            header: () => $t('common.date'),
-            type: 'date',
-            sortable: true,
-            filterable: false,
-            width: 120,
-            minWidth: 100,
-            cell: (mt) => ({type: 'date', value: mt.tx.date ?? '', format: 'date'}),
-        },
-        {
-            id: 'type',
-            header: () => $t('common.type'),
-            type: 'enum',
-            sortable: true,
-            filterable: true,
-            width: 140,
-            minWidth: 100,
-            getValue: (mt) => String(mt.tx.type ?? ''),
-            enumOptions: [],
-            cell: (mt) => {
-                const type = String(mt.tx.type ?? '');
-                const slug = type.toLowerCase().replace(/_/g, '-');
-                const label = $t(`transactions.types.${type}`) || type;
-                const isPair = getTypeRule(type).requiresPair;
-                const arrow = isPair ? '<span class="shrink-0 mr-0.5">↔</span>' : '';
-                return {
-                    type: 'html',
-                    html: `<span class="inline-flex items-center gap-1.5 text-xs leading-snug">\
+                getValue: (mt) => {
+                    const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
+                    if (assetId !== null && isFakeAssetId(assetId) && !assetResolutions.find((r) => r.fakeAssetId === assetId)?.resolvedAssetId) return 'unresolved';
+                    return mt.duplicateStatus as string;
+                },
+                enumOptions: [
+                    {value: 'unique', label: $t('importWizard.status.unique')},
+                    {value: 'possible', label: $t('importWizard.status.possibleDup')},
+                    {value: 'likely', label: $t('importWizard.status.likelyDup')},
+                    {value: 'unresolved', label: $t('importWizard.status.unresolved')},
+                ],
+                cell: (mt) => {
+                    const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
+                    const isUnresolved = assetId !== null && isFakeAssetId(assetId) && assetResolutions.find((r) => r.fakeAssetId === assetId)?.resolvedAssetId == null;
+                    if (isUnresolved) {
+                        return {
+                            type: 'html',
+                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"><span class="sm:hidden">✗</span><span class="hidden sm:inline">${$t('importWizard.status.unresolved')}</span></span>`,
+                            tooltip: {
+                                html: `<strong>${$t('importWizard.status.tooltip.unresolvedReason')}</strong> ${$t('importWizard.status.tooltip.unresolvedAction')}`,
+                                position: 'top',
+                                maxWidth: '280px',
+                            },
+                        };
+                    }
+                    const dupLabels = {date: $t('common.date'), type: $t('common.type'), amount: $t('common.amount'), desc: $t('common.description')};
+                    if (mt.duplicateStatus === 'likely') {
+                        return {
+                            type: 'html',
+                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 cursor-pointer"><span class="sm:hidden">⚠</span><span class="hidden sm:inline">${$t('importWizard.status.likelyDup')}</span></span>`,
+                            onClick: () => openCompare(mt),
+                        };
+                    }
+                    if (mt.duplicateStatus === 'possible') {
+                        return {
+                            type: 'html',
+                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 cursor-pointer"><span class="sm:hidden">ℹ</span><span class="hidden sm:inline">${$t('importWizard.status.possibleDup')}</span></span>`,
+                            onClick: () => openCompare(mt),
+                        };
+                    }
+                    return {
+                        type: 'html',
+                        html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"><span class="sm:hidden">✓</span><span class="hidden sm:inline">${$t('importWizard.status.unique')}</span></span>`,
+                    };
+                },
+            },
+            {
+                id: 'selected',
+                header: '',
+                type: 'custom',
+                sortable: false,
+                filterable: false,
+                width: 44,
+                minWidth: 44,
+                cell: (mt) => ({
+                    type: 'editable-checkbox',
+                    value: mt.selected,
+                    onchange: (v: boolean) => {
+                        mergedTransactions = mergedTransactions.map((t) => (t.index === mt.index ? {...t, selected: v} : t));
+                    },
+                }),
+            },
+            {
+                id: 'date',
+                header: () => $t('common.date'),
+                type: 'date',
+                sortable: true,
+                filterable: false,
+                width: 120,
+                minWidth: 100,
+                cell: (mt) => ({type: 'date', value: mt.tx.date ?? '', format: 'date'}),
+            },
+            {
+                id: 'type',
+                header: () => $t('common.type'),
+                type: 'enum',
+                sortable: true,
+                filterable: true,
+                width: 140,
+                minWidth: 100,
+                getValue: (mt) => String(mt.tx.type ?? ''),
+                enumOptions: [],
+                cell: (mt) => {
+                    const type = String(mt.tx.type ?? '');
+                    const slug = type.toLowerCase().replace(/_/g, '-');
+                    const label = $t(`transactions.types.${type}`) || type;
+                    const isPair = getTypeRule(type).requiresPair;
+                    const arrow = isPair ? '<span class="shrink-0 mr-0.5">↔</span>' : '';
+                    return {
+                        type: 'html',
+                        html: `<span class="inline-flex items-center gap-1.5 text-xs leading-snug">\
 <img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>\
 ${arrow}<span>${label}</span></span>`,
-                };
+                    };
+                },
             },
-        },
-        {
-            id: 'asset',
-            header: () => $t('common.asset'),
-            type: 'text',
-            sortable: true,
-            filterable: true,
-            width: 200,
-            minWidth: 150,
-            getValue: (mt) => getAssetDisplayName(typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null),
-            cell: (mt) => {
-                const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
-                if (assetId === null) return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
-                if (isFakeAssetId(assetId)) {
-                    const res = assetResolutions.find((r) => r.fakeAssetId === assetId);
-                    if (res?.resolvedAssetId) {
-                        const rInfo = getAssetInfo(res.resolvedAssetId);
-                        const rName = rInfo?.display_name ?? `#${res.resolvedAssetId}`;
-                        const rIcon = rInfo?.icon_url ?? (rInfo?.asset_type ? getAssetTypeIconUrl(rInfo.asset_type) : null);
-                        const rIconHtml = rIcon ? `<img src="${rIcon}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
-                        const origName = getAssetDisplayName(assetId);
-                        return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate text-emerald-600 dark:text-emerald-400" title="${origName} → ${rName}">${rIconHtml}<span class="truncate">${rName}</span></span>`};
+            {
+                id: 'asset',
+                header: () => $t('common.asset'),
+                type: 'text',
+                sortable: true,
+                filterable: true,
+                width: 200,
+                minWidth: 150,
+                getValue: (mt) => getAssetDisplayName(typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null),
+                cell: (mt) => {
+                    const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
+                    if (assetId === null) return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
+                    if (isFakeAssetId(assetId)) {
+                        const res = assetResolutions.find((r) => r.fakeAssetId === assetId);
+                        if (res?.resolvedAssetId) {
+                            const rInfo = getAssetInfo(res.resolvedAssetId);
+                            const rName = rInfo?.display_name ?? `#${res.resolvedAssetId}`;
+                            const rIcon = rInfo?.icon_url ?? (rInfo?.asset_type ? getAssetTypeIconUrl(rInfo.asset_type) : null);
+                            const rIconHtml = rIcon ? `<img src="${rIcon}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                            const origName = getAssetDisplayName(assetId);
+                            return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate text-emerald-600 dark:text-emerald-400" title="${origName} → ${rName}">${rIconHtml}<span class="truncate">${rName}</span></span>`};
+                        }
+                        const name = getAssetDisplayName(assetId);
+                        return {type: 'html', html: `<span class="text-red-600 dark:text-red-400 inline-flex items-center gap-1">✗ <span class="truncate">${name}</span></span>`};
                     }
-                    const name = getAssetDisplayName(assetId);
-                    return {type: 'html', html: `<span class="text-red-600 dark:text-red-400 inline-flex items-center gap-1">✗ <span class="truncate">${name}</span></span>`};
-                }
-                const info = getAssetInfo(assetId);
-                const name = info?.display_name ?? `#${assetId}`;
-                const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
-                const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
-                return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate">${iconHtml}<span class="truncate">${name}</span></span>`};
+                    const info = getAssetInfo(assetId);
+                    const name = info?.display_name ?? `#${assetId}`;
+                    const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
+                    const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                    return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate">${iconHtml}<span class="truncate">${name}</span></span>`};
+                },
             },
-        },
-        {
-            id: 'quantity',
-            header: () => $t('common.quantity'),
-            type: 'number',
-            sortable: true,
-            filterable: false,
-            width: 90,
-            minWidth: 70,
-            getValue: (mt) => Number(mt.tx.quantity ?? 0),
-            cell: (mt) => {
-                const q = mt.tx.quantity;
-                if (!q || q === '0') return {type: 'html', html: '<span class="text-gray-400">—</span>'};
-                const n = parseFloat(q);
-                const formatted = isNaN(n) ? q : parseFloat(n.toFixed(8)).toString();
-                return {type: 'html', html: `<span class="font-mono text-sm">${formatted}</span>`};
+            {
+                id: 'quantity',
+                header: () => $t('common.quantity'),
+                type: 'number',
+                sortable: true,
+                filterable: false,
+                width: 90,
+                minWidth: 70,
+                getValue: (mt) => Number(mt.tx.quantity ?? 0),
+                cell: (mt) => {
+                    const q = mt.tx.quantity;
+                    if (!q || q === '0') return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                    const n = parseFloat(q);
+                    const formatted = isNaN(n) ? q : parseFloat(n.toFixed(8)).toString();
+                    return {type: 'html', html: `<span class="font-mono text-sm">${formatted}</span>`};
+                },
             },
-        },
-        {
-            id: 'cash',
-            header: () => $t('common.cash'),
-            type: 'text',
-            sortable: false,
-            filterable: false,
-            width: 220,
-            minWidth: 160,
-            cell: (mt) => {
-                const cash = mt.tx.cash;
-                if (cash && typeof cash === 'object' && !Array.isArray(cash)) {
-                    const c = cash as {code: string; amount: string};
-                    return {type: 'html', html: formatCurrencyAmountHtml(Number(c.amount), c.code, {showSign: true})};
-                }
-                return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+            {
+                id: 'cash',
+                header: () => $t('common.cash'),
+                type: 'text',
+                sortable: false,
+                filterable: false,
+                width: 220,
+                minWidth: 160,
+                cell: (mt) => {
+                    const cash = mt.tx.cash;
+                    if (cash && typeof cash === 'object' && !Array.isArray(cash)) {
+                        const c = cash as {code: string; amount: string};
+                        return {type: 'html', html: formatCurrencyAmountHtml(Number(c.amount), c.code, {showSign: true})};
+                    }
+                    return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                },
             },
-        },
-    ]);
+        ];
+
+        // Show source file column only when multiple files were parsed (avoids noise for single-file imports)
+        if (doneFilesCount > 1) {
+            const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            columns.push({
+                id: 'sourceFileId',
+                header: () => $t('importWizard.sourceFile'),
+                displayName: () => $t('importWizard.sourceFile'),
+                type: 'text',
+                sortable: true,
+                filterable: true,
+                width: 200,
+                minWidth: 160,
+                getValue: (mt) => parseResults.find((r) => r.fileId === mt.sourceFileId)?.fileName ?? mt.sourceFileId,
+                cell: (mt) => {
+                    const name = parseResults.find((r) => r.fileId === mt.sourceFileId)?.fileName ?? mt.sourceFileId;
+                    return {type: 'html', html: `<span class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[180px] block" title="${esc(name)}">${esc(name)}</span>`} as const;
+                },
+            });
+        }
+
+        return columns;
+    });
 
     function step4SelectAll() {
         mergedTransactions = mergedTransactions.map((t) => ({...t, selected: true}));
@@ -763,6 +782,7 @@ ${arrow}<span>${label}</span></span>`,
     let brokers = $state<BrokerInfo[]>([]);
     let brokersLoading = $state(false);
     let confirmCloseOpen = $state(false);
+    let showWarningConfirm = $state(false);
 
     // =========================================================================
     // Derived
@@ -770,6 +790,7 @@ ${arrow}<span>${label}</span></span>`,
 
     let hasUnsavedWork = $derived(pendingFiles.length > 0 || selectedFiles.length > 0 || parseResults.length > 0 || mergedTransactions.length > 0);
     let selectedBrokerCount = $derived(new Set(selectedFiles.map((f) => f.brokerId)).size);
+    let step3Warnings = $derived(parseResults.flatMap((r) => r.response?.warnings ?? []));
 
     // =========================================================================
     // Lifecycle
@@ -872,6 +893,11 @@ ${arrow}<span>${label}</span></span>`,
             initParseResults();
             if (!usingCachedResults) doParseAll();
         } else if (currentStep === 3) {
+            if (step3Warnings.length > 0 && !showWarningConfirm) {
+                showWarningConfirm = true;
+                return;
+            }
+            showWarningConfirm = false;
             currentStep = 4;
             if (maxReachedStep < 4) maxReachedStep = 4;
             mergeAllTransactions();
@@ -1037,6 +1063,8 @@ ${arrow}<span>${label}</span></span>`,
                               value: row.brokerId,
                               onchange: (v: number | null) => onFileBrokerChange(row.id, v),
                               placeholder: $t('importWizard.assignBroker'),
+                              createLabel: $t('common.createNew'),
+                              onCreateNew: () => (createBrokerOpen = true),
                           },
                       } as const),
             type: 'custom',
@@ -1107,20 +1135,6 @@ ${arrow}<span>${label}</span></span>`,
                     }
                 }
             }
-
-            // T7: programmatically select rows in DataTable after render
-            requestAnimationFrame(() => {
-                for (const [brokerId, brokerFiles] of brokerFilesMap) {
-                    const brokerIdx = brokers.findIndex((b) => b.id === brokerId);
-                    const tableRef = brokerIdx >= 0 ? tableRefs[brokerIdx] : undefined;
-                    if (!tableRef) continue;
-                    for (const bf of brokerFiles) {
-                        if (step1FileIds.has(bf.file_id)) {
-                            tableRef.toggleRowSelectionById(bf.file_id);
-                        }
-                    }
-                }
-            });
         } catch (e) {
             console.error('Failed to load broker files:', e);
         } finally {
@@ -1547,6 +1561,13 @@ ${arrow}<span>${label}</span></span>`,
             visible: (row) => row.status === 'done' || row.status === 'error',
             onClick: (row) => reparseSingleFile(row),
         },
+        {
+            id: 'preview',
+            label: () => $t('importWizard.previewFile'),
+            icon: FileText,
+            visible: (row) => row.status === 'done',
+            onClick: (row) => openPreview(row.fileId),
+        },
     ];
 
     async function reparseSingleFile(result: ParsedFileResult) {
@@ -1712,7 +1733,7 @@ ${arrow}<span>${label}</span></span>`,
                         <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                             <span class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">{$t('importWizard.globalBroker')}:</span>
                             <div class="flex-1 max-w-xs">
-                                <BrokerSearchSelect {brokers} value={globalBrokerId} onchange={onGlobalBrokerChange} placeholder={$t('importWizard.assignBroker')} />
+                                <BrokerSearchSelect {brokers} value={globalBrokerId} onchange={onGlobalBrokerChange} placeholder={$t('importWizard.assignBroker')} createLabel={$t('common.createNew')} onCreateNew={() => (createBrokerOpen = true)} />
                             </div>
                         </div>
 
@@ -2003,29 +2024,28 @@ ${arrow}<span>${label}</span></span>`,
                                 {#each assetResolutions as res (res.fakeAssetId)}
                                     {@const isResolved = res.resolvedAssetId !== null}
                                     <div class="border rounded-lg p-3 {isResolved ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/10' : 'border-gray-200 dark:border-gray-700'}">
-                                        <!-- Card header -->
-                                        <div class="flex items-center justify-between gap-2 mb-1">
-                                            <div class="flex items-center gap-2 min-w-0 flex-wrap">
-                                                {#if res.extractedSymbol}
-                                                    <span class="flex items-center gap-1">
-                                                        <span class="text-xs text-gray-400 dark:text-gray-500 shrink-0">Ticker:</span>
-                                                        <span class="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">{res.extractedSymbol}</span>
-                                                    </span>
-                                                {/if}
-                                                {#if res.extractedIsin}
-                                                    <span class="flex items-center gap-1">
-                                                        <span class="text-xs text-gray-400 dark:text-gray-500 shrink-0">ISIN:</span>
-                                                        <span class="font-mono text-xs text-gray-500 dark:text-gray-400">{res.extractedIsin}</span>
-                                                    </span>
-                                                {/if}
-                                                {#if !res.extractedSymbol && !res.extractedIsin}
-                                                    <span class="font-mono font-bold text-sm text-gray-900 dark:text-gray-100">{res.extractedName ?? '?'}</span>
-                                                {/if}
-                                                {#if res.extractedName && res.extractedName !== res.extractedSymbol}
-                                                    <span class="text-xs text-gray-500 dark:text-gray-400 truncate">{res.extractedName}</span>
-                                                {/if}
+                                        <!-- Card header — name primary, identifier badges secondary -->
+                                        <div class="flex items-start justify-between gap-2 mb-1">
+                                            <div class="flex-1 min-w-0">
+                                                <p class="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">
+                                                    {res.extractedName ?? res.extractedSymbol ?? '?'}
+                                                </p>
+                                                <div class="flex flex-wrap gap-1 mt-0.5">
+                                                    {#if res.extractedSymbol}
+                                                        <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300">
+                                                            Ticker: {res.extractedSymbol}
+                                                        </span>
+                                                    {/if}
+                                                    {#if res.extractedIsin}
+                                                        <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400">
+                                                            ISIN: {res.extractedIsin}
+                                                        </span>
+                                                    {/if}
+                                                </div>
                                             </div>
-                                            <span class="shrink-0 text-xs text-gray-500">{res.txCount} TX</span>
+                                            <span class="shrink-0 text-xs font-medium text-gray-500 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                                {res.txCount} TX
+                                            </span>
                                         </div>
                                         <div class="text-xs text-gray-400 mb-3 truncate">{res.sourceFiles.join(', ')}</div>
 
@@ -2227,6 +2247,18 @@ ${arrow}<span>${label}</span></span>`,
 <!-- Unsaved guard -->
 <ConfirmModal open={confirmCloseOpen} title={$t('importWizard.discardTitle')} message={$t('importWizard.discardMessage')} confirmText={$t('importWizard.discardConfirm')} warning zIndex={80} onConfirm={confirmDiscard} onCancel={() => (confirmCloseOpen = false)} />
 
+<!-- Step 3 → 4: warning acknowledgement -->
+<ConfirmModal
+    open={showWarningConfirm}
+    title={$t('importWizard.warningConfirmTitle')}
+    message={$t('importWizard.warningConfirmMessage', {values: {n: step3Warnings.length}})}
+    confirmText={$t('importWizard.warningConfirmOk')}
+    warning
+    zIndex={85}
+    onConfirm={goNext}
+    onCancel={() => (showWarningConfirm = false)}
+/>
+
 <!-- File preview modal -->
 <FilePreviewModal open={showPreviewModal} preview={previewData} loading={previewLoading} error={previewError} onRequestClose={closePreviewModal} onSheetChange={(name) => loadPreview(name)} zIndex={80} />
 
@@ -2257,7 +2289,8 @@ ${arrow}<span>${label}</span></span>`,
                   identifier_isin: _createRes.extractedIsin ?? undefined,
               }
             : null}
-        initialSearchQuery={_createRes ? [_createRes.extractedSymbol, _createRes.extractedIsin, _createRes.extractedName].filter(Boolean).join(' ') : ''}
+        initialSearchBadges={_createRes ? ([_createRes.extractedSymbol, _createRes.extractedIsin, _createRes.extractedName].filter(Boolean) as string[]) : []}
+        initialSearchQuery=""
         zIndex={90}
         oncreated={(assetId) => {
             resolveAsset(createAssetForFakeId!, assetId);
@@ -2336,3 +2369,5 @@ ${arrow}<span>${label}</span></span>`,
         </div>
     </div>
 </ModalBase>
+
+<BrokerModal isOpen={createBrokerOpen} mode="create" zIndex={zIndex + 10} onclose={() => (createBrokerOpen = false)} />

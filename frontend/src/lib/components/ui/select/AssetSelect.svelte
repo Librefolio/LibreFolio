@@ -70,7 +70,7 @@
             value: String(a.id),
             label: a.display_name,
             searchText: [a.identifier_isin, a.identifier_ticker, a.currency, a.asset_type].filter(Boolean).join(' '),
-            disabled: !a.active || a.asset_type === 'INDEX',
+            disabled: a.active === false,
             icon: a.icon_url || (a.asset_type ? getAssetTypeIconUrl(a.asset_type) : undefined),
             data: a,
         }));

@@ -55,8 +55,9 @@
     let dateFrom = $state(getStart());
     let dateTo = $state(getEnd());
 
-    /** Display currency override — defaults to user base currency. */
-    let targetCurrency = $state('');
+    /** Display currency override — always concrete, defaults to user base currency. */
+    let targetCurrency = $state($globalSettings.default_currency || 'EUR');
+    let targetCurrencyManuallySet = $state(false);
 
     /** Broker filter dropdown open state. */
     let brokerFilterOpen = $state(false);
@@ -84,6 +85,14 @@
 
     const allBrokers = $derived(getAllBrokers());
     const baseCurrency = $derived($globalSettings.default_currency || 'EUR');
+    const displayCurrency = $derived(targetCurrency || baseCurrency);
+
+    $effect(() => {
+        if (targetCurrencyManuallySet || targetCurrency === baseCurrency) return;
+        const hadLoadedData = summary !== null || history.length > 0;
+        targetCurrency = baseCurrency;
+        if (hadLoadedData) void loadAll(true);
+    });
 
     /**
      * True when the selection covers all brokers — treated same as "no filter"
@@ -107,14 +116,29 @@
         return v;
     }
 
+    function formatMoney(code: string | undefined, amount: string | null | undefined, opts?: {signed?: boolean; absolute?: boolean}): string {
+        if (amount == null) return '—';
+        const num = parseFloat(amount);
+        const signed = opts?.signed ?? false;
+        const absolute = opts?.absolute ?? false;
+        const rendered = absolute ? Math.abs(num) : num;
+        const sign = signed ? (num >= 0 ? '+' : '-') : '';
+        return `${sign}${code ?? displayCurrency} ${rendered.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+
     /** Allocation data for charts (Record<string, number> where value = 0-1). */
     const allocationByType = $derived(summary ? Object.fromEntries((summary.allocation_by_type ?? []).map((i) => [i.name, parseFloat(i.value) / 100])) : {});
     const allocationBySector = $derived(summary ? Object.fromEntries((summary.allocation_by_sector ?? []).map((i) => [i.name, parseFloat(i.value) / 100])) : {});
     const allocationByGeo = $derived(summary ? Object.fromEntries((summary.allocation_by_geography ?? []).map((i) => [i.name, parseFloat(i.value) / 100])) : {});
+    const missingPricesAssets = $derived(summary?.missing_prices_assets ?? []);
+    const missingFxPairs = $derived.by(() => {
+        const pairs = (summary?.missing_fx_pairs ?? []).map((item) => item.pair);
+        return [...new Set(pairs)].sort();
+    });
 
     // KPI formatted values
-    const netWorthValue = $derived(summary ? `${baseCurrency} ${parseFloat(summary.net_worth).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '—');
-    const gainLossValue = $derived(summary ? `${parseFloat(summary.total_gain_loss) >= 0 ? '+' : ''}${baseCurrency} ${Math.abs(parseFloat(summary.total_gain_loss)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '—');
+    const netWorthValue = $derived(summary ? formatMoney(summary.net_worth.code, summary.net_worth.amount) : '—');
+    const gainLossValue = $derived(summary ? formatMoney(summary.total_gain_loss.code, summary.total_gain_loss.amount, {signed: true, absolute: true}) : '—');
     const gainLossPercent = $derived(summary ? parseFloat(summary.total_gain_loss_percent) : undefined);
     const roiValue = $derived(summary ? `${(parseFloat(summary.simple_roi_percent) * 100).toFixed(2)}%` : '—');
     const roiSubLabel = $derived.by(() => {
@@ -127,6 +151,7 @@
 
     /** URL for "See all" assets link — preserves current date range. */
     const assetsHref = $derived(`/assets?start=${dateFrom}&end=${dateTo}`);
+    const transactionsHref = $derived(`/transactions?start=${dateFrom}&end=${dateTo}`);
 
     // =========================================================================
     // Loaders
@@ -135,7 +160,7 @@
     async function loadSummary(force = false) {
         summaryLoading = true;
         try {
-            summary = await fetchSummary(activeBrokerIds, false, targetCurrency || undefined, force);
+            summary = await fetchSummary(activeBrokerIds, false, targetCurrency, force);
         } finally {
             summaryLoading = false;
         }
@@ -144,7 +169,7 @@
     async function loadHistory(force = false) {
         historyLoading = true;
         try {
-            history = await fetchHistory(activeBrokerIds, dateFrom || undefined, dateTo || undefined, targetCurrency || undefined, force);
+            history = await fetchHistory(activeBrokerIds, dateFrom || undefined, dateTo || undefined, targetCurrency, force);
         } finally {
             historyLoading = false;
         }
@@ -230,7 +255,16 @@
         <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
             <span class="whitespace-nowrap">{$_('dashboard.displayCurrency')}:</span>
             <div class="w-28">
-                <CurrencySearchSelect bind:value={targetCurrency} compact={true} dropdownPosition="bottom" includeAll={true} placeholder={baseCurrency} onchange={() => void loadAll()} />
+                <CurrencySearchSelect
+                    bind:value={targetCurrency}
+                    compact={true}
+                    dropdownPosition="bottom"
+                    placeholder={baseCurrency}
+                    onchange={() => {
+                        targetCurrencyManuallySet = true;
+                        void loadAll();
+                    }}
+                />
             </div>
         </div>
 
@@ -324,9 +358,31 @@
         </button>
     </div>
 
+    {#if missingPricesAssets.length > 0}
+        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-start gap-2" data-testid="dashboard-missing-prices-banner">
+            <span>⚠️</span>
+            <span>
+                {$_('dashboard.missingPricesPrefix')}
+                <strong>{missingPricesAssets.join(', ')}</strong>.
+                {$_('dashboard.missingPricesSuffix')}
+            </span>
+        </div>
+    {/if}
+
+    {#if missingFxPairs.length > 0}
+        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-start gap-2" data-testid="dashboard-missing-fx-banner">
+            <span>⚠️</span>
+            <span>
+                {$_('dashboard.missingFxPrefix')}
+                <strong>{missingFxPairs.join(', ')}</strong>.
+                {$_('dashboard.missingFxSuffix')}
+            </span>
+        </div>
+    {/if}
+
     <!-- ── KPI Row ── -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="kpi-row">
-        <KpiCard label={$_('dashboard.netWorth')} value={netWorthValue} subLabel={summary ? `${$_('common.cash')}: ${baseCurrency} ${parseFloat(summary.cash_total).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : ''} loading={summaryLoading} />
+        <KpiCard label={$_('dashboard.netWorth')} value={netWorthValue} subLabel={summary ? `${$_('common.cash')}: ${formatMoney(summary.cash_total.code, summary.cash_total.amount)}` : ''} loading={summaryLoading} />
         <KpiCard label={$_('dashboard.gainLoss')} value={gainLossValue} changePercent={gainLossPercent} positive={gainLossPercent !== undefined ? gainLossPercent >= 0 : undefined} loading={summaryLoading} />
         <KpiCard label={$_('dashboard.roiWeighted')} value={roiValue} subLabel={roiSubLabel} positive={roiIsPositive} loading={summaryLoading} />
     </div>
@@ -335,7 +391,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
         <!-- Growth Chart — 3/5 -->
         <div class="lg:col-span-3">
-            <GrowthChart {history} loading={historyLoading} {baseCurrency} />
+            <GrowthChart {history} loading={historyLoading} baseCurrency={displayCurrency} />
         </div>
 
         <!-- Allocation Panel — 2/5 -->
@@ -384,6 +440,6 @@
         <HoldingsPanel holdings={summary?.holdings ?? []} loading={summaryLoading} {assetsHref} />
 
         <!-- RIGHT: Recent Transactions -->
-        <RecentTransactionsPanel limit={10} brokerIds={activeBrokerIds} />
+        <RecentTransactionsPanel limit={10} brokerIds={activeBrokerIds} {transactionsHref} />
     </div>
 </div>
