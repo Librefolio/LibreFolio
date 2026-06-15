@@ -6,10 +6,11 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {CheckCircle, AlertTriangle, HelpCircle, X, CircleAlert, Wrench} from 'lucide-svelte';
+    import {CheckCircle, AlertTriangle, HelpCircle, X, CircleAlert, FileText, Wrench} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {getTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
+    import {getIndexColor} from '$lib/utils/colors';
     import {resolveIssueMessage} from '$lib/utils/transactions/resolveValidationMessage';
     import type {BrimParseResponse, BrimAssetMapping, BrimValidationIssue, BrimFieldTodo} from '$lib/types';
 
@@ -34,9 +35,11 @@
         allResults?: ParsedFileResult[];
         zIndex?: number;
         onClose: () => void;
+        /** Called when user clicks "Preview File" (single-file mode only) */
+        onPreview?: () => void;
     }
 
-    let {open, parseResult, allResults, zIndex = 80, onClose}: Props = $props();
+    let {open, parseResult, allResults, zIndex = 80, onClose, onPreview}: Props = $props();
 
     // Determine if we're in aggregate mode
     let isAggregate = $derived(!parseResult && (allResults?.length ?? 0) > 0);
@@ -191,24 +194,24 @@
                     <div class="space-y-1.5">
                         {#each assetMappings as mapping}
                             <div class="flex items-center justify-between px-3 py-1.5 rounded bg-gray-50 dark:bg-slate-800 text-sm">
-                                <div class="flex-1 min-w-0">
-                                    <p class="font-medium text-gray-900 dark:text-white truncate">
+                                <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 flex-1 min-w-0 mr-2">
+                                    <span class="font-medium text-gray-900 dark:text-white truncate max-w-full">
                                         {(mapping.extracted_name as string | null) ?? (mapping.extracted_symbol as string | null) ?? (mapping.extracted_isin as string | null) ?? `ID ${mapping.fake_asset_id}`}
-                                    </p>
-                                    <div class="flex flex-wrap gap-1 mt-0.5">
-                                        {#if mapping.extracted_symbol}
-                                            <span class="font-mono text-xs px-1 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300">
-                                                Ticker: {mapping.extracted_symbol as string}
-                                            </span>
-                                        {/if}
-                                        {#if mapping.extracted_isin}
-                                            <span class="font-mono text-xs px-1 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400">
-                                                ISIN: {mapping.extracted_isin as string}
-                                            </span>
-                                        {/if}
-                                    </div>
+                                    </span>
+                                    {#if mapping.extracted_symbol}
+                                        {@const tc = getIndexColor(0, 200)}
+                                        <span class="font-mono text-xs px-1.5 py-0.5 rounded-full shrink-0" style="background-color:{tc.bg};color:{tc.text}">
+                                            Ticker: {mapping.extracted_symbol as string}
+                                        </span>
+                                    {/if}
+                                    {#if mapping.extracted_isin}
+                                        {@const ic = getIndexColor(1, 200)}
+                                        <span class="font-mono text-xs px-1.5 py-0.5 rounded-full shrink-0" style="background-color:{ic.bg};color:{ic.text}">
+                                            ISIN: {mapping.extracted_isin as string}
+                                        </span>
+                                    {/if}
                                 </div>
-                                <div class="flex items-center gap-1 ml-2 shrink-0">
+                                <div class="flex items-center gap-1 shrink-0">
                                     {#if mapping.selected_asset_id != null}
                                         <CheckCircle size={14} class="text-emerald-500" />
                                         <span class="text-xs text-emerald-600 dark:text-emerald-400">{$t('importWizard.assetResolved')}</span>
@@ -327,7 +330,18 @@
         </div>
 
         <!-- Footer -->
-        <div class="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between p-4 border-t border-gray-200 dark:border-gray-700">
+            <div>
+                {#if parseResult && onPreview}
+                    <button
+                        type="button"
+                        class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                        onclick={onPreview}
+                    >
+                        <FileText size={14} />{$t('importWizard.previewFile')}
+                    </button>
+                {/if}
+            </div>
             <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={onClose}>
                 {$t('common.close')}
             </button>

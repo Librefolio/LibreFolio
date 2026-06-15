@@ -14,7 +14,7 @@
     import {_ as t} from '$lib/i18n';
     import {untrack} from 'svelte';
     import {zodiosApi} from '$lib/api';
-    import {ChevronDown, ChevronRight, ExternalLink, Loader2, Minus, Plus, RefreshCw, Trash2, Upload, X} from 'lucide-svelte';
+    import {ChevronDown, ChevronRight, ExternalLink, Info, Loader2, Minus, Plus, RefreshCw, Search, Trash2, Upload, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
@@ -26,6 +26,7 @@
     import type {DiffItem} from './ProviderComparisonModal.svelte';
     import AssetCurrencyChangeModal from './AssetCurrencyChangeModal.svelte';
     import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
+    import {getIndexColor} from '$lib/utils/colors';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
@@ -96,10 +97,10 @@
         initialSearchQuery?: string;
         /**
          * Clickable badge suggestions shown above the search input (create mode only).
-         * Each badge populates the search input when clicked. Replaces concatenated initialSearchQuery
-         * for BRIM wizard: pass [symbol, isin, name] as separate strings.
+         * Each badge has a display label and a click value (e.g. label="Ticker: TSLA", value="TSLA").
+         * Replaces concatenated initialSearchQuery for BRIM wizard.
          */
-        initialSearchBadges?: string[];
+        initialSearchBadges?: Array<{label: string; value: string}>;
         oncreated?: (assetId: number) => void;
         onupdated?: () => void;
         onclose?: () => void;
@@ -1151,22 +1152,38 @@
     <div class="px-6 py-4 space-y-5 max-h-[70vh] overflow-y-auto" data-testid="asset-modal-form">
         <!-- Search Online -->
         {#if !editMode && initialSearchBadges.length > 0}
-            <div class="flex flex-wrap items-center gap-1.5 -mb-1">
-                <span class="text-xs text-gray-400 dark:text-gray-500 shrink-0">{$t('assets.modal.searchSuggestions')}:</span>
-                {#each initialSearchBadges as badge}
-                    <button
-                        type="button"
-                        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-800/30 transition-colors"
-                        onclick={() => (activeSearchQuery = badge)}
-                    >
-                        {badge}
-                    </button>
-                {/each}
+            <!-- All three (title, badges, input) in one space-y-1.5 wrapper → uniform 6px gaps -->
+            <div class="space-y-1.5">
+                <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <Search size={12} />
+                    <span>{$t('assets.modal.searchOnline')}</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 shrink-0">
+                        <Search size={11} class="opacity-60" />
+                        {$t('assets.modal.searchSuggestions')}:
+                    </span>
+                    {#each initialSearchBadges as badge, i}
+                        {@const color = getIndexColor(i, 200)}
+                        <button
+                            type="button"
+                            style="background-color:{color.bg};color:{color.text}"
+                            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-opacity hover:opacity-80"
+                            onclick={() => (activeSearchQuery = badge.value)}
+                        >
+                            {badge.label}
+                        </button>
+                    {/each}
+                </div>
+                {#key activeSearchQuery}
+                    <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={activeSearchQuery} hideTitle={true} />
+                {/key}
             </div>
+        {:else}
+            {#key activeSearchQuery}
+                <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} />
+            {/key}
         {/if}
-        {#key activeSearchQuery}
-            <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} />
-        {/key}
 
         <!-- Asset Details -->
         <div class="space-y-3">
@@ -1264,10 +1281,10 @@
                         <div>
                             <div class="flex items-center gap-1 mb-1">
                                 <label for="asset-quote-base-quantity" class="block text-xs font-medium text-gray-500 dark:text-gray-400">
-                                    {$t('assets.modal.quoteBaseQuantity')}
+                                    {$t('assets.modal.quoteBaseQuantity')} *
                                 </label>
-                                <Tooltip text={$t('assets.modal.quoteBaseTooltip')} position="bottom" maxWidth="320px">
-                                    <span class="text-xs text-gray-400 cursor-help">ℹ️</span>
+                                <Tooltip text={$t('assets.modal.quoteBaseTooltip')} position="bottom" maxWidth="280px">
+                                    <Info size={14} class="text-gray-400 cursor-help" />
                                 </Tooltip>
                             </div>
                             <input
@@ -1550,12 +1567,12 @@
     <!-- Footer -->
     <div class="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700">
         <div class="flex items-center gap-2">
-            <span id="asset-active-label" class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                {$t('assets.edit.status.active')}
-            </span>
             <Tooltip text={$t('assets.modal.activeTooltip')} position="top" maxWidth="320px">
-                <span class="text-xs text-gray-400 cursor-help">ℹ️</span>
+                <Info size={14} class="text-gray-400 cursor-help shrink-0" />
             </Tooltip>
+            <span id="asset-active-label" class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                {active ? $t('assets.edit.status.active') : $t('assets.edit.status.inactive')}
+            </span>
             <button
                 type="button"
                 role="switch"
