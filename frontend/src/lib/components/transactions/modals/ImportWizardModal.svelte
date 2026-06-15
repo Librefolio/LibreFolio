@@ -8,17 +8,19 @@
   Step 4: Review & Import — asset resolution + TX selection + handoff to BulkModal
 -->
 <script lang="ts">
+    import {untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {Upload, Trash2, Eye, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square} from 'lucide-svelte';
+    import {Upload, Trash2, Eye, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, X} from 'lucide-svelte';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
     import {formatBytes} from '$lib/utils/files/upload';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
-    import {ensureBrokersLoaded, getEditableBrokers, type BrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getEditableBrokers, refreshAllBrokers, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getAssetInfo, refreshAllAssets, type AssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {isFakeAssetId} from '$lib/utils/brim/isFakeAssetId';
+    import {getIndexColor} from '$lib/utils/colors';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import {getTransactionTypeIconUrl, getTypeRule, ensureTypesLoaded} from '$lib/stores/transactions/transactionTypeStore';
@@ -230,6 +232,8 @@
     let assetResolutions = $state<AssetResolution[]>([]);
     let createAssetForFakeId = $state<number | null>(null);
     let createBrokerOpen = $state(false);
+    /** Tracks which context opened the create-broker modal: 'global' or a pendingFile id */
+    let createBrokerContext = $state<'global' | string | null>(null);
     let step4ShowResolveSection = $state(true);
     let step4TableRef = $state<DataTable<MergedTx> | undefined>(undefined);
 
@@ -791,6 +795,11 @@ ${arrow}<span>${label}</span></span>`,
     let hasUnsavedWork = $derived(pendingFiles.length > 0 || selectedFiles.length > 0 || parseResults.length > 0 || mergedTransactions.length > 0);
     let selectedBrokerCount = $derived(new Set(selectedFiles.map((f) => f.brokerId)).size);
     let step3Warnings = $derived(parseResults.flatMap((r) => r.response?.warnings ?? []));
+    let step3WarningsByFile = $derived(
+        parseResults
+            .filter((r) => r.status === 'done' && (r.response?.warnings?.length ?? 0) > 0)
+            .map((r) => ({fileName: r.fileName, fileId: r.fileId, warnings: r.response!.warnings as string[]})),
+    );
 
     // =========================================================================
     // Lifecycle
@@ -974,7 +983,11 @@ ${arrow}<span>${label}</span></span>`,
 
             const formData = new FormData();
             formData.append('file', entry.file);
-            const result = await trySave(() => axiosInstance.post(`/api/v1/brokers/import/upload?broker_id=${entry.brokerId}`, formData), {toast: false, fallback: 'Upload failed', prefix: entry.fileName});
+            formData.append('broker_id', String(entry.brokerId));
+            if (entry.fileName !== entry.file.name) {
+                formData.append('custom_filename', entry.fileName);
+            }
+            const result = await trySave(() => axiosInstance.post(`/api/v1/brokers/import/upload`, formData), {toast: false, fallback: 'Upload failed', prefix: entry.fileName});
 
             if (result.status === 'error') {
                 pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'error', errorMessage: result.message} : f));
@@ -1064,7 +1077,7 @@ ${arrow}<span>${label}</span></span>`,
                               onchange: (v: number | null) => onFileBrokerChange(row.id, v),
                               placeholder: $t('importWizard.assignBroker'),
                               createLabel: $t('common.createNew'),
-                              onCreateNew: () => (createBrokerOpen = true),
+                              onCreateNew: () => { createBrokerContext = row.id; createBrokerOpen = true; },
                           },
                       } as const),
             type: 'custom',
@@ -1600,8 +1613,11 @@ ${arrow}<span>${label}</span></span>`,
     let previewData = $state<FilePreviewResponse | null>(null);
     let previewFileId = $state<string | null>(null);
     let previewRequestToken = 0;
+    /** z-index for FilePreviewModal — set dynamically based on the caller's z-index. */
+    let previewZIndex = $state(untrack(() => zIndex + 20));
 
-    async function openPreview(fileId: string) {
+    async function openPreview(fileId: string, callerZIndex?: number) {
+        previewZIndex = (callerZIndex ?? zIndex) + 20;
         previewFileId = fileId;
         showPreviewModal = true;
         previewData = null;
@@ -1733,7 +1749,7 @@ ${arrow}<span>${label}</span></span>`,
                         <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                             <span class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">{$t('importWizard.globalBroker')}:</span>
                             <div class="flex-1 max-w-xs">
-                                <BrokerSearchSelect {brokers} value={globalBrokerId} onchange={onGlobalBrokerChange} placeholder={$t('importWizard.assignBroker')} createLabel={$t('common.createNew')} onCreateNew={() => (createBrokerOpen = true)} />
+                                <BrokerSearchSelect {brokers} value={globalBrokerId} onchange={onGlobalBrokerChange} placeholder={$t('importWizard.assignBroker')} createLabel={$t('common.createNew')} onCreateNew={() => { createBrokerContext = 'global'; createBrokerOpen = true; }} />
                             </div>
                         </div>
 
@@ -2024,24 +2040,24 @@ ${arrow}<span>${label}</span></span>`,
                                 {#each assetResolutions as res (res.fakeAssetId)}
                                     {@const isResolved = res.resolvedAssetId !== null}
                                     <div class="border rounded-lg p-3 {isResolved ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/10' : 'border-gray-200 dark:border-gray-700'}">
-                                        <!-- Card header — name primary, identifier badges secondary -->
+                                        <!-- Card header — name + badges on same flex-wrap row, TX count right -->
                                         <div class="flex items-start justify-between gap-2 mb-1">
-                                            <div class="flex-1 min-w-0">
-                                                <p class="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">
+                                            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 flex-1 min-w-0">
+                                                <span class="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate max-w-full">
                                                     {res.extractedName ?? res.extractedSymbol ?? '?'}
-                                                </p>
-                                                <div class="flex flex-wrap gap-1 mt-0.5">
-                                                    {#if res.extractedSymbol}
-                                                        <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300">
-                                                            Ticker: {res.extractedSymbol}
-                                                        </span>
-                                                    {/if}
-                                                    {#if res.extractedIsin}
-                                                        <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400">
-                                                            ISIN: {res.extractedIsin}
-                                                        </span>
-                                                    {/if}
-                                                </div>
+                                                </span>
+                                                {#if res.extractedSymbol}
+                                                    {@const tc = getIndexColor(0, 200)}
+                                                    <span class="font-mono text-xs px-1.5 py-0.5 rounded-full shrink-0" style="background-color:{tc.bg};color:{tc.text}">
+                                                        Ticker: {res.extractedSymbol}
+                                                    </span>
+                                                {/if}
+                                                {#if res.extractedIsin}
+                                                    {@const ic = getIndexColor(1, 200)}
+                                                    <span class="font-mono text-xs px-1.5 py-0.5 rounded-full shrink-0" style="background-color:{ic.bg};color:{ic.text}">
+                                                        ISIN: {res.extractedIsin}
+                                                    </span>
+                                                {/if}
                                             </div>
                                             <span class="shrink-0 text-xs font-medium text-gray-500 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded whitespace-nowrap">
                                                 {res.txCount} TX
@@ -2247,23 +2263,65 @@ ${arrow}<span>${label}</span></span>`,
 <!-- Unsaved guard -->
 <ConfirmModal open={confirmCloseOpen} title={$t('importWizard.discardTitle')} message={$t('importWizard.discardMessage')} confirmText={$t('importWizard.discardConfirm')} warning zIndex={80} onConfirm={confirmDiscard} onCancel={() => (confirmCloseOpen = false)} />
 
-<!-- Step 3 → 4: warning acknowledgement -->
-<ConfirmModal
-    open={showWarningConfirm}
-    title={$t('importWizard.warningConfirmTitle')}
-    message={$t('importWizard.warningConfirmMessage', {values: {n: step3Warnings.length}})}
-    confirmText={$t('importWizard.warningConfirmOk')}
-    warning
-    zIndex={85}
-    onConfirm={goNext}
-    onCancel={() => (showWarningConfirm = false)}
-/>
+<!-- Step 3 → 4: warning acknowledgement (custom modal with accordion) -->
+<ModalBase open={showWarningConfirm} maxWidth="lg" zIndex={85} onRequestClose={() => (showWarningConfirm = false)}>
+    <!-- Header -->
+    <div class="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full shrink-0">
+            <AlertTriangle size={18} class="text-amber-600 dark:text-amber-400" />
+        </div>
+        <div class="flex-1 min-w-0">
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{$t('importWizard.warningConfirmTitle')}</h2>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {$t('importWizard.warningConfirmMessage', {values: {n: step3Warnings.length}})}
+            </p>
+        </div>
+        <button type="button" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 shrink-0" onclick={() => (showWarningConfirm = false)}>
+            <X size={16} />
+        </button>
+    </div>
+    <!-- Body: accordion grouped by file -->
+    <div class="p-4 space-y-2 max-h-[40vh] overflow-y-auto">
+        {#each step3WarningsByFile as group}
+            <details class="border border-amber-200 dark:border-amber-800 rounded-lg overflow-hidden">
+                <summary class="flex items-center justify-between px-3 py-2 cursor-pointer bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors list-none">
+                    <span class="text-xs font-medium text-amber-800 dark:text-amber-200 truncate flex-1 mr-2">
+                        {group.fileName} <span class="opacity-70">({group.warnings.length})</span>
+                    </span>
+                    <button
+                        type="button"
+                        class="flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors shrink-0"
+                        onclick={(e) => { e.stopPropagation(); openPreview(group.fileId, 85); }}
+                    >
+                        <FileText size={11} />{$t('importWizard.previewFile')}
+                    </button>
+                </summary>
+                <ul class="px-4 py-2 space-y-1 bg-white dark:bg-slate-800">
+                    {#each group.warnings as w}
+                        <li class="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+                            <AlertTriangle size={11} class="shrink-0 mt-0.5" /><span>{w}</span>
+                        </li>
+                    {/each}
+                </ul>
+            </details>
+        {/each}
+    </div>
+    <!-- Footer -->
+    <div class="flex justify-end gap-2 p-4 border-t border-gray-200 dark:border-gray-700">
+        <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" onclick={() => (showWarningConfirm = false)}>
+            {$t('common.cancel')}
+        </button>
+        <button type="button" class="px-4 py-2 text-sm rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors" onclick={goNext}>
+            {$t('importWizard.warningConfirmOk')}
+        </button>
+    </div>
+</ModalBase>
 
 <!-- File preview modal -->
-<FilePreviewModal open={showPreviewModal} preview={previewData} loading={previewLoading} error={previewError} onRequestClose={closePreviewModal} onSheetChange={(name) => loadPreview(name)} zIndex={80} />
+<FilePreviewModal open={showPreviewModal} preview={previewData} loading={previewLoading} error={previewError} onRequestClose={closePreviewModal} onSheetChange={(name) => loadPreview(name)} zIndex={previewZIndex} />
 
 <!-- Parse detail modal (single file) -->
-<ParseDetailModal open={showParseDetail} parseResult={parseDetailResult} zIndex={80} onClose={closeParseDetail} />
+<ParseDetailModal open={showParseDetail} parseResult={parseDetailResult} zIndex={80} onClose={closeParseDetail} onPreview={parseDetailResult ? () => openPreview(parseDetailResult!.fileId, 80) : undefined} />
 
 <!-- Parse detail modal (aggregate) -->
 <ParseDetailModal
@@ -2289,7 +2347,13 @@ ${arrow}<span>${label}</span></span>`,
                   identifier_isin: _createRes.extractedIsin ?? undefined,
               }
             : null}
-        initialSearchBadges={_createRes ? ([_createRes.extractedSymbol, _createRes.extractedIsin, _createRes.extractedName].filter(Boolean) as string[]) : []}
+        initialSearchBadges={_createRes
+            ? [
+                  ...(_createRes.extractedSymbol ? [{label: `Ticker: ${_createRes.extractedSymbol}`, value: _createRes.extractedSymbol}] : []),
+                  ...(_createRes.extractedIsin ? [{label: `ISIN: ${_createRes.extractedIsin}`, value: _createRes.extractedIsin}] : []),
+                  ...(_createRes.extractedName ? [{label: _createRes.extractedName.slice(0, 28), value: _createRes.extractedName}] : []),
+              ]
+            : []}
         initialSearchQuery=""
         zIndex={90}
         oncreated={(assetId) => {
@@ -2370,4 +2434,22 @@ ${arrow}<span>${label}</span></span>`,
     </div>
 </ModalBase>
 
-<BrokerModal isOpen={createBrokerOpen} mode="create" zIndex={zIndex + 10} onclose={() => (createBrokerOpen = false)} />
+<BrokerModal
+    isOpen={createBrokerOpen}
+    mode="create"
+    zIndex={zIndex + 10}
+    oncreated={(d) => {
+        if (createBrokerContext === 'global') {
+            onGlobalBrokerChange(d.id);
+        } else if (createBrokerContext) {
+            pendingFiles = pendingFiles.map((f) => (f.id === createBrokerContext ? {...f, brokerId: d.id} : f));
+        }
+        // Force full refetch so user_role is included (mergeBrokers alone lacks role data).
+        refreshAllBrokers().then(() => {
+            brokers = getEditableBrokers();
+        });
+        createBrokerOpen = false;
+        createBrokerContext = null;
+    }}
+    onclose={() => { createBrokerOpen = false; createBrokerContext = null; }}
+/>

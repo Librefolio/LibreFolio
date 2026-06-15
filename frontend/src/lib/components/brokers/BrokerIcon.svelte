@@ -130,7 +130,13 @@
 
     {#if !imageLoaded || !currentDisplayUrl}
         <div class="absolute inset-0 flex items-center justify-center">
-            <Briefcase size={sizes[size].icon} class="text-libre-green dark:text-green-400" />
+            {#if altText.trim()}
+                <span class="text-xs font-bold text-libre-green dark:text-green-400 uppercase select-none">
+                    {altText.trim().charAt(0)}
+                </span>
+            {:else}
+                <Briefcase size={sizes[size].icon} class="text-libre-green dark:text-green-400" />
+            {/if}
         </div>
     {/if}
 </div>

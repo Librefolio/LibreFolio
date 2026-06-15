@@ -30,7 +30,7 @@ import asyncio
 import mimetypes
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -461,7 +461,8 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 @brim_router.post("/upload", response_model=BRIMFileInfo)
 async def upload_file(
     file: UploadFile = File(..., description="Broker report file to upload"),
-    broker_id: int = Query(..., description="Target broker ID for this report"),
+    broker_id: int = Form(..., description="Target broker ID for this report"),
+    custom_filename: Optional[str] = Form(None, description="Override filename (user-renamed)"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
 ) -> BRIMFileInfo:
@@ -494,8 +495,9 @@ async def upload_file(
             detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024 * 1024)} MB",
         )
 
-    # Get original filename
-    filename = file.filename or "unknown"
+    # Get filename: prefer user-provided custom_filename over original file.filename
+    filename = (custom_filename.strip() if custom_filename and custom_filename.strip()
+                else (file.filename or "unknown"))
 
     # Save file with user_id and broker_id
     file_info = brim_provider.save_uploaded_file(

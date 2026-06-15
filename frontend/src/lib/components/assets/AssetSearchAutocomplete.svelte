@@ -49,9 +49,11 @@
         disabled?: boolean;
         /** Pre-fill the search input on mount (e.g. from BRIM extracted symbol/name). */
         initialQuery?: string;
+        /** When true, hides the "Search Online" section title (caller renders it externally). */
+        hideTitle?: boolean;
     }
 
-    let {onselect, disabled = false, initialQuery = ''}: Props = $props();
+    let {onselect, disabled = false, initialQuery = '', hideTitle = false}: Props = $props();
 
     // =========================================================================
     // State
@@ -271,11 +273,13 @@
 </script>
 
 <div class="space-y-2" data-search-autocomplete>
-    <!-- Section label -->
-    <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-        <Search size={12} />
-        <span>{$t('assets.modal.searchOnline')}</span>
-    </div>
+    <!-- Section label (hidden when parent renders it externally) -->
+    {#if !hideTitle}
+        <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <Search size={12} />
+            <span>{$t('assets.modal.searchOnline')}</span>
+        </div>
+    {/if}
 
     <!-- Search input -->
     <div class="relative">
