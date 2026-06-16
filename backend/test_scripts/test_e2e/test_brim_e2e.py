@@ -120,8 +120,9 @@ class TestBRIME2EImport:
             # Step 1: Upload (broker_id is required)
             files = {"file": ("e2e_deposits.csv", io.BytesIO(csv_content), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             assert upload_response.status_code == 200
@@ -182,8 +183,9 @@ class TestBRIME2EImport:
             # Step 1: Upload (broker_id is required)
             files = {"file": ("e2e_with_assets.csv", io.BytesIO(csv_content), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             assert upload_response.status_code == 200
@@ -249,8 +251,9 @@ class TestBRIME2EImport:
             # First import - both transactions
             files1 = {"file": (f"filter_test_{unique_id}.csv", io.BytesIO(csv_content), "text/csv")}
             upload1 = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files1,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             assert upload1.status_code == 200, f"Upload failed: {upload1.text}"
@@ -275,8 +278,9 @@ class TestBRIME2EImport:
 
             files2 = {"file": (f"filter_test2_{unique_id}.csv", io.BytesIO(csv_content2), "text/csv")}
             upload2 = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files2,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             assert upload2.status_code == 200, f"Upload2 failed: {upload2.text}"
@@ -328,8 +332,9 @@ class TestBRIME2EImport:
             # First import
             files1 = {"file": (f"dup_test_{unique_id}.csv", io.BytesIO(csv_content), "text/csv")}
             upload1 = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files1,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             assert upload1.status_code == 200, f"Upload failed: {upload1.text}"
@@ -348,8 +353,9 @@ class TestBRIME2EImport:
             # Second upload of same content
             files2 = {"file": (f"dup_test_{unique_id}_2.csv", io.BytesIO(csv_content), "text/csv")}
             upload2 = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files2,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             assert upload2.status_code == 200, f"Upload2 failed: {upload2.text}"

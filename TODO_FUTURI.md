@@ -811,3 +811,17 @@ Attualmente, le emoji associate ai settori finanziari sono hardcodate nel fronte
 4. Aggiornare `sectorStore.ts` per memorizzare e fornire facilmente l'abbinamento settore/emoji.
 5. Aggiornare tutti i componenti frontend che mostrano i settori per usare l'emoji fornita dal backend, garantendo un'unica source of truth.
 
+
+---
+
+Aree di miglioramento dopo aver visto compeditor:
+Tra i provider di prezzo, oltre ai siti da aumentare, ha senso fare olgre al css selector (che potrebbe essere rinominato web page) anche json api, html table e csv
+aggiungere i provider AI, olre a ollama e openrouter, anche tutti gli altri per l'installazione locale.
+pensare un sistema di addon che permetta al forontend di aggiungere tab. Capendo come creare un market place.
+aggiungere nella dashboard e nei broker dei tab che fanno anche altri tipi di analisi oltre quelli pensati, come ad esempio il vedere l'allocazione percentuale con i quadrettoni
+Aggiungere la feature di analisi che permette di impostare una target allocation sia per broker che generale.
+Aggiungere la possibilità di creare "Portafogli" che dovrebbero essere gruppi di broker o asset o entrambi, da approfondire.
+Fare delle pagine di dettaglio per analizzare i trade, le fee 
+Fare analisi solo sui dati
+Capire se serve aggiungere esplicitamente la transazione di split o se l'adjustment è già sufficiente
+Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una data di inizio per aver modo di vedere la differenza tra andamento teorico e reale.

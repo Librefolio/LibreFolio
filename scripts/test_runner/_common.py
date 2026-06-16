@@ -262,6 +262,11 @@ def run_command(cmd: list[str], description: str, verbose: bool = False, timeout
             return True
         else:
             print_error(f"{description} - FAILED (exit code: {result.returncode})")
+            # Print captured output so the pytest summary/traceback is visible
+            if not verbose and result.stdout:
+                print(result.stdout)
+            if not verbose and result.stderr:
+                print(result.stderr, end="")
             if use_coverage:
                 print(f"{Colors.YELLOW}⚠️  Coverage data still appended despite test failure{Colors.NC}")
             return False

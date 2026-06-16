@@ -46,6 +46,15 @@ async function openBulkModalAndImport(page: Page) {
         await page.getByRole('button', {name: /edit/i}).first().click();
     }
     await page.getByTestId('tx-bulk-modal-root').waitFor({state: 'visible', timeout: 6_000});
+
+    // The BulkModal may auto-open a FormModal for the selected paired transaction.
+    // Close it before clicking Import.
+    const formClose = page.getByTestId('tx-form-close');
+    if (await formClose.isVisible({timeout: 1_500}).catch(() => false)) {
+        await formClose.click();
+        await page.waitForTimeout(300);
+    }
+
     // Click "Import" button inside BulkModal
     await page.getByTestId('tx-bulk-import').click();
     await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 5_000});
@@ -60,10 +69,14 @@ async function skipToStep2(page: Page) {
 
 /** Select the first available file from first expanded broker panel. */
 async function selectFirstAvailableFile(page: Page) {
-    // Brokers should be auto-expanded; select first checkbox
-    const firstFileCheckbox = page.locator('[data-testid="import-wizard-step2"] input[type="checkbox"]').first();
-    if (await firstFileCheckbox.isVisible({timeout: 3_000}).catch(() => false)) {
-        await firstFileCheckbox.check();
+    // DataTable uses <button class="checkbox-btn"> inside <td class="td-select">,
+    // NOT input[type="checkbox"]. Brokers are auto-expanded when they have files.
+    const step2 = page.getByTestId('import-wizard-step2');
+    await page.waitForTimeout(400); // wait for broker files to load
+
+    const firstCheckbox = step2.locator('td.td-select button.checkbox-btn').first();
+    if (await firstCheckbox.isVisible({timeout: 3_000}).catch(() => false)) {
+        await firstCheckbox.click();
         await page.waitForTimeout(300);
     }
 }
@@ -79,9 +92,14 @@ async function parseFiles(page: Page) {
     await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
 }
 
-/** Navigate from Step 3 to Step 4 (Review). */
+/** Navigate from Step 3 to Step 4 (Review), handling the optional warnings confirmation modal. */
 async function continueToReview(page: Page) {
     await page.getByTestId('import-wizard-continue').click();
+    // If parse generated warnings, a confirmation modal appears — dismiss it to proceed
+    const warningConfirm = page.getByTestId('import-wizard-warning-confirm');
+    if (await warningConfirm.isVisible({timeout: 2_000}).catch(() => false)) {
+        await warningConfirm.click();
+    }
     await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 5_000});
     await page.waitForTimeout(300);
 }

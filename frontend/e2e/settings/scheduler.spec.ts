@@ -30,8 +30,8 @@ async function goToSchedulerSettings(page: import('@playwright/test').Page) {
     await page.getByTestId('settings-tab-admin').click();
     await expect(page.getByTestId('global-settings-tab')).toBeVisible({timeout: 10_000});
 
-    // Click the "Sync" category to filter settings so scheduler rows are visible
-    await page.getByTestId('global-settings-tab').getByRole('button', {name: 'Sync'}).click();
+    // Click the "Scheduler & Upload" category to filter settings so scheduler rows are visible
+    await page.getByTestId('global-settings-tab').getByRole('button', {name: 'Scheduler & Upload'}).click();
 
     // Wait for scheduler rows
     await expect(page.getByTestId('scheduler-status-row')).toBeVisible({timeout: 10_000});
@@ -184,9 +184,9 @@ test.describe('Scheduler — Config Modal', () => {
         await page.getByTestId('scheduler-config-row').getByRole('button', {name: 'Configure'}).click();
         await expect(page.getByTestId('scheduler-config-times')).toBeVisible({timeout: 5_000});
 
-        // Count initial slots
+        // Time slots are rendered as <span class="rounded-full"> badge elements (not <li>)
         const timesSection = page.getByTestId('scheduler-config-times');
-        const initialSlots = await timesSection.locator('button[data-testid]').count();
+        const initialSlots = await timesSection.locator('span.rounded-full').count();
 
         // Add a new time slot
         await page.getByTestId('scheduler-config-time-input').fill('12:00');
@@ -194,7 +194,7 @@ test.describe('Scheduler — Config Modal', () => {
         await page.waitForTimeout(300);
 
         // Slot count should have increased
-        const newSlots = await timesSection.locator('li').count();
+        const newSlots = await timesSection.locator('span.rounded-full').count();
         expect(newSlots).toBeGreaterThan(initialSlots);
     });
 
@@ -212,26 +212,24 @@ test.describe('Scheduler — Config Modal', () => {
 
         const timesSection = page.getByTestId('scheduler-config-times');
 
-        // Count initial slot items
-        const initialCount = await timesSection.locator('li').count();
+        // Time slots are <span class="rounded-full"> (not <li>)
+        let initialCount = await timesSection.locator('span.rounded-full').count();
 
-        if (initialCount <= 1) {
+        if (initialCount < 2) {
             // Need at least 2 to delete one — add a slot first
             await page.getByTestId('scheduler-config-time-input').fill('14:00');
             await page.getByTestId('scheduler-config-time-add').click();
             await page.waitForTimeout(300);
+            initialCount = await timesSection.locator('span.rounded-full').count();
         }
 
-        // Delete first slot via its remove button (×)
-        const firstSlotDeleteBtn = timesSection.locator('li button').first();
+        // Delete first slot via its remove button (the <button> inside the span badge)
+        const firstSlotDeleteBtn = timesSection.locator('span.rounded-full button').first();
         await firstSlotDeleteBtn.click();
         await page.waitForTimeout(300);
 
-        const afterCount = await timesSection.locator('li').count();
-        expect(afterCount).toBeLessThan((await timesSection.locator('li').count()) + 1);
-        // More explicit: slot count decreased
-        const newCount = await timesSection.locator('li').count();
-        expect(newCount).toBeLessThan(initialCount + 1); // at most initialCount (we deleted one or started fresh)
+        const afterCount = await timesSection.locator('span.rounded-full').count();
+        expect(afterCount).toBeLessThan(initialCount);
     });
 });
 

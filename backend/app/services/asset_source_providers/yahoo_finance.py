@@ -377,6 +377,13 @@ class YahooFinanceProvider(AssetSourceProvider):
                 else:
                     date_utc = idx.date()
 
+                # Skip rows where Close is NaN — this happens on the current trading day
+                # when markets are still open, or on data quality gaps returned by yfinance.
+                # Close is required (non-optional in FAPricePoint), so NaN rows are unusable.
+                if not pd.notna(row["Close"]):
+                    logger.debug(f"Skipping {date_utc} for {identifier}: Close is NaN")
+                    continue
+
                 prices.append(
                     FAPricePoint(
                         date=date_utc,
@@ -387,6 +394,13 @@ class YahooFinanceProvider(AssetSourceProvider):
                         volume=int(row["Volume"]) if pd.notna(row["Volume"]) else None,
                         currency=currency,
                     )
+                )
+
+            if not prices:
+                raise AssetSourceError(
+                    f"No usable price points for ticker: {identifier} (all Close values are NaN)",
+                    "NO_DATA",
+                    {"identifier": identifier, "start": str(start_date), "end": str(end_date)},
                 )
 
             # --- Parse asset events (dividends + splits) ---

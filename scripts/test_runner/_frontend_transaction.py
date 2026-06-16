@@ -279,6 +279,20 @@ def front_tx_brim_import(verbose: bool = False, ui: bool = False, headed: bool =
     return _run_playwright("transactions/tx-brim-import.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_import_resolution(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Import Wizard Resolution E2E tests (resolve section, identifier prompt, create asset)."""
+    print_section("Frontend TX Import Resolution Tests")
+    if not _ensure_frontend_build():
+        return False
+    # Populate DB with broker report files (--with-reports flag for generic_simple.csv)
+    from ._backend_db import db_populate
+    if not db_populate(verbose=verbose, force=True, with_reports=True):
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-import-resolution.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Transaction E2E tests."""
     return _run_test_suite(
@@ -305,6 +319,7 @@ def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool 
             ("TX WAC Mode", lambda: front_tx_wac_mode(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Event Picker", lambda: front_tx_event_picker(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX BRIM Import", lambda: front_tx_brim_import(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX Import Resolution", lambda: front_tx_import_resolution(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
         ],
         verbose=verbose,
         header_msg="All Transaction Tests (E2E)",
@@ -340,6 +355,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-wac-mode", front_tx_wac_mode, name="TX WAC Mode Tests", desc="WAC auto/manual toggle, blur-without-change stays auto, placeholder with validate hint", tests="transactions/tx-wac-mode.spec.ts")
     add_test(cat, "tx-event-picker", front_tx_event_picker, name="TX Event Picker Tests", desc="Event picker card-style dropdown, delta, slider range, type visibility", tests="transactions/tx-event-picker.spec.ts")
     add_test(cat, "tx-brim-import", front_tx_brim_import, name="TX BRIM Import Wizard Tests", desc="Import Wizard flow: open, select file, parse, resolve assets, import to BulkModal", tests="transactions/tx-brim-import.spec.ts")
+    add_test(cat, "tx-import-resolution", front_tx_import_resolution, name="TX Import Resolution Tests", desc="Advanced resolve flow: resolve section, AssetSelect, identifier prompt, create asset, full E2E", tests="transactions/tx-import-resolution.spec.ts")
     add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi", tests="vitest")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

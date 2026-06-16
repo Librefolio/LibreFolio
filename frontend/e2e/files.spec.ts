@@ -47,8 +47,9 @@ async function createBroker(page: Page): Promise<number> {
 }
 
 async function uploadBrimFile(page: Page, brokerId: number, filename: string, content: Buffer | string, mimeType: string): Promise<string> {
-    const response = await page.request.post(`${API}/brokers/import/upload?broker_id=${brokerId}`, {
+    const response = await page.request.post(`${API}/brokers/import/upload`, {
         multipart: {
+            broker_id: String(brokerId),
             file: {
                 name: filename,
                 mimeType,

@@ -111,9 +111,12 @@ def _row(dt: str, type_: str, amount: str, share: str = "1") -> _HistoryTxRow:
 class TestBuildHistorySeries:
     """Pure unit tests — no DB, no async, no fixtures. Fast and deterministic.
 
-    Any NameError or wrong variable name in the list comprehension
-    (like Bug 2: vals["cash"] instead of daily[dt]["cash"]) would be
-    caught immediately by test_single_deposit.
+    NOTE: _build_history_series was refactored to produce a *dense daily* series
+    (one point per calendar day) rather than one point per transaction date.
+    `invested_value` is always 0 at this stage (patched by mark-to-market in
+    get_history()). `nav_value == cash_value` always in the raw output.
+
+    All transaction types contribute to cash_value (no type-based filtering here).
     """
 
     def test_empty_input(self):
@@ -121,50 +124,52 @@ class TestBuildHistorySeries:
 
     def test_single_deposit(self):
         """
-        Single DEPOSIT 10000 -> cash=10000, invested=0, nav=10000.
+        Single DEPOSIT 10000 -> point on that date has cash=10000, invested=0, nav=10000.
         This test would have caught Bug 2 (NameError on vals["cash"]).
         """
         rows = [_row("2025-01-01", "DEPOSIT", "10000")]
         result = _build_history_series(rows)
 
-        assert len(result) == 1
-        assert result[0].date == date(2025, 1, 1)
-        assert result[0].cash_value == Decimal("10000")
-        assert result[0].invested_value == Decimal("0")
-        assert result[0].nav_value == Decimal("10000")
+        assert len(result) >= 1
+        pt = result[0]
+        assert pt.date == date(2025, 1, 1)
+        assert pt.cash_value == Decimal("10000")
+        assert pt.invested_value == Decimal("0")
+        assert pt.nav_value == Decimal("10000")
 
     def test_buy_moves_cash_to_invested(self):
-        """DEPOSIT 10000 then BUY 5000.
-        t0: cash=10000, invested=0,    nav=10000
-        t1: cash=5000,  invested=5000, nav=10000
+        """DEPOSIT 10000 then BUY -5000 (BUY amounts are negative = cash out).
+        Dense series: point on 2025-01-01 has cash=10000; point on 2025-03-01 has
+        cash=10000+(-5000)=5000. invested_value is always 0 (MtM layer patches it).
         """
         rows = [
             _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-03-01", "BUY",     "5000"),
+            _row("2025-03-01", "BUY",     "-5000"),   # BUY: negative amount (cash out)
         ]
         result = _build_history_series(rows)
 
-        assert len(result) == 2
-        t0 = result[0]
+        # Dense expansion: many daily points between 2025-01-01 and 2025-03-01
+        assert len(result) > 2
+        # Find points by date
+        t0 = next(p for p in result if p.date == date(2025, 1, 1))
+        t1 = next(p for p in result if p.date == date(2025, 3, 1))
         assert t0.cash_value == Decimal("10000")
-        assert t0.invested_value == Decimal("0")
         assert t0.nav_value == Decimal("10000")
-        t1 = result[1]
         assert t1.cash_value == Decimal("5000")
-        assert t1.invested_value == Decimal("5000")
-        assert t1.nav_value == Decimal("10000")
+        assert t1.nav_value == Decimal("5000")  # invested_value=0, so nav=cash
 
     def test_nav_invariant(self):
-        """For every point: nav_value == cash_value + invested_value."""
+        """For every point: nav_value == cash_value + invested_value (invested=0 always)."""
         rows = [
             _row("2025-01-01", "DEPOSIT",    "10000"),
-            _row("2025-02-01", "BUY",         "3000"),
-            _row("2025-04-01", "SELL",         "1000"),
-            _row("2025-06-01", "WITHDRAWAL",   "2000"),
-            _row("2025-09-01", "DEPOSIT",      "5000"),
+            _row("2025-02-01", "BUY",        "-3000"),
+            _row("2025-04-01", "SELL",        "1000"),
+            _row("2025-06-01", "WITHDRAWAL",  "-2000"),
+            _row("2025-09-01", "DEPOSIT",     "5000"),
         ]
         result = _build_history_series(rows)
-        assert len(result) == 5
+        # Dense: many more than 5 points
+        assert len(result) > 5
         for point in result:
             assert point.nav_value == point.cash_value + point.invested_value, (
                 f"NAV invariant violated at {point.date}: "
@@ -187,50 +192,53 @@ class TestBuildHistorySeries:
         rows = [_row("2025-01-01", "DEPOSIT", "10000", share="0.5")]
         result = _build_history_series(rows)
 
-        assert len(result) == 1
+        assert len(result) >= 1
         assert result[0].cash_value == Decimal("5000")
         assert result[0].nav_value == Decimal("5000")
 
     def test_withdrawal_reduces_cash(self):
-        """DEPOSIT 10000 -> WITHDRAWAL 3000 -> cash = 7000."""
+        """DEPOSIT 10000 -> WITHDRAWAL -3000 -> cash = 7000 on withdrawal date."""
         rows = [
             _row("2025-01-01", "DEPOSIT",    "10000"),
-            _row("2025-06-01", "WITHDRAWAL",  "3000"),
+            _row("2025-06-01", "WITHDRAWAL", "-3000"),
         ]
         result = _build_history_series(rows)
 
-        assert len(result) == 2
-        t1 = result[1]
-        assert t1.cash_value == Decimal("7000")
-        assert t1.invested_value == Decimal("0")
-        assert t1.nav_value == Decimal("7000")
+        # Dense: many points; find the withdrawal date
+        assert len(result) > 2
+        pt = next(p for p in result if p.date == date(2025, 6, 1))
+        assert pt.cash_value == Decimal("7000")
+        assert pt.nav_value == Decimal("7000")
 
     def test_sell_increases_cash_reduces_invested(self):
-        """DEPOSIT 10000 -> BUY 8000 -> SELL 3000.
-        After SELL: cash = 10000-8000+3000 = 5000, invested = 8000-3000 = 5000.
+        """DEPOSIT 10000 -> BUY -8000 -> SELL 3000.
+        Net cash at end: 10000 - 8000 + 3000 = 5000.
+        invested_value is always 0 in the raw series (patched by MtM later).
         """
         rows = [
             _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-02-01", "BUY",      "8000"),
+            _row("2025-02-01", "BUY",     "-8000"),
             _row("2025-03-01", "SELL",     "3000"),
         ]
         result = _build_history_series(rows)
 
         final = result[-1]
         assert final.cash_value == Decimal("5000")
-        assert final.invested_value == Decimal("5000")
-        assert final.nav_value == Decimal("10000")
+        assert final.nav_value == Decimal("5000")   # invested_value=0 at this stage
 
-    def test_unknown_type_skipped(self):
-        """Unknown transaction types are silently ignored."""
+    def test_all_types_contribute_to_cash(self):
+        """All transaction types (including DIVIDEND) contribute to cash_value.
+        There is no type-based filtering in _build_history_series.
+        """
         rows = [
             _row("2025-01-01", "DEPOSIT",  "10000"),
-            _row("2025-02-01", "DIVIDEND",  "500"),
+            _row("2025-02-01", "DIVIDEND",   "500"),
         ]
         result = _build_history_series(rows)
         final = result[-1]
-        assert final.cash_value == Decimal("10000")
-        assert final.nav_value == Decimal("10000")
+        # DIVIDEND adds to cash (no type filtering at this layer)
+        assert final.cash_value == Decimal("10500")
+        assert final.nav_value == Decimal("10500")
 
     def test_multiple_transactions_same_date(self):
         """Two deposits on same date -> single point with cumulative state."""
@@ -332,6 +340,7 @@ class TestPortfolioServiceGetHistory:
         """
         Deposito 10000 EUR -> il punto ha cash_value=10000, invested=0, nav=10000.
         Questo test avrebbe trovato Bug 2 (NameError su vals["cash"]).
+        NOTE: PortfolioHistoryPoint.cash_value/invested_value/nav_value are Currency objects.
         """
         broker, _ = broker_with_access
         session.add(Transaction(
@@ -346,9 +355,9 @@ class TestPortfolioServiceGetHistory:
         assert len(result) >= 1
         point = next((p for p in result if p.date == date(2025, 3, 1)), None)
         assert point is not None, f"No point for 2025-03-01 in {[p.date for p in result]}"
-        assert point.cash_value == Decimal("10000"), f"Expected cash=10000, got {point.cash_value}"
-        assert point.invested_value == Decimal("0")
-        assert point.nav_value == Decimal("10000")
+        assert point.cash_value.amount == Decimal("10000"), f"Expected cash=10000, got {point.cash_value}"
+        assert point.invested_value.amount == Decimal("0")
+        assert point.nav_value.amount == Decimal("10000")
 
     @pytest.mark.asyncio
     async def test_nav_invariant_on_deposit(self, session, test_user, broker_with_access):
@@ -399,15 +408,17 @@ class TestPortfolioServiceGetHistory:
 class TestPortfolioServiceGetSummary:
     @pytest.mark.asyncio
     async def test_empty_summary_returns_zeros(self, session, test_user):
-        """User with no brokers -> all numeric fields are zero."""
+        """User with no brokers -> all numeric fields are zero.
+        NOTE: net_worth, total_invested, etc. are Currency objects (not bare Decimal).
+        """
         service = PortfolioService(session)
         summary = await service.get_summary(user_id=test_user.id)
 
         assert summary is not None
-        assert summary.net_worth == Decimal("0")
-        assert summary.total_invested == Decimal("0")
-        assert summary.total_gain_loss == Decimal("0")
-        assert summary.cash_total == Decimal("0")
+        assert summary.net_worth.amount == Decimal("0")
+        assert summary.total_invested.amount == Decimal("0")
+        assert summary.total_gain_loss.amount == Decimal("0")
+        assert summary.cash_total.amount == Decimal("0")
         assert summary.holdings == []
         assert summary.by_broker is None
 
@@ -416,6 +427,7 @@ class TestPortfolioServiceGetSummary:
         """
         Solo depositi (nessun asset) -> net_worth = cash_total = deposito.
         gain_loss = 0, simple_roi = 0.
+        NOTE: monetary fields are Currency objects; compare via .amount.
         """
         broker, _ = broker_with_access
         session.add(Transaction(
@@ -427,9 +439,9 @@ class TestPortfolioServiceGetSummary:
         service = PortfolioService(session)
         summary = await service.get_summary(user_id=test_user.id)
 
-        assert summary.cash_total == Decimal("10000"), f"Expected cash_total=10000, got {summary.cash_total}"
-        assert summary.net_worth == Decimal("10000"), f"Expected net_worth=10000, got {summary.net_worth}"
-        assert summary.total_gain_loss == Decimal("0")
+        assert summary.cash_total.amount == Decimal("10000"), f"Expected cash_total=10000, got {summary.cash_total}"
+        assert summary.net_worth.amount == Decimal("10000"), f"Expected net_worth=10000, got {summary.net_worth}"
+        assert summary.total_gain_loss.amount == Decimal("0")
         assert summary.simple_roi_percent == Decimal("0")
         assert summary.holdings == []
 
@@ -448,7 +460,7 @@ class TestPortfolioServiceGetSummary:
         service = PortfolioService(session)
         summary = await service.get_summary(user_id=test_user.id, broker_ids=[broker.id])
         assert summary is not None
-        assert summary.net_worth >= Decimal("0")
+        assert summary.net_worth.amount >= Decimal("0")
 
     @pytest.mark.asyncio
     async def test_summary_nonexistent_broker_ignored(self, session, test_user):
@@ -457,4 +469,4 @@ class TestPortfolioServiceGetSummary:
         summary = await service.get_summary(user_id=test_user.id, broker_ids=[999999])
         assert summary is not None
         assert summary.holdings == []
-        assert summary.net_worth == Decimal("0")
+        assert summary.net_worth.amount == Decimal("0")
