@@ -1,4 +1,4 @@
-site_name: LibreFolio Docs
+site_name: LibreFolio
 site_url: https://librefolio.github.io/LibreFolio/
 repo_url: https://github.com/Librefolio/LibreFolio
 repo_name: Librefolio/LibreFolio
@@ -718,3 +718,4 @@ hooks:
 
 extra_css:
   - static/extra.css
+  - stylesheets/home-custom.css
