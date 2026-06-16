@@ -12,8 +12,8 @@
  *   - This ensures brokers with icons exist for realistic screenshots
  */
 import {expect, Page, test} from '@playwright/test';
-import {login, navigateTo, setLanguage} from './fixtures/auth-helpers';
-import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN} from './fixtures/test-users';
+import {login, logout, navigateTo, setLanguage} from './fixtures/auth-helpers';
+import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
 import {goToAssetsPage, navigateToAssetByName} from './assets/assets-helpers';
 import * as path from 'path';
@@ -228,6 +228,40 @@ test.describe('Gallery Screenshots', () => {
                 }
             }
         });
+
+        test('dashboard allocation charts - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle');
+                await freezeAnimations(page);
+                // Scroll to the allocation panel
+                const allocPanel = page.getByTestId('allocation-panel');
+                if (await allocPanel.isVisible({timeout: 5_000}).catch(() => false)) {
+                    await allocPanel.scrollIntoViewIfNeeded();
+                    await waitForNetworkSettled(page);
+                    await page.waitForTimeout(800); // Extra time for ECharts render
+                }
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-charts');
+                // Scroll back to top so next iteration starts clean
+                await page.evaluate(() => window.scrollTo(0, 0));
+            });
+        });
+
+        test('dashboard empty state - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            // Logout TEST_ADMIN (from beforeEach) and switch to empty user
+            await logout(page);
+            await login(page, TEST_EMPTY);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle');
+                await freezeAnimations(page);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'empty-state');
+            });
+        });
     });
 
     test.describe('Settings', () => {
@@ -334,6 +368,84 @@ test.describe('Gallery Screenshots', () => {
                 }
             });
         });
+
+        test('scheduler config modal - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_ADMIN);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/settings');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('settings-page').waitFor({state: 'visible', timeout: 10_000});
+                    await freezeAnimations(page);
+
+                    // Navigate to admin tab
+                    await page.getByTestId('settings-tab-admin').click();
+                    await page.getByTestId('global-settings-tab').waitFor({state: 'visible', timeout: 10_000});
+                    await page
+                        .locator('[data-testid="global-settings-tab"] [role="status"]')
+                        .waitFor({state: 'hidden', timeout: 15_000})
+                        .catch(() => {});
+                    await waitForNetworkSettled(page);
+                    await page.waitForTimeout(500);
+
+                    // Click the configure button to open SchedulerConfigModal
+                    const configBtn = page.getByTestId('scheduler-config-btn');
+                    await configBtn.scrollIntoViewIfNeeded();
+                    if (await configBtn.isVisible({timeout: 3_000}).catch(() => false)) {
+                        await configBtn.click();
+                        const configModal = page.getByTestId('scheduler-config-modal');
+                        await expect(configModal).toBeVisible({timeout: 5_000});
+                        await freezeAnimations(page);
+                        await page.waitForTimeout(300);
+                        await screenshot(page, viewport, lang, theme, 'settings', 'scheduler-config');
+                        await page.keyboard.press('Escape');
+                        await page.waitForTimeout(200);
+                    }
+                }
+            }
+        });
+
+        test('scheduler log modal - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            await login(page, TEST_ADMIN);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/settings');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('settings-page').waitFor({state: 'visible', timeout: 10_000});
+                    await freezeAnimations(page);
+
+                    // Navigate to admin tab
+                    await page.getByTestId('settings-tab-admin').click();
+                    await page.getByTestId('global-settings-tab').waitFor({state: 'visible', timeout: 10_000});
+                    await page
+                        .locator('[data-testid="global-settings-tab"] [role="status"]')
+                        .waitFor({state: 'hidden', timeout: 15_000})
+                        .catch(() => {});
+                    await waitForNetworkSettled(page);
+                    await page.waitForTimeout(500);
+
+                    // Click the scheduler status row to open SchedulerLogModal
+                    const statusRow = page.getByTestId('scheduler-status-row');
+                    await statusRow.scrollIntoViewIfNeeded();
+                    if (await statusRow.isVisible({timeout: 3_000}).catch(() => false)) {
+                        await statusRow.click();
+                        const logModal = page.getByTestId('scheduler-log-modal');
+                        await expect(logModal).toBeVisible({timeout: 5_000});
+                        await freezeAnimations(page);
+                        await page.waitForTimeout(300);
+                        await screenshot(page, viewport, lang, theme, 'settings', 'scheduler-log');
+                        await page.keyboard.press('Escape');
+                        await page.waitForTimeout(200);
+                    }
+                }
+            }
+        });
     });
 
     test.describe('Files', () => {
@@ -375,10 +487,388 @@ test.describe('Gallery Screenshots', () => {
                 const gridBtn = page.getByTestId('view-mode-grid');
                 if (await gridBtn.isVisible().catch(() => false)) {
                     await gridBtn.click();
-                    await page.waitForTimeout(500);
+                    await page.waitForTimeout(2000); // Wait for image previews to load
                     await screenshot(page, viewport, lang, theme, 'files', 'static-grid');
                 }
             });
+        });
+
+        test('file preview modal (BRIM) - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await page.goto('/files?tab=brim');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.waitForLoadState('networkidle');
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(500);
+
+                    // Click the preview action on the first BRIM file row
+                    const previewBtn = page.locator('[data-testid="files-table-brim"] [data-testid="row-action-preview"]').first();
+                    if (await previewBtn.isVisible({timeout: 3_000}).catch(() => false)) {
+                        await previewBtn.click();
+                        const previewModal = page.getByTestId('file-preview-modal');
+                        await expect(previewModal).toBeVisible({timeout: 8_000});
+                        await page.waitForTimeout(1000); // Wait for file content to load
+                        await screenshot(page, viewport, lang, theme, 'files', 'preview-modal-csv');
+                        await page.keyboard.press('Escape');
+                        await page.waitForTimeout(200);
+                    }
+                }
+            }
+        });
+
+        test('file preview modal (image) - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            // File types to preview, with URL filter to find the specific file
+            const previewTypes: Array<{filename: string; name: string}> = [
+                {filename: '.png', name: 'preview-modal-image'},
+                {filename: 'ebook.pdf', name: 'preview-modal-pdf'},
+                {filename: 'preview_markdown_sample.md', name: 'preview-modal-markdown'},
+                {filename: 'preview_notes_sample.txt', name: 'preview-modal-text'},
+            ];
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    for (const {filename, name} of previewTypes) {
+                        // Navigate with URL filter to directly show the target file
+                        await page.goto(`/files?tab=static&filename=${encodeURIComponent(filename)}`);
+                        await setLanguage(page, lang);
+                        await setTheme(page, theme);
+                        await page.waitForLoadState('networkidle');
+                        await freezeAnimations(page);
+                        await page.waitForTimeout(500);
+
+                        // Find first row with a preview button
+                        const table = page.locator('[data-testid="files-table-static"]');
+                        const firstPreviewBtn = table.locator('[data-testid="row-action-preview"]').first();
+                        if (await firstPreviewBtn.isVisible({timeout: 3_000}).catch(() => false)) {
+                            await firstPreviewBtn.click();
+                            const previewModal = page.getByTestId('file-preview-modal');
+                            if (await previewModal.isVisible({timeout: 8_000}).catch(() => false)) {
+                                await waitForNetworkSettled(page);
+                                await page.waitForTimeout(1500); // Wait for content to load (PDF may take longer)
+                                await screenshot(page, viewport, lang, theme, 'files', name);
+                                await page.keyboard.press('Escape');
+                                await page.waitForTimeout(200);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
+
+    test.describe('Transactions', () => {
+        test.beforeEach(async ({page}) => {
+            await login(page, TEST_ADMIN);
+        });
+
+        test('transaction list - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await navigateTo(page, '/transactions');
+                await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+                await waitForNetworkSettled(page);
+                await freezeAnimations(page);
+                await screenshot(page, viewport, lang, theme, 'transactions', 'list');
+            });
+        });
+
+        test('transaction form modal - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+                    await freezeAnimations(page);
+
+                    // Click the Add transaction button
+                    await page.getByTestId('tx-add-button').click();
+                    const formModal = page.getByTestId('tx-form-modal');
+                    await expect(formModal).toBeVisible({timeout: 8_000});
+                    await waitForNetworkSettled(page);
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'transactions', 'form-modal');
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(300);
+                    // Confirm discard if dialog appears
+                    const confirmDiscard = page.getByTestId('confirm-modal-confirm');
+                    if (await confirmDiscard.isVisible({timeout: 500}).catch(() => false)) {
+                        await confirmDiscard.click();
+                        await page.waitForTimeout(200);
+                    }
+                }
+            }
+        });
+
+        test('transaction form modal variants - all languages and themes', async ({page}, testInfo) => {
+            // Screenshots for different transaction types in the form modal
+            const viewport = getViewport(testInfo);
+            const typesToShoot: Array<{type: string; name: string}> = [
+                {type: 'SELL', name: 'form-modal-sell'},
+                {type: 'DIVIDEND', name: 'form-modal-dividend'},
+                {type: 'DEPOSIT', name: 'form-modal-deposit'},
+                {type: 'TRANSFER', name: 'form-modal-transfer'},
+                {type: 'FX_CONVERSION', name: 'form-modal-fxconversion'},
+            ];
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    for (const {type, name} of typesToShoot) {
+                        await navigateTo(page, '/transactions');
+                        await setLanguage(page, lang);
+                        await setTheme(page, theme);
+                        await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+
+                        // Open Add form
+                        await page.getByTestId('tx-add-button').click();
+                        const formModal = page.getByTestId('tx-form-modal');
+                        await expect(formModal).toBeVisible({timeout: 8_000});
+                        await waitForNetworkSettled(page);
+                        await page.waitForTimeout(200);
+
+                        // Change type via the type search-select:
+                        // SearchSelect shows input INSIDE the open dropdown, not inline.
+                        // 1) Click the combobox trigger to open dropdown
+                        // 2) Click the specific option by testid
+                        const typeCombobox = page.locator('[data-testid="tx-form-type"] [role="combobox"]');
+                        if (await typeCombobox.isVisible({timeout: 2_000}).catch(() => false)) {
+                            await typeCombobox.click();
+                            await page.waitForTimeout(400);
+                            const option = page.locator(`[data-testid="search-select-option-${type}"]`);
+                            if (await option.isVisible({timeout: 2_000}).catch(() => false)) {
+                                await option.click();
+                                await waitForNetworkSettled(page);
+                                await page.waitForTimeout(400);
+                            }
+                        }
+                        await freezeAnimations(page);
+                        await screenshot(page, viewport, lang, theme, 'transactions', name);
+
+                        // Close form
+                        await page.keyboard.press('Escape');
+                        await page.waitForTimeout(200);
+                        const discardBtn = page.getByTestId('confirm-modal-confirm');
+                        if (await discardBtn.isVisible({timeout: 500}).catch(() => false)) {
+                            await discardBtn.click();
+                            await page.waitForTimeout(200);
+                        }
+                    }
+                }
+            }
+        });
+
+        test('transaction picker modal - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+                    await freezeAnimations(page);
+
+                    // Open BulkModal by hovering the first row and clicking edit
+                    const firstRow = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').first();
+                    await expect(firstRow).toBeVisible({timeout: 5_000});
+                    await firstRow.hover();
+                    await page.waitForTimeout(200);
+                    const editAction = firstRow.locator('button[data-action-id="edit"]');
+                    if (await editAction.isVisible({timeout: 2_000}).catch(() => false)) {
+                        await editAction.click();
+                        // BulkModal or FormModal opens — wait for BulkModal
+                        const bulkModal = page.locator('[data-testid="tx-bulk-modal-root"]');
+                        if (await bulkModal.isVisible({timeout: 5_000}).catch(() => false)) {
+                            // Close any nested FormModal first
+                            const formClose = page.getByTestId('tx-form-close');
+                            if (await formClose.isVisible({timeout: 1_000}).catch(() => false)) {
+                                await formClose.click();
+                                await page.waitForTimeout(200);
+                            }
+                            // Open the TransactionPickerModal
+                            const pickerBtn = page.getByTestId('tx-bulk-picker');
+                            if (await pickerBtn.isVisible({timeout: 3_000}).catch(() => false)) {
+                                await pickerBtn.click();
+                                const pickerModal = page.getByTestId('tx-picker-modal');
+                                await expect(pickerModal).toBeVisible({timeout: 5_000});
+                                await waitForNetworkSettled(page);
+                                await page.waitForTimeout(300);
+                                await screenshot(page, viewport, lang, theme, 'transactions', 'picker-modal');
+                                await page.keyboard.press('Escape');
+                                await page.waitForTimeout(200);
+                            }
+                        }
+                    }
+                    // Close any open modals
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('transaction split action modal - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+                    await freezeAnimations(page);
+
+                    // Find a paired TX row that has a split action
+                    const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
+                    const rowCount = await rows.count();
+                    let found = false;
+                    for (let i = 0; i < Math.min(rowCount, 30) && !found; i++) {
+                        const row = rows.nth(i);
+                        await row.hover();
+                        await page.waitForTimeout(150);
+                        const splitBtn = row.locator('button[data-action-id="split"]');
+                        if (await splitBtn.isVisible({timeout: 500}).catch(() => false)) {
+                            await splitBtn.click();
+                            const actionModal = page.getByTestId('tx-action-modal');
+                            if (await actionModal.isVisible({timeout: 3_000}).catch(() => false)) {
+                                await page.waitForTimeout(300);
+                                await screenshot(page, viewport, lang, theme, 'transactions', 'action-modal');
+                                await page.getByTestId('tx-action-modal-cancel').click();
+                                await page.waitForTimeout(200);
+                                found = true;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        test('transaction promote-merge modal - all languages and themes', async ({page}, testInfo) => {
+            // Note: this test finds 2 compatible standalone TXs (WITHDRAWAL+DEPOSIT)
+            // and opens the PromoteMergeModal or ConfirmModal. Silently skips if not found.
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/transactions?types=WITHDRAWAL,DEPOSIT&page_size=50');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+                    await waitForNetworkSettled(page);
+                    await page.waitForTimeout(1500); // Wait for type store to load
+
+                    const rows = page.locator('[data-testid="tx-table"] tr[data-row-id^="tx-"]');
+                    const rowCount = await rows.count();
+                    if (rowCount < 2) continue;
+
+                    // Try the first 4 row combinations
+                    let screenshotTaken = false;
+                    const maxTry = Math.min(rowCount, 4);
+
+                    for (let i = 0; i < maxTry && !screenshotTaken; i++) {
+                        for (let j = i + 1; j < maxTry && !screenshotTaken; j++) {
+                            // Clear any prior selection before EACH attempt
+                            const clearBtn = page.locator('button.selected-count-btn').first();
+                            if (await clearBtn.isVisible({timeout: 300}).catch(() => false)) {
+                                await clearBtn.click();
+                                await page.waitForTimeout(200);
+                            }
+
+                            const cbI = rows.nth(i).locator('.checkbox-btn').first();
+                            const cbJ = rows.nth(j).locator('.checkbox-btn').first();
+                            await cbI.click({timeout: 2_000}).catch(() => {});
+                            await page.waitForTimeout(300);
+                            await cbJ.click({timeout: 2_000}).catch(() => {});
+                            await page.waitForTimeout(800); // Wait for Svelte to re-derive promoteMatch
+
+                            const promoteBtn = page.getByTestId('toolbar-action-promote');
+                            const promoteBtnVisible = await promoteBtn.isVisible({timeout: 5_000}).catch(() => false);
+                            if (promoteBtnVisible) {
+                                await promoteBtn.click();
+                                await page.waitForTimeout(500);
+                                await freezeAnimations(page);
+
+                                // Use role=dialog to target the ModalBase backdrop (not the inner div)
+                                // which also has data-testid="promote-merge-modal"
+                                const mergeModal = page.locator('[data-testid="promote-merge-modal"][role="dialog"]');
+                                const confirmBtn = page.getByTestId('confirm-modal-confirm');
+                                if (await mergeModal.isVisible({timeout: 3_000}).catch(() => false)) {
+                                    await screenshot(page, viewport, lang, theme, 'transactions', 'promote-merge-modal');
+                                    screenshotTaken = true;
+                                } else if (await confirmBtn.isVisible({timeout: 3_000}).catch(() => false)) {
+                                    await screenshot(page, viewport, lang, theme, 'transactions', 'promote-merge-modal');
+                                    screenshotTaken = true;
+                                }
+                                await page.keyboard.press('Escape');
+                                await page.waitForTimeout(200);
+                                const cancelBtn = page.getByTestId('confirm-modal-cancel');
+                                if (await cancelBtn.isVisible({timeout: 300}).catch(() => false)) {
+                                    await cancelBtn.click();
+                                    await page.waitForTimeout(200);
+                                }
+                            }
+                        }
+                    }
+                    // Clear selection at end of this lang/theme iteration
+                    const finalClear = page.locator('button.selected-count-btn').first();
+                    if (await finalClear.isVisible({timeout: 300}).catch(() => false)) {
+                        await finalClear.click();
+                        await page.waitForTimeout(100);
+                    }
+                }
+            }
+        });
+
+        test('delete linked pair modal - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+                    await freezeAnimations(page);
+
+                    // Find a linked pair TX (rebalance tag indicates TRANSFER pairs)
+                    const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
+                    const rowCount = await rows.count();
+                    let found = false;
+
+                    for (let i = 0; i < Math.min(rowCount, 50) && !found; i++) {
+                        const row = rows.nth(i);
+                        const text = (await row.textContent()) ?? '';
+                        // Look for a transfer or fx-conversion with known tag or description
+                        if (text.includes('rebalance') || text.includes('TRANSFER') || text.includes('Transfer')) {
+                            await row.hover();
+                            await page.waitForTimeout(150);
+                            const deleteBtn = row.locator('button.action-btn.danger');
+                            if (await deleteBtn.isVisible({timeout: 500}).catch(() => false)) {
+                                await deleteBtn.click();
+                                const deleteModal = page.getByTestId('tx-delete-modal');
+                                if (await deleteModal.isVisible({timeout: 3_000}).catch(() => false)) {
+                                    // Check if it's the linked layout (shows From/To)
+                                    const isLinked = await deleteModal.locator('[data-testid="tx-delete-paired-details"]').isVisible({timeout: 1_000}).catch(() => false);
+                                    if (isLinked) {
+                                        await page.waitForTimeout(300);
+                                        await screenshot(page, viewport, lang, theme, 'transactions', 'bulk-delete-pair-modal');
+                                        found = true;
+                                    }
+                                    await deleteModal.getByTestId('tx-delete-modal-cancel').click();
+                                    await page.waitForTimeout(200);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         });
     });
 
@@ -497,6 +987,247 @@ test.describe('Gallery Screenshots', () => {
                 }
             }
         });
+
+        test('import wizard step 1 - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+                    await freezeAnimations(page);
+
+                    // Open ImportWizardModal via the Import button on the transactions page
+                    await page.getByTestId('tx-import-button').click();
+                    await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
+                    await page.getByTestId('import-wizard-step1').waitFor({state: 'visible', timeout: 5_000});
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'import-wizard-step1');
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(300);
+                    // Confirm discard if needed
+                    const confirmDiscard = page.getByTestId('confirm-modal-confirm');
+                    if (await confirmDiscard.isVisible({timeout: 500}).catch(() => false)) {
+                        await confirmDiscard.click();
+                        await page.waitForTimeout(200);
+                    }
+                    // Also close BulkModal if open
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('import wizard step 2 - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+
+                    // Open ImportWizardModal
+                    await page.getByTestId('tx-import-button').click();
+                    await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
+
+                    // Skip step 1 (DB already has uploaded files)
+                    await page.getByTestId('import-wizard-next').click();
+                    await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 8_000});
+                    await page.waitForTimeout(800); // Wait for broker panels to load
+                    await freezeAnimations(page);
+                    await page.waitForTimeout(300);
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'import-wizard-step2');
+
+                    // Close
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(300);
+                    const confirmDiscard = page.getByTestId('confirm-modal-confirm');
+                    if (await confirmDiscard.isVisible({timeout: 500}).catch(() => false)) {
+                        await confirmDiscard.click();
+                        await page.waitForTimeout(200);
+                    }
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('import wizard step 4 asset resolution - all languages and themes', async ({page}, testInfo) => {
+            // generic_simple.csv contains UNETF (unknown asset → unresolved card in step 4)
+            const viewport = getViewport(testInfo);
+            const GENERIC_SIMPLE = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+
+                    // Open ImportWizardModal
+                    await page.getByTestId('tx-import-button').click();
+                    await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
+
+                    // Skip step 1 (go to step 2 which shows files already in DB)
+                    await page.getByTestId('import-wizard-next').click();
+                    await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 8_000});
+                    await page.waitForTimeout(800);
+
+                    // Find and select the generic_simple.csv row
+                    const step2 = page.getByTestId('import-wizard-step2');
+                    const fileRow = step2.locator('tr[data-row-id]').filter({hasText: 'generic_simple.csv'}).first();
+                    if (await fileRow.isVisible({timeout: 3_000}).catch(() => false)) {
+                        const checkbox = fileRow.locator('td.td-select button.checkbox-btn');
+                        await checkbox.scrollIntoViewIfNeeded();
+                        await page.keyboard.press('Escape'); // dismiss any open dropdown
+                        await page.waitForTimeout(200);
+                        await checkbox.click();
+
+                        // Parse (step 3)
+                        const parseBtn = page.getByTestId('import-wizard-parse');
+                        if (await parseBtn.isEnabled({timeout: 3_000}).catch(() => false)) {
+                            await parseBtn.click();
+                            await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
+                            await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
+
+                            // Continue to step 4
+                            await page.getByTestId('import-wizard-continue').click();
+                            await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 10_000});
+                            await page.waitForTimeout(500);
+                            await freezeAnimations(page);
+                            await screenshot(page, viewport, lang, theme, 'brokers', 'import-wizard-step4-resolution');
+                        }
+                    }
+
+                    // Close
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(300);
+                    const confirmDiscard = page.getByTestId('confirm-modal-confirm');
+                    if (await confirmDiscard.isVisible({timeout: 500}).catch(() => false)) {
+                        await confirmDiscard.click();
+                        await page.waitForTimeout(200);
+                    }
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('import wizard duplicate detection - all languages and themes', async ({page}, testInfo) => {
+            // ibkr-trades-export.csv was already uploaded; if the DB has matching transactions
+            // from populate_mock_data, they'll be flagged as likely-duplicate in step 4.
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+
+                    await page.getByTestId('tx-import-button').click();
+                    await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
+
+                    // Skip to step 2
+                    await page.getByTestId('import-wizard-next').click();
+                    await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 8_000});
+                    await page.waitForTimeout(800);
+
+                    // Select ibkr-trades-export.csv
+                    const step2 = page.getByTestId('import-wizard-step2');
+                    const fileRow = step2.locator('tr[data-row-id]').filter({hasText: 'ibkr-trades-export.csv'}).first();
+                    if (await fileRow.isVisible({timeout: 3_000}).catch(() => false)) {
+                        const checkbox = fileRow.locator('td.td-select button.checkbox-btn');
+                        await checkbox.scrollIntoViewIfNeeded();
+                        await page.keyboard.press('Escape');
+                        await page.waitForTimeout(200);
+                        await checkbox.click();
+
+                        const parseBtn = page.getByTestId('import-wizard-parse');
+                        if (await parseBtn.isEnabled({timeout: 3_000}).catch(() => false)) {
+                            await parseBtn.click();
+                            await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
+                            await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
+                            await page.getByTestId('import-wizard-continue').click();
+                            // Handle parse warnings overlay (intercepts step3 → step4 transition)
+                            const warningConfirm = page.getByTestId('import-wizard-warning-confirm');
+                            if (await warningConfirm.isVisible({timeout: 3_000}).catch(() => false)) {
+                                await warningConfirm.click();
+                                await page.waitForTimeout(300);
+                            }
+                            await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 10_000});
+                            await page.waitForTimeout(500);
+                            await freezeAnimations(page);
+                            await screenshot(page, viewport, lang, theme, 'brokers', 'import-wizard-duplicate');
+                        }
+                    }
+
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(300);
+                    const confirmDiscard = page.getByTestId('confirm-modal-confirm');
+                    if (await confirmDiscard.isVisible({timeout: 500}).catch(() => false)) {
+                        await confirmDiscard.click();
+                        await page.waitForTimeout(200);
+                    }
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('import bulk staging - all languages and themes', async ({page}, testInfo) => {
+            // Show the BulkModal (staging grid) — open it in edit mode from the transactions table.
+            // The BulkModal staging view is the same whether populated from wizard import or manual edit.
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+                    await waitForNetworkSettled(page);
+                    await freezeAnimations(page);
+
+                    // Open BulkModal via edit action on the first row
+                    const firstRow = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').first();
+                    await firstRow.hover();
+                    await page.waitForTimeout(200);
+                    const editAction = firstRow.locator('button[data-action-id="edit"]');
+                    if (await editAction.isVisible({timeout: 2_000}).catch(() => false)) {
+                        await editAction.click();
+                        // BulkModal opens
+                        const bulkModal = page.locator('[data-testid="tx-bulk-modal-root"]');
+                        if (await bulkModal.isVisible({timeout: 6_000}).catch(() => false)) {
+                            // Close any auto-opened FormModal
+                            const formClose = page.getByTestId('tx-form-close');
+                            if (await formClose.isVisible({timeout: 1_000}).catch(() => false)) {
+                                await formClose.click();
+                                await page.waitForTimeout(200);
+                            }
+                            await page.waitForTimeout(300);
+                            await screenshot(page, viewport, lang, theme, 'brokers', 'import-bulk-staging');
+                        }
+                    }
+
+                    // Close BulkModal
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(300);
+                    const confirmDiscard = page.getByTestId('confirm-modal-confirm');
+                    if (await confirmDiscard.isVisible({timeout: 500}).catch(() => false)) {
+                        await confirmDiscard.click();
+                        await page.waitForTimeout(200);
+                    }
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
     });
 
     test.describe('Media & Upload', () => {
@@ -589,7 +1320,8 @@ test.describe('Gallery Screenshots', () => {
                                 await iconTrigger.click();
                                 const pickerModal = page.getByTestId('asset-picker-modal');
                                 if (await pickerModal.isVisible({timeout: 3000}).catch(() => false)) {
-                                    await page.waitForTimeout(500);
+                                    await waitForNetworkSettled(page);
+                                    await page.waitForTimeout(1500); // Wait for file previews to load
                                     await screenshot(page, viewport, lang, theme, 'media', 'asset-picker-modal');
                                     await page.keyboard.press('Escape');
                                     await page.waitForTimeout(200);
@@ -1145,6 +1877,124 @@ test.describe('Gallery Screenshots', () => {
             }
         });
 
+        test('Asset detail signals EMA - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await navigateToAssetByName(page, GALLERY_ASSET);
+                    await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
+                    await page.waitForTimeout(1000);
+
+                    // Open signals panel and add EMA indicator
+                    const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
+                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                        await signalsToggle.click();
+                        await page.waitForTimeout(500);
+
+                        // Select EMA from the indicator dropdown
+                        const indicatorSelect = page.getByTestId('signals-indicator-select-button');
+                        if (await indicatorSelect.isVisible({timeout: 2000}).catch(() => false)) {
+                            await indicatorSelect.click();
+                            await page.waitForTimeout(300);
+                            // SimpleSelect options use role="menuitem"
+                            const emaOption = page.locator('[role="menuitem"]').filter({hasText: /EMA/i}).first();
+                            if (await emaOption.isVisible({timeout: 1000}).catch(() => false)) {
+                                await emaOption.click();
+                                await page.waitForTimeout(1500); // Wait for EMA to render on chart
+                                // Scroll to chart to center it in viewport
+                                await page.getByTestId('asset-detail-chart').scrollIntoViewIfNeeded();
+                                await page.waitForTimeout(300);
+                                await freezeAnimations(page);
+                                await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-ema');
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        test('Asset detail signals RSI - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await navigateToAssetByName(page, GALLERY_ASSET);
+                    await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
+                    await page.waitForTimeout(1000);
+
+                    const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
+                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                        await signalsToggle.click();
+                        await page.waitForTimeout(500);
+
+                        const indicatorSelect = page.getByTestId('signals-indicator-select-button');
+                        if (await indicatorSelect.isVisible({timeout: 2000}).catch(() => false)) {
+                            await indicatorSelect.click();
+                            await page.waitForTimeout(300);
+                            const rsiOption = page.locator('[role="menuitem"]').filter({hasText: /RSI/i}).first();
+                            if (await rsiOption.isVisible({timeout: 1000}).catch(() => false)) {
+                                await rsiOption.click();
+                                await page.waitForTimeout(1500);
+                                await page.getByTestId('asset-detail-chart').scrollIntoViewIfNeeded();
+                                await page.waitForTimeout(300);
+                                await freezeAnimations(page);
+                                await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-rsi');
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        test('Asset detail signals MACD - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await navigateToAssetByName(page, GALLERY_ASSET);
+                    await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
+                    await page.waitForTimeout(1000);
+
+                    const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
+                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                        await signalsToggle.click();
+                        await page.waitForTimeout(500);
+
+                        const indicatorSelect = page.getByTestId('signals-indicator-select-button');
+                        if (await indicatorSelect.isVisible({timeout: 2000}).catch(() => false)) {
+                            await indicatorSelect.click();
+                            await page.waitForTimeout(300);
+                            const macdOption = page.locator('[role="menuitem"]').filter({hasText: /MACD/i}).first();
+                            if (await macdOption.isVisible({timeout: 1000}).catch(() => false)) {
+                                await macdOption.click();
+                                await page.waitForTimeout(1500);
+                                await page.getByTestId('asset-detail-chart').scrollIntoViewIfNeeded();
+                                await page.waitForTimeout(300);
+                                await freezeAnimations(page);
+                                await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-macd');
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
         test('Asset detail measures', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
 
@@ -1156,14 +2006,29 @@ test.describe('Gallery Screenshots', () => {
                     await freezeAnimations(page);
 
                     await navigateToAssetByName(page, GALLERY_ASSET);
+                    await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
+                    await page.waitForTimeout(1000);
 
-                    // Toggle measures panel
+                    // Toggle measures panel — screenshot 1: panel open (empty)
                     const measuresToggle = page.getByTestId('asset-detail-measures-toggle');
                     if (await measuresToggle.isVisible({timeout: 2000}).catch(() => false)) {
                         await measuresToggle.click();
                         await page.waitForTimeout(500);
                     }
+                    await page.getByTestId('asset-detail-chart').scrollIntoViewIfNeeded();
+                    await page.waitForTimeout(300);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-measures');
+
+                    // Screenshot 2: panel with a measurement added (full date range)
+                    const addMeasureBtn = page.getByTestId('asset-detail-add-measure-btn');
+                    if (await addMeasureBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                        await addMeasureBtn.click();
+                        await page.waitForTimeout(800); // Wait for measurement to appear
+                        await page.getByTestId('asset-detail-chart').scrollIntoViewIfNeeded();
+                        await page.waitForTimeout(300);
+                        await freezeAnimations(page);
+                        await screenshot(page, viewport, lang, theme, 'assets', 'detail-measures-active');
+                    }
                 }
             }
         });
@@ -1242,6 +2107,105 @@ test.describe('Gallery Screenshots', () => {
                     await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
                     await page.waitForTimeout(500);
                     await screenshot(page, viewport, lang, theme, 'assets', 'create-modal');
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('Asset create modal from import wizard - all languages and themes', async ({page}, testInfo) => {
+            // Opens AssetModal from ImportWizard step4 — pre-filled with extracted ticker/ISIN/name
+            // Uses generic_simple.csv which has UNETF (unresolved asset)
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+
+                    // Open wizard from transactions import button
+                    await page.getByTestId('tx-import-button').click();
+                    await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
+
+                    // Skip step 1, advance to step 2
+                    await page.getByTestId('import-wizard-next').click();
+                    await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 8_000});
+                    await page.waitForTimeout(800);
+
+                    // Select generic_simple.csv (has UNETF - unresolved asset)
+                    const step2 = page.getByTestId('import-wizard-step2');
+                    const fileRow = step2.locator('tr[data-row-id]').filter({hasText: 'generic_simple.csv'}).first();
+                    if (await fileRow.isVisible({timeout: 3_000}).catch(() => false)) {
+                        const checkbox = fileRow.locator('td.td-select button.checkbox-btn');
+                        await checkbox.scrollIntoViewIfNeeded();
+                        await page.keyboard.press('Escape');
+                        await page.waitForTimeout(200);
+                        await checkbox.click();
+
+                        const parseBtn = page.getByTestId('import-wizard-parse');
+                        if (await parseBtn.isEnabled({timeout: 3_000}).catch(() => false)) {
+                            await parseBtn.click();
+                            await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
+                            await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
+                            await page.getByTestId('import-wizard-continue').click();
+                            // Handle warnings if any
+                            const warningConfirm = page.getByTestId('import-wizard-warning-confirm');
+                            if (await warningConfirm.isVisible({timeout: 3_000}).catch(() => false)) {
+                                await warningConfirm.click();
+                                await page.waitForTimeout(300);
+                            }
+                            await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 10_000});
+                            await page.waitForTimeout(800);
+
+                            // The resolve section defaults to expanded when there are unresolved assets.
+                            // Just find the AssetSelect directly — it's inside the resolve section.
+                            // Use the [role="combobox"] inside the asset-select element.
+                            const assetSelect = page.getByTestId('asset-select').first();
+                            if (await assetSelect.isVisible({timeout: 5_000}).catch(() => false)) {
+                                // Open the search dropdown by clicking the combobox trigger
+                                const combobox = assetSelect.locator('[role="combobox"], input[type="text"]').first();
+                                if (await combobox.isVisible({timeout: 1_000}).catch(() => false)) {
+                                    await combobox.click();
+                                } else {
+                                    await assetSelect.click();
+                                }
+                                await page.waitForTimeout(400);
+
+                                // Click the "Create new" option in the dropdown
+                                const createNewBtn = page.getByTestId('search-select-create-new');
+                                if (await createNewBtn.isVisible({timeout: 2_000}).catch(() => false)) {
+                                    await createNewBtn.click();
+                                    // AssetModal opens pre-filled with extracted ticker/ISIN/name
+                                    const assetModal = page.getByTestId('asset-modal-form');
+                                    if (await assetModal.isVisible({timeout: 5_000}).catch(() => false)) {
+                                        await waitForNetworkSettled(page);
+                                        await page.waitForTimeout(500);
+                                        await freezeAnimations(page);
+                                        await screenshot(page, viewport, lang, theme, 'assets', 'create-wizard-modal');
+                                        await page.keyboard.press('Escape');
+                                        await page.waitForTimeout(200);
+                                        // Close any confirm dialog
+                                        const confirmClose = page.getByTestId('confirm-modal-confirm');
+                                        if (await confirmClose.isVisible({timeout: 500}).catch(() => false)) {
+                                            await confirmClose.click();
+                                            await page.waitForTimeout(200);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Close all wizard/bulk modals
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(300);
+                    const confirmDiscard = page.getByTestId('confirm-modal-confirm');
+                    if (await confirmDiscard.isVisible({timeout: 500}).catch(() => false)) {
+                        await confirmDiscard.click();
+                        await page.waitForTimeout(200);
+                    }
                     await page.keyboard.press('Escape');
                     await page.waitForTimeout(200);
                 }

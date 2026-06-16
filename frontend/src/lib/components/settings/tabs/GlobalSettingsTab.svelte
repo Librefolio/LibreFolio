@@ -739,7 +739,7 @@
                                     </p>
                                 </div>
                             </div>
-                            <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0 disabled:opacity-50" type="button" disabled={isLocked} on:click={() => (showConfigModal = true)}>
+                            <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0" type="button" data-testid="scheduler-config-btn" on:click={() => (showConfigModal = true)}>
                                 {$_('settings.global.scheduler.status.configure')}
                             </button>
                         </div>
