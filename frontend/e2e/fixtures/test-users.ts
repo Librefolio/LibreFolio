@@ -53,5 +53,12 @@ export const TEST_USER_EVE = {
     password: 'EvePass123!',
 };
 
+// Gallery empty-state user — no broker access, used to photograph dashboard empty state
+export const TEST_EMPTY = {
+    username: 'e2e_test_empty',
+    email: 'empty@test.example.com',
+    password: 'E2eEmptyPass123!',
+};
+
 export const SUPPORTED_LANGUAGES = ['en', 'it', 'fr', 'es'] as const;
 export type Language = (typeof SUPPORTED_LANGUAGES)[number];

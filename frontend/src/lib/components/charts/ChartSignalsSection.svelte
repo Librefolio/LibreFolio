@@ -311,6 +311,7 @@
                         options={indicatorOptions}
                         placeholder={$t('common.select')}
                         dropdownPosition="auto"
+                        testId="signals-indicator-select"
                         onchange={(v) => {
                             addSignal(v);
                             indicatorSelect = '';
