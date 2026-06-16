@@ -35,12 +35,21 @@ Easy account creation with password strength feedback.
 
 ## 📊 Dashboard
 
-### 📈 Main Dashboard
+Your portfolio at a glance — key stats, allocation charts, and a clean empty state for new users.
 
-Your portfolio overview optimized for mobile viewing.
-
+<div class="screenshot-carousel">
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard">
+    <img class="gallery-img" data-category="dashboard" data-name="main" alt="Main Dashboard">
+    <p class="screenshot-carousel-label">📈 Main view</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="dashboard" data-name="allocation-charts" alt="Dashboard Allocation Charts">
+    <p class="screenshot-carousel-label">📊 Allocation & Composition</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="dashboard" data-name="empty-state" alt="Dashboard Empty State">
+    <p class="screenshot-carousel-label">🌱 New portfolio (empty state)</p>
+</div>
 </div>
 
 ### ☰ Navigation Menu
@@ -49,6 +58,81 @@ Full navigation accessible via the hamburger menu.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="dashboard" data-name="menu-open" alt="Mobile Menu">
+</div>
+
+---
+
+## 📒 Transactions
+
+### 📋 Transaction List
+
+All your recorded financial operations in a filterable, sortable table view.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="transactions" data-name="list" alt="Transaction List">
+</div>
+
+### ➕ Add / Edit Transaction
+
+Record any operation — buy, sell, dividend, deposit, transfer, FX conversion — with asset lookup. The form adapts to the selected type.
+
+<div class="screenshot-carousel">
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal" alt="Transaction Form — BUY">
+    <p class="screenshot-carousel-label">📈 Buy</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-sell" alt="Transaction Form — SELL">
+    <p class="screenshot-carousel-label">📉 Sell</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-dividend" alt="Transaction Form — DIVIDEND">
+    <p class="screenshot-carousel-label">💰 Dividend</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-deposit" alt="Transaction Form — DEPOSIT">
+    <p class="screenshot-carousel-label">🏦 Deposit</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Transaction Form — TRANSFER">
+    <p class="screenshot-carousel-label">🔀 Asset Transfer</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-fxconversion" alt="Transaction Form — FX Conversion">
+    <p class="screenshot-carousel-label">💱 FX Conversion</p>
+</div>
+</div>
+
+### 🔗 Transaction Picker
+
+Search and link an existing transaction to create paired operations (e.g. FX trades, transfers).
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="transactions" data-name="picker-modal" alt="Transaction Picker Modal">
+</div>
+
+### ✂️ Split Confirm
+
+When linking transactions with mismatched quantities, the system proposes a split — previewing the result before confirming.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="transactions" data-name="action-modal" alt="Transaction Split Modal">
+</div>
+
+### 🔀 Merge / Promote
+
+Merge related operations into a single consolidated transaction.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="transactions" data-name="promote-merge-modal" alt="Promote Merge Modal">
+</div>
+
+### 🗑️ Delete Linked Pair
+
+When deleting a transaction that is part of a linked pair, you can choose to remove just one leg or both.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="transactions" data-name="bulk-delete-pair-modal" alt="Delete Linked Pair Modal">
 </div>
 
 ---
@@ -69,6 +153,22 @@ System-wide configuration on mobile.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings">
+</div>
+
+### 🕐 Market Data Scheduler — Config
+
+Configure the automatic market data sync daemon on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="scheduler-config" alt="Scheduler Config Modal">
+</div>
+
+### 📜 Market Data Scheduler — Log
+
+View the history of scheduler executions on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="scheduler-log" alt="Scheduler Log Modal">
 </div>
 
 ### ℹ️ About
@@ -122,6 +222,33 @@ Import and manage broker reports.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="files" data-name="brim-tab" alt="BRIM Tab">
+</div>
+
+### 👁️ File Preview
+
+Preview any static file directly in the browser — CSV grid, image, PDF, markdown, and plain text.
+
+<div class="screenshot-carousel">
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="files" data-name="preview-modal-csv" alt="CSV File Preview">
+    <p class="screenshot-carousel-label">📋 Broker CSV</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="files" data-name="preview-modal-image" alt="Image File Preview">
+    <p class="screenshot-carousel-label">🖼️ Image</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="files" data-name="preview-modal-pdf" alt="PDF File Preview">
+    <p class="screenshot-carousel-label">📄 PDF</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="files" data-name="preview-modal-markdown" alt="Markdown Preview">
+    <p class="screenshot-carousel-label">📝 Markdown</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="files" data-name="preview-modal-text" alt="Text Preview">
+    <p class="screenshot-carousel-label">🗒️ Plain text</p>
+</div>
 </div>
 
 ---
@@ -180,12 +307,35 @@ Edit broker details — name, icon, base currency, and configuration.
     <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Broker Edit Modal">
 </div>
 
-### 📥 Import Modal
+### 📥 Import
 
-Import transactions directly from your phone.
+Import transactions from your broker's export files — quick modal or full wizard.
 
+<div class="screenshot-carousel">
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="brokers" data-name="import-modal" alt="Import Modal">
+    <p class="screenshot-carousel-label">📥 Quick modal</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Import Wizard Step 1">
+    <p class="screenshot-carousel-label">🧙 Step 1: Upload</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Import Wizard Step 2">
+    <p class="screenshot-carousel-label">⚙️ Step 2: Parser</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Import Wizard Asset Resolution">
+    <p class="screenshot-carousel-label">🔍 Step 4: Asset Resolution</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicate" alt="Import Wizard Duplicate Detection">
+    <p class="screenshot-carousel-label">⚠️ Duplicate Detection</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="import-bulk-staging" alt="Import Bulk Staging">
+    <p class="screenshot-carousel-label">📦 Bulk Staging</p>
+</div>
 </div>
 
 ### 🤝 Broker Sharing
@@ -326,23 +476,45 @@ Interactive price chart with date range and currency toggle.
 
 ### 📡 Signals Overlay
 
-Technical indicators (EMA, MACD, RSI, Bollinger) on the price chart.
+Technical indicators (EMA, RSI, MACD, Bollinger) on the price chart — each in its own sub-panel.
 
+<div class="screenshot-carousel">
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="detail-signals" alt="Asset Detail Signals">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals" alt="Asset Signals Panel">
+    <p class="screenshot-carousel-label">📊 Panel (empty)</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals-ema" alt="EMA active">
+    <p class="screenshot-carousel-label">📈 EMA</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals-rsi" alt="RSI active">
+    <p class="screenshot-carousel-label">📉 RSI</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals-macd" alt="MACD active">
+    <p class="screenshot-carousel-label">📊 MACD</p>
+</div>
 </div>
 
 ### 📏 Measures Panel
 
-Click-to-click measurement tool on mobile.
+Click-to-click measurement tool on mobile — view delta, %, and annualized return over any date range.
 
+<div class="screenshot-carousel">
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="detail-measures" alt="Asset Detail Measures">
+    <img class="gallery-img" data-category="assets" data-name="detail-measures" alt="Asset Detail Measures Panel">
+    <p class="screenshot-carousel-label">📏 Panel open</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="detail-measures-active" alt="Asset Detail Measures Active">
+    <p class="screenshot-carousel-label">📐 Measurement active</p>
+</div>
 </div>
 
-### 🗂️ Classification
+### 🗂️ Classification & Metadata
 
-Sector pie chart and geographic world map on mobile.
+Sector pie chart and geographic world map for assets with rich metadata.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Asset Detail Classification">
@@ -356,12 +528,19 @@ Inline price data editor on mobile.
     <img class="gallery-img" data-category="assets" data-name="detail-editor" alt="Asset Data Editor">
 </div>
 
-### ➕ Create Asset Modal
+### ➕ Create Asset
 
-Create a new asset with all fields on mobile.
+Create a new asset on mobile — or launch from the Import Wizard with pre-filled data.
 
+<div class="screenshot-carousel">
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="assets" data-name="create-modal" alt="Create Asset Modal">
+    <p class="screenshot-carousel-label">➕ Manual create</p>
+</div>
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="assets" data-name="create-wizard-modal" alt="Create Asset from Import Wizard">
+    <p class="screenshot-carousel-label">🧙 From Import Wizard</p>
+</div>
 </div>
 
 ---
@@ -389,5 +568,33 @@ Create a new asset with all fields on mobile.
 
 .gallery-img:hover {
     opacity: 0.95;
+}
+
+.screenshot-carousel {
+    display: flex;
+    gap: 1.25rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 0.75rem;
+    margin-bottom: 2rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.screenshot-carousel .screenshot-container,
+.screenshot-carousel .screenshot-container.mobile {
+    flex: 0 0 88%;
+    margin: 0;
+    scroll-snap-align: start;
+}
+
+.screenshot-carousel-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    text-align: center;
+    padding: 0.4rem 0.5rem 0.2rem;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
 }
 </style>

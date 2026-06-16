@@ -1873,6 +1873,7 @@
                                hover:bg-violet-100 dark:hover:bg-violet-900/50
                                transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={lineData.length < 2}
+                    data-testid="asset-detail-add-measure-btn"
                     onclick={(e) => {
                         e.stopPropagation();
                         showMeasures = true;

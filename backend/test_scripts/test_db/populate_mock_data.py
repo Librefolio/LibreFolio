@@ -353,6 +353,8 @@ def populate_broker_user_access(session: Session):
         # "Free" users — NOT assigned to any broker, useful for search tests
         ("e2e_user_frank", "frank@test.example.com", "FrankPass123!", False),
         ("e2e_user_grace", "grace@test.example.com", "GracePass123!", False),
+        # Gallery empty-state user — NO broker access, used to photograph dashboard empty state
+        ("e2e_test_empty", "empty@test.example.com", "E2eEmptyPass123!", False),
     ]
 
     # Create any missing users
