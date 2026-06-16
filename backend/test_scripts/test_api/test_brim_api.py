@@ -134,8 +134,9 @@ class TestFileStorage:
 
             files = {"file": ("test_upload.csv", io.BytesIO(sample_csv_content), "text/csv")}
             response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
 
@@ -160,8 +161,9 @@ class TestFileStorage:
 
             files = {"file": ("empty.csv", io.BytesIO(b""), "text/csv")}
             response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
 
@@ -178,8 +180,9 @@ class TestFileStorage:
             # Upload a file first
             files = {"file": ("list_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             assert upload_response.status_code == 200
@@ -205,8 +208,9 @@ class TestFileStorage:
             # Upload a file
             files = {"file": ("status_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
 
@@ -231,8 +235,9 @@ class TestFileStorage:
             # Upload a file
             files = {"file": ("info_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             file_id = upload_response.json()["file_id"]
@@ -270,8 +275,9 @@ class TestFileStorage:
             # Upload a file
             files = {"file": ("delete_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             file_id = upload_response.json()["file_id"]
@@ -303,8 +309,9 @@ class TestFileStorage:
 
             files = {"file": ("preview.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             file_id = upload_response.json()["file_id"]
@@ -335,8 +342,9 @@ class TestFileStorage:
 
             files = {"file": ("inline.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             file_id = upload_response.json()["file_id"]
@@ -383,8 +391,9 @@ class TestParseEndpoint:
             # Upload file
             files = {"file": ("parse_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             file_id = upload_response.json()["file_id"]
@@ -420,8 +429,9 @@ class TestParseEndpoint:
             # Upload file with assets
             files = {"file": ("assets_test.csv", io.BytesIO(sample_csv_with_assets), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             file_id = upload_response.json()["file_id"]
@@ -456,8 +466,9 @@ class TestParseEndpoint:
             # Upload file
             files = {"file": ("dup_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             file_id = upload_response.json()["file_id"]
@@ -507,8 +518,9 @@ class TestParseEndpoint:
             # Upload file
             files = {"file": ("plugin_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             file_id = upload_response.json()["file_id"]
@@ -590,8 +602,9 @@ class TestMultiUserBRIM:
 
             files = {"file": ("test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
 
@@ -612,16 +625,18 @@ class TestMultiUserBRIM:
             # Upload to broker1
             files = {"file": ("b1.csv", io.BytesIO(sample_csv_content), "text/csv")}
             await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker1}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker1},
                 timeout=TIMEOUT,
             )
 
             # Upload to broker2
             files = {"file": ("b2.csv", io.BytesIO(sample_csv_content), "text/csv")}
             await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker2}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker2},
                 timeout=TIMEOUT,
             )
 
@@ -653,8 +668,9 @@ class TestMultiUserBRIM:
 
             files = {"file": ("test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             response = await client2.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
 
@@ -696,8 +712,9 @@ class TestMultiUserBRIM:
             # Upload file
             files = {"file": ("cache_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             assert upload_response.status_code == 200
@@ -739,8 +756,9 @@ class TestMultiUserBRIM:
             # Upload file
             files = {"file": ("last_parse_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             assert upload_response.status_code == 200
@@ -824,8 +842,9 @@ class TestMultiUserBRIM:
             # Upload file
             files = {"file": ("download_test.csv", io.BytesIO(sample_csv_content), "text/csv")}
             upload_response = await client.post(
-                f"{API_BASE}/brokers/import/upload?broker_id={broker_id}",
+                f"{API_BASE}/brokers/import/upload",
                 files=files,
+                data={"broker_id": broker_id},
                 timeout=TIMEOUT,
             )
             assert upload_response.status_code == 200

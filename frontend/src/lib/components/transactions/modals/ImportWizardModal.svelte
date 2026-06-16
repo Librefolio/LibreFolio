@@ -1748,7 +1748,7 @@ ${arrow}<span>${label}</span></span>`,
                         <!-- "Assign all" global broker -->
                         <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                             <span class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">{$t('importWizard.globalBroker')}:</span>
-                            <div class="flex-1 max-w-xs">
+                            <div class="flex-1 max-w-xs" data-testid="import-wizard-step1-broker-select">
                                 <BrokerSearchSelect {brokers} value={globalBrokerId} onchange={onGlobalBrokerChange} placeholder={$t('importWizard.assignBroker')} createLabel={$t('common.createNew')} onCreateNew={() => { createBrokerContext = 'global'; createBrokerOpen = true; }} />
                             </div>
                         </div>
@@ -2016,9 +2016,9 @@ ${arrow}<span>${label}</span></span>`,
             <div class="flex flex-col gap-4 h-full overflow-y-auto" data-testid="import-wizard-step4">
                 <!-- ── Resolve Assets section ─────────────────────────── -->
                 {#if assetResolutions.length > 0}
-                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden" data-testid="import-wizard-resolve-section">
                         <!-- Section header -->
-                        <button type="button" class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors" onclick={() => (step4ShowResolveSection = !step4ShowResolveSection)}>
+                        <button type="button" class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors" onclick={() => (step4ShowResolveSection = !step4ShowResolveSection)} data-testid="import-wizard-resolve-toggle">
                             <div class="flex items-center gap-2">
                                 {#if step4ShowResolveSection}<ChevronDown size={16} />{:else}<ChevronRight size={16} />{/if}
                                 <span class="font-semibold text-sm">{$t('importWizard.resolveAssets')}</span>
@@ -2311,7 +2311,7 @@ ${arrow}<span>${label}</span></span>`,
         <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" onclick={() => (showWarningConfirm = false)}>
             {$t('common.cancel')}
         </button>
-        <button type="button" class="px-4 py-2 text-sm rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors" onclick={goNext}>
+        <button type="button" class="px-4 py-2 text-sm rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors" onclick={goNext} data-testid="import-wizard-warning-confirm">
             {$t('importWizard.warningConfirmOk')}
         </button>
     </div>
