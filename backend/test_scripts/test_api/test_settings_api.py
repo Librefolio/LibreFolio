@@ -539,3 +539,236 @@ class TestGlobalSettingsInitialize:
 
             assert resp2.status_code == 200, f"Expected 200, got {resp2.status_code}"
             print_success("✓ Initialize is idempotent")
+
+
+# ============================================================================
+# Scheduler Settings Keys Tests
+# ============================================================================
+
+
+def _get_setting_value(items: list, key: str) -> str | None:
+    """Extract a setting value from the GET /settings/global items list."""
+    for s in items:
+        if s["key"] == key:
+            return s["value"]
+    return None
+
+
+async def _read_setting(client: httpx.AsyncClient, key: str) -> str | None:
+    """GET /settings/global and extract a specific key's value."""
+    resp = await client.get(f"{API_BASE}/settings/global", timeout=TIMEOUT)
+    assert resp.status_code == 200, f"GET /settings/global failed: {resp.status_code}"
+    return _get_setting_value(resp.json()["items"], key)
+
+
+async def _patch_setting(client: httpx.AsyncClient, key: str, value: str) -> None:
+    """PATCH /settings/global/bulk for a single key."""
+    resp = await client.patch(
+        f"{API_BASE}/settings/global/bulk",
+        json={"items": [{"key": key, "value": value}]},
+        timeout=TIMEOUT,
+    )
+    assert resp.status_code == 200, f"PATCH bulk failed for '{key}': {resp.status_code} {resp.text}"
+
+
+class TestSchedulerSettingsKeys:
+    """Tests for the 5 scheduler settings keys via PATCH/GET /settings/global*.
+
+    Test IDs: GSET-SCH-001..GSET-SCH-006
+    """
+
+    @pytest.mark.asyncio
+    async def test_scheduler_enabled_save_read(self, test_server):
+        """GSET-SCH-001: Save and read scheduler_enabled (bool as string)."""
+        print_section("GSET-SCH-001: scheduler_enabled — save and read")
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+
+            original = await _read_setting(client, "scheduler_enabled")
+
+            try:
+                # Set to "true"
+                await _patch_setting(client, "scheduler_enabled", "true")
+                val = await _read_setting(client, "scheduler_enabled")
+                assert val == "true", f"Expected 'true', got '{val}'"
+                print_info("  scheduler_enabled='true' ✓")
+
+                # Set to "false"
+                await _patch_setting(client, "scheduler_enabled", "false")
+                val = await _read_setting(client, "scheduler_enabled")
+                assert val == "false", f"Expected 'false', got '{val}'"
+                print_info("  scheduler_enabled='false' ✓")
+            finally:
+                # Restore
+                if original is not None:
+                    await _patch_setting(client, "scheduler_enabled", original)
+
+        print_success("GSET-SCH-001: scheduler_enabled save/read OK ✓")
+
+    @pytest.mark.asyncio
+    async def test_scheduler_current_price_frequency_save_read(self, test_server):
+        """GSET-SCH-002: Save and read scheduler_current_price_frequency_minutes."""
+        print_section("GSET-SCH-002: scheduler_current_price_frequency_minutes — save and read")
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+
+            original = await _read_setting(client, "scheduler_current_price_frequency_minutes")
+
+            try:
+                await _patch_setting(client, "scheduler_current_price_frequency_minutes", "15")
+                val = await _read_setting(client, "scheduler_current_price_frequency_minutes")
+                assert val == "15", f"Expected '15', got '{val}'"
+                print_info("  frequency=15 ✓")
+
+                await _patch_setting(client, "scheduler_current_price_frequency_minutes", "5")
+                val = await _read_setting(client, "scheduler_current_price_frequency_minutes")
+                assert val == "5", f"Expected '5', got '{val}'"
+                print_info("  frequency=5 ✓")
+            finally:
+                if original is not None:
+                    await _patch_setting(client, "scheduler_current_price_frequency_minutes", original)
+
+        print_success("GSET-SCH-002: scheduler_current_price_frequency_minutes save/read OK ✓")
+
+    @pytest.mark.asyncio
+    async def test_scheduler_history_sync_times_save_read(self, test_server):
+        """GSET-SCH-003: Save and read scheduler_history_sync_times (HH:MM CSV)."""
+        print_section("GSET-SCH-003: scheduler_history_sync_times — save and read")
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+
+            original = await _read_setting(client, "scheduler_history_sync_times")
+
+            try:
+                # Multi-slot
+                await _patch_setting(client, "scheduler_history_sync_times", "06:00,12:00,23:00")
+                val = await _read_setting(client, "scheduler_history_sync_times")
+                assert val == "06:00,12:00,23:00", f"Expected '06:00,12:00,23:00', got '{val}'"
+                print_info("  times='06:00,12:00,23:00' ✓")
+
+                # Single slot
+                await _patch_setting(client, "scheduler_history_sync_times", "08:30")
+                val = await _read_setting(client, "scheduler_history_sync_times")
+                assert val == "08:30", f"Expected '08:30', got '{val}'"
+                print_info("  times='08:30' ✓")
+            finally:
+                if original is not None:
+                    await _patch_setting(client, "scheduler_history_sync_times", original)
+
+        print_success("GSET-SCH-003: scheduler_history_sync_times save/read OK ✓")
+
+    @pytest.mark.asyncio
+    async def test_scheduler_history_sync_days_save_read(self, test_server):
+        """GSET-SCH-004: Save and read scheduler_history_sync_days (day-code CSV)."""
+        print_section("GSET-SCH-004: scheduler_history_sync_days — save and read")
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+
+            original = await _read_setting(client, "scheduler_history_sync_days")
+
+            try:
+                # Subset
+                await _patch_setting(client, "scheduler_history_sync_days", "mon,wed,fri")
+                val = await _read_setting(client, "scheduler_history_sync_days")
+                assert val == "mon,wed,fri", f"Expected 'mon,wed,fri', got '{val}'"
+                print_info("  days='mon,wed,fri' ✓")
+
+                # All 7 days
+                await _patch_setting(client, "scheduler_history_sync_days", "mon,tue,wed,thu,fri,sat,sun")
+                val = await _read_setting(client, "scheduler_history_sync_days")
+                assert val == "mon,tue,wed,thu,fri,sat,sun", f"Got '{val}'"
+                print_info("  days='mon,tue,wed,thu,fri,sat,sun' ✓")
+            finally:
+                if original is not None:
+                    await _patch_setting(client, "scheduler_history_sync_days", original)
+
+        print_success("GSET-SCH-004: scheduler_history_sync_days save/read OK ✓")
+
+    @pytest.mark.asyncio
+    async def test_scheduler_history_sync_horizon_days_save_read(self, test_server):
+        """GSET-SCH-005: Save and read scheduler_history_sync_horizon_days."""
+        print_section("GSET-SCH-005: scheduler_history_sync_horizon_days — save and read")
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+
+            original = await _read_setting(client, "scheduler_history_sync_horizon_days")
+
+            try:
+                await _patch_setting(client, "scheduler_history_sync_horizon_days", "30")
+                val = await _read_setting(client, "scheduler_history_sync_horizon_days")
+                assert val == "30", f"Expected '30', got '{val}'"
+                print_info("  horizon_days=30 ✓")
+
+                await _patch_setting(client, "scheduler_history_sync_horizon_days", "7")
+                val = await _read_setting(client, "scheduler_history_sync_horizon_days")
+                assert val == "7", f"Expected '7', got '{val}'"
+                print_info("  horizon_days=7 ✓")
+            finally:
+                if original is not None:
+                    await _patch_setting(client, "scheduler_history_sync_horizon_days", original)
+
+        print_success("GSET-SCH-005: scheduler_history_sync_horizon_days save/read OK ✓")
+
+    @pytest.mark.asyncio
+    async def test_all_scheduler_keys_bulk_update(self, test_server):
+        """GSET-SCH-006: Bulk update all 5 scheduler keys in a single PATCH request."""
+        print_section("GSET-SCH-006: All 5 scheduler keys — bulk update")
+
+        scheduler_keys = [
+            "scheduler_enabled",
+            "scheduler_current_price_frequency_minutes",
+            "scheduler_history_sync_times",
+            "scheduler_history_sync_days",
+            "scheduler_history_sync_horizon_days",
+        ]
+        new_values = {
+            "scheduler_enabled": "false",
+            "scheduler_current_price_frequency_minutes": "20",
+            "scheduler_history_sync_times": "07:00,22:00",
+            "scheduler_history_sync_days": "mon,tue,wed,thu,fri",
+            "scheduler_history_sync_horizon_days": "21",
+        }
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+
+            # Save originals
+            originals: dict[str, str | None] = {}
+            for k in scheduler_keys:
+                originals[k] = await _read_setting(client, k)
+
+            try:
+                # Bulk update all 5
+                resp = await client.patch(
+                    f"{API_BASE}/settings/global/bulk",
+                    json={"items": [{"key": k, "value": v} for k, v in new_values.items()]},
+                    timeout=TIMEOUT,
+                )
+                assert resp.status_code == 200, f"Bulk PATCH failed: {resp.status_code} {resp.text}"
+                print_info("  Bulk PATCH 5 keys → 200 ✓")
+
+                # Read back each key individually and verify
+                for key, expected in new_values.items():
+                    val = await _read_setting(client, key)
+                    assert val == expected, f"Key '{key}': expected '{expected}', got '{val}'"
+                    print_info(f"  {key}='{val}' ✓")
+            finally:
+                # Restore all originals
+                restore_items = [
+                    {"key": k, "value": v}
+                    for k, v in originals.items()
+                    if v is not None
+                ]
+                if restore_items:
+                    await client.patch(
+                        f"{API_BASE}/settings/global/bulk",
+                        json={"items": restore_items},
+                        timeout=TIMEOUT,
+                    )
+
+        print_success("GSET-SCH-006: All 5 scheduler keys bulk update OK ✓")
