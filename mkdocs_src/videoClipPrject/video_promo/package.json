@@ -1,0 +1,47 @@
+{
+  "name": "video_promo",
+  "version": "1.0.0",
+  "description": "LibreFolio promotional video — Remotion multi-language",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "sync": "tsx scripts/sync-assets.ts",
+    "start": "npm run sync && remotion studio src/index.ts",
+    "prebuild:en": "npm run sync",
+    "build:en": "remotion render src/index.ts LibreFolioPromo out/librefolio_promo_en.mp4 --props='{\"locale\":\"en\"}'",
+    "prebuild:it": "npm run sync",
+    "build:it": "remotion render src/index.ts LibreFolioPromo out/librefolio_promo_it.mp4 --props='{\"locale\":\"it\"}'",
+    "prebuild:es": "npm run sync",
+    "build:es": "remotion render src/index.ts LibreFolioPromo out/librefolio_promo_es.mp4 --props='{\"locale\":\"es\"}'",
+    "prebuild:fr": "npm run sync",
+    "build:fr": "remotion render src/index.ts LibreFolioPromo out/librefolio_promo_fr.mp4 --props='{\"locale\":\"fr\"}'",
+    "prebuild:all": "npm run sync",
+    "build:all": "npm run build:en && npm run build:it && npm run build:es && npm run build:fr"
+  },
+  "keywords": [
+    "remotion",
+    "video",
+    "librefolio",
+    "promo"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "@remotion/player": "^4.0.0",
+    "framer-motion": "^12.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "remotion": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.21",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "tsx": "^4.22.4",
+    "typescript": "^5.9.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
+  }
+}
