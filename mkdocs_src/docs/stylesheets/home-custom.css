@@ -168,103 +168,285 @@
 }
 
 .badge-open-source:hover {
-    background: rgba(34, 197, 94, 0.15);
-    border-color: #22c55e;
-    color: #16a34a;
+    background: rgba(251, 191, 36, 0.15);
+    border-color: #fbbf24;
+    color: #fbbf24;
     transform: translateY(-2px);
 }
 
 .badge-self-hosted:hover {
-    background: rgba(59, 130, 246, 0.15);
-    border-color: #3b82f6;
-    color: #2563eb;
+    background: rgba(48, 80, 192, 0.15);
+    border-color: #3050c0;
+    color: #3050c0;
     transform: translateY(-2px);
 }
 
 .badge-expandable:hover {
-    background: rgba(168, 85, 247, 0.15);
-    border-color: #a855f7;
-    color: #9333ea;
+    background: rgba(112, 200, 48, 0.15);
+    border-color: #70c830;
+    color: #70c830;
     transform: translateY(-2px);
 }
 
 [data-md-color-scheme="slate"] .badge {
     background: rgba(30, 41, 59, 0.8);
-    color: #4ade80;
+    color: #94a3b8; /* neutral default instead of green */
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 [data-md-color-scheme="slate"] .badge-open-source:hover {
-    background: rgba(34, 197, 94, 0.3);
-    color: #86efac;
-    border-color: #4ade80;
+    background: rgba(240, 192, 48, 0.25);
+    color: #f0c030;
+    border-color: #f0c030;
 }
 
 [data-md-color-scheme="slate"] .badge-self-hosted:hover {
-    background: rgba(59, 130, 246, 0.3);
-    color: #93c5fd;
-    border-color: #60a5fa;
+    background: rgba(48, 80, 192, 0.25);
+    color: #a0b4f0;
+    border-color: #3050c0;
 }
 
 [data-md-color-scheme="slate"] .badge-expandable:hover {
-    background: rgba(168, 85, 247, 0.3);
-    color: #d8b4fe;
-    border-color: #c084fc;
+    background: rgba(168, 224, 96, 0.25);
+    color: #A8E060;
+    border-color: #A8E060;
 }
 
-/* Quick Install */
-.quick-install {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-    margin: 2rem 0 0.5rem 0;
+/* Quick Install Section Redesign */
+.lf-quick-install-section {
+    margin-top: clamp(1.5rem, 3vw, 2.5rem);
+    margin-bottom: clamp(1.75rem, 3.5vw, 2.75rem);
+    display: flex;
+    justify-content: center;
 }
 
-.install-box {
+.lf-quick-install-card {
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    border-radius: 24px;
+    padding: clamp(2.5rem, 5vw, 3.5rem);
+    width: 100%;
+    max-width: 800px;
+    display: grid;
+    gap: clamp(1.6rem, 3vw, 2.35rem);
+}
+
+[data-md-color-scheme="slate"] .lf-quick-install-card {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.md-typeset .lf-quick-install-title {
+    margin: 0 0 clamp(0.5rem, 2vw, 1.15rem) 0 !important;
+    padding: 0 !important;
+    text-align: center;
+    color: var(--md-default-fg-color);
+    font-size: clamp(2.35rem, 4.6vw, 3.75rem);
+    line-height: 1.1;
+    letter-spacing: -0.045em;
+}
+
+.lf-quick-install-docker {
+    position: relative;
+    background: rgba(59, 130, 246, 0.04);
+    border: 1px solid rgba(59, 130, 246, 0.2);
     border-radius: 16px;
     padding: 2rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    transition: transform 0.3s;
-}
-
-[data-md-color-scheme="slate"] .install-box {
-    background: rgba(30, 41, 59, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-}
-
-.install-box:hover {
-    transform: translateY(-4px);
-}
-
-.install-box h3 {
-    margin-top: 0;
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    justify-content: space-between;
+    gap: 2rem;
+    /* margin-bottom removed for grid gap */
+}
+
+[data-md-color-scheme="slate"] .lf-quick-install-docker {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.lf-quick-install-eyebrow {
+    position: absolute;
+    top: -12px;
+    left: 24px;
+    background: var(--md-primary-fg-color);
+    color: white;
+    padding: 2px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.lf-quick-install-docker-body h3 {
     color: var(--md-primary-fg-color);
 }
 
-[data-md-color-scheme="slate"] .install-box h3 {
-    color: #f8fafc;
+[data-md-color-scheme="slate"] .lf-quick-install-docker-body h3 {
+    color: #93c5fd;
 }
 
-.install-cmd {
-    background: #1e293b;
-    color: #00ff9a;
-    font-family: monospace;
-    padding: 1rem;
+.lf-quick-install-docker-body p {
+    margin: 0;
+    color: var(--md-default-fg-color--light);
+}
+
+.lf-quick-install-dev {
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+}
+
+[data-md-color-scheme="slate"] .lf-quick-install-dev {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.lf-quick-install-dev-body h4 {
+    font-size: 1.1rem;
+}
+
+.lf-quick-install-dev-body p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--md-default-fg-color--light);
+}
+
+
+.lf-quick-install-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.lf-quick-install-heading h3, .lf-quick-install-heading h4 {
+    margin: 0 !important;
+}
+
+.lf-quick-install-icon {
+    width: 2.4rem;
+    height: 2.4rem;
+    min-width: 2.4rem;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 999px;
+    overflow: visible;
+}
+
+.lf-quick-install-icon svg {
+    width: 1.2rem;
+    height: 1.2rem;
+    display: block;
+    overflow: visible;
+}
+
+.lf-quick-install-icon-primary {
+    color: #0f172a;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.lf-quick-install-icon-primary svg {
+    stroke: #0f172a;
+}
+
+[data-md-color-scheme="slate"] .lf-quick-install-icon-primary {
+    color: #0f172a;
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(148, 163, 184, 0.45);
+}
+
+[data-md-color-scheme="slate"] .lf-quick-install-icon-primary svg {
+    stroke: #0f172a;
+}
+
+.lf-quick-install-icon-secondary {
+    color: var(--md-default-fg-color);
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+[data-md-color-scheme="slate"] .lf-quick-install-icon-secondary {
+    color: #cbd5e1;
+}
+
+/* Buttons */
+.lf-btn-primary {
+    display: inline-block;
+    background: var(--md-primary-fg-color);
+    color: white !important;
+    padding: 0.75rem 1.5rem;
     border-radius: 8px;
-    margin: 1.5rem 0;
-    overflow-x: auto;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.2s, transform 0.2s;
+    white-space: nowrap;
 }
 
-.install-box a {
-    font-weight: bold;
-    color: var(--md-accent-fg-color);
+.lf-btn-primary:hover {
+    background: var(--md-accent-fg-color);
+    transform: translateY(-2px);
+}
+
+.lf-btn-secondary {
+    display: inline-block;
+    background: transparent;
+    color: var(--md-default-fg-color) !important;
+    border: 1px solid var(--md-default-fg-color--light);
+    padding: 0.5rem 1.25rem;
+    border-radius: 8px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+[data-md-color-scheme="slate"] .lf-btn-secondary {
+    color: #e2e8f0 !important;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.lf-btn-secondary:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+[data-md-color-scheme="slate"] .lf-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .lf-quick-install-docker, .lf-quick-install-dev {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+    }
+    
+    .lf-quick-install-card {
+        padding: 1.5rem;
+    }
+
+    .lf-quick-install-docker {
+        padding: 2rem 1.5rem 1.5rem;
+    }
+
+    .lf-quick-install-eyebrow {
+        left: 1.5rem;
+    }
+
+    .lf-btn-primary, .lf-btn-secondary {
+        width: 100%;
+        text-align: center;
+        box-sizing: border-box;
+    }
 }
 
 /* Strengths Grid */
@@ -323,6 +505,8 @@
 .deep-dive-image {
     flex: 1;
     position: relative;
+    width: 100%;
+    min-width: 0;
 }
 
 .deep-dive-image img {
@@ -532,7 +716,7 @@
         font-size: 2.5rem;
     }
     
-    .quick-install, .strengths-grid, .deep-dive {
+    .strengths-grid, .deep-dive {
         grid-template-columns: 1fr;
         flex-direction: column;
         gap: 2rem;
@@ -891,10 +1075,7 @@
   }
 
   .lf-fit-top-row {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    margin-bottom: 1.5rem;
+    display: none;
   }
 
   .lf-fit-row {
@@ -969,5 +1150,83 @@
     transition: none !important;
     animation: none !important;
     transform: none !important;
+  }
+}
+
+/* --- Screenshot Carousel --- */
+
+.lf-screenshot-carousel {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  background-color: var(--md-default-bg-color);
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease;
+}
+
+.lf-screenshot-carousel:hover {
+  transform: scale(1.03);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.25);
+}
+
+[data-md-color-scheme="slate"] .lf-screenshot-carousel:hover {
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+}
+
+.lf-screenshot-carousel-item {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 2s cubic-bezier(0.25, 1, 0.5, 1) !important;
+  will-change: transform;
+}
+
+.lf-screenshot-carousel-dots {
+  position: absolute;
+  left: 50%;
+  bottom: 0.75rem;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  transform: translateX(-50%);
+}
+
+.lf-screenshot-carousel-dot {
+  width: 0.48rem;
+  height: 0.48rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition: width 180ms ease, background-color 180ms ease, opacity 180ms ease;
+}
+
+.lf-screenshot-carousel-dot.is-active {
+  width: 1.25rem;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.lf-screenshot-carousel-dot:focus-visible {
+  outline: 2px solid var(--md-primary-fg-color);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lf-screenshot-carousel-item {
+    transition: none !important;
+  }
+  .lf-screenshot-carousel-dot {
+    transition: none !important;
   }
 }
