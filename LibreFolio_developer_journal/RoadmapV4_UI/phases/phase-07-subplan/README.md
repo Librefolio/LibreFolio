@@ -15,7 +15,7 @@ Questa directory raccoglie i sotto-piani di implementazione per la **Phase 7 (Tr
 | **Parte 3** | ✅ **DONE 2026-04-25** | API consolidation full-bulk + Blocco I currency simplification + I-bis closure (#1..#26) + Blocco G test coverage 87.06% |
 | **Parte 4** | 🔄 **PROGRESS** | Pagina `/transactions` — DataTable, FormModal, BulkModal, ContextMenu, TxStore (10 steps + 11 rounds: R1–R6) |
 | Parte 4b | ✅ DONE 2026-06-04 | File Preview System (`/files` Static + BRIM, recovery + polish) |
-| Parte 5 | ⏳ TODO | Staging Modal unificata |
+| Parte 5 | ✅ DONE | BRIM Import Bridge, ImportWizard e ParseAndSee |
 
 
 ## Sotto-piani archiviati
@@ -123,6 +123,15 @@ Piano master D2-Round2 + 4 sub-plan (SP-A/B/C) + 8 bugfix WAC deep-dive. Tutti c
 | File | Descrizione | Status |
 |------|-------------|:------:|
 | [`Standalone/plan-pwa-mobile-optimizations.prompt.md`](./Standalone/plan-pwa-mobile-optimizations.prompt.md) | PWA manifest, install button, CSS mobile, docs | ✅ |
+
+### Parte 5 — BRIM Import Bridge & Import Wizard
+
+| File | Descrizione | Status |
+|------|-------------|:------:|
+| [`Parte5/plan-phase07Part5-BRIMImportBridge.prompt.md`](./Parte5/plan-phase07Part5-BRIMImportBridge.prompt.md) | BRIM Import Bridge | ✅ |
+| [`Parte5/plan-phase07Part5-M1-ParseAndSee.prompt.md`](./Parte5/plan-phase07Part5-M1-ParseAndSee.prompt.md) | M1 Parse and See | ✅ |
+| [`Parte5/plan-phase07Part5-v5-ImportWizard.prompt.md`](./Parte5/plan-phase07Part5-v5-ImportWizard.prompt.md) | v5 Import Wizard | ✅ |
+| [`Parte5/brim-plugin-sign-audit-2026-06-08.md`](./Parte5/brim-plugin-sign-audit-2026-06-08.md) | Audit sign per plugin BRIM | ✅ |
 
 ## Piani storici mantenuti per contesto
 

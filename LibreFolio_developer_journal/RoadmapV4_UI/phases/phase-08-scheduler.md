@@ -1,6 +1,7 @@
 # Phase 8 — Market Data Scheduler
 
 > **Status**: ✅ Completata (2026-06-08). Step 1+2 (backend) + Step 3 (UI) tutti implementati.
+> **Sub-plans archiviati**: [`phase-08-subplan/README.md`](./phase-08-subplan/README.md)
 > **Giorni stimati**: 2–3
 > **Origine**: side-quest emersa durante Phase 7 dalla convergenza dei sistemi FX (Phase 5) e Asset (Phase 6). Con entrambi i pipeline di sync collaudati e stabili, ha senso automatizzare l'esecuzione periodica invece di lasciarla manuale.
 > **Ultimo aggiornamento**: 2026-06-08 — Tutti gli step completati, testati manualmente e verificati.

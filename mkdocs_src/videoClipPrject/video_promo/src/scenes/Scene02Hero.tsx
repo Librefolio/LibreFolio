@@ -1,5 +1,5 @@
 import React from "react";
-import { useCurrentFrame, staticFile, interpolate, spring, useVideoConfig } from "remotion";
+import { useCurrentFrame, staticFile, interpolate, spring, useVideoConfig, Audio } from "remotion";
 import { SceneShell } from "../components/SceneShell";
 import { AnimatedHeadline } from "../components/AnimatedHeadline";
 import { DiagonalThemeReveal } from "../components/DiagonalThemeReveal";
@@ -36,6 +36,7 @@ export const Scene02Hero: React.FC<{ locale: Locale }> = ({ locale }) => {
 
   return (
     <SceneShell bg="#050510">
+      <Audio src={staticFile("ai/sfx_transition_whoosh_cut_a.mp3")} volume={0.6} />
       <div
         style={{
           position: "absolute",

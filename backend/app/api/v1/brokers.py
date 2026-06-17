@@ -62,6 +62,7 @@ from backend.app.schemas.brokers import (
     BRSummary,
     BRUpdateItem,
 )
+from backend.app.schemas.uploads import FilePreviewResponse
 from backend.app.services import brim_provider
 from backend.app.services.brim_provider import BRIMParseError, detect_tx_duplicates, search_asset_candidates
 from backend.app.services.broker_service import BrokerService
@@ -72,7 +73,6 @@ from backend.app.services.file_preview import (
     build_preview_response,
 )
 from backend.app.services.provider_registry import BRIMProviderRegistry
-from backend.app.schemas.uploads import FilePreviewResponse
 
 logger = get_logger(__name__)
 

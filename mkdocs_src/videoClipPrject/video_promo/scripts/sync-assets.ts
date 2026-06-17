@@ -46,7 +46,9 @@ const AI_ASSETS = [
   "device_sync_bg.png",
   "open_network_bg.png",
   "cta_particles_bg.png",
-  "audio_track.mp3",
+  "audio_track_main_54s_fade.mp3",
+  "sfx_transition_whoosh_cut_a.mp3",
+  "sfx_logo_sting_cut_a.mp3",
 ];
 
 function getMtime(p: string): number {

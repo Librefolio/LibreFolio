@@ -15,7 +15,6 @@ from backend.app.utils.financial.roi_utils import (
     MWRRPoint,
     NAVSnapshot,
     SimpleROIPoint,
-    TWRRPoint,
     calculate_mwrr,
     calculate_mwrr_series,
     calculate_simple_roi,
@@ -23,7 +22,6 @@ from backend.app.utils.financial.roi_utils import (
     calculate_twrr,
     calculate_twrr_series,
 )
-
 
 # ---------------------------------------------------------------------------
 # TestSimpleROI
@@ -262,7 +260,7 @@ class TestMWRRSeries:
             NAVSnapshot(date(2025, 12, 31), Decimal("12000")),
         ]
         cfs = [CashFlowInput(date(2025, 6, 1), Decimal("-1000"))]
-        
+
         series = calculate_mwrr_series(navs, cfs)
         assert len(series) == 2
 

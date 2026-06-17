@@ -16,7 +16,7 @@ export interface MainVideoProps {
 
 export const LibreFolioPromo: React.FC<MainVideoProps> = ({ locale }) => (
   <AbsoluteFill>
-    <Audio src={staticFile("ai/audio_track.mp3")} />
+    <Audio src={staticFile("ai/audio_track_main_54s_fade.mp3")} />
     <Series>
       <Series.Sequence durationInFrames={videoPlan.scenes.scene01.durationInFrames}>
         <Scene01Hook locale={locale} />

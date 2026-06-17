@@ -2,7 +2,7 @@
 
 **Date**: 2025-06-05
 **Status**: ✅ Complete
-**Parent plan**: [plan-phase07Part5-BRIMImportBridge.prompt.md](./plan-phase07Part5-BRIMImportBridge.prompt.md)
+**Parent plan**: [plan-phase07Part5-BRIMImportBridge.prompt.md](../../../plan-phase07Part5-BRIMImportBridge.prompt.md)
 
 ---
 

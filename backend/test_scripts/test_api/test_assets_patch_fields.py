@@ -24,7 +24,6 @@ from backend.app.schemas.assets import (
     FAAssetPatchItem,
     FABulkAssetCreateResponse,
     FABulkAssetPatchResponse,
-    FAinfoResponse,
 )
 
 # Test server fixture

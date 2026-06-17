@@ -4,14 +4,14 @@
 
 **Date**: 2026-06-05
 **Scope**: Connect BRIM parse flow to the existing BulkModal from `/transactions` page
-**Status**: ⚠️ SUPERSEDED by [plan-phase07Part5-v5-ImportWizard.prompt.md](./plan-phase07Part5-v5-ImportWizard.prompt.md)
+**Status**: ⚠️ SUPERSEDED by [plan-phase07Part5-v5-ImportWizard.prompt.md](../../../plan-phase07Part5-v5-ImportWizard.prompt.md)
 **Incorporates**: 17 OSS + 7 issue fixes from final review
 
 ### Milestone Execution Logs
 
 | Milestone | Status | Log |
 |-----------|--------|-----|
-| **M1: Parse & See** | ✅ 2025-06-05 | [plan-phase07Part5-M1-ParseAndSee.prompt.md](./plan-phase07Part5-M1-ParseAndSee.prompt.md) |
+| **M1: Parse & See** | ✅ 2025-06-05 | [plan-phase07Part5-M1-ParseAndSee.prompt.md](../../../plan-phase07Part5-M1-ParseAndSee.prompt.md) |
 | **M2: Resolve Assets** | ⏳ Pending | — |
 | **M3: Review & Duplicates** | ⏳ Pending | — |
 | **M4: Wire to BulkModal** | ⏳ Pending | — |

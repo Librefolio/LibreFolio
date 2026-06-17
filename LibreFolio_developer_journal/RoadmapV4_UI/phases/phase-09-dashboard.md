@@ -1,6 +1,7 @@
 # Phase 9: Dashboard
 
-**Status**: ⏳ TODO  
+**Status**: ⏳ Progress
+**Sub-plans archiviati**: [`../phase-09-subplan/README.md`](../phase-09-subplan/README.md)
 **Durata**: ~5 giorni (aggiornata)  
 **Priorità**: P1 (Important)  
 **Dipendenze**: Phase 4.8 (share_percentage per aggregazione), Phase 5 (PriceChartShared), Phase 6, Phase 7 (tutti i dati)

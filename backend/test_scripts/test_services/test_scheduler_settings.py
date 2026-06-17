@@ -17,7 +17,6 @@ from datetime import time
 from backend.app.services.scheduler.settings import _parse_days, _parse_times
 from backend.test_scripts.test_utils import print_section, print_success
 
-
 # ============================================================================
 # _parse_times
 # ============================================================================

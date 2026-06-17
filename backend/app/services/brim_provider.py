@@ -461,7 +461,7 @@ class BRIMProvider(ABC):
         """
         sample = ""
         try:
-            with open(file_path, "r", encoding="utf-8-sig") as f:
+            with open(file_path, encoding="utf-8-sig") as f:
                 for i, line in enumerate(f):
                     if i >= lines_to_read:
                         break

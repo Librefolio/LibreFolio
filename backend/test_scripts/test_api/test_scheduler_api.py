@@ -13,7 +13,7 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.config import PROJECT_ROOT, get_settings
+from backend.app.config import get_settings
 from backend.app.db.session import get_async_engine
 from backend.app.services import user_service
 from backend.test_scripts.test_server_helper import _TestingServerManager

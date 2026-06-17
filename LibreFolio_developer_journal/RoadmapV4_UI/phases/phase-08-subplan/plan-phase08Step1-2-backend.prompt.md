@@ -2,7 +2,7 @@
 
 > **Tipo**: Piano esecutivo per agente CLI
 > **Prerequisiti**: Phase 7 completata, backend e test funzionanti
-> **Piano padre**: [`../phase-08-scheduler.md`](../phase-08-scheduler.md)
+> **Piano padre**: [`../phase-08-scheduler.md`](../../../phase-08-scheduler.md)
 > **Stima**: ~6h
 > **Output atteso**: backend con scheduler daemon funzionante, `fetch_interval` rimosso, test green
 
