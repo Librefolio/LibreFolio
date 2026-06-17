@@ -12,7 +12,7 @@
  *   - This ensures brokers with icons exist for realistic screenshots
  */
 import {expect, Page, test} from '@playwright/test';
-import {login, logout, navigateTo, setLanguage} from './fixtures/auth-helpers';
+import {login, logout, navigateTo, openMobileMenu, setLanguage} from './fixtures/auth-helpers';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
 import {goToAssetsPage, navigateToAssetByName} from './assets/assets-helpers';
@@ -251,7 +251,13 @@ test.describe('Gallery Screenshots', () => {
 
         test('dashboard empty state - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
-            // Logout TEST_ADMIN (from beforeEach) and switch to empty user
+            // Logout TEST_ADMIN (from beforeEach) and switch to empty user.
+            // On mobile the logout button is inside the collapsed sidebar — open the menu first.
+            const isMobile = testInfo.project.name === 'mobile';
+            if (isMobile) {
+                await openMobileMenu(page);
+                await page.waitForTimeout(300);
+            }
             await logout(page);
             await login(page, TEST_EMPTY);
 
@@ -609,57 +615,59 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('transaction form modal variants - all languages and themes', async ({page}, testInfo) => {
-            // Screenshots for different transaction types in the form modal
+            // Screenshots for different transaction types in the form modal.
+            // Open the form ONCE per lang/theme and switch types inside it — avoids
+            // 7 × navigation overhead and stays well within the 3-min timeout.
             const viewport = getViewport(testInfo);
             const typesToShoot: Array<{type: string; name: string}> = [
                 {type: 'SELL', name: 'form-modal-sell'},
                 {type: 'DIVIDEND', name: 'form-modal-dividend'},
                 {type: 'DEPOSIT', name: 'form-modal-deposit'},
+                {type: 'ADJUSTMENT', name: 'form-modal-adjustment'},
                 {type: 'TRANSFER', name: 'form-modal-transfer'},
                 {type: 'FX_CONVERSION', name: 'form-modal-fxconversion'},
+                {type: 'CASH_TRANSFER', name: 'form-modal-cash-transfer'},
             ];
 
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
+                    // Navigate once per lang/theme
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+
+                    // Open Add form once
+                    await page.getByTestId('tx-add-button').click();
+                    const formModal = page.getByTestId('tx-form-modal');
+                    await expect(formModal).toBeVisible({timeout: 8_000});
+                    await waitForNetworkSettled(page);
+                    await page.waitForTimeout(200);
+
+                    // Cycle through each type inside the same open modal
                     for (const {type, name} of typesToShoot) {
-                        await navigateTo(page, '/transactions');
-                        await setLanguage(page, lang);
-                        await setTheme(page, theme);
-                        await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
-
-                        // Open Add form
-                        await page.getByTestId('tx-add-button').click();
-                        const formModal = page.getByTestId('tx-form-modal');
-                        await expect(formModal).toBeVisible({timeout: 8_000});
-                        await waitForNetworkSettled(page);
-                        await page.waitForTimeout(200);
-
-                        // Change type via the type search-select:
-                        // SearchSelect shows input INSIDE the open dropdown, not inline.
-                        // 1) Click the combobox trigger to open dropdown
-                        // 2) Click the specific option by testid
                         const typeCombobox = page.locator('[data-testid="tx-form-type"] [role="combobox"]');
                         if (await typeCombobox.isVisible({timeout: 2_000}).catch(() => false)) {
                             await typeCombobox.click();
-                            await page.waitForTimeout(400);
+                            await page.waitForTimeout(300);
                             const option = page.locator(`[data-testid="search-select-option-${type}"]`);
                             if (await option.isVisible({timeout: 2_000}).catch(() => false)) {
                                 await option.click();
                                 await waitForNetworkSettled(page);
-                                await page.waitForTimeout(400);
+                                await page.waitForTimeout(300);
                             }
                         }
                         await freezeAnimations(page);
                         await screenshot(page, viewport, lang, theme, 'transactions', name);
+                    }
 
-                        // Close form
-                        await page.keyboard.press('Escape');
+                    // Close form once at the end
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                    const discardBtn = page.getByTestId('confirm-modal-confirm');
+                    if (await discardBtn.isVisible({timeout: 500}).catch(() => false)) {
+                        await discardBtn.click();
                         await page.waitForTimeout(200);
-                        const discardBtn = page.getByTestId('confirm-modal-confirm');
-                        if (await discardBtn.isVisible({timeout: 500}).catch(() => false)) {
-                            await discardBtn.click();
-                            await page.waitForTimeout(200);
-                        }
                     }
                 }
             }
@@ -1119,8 +1127,9 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('import wizard duplicate detection - all languages and themes', async ({page}, testInfo) => {
-            // ibkr-trades-export.csv was already uploaded; if the DB has matching transactions
-            // from populate_mock_data, they'll be flagged as likely-duplicate in step 4.
+            // generic_simple.csv has AAPL rows that match transactions already in the DB.
+            // After parsing, step4 shows the transaction table with "likely duplicate" badges.
+            // We scroll to center on the table to make the duplicate status visible.
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
@@ -1138,9 +1147,10 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 8_000});
                     await page.waitForTimeout(800);
 
-                    // Select ibkr-trades-export.csv
+                    // Select generic_simple.csv — has AAPL/MSFT rows + UNETF (unresolved)
+                    // The AAPL rows match existing DB transactions → show as "likely duplicate"
                     const step2 = page.getByTestId('import-wizard-step2');
-                    const fileRow = step2.locator('tr[data-row-id]').filter({hasText: 'ibkr-trades-export.csv'}).first();
+                    const fileRow = step2.locator('tr[data-row-id]').filter({hasText: 'generic_simple.csv'}).first();
                     if (await fileRow.isVisible({timeout: 3_000}).catch(() => false)) {
                         const checkbox = fileRow.locator('td.td-select button.checkbox-btn');
                         await checkbox.scrollIntoViewIfNeeded();
@@ -1162,6 +1172,14 @@ test.describe('Gallery Screenshots', () => {
                             }
                             await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 10_000});
                             await page.waitForTimeout(500);
+
+                            // Scroll to the transaction table (below the resolve section) to show duplicate badges
+                            const step4 = page.getByTestId('import-wizard-step4');
+                            const txTable = step4.locator('table').first();
+                            if (await txTable.isVisible({timeout: 2_000}).catch(() => false)) {
+                                await txTable.evaluate((el) => el.scrollIntoView({block: 'center'}));
+                                await page.waitForTimeout(300);
+                            }
                             await freezeAnimations(page);
                             await screenshot(page, viewport, lang, theme, 'brokers', 'import-wizard-duplicate');
                         }
@@ -1567,7 +1585,25 @@ test.describe('Gallery Screenshots', () => {
                     await modal.locator('.overflow-y-auto').evaluate((el) => (el.scrollTop = el.scrollHeight));
 
                     // Wait for chain routes section to render
-                    await modal.locator('[data-testid^="fx-route-chain-section"]').first().waitFor({state: 'visible', timeout: 5000});
+                    const chainSection = modal.locator('[data-testid^="fx-route-chain-section"]').first();
+                    await chainSection.waitFor({state: 'visible', timeout: 5000});
+
+                    // Click the chain section header to expand it (collapsed by default when direct routes exist)
+                    const chainHeader = chainSection.locator('button').first();
+                    if (await chainHeader.isVisible({timeout: 1000}).catch(() => false)) {
+                        await chainHeader.click();
+                        await page.waitForTimeout(500); // Let chain routes expand
+                    }
+
+                    // Click the first chain route item to add it — this shows the 2-step route in the selected panel
+                    const firstChainRoute = chainSection.locator('[data-testid^="fx-route-chain-"]').first();
+                    if (await firstChainRoute.isVisible({timeout: 2000}).catch(() => false)) {
+                        await firstChainRoute.click();
+                        await page.waitForTimeout(500); // Wait for route to appear in the selected list
+                    }
+
+                    // Scroll modal body to bottom so the selected chain route + detail are in view
+                    await modal.locator('.overflow-y-auto').evaluate((el) => (el.scrollTop = el.scrollHeight));
                     await page.waitForTimeout(500); // Extra settle time for provider icons
 
                     await screenshot(page, viewport, lang, theme, 'fx', 'add-pair-chain');
@@ -1848,8 +1884,25 @@ test.describe('Gallery Screenshots', () => {
                     await freezeAnimations(page);
 
                     await navigateToAssetByName(page, GALLERY_ASSET);
+                    await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
                     await page.waitForTimeout(500);
+                    // Screenshot 1: line chart (default)
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-chart');
+
+                    // Screenshot 2: candlestick chart
+                    const candlestickBtn = page.getByTestId('chart-type-candlestick');
+                    if (await candlestickBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                        await candlestickBtn.click();
+                        await page.waitForTimeout(800); // Wait for candlestick to render
+                        await freezeAnimations(page);
+                        await screenshot(page, viewport, lang, theme, 'assets', 'detail-chart-candlestick');
+                        // Reset to line for next iteration
+                        const lineBtn = page.getByTestId('chart-type-line');
+                        if (await lineBtn.isVisible({timeout: 1000}).catch(() => false)) {
+                            await lineBtn.click();
+                            await page.waitForTimeout(300);
+                        }
+                    }
                 }
             }
         });
@@ -1907,8 +1960,8 @@ test.describe('Gallery Screenshots', () => {
                             if (await emaOption.isVisible({timeout: 1000}).catch(() => false)) {
                                 await emaOption.click();
                                 await page.waitForTimeout(1500); // Wait for EMA to render on chart
-                                // Scroll to chart to center it in viewport
-                                await page.getByTestId('asset-detail-chart').scrollIntoViewIfNeeded();
+                                // Scroll the chart into center of viewport
+                                await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
                                 await page.waitForTimeout(300);
                                 await freezeAnimations(page);
                                 await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-ema');
@@ -1946,7 +1999,8 @@ test.describe('Gallery Screenshots', () => {
                             if (await rsiOption.isVisible({timeout: 1000}).catch(() => false)) {
                                 await rsiOption.click();
                                 await page.waitForTimeout(1500);
-                                await page.getByTestId('asset-detail-chart').scrollIntoViewIfNeeded();
+                                // Scroll the chart into center of viewport (not just into view)
+                                await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
                                 await page.waitForTimeout(300);
                                 await freezeAnimations(page);
                                 await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-rsi');
@@ -1984,10 +2038,49 @@ test.describe('Gallery Screenshots', () => {
                             if (await macdOption.isVisible({timeout: 1000}).catch(() => false)) {
                                 await macdOption.click();
                                 await page.waitForTimeout(1500);
-                                await page.getByTestId('asset-detail-chart').scrollIntoViewIfNeeded();
+                                // Scroll the chart into center of viewport
+                                await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
                                 await page.waitForTimeout(300);
                                 await freezeAnimations(page);
                                 await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-macd');
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        test('Asset detail signals Bollinger - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await navigateToAssetByName(page, GALLERY_ASSET);
+                    await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
+                    await page.waitForTimeout(1000);
+
+                    const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
+                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                        await signalsToggle.click();
+                        await page.waitForTimeout(500);
+
+                        const indicatorSelect = page.getByTestId('signals-indicator-select-button');
+                        if (await indicatorSelect.isVisible({timeout: 2000}).catch(() => false)) {
+                            await indicatorSelect.click();
+                            await page.waitForTimeout(300);
+                            const bollingerOption = page.locator('[role="menuitem"]').filter({hasText: /Bollinger/i}).first();
+                            if (await bollingerOption.isVisible({timeout: 1000}).catch(() => false)) {
+                                await bollingerOption.click();
+                                await page.waitForTimeout(1500);
+                                await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
+                                await page.waitForTimeout(300);
+                                await freezeAnimations(page);
+                                await screenshot(page, viewport, lang, theme, 'assets', 'detail-signals-bollinger');
                             }
                         }
                     }
