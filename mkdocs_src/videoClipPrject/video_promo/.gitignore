@@ -1,0 +1,9 @@
+# System and IDE files
+node_modules/
+.DS_Store
+
+# Build artifacts
+out/
+
+# AutoSync asset from screen
+public/assets/
