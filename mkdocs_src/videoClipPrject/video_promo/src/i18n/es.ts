@@ -2,8 +2,61 @@ import { I18nDict } from "../types/i18n";
 
 export const es: I18nDict = {
   scene01: {
-    headline: "Tus inversiones están en todas partes.",
-    sub: "Apps. Brókeres. Hojas de cálculo. Billeteras cripto.",
+    introStatement: "Invertir está bien.",
+    controlStatement: "Mantenerlo todo bajo control\nes otra historia.",
+    sourceWords: [
+      "Brókers distintos.",
+      "Apps distintas.",
+      "Informes distintos.",
+      "Hojas de cálculo.",
+      "Wallets distintos.",
+    ],
+    formatsStatement: [
+      "Formatos diferentes.",
+      "Datos dispersos.",
+      "Controles manuales.",
+    ],
+    overloadStatement: "Demasiadas fuentes.\nPoca claridad.",
+    revealPrefix: "¿Y si todo volviera a estar claro?",
+    productName: "LibreFolio",
+    shards: {
+      csvReport: {
+        title: "CSV Report",
+        subtitle: "rows · fees · dates",
+      },
+      brokerExport: {
+        title: "Broker Export",
+        subtitle: "different formats",
+      },
+      fxRates: {
+        title: "FX Rates",
+        subtitle: "🇪🇺 EUR ⇄ USD 🇺🇸",
+      },
+      spreadsheets: {
+        title: "Spreadsheets",
+        subtitle: "manual tracking",
+      },
+      wallets: {
+        title: "Wallets",
+        subtitle: "isolated balances",
+      },
+      duplicates: {
+        title: "Duplicates",
+        subtitle: "same trade?",
+      },
+      priceNoise: {
+        title: "Price Noise",
+        subtitle: "too many charts",
+      },
+      reports: {
+        title: "Reports",
+        subtitle: "PDF · CSV · XLS",
+      },
+      alerts: {
+        title: "Alerts",
+        subtitle: "manual checks",
+      },
+    },
   },
   scene02: {
     headline: "Un único panel privado.",
