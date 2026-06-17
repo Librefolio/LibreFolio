@@ -43,71 +43,196 @@ description: Free to understand, free to act. LibreFolio brings all your investm
 
     <div class="premium-badges">
       <span class="badge badge-open-source">100% OPEN SOURCE</span>
-      <span class="badge badge-self-hosted">SELF-HOSTED OR CLOUD</span>
       <span class="badge badge-expandable">HIGHLY EXPANDABLE</span>
+      <span class="badge badge-self-hosted">SELF-HOSTED OR CLOUD</span>
     </div>
   </div>
 
-  <!-- Video Section -->
-  <div class="premium-video-wrapper">
-    <video id="hero-video" width="100%" height="100%" muted playsinline controls style="object-fit: cover; border-radius: 20px;">
-      <source src="static/video/librefolio_promo_en.mp4" type="video/mp4">
-      Your browser does not support the video tag.
-    </video>
-  </div>
+  <!-- Video Section: Temporaneamente rimosso (Work in Progress) -->
 
-  <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      var video = document.getElementById("hero-video");
-      if (!video) return;
-
-      // Gestione custom del loop per non buggare la barra del tempo (scrubber) nei browser
-      video.addEventListener('ended', function() {
-        video.currentTime = 0;
-        video.play();
-      });
-
-      // Observer per far partire il video quando entra nello schermo
-      var observer = new IntersectionObserver(function(entries) {
-        entries.forEach(function(entry) {
-          if (entry.isIntersecting) {
-            // Usa una Promise per gestire le policy di autoplay dei browser
-            var playPromise = video.play();
-            if (playPromise !== undefined) {
-              playPromise.catch(function(error) {
-                console.log("Autoplay bloccato dal browser. L'utente deve interagire o il video deve essere mutato.", error);
-              });
-            }
-          }
-        });
-      }, { threshold: 0.5 }); // Fa partire il video quando è visibile al 50%
+    <!-- Quick Install -->
+  <section class="lf-quick-install-section" id="get-started-quick">
+    <div class="lf-quick-install-card">
+      <h2 class="lf-quick-install-title">Ready to try LibreFolio?</h2>
       
-      observer.observe(video);
-    });
-  </script>
-
-  <!-- Quick Install -->
-  <div class="quick-install" id="get-started-quick">
-    <div class="install-box">
-      <h3>
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
-        Docker (Recommended)
-      </h3>
-      <a href="user/installation/">Read Docker Guide &rarr;</a>
+      <div class="lf-quick-install-docker">
+        <span class="lf-quick-install-eyebrow">Recommended</span>
+        <div class="lf-quick-install-docker-body">
+          <div class="lf-quick-install-heading">
+            <span class="lf-quick-install-icon lf-quick-install-icon-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+            </span>
+            <h3>Install with Docker</h3>
+          </div>
+          <p>The standard path to run LibreFolio privately and reliably.</p>
+        </div>
+        <a href="user/installation/" class="lf-btn-primary">Read Docker guide &rarr;</a>
+      </div>
+      
+      <div class="lf-quick-install-dev">
+        <div class="lf-quick-install-dev-body">
+          <div class="lf-quick-install-heading">
+            <span class="lf-quick-install-icon lf-quick-install-icon-secondary">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            </span>
+            <h4>Developer?</h4>
+          </div>
+          <p>Set up the Python + Pipenv environment to contribute or customize.</p>
+        </div>
+        <a href="developer/dev-installation/" class="lf-btn-secondary">Developer installation &rarr;</a>
+      </div>
     </div>
-    <div class="install-box">
-      <h3>
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19h8"/><path d="m4 17 6-6-6-6"/></svg>
-        Python (Pipenv)
-      </h3>
-      <a href="developer/dev-installation/">Read Dev Installation Guide &rarr;</a>
+  </section>
+
+  <!-- Deep Dive 1: Dashboard -->
+  <div class="deep-dive">
+    <div class="deep-dive-content">
+      <h2>Dashboard</h2>
+      <p>A unified view of your entire portfolio. Track your net worth, allocation, and daily changes in one secure place.</p>
+    </div>
+    <div class="deep-dive-image">
+      <div class="screenshot-container">
+          <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard Main"
+               style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+      </div>
     </div>
   </div>
+
+  <!-- Deep Dive 2: Brokers -->
+  <div class="deep-dive reverse">
+    <div class="deep-dive-content">
+      <h2>Brokers Integration</h2>
+      <p>Seamlessly import data from your brokers. Standardize your transaction history and keep everything organized automatically.</p>
+    </div>
+    <div class="deep-dive-image">
+      <div class="screenshot-container">
+          <img class="gallery-img" data-category="brokers" data-name="list" alt="Brokers List"
+               style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+      </div>
+    </div>
+  </div>
+
+  <!-- Deep Dive 3: Transactions -->
+  <div class="deep-dive">
+    <div class="deep-dive-content">
+      <h2>Transactions</h2>
+      <p>Full transparency over every single movement. Filter, search, and edit transactions across all your portfolios effortlessly.</p>
+    </div>
+    <div class="deep-dive-image">
+      <div class="screenshot-container">
+          <img class="gallery-img" data-category="transactions" data-name="list" alt="Transactions List"
+               style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+      </div>
+    </div>
+  </div>
+
+  <!-- Deep Dive 4: Assets -->
+  <div class="deep-dive reverse">
+    <div class="deep-dive-content">
+      <h2>Assets & Analytics</h2>
+      <p>Dive deep into individual assets. Advanced charts, technical indicators (EMA, MACD, RSI), and historical data directly imported from global providers.</p>
+    </div>
+    <div class="deep-dive-image">
+      <div class="lf-screenshot-carousel" data-carousel="assets" data-carousel-interval="4000">
+        <img class="gallery-img lf-screenshot-carousel-item is-active" 
+             data-category="assets" data-name="detail-chart" alt="Asset Details Base Chart">
+        <img class="gallery-img lf-screenshot-carousel-item" loading="lazy"
+             data-category="assets" data-name="detail-signals-macd" alt="Asset Details MACD Signals">
+        <img class="gallery-img lf-screenshot-carousel-item" loading="lazy"
+             data-category="assets" data-name="detail-signals-rsi" alt="Asset Details RSI Signals">
+        <img class="gallery-img lf-screenshot-carousel-item" loading="lazy"
+             data-category="assets" data-name="detail-signals-bollinger" alt="Asset Details Bollinger Bands">
+      </div>
+    </div>
+  </div>
+
+  <!-- Deep Dive 5: Forex -->
+  <div class="deep-dive">
+    <div class="deep-dive-content">
+      <h2>Forex & Currencies</h2>
+      <p>Track exchange rates automatically. Manage multi-currency portfolios with live rates fetched straight from central banks.</p>
+    </div>
+    <div class="deep-dive-image">
+      <div class="screenshot-container">
+          <img class="gallery-img" data-category="fx" data-name="list" alt="Forex Details"
+               style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+      </div>
+    </div>
+  </div>
+
+  <!-- Deep Dive: Expandable by the Community -->
+  <div class="deep-dive" style="margin-top: 4rem; display: block; text-align: center;">
+    <h2 style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+      Expandable by the Community
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+    </h2>
+    <p style="max-width: 600px; margin: 0 auto 3rem auto; color: var(--md-default-fg-color--light);">LibreFolio is built around a plugin architecture. It's incredibly easy to write new integrations or leverage existing ones.</p>
+    
+    <div class="plugin-radial-hub">
+      <div class="hub-core">
+        <img id="hub-core-img" alt="LibreFolio Core" src="/LibreFolio/static/logo.png">
+        <script>
+          (function() {
+            var p = window.location.pathname.replace(/\/+$/, '');
+            var base = p.replace(/\/(it|fr|es)$/, '');
+            document.getElementById('hub-core-img').src = base + '/static/logo.png';
+          })();
+        </script>
+      </div>
+
+      <div class="ellipse-wrapper">
+        <div class="satellite-track">
+          <svg class="hub-lines" viewBox="0 0 650 650" width="100%" height="100%">
+            <line x1="325" y1="325" x2="325" y2="0" />
+            <line x1="325" y1="325" x2="43.5" y2="487.5" />
+            <line x1="325" y1="325" x2="606.5" y2="487.5" />
+          </svg>
+          
+          <div class="hub-node node-top">
+            <div class="hub-node-unscale">
+              <a href="user/brokers/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="6" rx="2"/><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                <div class="provider-info">
+                  <h4>Import Brokers Report</h4>
+                  <p>Load your transactions directly from your broker's export files in one click.</p>
+                </div>
+              </a>
+            </div>
+          </div>
+
+          <div class="hub-node node-bottom-left">
+            <div class="hub-node-unscale">
+              <a href="user/assets/providers/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                <div class="provider-info">
+                  <h4>Asset Providers</h4>
+                  <p>Sync real-time asset valuations from your preferred financial data sources.</p>
+                </div>
+              </a>
+            </div>
+          </div>
+
+          <div class="hub-node node-bottom-right">
+            <div class="hub-node-unscale">
+              <a href="user/fx/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
+                <div class="provider-info">
+                  <h4>Forex Providers</h4>
+                  <p>Fetch reliable daily currency exchange rates from your trusted financial providers.</p>
+                </div>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
   <!-- Is LibreFolio right for you? Section -->
   <section class="lf-fit-section">
     <div class="lf-fit-header">
-      <h2 id="lf-fit-title">Is LibreFolio right for you?</h2>
+      <h2 id="lf-fit-title">Is LibreFolio for you?</h2>
       <p>LibreFolio helps long-term investors bring every portfolio into one private, structured, analytics-ready workspace.</p>
     </div>
 
@@ -311,146 +436,9 @@ description: Free to understand, free to act. LibreFolio brings all your investm
       </div>
     </div>
   </section>
-  <!-- Deep Dive 1: Dashboard -->
-  <div class="deep-dive">
-    <div class="deep-dive-content">
-      <h2>Dashboard</h2>
-      <p>A unified view of your entire portfolio. Track your net worth, allocation, and daily changes in one secure place.</p>
-    </div>
-    <div class="deep-dive-image">
-      <div class="screenshot-container">
-          <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard Main"
-               style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-      </div>
-    </div>
-  </div>
-
-  <!-- Deep Dive 2: Brokers -->
-  <div class="deep-dive reverse">
-    <div class="deep-dive-content">
-      <h2>Brokers Integration</h2>
-      <p>Seamlessly import data from your brokers. Standardize your transaction history and keep everything organized automatically.</p>
-    </div>
-    <div class="deep-dive-image">
-      <div class="screenshot-container">
-          <img class="gallery-img" data-category="brokers" data-name="list" alt="Brokers List"
-               style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-      </div>
-    </div>
-  </div>
-
-  <!-- Deep Dive 3: Transactions -->
-  <div class="deep-dive">
-    <div class="deep-dive-content">
-      <h2>Transactions</h2>
-      <p>Full transparency over every single movement. Filter, search, and edit transactions across all your portfolios effortlessly.</p>
-    </div>
-    <div class="deep-dive-image">
-      <div class="screenshot-container">
-          <img class="gallery-img" data-category="transactions" data-name="list" alt="Transactions List"
-               style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-      </div>
-    </div>
-  </div>
-
-  <!-- Deep Dive 4: Assets -->
-  <div class="deep-dive reverse">
-    <div class="deep-dive-content">
-      <h2>Assets & Analytics</h2>
-      <p>Dive deep into individual assets. Advanced charts, technical indicators (EMA, MACD, RSI), and historical data directly imported from global providers.</p>
-    </div>
-    <div class="deep-dive-image">
-      <div class="screenshot-container">
-          <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Details"
-               style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-      </div>
-    </div>
-  </div>
-
-  <!-- Deep Dive 5: Forex -->
-  <div class="deep-dive">
-    <div class="deep-dive-content">
-      <h2>Forex & Currencies</h2>
-      <p>Track exchange rates automatically. Manage multi-currency portfolios with live rates fetched straight from central banks.</p>
-    </div>
-    <div class="deep-dive-image">
-      <div class="screenshot-container">
-          <img class="gallery-img" data-category="fx" data-name="list" alt="Forex Details"
-               style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-      </div>
-    </div>
-  </div>
-
-  <!-- Deep Dive: Expandable by the Community -->
-  <div class="deep-dive" style="margin-top: 4rem; display: block; text-align: center;">
-    <h2 style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-      Expandable by the Community
-      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
-    </h2>
-    <p style="max-width: 600px; margin: 0 auto 3rem auto; color: var(--md-default-fg-color--light);">LibreFolio is built around a plugin architecture. It's incredibly easy to write new integrations or leverage existing ones.</p>
-    
-    <div class="plugin-radial-hub">
-      <div class="hub-core">
-        <img id="hub-core-img" alt="LibreFolio Core" src="/LibreFolio/static/logo.png">
-        <script>
-          (function() {
-            var p = window.location.pathname.replace(/\/+$/, '');
-            var base = p.replace(/\/(it|fr|es)$/, '');
-            document.getElementById('hub-core-img').src = base + '/static/logo.png';
-          })();
-        </script>
-      </div>
-
-      <div class="ellipse-wrapper">
-        <div class="satellite-track">
-          <svg class="hub-lines" viewBox="0 0 650 650" width="100%" height="100%">
-            <line x1="325" y1="325" x2="325" y2="0" />
-            <line x1="325" y1="325" x2="43.5" y2="487.5" />
-            <line x1="325" y1="325" x2="606.5" y2="487.5" />
-          </svg>
-          
-          <div class="hub-node node-top">
-            <div class="hub-node-unscale">
-              <a href="user/brokers/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="6" rx="2"/><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-                <div class="provider-info">
-                  <h4>Import Brokers Report</h4>
-                  <p>Load your transactions directly from your broker's export files in one click.</p>
-                </div>
-              </a>
-            </div>
-          </div>
-
-          <div class="hub-node node-bottom-left">
-            <div class="hub-node-unscale">
-              <a href="user/assets/providers/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
-                <div class="provider-info">
-                  <h4>Asset Providers</h4>
-                  <p>Sync real-time asset valuations from your preferred financial data sources.</p>
-                </div>
-              </a>
-            </div>
-          </div>
-
-          <div class="hub-node node-bottom-right">
-            <div class="hub-node-unscale">
-              <a href="user/fx/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
-                <div class="provider-info">
-                  <h4>Forex Providers</h4>
-                  <p>Fetch reliable daily currency exchange rates from your trusted financial providers.</p>
-                </div>
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- Explore Resources (Existing Cards) -->
-  <div class="grid cards" style="margin-top: 4rem;">
+  <div class="grid cards">
     <a href="user/getting-started/" class="card-link">
       <div class="card-icon">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M13.13 22.19L11.5 18.36C13.07 17.78 14.54 17 15.9 16.09L13.13 22.19M5.64 12.5L1.81 10.87L7.91 8.1C7 9.46 6.22 10.93 5.64 12.5M21.61 2.39C21.61 2.39 16.66 .29 11 5.96C5.34 11.63 3.23 16.58 3.23 16.58C3.23 16.58 3 16.8 3 17C3 17.2 3.23 17.42 3.23 17.42L9 11.65L12.35 15L6.58 20.77C6.58 20.77 6.8 21 7 21C7.2 21 7.42 20.77 7.42 20.77C7.42 20.77 12.37 18.66 18.04 13C23.71 7.34 21.61 2.39 21.61 2.39M14.5 13.5C14.5 12.67 13.83 12 13.5 12C13.17 12 12.5 12.67 12.5 13.5C12.5 14.33 13.17 15 13.5 15C13.83 15 14.5 14.33 14.5 13.5Z" /></svg>

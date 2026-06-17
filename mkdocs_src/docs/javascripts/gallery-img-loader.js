@@ -165,8 +165,134 @@
         });
     }
 
+    function initScreenshotCarousels() {
+        var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        var carousels = document.querySelectorAll('.lf-screenshot-carousel');
+        carousels.forEach(function (carousel) {
+            if (carousel.dataset.carouselInitialized === 'true') return;
+            carousel.dataset.carouselInitialized = 'true';
+
+            var items = Array.prototype.slice.call(
+                carousel.querySelectorAll('.lf-screenshot-carousel-item')
+            );
+
+            if (items.length <= 1) return;
+
+            var intervalMs = Number(carousel.dataset.carouselInterval || 4500);
+            var currentIndex = items.findIndex(function (item) {
+                return item.classList.contains('is-active');
+            });
+
+            if (currentIndex < 0) currentIndex = 0;
+            var timer = null;
+            var isHovered = false;
+
+            var dotsContainer = document.createElement('div');
+            dotsContainer.className = 'lf-screenshot-carousel-dots';
+            carousel.appendChild(dotsContainer);
+
+            var dots = items.map(function (item, index) {
+                var dot = document.createElement('button');
+                dot.className = 'lf-screenshot-carousel-dot';
+                dot.setAttribute('aria-label', 'Go to slide ' + (index + 1));
+                if (index === currentIndex) {
+                    dot.classList.add('is-active');
+                    dot.setAttribute('aria-current', 'true');
+                }
+                dot.addEventListener('click', function () {
+                    goTo(index, true);
+                });
+                dotsContainer.appendChild(dot);
+                return dot;
+            });
+
+            function syncDots() {
+                dots.forEach(function (dot, index) {
+                    if (index === currentIndex) {
+                        dot.classList.add('is-active');
+                        dot.setAttribute('aria-current', 'true');
+                    } else {
+                        dot.classList.remove('is-active');
+                        dot.removeAttribute('aria-current');
+                    }
+                });
+            }
+
+            function updateTransforms() {
+                items.forEach(function (item, index) {
+                    var offset = (index - currentIndex) * 100;
+                    item.style.transform = 'translateX(' + offset + '%)';
+                });
+            }
+
+            // Initialize position without transition
+            items.forEach(function(item) { item.style.transition = 'none'; });
+            updateTransforms();
+            carousel.offsetHeight; // force reflow
+            items.forEach(function(item) { item.style.transition = ''; });
+
+            function goTo(index, manual) {
+                if (index === currentIndex) return;
+
+                if (manual) stop();
+
+                currentIndex = index;
+                syncDots();
+                updateTransforms();
+
+                if (manual && !reduceMotion && !isHovered) {
+                    start();
+                }
+            }
+
+            function showNext() {
+                var nextIndex = (currentIndex + 1) % items.length;
+                goTo(nextIndex, false);
+            }
+
+            function start() {
+                if (reduceMotion) return;
+                if (timer) return;
+                timer = window.setInterval(showNext, intervalMs);
+            }
+
+            function stop() {
+                if (!timer) return;
+                window.clearInterval(timer);
+                timer = null;
+            }
+
+            carousel.addEventListener('mouseenter', function() {
+                isHovered = true;
+                stop();
+            });
+            carousel.addEventListener('mouseleave', function() {
+                isHovered = false;
+                start();
+            });
+            carousel.addEventListener('focusin', stop);
+            carousel.addEventListener('focusout', function() {
+                if (!isHovered) start();
+            });
+
+            if ('IntersectionObserver' in window && !reduceMotion) {
+                var observer = new IntersectionObserver(function (entries) {
+                    entries.forEach(function (entry) {
+                        if (entry.isIntersecting && !isHovered) start();
+                        else stop();
+                    });
+                }, { threshold: 0.25 });
+                observer.observe(carousel);
+            } else {
+                start();
+            }
+        });
+    }
+
     function init() {
         updateImages();
+        initScreenshotCarousels();
 
         // React to language changes (from site-lang-selector.js)
         window.addEventListener('gallery-lang-change', updateImages);
