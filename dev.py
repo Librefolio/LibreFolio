@@ -141,6 +141,7 @@ def cmd_server(args):
     host_override = getattr(args, 'host', None)
     port_override = getattr(args, 'port', None)
     coverage_mode = getattr(args, 'coverage', False)
+    no_scheduler = getattr(args, 'no_scheduler', False)
 
     if test_mode:
         port = get_test_server_port()
@@ -224,6 +225,8 @@ def cmd_server(args):
         print()
     if debug_mode:
         print(Colors.warning("Log Level: DEBUG"))
+    if no_scheduler:
+        print(Colors.warning("⏸️  Scheduler: DISABLED (--no-scheduler)"))
     print()
     print(f"{Colors.BLUE}{Colors.BOLD}Available endpoints:{Colors.NC}")
     print(f" ├── 🏠 {Colors.YELLOW}Frontend:  http://localhost:{port}/{Colors.NC}")
@@ -245,6 +248,8 @@ def cmd_server(args):
         env["LIBREFOLIO_TEST_MODE"] = "1"
     if debug_mode:
         env["LIBREFOLIO_LOG_LEVEL"] = "DEBUG"
+    if no_scheduler:
+        env["LIBREFOLIO_NO_SCHEDULER"] = "1"
     # Generate a shared JWT secret for all workers.
     # On macOS, Python uses 'spawn' (not fork) for multiprocessing, so each
     # uvicorn worker is a fresh process. Without a shared env var, each worker
@@ -802,6 +807,9 @@ def cmd_mkdocs_gallery(args):
     # Stream output live to terminal (no capture_output) so user sees progress
     gallery_env = os.environ.copy()
     gallery_env["GALLERY_SERVER_WORKERS"] = str(server_workers)
+    # Always disable the scheduler during gallery runs — prevents live data updates
+    # from changing charts/numbers between screenshots.
+    gallery_env["LIBREFOLIO_NO_SCHEDULER"] = "1"
     if test_port:
         gallery_env["TEST_PORT"] = str(test_port)
 
@@ -1717,6 +1725,8 @@ Examples:
     p.add_argument("--host", type=str, default=None, help="Bind host (default: HOST env or 0.0.0.0)")
     p.add_argument("--port", "-p", type=int, default=None, help="Bind port (default: PORT env or 6040)")
     p.add_argument("--coverage", action="store_true", help="Enable backend code coverage tracking (writes .coverage.<pid>)")
+    p.add_argument("--no-scheduler", action="store_true", dest="no_scheduler",
+                   help="Disable the market data scheduler (no background sync jobs)")
     p.set_defaults(func=cmd_server)
 
     # Database

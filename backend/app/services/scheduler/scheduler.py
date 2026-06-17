@@ -1,6 +1,7 @@
 """Main scheduler loop — asyncio task embedded in FastAPI lifespan."""
 
 import asyncio
+import os
 from datetime import datetime, timedelta
 
 import structlog
@@ -72,7 +73,14 @@ async def scheduler_loop(shutdown_event: asyncio.Event) -> None:
     1. Check leader election (psutil, offloaded to thread)
     2. If leader: read settings, check due jobs, execute
     3. Save state after each job
+
+    Disabled entirely when LIBREFOLIO_NO_SCHEDULER=1 is set (e.g. during
+    gallery screenshot generation to prevent data changes mid-run).
     """
+    if os.getenv("LIBREFOLIO_NO_SCHEDULER"):
+        logger.info("Scheduler disabled via LIBREFOLIO_NO_SCHEDULER — loop not started")
+        return
+
     logger.info("Scheduler loop started")
 
     # Initial delay to let the application fully initialize

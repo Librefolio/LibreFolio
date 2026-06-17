@@ -1,90 +1,89 @@
-// src/scenes/Scene01Hook.tsx
-// Scene 01 — Hook (150 frames / 5s)
-// Sfondo AI "caos finanziario" + headline fade-in
-// Fallback: gradient animato se chaos_bg.png non ancora disponibile
 import React from "react";
-import { AbsoluteFill, useCurrentFrame, interpolate, Img, staticFile } from "remotion";
-import { Locale } from "../types/i18n";
+import { Img, staticFile, useCurrentFrame, interpolate, spring, useVideoConfig } from "remotion";
+import { SceneShell } from "../components/SceneShell";
+import { AnimatedHeadline } from "../components/AnimatedHeadline";
 import { dictionaries } from "../i18n";
+import { Locale } from "../types/i18n";
 
-interface Props { locale: Locale }
-
-export const Scene01Hook: React.FC<Props> = ({ locale }) => {
+export const Scene01Hook: React.FC<{ locale: Locale }> = ({ locale }) => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
   const t = dictionaries[locale].scene01;
 
-  const fadeIn   = interpolate(frame, [0, 25],  [0, 1], { extrapolateRight: "clamp" });
-  const textIn   = interpolate(frame, [20, 50], [0, 1], { extrapolateRight: "clamp" });
-  const subIn    = interpolate(frame, [40, 70], [0, 1], { extrapolateRight: "clamp" });
-  const bgScale  = interpolate(frame, [0, 150], [1.08, 1.0], { extrapolateRight: "clamp" });
+  const bgScale = interpolate(frame, [0, 150], [1.1, 1.0], { extrapolateRight: "clamp" });
+  
+  const cards = [
+    { label: "Brokers", x: 200, y: 150, delay: 10 },
+    { label: "Crypto", x: 1500, y: 200, delay: 20 },
+    { label: "FX", x: 300, y: 700, delay: 30 },
+    { label: "CSV Reports", x: 1400, y: 800, delay: 40 },
+    { label: "Spreadsheets", x: 800, y: 100, delay: 50 },
+  ];
+
+  const collapseProgress = spring({
+    frame: frame - 120, // Start collapsing near the end
+    fps,
+    config: { damping: 20, stiffness: 100 },
+  });
 
   return (
-    <AbsoluteFill
-      style={{
-        background: "linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-      }}
-    >
-      {/* AI-generated chaos background — graceful fallback if missing */}
+    <SceneShell bg="#050510">
       <Img
-        src={staticFile("ai/chaos_bg.png")}
-        onError={() => {}} // silent fallback
+        src={staticFile("ai/chaos_bg_v2.png")}
+        onError={(e) => { e.currentTarget.style.display = 'none'; }}
         style={{
           position: "absolute",
           inset: 0,
           width: "100%",
           height: "100%",
           objectFit: "cover",
-          opacity: fadeIn * 0.55,
           transform: `scale(${bgScale})`,
-          filter: "blur(1px) brightness(0.5) saturate(1.4)",
+          filter: "brightness(0.3) saturate(1.2)",
         }}
       />
+      
+      {/* Floating abstract cards */}
+      {cards.map((card, i) => {
+        const enterScale = spring({
+          frame: frame - card.delay,
+          fps,
+          config: { damping: 12, stiffness: 100 },
+        });
+        
+        // Move towards center during collapse
+        const currentX = interpolate(collapseProgress, [0, 1], [card.x, 960]);
+        const currentY = interpolate(collapseProgress, [0, 1], [card.y, 540]);
+        const currentScale = interpolate(collapseProgress, [0, 1], [enterScale, 0]);
 
-      {/* Vignette overlay */}
-      <div style={{
-        position: "absolute",
-        inset: 0,
-        background: "radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.7) 100%)",
-      }} />
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: currentX,
+              top: currentY,
+              transform: `scale(${currentScale})`,
+              background: "rgba(30, 30, 40, 0.8)",
+              border: "1px solid rgba(129, 140, 248, 0.4)",
+              color: "#818cf8",
+              padding: "12px 24px",
+              borderRadius: 8,
+              fontSize: 28,
+              fontWeight: 600,
+              fontFamily: "system-ui, sans-serif",
+              backdropFilter: "blur(10px)",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+            }}
+          >
+            {card.label}
+          </div>
+        );
+      })}
 
-      <h1 style={{
-        position: "relative",
-        color: "#ffffff",
-        fontSize: 96,
-        fontFamily: "system-ui, sans-serif",
-        fontWeight: 800,
-        textAlign: "center",
-        margin: 0,
-        padding: "0 120px",
-        opacity: textIn,
-        transform: `translateY(${interpolate(frame, [20, 50], [30, 0], { extrapolateRight: "clamp" })}px)`,
-        textShadow: "0 6px 30px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.6)",
-        letterSpacing: "-1px",
-      }}>
-        {t.headline}
-      </h1>
-
-      {t.sub && (
-        <p style={{
-          position: "relative",
-          color: "#c4b5fd",
-          fontSize: 52,
-          fontFamily: "system-ui, sans-serif",
-          fontWeight: 400,
-          textAlign: "center",
-          marginTop: 32,
-          opacity: subIn,
-          transform: `translateY(${interpolate(frame, [40, 70], [20, 0], { extrapolateRight: "clamp" })}px)`,
-          textShadow: "0 4px 16px rgba(0,0,0,0.8)",
-        }}>
-          {t.sub}
-        </p>
-      )}
-    </AbsoluteFill>
+      {/* Main Text */}
+      <div style={{ opacity: interpolate(collapseProgress, [0, 1], [1, 0]) }}>
+        <AnimatedHeadline headline={t.headline} sub={t.sub} enterAt={60} />
+      </div>
+    </SceneShell>
   );
 };

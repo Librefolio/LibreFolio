@@ -2991,7 +2991,7 @@ def upload_broker_reports(session: Session):
 
     # Map broker names to sample report files (supports list for multiple files)
     report_map: dict[str, list[str]] = {
-        "Interactive Brokers": ["ibkr-trades-export.csv", "generic_simple.csv"],
+        "Interactive Brokers": ["ibkr-trades-export.csv", "generic_simple.csv", "generic_with_assets.csv"],
         "DEGIRO": ["degiro-export.csv"],
         "Directa SIM": ["directa-export.csv"],
         "eToro": ["etoro-export.csv"],

@@ -90,12 +90,20 @@ Record any operation — buy, sell, dividend, deposit, transfer, FX conversion �
     <p class="screenshot-carousel-label">🏦 Deposit</p>
 </div>
 <div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-adjustment" alt="Transaction Form — Adjustment">
+    <p class="screenshot-carousel-label">🔧 Adjustment (stock split / spin-off)</p>
+</div>
+<div class="screenshot-container">
     <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Transaction Form — TRANSFER">
     <p class="screenshot-carousel-label">🔀 Asset Transfer</p>
 </div>
 <div class="screenshot-container">
     <img class="gallery-img" data-category="transactions" data-name="form-modal-fxconversion" alt="Transaction Form — FX Conversion">
     <p class="screenshot-carousel-label">💱 FX Conversion</p>
+</div>
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-cash-transfer" alt="Transaction Form — Cash Transfer">
+    <p class="screenshot-carousel-label">🏧 Cash Transfer (bonifico)</p>
 </div>
 </div>
 
@@ -132,6 +140,38 @@ When deleting a transaction that is part of a linked pair (FX trade, transfer), 
 </div>
 
 ---
+
+### 📥 Import
+
+Import transactions from your broker's export files — via the quick modal or the full step-by-step wizard.
+
+<div class="screenshot-carousel">
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-modal" alt="Import Modal">
+    <p class="screenshot-carousel-label">📥 Quick import modal</p>
+</div>
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Import Wizard Step 1">
+    <p class="screenshot-carousel-label">🧙 Wizard — Step 1: Upload</p>
+</div>
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Import Wizard Step 2">
+    <p class="screenshot-carousel-label">⚙️ Wizard — Step 2: Parser Config</p>
+</div>
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Import Wizard Asset Resolution">
+    <p class="screenshot-carousel-label">🔍 Wizard — Step 4: Asset Resolution</p>
+</div>
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicate" alt="Import Wizard Duplicate Detection">
+    <p class="screenshot-carousel-label">⚠️ Duplicate Detection</p>
+</div>
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-bulk-staging" alt="Import Bulk Staging">
+    <p class="screenshot-carousel-label">📦 Bulk Staging</p>
+</div>
+</div>
+
 
 ## ⚙️ Settings
 
@@ -303,37 +343,6 @@ Edit broker details — name, icon, base currency, and configuration.
     <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Broker Edit Modal">
 </div>
 
-### 📥 Import
-
-Import transactions from your broker's export files — via the quick modal or the full step-by-step wizard.
-
-<div class="screenshot-carousel">
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="brokers" data-name="import-modal" alt="Import Modal">
-    <p class="screenshot-carousel-label">📥 Quick import modal</p>
-</div>
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Import Wizard Step 1">
-    <p class="screenshot-carousel-label">🧙 Wizard — Step 1: Upload</p>
-</div>
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Import Wizard Step 2">
-    <p class="screenshot-carousel-label">⚙️ Wizard — Step 2: Parser Config</p>
-</div>
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Import Wizard Asset Resolution">
-    <p class="screenshot-carousel-label">🔍 Wizard — Step 4: Asset Resolution</p>
-</div>
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicate" alt="Import Wizard Duplicate Detection">
-    <p class="screenshot-carousel-label">⚠️ Duplicate Detection</p>
-</div>
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="brokers" data-name="import-bulk-staging" alt="Import Bulk Staging">
-    <p class="screenshot-carousel-label">📦 Bulk Staging</p>
-</div>
-</div>
-
 ### 🤝 Broker Sharing
 
 Manage co-ownership and access roles with a visual half-donut chart showing ownership distribution.
@@ -343,6 +352,115 @@ Manage co-ownership and access roles with a visual half-donut chart showing owne
 </div>
 
 ---
+
+## 💼 Assets
+
+### 📋 Asset List
+
+All your tracked financial instruments — stocks, ETFs, bonds, crypto — in one view.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="list" alt="Asset List Page">
+</div>
+
+### 🔎 Asset List Filtered
+
+Filter assets by name, type, or search text.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="list-filtered" alt="Asset List Filtered">
+</div>
+
+### 📈 Detail Chart
+
+Full-size interactive price chart with date range selector and currency toggle. Switch between line and candlestick view.
+
+<div class="screenshot-carousel">
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Detail Chart — Line">
+    <p class="screenshot-carousel-label">📈 Line chart</p>
+</div>
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-chart-candlestick" alt="Asset Detail Chart — Candlestick">
+    <p class="screenshot-carousel-label">🕯️ Candlestick chart</p>
+</div>
+</div>
+
+### 📡 Signals Overlay
+
+Technical indicators (EMA, RSI, MACD, Bollinger) overlaid on the price chart — each in a dedicated sub-panel.
+
+<div class="screenshot-carousel">
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals" alt="Asset Detail Signals Panel">
+    <p class="screenshot-carousel-label">📊 Signals panel (empty)</p>
+</div>
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals-ema" alt="Asset Detail Signals — EMA">
+    <p class="screenshot-carousel-label">📈 EMA active</p>
+</div>
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals-rsi" alt="Asset Detail Signals — RSI">
+    <p class="screenshot-carousel-label">📉 RSI active</p>
+</div>
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals-macd" alt="Asset Detail Signals — MACD">
+    <p class="screenshot-carousel-label">📊 MACD active</p>
+</div>
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-signals-bollinger" alt="Asset Detail Signals — Bollinger Bands">
+    <p class="screenshot-carousel-label">🎯 Bollinger Bands active</p>
+</div>
+</div>
+
+### 📏 Measures Panel
+
+Click-to-click measurement tool for price differences, percentage changes, and annualized returns.
+
+<div class="screenshot-carousel">
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-measures" alt="Asset Detail Measures Panel">
+    <p class="screenshot-carousel-label">📏 Panel open (no measures)</p>
+</div>
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-measures-active" alt="Asset Detail Measures Active">
+    <p class="screenshot-carousel-label">📐 Measurement active</p>
+</div>
+</div>
+
+### 🗂️ Classification & Metadata
+
+Sector distribution pie chart and geographic allocation world map for assets with rich metadata.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Asset Detail Classification">
+</div>
+
+### ✏️ Data Editor
+
+Inline data editor for viewing and modifying individual price data points.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-editor" alt="Asset Data Editor">
+</div>
+
+### ➕ Create Asset
+
+Create a new asset with name, type, currency, identifiers, provider, and classification. When triggered from the Import Wizard, the form opens pre-filled with extracted ticker, ISIN, and name.
+
+<div class="screenshot-carousel">
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="create-modal" alt="Create Asset Modal">
+    <p class="screenshot-carousel-label">➕ Manual create</p>
+</div>
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="create-wizard-modal" alt="Create Asset from Import Wizard">
+    <p class="screenshot-carousel-label">🧙 From Import Wizard (pre-filled)</p>
+</div>
+</div>
+
+---
+
 
 ## 💱 FX Rates
 
@@ -377,6 +495,63 @@ Add a pair using conversion chain through an intermediate currency (e.g. NOK/CHF
 <div class="screenshot-container">
     <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Add Pair - Chain">
 </div>
+
+### 🔧 Provider Config
+
+Configure provider priority and conversion routes for a currency pair.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Provider Config Modal">
+</div>
+
+---
+
+<style>
+.screenshot-container {
+    margin: 1rem 0 2rem 0;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+.gallery-img {
+    width: 100%;
+    display: block;
+    transition: opacity 0.3s;
+}
+
+.gallery-img:hover {
+    opacity: 0.95;
+}
+
+/* Horizontal scroll carousel for multiple screenshots */
+.screenshot-carousel {
+    display: flex;
+    gap: 1.25rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 0.75rem;
+    margin-bottom: 2rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.screenshot-carousel .screenshot-container {
+    flex: 0 0 88%;
+    margin: 0;
+    scroll-snap-align: start;
+}
+
+.screenshot-carousel-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    text-align: center;
+    padding: 0.4rem 0.5rem 0.2rem;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+}
+</style>
 
 ### 🔄 Sync All
 
@@ -433,158 +608,3 @@ Global and per-chart settings for aesthetics and signal overlay configuration.
 <div class="screenshot-container">
     <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Chart Settings Modal">
 </div>
-
-### 🔧 Provider Config
-
-Configure provider priority and conversion routes for a currency pair.
-
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Provider Config Modal">
-</div>
-
----
-
-## 💼 Assets
-
-### 📋 Asset List
-
-All your tracked financial instruments — stocks, ETFs, bonds, crypto — in one view.
-
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="list" alt="Asset List Page">
-</div>
-
-### 🔎 Asset List Filtered
-
-Filter assets by name, type, or search text.
-
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="list-filtered" alt="Asset List Filtered">
-</div>
-
-### 📈 Detail Chart
-
-Full-size interactive price chart with date range selector and currency toggle.
-
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Detail Chart">
-</div>
-
-### 📡 Signals Overlay
-
-Technical indicators (EMA, RSI, MACD, Bollinger) overlaid on the price chart — each in a dedicated sub-panel.
-
-<div class="screenshot-carousel">
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="detail-signals" alt="Asset Detail Signals Panel">
-    <p class="screenshot-carousel-label">📊 Signals panel (empty)</p>
-</div>
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="detail-signals-ema" alt="Asset Detail Signals — EMA">
-    <p class="screenshot-carousel-label">📈 EMA active</p>
-</div>
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="detail-signals-rsi" alt="Asset Detail Signals — RSI">
-    <p class="screenshot-carousel-label">📉 RSI active</p>
-</div>
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="detail-signals-macd" alt="Asset Detail Signals — MACD">
-    <p class="screenshot-carousel-label">📊 MACD active</p>
-</div>
-</div>
-
-### 📏 Measures Panel
-
-Click-to-click measurement tool for price differences, percentage changes, and annualized returns.
-
-<div class="screenshot-carousel">
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="detail-measures" alt="Asset Detail Measures Panel">
-    <p class="screenshot-carousel-label">📏 Panel open (no measures)</p>
-</div>
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="detail-measures-active" alt="Asset Detail Measures Active">
-    <p class="screenshot-carousel-label">📐 Measurement active</p>
-</div>
-</div>
-
-### 🗂️ Classification & Metadata
-
-Sector distribution pie chart and geographic allocation world map for assets with rich metadata.
-
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Asset Detail Classification">
-</div>
-
-### ✏️ Data Editor
-
-Inline data editor for viewing and modifying individual price data points.
-
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="detail-editor" alt="Asset Data Editor">
-</div>
-
-### ➕ Create Asset
-
-Create a new asset with name, type, currency, identifiers, provider, and classification. When triggered from the Import Wizard, the form opens pre-filled with extracted ticker, ISIN, and name.
-
-<div class="screenshot-carousel">
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="create-modal" alt="Create Asset Modal">
-    <p class="screenshot-carousel-label">➕ Manual create</p>
-</div>
-<div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="create-wizard-modal" alt="Create Asset from Import Wizard">
-    <p class="screenshot-carousel-label">🧙 From Import Wizard (pre-filled)</p>
-</div>
-</div>
-
----
-
-
-<style>
-.screenshot-container {
-    margin: 1rem 0 2rem 0;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-}
-
-.gallery-img {
-    width: 100%;
-    display: block;
-    transition: opacity 0.3s;
-}
-
-.gallery-img:hover {
-    opacity: 0.95;
-}
-
-/* Horizontal scroll carousel for multiple screenshots */
-.screenshot-carousel {
-    display: flex;
-    gap: 1.25rem;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    padding-bottom: 0.75rem;
-    margin-bottom: 2rem;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-}
-
-.screenshot-carousel .screenshot-container {
-    flex: 0 0 88%;
-    margin: 0;
-    scroll-snap-align: start;
-}
-
-.screenshot-carousel-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #64748b;
-    text-align: center;
-    padding: 0.4rem 0.5rem 0.2rem;
-    background: #f8fafc;
-    border-top: 1px solid #e2e8f0;
-}
-</style>
