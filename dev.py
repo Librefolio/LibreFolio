@@ -637,6 +637,33 @@ def _check_image_paths_in_built_site():
         print(Colors.success("✅ All static icon paths in built site verified"))
 
 
+def cmd_mkdocs_video(args):
+    """Manage promotional video generation."""
+    action = args.action
+    video_dir = PROJECT_ROOT / "mkdocs_src" / "videoClipPrject" / "video_promo"
+    
+    if not video_dir.exists():
+        print_error("Video project not found")
+        return 1
+
+    if action == "sync":
+        print(Colors.success("Syncing AI assets for video promo..."))
+        return run_command_live(["npm", "run", "sync"], cwd=video_dir)
+    elif action == "start":
+        print(Colors.success("Starting Remotion studio..."))
+        return run_command_live(["npm", "run", "start"], cwd=video_dir)
+    elif action == "build":
+        locale = getattr(args, "locale", "all")
+        print(Colors.success(f"Building promo videos ({locale})..."))
+        cmd = ["npm", "run", f"build:{locale}"]
+        return run_command_live(cmd, cwd=video_dir)
+    elif action == "review":
+        print(Colors.success("Generating review assets..."))
+        return run_command_live(["npm", "run", "review:assets", "--", "--clean"], cwd=video_dir)
+    else:
+        print_error(f"Unknown action: {action}")
+        return 1
+
 def cmd_mkdocs_build(args):
     """Build MkDocs documentation."""
     print(Colors.success("Building MkDocs site..."))
@@ -1642,6 +1669,15 @@ def copy_docs_assets():
             shutil.rmtree(dest_icons)
         shutil.copytree(src_icons, dest_icons)
 
+    # Copy promo videos
+    promo_dir = PROJECT_ROOT / "mkdocs_src" / "videoClipPrject" / "video_promo" / "out"
+    video_dest = static_dir / "video"
+    if promo_dir.exists():
+        video_dest.mkdir(parents=True, exist_ok=True)
+        for video_file in promo_dir.glob("*.mp4"):
+            shutil.copy(video_file, video_dest / video_file.name)
+            print_success(f"Copied promo video to mkdocs assets: {video_file.name}")
+
 
 def update_js_cache():
     """Update JS library cache."""
@@ -1835,6 +1871,11 @@ Examples:
     mk_p.add_argument("--force", action="store_true",
                       help="Kill zombie processes blocking the test port instead of failing")
     mk_p.set_defaults(func=cmd_mkdocs_gallery)
+
+    mk_p = mk_sub.add_parser("video", help="Manage promotional video assets (sync, start, build, review)")
+    mk_p.add_argument("action", choices=["sync", "start", "build", "review"], help="Action to perform")
+    mk_p.add_argument("--locale", "-l", default="all", choices=["en", "it", "es", "fr", "all"], help="Locale to build (for build action)")
+    mk_p.set_defaults(func=cmd_mkdocs_video)
 
     mk_p = mk_sub.add_parser("check-links", help="Validate cross-boundary links (frontend/backend → docs)")
     mk_p.set_defaults(func=cmd_mkdocs_check_links)

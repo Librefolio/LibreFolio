@@ -2,8 +2,61 @@ import { I18nDict } from "../types/i18n";
 
 export const fr: I18nDict = {
   scene01: {
-    headline: "Vos investissements sont partout.",
-    sub: "Apps. Courtiers. Tableurs. Portefeuilles crypto.",
+    introStatement: "Investir, c’est agréable.",
+    controlStatement: "Tout garder sous contrôle\nest une autre histoire.",
+    sourceWords: [
+      "Différents courtiers.",
+      "Différentes apps.",
+      "Différents rapports.",
+      "Tableurs.",
+      "Différents wallets.",
+    ],
+    formatsStatement: [
+      "Formats différents.",
+      "Données dispersées.",
+      "Contrôles manuels.",
+    ],
+    overloadStatement: "Trop de sources.\nPas assez de clarté.",
+    revealPrefix: "Et si tout redevenait clair ?",
+    productName: "LibreFolio",
+    shards: {
+      csvReport: {
+        title: "CSV Report",
+        subtitle: "rows · fees · dates",
+      },
+      brokerExport: {
+        title: "Broker Export",
+        subtitle: "different formats",
+      },
+      fxRates: {
+        title: "FX Rates",
+        subtitle: "🇪🇺 EUR ⇄ USD 🇺🇸",
+      },
+      spreadsheets: {
+        title: "Spreadsheets",
+        subtitle: "manual tracking",
+      },
+      wallets: {
+        title: "Wallets",
+        subtitle: "isolated balances",
+      },
+      duplicates: {
+        title: "Duplicates",
+        subtitle: "same trade?",
+      },
+      priceNoise: {
+        title: "Price Noise",
+        subtitle: "too many charts",
+      },
+      reports: {
+        title: "Reports",
+        subtitle: "PDF · CSV · XLS",
+      },
+      alerts: {
+        title: "Alerts",
+        subtitle: "manual checks",
+      },
+    },
   },
   scene02: {
     headline: "Un seul tableau de bord privé.",

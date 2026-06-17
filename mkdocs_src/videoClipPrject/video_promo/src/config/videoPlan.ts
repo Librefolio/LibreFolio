@@ -1,8 +1,8 @@
 export const videoPlan = {
   fps: 30,
-  durationInFrames: 1620, // 54 seconds
+  durationInFrames: 1830, // 61 seconds
   scenes: {
-    scene01: { durationInFrames: 150 }, // 5s Chaos
+    scene01: { durationInFrames: 360 }, // 12s Chaos
     scene02: { durationInFrames: 240 }, // 8s Unified Dashboard Reveal
     scene03: { durationInFrames: 300 }, // 10s Analysis Cockpit
     scene04: { durationInFrames: 270 }, // 9s Import & Automation
