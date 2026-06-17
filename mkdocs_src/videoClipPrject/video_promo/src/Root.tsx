@@ -8,7 +8,7 @@ export const RemotionRoot: React.FC = () => {
     <>
       {/* Build EN */}
       <Composition
-        id="LibreFolioPromo_EN"
+        id="LibreFolioPromo-EN"
         component={LibreFolioPromo}
         durationInFrames={videoPlan.durationInFrames}
         fps={videoPlan.fps}
@@ -18,7 +18,7 @@ export const RemotionRoot: React.FC = () => {
       />
       {/* Build IT */}
       <Composition
-        id="LibreFolioPromo_IT"
+        id="LibreFolioPromo-IT"
         component={LibreFolioPromo}
         durationInFrames={videoPlan.durationInFrames}
         fps={videoPlan.fps}
@@ -28,7 +28,7 @@ export const RemotionRoot: React.FC = () => {
       />
       {/* Build ES */}
       <Composition
-        id="LibreFolioPromo_ES"
+        id="LibreFolioPromo-ES"
         component={LibreFolioPromo}
         durationInFrames={videoPlan.durationInFrames}
         fps={videoPlan.fps}
@@ -38,7 +38,7 @@ export const RemotionRoot: React.FC = () => {
       />
       {/* Build FR */}
       <Composition
-        id="LibreFolioPromo_FR"
+        id="LibreFolioPromo-FR"
         component={LibreFolioPromo}
         durationInFrames={videoPlan.durationInFrames}
         fps={videoPlan.fps}

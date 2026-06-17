@@ -7,9 +7,9 @@ from borsaitaliana.it (stocks, bonds, ETFs listed on Borsa Italiana).
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType

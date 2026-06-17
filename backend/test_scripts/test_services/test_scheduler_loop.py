@@ -11,15 +11,13 @@ import json
 import sys
 from datetime import datetime, time, timedelta, timezone
 
-import pytest
-
 from backend.app.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.app.services.scheduler.scheduler import due_current_price, due_history_sync
 from backend.app.services.scheduler.settings import SchedulerSettings
-from backend.app.services.scheduler.state import JobState, SchedulerState, load_state, save_state
+from backend.app.services.scheduler.state import JobState, SchedulerState
 from backend.test_scripts.test_utils import print_section, print_success
 
 TZ = timezone(timedelta(hours=2))

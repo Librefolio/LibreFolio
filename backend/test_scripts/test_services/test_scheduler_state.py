@@ -9,14 +9,11 @@ Test IDs: SS-001..SS-006
 import json
 import sys
 
-import pytest
-
 from backend.app.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.test_scripts.test_utils import print_section, print_success
-
 
 # ============================================================================
 # Helpers

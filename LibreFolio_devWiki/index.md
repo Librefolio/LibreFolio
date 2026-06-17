@@ -239,3 +239,89 @@
 | [[sources/r2-parallel-features-pwa-borsa-fx]] | Batch 3: PWA, Port 60/40, Borsa Italiana, FX fix (parallel commits) ✅ | 2026-06-02 | pwa, mobile, ports, assets, fx, borsa-italiana |
 | [[sources/independent-batch-2026-06-01]] | Batch 4: 5 independent plans (LogAudit, Candlestick, FxRange, LazyImage, RsiBands) ✅ | 2026-06-01 | backend, frontend, logging, charts, fx, cache, signals |
 | [[sources/r3-sp-d-formmodal-wac-fx-chain]] | SP-D chain (6 plans): FormModal props + EventPicker + WAC FX feedback + currency selector + bugfixes ✅ | 2026-06-04 | phase07, transactions, wac, fx, event-picker, formmodal |
+
+
+## Recent Additions (Phase 09)
+- [[sources/phase09-dashboard-batch]]
+- [[concepts/twrr-mwrr-algorithms]]
+- [[concepts/fifo-lot-tracking]]
+- [[sources/source-code-v0.9.0-batch]]
+- [[entities/video-promo-remotion]]
+- [[concepts/interactive-pros-cons-slider]]
+
+
+## Uncategorized / Auto-Recovered
+
+The following pages were automatically recovered by the lint pass:
+
+### Features
+- [[features/F-002]]
+- [[features/F-005]]
+- [[features/F-006]]
+- [[features/F-007]]
+- [[features/F-010]]
+- [[features/F-011]]
+- [[features/F-013]]
+- [[features/F-016]]
+- [[features/F-017]]
+- [[features/F-018]]
+- [[features/F-021]]
+- [[features/F-022]]
+- [[features/F-025]]
+- [[features/F-026]]
+- [[features/F-027]]
+- [[features/F-028]]
+- [[features/F-029]]
+- [[features/F-030]]
+- [[features/F-031]]
+- [[features/F-032]]
+- [[features/F-035]]
+- [[features/F-040]]
+- [[features/F-041]]
+- [[features/F-043]]
+- [[features/F-044]]
+- [[features/F-049]]
+- [[features/F-050]]
+- [[features/F-057]]
+- [[features/F-062]]
+- [[features/F-063]]
+- [[features/F-064]]
+- [[features/F-065]]
+- [[features/F-066]]
+- [[features/F-067]]
+- [[features/F-068]]
+- [[features/F-069]]
+- [[features/F-070]]
+- [[features/F-071]]
+- [[features/F-072]]
+- [[features/F-073]]
+- [[features/F-075]]
+- [[features/F-076]]
+- [[features/F-077]]
+- [[features/F-078]]
+- [[features/F-079]]
+- [[features/F-080]]
+- [[features/F-081]]
+- [[features/F-082]]
+- [[features/F-083]]
+- [[features/F-084]]
+- [[features/F-085]]
+- [[features/F-086]]
+- [[features/F-087]]
+- [[features/F-088]]
+- [[features/F-089]]
+- [[features/F-090]]
+- [[features/F-091]]
+- [[features/F-092]]
+- [[features/F-093]]
+- [[features/F-094]]
+- [[features/F-095]]
+
+### Problems
+- [[problems/pydantic-422-preemption]]
+
+### Decisions
+- [[decisions/blur-detection-format-string-comparison]]
+- [[decisions/fxsyncmodal-parent-ownership]]
+- [[decisions/wac-target-currency-last-acquisition]]
+

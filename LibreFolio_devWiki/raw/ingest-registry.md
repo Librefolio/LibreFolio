@@ -128,3 +128,5 @@
 | `LibreFolio_developer_journal/RoadmapV4_UI/plan-independent-FxRangeHelper.prompt.md` | `f5aadec` | 2026-06-01 | [[sources/independent-batch-2026-06-01]], [[concepts/fx-range-helper-pattern]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/plan-independent-LazyImageCache.prompt.md` | `ce2bc92` | 2026-06-01 | [[sources/independent-batch-2026-06-01]], [[features/F-086]], [[concepts/image-preview-cache-pattern]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/plan-independent-RsiSignalBands.prompt.md` | `6f0d4c6` | 2026-06-01 | [[sources/independent-batch-2026-06-01]], [[features/F-039]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/batch` | `24cdc40` | 2026-06-17 | [[sources/phase09-dashboard-batch]] |
+| `source-code-v0.9.0-batch` | `6d89b44` | 2026-06-17 | [[sources/source-code-v0.9.0-batch]] |

@@ -952,3 +952,14 @@ Batch ingest of 8 Phase 7 Part 4 plan files covering Round 5 Bugfix 1-3 and Roun
 
 **Pages created**: 6 sources + 3 decisions + 1 problem = 10 new wiki pages.
 **Pages updated**: 7 existing pages + index.md + ingest-registry.md.
+
+## [2026-06-17] ingest | Phase 09 Dashboard Batch
+Source: `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/` @ git:`24cdc40`.
+Extracted concepts regarding Dashboard KPI, TWRR, MWRR algorithms, and FIFO lot tracking implementations.
+Created: [[sources/phase09-dashboard-batch]], [[concepts/twrr-mwrr-algorithms]], [[concepts/fifo-lot-tracking]].
+Updated: [[features/F-054]].
+
+## [2026-06-17] ingest | Source Code v0.9.0 Batch
+Source: Source Code @ git:`6d89b44`.
+Ingested new source code implementations including Remotion Video Promo, MkDocs Pros/Cons Slider, and Gallery Overhaul.
+Created: [[sources/source-code-v0.9.0-batch]], [[entities/video-promo-remotion]], [[concepts/interactive-pros-cons-slider]].

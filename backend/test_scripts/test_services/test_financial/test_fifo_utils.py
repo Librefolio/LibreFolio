@@ -10,10 +10,7 @@ from decimal import Decimal
 import pytest
 
 from backend.app.utils.financial.fifo_utils import (
-    ClosedLot,
-    FIFOResult,
     FIFOTransactionInput,
-    OpenLot,
     calculate_fifo_lots,
 )
 
