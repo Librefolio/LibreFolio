@@ -19,10 +19,10 @@ Questo piano è suddiviso in fasi separate, ognuna in un file dedicato per facil
 
 | Fase | Piano dettagliato | Status |
 |------|-------------------|--------|
-| **Phase 6** | [→ plan-phase06-assets.md](../plan-phase06-assets.md) | 📋 Pianificato |
-| **Phase 7** | `plan-phase07-transactions.md` (da creare) | ⏳ |
-| **Phase 8** | `plan-phase08-scheduler.md` (da creare) | ⏳ |
-| **Phase 9** | `plan-phase09-dashboard.md` (da creare) | ⏳ |
+| **Phase 6** | [→ phase-06-assets.md](./phase-06-assets.md) | ✅ Completato |
+| **Phase 7** | [→ phase-07-transactions.md](./phase-07-transactions.md) | ✅ Completato |
+| **Phase 8** | [→ phase-08-scheduler.md](./phase-08-scheduler.md) | ✅ Completato |
+| **Phase 9** | [→ phase-09-dashboard.md](./phase-09-dashboard.md) | ✅ Completato |
 
 I sotto-piani di implementazione per ogni fase vanno in `phases/phase-XX-subplan/`.
 
@@ -39,10 +39,10 @@ I sotto-piani di implementazione per ogni fase vanno in `phases/phase-XX-subplan
 | **3**   | [phase-03-layout-settings.md](./phase-03-layout-settings.md)       | Layout Sidebar + Settings Page             | ✅      | 3      |
 | **4**   | [phase-04-brokers.md](./phase-04-brokers.md)                       | Brokers, Files, Image Crop, ModalBase      | ✅      | 15+    |
 | **5**   | [phase-05-fx.md](./phase-05-fx.md)                                 | FX Currencies, Pair Sources, Sync          | ⏳      | 3      |
-| **6**   | [phase-06-assets.md](./phase-06-assets.md)                         | Assets: Dual View, Chart, Signals, Wizard  | 📋      | 7      |
-| **7**   | [phase-07-transactions.md](./phase-07-transactions.md)             | Transactions: DB+BRIM+API (Part 1/2/3 ✅)  | 🔄      | 5+     |
-| **8**   | [phase-08-scheduler.md](./phase-08-scheduler.md)                   | Market Data Scheduler (daemon + settings)  | ⏳      | 2      |
-| **9**   | [phase-09-dashboard.md](./phase-09-dashboard.md)                   | Dashboard con KPI e Charts                 | ⏳      | 3      |
+| **6**   | [phase-06-assets.md](./phase-06-assets.md)                         | Assets: Dual View, Chart, Signals, Wizard  | ✅      | 7      |
+| **7**   | [phase-07-transactions.md](./phase-07-transactions.md)             | Transactions: DB+BRIM+API (Part 1/2/3/4/5) | ✅      | 5+     |
+| **8**   | [phase-08-scheduler.md](./phase-08-scheduler.md)                   | Market Data Scheduler (daemon + settings)  | ✅      | 2      |
+| **9**   | [phase-09-dashboard.md](./phase-09-dashboard.md)                   | Dashboard con KPI e Charts                 | ✅      | 3      |
 | **10**  | [phase-10-polish.md](./phase-10-polish.md)                         | UI Components, Responsive                  | ⏳      | 2      |
 
 **Totale stimato**: ~6,5 settimane (~33 giorni)

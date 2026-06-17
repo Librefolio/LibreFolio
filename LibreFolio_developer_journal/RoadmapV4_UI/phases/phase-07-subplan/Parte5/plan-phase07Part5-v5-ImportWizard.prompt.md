@@ -3,8 +3,8 @@
 **Date**: 2026-06-08
 **Status**: 🔍 REVIEW — M1 ✅, M2 ✅, M2-W ✅, M2-FT ✅, M3 ✅, M4 ✅, Schwab ✅ — in attesa review utente (vedi §17)
 **Supersedes**: `plan-phase07Part5-BRIMImportBridge.prompt.md` (v4)
-**Parent milestone log**: [plan-phase07Part5-M1-ParseAndSee.prompt.md](./plan-phase07Part5-M1-ParseAndSee.prompt.md) (M1 complete, feedback incorporated)
-**M1 detailed plan**: [plan-phase07Part5-M1v2-ImportWizardRebuild.prompt.md](./plan-phase07Part5-M1v2-ImportWizardRebuild.prompt.md)
+**Parent milestone log**: [plan-phase07Part5-M1-ParseAndSee.prompt.md](../../../plan-phase07Part5-M1-ParseAndSee.prompt.md) (M1 complete, feedback incorporated)
+**M1 detailed plan**: [plan-phase07Part5-M1v2-ImportWizardRebuild.prompt.md](../../../plan-phase07Part5-M1v2-ImportWizardRebuild.prompt.md)
 
 ---
 

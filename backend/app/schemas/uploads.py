@@ -4,7 +4,7 @@ Schemas for static file uploads and file preview.
 DTOs for file upload operations.
 """
 
-from enum import Enum
+from enum import StrEnum
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -55,7 +55,7 @@ class UploadDeleteResponse(BaseModel):
     file_id: str
 
 
-class FilePreviewType(str, Enum):
+class FilePreviewType(StrEnum):
     """Supported inline file preview categories."""
 
     IMAGE = "image"

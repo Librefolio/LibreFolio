@@ -7,18 +7,14 @@ dev mode --reload detection, and exception safety.
 Test IDs: SL-001..SL-007
 """
 
-import os
 import sys
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from backend.app.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.test_scripts.test_utils import print_section, print_success
-
 
 # ============================================================================
 # Helpers — build mock Process objects
@@ -147,9 +143,8 @@ class TestZombieSiblingsExcluded:
     def test_zombie_excluded(self):
         """SL-004: siblings=[zombie(100), running(200)], me=200 → True (zombie excluded)."""
         print_section("SL-004: am_i_leader — zombie siblings excluded")
-        from backend.app.services.scheduler.leader import am_i_leader
 
-        import psutil as psutil_module
+        from backend.app.services.scheduler.leader import am_i_leader
 
         me_pid = 200
         zombie = _mock_process(100, status="zombie")

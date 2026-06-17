@@ -47,5 +47,10 @@ export interface I18nDict {
     measures: string;
     import: string;
     reconcile: string;
+    automate: string;
+  };
+  repo: {
+    alpha: string;
+    url: string;
   };
 }

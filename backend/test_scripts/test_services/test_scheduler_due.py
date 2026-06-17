@@ -10,8 +10,6 @@ Test IDs: SD-001..SD-010
 import sys
 from datetime import datetime, time, timedelta, timezone
 
-import pytest
-
 from backend.app.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT))

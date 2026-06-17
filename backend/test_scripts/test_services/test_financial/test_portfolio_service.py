@@ -29,10 +29,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.common import Currency
-from backend.app.services.portfolio_service import PortfolioService, _HistoryTxRow, _build_history_series
+from backend.app.services.portfolio_service import PortfolioService, _build_history_series, _HistoryTxRow
 from backend.app.utils.datetime_utils import utcnow
-
 
 # =============================================================================
 # FIXTURES

@@ -1,6 +1,6 @@
 # Phase 7: Transactions System — Macro Plan
 
-**Status**: 🔄 In corso (Part 1 ✅, Part 2 ✅ Revisione 2, **Part 3 ✅ DONE 2026-04-25** — backend coverage 87.06%, **Part 4 ✅ DONE 2026-05-05** — 10 steps + 11 rounds of bugfix/polish, **Part 4b ✅ DONE 2026-06-04** — file preview delivery + recovery/polish — Part 5 TODO)
+**Status**: ✅ Completata (Part 1 ✅, Part 2 ✅, **Part 3 ✅**, **Part 4 ✅**, **Part 4b ✅**, **Part 5 ✅ DONE**)
 **Sub-plans archiviati**: [`phase-07-subplan/README.md`](./phase-07-subplan/README.md)
 **Durata stimata**: ~11 giorni (multi-sprint, Parti 1+2+3+4+4b+5 = 1+2+2+2+1+3)
 **Priorità**: P0 (MVP)
@@ -100,7 +100,7 @@ auto-linking massivo degli eventi retroattivi.
 | **3** | API Consolidation — bulk atomic per-broker | endpoints, service, pytest | `POST/PATCH/DELETE /brokers/{id}/transactions/bulk` atomic, `validate` dry-run, `events/suggest`, test ≥85% | 2g | **Dettagliato** |
 | **4** | Frontend — Pagina `/transactions` | route, DataTable, filtri colonna | Lista utente con filtri header, GoTo linked pair, bulk actions | 2g | **✅ COMPLETATO** → [`plan-phase07-transaction-Part4.prompt.md`](./phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md) (10 steps + 11 rounds: R1–R6) |
 | **4b** | Frontend — File Preview System | backend service + modale multi-tipo | Preview inline (image/text/table/markdown/pdf) su Files page + BRIM files | 1g | **✅ COMPLETATO** → [`phase-07-subplan/Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md`](./phase-07-subplan/Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md) |
-| **5** | Frontend — Staging Modal | modale unificata, asset resolver | Manual + BRIM + Clone, grouping colorato, tolerance slider 0-7, commit via /brokers/{id}/tx/bulk atomic | 3g | **Alto livello** |
+| **5** | Frontend — Staging Modal | modale unificata, asset resolver | Manual + BRIM + Clone, grouping colorato, tolerance slider 0-7, commit via /brokers/{id}/tx/bulk atomic | 3g | **✅ COMPLETATO** → Archiviato in `Parte5/` |
 
 Le Parti 1–4b sono ormai **dettagliate / archiviate**.
 La sola Parte 5 resta **alto livello** (ASCII art + principi UX) — target e situazione
@@ -215,7 +215,7 @@ Tracciamento dei sub-plan che servono ma non sono ancora stati redatti:
 | Parte 3 (include 3b) | `plan-phase07-transaction-Part3.md` (API consolidation atomic per-broker + events/suggest + deferred da Part 1 §8/§9) | ✅ completato | Parte 1, Parte 2 |
 | Parte 4 | [`plan-phase07-transaction-Part4.prompt.md`](./phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md) (10 steps + 11 rounds) | ✅ completato (Round 6 ✅ DONE 2026-06-04) | Parte 3 |
 | Parte 4b | [`phase-07-subplan/Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md`](./phase-07-subplan/Parte4b/plan-phase07-transaction-Part4b_FilePreviewRecovery.prompt.md) | ✅ completato | autonomo |
-| Parte 5 | `plan-phase07-transaction-Part5-staging-modal.md` (Staging Modal frontend: BRIM mode, resolve fake_id, event matching, TransactionPickerModal, Promote/Split in BulkModal) | ⏳ **da scrivere** | Parte 2, Parte 3, Parte 4 |
+| Parte 5 | BRIM Import Bridge, ParseAndSee, ImportWizard | ✅ **completato** | Parte 2, Parte 3, Parte 4 |
 
 ---
 
