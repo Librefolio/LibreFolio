@@ -41,7 +41,12 @@ frontend/src/
 │   │       ├── media/    # ImageCropper, ImageEditModal, AssetPickerModal, FileEditModal
 │   │       └── select/   # BaseDropdown, SimpleSelect, SearchSelect
 │   ├── i18n/         # Internationalization (EN, IT, FR, ES)
-│   ├── stores/       # Global state (Auth, Settings, Language)
+│   ├── stores/       # Store Client System (State Management)
+│   │   ├── app/          # Auth, Theme, Settings, DateRange
+│   │   ├── core/         # EntityStore, EditBuffer, TimeSeriesStore
+│   │   ├── reference/    # brokerStore, assetStore, currencyStore
+│   │   ├── domain/       # portfolioStore, txStore, fxStore
+│   │   └── registries/   # AssetPriceStoreRegistry, FxStoreRegistry
 │   ├── types/        # TypeScript type definitions
 │   └── utils/        # Utilities (imageCrop, upload, urlFilters)
 ├── e2e/              # Playwright E2E tests (7 suites, 109+ tests)
@@ -78,7 +83,7 @@ LibreFolio fully embraces Svelte 5's **Runes** for reactivity, replacing the leg
 - [Components](components/index.md) - Reusable UI components
 - [FX Chain Algorithm](fx-chain-algorithm.md) - DFS pathfinding for currency conversion chains
 - [Pages](pages/index.md) - Application pages and routing
-- [State Management](state/index.md) - Stores and reactive state
+- [Store Client System](state/index.md) - Stores and reactive state
 - [Internationalization](i18n.md) - Multi-language support
 - [Styling](styling.md) - Tailwind CSS and theming
 
@@ -121,8 +126,8 @@ Frontend tasks are managed via `dev.py front`:
 
 | Topic                                    | Description                                        |
 |------------------------------------------|----------------------------------------------------|
-| [DataTable](components/data-table.md)    | Advanced table with sorting, filtering, pagination |
+| [DataTable](components/core-ui/data-table.md) | Advanced table with sorting, filtering, pagination |
 | [FX Chain Algorithm](fx-chain-algorithm.md) | DFS + graphology for multi-step FX routes       |
-| [Authentication](components/auth.md)     | LoginCard, RegisterCard, ForgotPasswordCard        |
-| [Settings](components/settings.md)       | User preferences, profile, and global settings     |
-| [File Upload](components/file-upload.md) | File uploader, image crop, asset picker            |
+| [Authentication](components/features/auth.md) | LoginCard, RegisterCard, ForgotPasswordCard        |
+| [Settings](components/features/settings.md)   | User preferences, profile, and global settings     |
+| [File Upload](components/core-ui/file-upload.md) | File uploader, image crop, asset picker            |

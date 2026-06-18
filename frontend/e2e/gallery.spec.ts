@@ -1436,6 +1436,27 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
+        test('FX list table', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToFxPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Switch to table view
+                    const tableBtn = page.getByTestId('view-mode-list');
+                    if (await tableBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                        await tableBtn.click();
+                        await page.waitForTimeout(1000); // Wait for table to render
+                    }
+                    await screenshot(page, viewport, lang, theme, 'fx', 'list-table');
+                }
+            }
+        });
+
         test('FX list filtered', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
 
@@ -1850,6 +1871,27 @@ test.describe('Gallery Screenshots', () => {
                 await page.waitForTimeout(1500);
                 await screenshot(page, viewport, lang, theme, 'assets', 'list');
             });
+        });
+
+        test('Asset list table', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    // Switch to table view
+                    const tableBtn = page.getByTestId('view-mode-list');
+                    if (await tableBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                        await tableBtn.click();
+                        await page.waitForTimeout(1000); // Wait for table to render
+                    }
+                    await screenshot(page, viewport, lang, theme, 'assets', 'list-table');
+                }
+            }
         });
 
         test('Asset list filtered', async ({page}, testInfo) => {

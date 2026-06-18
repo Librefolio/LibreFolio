@@ -18,6 +18,7 @@ Each card shows:
 - 📈 The **latest rate** and trend
 - 🏛️ The **data provider** (ECB, FED, BOE, etc.)
 - 📊 A **mini sparkline** chart
+- 🖱️ **Context Menu**: right-click any row to access quick actions (Edit, Sync, Delete)
 
 You can **filter** by currency to quickly find a specific pair:
 

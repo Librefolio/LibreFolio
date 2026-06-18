@@ -1,5 +1,9 @@
 # ![](../../../static/icons/transactions/fx-conversion.png){: width="32" style="vertical-align: middle;" } FX Conversion
 
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-fxconversion" alt="Transaction Form — FX Conversion">
+</div>
+
 **FX conversions** exchange one currency for another within the **same broker account**. One currency balance decreases while another increases — no securities or brokers change.
 
 ---

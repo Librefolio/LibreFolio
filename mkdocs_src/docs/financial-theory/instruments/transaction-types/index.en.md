@@ -8,11 +8,10 @@ These operate independently on a single broker account.
 
 | | Type | Code | Description | Cash | Asset | |
 |:---:|:---|:---|---|:---:|:---:|:---:|
-| ![](../../../static/icons/transactions/buy.png){: width="32" } | **Buy / Sell** | `BUY` / `SELL` | Purchase or sale of an asset. | ⬇️⬆️ | ⬆️⬇️ | [📖](buy-sell.md) |
-| ![](../../../static/icons/transactions/deposit.png){: width="32" } | **Deposit / Withdrawal** | `DEPOSIT` / `WITHDRAWAL` | Adding or removing cash from a broker account. | ⬆️⬇️ | — | [📖](deposit-withdrawal.md) |
-| ![](../../../static/icons/transactions/dividend.png){: width="32" } | **Dividend** | `DIVIDEND` | Cash payment from a stock or ETF holding. | ⬆️ | — | [📖](dividend.md) |
-| ![](../../../static/icons/transactions/fee.png){: width="32" } | **Fee / Tax** | `FEE` / `TAX` | Costs associated with trades, account maintenance, or taxes. | ⬇️ | — | [📖](fee.md) |
-| ![](../../../static/icons/transactions/interest.png){: width="32" } | **Interest** | `INTEREST` | Interest received from cash, bonds, or P2P loans. | ⬆️ | — | [📖](interest.md) |
+| ![](../../../static/icons/transactions/buy.png){: width="32" } ![](../../../static/icons/transactions/sell.png){: width="32" } | **Buy / Sell** | `BUY` / `SELL` | Purchase or sale of an asset. | ⬇️⬆️ | ⬆️⬇️ | [📖](buy-sell.md) |
+| ![](../../../static/icons/transactions/deposit.png){: width="32" } ![](../../../static/icons/transactions/withdrawal.png){: width="32" } | **Deposit / Withdrawal** | `DEPOSIT` / `WITHDRAWAL` | Adding or removing cash from a broker account. | ⬆️⬇️ | — | [📖](deposit-withdrawal.md) |
+| ![](../../../static/icons/transactions/dividend.png){: width="32" } ![](../../../static/icons/transactions/interest.png){: width="32" } | **Dividend / Interest** | `DIVIDEND` / `INTEREST` | Yield received from equity or fixed-income assets. | ⬆️ | — | [📖](dividend-interest.md) |
+| ![](../../../static/icons/transactions/fee.png){: width="32" } ![](../../../static/icons/transactions/tax.png){: width="32" } | **Fee / Tax** | `FEE` / `TAX` | Costs associated with trades, account maintenance, or taxes. | ⬇️ | — | [📖](fee.md) |
 | ![](../../../static/icons/transactions/adjustment.png){: width="32" } | **Adjustment** | `ADJUSTMENT` | Manual correction to balances. | ± | ± | [📖](adjustment.md) |
 
 ## 🔀 Composite Transactions

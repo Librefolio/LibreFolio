@@ -71,15 +71,37 @@ Then use the agent to fix reported differences (missing headings, broken links, 
 - Write in **English** (translations via pipeline)
 - Use **admonitions** for side notes — never for primary content
 - **Emoji in headings**: H1-H3 always have 1 emoji
-- **Diagrams**: Mermaid inline (no PNG)
+- **Diagrams**: Mermaid inline (no PNG). 
+  - Standard engine (Dagre) is the default, best for simple graphs.
+  - For complex architectural diagrams, force the ELK engine by adding frontmatter:
+    ````markdown
+    ```mermaid
+    ---
+    config:
+      layout: elk
+    ---
+    flowchart LR
+        A --> B
+    ```
+    ````
 - Code blocks with correct language tag
 
 ## Gallery Images in Pages
 
+### Single Image
 ```html
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="fx" data-name="list" alt="FX List"
          style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+```
+
+### Image Carousel
+For displaying multiple related images, use the custom `lf-screenshot-carousel` component:
+```html
+<div class="lf-screenshot-carousel" data-carousel="my-carousel-id" data-carousel-interval="3000" data-show-titles="true">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="settings" data-name="user-preferences" data-title="User Preferences">
+    <img class="gallery-img lf-screenshot-carousel-item" data-category="settings" data-name="global-settings" data-title="Global Settings (Admin)">
 </div>
 ```
 

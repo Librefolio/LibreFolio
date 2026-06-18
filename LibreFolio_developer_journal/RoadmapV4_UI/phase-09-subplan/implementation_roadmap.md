@@ -74,6 +74,9 @@ Questa roadmap scompone la riprogettazione della Dashboard e della vista Dettagl
 ### Criterio di Verifica Utente
 * L'utente entra in un broker, vede l'header rinnovato e il tab "Panoramica" perfettamente funzionante con i grafici specifici per quel broker (Mappa del mondo inclusa).
 
+> [!WARNING]
+> **Aggiornamento Documentazione (Posticipato):** Al termine dei lavori di riprogettazione, sarà necessario rivedere completamente la guida sviluppatore per l'area `developer/frontend/components/features/brokers/` e i suoi file figli. La documentazione attuale è già in parte superata, ma correggerla ora è inefficace. Verrà sanata in blocco alla fine delle milestone.
+
 ---
 
 ## Milestone 4: Dettaglio Broker - Posizioni e Modale Lotti FIFO

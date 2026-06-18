@@ -153,9 +153,15 @@ description: Free to understand, free to act. LibreFolio brings all your investm
       <p>Track exchange rates automatically. Manage multi-currency portfolios with live rates fetched straight from central banks.</p>
     </div>
     <div class="deep-dive-image">
-      <div class="screenshot-container">
-          <img class="gallery-img" data-category="fx" data-name="list" alt="Forex Details"
-               style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+      <div class="lf-screenshot-carousel" data-carousel="fx-assets-table" data-carousel-interval="4000">
+        <img class="gallery-img lf-screenshot-carousel-item is-active" 
+             data-category="fx" data-name="list" data-title="Forex Grid" alt="Forex Grid">
+        <img class="gallery-img lf-screenshot-carousel-item" loading="lazy"
+             data-category="fx" data-name="list-table" data-title="Forex Table" alt="Forex Table">
+        <img class="gallery-img lf-screenshot-carousel-item" loading="lazy"
+             data-category="assets" data-name="list" data-title="Assets Grid" alt="Assets Grid">
+        <img class="gallery-img lf-screenshot-carousel-item" loading="lazy"
+             data-category="assets" data-name="list-table" data-title="Assets Table" alt="Assets Table">
       </div>
     </div>
   </div>

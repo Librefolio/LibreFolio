@@ -1,4 +1,9 @@
-# ![](../../../static/icons/transactions/buy.png){: width="32" style="vertical-align: middle;" } Buy & Sell
+# ![](../../../static/icons/transactions/buy.png){: width="32" style="vertical-align: middle;" } Buy & Sell ![](../../../static/icons/transactions/sell.png){: width="32" style="vertical-align: middle;" }
+
+<div class="lf-screenshot-carousel" data-carousel="buy-sell" data-carousel-interval="4000" data-show-titles="true">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="transactions" data-name="form-modal" data-title='<img src="/LibreFolio/static/icons/transactions/buy.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> BUY' alt="Buy">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-sell" data-title='<img src="/LibreFolio/static/icons/transactions/sell.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> SELL' alt="Sell">
+</div>
 
 The most fundamental transaction types: **buying** increases your holdings and decreases cash; **selling** does the reverse and realizes a profit or loss.
 

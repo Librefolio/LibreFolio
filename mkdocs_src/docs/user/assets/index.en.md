@@ -28,6 +28,7 @@ Navigate to **Assets** in the sidebar to see all your assets. The list page prov
 - **Price change period**: select the time window for price change (Δ) display (1D, 1W, 1M, 3M, 6M, 1Y, YTD, ALL)
 - **Sync All**: fetch latest prices for all assets with a provider
 - **Refresh All**: reload asset data from the database
+- **Context Menu**: right-click any row in the table view to access quick actions (Edit, Delete, etc.)
 
 Click on any asset card to navigate to its **[detail page](detail/index.md)**.
 

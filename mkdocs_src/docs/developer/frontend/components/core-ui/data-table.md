@@ -2,8 +2,11 @@
 
 The `DataTable` is a powerful, generic table component built with Svelte 5 Runes. It provides a rich set of features similar to Excel or advanced data grids.
 
-<div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    <img class="gallery-img" data-category="files" data-name="static-tab" alt="DataTable in Files page" style="width: 100%; display: block;">
+<div class="lf-screenshot-carousel" data-carousel="datatable" data-carousel-interval="3000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="transactions" data-name="list" data-title="Transactions" alt="Transactions Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="list-table" data-title="Assets" alt="Assets Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="fx" data-name="list-table" data-title="FX Rates" alt="FX Rates Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="files" data-name="static-tab" data-title="Files" alt="Files Table">
 </div>
 
 ## ⚡ Features
@@ -14,7 +17,8 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 - **Selection**: Row selection with checkboxes and "Select All" on page.
 - **Column Management**: Show/hide columns, reorder via drag-and-drop (in toolbar), and resize columns.
 - **Persistence**: User preferences (column order, visibility, widths, page size) are automatically saved to `localStorage`.
-- **Actions**: Support for per-row actions and bulk actions on selected rows.
+- **Actions**: Support for per-row actions and bulk actions on selected rows. Row actions automatically map to both action buttons and a native-feeling context menu on right-click.
+- **Context Menu**: Built-in support for right-click context menus on rows, reusing the defined `rowActions`.
 - **Sticky Columns**: Selection and Action columns are sticky.
 
 ## 💻 Usage
@@ -95,6 +99,7 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 | `enableSorting`       | `boolean`             | `true`       | Enable column sorting.                   |
 | `enableColumnFilters` | `boolean`             | `true`       | Enable column filters.                   |
 | `enablePagination`    | `boolean`             | `true`       | Enable pagination.                       |
+| `enableContextMenu`   | `boolean`             | `true`       | Enable right-click context menu on rows. |
 | `defaultPageSize`     | `number`              | `10`         | Initial page size.                       |
 | `rowActions`          | `RowAction<T>[]`      | `[]`         | Actions available for each row.          |
 | `bulkActions`         | `BulkAction<T>[]`     | `[]`         | Actions available for selected rows.     |

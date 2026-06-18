@@ -22,24 +22,25 @@ The graph is a **MultiDirectedGraph** (from the [graphology](https://graphology.
 
 ### 🔗 Edge Construction
 
-For each provider $P$ (excluding `MANUAL`), for each base $B \in P.\text{base\_currencies}$ and target $T \in P.\text{target\_currencies}$ (with $B \ne T$):
+For each provider `P` (excluding `MANUAL`):
 
-$$
-\text{addDirectedEdge}(B \to T, \;\{\text{provider}: P.\text{code}\})
-$$
+- For each base `B` in `P.base_currencies`
+- And target `T` in `P.target_currencies` (with `B != T`)
+
+**Add Directed Edge:** `B ➔ T` with payload `{provider: P.code}`
 
 Key design decisions:
 
 1. **Single directed edges** — one edge $B \to T$ per (provider, base, target). No reverse edge $T \to B$ is added.
 2. **Bidirectionality via DFS** — the DFS explores both outbound edges ($B \to T$) and **inbound** edges ($T \leftarrow B$) at each node, effectively traversing in reverse.
-3. **Multi-graph** — if two providers both cover EUR→USD, there are two parallel edges with different `provider` attributes.
+3. **Multi-graph** — if two providers both cover 🇪🇺 EUR→🇺🇸 USD, there are two parallel edges with different `provider` attributes.
 
 ### ❓ Why Single-Direction Edges?
 
 | Approach | Edges | Pros | Cons |
 |:---------|:------|:-----|:-----|
-| Bidirectional (2 edges per pair) | $2 \times |E|$ | Simple DFS (outbound only) | Doubled memory, unclear semantics |
-| **Single + DFS inbound** ✅ | $|E|$ | Clear semantics, compact | DFS must explore 2 directions |
+| Bidirectional (2 edges per pair) | `2 * E` | Simple DFS (outbound only) | Doubled memory, unclear semantics |
+| **Single + DFS inbound** ✅ | `E` | Clear semantics, compact | DFS must explore 2 directions |
 
 The single-direction approach encodes the real relationship: *"Provider P publishes rates from B to T"*. The backend's `compute_chain_rate()` uses alphabetical normalization to decide whether to use the rate directly or invert it ($1/\text{rate}$).
 
@@ -48,19 +49,26 @@ The single-direction approach encodes the real relationship: *"Provider P publis
 Consider 4 providers and 5 currencies:
 
 ```mermaid
-graph LR
-    subgraph ECB ["🇪🇺 ECB (base: EUR)"]
-        direction LR
+graph TD
+    subgraph Providers
+        ECB["🇪🇺 ECB (EUR)"]
+        FED["🇺🇸 FED (USD)"]
+        BOE["🇬🇧 BOE (GBP)"]
+        SNB["🇨🇭 SNB (CHF)"]
+        
+        ECB ~~~ BOE
+        FED ~~~ SNB
     end
-    subgraph FED ["🇺🇸 FED (base: USD)"]
-        direction LR
+
+    subgraph Currencies
+        EUR["🇪🇺 EUR"]
+        USD["🇺🇸 USD"]
+        GBP["🇬🇧 GBP"]
+        CHF["🇨🇭 CHF"]
+        RON["🇷🇴 RON"]
     end
-    subgraph BOE ["🇬🇧 BOE (base: GBP)"]
-        direction LR
-    end
-    subgraph SNB ["🇨🇭 SNB (base: CHF)"]
-        direction LR
-    end
+
+    Providers ~~~ Currencies
 
     EUR -->|ECB| USD
     EUR -->|ECB| GBP
@@ -74,19 +82,19 @@ graph LR
     CHF -->|SNB| EUR
 ```
 
-Each arrow is a directed edge with the provider label. The DFS can traverse any edge in reverse (e.g., go from USD to EUR via the ECB edge EUR→USD).
+Each arrow is a directed edge with the provider label. The DFS can traverse any edge in reverse (e.g., go from 🇺🇸 USD to 🇪🇺 EUR via the ECB edge 🇪🇺 EUR→🇺🇸 USD).
 
-### 📋 Example: All Routes from RON to USD
+### 📋 Example: All Routes from 🇷🇴 RON to 🇺🇸 USD
 
-Starting from **RON**, the DFS finds these paths:
+Starting from **🇷🇴 RON**, the DFS finds these paths:
 
 | # | Path | Steps | Providers |
 |:--|:-----|:------|:----------|
-| 1 | `RON →[ECB]→ EUR →[ECB]→ USD` | 2 | ECB × 2 |
-| 2 | `RON →[ECB]→ EUR →[FED]→ USD` | 2 | ECB + FED |
-| 3 | `RON →[ECB]→ EUR →[BOE]→ GBP →[BOE]→ USD` | 3 | ECB + BOE × 2 |
-| 4 | `RON →[ECB]→ EUR →[SNB]→ CHF →[FED]→ USD` | 3 | ECB + SNB + FED |
-| 5 | `RON →[ECB]→ EUR →[FED]→ GBP →[BOE]→ USD` | 3 | ECB + FED + BOE |
+| 1 | `🇷🇴 RON →[ECB]→ 🇪🇺 EUR →[ECB]→ 🇺🇸 USD` | 2 | ECB × 2 |
+| 2 | `🇷🇴 RON →[ECB]→ 🇪🇺 EUR →[FED]→ 🇺🇸 USD` | 2 | ECB + FED |
+| 3 | `🇷🇴 RON →[ECB]→ 🇪🇺 EUR →[BOE]→ 🇬🇧 GBP →[BOE]→ 🇺🇸 USD` | 3 | ECB + BOE × 2 |
+| 4 | `🇷🇴 RON →[ECB]→ 🇪🇺 EUR →[SNB]→ 🇨🇭 CHF →[FED]→ 🇺🇸 USD` | 3 | ECB + SNB + FED |
+| 5 | `🇷🇴 RON →[ECB]→ 🇪🇺 EUR →[FED]→ 🇬🇧 GBP →[BOE]→ 🇺🇸 USD` | 3 | ECB + FED + BOE |
 | ... | *(other 3-4 step combinations)* | 3-4 | ... |
 
 Route 1 is the shortest (2 steps) and uses only ECB. Route 2 mixes ECB and FED. Longer chains provide more fallback options but carry higher failure risk.
@@ -154,13 +162,13 @@ $$
 Each node (currency) can appear **at most once** in a path. This eliminates:
 
 - **Trivial cycles**: A → B → A (returning to the same node)
-- **Redundant round-trips**: EUR → USD → GBP → EUR → RON (the EUR→USD→GBP→EUR detour is pointless and introduces unnecessary failure risk)
+- **Redundant round-trips**: 🇪🇺 EUR → 🇺🇸 USD → 🇬🇧 GBP → 🇪🇺 EUR → 🇷🇴 RON (the 🇪🇺 EUR→🇺🇸 USD→🇬🇧 GBP→🇪🇺 EUR detour is pointless and introduces unnecessary failure risk)
 
 The source node is added to `visitedNodes` at initialization, so the DFS can never return to it. The target node is **not** in `visitedNodes` — it serves as the exit condition.
 
 !!! note "Evolution"
 
-    The original algorithm used `usedEdgePairs: Set<string>` (tracking visited *edges*, not *nodes*). This allowed the same node to appear multiple times if reached via different edge pairs, producing redundant cycles like `EUR→USD→GBP→EUR→RON`. Switching to `visitedNodes` (simple paths) eliminated these and guarantees each conversion chain is **unique and optimal**.
+    The original algorithm used `usedEdgePairs: Set<string>` (tracking visited *edges*, not *nodes*). This allowed the same node to appear multiple times if reached via different edge pairs, producing redundant cycles like `🇪🇺 EUR→🇺🇸 USD→🇬🇧 GBP→🇪🇺 EUR→🇷🇴 RON`. Switching to `visitedNodes` (simple paths) eliminated these and guarantees each conversion chain is **unique and optimal**.
 
 #### 2️⃣ Constraint 2 — Max 2 Uses per Provider
 
@@ -170,9 +178,9 @@ $$
 
 A provider can be used **at most twice** in the same path. This reflects the real-world topology:
 
-- A provider like ECB has **one base** (EUR) and **many targets** (USD, GBP, CHF, RON, ...).
-- To "bridge through" EUR using ECB, you need **two edges**: one to reach EUR, one to leave EUR.
-  Example: `RON →[ECB]→ EUR →[ECB]→ USD` (2 uses of ECB).
+- A provider like ECB has **one base** (🇪🇺 EUR) and **many targets** (🇺🇸 USD, 🇬🇧 GBP, 🇨🇭 CHF, 🇷🇴 RON, ...).
+- To "bridge through" 🇪🇺 EUR using ECB, you need **two edges**: one to reach 🇪🇺 EUR, one to leave 🇪🇺 EUR.
+  Example: `🇷🇴 RON →[ECB]→ 🇪🇺 EUR →[ECB]→ 🇺🇸 USD` (2 uses of ECB).
 - A third ECB edge would be redundant: you'd have already left the ECB hub.
 
 ### Backtracking
@@ -216,24 +224,24 @@ graph.forEachInboundEdge(currentNode, (_, attrs, src, _) => {
 
 The `ChainStep` always records the **logical** direction: `{ from: currentNode, to: neighbor }`. The backend determines whether to use the rate directly or invert it via alphabetical normalization in `compute_chain_rate()`.
 
-### Visualization: DFS Tree for RON → USD
+### Visualization: DFS Tree for 🇷🇴 RON → 🇺🇸 USD
 
 ```mermaid
 graph TD
-    START["🟢 RON (start)"] --> E1["EUR via ECB"]
+    START["🟢 🇷🇴 RON (start)"] --> E1["🇪🇺 EUR via ECB"]
     
-    E1 --> U1["✅ USD via ECB<br/><i>Path 1: RON→EUR→USD</i>"]
-    E1 --> G1["GBP via ECB"]
-    E1 --> C1["CHF via ECB"]
-    E1 --> U2["✅ USD via FED<br/><i>Path 2: RON→EUR→USD</i>"]
-    E1 --> G2["GBP via FED"]
-    E1 --> C2["CHF via FED"]
-    E1 --> C3["CHF via SNB"]
+    E1 --> U1["✅ 🇺🇸 USD via ECB<br/><i>Path 1: 🇷🇴 RON→🇪🇺 EUR→🇺🇸 USD</i>"]
+    E1 --> G1["🇬🇧 GBP via ECB"]
+    E1 --> C1["🇨🇭 CHF via ECB"]
+    E1 --> U2["✅ 🇺🇸 USD via FED<br/><i>Path 2: 🇷🇴 RON→🇪🇺 EUR→🇺🇸 USD</i>"]
+    E1 --> G2["🇬🇧 GBP via FED"]
+    E1 --> C2["🇨🇭 CHF via FED"]
+    E1 --> C3["🇨🇭 CHF via SNB"]
     
-    G1 --> U3["✅ USD via BOE<br/><i>Path 3: RON→EUR→GBP→USD</i>"]
-    G2 --> U4["✅ USD via BOE<br/><i>Path 4: RON→EUR→GBP→USD</i>"]
+    G1 --> U3["✅ 🇺🇸 USD via BOE<br/><i>Path 3: 🇷🇴 RON→🇪🇺 EUR→🇬🇧 GBP→🇺🇸 USD</i>"]
+    G2 --> U4["✅ 🇺🇸 USD via BOE<br/><i>Path 4: 🇷🇴 RON→🇪🇺 EUR→🇬🇧 GBP→🇺🇸 USD</i>"]
     
-    C1 --> DEAD1["❌ dead end<br/>(no edge to USD)"]
+    C1 --> DEAD1["❌ dead end<br/>(no edge to 🇺🇸 USD)"]
     C2 --> DEAD2["❌ dead end"]
     C3 --> DEAD3["❌ dead end"]
     

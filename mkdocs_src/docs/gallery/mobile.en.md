@@ -37,19 +37,10 @@ Easy account creation with password strength feedback.
 
 Your portfolio at a glance — key stats, allocation charts, and a clean empty state for new users.
 
-<div class="screenshot-carousel">
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="dashboard" data-name="main" alt="Main Dashboard">
-    <p class="screenshot-carousel-label">📈 Main view</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="dashboard" data-name="allocation-charts" alt="Dashboard Allocation Charts">
-    <p class="screenshot-carousel-label">📊 Allocation & Composition</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="dashboard" data-name="empty-state" alt="Dashboard Empty State">
-    <p class="screenshot-carousel-label">🌱 New portfolio (empty state)</p>
-</div>
+<div class="lf-screenshot-carousel lf-mobile-carousel" data-carousel="carousel-mobile-0" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Main view" alt="Main Dashboard">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-charts" data-title="📊 Allocation & Composition" alt="Dashboard Allocation Charts">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="empty-state" data-title="🌱 New portfolio (empty state)" alt="Dashboard Empty State">
 </div>
 
 ### ☰ Navigation Menu
@@ -76,39 +67,15 @@ All your recorded financial operations in a filterable, sortable table view.
 
 Record any operation — buy, sell, dividend, deposit, transfer, FX conversion — with asset lookup. The form adapts to the selected type.
 
-<div class="screenshot-carousel">
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal" alt="Transaction Form — BUY">
-    <p class="screenshot-carousel-label">📈 Buy</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal-sell" alt="Transaction Form — SELL">
-    <p class="screenshot-carousel-label">📉 Sell</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal-dividend" alt="Transaction Form — DIVIDEND">
-    <p class="screenshot-carousel-label">💰 Dividend</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal-deposit" alt="Transaction Form — DEPOSIT">
-    <p class="screenshot-carousel-label">🏦 Deposit</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal-adjustment" alt="Transaction Form — Adjustment">
-    <p class="screenshot-carousel-label">🔧 Adjustment</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Transaction Form — TRANSFER">
-    <p class="screenshot-carousel-label">🔀 Asset Transfer</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal-fxconversion" alt="Transaction Form — FX Conversion">
-    <p class="screenshot-carousel-label">💱 FX Conversion</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal-cash-transfer" alt="Transaction Form — Cash Transfer">
-    <p class="screenshot-carousel-label">🏧 Cash Transfer (bonifico)</p>
-</div>
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-1" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="transactions" data-name="form-modal" data-title="📈 Buy" alt="Transaction Form — BUY">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-sell" data-title="📉 Sell" alt="Transaction Form — SELL">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-dividend" data-title="💰 Dividend" alt="Transaction Form — DIVIDEND">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-deposit" data-title="🏦 Deposit" alt="Transaction Form — DEPOSIT">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-adjustment" data-title="🔧 Adjustment" alt="Transaction Form — Adjustment">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-transfer" data-title="🔀 Asset Transfer" alt="Transaction Form — TRANSFER">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fxconversion" data-title="💱 FX Conversion" alt="Transaction Form — FX Conversion">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-cash-transfer" data-title="🏧 Cash Transfer (bonifico)" alt="Transaction Form — Cash Transfer">
 </div>
 
 ### 🔗 Transaction Picker
@@ -149,31 +116,13 @@ When deleting a transaction that is part of a linked pair, you can choose to rem
 
 Import transactions from your broker's export files — quick modal or full wizard.
 
-<div class="screenshot-carousel">
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="brokers" data-name="import-modal" alt="Import Modal">
-    <p class="screenshot-carousel-label">📥 Quick modal</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Import Wizard Step 1">
-    <p class="screenshot-carousel-label">🧙 Step 1: Upload</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Import Wizard Step 2">
-    <p class="screenshot-carousel-label">⚙️ Step 2: Parser</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Import Wizard Asset Resolution">
-    <p class="screenshot-carousel-label">🔍 Step 4: Asset Resolution</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicate" alt="Import Wizard Duplicate Detection">
-    <p class="screenshot-carousel-label">⚠️ Duplicate Detection</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="brokers" data-name="import-bulk-staging" alt="Import Bulk Staging">
-    <p class="screenshot-carousel-label">📦 Bulk Staging</p>
-</div>
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-2" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Quick modal" alt="Import Modal">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step1" data-title="🧙 Step 1: Upload" alt="Import Wizard Step 1">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Step 2: Parser" alt="Import Wizard Step 2">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step4-resolution" data-title="🔍 Step 4: Asset Resolution" alt="Import Wizard Asset Resolution">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-duplicate" data-title="⚠️ Duplicate Detection" alt="Import Wizard Duplicate Detection">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Bulk Staging" alt="Import Bulk Staging">
 </div>
 
 
@@ -268,27 +217,12 @@ Import and manage broker reports.
 
 Preview any static file directly in the browser — CSV grid, image, PDF, markdown, and plain text.
 
-<div class="screenshot-carousel">
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="files" data-name="preview-modal-csv" alt="CSV File Preview">
-    <p class="screenshot-carousel-label">📋 Broker CSV</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="files" data-name="preview-modal-image" alt="Image File Preview">
-    <p class="screenshot-carousel-label">🖼️ Image</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="files" data-name="preview-modal-pdf" alt="PDF File Preview">
-    <p class="screenshot-carousel-label">📄 PDF</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="files" data-name="preview-modal-markdown" alt="Markdown Preview">
-    <p class="screenshot-carousel-label">📝 Markdown</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="files" data-name="preview-modal-text" alt="Text Preview">
-    <p class="screenshot-carousel-label">🗒️ Plain text</p>
-</div>
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-3" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="files" data-name="preview-modal-csv" data-title="📋 Broker CSV" alt="CSV File Preview">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="files" data-name="preview-modal-image" data-title="🖼️ Image" alt="Image File Preview">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="files" data-name="preview-modal-pdf" data-title="📄 PDF" alt="PDF File Preview">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="files" data-name="preview-modal-markdown" data-title="📝 Markdown" alt="Markdown Preview">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="files" data-name="preview-modal-text" data-title="🗒️ Plain text" alt="Text Preview">
 </div>
 
 ---
@@ -363,8 +297,9 @@ Manage co-ownership and access roles with the sharing modal, optimized for mobil
 
 All your tracked financial instruments, optimized for mobile.
 
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="list" alt="Asset List Page">
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-assets-list" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="list" data-title="🔲 Card view" alt="Asset List Page (Card)">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="list-table" data-title="📋 Table view" alt="Asset List Page (Table)">
 </div>
 
 ### 🔎 Asset List Filtered
@@ -379,57 +314,30 @@ Filter assets by name, type, or search text on mobile.
 
 Interactive price chart with date range and currency toggle. Switch between line and candlestick view.
 
-<div class="screenshot-carousel">
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Asset Detail Chart — Line">
-    <p class="screenshot-carousel-label">📈 Line chart</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="detail-chart-candlestick" alt="Asset Detail Chart — Candlestick">
-    <p class="screenshot-carousel-label">🕯️ Candlestick</p>
-</div>
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-4" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="detail-chart" data-title="📈 Line chart" alt="Asset Detail Chart — Line">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-chart-candlestick" data-title="🕯️ Candlestick" alt="Asset Detail Chart — Candlestick">
 </div>
 
 ### 📡 Signals Overlay
 
 Technical indicators (EMA, RSI, MACD, Bollinger) on the price chart — each in its own sub-panel.
 
-<div class="screenshot-carousel">
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="detail-signals" alt="Asset Signals Panel">
-    <p class="screenshot-carousel-label">📊 Panel (empty)</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="detail-signals-ema" alt="EMA active">
-    <p class="screenshot-carousel-label">📈 EMA</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="detail-signals-rsi" alt="RSI active">
-    <p class="screenshot-carousel-label">📉 RSI</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="detail-signals-macd" alt="MACD active">
-    <p class="screenshot-carousel-label">📊 MACD</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="detail-signals-bollinger" alt="Bollinger Bands active">
-    <p class="screenshot-carousel-label">🎯 Bollinger Bands</p>
-</div>
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-5" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="detail-signals" data-title="📊 Panel (empty)" alt="Asset Signals Panel">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-signals-ema" data-title="📈 EMA" alt="EMA active">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-signals-rsi" data-title="📉 RSI" alt="RSI active">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-signals-macd" data-title="📊 MACD" alt="MACD active">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-signals-bollinger" data-title="🎯 Bollinger Bands" alt="Bollinger Bands active">
 </div>
 
 ### 📏 Measures Panel
 
 Click-to-click measurement tool on mobile — view delta, %, and annualized return over any date range.
 
-<div class="screenshot-carousel">
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="detail-measures" alt="Asset Detail Measures Panel">
-    <p class="screenshot-carousel-label">📏 Panel open</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="detail-measures-active" alt="Asset Detail Measures Active">
-    <p class="screenshot-carousel-label">📐 Measurement active</p>
-</div>
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-6" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="detail-measures" data-title="📏 Panel open" alt="Asset Detail Measures Panel">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-measures-active" data-title="📐 Measurement active" alt="Asset Detail Measures Active">
 </div>
 
 ### 🗂️ Classification & Metadata
@@ -452,15 +360,9 @@ Inline price data editor on mobile.
 
 Create a new asset on mobile — or launch from the Import Wizard with pre-filled data.
 
-<div class="screenshot-carousel">
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="create-modal" alt="Create Asset Modal">
-    <p class="screenshot-carousel-label">➕ Manual create</p>
-</div>
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="create-wizard-modal" alt="Create Asset from Import Wizard">
-    <p class="screenshot-carousel-label">🧙 From Import Wizard</p>
-</div>
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-7" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="create-modal" data-title="➕ Manual create" alt="Create Asset Modal">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 From Import Wizard" alt="Create Asset from Import Wizard">
 </div>
 
 ---
@@ -472,8 +374,9 @@ Create a new asset on mobile — or launch from the Import Wizard with pre-fille
 
 All configured currency pairs with mini-charts, optimized for mobile.
 
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="fx" data-name="list" alt="FX List Page">
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-fx-list" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="fx" data-name="list" data-title="🔲 Card view" alt="FX List Page (Card)">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="fx" data-name="list-table" data-title="📋 Table view" alt="FX List Page (Table)">
 </div>
 
 ### 🔎 FX List Filtered

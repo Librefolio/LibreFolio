@@ -36,6 +36,7 @@
 <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
     <button
         aria-label="Grid view"
+        data-testid="view-mode-grid"
         class="flex items-center justify-center px-2.5 py-1.5 transition-colors
                {mode === 'grid' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
         onclick={() => setMode('grid')}
@@ -45,6 +46,7 @@
     </button>
     <button
         aria-label="Table view"
+        data-testid="view-mode-list"
         class="flex items-center justify-center px-2.5 py-1.5 transition-colors
                {mode === 'list' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
         onclick={() => setMode('list')}

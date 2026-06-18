@@ -20,6 +20,8 @@ Static resources are **visible to all users** in the system. This is where you'l
 
 These files live in the `custom-uploads/` directory on the server.
 
+**Context Menu**: Right-click any file row (in list view) to access quick actions (Preview, Rename, Delete).
+
 You can switch between **list view** and **grid view** for a visual preview of image files:
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
@@ -37,6 +39,8 @@ Broker reports have **restricted visibility** — you can only see reports for b
 - 📋 CSV or Excel **transaction exports** from your broker
 - ✅ **Parsed results** from the automatic import system (BRIM)
 - ❌ Files that **failed parsing** (kept for debugging)
+
+**Context Menu**: Right-click any report row to access quick actions (Preview, Rename, Delete).
 
 ---
 

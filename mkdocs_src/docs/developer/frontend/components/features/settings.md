@@ -2,13 +2,9 @@
 
 This section documents the components used for the Settings pages (User Preferences, Global Settings, Profile).
 
-<div style="display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0 2rem 0;">
-    <div class="screenshot-container" style="flex: 1; min-width: 280px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-        <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences" style="width: 100%; display: block;">
-    </div>
-    <div class="screenshot-container" style="flex: 1; min-width: 280px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-        <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings (Admin)" style="width: 100%; display: block;">
-    </div>
+<div class="lf-screenshot-carousel" data-carousel="settings-main" data-carousel-interval="3000" data-show-titles="true">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="settings" data-name="user-preferences" data-title="User Preferences">
+    <img class="gallery-img lf-screenshot-carousel-item" data-category="settings" data-name="global-settings" data-title="Global Settings (Admin)">
 </div>
 
 ## 🏗️ Architecture
@@ -36,6 +32,10 @@ The `SettingsLayout` component provides the structural shell for all settings ta
 
 ### 🎨 PreferencesTab
 
+<div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 600px;">
+    <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences" style="width: 100%; display: block;">
+</div>
+
 Manages user-specific settings (Language, Currency, Theme).
 
 ### 👤 ProfileTab
@@ -48,6 +48,10 @@ Manages user profile information:
 - Edit mode toggle to prevent accidental changes
 
 ### 🌍 GlobalSettingsTab (Admin only)
+
+<div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 600px;">
+    <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings" style="width: 100%; display: block;">
+</div>
 
 System-wide configuration with lock toggle:
 
