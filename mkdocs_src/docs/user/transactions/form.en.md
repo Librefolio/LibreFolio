@@ -6,67 +6,52 @@ The Transaction Form opens whenever you **create** or **edit** a transaction. It
 
 ## 🏷️ Transaction Types
 
-| Type | Icon | Description |
-|------|------|-------------|
-| **BUY** | 🟢 | Purchase of an asset |
-| **SELL** | 🔴 | Sale of an asset |
-| **DIVIDEND** | 💰 | Cash dividend received |
-| **INTEREST** | 📈 | Interest income (bonds, P2P) |
-| **FEE** | 💸 | Broker fee or platform charge |
-| **DEPOSIT** | ⬇️ | Cash deposited into the broker account |
-| **WITHDRAWAL** | ⬆️ | Cash withdrawn from the broker account |
-| **ADJUSTMENT** | 🔧 | Manual correction to quantity or price |
-| **TRANSFER** | 🔄 | Asset moved between two of your brokers (composite) |
-| **FX_CONVERSION** | 💱 | Currency exchange within a broker (composite) |
+For an in-depth conceptual definition of each operation, please refer to the [Financial Theory guide](../../financial-theory/instruments/transaction-types/index.md).
 
-See [Financial Theory → Transaction Types](../../financial-theory/instruments/transaction-types/index.md) for the conceptual definition of each type.
+<div class="lf-screenshot-carousel" data-carousel="transactions" data-carousel-interval="3000" data-show-titles="true">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="transactions" data-name="form-modal" data-title='<img src="/LibreFolio/static/icons/transactions/buy.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> BUY' alt="Buy">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-sell" data-title='<img src="/LibreFolio/static/icons/transactions/sell.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> SELL' alt="Sell">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-dividend" data-title='<img src="/LibreFolio/static/icons/transactions/dividend.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> DIVIDEND' alt="Dividend">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-deposit" data-title='<img src="/LibreFolio/static/icons/transactions/deposit.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> DEPOSIT' alt="Deposit">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-adjustment" data-title='<img src="/LibreFolio/static/icons/transactions/adjustment.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> ADJUSTMENT' alt="Adjustment">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-transfer" data-title='<img src="/LibreFolio/static/icons/transactions/transfer.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> TRANSFER' alt="Asset Transfer">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fxconversion" data-title='<img src="/LibreFolio/static/icons/transactions/fx-conversion.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> FX CONVERSION' alt="FX Conversion">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-cash-transfer" data-title='<img src="/LibreFolio/static/icons/transactions/cash-transfer.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> CASH TRANSFER' alt="Cash Transfer">
+</div>
 
----
+### Single Transactions
 
-## 📋 Common Fields
+These operate independently on a single broker account.
 
-These fields appear for **all** transaction types:
+| Type | Description | Theory Guide |
+|------|-------------|--------------|
+| ![](../../../static/icons/transactions/buy.png){: width="24" style="vertical-align: middle;" } **BUY / SELL** ![](../../../static/icons/transactions/sell.png){: width="24" style="vertical-align: middle;" } | Purchase or sale of an asset | [📖 Read](../../financial-theory/instruments/transaction-types/buy-sell.md) |
+| ![](../../../static/icons/transactions/deposit.png){: width="24" style="vertical-align: middle;" } **DEPOSIT / WITHDRAWAL** ![](../../../static/icons/transactions/withdrawal.png){: width="24" style="vertical-align: middle;" } | Adding or removing cash from a broker account | [📖 Read](../../financial-theory/instruments/transaction-types/deposit-withdrawal.md) |
+| ![](../../../static/icons/transactions/dividend.png){: width="24" style="vertical-align: middle;" } **DIVIDEND / INTEREST** ![](../../../static/icons/transactions/interest.png){: width="24" style="vertical-align: middle;" } | Yield from equity or fixed-income assets | [📖 Read](../../financial-theory/instruments/transaction-types/dividend-interest.md) |
+| ![](../../../static/icons/transactions/fee.png){: width="24" style="vertical-align: middle;" } **FEE / TAX** ![](../../../static/icons/transactions/tax.png){: width="24" style="vertical-align: middle;" } | Costs like broker fees or taxes | [📖 Read](../../financial-theory/instruments/transaction-types/fee.md) |
+| ![](../../../static/icons/transactions/adjustment.png){: width="24" style="vertical-align: middle;" } **ADJUSTMENT** | Manual correction to balances | [📖 Read](../../financial-theory/instruments/transaction-types/adjustment.md) |
 
-| Field | Required | Description |
-|-------|:--------:|-------------|
-| **Type** | ✅ | Transaction type selector |
-| **Date** | ✅ | Execution date (YYYY-MM-DD) |
-| **Currency** | ✅ | Currency of the transaction |
-| **Amount** | ✅ | Total gross amount |
-| **Fee** | ❌ | Brokerage commission or tax withheld |
-| **Notes** | ❌ | Free-text memo |
+### Composite Transactions
 
----
+These represent movements **between** accounts or currencies. They produce two linked entries that balance each other.
 
-## 🏦 Asset Operations (BUY / SELL / TRANSFER)
-
-When an asset is involved, additional fields appear:
-
-| Field | Required | Description |
-|-------|:--------:|-------------|
-| **Asset** | ✅ | The asset being traded (searchable) |
-| **Quantity** | ✅ | Number of units |
-| **Unit Price** | ✅ | Price per unit |
-
-!!! tip "Auto-calculation"
-
-    If you fill in **Quantity** and **Unit Price**, the **Amount** is computed automatically, and vice versa.
+| Type | Description | Theory Guide |
+|------|-------------|--------------|
+| ![](../../../static/icons/transactions/transfer.png){: width="24" style="vertical-align: middle;" } **TRANSFER** | Asset moved between two of your brokers | [📖 Read](../../financial-theory/instruments/transaction-types/transfer.md) |
+| ![](../../../static/icons/transactions/cash-transfer.png){: width="24" style="vertical-align: middle;" } **CASH_TRANSFER** | Wire transfer between brokers | [📖 Read](../../financial-theory/instruments/transaction-types/cash-transfer.md) |
+| ![](../../../static/icons/transactions/fx-conversion.png){: width="24" style="vertical-align: middle;" } **FX_CONVERSION** | Currency exchange within a broker | [📖 Read](../../financial-theory/instruments/transaction-types/fx-conversion.md) |
 
 ---
 
-## 💰 WAC Preview
+## 📋 The Form Interface
 
-For **BUY** and **SELL** transactions, a **WAC (Weighted Average Cost) preview** panel appears below the main fields. It shows in real-time:
+The form is designed to be intuitive and dynamic. When you select a **Transaction Type**, the form automatically adjusts to show only the relevant fields. 
 
-- The **current cost basis** before this transaction
-- The **projected new cost basis** after saving
-- The **realized gain/loss** (SELL only)
+- **Basic Details:** Date, Type, Currency, and Amount.
+- **Asset Specifics:** If the transaction involves an asset (like BUY or SELL), fields for selecting the asset, entering the quantity, and setting the unit price will appear.
+- **Preview Panel (WAC):** For operations that affect your portfolio, a real-time preview appears at the bottom. It shows your current cost basis, the projected new cost basis, and any realized gain/loss.
 
-This preview is computed live — no need to save first.
-
-!!! note "Manual WAC Override"
-
-    You can switch the WAC mode from **Auto** (computed by LibreFolio) to **Manual** (enter your own cost basis). This is useful when migrating historical data from another system.
+> **💡 Note:** The system automatically handles standard calculations for you (such as multiplying quantity by unit price) so you don't have to do the math manually.
 
 ---
 
@@ -78,17 +63,6 @@ This preview is computed live — no need to save first.
 - **FX_CONVERSION**: specifies the **source currency amount** and the **destination currency amount** within the same broker.
 
 To split a composite back into two independent transactions, use the [Split](index.md#split) operation on the transaction table.
-
----
-
-## ✅ Validation
-
-The form validates on save:
-
-- Dates must be in valid range (not in the future by default).
-- Quantity and price must be positive.
-- For SELL: quantity cannot exceed the current holding (warning, not a hard block).
-- Amount must match quantity × price within a small tolerance.
 
 ---
 

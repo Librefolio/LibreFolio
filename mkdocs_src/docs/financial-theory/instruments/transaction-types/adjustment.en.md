@@ -1,5 +1,9 @@
 # ![](../../../static/icons/transactions/adjustment.png){: width="32" style="vertical-align: middle;" } Adjustment
 
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-adjustment" alt="Transaction Form — Adjustment">
+</div>
+
 **Adjustments** are a catch-all transaction type for manual corrections to either cash or asset balances. Unlike the paired types (Transfer, Cash Transfer, FX Conversion), adjustments are **standalone** — each adjustment is a single, independent row.
 
 ---

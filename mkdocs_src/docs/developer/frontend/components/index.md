@@ -2,18 +2,26 @@
 
 This section documents the reusable UI components in LibreFolio, organized by functional area.
 
-## 📚 Component Library
+## 📚 Component Categories
 
-| Category | Components | Details |
-|----------|-----------|---------|
-| **[UI Base](ui-base/index.md)** | ModalBase, ConfirmModal, Tooltip, ToastContainer, DateRangePicker, DataEditor, and more | Generic building blocks used by all composite components |
-| **[DataTable](data-table.md)** | DataTable, Pagination, Toolbar, ColumnFilter, ModalBase, ConfirmModal | Advanced data grid with sorting, filtering, column management |
-| **[Authentication](auth.md)** | LoginCard, RegisterCard, ForgotPasswordCard, PasswordStrengthMeter | Card-style auth forms with validation |
-| **[Settings](settings.md)** | SettingsLayout, PreferencesTab, ProfileTab, GlobalSettingsTab, AboutTab | Two-column settings with categories |
-| **[File Upload & Media](file-upload.md)** | FileUploader, ImageCropper, ImageEditModal, FileEditModal, AssetPickerModal, LazyImage | Upload, crop, edit, and pick media files |
-| **[Select & Dropdowns](select.md)** | BaseDropdown, SimpleSelect, SearchSelect, CurrencySearchSelect, FxProviderSelect, BrokerSearchSelect | Keyboard-navigable dropdowns with search |
-| **[Live Ticker](live-ticker.md)** | LiveTicker | Real-time asset price badges with polling, dynamic colors, and non-blocking loading |
-| **[Brokers](brokers/index.md)** | BrokerCard, BrokerForm, BrokerIcon, BrokerModal, BrokerSharingModal, CashBalanceCard | Broker CRUD, sharing, cash management |
+The library is split into two architectural layers: **Core UI** (generic atoms and molecules) and **Features** (domain-specific components).
+
+### Core UI
+| Component | Details |
+|-----------|---------|
+| **[Atoms & Modals](core-ui/index.md)** | `ModalBase`, `ConfirmModal`, `Tooltip`, `ToastContainer`, `DateRangePicker`, `DataEditor`, `Button`, etc. Generic building blocks. |
+| **[DataTable](core-ui/data-table.md)** | Advanced data grid with sorting, filtering, and column management. |
+| **[File Upload & Media](core-ui/file-upload.md)** | `FileUploader`, `ImageCropper`, `ImageEditModal`, `AssetPickerModal`, `LazyImage`. |
+| **[Select & Dropdowns](core-ui/select.md)** | `BaseDropdown`, `SimpleSelect`, `SearchSelect` with keyboard navigation. |
+
+### Features (Domain)
+| Component | Details |
+|-----------|---------|
+| **[Transaction Form](features/transaction-form.md)** | Complex modal for creating/editing transactions with reactive auto-calculation and live WAC preview. |
+| **[Brokers](features/brokers/index.md)** | `BrokerCard`, `BrokerForm`, `BrokerModal`, `CashBalanceCard`, and Broker Sharing. |
+| **[Settings](features/settings.md)** | `SettingsLayout`, `PreferencesTab`, `GlobalSettingsTab`. |
+| **[Authentication](features/auth.md)** | `LoginCard`, `RegisterCard`, `ForgotPasswordCard`. |
+| **[Live Ticker](features/live-ticker.md)** | Real-time asset price badges with polling and dynamic colors. |
 
 ## 📏 Component Guidelines
 

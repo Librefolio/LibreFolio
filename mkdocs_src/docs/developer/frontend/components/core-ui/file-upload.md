@@ -6,18 +6,18 @@
 
 Comprehensive file upload system with image editing, asset picking, and multi-file support.
 
-<div style="display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0 2rem 0;">
-    <div class="screenshot-container" style="flex: 1; min-width: 300px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-        <img class="gallery-img" data-category="files" data-name="static-tab" alt="Static Files Tab" style="width: 100%; display: block;">
-    </div>
-    <div class="screenshot-container" style="flex: 1; min-width: 300px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-        <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View" style="width: 100%; display: block;">
-    </div>
+<div class="lf-screenshot-carousel" data-carousel="file-upload-main" data-carousel-interval="3000" data-show-titles="true">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="files" data-name="static-tab" data-title="Static Files Tab">
+    <img class="gallery-img lf-screenshot-carousel-item" data-category="files" data-name="static-grid" data-title="Static Files Grid View">
 </div>
 
 ## 🧱 Components
 
 ### ⬆️ FileUploader (`ui/media/FileUploader.svelte`)
+
+<div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 600px;">
+    <img class="gallery-img" data-category="media" data-name="file-uploader-empty" alt="File Uploader" style="width: 100%; display: block;">
+</div>
 
 Multi-file uploader with:
 
@@ -81,30 +81,37 @@ Used for: broker icons, user avatars, and any image URL field.
 
 ### 📸 ImagePickerWrapper (`ui/media/ImagePickerWrapper.svelte`)
 
+*(This component is an invisible logic wrapper and has no UI of its own)*
 Wraps the full AssetPicker → ImageEdit flow:
 
 - Opens AssetPickerModal
 - If upload selected → opens ImageEditModal
 - Returns final URL to parent
 
-### 📁 FileGrid (`ui/media/FileGrid.svelte`)
+### 📁 FileGrid (`files/FileGrid.svelte`)
+
+<div class="screenshot-container" style="margin: 1rem 0 2rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 600px;">
+    <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View" style="width: 100%; display: block;">
+</div>
 
 Shared grid view component used in both `/files` page and AssetPickerModal.
 
 ## 📂 Files
 
 ```
-frontend/src/lib/components/ui/media/
-├── AssetPickerModal.svelte
-├── FileEditModal.svelte
-├── FileGrid.svelte
-├── FileUploader.svelte
-├── ImageCropper.svelte
-├── ImageEditModal.svelte
-├── ImagePickerWrapper.svelte
-├── ImageUploader.svelte
-├── LazyImage.svelte
-└── index.ts
+frontend/src/lib/components/
+├── files/
+│   └── FileGrid.svelte
+└── ui/media/
+    ├── AssetPickerModal.svelte
+    ├── FileEditModal.svelte
+    ├── FileUploader.svelte
+    ├── ImageCropper.svelte
+    ├── ImageEditModal.svelte
+    ├── ImagePickerWrapper.svelte
+    ├── ImageUploader.svelte
+    ├── LazyImage.svelte
+    └── index.ts
 ```
 
 ## Backend Support

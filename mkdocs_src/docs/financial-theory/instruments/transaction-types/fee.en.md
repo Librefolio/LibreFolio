@@ -1,4 +1,4 @@
-# ![](../../../static/icons/transactions/fee.png){: width="32" style="vertical-align: middle;" } Fee & Tax
+# ![](../../../static/icons/transactions/fee.png){: width="32" style="vertical-align: middle;" } Fee & Tax ![](../../../static/icons/transactions/tax.png){: width="32" style="vertical-align: middle;" }
 
 **Fees** and **taxes** represent costs that reduce your portfolio value. They are separate transaction types to distinguish between broker-charged costs and government-imposed obligations.
 

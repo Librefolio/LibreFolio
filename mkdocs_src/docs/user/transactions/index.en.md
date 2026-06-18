@@ -37,6 +37,7 @@ Click **+ New Transaction** to open the [Transaction Form](form.md). You can:
 ## ✏️ Editing & Deleting
 
 - Click any row to **open the form** pre-filled with that transaction's data.
+- **Right-click** any row to open the **Context Menu** for quick actions (Edit, Delete, Split, etc.).
 - Click the **trash icon** (:material-delete:) to delete a transaction.
 - Select multiple rows with the **checkbox** column, then use the toolbar to **bulk delete**.
 

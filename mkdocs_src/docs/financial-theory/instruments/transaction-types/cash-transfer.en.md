@@ -1,5 +1,9 @@
 # ![](../../../static/icons/transactions/cash-transfer.png){: width="32" style="vertical-align: middle;" } Cash Transfer
 
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-cash-transfer" alt="Transaction Form — Cash Transfer">
+</div>
+
 **Cash transfers** (wire transfers / bonifici) move money between broker accounts. The balance decreases at the source and increases at the destination — no assets are involved.
 
 ---

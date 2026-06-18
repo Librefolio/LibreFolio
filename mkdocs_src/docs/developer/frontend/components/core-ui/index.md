@@ -1,4 +1,4 @@
-# 🧱 UI Base Components
+# 🧱 Core UI Components
 
 Generic, reusable components in `lib/components/ui/` that serve as building blocks for all composite components.
 

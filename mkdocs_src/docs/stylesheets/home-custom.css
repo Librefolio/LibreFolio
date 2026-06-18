@@ -517,16 +517,24 @@
     transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease;
 }
 
-.deep-dive-image img:hover {
+.deep-dive-image img:not(.lf-screenshot-carousel-item):hover {
     transform: scale(1.03);
     box-shadow: 0 30px 60px rgba(0, 0, 0, 0.25);
+}
+
+.deep-dive-image .lf-screenshot-carousel {
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.deep-dive-image .lf-screenshot-carousel:hover {
+    transform: scale(1.03);
 }
 
 [data-md-color-scheme="slate"] .deep-dive-image img {
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
 }
 
-[data-md-color-scheme="slate"] .deep-dive-image img:hover {
+[data-md-color-scheme="slate"] .deep-dive-image img:not(.lf-screenshot-carousel-item):hover {
     box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
 }
 
@@ -1156,40 +1164,147 @@
 /* --- Screenshot Carousel --- */
 
 .lf-screenshot-carousel {
-  position: relative;
+  display: grid;
   width: 100%;
-  aspect-ratio: 16 / 9;
   overflow: hidden;
+  position: relative;
   border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-  background-color: var(--md-default-bg-color);
-  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease;
-}
-
-.lf-screenshot-carousel:hover {
-  transform: scale(1.03);
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.25);
-}
-
-[data-md-color-scheme="slate"] .lf-screenshot-carousel:hover {
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+  background-color: transparent;
+  padding: 10px 0;
 }
 
 .lf-screenshot-carousel-item {
+  grid-area: 1 / 1;
+  width: auto !important;
+  height: auto !important;
+  max-width: 65%;
+  max-height: 65vh;
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  transition: transform 2s cubic-bezier(0.25, 1, 0.5, 1), opacity 2s ease, filter 2s ease !important;
+  will-change: transform, opacity, filter;
+  cursor: default;
+}
+
+/* Cover Flow States */
+.lf-screenshot-carousel-item.is-active {
+  transform: translateX(0) scale(1);
+  opacity: 1;
+  z-index: 10;
+  filter: none;
+}
+
+.lf-screenshot-carousel-item.is-prev {
+  transform: translateX(-95%) scale(0.85);
+  opacity: 0.6;
+  z-index: 5;
+  filter: brightness(0.6) contrast(0.9);
+  cursor: pointer;
+}
+
+.lf-screenshot-carousel-item.is-next {
+  transform: translateX(95%) scale(0.85);
+  opacity: 0.6;
+  z-index: 5;
+  filter: brightness(0.6) contrast(0.9);
+  cursor: pointer;
+}
+
+.lf-screenshot-carousel-item.is-hidden {
+  transform: translateX(0) scale(0.6);
+  opacity: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.lf-screenshot-carousel-item.is-prev:hover,
+.lf-screenshot-carousel-item.is-next:hover {
+  opacity: 0.85;
+  filter: brightness(0.8) contrast(0.95);
+}
+
+/* Arrows */
+.lf-screenshot-carousel-arrow {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 2s cubic-bezier(0.25, 1, 0.5, 1) !important;
-  will-change: transform;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.6);
+  color: white;
+  border: none;
+  cursor: pointer;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, background 0.3s ease, visibility 0.3s;
+}
+
+.lf-screenshot-carousel-arrow:hover {
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.lf-screenshot-carousel-arrow svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+.lf-screenshot-carousel-arrow.prev {
+  left: 1rem;
+}
+
+.lf-screenshot-carousel-arrow.next {
+  right: 1rem;
+}
+
+.lf-screenshot-carousel:hover .lf-screenshot-carousel-arrow {
+  opacity: 1;
+  visibility: visible;
+}
+
+.lf-screenshot-carousel-title {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.85);
+  color: white;
+  padding: 0.5rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
+  white-space: nowrap;
+}
+
+.lf-screenshot-carousel:hover .lf-screenshot-carousel-title {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
 }
 
 .lf-screenshot-carousel-dots {
   position: absolute;
   left: 50%;
   bottom: 0.75rem;
-  z-index: 5;
+  z-index: 20;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;

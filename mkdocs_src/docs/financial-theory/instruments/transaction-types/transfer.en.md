@@ -1,5 +1,9 @@
 # ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Asset Transfer
 
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Transaction Form — TRANSFER">
+</div>
+
 **Asset transfers** move securities between broker accounts **without a sale**. The position leaves one broker and arrives at another — no cash changes hands, and in most jurisdictions this is not a taxable event.
 
 ---

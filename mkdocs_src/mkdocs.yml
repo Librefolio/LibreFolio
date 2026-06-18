@@ -5,6 +5,7 @@ repo_name: Librefolio/LibreFolio
 
 theme:
   name: material
+  custom_dir: overrides
   palette:
     # Light mode
     - media: "(prefers-color-scheme: light)"
@@ -70,28 +71,29 @@ plugins:
           name: Italiano
           build: true
           nav_translations:
+
             Home: Home
             FAQ: FAQ
-            User Manual: Manuale Utente
+            "📘 User Manual": "📘 Manuale Utente"
             Overview: Panoramica
             Getting Started: Per Iniziare
             Installation (Docker): Installazione (Docker)
             Install as App (PWA): Installa come App (PWA)
-            Brokers: Broker
+            "🏦 Brokers": "🏦 Broker"
             Broker Sharing: Condivisione Broker
-            Files: File
-            FX Rates: Tassi di Cambio
+            "📁 Files": "📁 File"
+            "💱 FX Rates": "💱 Tassi di Cambio"
             Adding a Pair: Aggiungere una Coppia
             Synchronization: Sincronizzazione
-            Pair Detail: Dettaglio Coppia
+            "🔎 Pair Detail": "🔎 Dettaglio Coppia"
             Interactive Chart: Grafico Interattivo
             Signals: Segnali
             Measures: Misure
             Data Editor: Editor Dati
             Provider Config: Configurazione Provider
             Chart Settings: Impostazioni Grafico
-            Assets: Asset
-            Providers: Provider
+            "📈 Assets": "📈 Asset"
+            "🔌 Providers": "🔌 Provider"
             Yahoo Finance: Yahoo Finance
             justETF: justETF
             CSS Scraper: CSS Scraper
@@ -109,11 +111,11 @@ plugins:
             "WAC & Cost Basis": "WAC & Cost Basis"
             "Split & Promote": "Split & Promote"
             Balance Validation: Balance Validation
-            Misc: Varie
+            "🧩 Misc": "🧩 Varie"
             Image Crop: Ritaglio Immagine
-            Transactions: Transazioni
+            "💸 Transactions": "💸 Transazioni"
             Transaction Form: Modulo Transazione
-            Import from Broker: Importa da Broker
+            "📥 Import from Broker": "📥 Importa da Broker"
             Interactive Brokers (IBKR): Interactive Brokers (IBKR)
             Degiro: Degiro
             eToro: eToro
@@ -125,24 +127,23 @@ plugins:
             Finpension: Finpension
             Trading212: Trading212
             Generic CSV: CSV Generico
-            Dashboard: Dashboard
-            Settings: Impostazioni
-            Admin Manual: Manuale Admin
+            "📊 Dashboard": "📊 Dashboard"
+            "⚙️ Settings": "⚙️ Impostazioni"
+            "🛠️ Admin Manual": "🛠️ Manuale Admin"
             CLI Tools: Strumenti CLI
             Global Settings: Impostazioni Globali
             Filesystem Structure: Struttura Filesystem
             Advanced Docker: Docker Avanzato
             Exposing with Tailscale: Esporre con Tailscale
-            Financial Theory: Teoria Finanziaria
-            Asset Types: Tipi di Asset
-            Transaction Types: Tipi di Transazione
-            Asset Events: Eventi Asset
-            Dividend: Dividendo
-            Interest: Interesse
+            "📚 Financial Theory": "📚 Teoria Finanziaria"
+            "🏷️ Asset Types": "🏷️ Tipi di Asset"
+            "🔄 Transaction Types": "🔄 Tipi di Transazione"
+            "📅 Asset Events": "📅 Eventi Asset"
+            "Dividend & Interest": "Dividendo & Interesse"
             Split: Frazionamento
             Price Adjustment: Rettifica Prezzo
             Maturity Settlement: Rimborso a Scadenza
-            Instruments: Strumenti
+            "🗃️ Instruments": "🗃️ Strumenti"
             Stocks: Azioni
             ETFs: ETF
             Bonds: Obbligazioni
@@ -160,65 +161,66 @@ plugins:
             FX Conversion: Cambio Valuta
             Adjustment: Rettifica
             Single: Singole
-            Composite: Composite
-            Technical Analysis: Analisi Tecnica
-            Indicators: Indicatori
+            "🔢 Composite": "🔢 Composite"
+            "📉 Technical Analysis": "📉 Analisi Tecnica"
+            "📐 Indicators": "📐 Indicatori"
             EMA: EMA
             MACD: MACD
             RSI: RSI
             Bollinger Bands: Bande di Bollinger
-            Synthetic Benchmarks: Benchmark Sintetici
+            "🧪 Synthetic Benchmarks": "🧪 Benchmark Sintetici"
             Linear Growth: Crescita Lineare
             Compound Growth: Crescita Composta
             Sine Wave: Onda Sinusoidale
-            Performance Metrics: Metriche di Performance
-            Fundamentals: Fondamenti
+            "🏆 Performance Metrics": "🏆 Metriche di Performance"
+            "📖 Fundamentals": "📖 Fondamenti"
             Day Count Conventions: Convenzioni di Conteggio Giorni
             "Returns & Growth Rates": "Rendimenti & Tassi di Crescita"
             "Taxation & Tax Efficiency": "Tassazione & Efficienza Fiscale"
-            Portfolio Theory: Teoria del Portafoglio
+            "🧮 Portfolio Theory": "🧮 Teoria del Portafoglio"
             Diversification: Diversificazione
             Asset Allocation: Allocazione degli Asset
-            Risk Metrics: Metriche di Rischio
+            "⚠️ Risk Metrics": "⚠️ Metriche di Rischio"
             Sharpe Ratio: Indice di Sharpe
             Sortino Ratio: Indice di Sortino
             Max Drawdown: Massimo Drawdown
             Volatility: Volatilità
             Weighted Average Cost: Costo Medio Ponderato
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
-            Gallery: Galleria
+            "🖼️ Gallery": "🖼️ Galleria"
             Desktop: Desktop
             Mobile: Mobile
             POC UX: POC UX
-            Community: Comunità
+            "❤️ Community": "❤️ Comunità"
             "Support the Project": "Supporta il Progetto"
             "Credits & Legal": "Crediti & Note Legali"
         - locale: fr
           name: Français
           build: true
           nav_translations:
+
             Home: Accueil
             FAQ: FAQ
-            User Manual: Manuel Utilisateur
+            "📘 User Manual": "📘 Manuel Utilisateur"
             Overview: Aperçu
             Getting Started: Premiers Pas
             Installation (Docker): Installation (Docker)
             Install as App (PWA): Installer comme App (PWA)
-            Brokers: Courtiers
+            "🏦 Brokers": "🏦 Courtiers"
             Broker Sharing: Partage de Courtier
-            Files: Fichiers
-            FX Rates: Taux de Change
+            "📁 Files": "📁 Fichiers"
+            "💱 FX Rates": "💱 Taux de Change"
             Adding a Pair: Ajouter une Paire
             Synchronization: Synchronisation
-            Pair Detail: Détail de la Paire
+            "🔎 Pair Detail": "🔎 Détail de la Paire"
             Interactive Chart: Graphique Interactif
             Signals: Signaux
             Measures: Mesures
             Data Editor: Éditeur de Données
             Provider Config: Configuration du Fournisseur
             Chart Settings: Paramètres du Graphique
-            Assets: Actifs
-            Providers: Fournisseurs
+            "📈 Assets": "📈 Actifs"
+            "🔌 Providers": "🔌 Fournisseurs"
             Yahoo Finance: Yahoo Finance
             justETF: justETF
             CSS Scraper: CSS Scraper
@@ -235,11 +237,11 @@ plugins:
             "WAC & Cost Basis": "WAC & Cost Basis"
             "Split & Promote": "Split & Promote"
             Balance Validation: Balance Validation
-            Misc: Divers
+            "🧩 Misc": "🧩 Divers"
             Image Crop: Recadrage d'Image
-            Transactions: Transactions
+            "💸 Transactions": "💸 Transactions"
             Transaction Form: Formulaire de Transaction
-            Import from Broker: Importer depuis le Courtier
+            "📥 Import from Broker": "📥 Importer depuis le Courtier"
             Interactive Brokers (IBKR): Interactive Brokers (IBKR)
             Degiro: Degiro
             eToro: eToro
@@ -251,25 +253,24 @@ plugins:
             Finpension: Finpension
             Trading212: Trading212
             Generic CSV: CSV Générique
-            Dashboard: Tableau de Bord
-            Settings: Paramètres
+            "📊 Dashboard": "📊 Tableau de Bord"
+            "⚙️ Settings": "⚙️ Paramètres"
             Borsa Italiana: Borsa Italiana
-            Admin Manual: Manuel Admin
+            "🛠️ Admin Manual": "🛠️ Manuel Admin"
             CLI Tools: Outils CLI
             Global Settings: Paramètres Globaux
             Filesystem Structure: Structure du Système de Fichiers
             Advanced Docker: Docker Avancé
             Exposing with Tailscale: Exposer avec Tailscale
-            Financial Theory: Théorie Financière
-            Asset Types: Types d'Actifs
-            Transaction Types: Types de Transactions
-            Asset Events: Événements d'Actifs
-            Dividend: Dividende
-            Interest: Intérêt
+            "📚 Financial Theory": "📚 Théorie Financière"
+            "🏷️ Asset Types": "🏷️ Types d'Actifs"
+            "🔄 Transaction Types": "🔄 Types de Transactions"
+            "📅 Asset Events": "📅 Événements d'Actifs"
+            "Dividend & Interest": "Dividende & Intérêt"
             Split: Fractionnement
             Price Adjustment: Ajustement de Prix
             Maturity Settlement: Règlement à l'Échéance
-            Instruments: Instruments
+            "🗃️ Instruments": "🗃️ Instruments"
             Stocks: Actions
             ETFs: ETF
             Bonds: Obligations
@@ -287,65 +288,66 @@ plugins:
             FX Conversion: Conversion de Devises
             Adjustment: Ajustement
             Single: Simples
-            Composite: Composites
-            Technical Analysis: Analyse Technique
-            Indicators: Indicateurs
+            "🔢 Composite": "🔢 Composites"
+            "📉 Technical Analysis": "📉 Analyse Technique"
+            "📐 Indicators": "📐 Indicateurs"
             EMA: EMA
             MACD: MACD
             RSI: RSI
             Bollinger Bands: Bandes de Bollinger
-            Synthetic Benchmarks: Benchmarks Synthétiques
+            "🧪 Synthetic Benchmarks": "🧪 Benchmarks Synthétiques"
             Linear Growth: Croissance Linéaire
             Compound Growth: Croissance Composée
             Sine Wave: Onde Sinusoïdale
-            Performance Metrics: Métriques de Performance
-            Fundamentals: Fondamentaux
+            "🏆 Performance Metrics": "🏆 Métriques de Performance"
+            "📖 Fundamentals": "📖 Fondamentaux"
             Day Count Conventions: Conventions de Décompte des Jours
             "Returns & Growth Rates": "Rendements & Taux de Croissance"
             "Taxation & Tax Efficiency": "Fiscalité & Efficience Fiscale"
-            Portfolio Theory: Théorie du Portefeuille
+            "🧮 Portfolio Theory": "🧮 Théorie du Portefeuille"
             Diversification: Diversification
             Asset Allocation: Allocation d'Actifs
-            Risk Metrics: Métriques de Risque
+            "⚠️ Risk Metrics": "⚠️ Métriques de Risque"
             Sharpe Ratio: Ratio de Sharpe
             Sortino Ratio: Ratio de Sortino
             Max Drawdown: Drawdown Maximum
             Volatility: Volatilité
             Weighted Average Cost: Coût Moyen Pondéré
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
-            Gallery: Galerie
+            "🖼️ Gallery": "🖼️ Galerie"
             Desktop: Bureau
             Mobile: Mobile
             POC UX: POC UX
-            Community: Communauté
+            "❤️ Community": "❤️ Communauté"
             "Support the Project": "Soutenir le Projet"
             "Credits & Legal": "Crédits & Mentions Légales"
         - locale: es
           name: Español
           build: true
           nav_translations:
+
             Home: Inicio
             FAQ: FAQ
-            User Manual: Manual de Usuario
+            "📘 User Manual": "📘 Manual de Usuario"
             Overview: Resumen
             Getting Started: Primeros Pasos
             Installation (Docker): Instalación (Docker)
             Install as App (PWA): Instalar como App (PWA)
-            Brokers: Brokers
+            "🏦 Brokers": "🏦 Brokers"
             Broker Sharing: Compartir Broker
-            Files: Archivos
-            FX Rates: Tipos de Cambio
+            "📁 Files": "📁 Archivos"
+            "💱 FX Rates": "💱 Tipos de Cambio"
             Adding a Pair: Añadir un Par
             Synchronization: Sincronización
-            Pair Detail: Detalle del Par
+            "🔎 Pair Detail": "🔎 Detalle del Par"
             Interactive Chart: Gráfico Interactivo
             Signals: Señales
             Measures: Medidas
             Data Editor: Editor de Datos
             Provider Config: Configuración del Proveedor
             Chart Settings: Ajustes del Gráfico
-            Assets: Activos
-            Providers: Proveedores
+            "📈 Assets": "📈 Activos"
+            "🔌 Providers": "🔌 Proveedores"
             Yahoo Finance: Yahoo Finance
             justETF: justETF
             CSS Scraper: CSS Scraper
@@ -362,11 +364,11 @@ plugins:
             "WAC & Cost Basis": "WAC & Cost Basis"
             "Split & Promote": "Split & Promote"
             Balance Validation: Balance Validation
-            Misc: Varios
+            "🧩 Misc": "🧩 Varios"
             Image Crop: Recorte de Imagen
-            Transactions: Transacciones
+            "💸 Transactions": "💸 Transacciones"
             Transaction Form: Formulario de Transacción
-            Import from Broker: Importar desde el Bróker
+            "📥 Import from Broker": "📥 Importar desde el Bróker"
             Interactive Brokers (IBKR): Interactive Brokers (IBKR)
             Degiro: Degiro
             eToro: eToro
@@ -378,25 +380,24 @@ plugins:
             Finpension: Finpension
             Trading212: Trading212
             Generic CSV: CSV Genérico
-            Dashboard: Panel Principal
-            Settings: Configuración
+            "📊 Dashboard": "📊 Panel Principal"
+            "⚙️ Settings": "⚙️ Configuración"
             Borsa Italiana: Borsa Italiana
-            Admin Manual: Manual de Admin
+            "🛠️ Admin Manual": "🛠️ Manual de Admin"
             CLI Tools: Herramientas CLI
             Global Settings: Configuración Global
             Filesystem Structure: Estructura del Sistema de Archivos
             Advanced Docker: Docker Avanzado
             Exposing with Tailscale: Exponer con Tailscale
-            Financial Theory: Teoría Financiera
-            Asset Types: Tipos de Activos
-            Transaction Types: Tipos de Transacciones
-            Asset Events: Eventos de Activos
-            Dividend: Dividendo
-            Interest: Interés
+            "📚 Financial Theory": "📚 Teoría Financiera"
+            "🏷️ Asset Types": "🏷️ Tipos de Activos"
+            "🔄 Transaction Types": "🔄 Tipos de Transacciones"
+            "📅 Asset Events": "📅 Eventos de Activos"
+            "Dividend & Interest": "Dividendo & Interés"
             Split: Desdoblamiento
             Price Adjustment: Ajuste de Precio
             Maturity Settlement: Liquidación al Vencimiento
-            Instruments: Instrumentos
+            "🗃️ Instruments": "🗃️ Instrumentos"
             Stocks: Acciones
             ETFs: ETF
             Bonds: Bonos
@@ -414,41 +415,43 @@ plugins:
             FX Conversion: Conversión de Divisas
             Adjustment: Ajuste
             Single: Individuales
-            Composite: Compuestas
-            Technical Analysis: Análisis Técnico
-            Indicators: Indicadores
+            "🔢 Composite": "🔢 Compuestas"
+            "📉 Technical Analysis": "📉 Análisis Técnico"
+            "📐 Indicators": "📐 Indicadores"
             EMA: EMA
             MACD: MACD
             RSI: RSI
             Bollinger Bands: Bandas de Bollinger
-            Synthetic Benchmarks: Benchmarks Sintéticos
+            "🧪 Synthetic Benchmarks": "🧪 Benchmarks Sintéticos"
             Linear Growth: Crecimiento Lineal
             Compound Growth: Crecimiento Compuesto
             Sine Wave: Onda Sinusoidal
-            Performance Metrics: Métricas de Rendimiento
-            Fundamentals: Fundamentos
+            "🏆 Performance Metrics": "🏆 Métricas de Rendimiento"
+            "📖 Fundamentals": "📖 Fundamentos"
             Day Count Conventions: Convenciones de Conteo de Días
             "Returns & Growth Rates": "Rendimientos & Tasas de Crecimiento"
             "Taxation & Tax Efficiency": "Fiscalidad & Eficiencia Fiscal"
-            Portfolio Theory: Teoría del Portafolio
+            "🧮 Portfolio Theory": "🧮 Teoría del Portafolio"
             Diversification: Diversificación
             Asset Allocation: Asignación de Activos
-            Risk Metrics: Métricas de Riesgo
+            "⚠️ Risk Metrics": "⚠️ Métricas de Riesgo"
             Sharpe Ratio: Ratio de Sharpe
             Sortino Ratio: Ratio de Sortino
             Max Drawdown: Drawdown Máximo
             Volatility: Volatilidad
             Weighted Average Cost: Coste Medio Ponderado
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
-            Gallery: Galería
+            "🖼️ Gallery": "🖼️ Galería"
             Desktop: Escritorio
             Mobile: Móvil
             POC UX: POC UX
-            Community: Comunidad
+            "❤️ Community": "❤️ Comunidad"
             "Support the Project": "Apoyar el Proyecto"
             "Credits & Legal": "Créditos & Aviso Legal"
 
 extra_javascript:
+  # Mermaid customization (must be loaded as module)
+  - javascripts/mermaid.mjs
   # MathJax configuration (must load before MathJax)
   - javascripts/mathjax.js
   # Library loader with local cache + CDN fallback
@@ -466,20 +469,20 @@ extra_javascript:
 
 nav:
   - Home: index.md
-  - User Manual:
+  - 📘 User Manual:
       - Overview: user/index.md
       - Getting Started: user/getting-started.md
       - Installation (Docker): user/installation.md
       - Install as App (PWA): user/pwa.md
-      - Dashboard:
+      - 📊 Dashboard:
           - Overview: user/dashboard/index.md
-      - Brokers:
+      - 🏦 Brokers:
           - Overview: user/brokers/index.md
           - Broker Sharing: user/brokers/sharing.md
-      - Transactions:
+      - 💸 Transactions:
           - Overview: user/transactions/index.md
           - Transaction Form: user/transactions/form.md
-          - Import from Broker:
+          - 📥 Import from Broker:
               - Overview: user/transactions/import/index.md
               - Interactive Brokers (IBKR): user/transactions/import/ibkr.md
               - Degiro: user/transactions/import/degiro.md
@@ -492,10 +495,10 @@ nav:
               - Finpension: user/transactions/import/finpension.md
               - Trading212: user/transactions/import/trading212.md
               - Generic CSV: user/transactions/import/generic-csv.md
-      - Assets:
+      - 📈 Assets:
           - Overview: user/assets/index.md
           - Create & Edit: user/assets/create-edit.md
-          - Asset Detail:
+          - 🔎 Asset Detail:
               - Overview: user/assets/detail/index.md
               - Interactive Chart: user/assets/detail/chart.md
               - Signals: user/assets/detail/signals.md
@@ -503,18 +506,18 @@ nav:
               - Classification: user/assets/detail/classification.md
               - Data Editor: user/assets/detail/data-editor.md
               - Events: user/assets/detail/events.md
-          - Providers:
+          - 🔌 Providers:
               - Overview: user/assets/providers/index.md
               - Yahoo Finance: user/assets/providers/yahoo-finance.md
               - justETF: user/assets/providers/justetf.md
               - CSS Scraper: user/assets/providers/css-scraper.md
               - Scheduled Investment: user/assets/providers/scheduled-investment.md
               - Borsa Italiana: user/assets/providers/borsa-italiana.md
-      - FX Rates:
+      - 💱 FX Rates:
           - Overview: user/fx/index.md
           - Adding a Pair: user/fx/add-pair.md
           - Synchronization: user/fx/sync.md
-          - Pair Detail:
+          - 🔎 Pair Detail:
               - Overview: user/fx/detail/index.md
               - Interactive Chart: user/fx/detail/chart.md
               - Signals: user/fx/detail/signals.md
@@ -522,37 +525,36 @@ nav:
               - Data Editor: user/fx/detail/data-editor.md
               - Provider Config: user/fx/detail/provider.md
           - Chart Settings: user/fx/chart-settings.md
-      - Files:
+      - 📁 Files:
           - Overview: user/files/index.md
-      - Settings:
+      - ⚙️ Settings:
           - Overview: user/settings/index.md
-      - Misc:
+      - 🧩 Misc:
           - Image Crop: user/misc/image-crop.md
-  - Admin Manual:
+  - 🛠️ Admin Manual:
       - Overview: admin/index.md
       - CLI Tools: admin/cli_tools.md
       - Global Settings: admin/settings.md
       - Filesystem Structure: admin/filesystem.md
       - Advanced Docker: admin/docker_advanced.md
       - Exposing with Tailscale: admin/tailscale_exposure.md
-  - Financial Theory:
+  - 📚 Financial Theory:
       - Overview: financial-theory/index.md
-      - Instruments:
+      - 🗃️ Instruments:
           - Overview: financial-theory/instruments/index.md
-          - Transaction Types:
+          - 🔄 Transaction Types:
               - Overview: financial-theory/instruments/transaction-types/index.md
-              - Single:
+              - 1️⃣ Single:
                   - Buy & Sell: financial-theory/instruments/transaction-types/buy-sell.md
                   - Deposit & Withdrawal: financial-theory/instruments/transaction-types/deposit-withdrawal.md
-                  - Dividend: financial-theory/instruments/transaction-types/dividend.md
+                  - Dividend & Interest: financial-theory/instruments/transaction-types/dividend-interest.md
                   - Fee & Tax: financial-theory/instruments/transaction-types/fee.md
-                  - Interest: financial-theory/instruments/transaction-types/interest.md
                   - Adjustment: financial-theory/instruments/transaction-types/adjustment.md
-              - Composite:
+              - 🔢 Composite:
                   - Asset Transfer: financial-theory/instruments/transaction-types/transfer.md
                   - Cash Transfer: financial-theory/instruments/transaction-types/cash-transfer.md
                   - FX Conversion: financial-theory/instruments/transaction-types/fx-conversion.md
-          - Asset Types:
+          - 🏷️ Asset Types:
               - Overview: financial-theory/instruments/asset-types/index.md
               - Stocks: financial-theory/instruments/asset-types/stocks.md
               - ETFs: financial-theory/instruments/asset-types/etfs.md
@@ -563,89 +565,89 @@ nav:
               - Commodities: financial-theory/instruments/asset-types/commodities.md
               - Index & Benchmark: financial-theory/instruments/asset-types/index-benchmark.md
               - Other: financial-theory/instruments/asset-types/other.md
-          - Asset Events:
+          - 📅 Asset Events:
               - Overview: financial-theory/instruments/asset-events/index.md
               - Dividend: financial-theory/instruments/asset-events/dividend.md
               - Interest: financial-theory/instruments/asset-events/interest.md
               - Split: financial-theory/instruments/asset-events/split.md
               - Price Adjustment: financial-theory/instruments/asset-events/price-adjustment.md
               - Maturity Settlement: financial-theory/instruments/asset-events/maturity-settlement.md
-      - Technical Analysis:
+      - 📉 Technical Analysis:
           - Overview: financial-theory/technical-analysis/index.md
-          - Indicators:
+          - 📐 Indicators:
               - Overview: financial-theory/technical-analysis/indicators/index.md
               - EMA: financial-theory/technical-analysis/indicators/ema.md
               - MACD: financial-theory/technical-analysis/indicators/macd.md
               - RSI: financial-theory/technical-analysis/indicators/rsi.md
               - Bollinger Bands: financial-theory/technical-analysis/indicators/bollinger-bands.md
-          - Synthetic Benchmarks:
+          - 🧪 Synthetic Benchmarks:
               - Overview: financial-theory/technical-analysis/synthetic-benchmarks/index.md
               - Linear Growth: financial-theory/technical-analysis/synthetic-benchmarks/linear.md
               - Compound Growth: financial-theory/technical-analysis/synthetic-benchmarks/compound.md
               - Sine Wave: financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md
-          - Performance Metrics:
+          - 🏆 Performance Metrics:
               - Overview: financial-theory/technical-analysis/performance-metrics/index.md
               - ROI: financial-theory/technical-analysis/performance-metrics/roi.md
               - TWRR: financial-theory/technical-analysis/performance-metrics/twrr.md
               - MWRR: financial-theory/technical-analysis/performance-metrics/mwrr.md
               - Weighted Average Cost: financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md
-          - Risk Metrics:
+          - ⚠️ Risk Metrics:
               - Overview: financial-theory/technical-analysis/risk-metrics/index.md
               - Sharpe Ratio: financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md
               - Sortino Ratio: financial-theory/technical-analysis/risk-metrics/sortino-ratio.md
               - Max Drawdown: financial-theory/technical-analysis/risk-metrics/max-drawdown.md
               - Volatility: financial-theory/technical-analysis/risk-metrics/volatility.md
-      - Fundamentals:
+      - 📖 Fundamentals:
           - Overview: financial-theory/fundamentals/index.md
           - Day Count Conventions: financial-theory/fundamentals/day-count.md
           - Returns & Growth Rates: financial-theory/fundamentals/returns.md
           - Taxation & Tax Efficiency: financial-theory/fundamentals/taxation.md
-      - Portfolio Theory:
+      - 🧮 Portfolio Theory:
           - Overview: financial-theory/portfolio-theory/index.md
           - Diversification: financial-theory/portfolio-theory/diversification.md
           - Asset Allocation: financial-theory/portfolio-theory/asset-allocation.md
-  - Developer Manual:
+  - 💻 Developer Manual:
       - System Overview: developer/index.md
       - Dev Installation: developer/dev-installation.md
-      - Architecture:
+      - 🏛️ Architecture:
           - System Overview: developer/architecture/overview.md
-          - Technologies & Patterns:
+          - 🧩 Technologies & Patterns:
               - Async Architecture: developer/architecture/patterns/async.md
-              - Registry & Plugin System:
+              - 🔌 Registry & Plugin System:
                   - Overview: developer/architecture/patterns/registry_pattern.md
                   - BRIM Plugin Guide: developer/architecture/patterns/brim_plugin_guide.md
                   - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
                   - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
               - Database Migrations (Alembic): developer/architecture/patterns/alembic.md
               - Configuration: developer/architecture/patterns/configuration.md
-          - Core Systems:
+          - ⚙️ Core Systems:
               - Security & Authentication: developer/architecture/security.md
               - Users & Roles: developer/architecture/users_and_brokers.md
               - Access Control (RBAC): developer/architecture/access_control.md
               - Settings System: developer/architecture/settings.md
-          - Database Schema:
+          - 🗄️ Database Schema:
               - Overview: developer/architecture/database/index.md
               - Users & Access: developer/architecture/database/users_access.md
               - Brokers & Transactions: developer/architecture/database/brokers_transactions.md
               - Assets & Pricing: developer/architecture/database/assets_pricing.md
               - FX Rates & Routes: developer/architecture/database/fx_rates.md
-      - API & Communication:
+      - 📡 API & Communication:
           - Overview: developer/api/overview.md
           - Reference: developer/api/index.md
           - cURL Testing: developer/api/curl-testing.md
-      - Backend Development:
-          - "Transactions (User Data)":
+      - 🐍 Backend Development:
+          - "💸 Transactions (User Data)":
               - Service Architecture: developer/backend/transactions/service.md
               - "WAC & Cost Basis": developer/backend/transactions/wac.md
               - "Split & Promote": developer/backend/transactions/split_promote.md
               - Balance Validation: developer/backend/transactions/balance_validation.md
-              - Import (BRIM):
+              - 📥 Import (BRIM):
                   - Architecture: developer/backend/brim/architecture.md
                   - Generic CSV Provider: developer/backend/brim/generic_csv.md
                   - Providers List: developer/backend/brim/providers_list.md
-          - Assets (Pricing):
+          - "📈 Assets (Pricing)":
               - Architecture: developer/backend/assets/architecture.md
-              - Providers:
+              - 🔌 Providers:
                   - Overview Providers: developer/backend/assets/system_providers.md
                   - Yahoo Finance Tech: developer/backend/assets/provider_yahoo_finance.md
                   - justETF Tech: developer/backend/assets/provider_justetf.md
@@ -653,41 +655,50 @@ nav:
                   - Scheduled Investment Tech: developer/backend/assets/provider_scheduled_investment.md
                   - Borsa Italiana Tech: developer/backend/assets/provider_borsa_italiana.md
               - Events: developer/backend/assets/events.md
-          - FX (Currency):
+          - "💱 FX (Currency)":
               - Architecture: developer/backend/fx/architecture.md
               - Configuration & Routing: developer/backend/fx/configuration.md
               - Providers List: developer/backend/fx/providers_list.md
-      - Frontend Development:
+      - 🎨 Frontend Development:
           - Overview: developer/frontend/index.md
-          - Components:
-              - Overview: developer/frontend/components/index.md
-              - UI Base:
-                  - Overview: developer/frontend/components/ui-base/index.md
-                  - Modals: developer/frontend/components/ui-base/modals.md
-                  - Feedback: developer/frontend/components/ui-base/feedback.md
-                  - Date Pickers: developer/frontend/components/ui-base/datePickers.md
-                  - Atoms: developer/frontend/components/ui-base/atoms.md
-                  - Datapoint Editor: developer/frontend/components/ui-base/data-editor.md
-              - DataTable: developer/frontend/components/data-table.md
-              - Authentication: developer/frontend/components/auth.md
-              - Settings: developer/frontend/components/settings.md
-              - File Upload & Media: developer/frontend/components/file-upload.md
-              - Select & Dropdowns: developer/frontend/components/select.md
-              - Live Ticker: developer/frontend/components/live-ticker.md
-              - Brokers:
-                  - Overview: developer/frontend/components/brokers/index.md
-                  - Cards: developer/frontend/components/brokers/cards.md
-                  - Forms: developer/frontend/components/brokers/forms.md
-                  - Modals: developer/frontend/components/brokers/modals.md
-          - FX Chain Algorithm: developer/frontend/fx-chain-algorithm.md
-          - Pages: developer/frontend/pages/index.md
-          - State Management: developer/frontend/state/index.md
-          - Internationalization: developer/frontend/i18n.md
-          - Styling: developer/frontend/styling.md
-          - PWA & Mobile: developer/frontend/pwa.md
-      - Test Walkthrough:
+          - "🧠 Core Architecture & State":
+              - 🗃️ Store Client System:
+                  - Overview: developer/frontend/state/index.md
+                  - App & UI State: developer/frontend/state/app-state.md
+                  - Reference State: developer/frontend/state/reference-state.md
+                  - Domain State: developer/frontend/state/domain-state.md
+                  - Registries & Caches: developer/frontend/state/registries.md
+                  - Core Infrastructure: developer/frontend/state/core-infrastructure.md
+              - FX Chain Algorithm: developer/frontend/fx-chain-algorithm.md
+          - "🗺️ Routing & Pages":
+              - Pages: developer/frontend/pages/index.md
+          - "🎨 Design System & UI":
+              - Styling: developer/frontend/styling.md
+              - 🧩 Components:
+                  - Overview: developer/frontend/components/index.md
+                  - Modals: developer/frontend/components/core-ui/modals.md
+                  - Feedback: developer/frontend/components/core-ui/feedback.md
+                  - Date Pickers: developer/frontend/components/core-ui/datePickers.md
+                  - Atoms: developer/frontend/components/core-ui/atoms.md
+                  - Datapoint Editor: developer/frontend/components/core-ui/data-editor.md
+                  - DataTable: developer/frontend/components/core-ui/data-table.md
+                  - File Upload & Media: developer/frontend/components/core-ui/file-upload.md
+                  - Select & Dropdowns: developer/frontend/components/core-ui/select.md
+                  - Transaction Form: developer/frontend/components/features/transaction-form.md
+                  - Authentication: developer/frontend/components/features/auth.md
+                  - Settings: developer/frontend/components/features/settings.md
+                  - Live Ticker: developer/frontend/components/features/live-ticker.md
+                  - 🏦 Brokers:
+                      - Overview: developer/frontend/components/features/brokers/index.md
+                      - Cards: developer/frontend/components/features/brokers/cards.md
+                      - Forms: developer/frontend/components/features/brokers/forms.md
+                      - Modals: developer/frontend/components/features/brokers/modals.md
+          - "⚙️ App Configuration":
+              - Internationalization: developer/frontend/i18n.md
+              - PWA & Mobile: developer/frontend/pwa.md
+      - 🧪 Test Walkthrough:
           - Overview: developer/test-walkthrough/index.md
-          - Backend Tests:
+          - 🐍 Backend Tests:
               - External: developer/test-walkthrough/external.md
               - Database: developer/test-walkthrough/db.md
               - Services: developer/test-walkthrough/services.md
@@ -695,22 +706,22 @@ nav:
               - Schemas: developer/test-walkthrough/schemas.md
               - API: developer/test-walkthrough/api.md
               - E2E: developer/test-walkthrough/e2e.md
-          - Frontend Tests (Playwright):
+          - 🎭 Frontend Tests (Playwright):
               - Overview: developer/test-walkthrough/front-overview.md
               - Front-Utility: developer/test-walkthrough/front-utility.md
               - Front-User: developer/test-walkthrough/front-user.md
               - Front-FX: developer/test-walkthrough/front-fx.md
-      - Documentation:
+      - 📝 Documentation:
           - Translation Pipeline: developer/docs/translation-pipeline.md
-  - Gallery:
+  - 🖼️ Gallery:
       - Overview: gallery/index.md
       - Desktop: gallery/desktop.md
       - Mobile: gallery/mobile.md
-  - POC UX: POC_UX/index.md
-  - Community:
+  - ❤️ Community:
       - FAQ: community/faq.md
       - Support the Project: community/contribute.md
       - Credits & Legal: community/credits-legal.md
+  - POC UX: POC_UX/index.md
 
 hooks:
   - hooks/absolute_hreflang.py

@@ -192,6 +192,15 @@
             dotsContainer.className = 'lf-screenshot-carousel-dots';
             carousel.appendChild(dotsContainer);
 
+            var showTitles = carousel.getAttribute('data-show-titles') === 'true';
+            var titleContainer = null;
+            if (showTitles) {
+                titleContainer = document.createElement('div');
+                titleContainer.className = 'lf-screenshot-carousel-title';
+                titleContainer.innerHTML = items[currentIndex].getAttribute('data-title') || items[currentIndex].getAttribute('alt') || '';
+                carousel.appendChild(titleContainer);
+            }
+
             var dots = items.map(function (item, index) {
                 var dot = document.createElement('button');
                 dot.className = 'lf-screenshot-carousel-dot';
@@ -207,6 +216,20 @@
                 return dot;
             });
 
+            var arrowPrev = document.createElement('button');
+            arrowPrev.className = 'lf-screenshot-carousel-arrow prev';
+            arrowPrev.innerHTML = '<svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>';
+            arrowPrev.setAttribute('aria-label', 'Previous slide');
+            arrowPrev.onclick = function() { goTo((currentIndex - 1 + items.length) % items.length, true); };
+            carousel.appendChild(arrowPrev);
+
+            var arrowNext = document.createElement('button');
+            arrowNext.className = 'lf-screenshot-carousel-arrow next';
+            arrowNext.innerHTML = '<svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>';
+            arrowNext.setAttribute('aria-label', 'Next slide');
+            arrowNext.onclick = function() { goTo((currentIndex + 1) % items.length, true); };
+            carousel.appendChild(arrowNext);
+
             function syncDots() {
                 dots.forEach(function (dot, index) {
                     if (index === currentIndex) {
@@ -221,16 +244,31 @@
 
             function updateTransforms() {
                 items.forEach(function (item, index) {
-                    var offset = (index - currentIndex) * 100;
-                    item.style.transform = 'translateX(' + offset + '%)';
+                    item.classList.remove('is-active', 'is-prev', 'is-next', 'is-hidden');
+                    item.onclick = null;
+                    
+                    if (index === currentIndex) {
+                        item.classList.add('is-active');
+                    } else if (items.length === 2) {
+                        item.classList.add('is-hidden');
+                        // non clickable when hidden behind
+                    } else if (index === (currentIndex - 1 + items.length) % items.length) {
+                        item.classList.add('is-prev');
+                        item.onclick = function() { goTo(index, true); };
+                    } else if (index === (currentIndex + 1) % items.length) {
+                        item.classList.add('is-next');
+                        item.onclick = function() { goTo(index, true); };
+                    } else {
+                        item.classList.add('is-hidden');
+                    }
                 });
             }
 
             // Initialize position without transition
-            items.forEach(function(item) { item.style.transition = 'none'; });
+            items.forEach(function(item) { item.style.setProperty('transition', 'none', 'important'); });
             updateTransforms();
             carousel.offsetHeight; // force reflow
-            items.forEach(function(item) { item.style.transition = ''; });
+            items.forEach(function(item) { item.style.removeProperty('transition'); });
 
             function goTo(index, manual) {
                 if (index === currentIndex) return;
@@ -239,6 +277,11 @@
 
                 currentIndex = index;
                 syncDots();
+                
+                if (showTitles && titleContainer) {
+                    titleContainer.innerHTML = items[currentIndex].getAttribute('data-title') || items[currentIndex].getAttribute('alt') || '';
+                }
+                
                 updateTransforms();
 
                 if (manual && !reduceMotion && !isHovered) {
@@ -307,5 +350,12 @@
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
+    }
+
+    // Support for MkDocs Material instant loading
+    if (typeof document$ !== 'undefined') {
+        document$.subscribe(function() {
+            init();
+        });
     }
 })();

@@ -8,6 +8,7 @@ graph TD
     MB --> CM["ConfirmModal<br/><small>Destructive action dialog</small>"]
 
     MB -.->|used by| BM["BrokerModal"]
+    MB -.->|used by| TM["TransactionModal"]
     MB -.->|used by| BSM["BrokerSharingModal"]
     MB -.->|used by| BIM["BrokerImportFilesModal"]
     MB -.->|used by| IEM["ImageEditModal"]

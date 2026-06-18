@@ -1,4 +1,8 @@
-# ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Deposit & Withdrawal
+# ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Deposit & Withdrawal ![](../../../static/icons/transactions/withdrawal.png){: width="32" style="vertical-align: middle;" }
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-deposit" alt="Transaction Form — DEPOSIT">
+</div>
 
 **Deposits** and **withdrawals** track the movement of cash into and out of a broker account. They do not involve any asset — only the cash balance changes.
 
