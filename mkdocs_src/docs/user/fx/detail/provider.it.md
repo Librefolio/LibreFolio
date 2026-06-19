@@ -61,7 +61,7 @@ Quando più percorsi sono configurati per una coppia:
 
 - ➕ **[Aggiungere una Coppia](../add-pair.md)** — Scoperta completa dei percorsi (percorsi Direct + Chain)
 - 🔄 **[Sincronizzazione](../sync.md)** — Come la sincronizzazione utilizza i provider configurati
-- 📋 **[Elenco Provider FX](../../../developer/backend/fx/providers_list.md)** — Dettagli tecnici su ogni provider (ECB, FED, BOE, SNB)
+- 🔌 **[Provider FX](../providers/index.md)** — Guida per l'utente e dettagli su ciascun provider (ECB, FED, BOE, SNB)
 
 !!! tip "🔗 Come vengono calcolati i percorsi chain"
 

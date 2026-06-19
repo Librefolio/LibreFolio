@@ -145,7 +145,7 @@ class FreetradeBrokerProvider(BRIMProvider):
 
     @property
     def icon_url(self) -> str:
-        return "https://freetrade.io/favicon.ico"
+        return "https://cdn.prod.website-files.com/66289cd2c30bc8d40bd60733/66f526a076ad61485c78771c_favicon.png"
 
     def can_parse(self, file_path: Path) -> bool:
         """Detect Freetrade format by checking for distinctive headers."""

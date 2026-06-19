@@ -1,22 +1,41 @@
 # ➕ Create & Edit Assets
 
-## Creating a New Asset
-
-1. Click **+ New Asset** on the assets page
-2. Use **Smart Search** to find your asset: type a name, ISIN, or ticker and LibreFolio searches across multiple providers (Yahoo Finance, justETF, CSS Scraper) in parallel
-3. Select a result to **auto-fill** name, identifiers, currency, sector/geographic distributions, and provider configuration
-4. Or fill in manually:
-    - **Name** (required)
-    - **Category** (required): Stock, ETF, Bond, Crypto, Commodity, P2P, Index, etc.
-    - **Currency** (required): the currency the asset is denominated in
-    - **Identifiers**: ISIN, ticker, CUSIP, SEDOL, etc.
-5. Optionally configure a **[Provider](providers/index.md)** for automatic price fetching
-6. Optionally add **Sector** and **Geographic** distributions
-7. Click **Save**
-
-<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="assets" data-name="create-modal" alt="Create Asset Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+<div class="lf-screenshot-carousel" data-carousel="carousel-assets-create" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="create-modal" data-title="➕ Manual Creation Form" alt="Manual Create Modal">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Import Wizard Auto-Creation Form" alt="Create Asset from Wizard">
 </div>
+
+## 🚀 Asset Creation Flows
+
+In LibreFolio, you can create new assets in two different ways:
+
+=== "Manual Creation (with Smart Search)"
+
+    ```mermaid
+    graph TD
+        A[Start: Click '+ New Asset'] --> B[Type Name, ISIN, or Ticker in Smart Search]
+        B --> C{Match Found?}
+        C -->|Yes| D[Auto-fill details from external providers]
+        C -->|No| E[Manually enter name, category, & currency]
+        D --> F[Adjust config / Assign pricing provider]
+        E --> F
+        F --> G[Click Save]
+        G --> H[Asset added to library]
+    ```
+
+=== "Broker Import Auto-Creation"
+
+    ```mermaid
+    graph TD
+        A[Start: Upload CSV report in Import Wizard] --> B[Parse report rows]
+        B --> C{Asset ID recognized?}
+        C -->|Yes| D[Auto-match with existing asset]
+        C -->|No| E[Flag warning ⚠️ and show 'Create' button]
+        E --> F[Click 'Create' to open pre-filled modal]
+        F --> G[Save asset to resolve mapping]
+        G --> D
+        D --> H[Commit all transactions]
+    ```
 
 ## 🧪 Testing Provider Configuration
 
@@ -31,10 +50,6 @@ Results are displayed inline with execution times. A ⚠️ warning means the op
 
 Each asset can have one pricing provider assigned. See [Providers](providers/index.md) for details on available providers and their configuration.
 
-## ⏱️ Fetch Interval
-
-The fetch interval controls how often LibreFolio automatically refreshes the asset's price data. Default is 24 hours (`24:00`). Format: `HH:MM`.
-
 ## 🛠️ Editing an Asset
 
 Click the **Edit** (✏️) button on the [detail page](detail/index.md) to open the asset modal with all fields pre-populated. All fields are editable, including provider configuration and distributions.
@@ -43,4 +58,5 @@ Click the **Edit** (✏️) button on the [detail page](detail/index.md) to open
 
 - 📊 **[Asset Detail Page](detail/index.md)** — View and analyze asset data
 - 🔌 **[Providers](providers/index.md)** — Available pricing providers
+
 

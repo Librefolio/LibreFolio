@@ -47,7 +47,7 @@ Set up your local development environment and learn the daily workflow:
 - 📈 **[Asset Pricing & Metadata](backend/assets/architecture.md)** — How asset prices and metadata are fetched and managed
 - 💱 **[Foreign Exchange (FX)](backend/fx/architecture.md)** — Multi-provider currency conversion system
     - 🔀 [FX Configuration & Routing](backend/fx/configuration.md) — Chain routing algorithm
-    - 🏛️ [FX Providers List](backend/fx/providers_list.md) — ECB, FED, BOE, SNB details
+    - 🔌 [FX Providers](backend/fx/providers/index.md) — ECB, FED, BOE, SNB technical details
 - 🗃️ **[Database Schema](architecture/database/index.md)** — SQLite schema split by subsystem (Users, Brokers, Assets, FX)
 
 ---

@@ -58,5 +58,5 @@ This is configured via [FX Configuration & Routing](../../backend/fx/configurati
 
 - ⚙️ [FX Architecture](../../backend/fx/architecture.md) — Multi-provider FX system design
 - 🔀 [FX Configuration & Routing](../../backend/fx/configuration.md) — Chain routing algorithm
-- 🏛️ [FX Providers List](../../backend/fx/providers_list.md) — ECB, FED, BOE, SNB details
+- 🔌 [FX Providers](../../backend/fx/providers/index.md) — ECB, FED, BOE, SNB technical details
 - 📖 [FX Rates (User Guide)](../../../user/fx/index.md) — How to manage currency pairs

@@ -61,7 +61,7 @@ Cuando se configuran múltiples rutas para un par:
 
 - ➕ **[Añadir un Par](../add-pair.md)** — Descubrimiento completo de rutas (rutas directas + de cadena)
 - 🔄 **[Sincronización](../sync.md)** — Cómo utiliza la sincronización los proveedores configurados
-- 📋 **[Lista de Proveedores FX](../../../developer/backend/fx/providers_list.md)** — Detalles técnicos de cada proveedor (ECB, FED, BOE, SNB)
+- 🔌 **[Proveedores de FX](../providers/index.md)** — Guía de usuario y detalles de cada proveedor (ECB, FED, BOE, SNB)
 
 !!! tip "🔗 Cómo se calculan las rutas en cadena"
 

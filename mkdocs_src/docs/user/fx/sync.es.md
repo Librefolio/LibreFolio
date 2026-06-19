@@ -57,6 +57,6 @@ Esto significa que:
 - 🔀 Los pares exóticos utilizan cadenas de varios pasos a través de divisas intermedias (por ejemplo, RON → EUR → JPY)
 - ⚙️ Puede personalizar qué proveedor utilizar para cada par
 
-Para ver la lista de proveedores compatibles, consulte la [Lista de Proveedores de FX](../../developer/backend/fx/providers_list.md).
+Para ver la lista de proveedores compatibles, consulte los [Proveedores de FX](providers/index.md).
 
 Para detalles técnicos sobre el algoritmo de enrutamiento y la configuración, consulte la documentación para desarrolladores: [Configuración y Enrutamiento de FX](../../developer/backend/fx/configuration.md).
