@@ -28,6 +28,7 @@
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import AllocationPieChart from '$lib/components/charts/AllocationPieChart.svelte';
+    import AllocationHistoryChart from '$lib/components/dashboard/AllocationHistoryChart.svelte';
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
     import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
@@ -68,6 +69,14 @@
 
     /** Active tab in the allocation panel. */
     let allocationTab = $state<'type' | 'sector' | 'geo'>('type');
+
+    /** Allocation view mode: Now (pie/map) or History (stacked area). */
+    let allocationView = $state<'now' | 'history'>('now');
+
+    /** Allocation history data (loaded on demand). */
+    let allocationHistoryData = $state<any[]>([]);
+    let allocationHistoryLoading = $state(false);
+    let allocationHistoryDimensionLoaded = $state<string | null>(null);
 
     /** Responsive layout — same utility as assets/fx pages. */
     const layout = createResponsiveLayout({wide: 900, tablet: 660, tabletS: 480, labelHide: 460});
@@ -130,7 +139,11 @@
     const allocationByType = $derived(summary ? Object.fromEntries((summary.allocation_by_type ?? []).map((i) => [i.name, parseFloat(i.value) / 100])) : {});
     const allocationBySector = $derived(summary ? Object.fromEntries((summary.allocation_by_sector ?? []).map((i) => [i.name, parseFloat(i.value) / 100])) : {});
     const allocationByGeo = $derived(summary ? Object.fromEntries((summary.allocation_by_geography ?? []).map((i) => [i.name, parseFloat(i.value) / 100])) : {});
-    const missingPricesAssets = $derived(summary?.missing_prices_assets ?? []);
+    const geoUnknownPercent = $derived.by(() => {
+        const unknown = (summary?.allocation_by_geography ?? []).find((i) => i.name === 'Unknown');
+        return unknown ? parseFloat(unknown.value) : 0;
+    });
+    const missingPriceAssets = $derived(summary?.missing_price_assets ?? []);
     const missingFxPairs = $derived.by(() => {
         const pairs = (summary?.missing_fx_pairs ?? []).map((item) => item.pair);
         return [...new Set(pairs)].sort();
@@ -177,6 +190,30 @@
 
     async function loadAll(force = false) {
         await Promise.all([loadSummary(force), loadHistory(force)]);
+    }
+
+    async function loadAllocationHistory(dimension: string) {
+        const dimMap: Record<string, string> = {type: 'type', sector: 'sector', geo: 'geography'};
+        const apiDimension = dimMap[dimension] || 'type';
+        if (allocationHistoryDimensionLoaded === apiDimension && allocationHistoryData.length > 0) return;
+
+        allocationHistoryLoading = true;
+        try {
+            const {api} = await import('$lib/api/generated');
+            const resp = await api.get_allocation_history_api_v1_portfolio_allocation_history_post({
+                dimension: apiDimension,
+                broker_ids: activeBrokerIds?.length ? activeBrokerIds : undefined,
+                date_range: dateFrom || dateTo ? {start: dateFrom || undefined, end: dateTo || undefined} : undefined,
+                target_currency: targetCurrency || undefined,
+            } as any);
+            allocationHistoryData = (resp as any).series ?? [];
+            allocationHistoryDimensionLoaded = apiDimension;
+        } catch (e) {
+            console.error('Failed to load allocation history:', e);
+            allocationHistoryData = [];
+        } finally {
+            allocationHistoryLoading = false;
+        }
     }
 
     // =========================================================================
@@ -358,12 +395,12 @@
         </button>
     </div>
 
-    {#if missingPricesAssets.length > 0}
+    {#if missingPriceAssets.length > 0}
         <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-start gap-2" data-testid="dashboard-missing-prices-banner">
             <span>⚠️</span>
             <span>
                 {$_('dashboard.missingPricesPrefix')}
-                <strong>{missingPricesAssets.join(', ')}</strong>.
+                <strong>{missingPriceAssets.map((a) => a.name).join(', ')}</strong>.
                 {$_('dashboard.missingPricesSuffix')}
             </span>
         </div>
@@ -396,14 +433,29 @@
 
         <!-- Allocation Panel — 2/5 -->
         <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4 flex flex-col gap-3 min-h-[380px] lg:min-h-0" data-testid="allocation-panel">
-            <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{$_('dashboard.allocation')}</h2>
+            <div class="flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{$_('dashboard.allocation')}</h2>
+                <!-- Now / History toggle -->
+                <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
+                    <button
+                        class="px-3 py-1 transition-colors {allocationView === 'now' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => (allocationView = 'now')}
+                        data-testid="allocation-view-now"
+                    >{$_('dashboard.now')}</button>
+                    <button
+                        class="px-3 py-1 transition-colors border-l border-gray-200 dark:border-slate-600 {allocationView === 'history' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        onclick={() => { allocationView = 'history'; loadAllocationHistory(allocationTab); }}
+                        data-testid="allocation-view-history"
+                    >{$_('dashboard.history')}</button>
+                </div>
+            </div>
 
             <!-- Tab bar -->
             <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium self-start">
                 {#each [['type', 'dashboard.typeAllocation'], ['sector', 'dashboard.sectorAllocation'], ['geo', 'dashboard.geoAllocation']] as const as [tab, labelKey]}
                     <button
                         class="px-3 py-1 transition-colors {allocationTab === tab ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'} {tab !== 'type' ? 'border-l border-gray-200 dark:border-slate-600' : ''}"
-                        onclick={() => (allocationTab = tab)}
+                        onclick={() => { allocationTab = tab; if (allocationView === 'history') { allocationHistoryDimensionLoaded = null; loadAllocationHistory(tab); } }}
                         data-testid="allocation-tab-{tab}"
                     >
                         {$_(labelKey)}
@@ -412,8 +464,12 @@
             </div>
 
             <!-- Chart area -->
-            {#if summaryLoading}
+            {#if summaryLoading || allocationHistoryLoading}
                 <div class="flex-1 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
+            {:else if allocationView === 'history'}
+                <div class="flex-1 min-h-0">
+                    <AllocationHistoryChart data={allocationHistoryData} height="100%" loading={allocationHistoryLoading} />
+                </div>
             {:else if !summary}
                 <div class="flex-1 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
                     {$_('dashboard.noData')}
@@ -430,6 +486,11 @@
                 <div class="flex-1 min-h-0">
                     <GeographyMap data={allocationByGeo} height="100%" language={$currentLanguage} />
                 </div>
+                {#if geoUnknownPercent > 0}
+                    <p class="text-xs text-gray-400 dark:text-gray-500 text-center mt-1">
+                        {$_('dashboard.geoUnknownNote', {values: {percent: geoUnknownPercent.toFixed(1)}})}
+                    </p>
+                {/if}
             {/if}
         </div>
     </div>

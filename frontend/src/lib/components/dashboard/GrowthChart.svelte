@@ -48,9 +48,12 @@
 
     // Color palettes
     const COLORS = {
-        nav: {light: '#1a4031', dark: '#4ade80'}, // NAV / MWRR — prominent
-        invested: {light: '#2563eb', dark: '#60a5fa'}, // Invested / TWRR
-        cash: {light: '#9caf9c', dark: '#94a3b8'}, // Cash / ROI — subdued
+        nav: {light: '#1a4031', dark: '#4ade80'}, // NAV — prominent line
+        costBasis: {light: '#3b82f6', dark: '#60a5fa'}, // Open cost basis — blue area
+        cash: {light: '#9caf9c', dark: '#6b8e6b'}, // Cash — subdued green area
+        inTransit: {light: '#f59e0b', dark: '#fbbf24'}, // In-transit — amber area
+        invested: {light: '#2563eb', dark: '#60a5fa'}, // TWRR (% mode)
+        pctCash: {light: '#9caf9c', dark: '#94a3b8'}, // ROI (% mode)
     };
 
     // =========================================================================
@@ -59,29 +62,19 @@
 
     const dates = $derived(history.map((pt) => pt.date));
 
-    const eurSeries = $derived([
-        {
-            name: $_('dashboard.navValue'),
-            data: history.map((pt) => (pt.nav_value != null ? Number(pt.nav_value.amount) : null)),
-            lineStyle: 'solid' as const,
-            colorKey: 'nav' as const,
-            areaOpacity: 0.1,
-        },
-        {
-            name: $_('dashboard.investedCapital'),
-            data: history.map((pt) => (pt.invested_value != null ? Number(pt.invested_value.amount) : null)),
-            lineStyle: 'dashed' as const,
-            colorKey: 'invested' as const,
-            areaOpacity: 0,
-        },
-        {
-            name: $_('dashboard.cashValue'),
-            data: history.map((pt) => (pt.cash_value != null ? Number(pt.cash_value.amount) : null)),
-            lineStyle: 'dotted' as const,
-            colorKey: 'cash' as const,
-            areaOpacity: 0,
-        },
-    ]);
+    /** Helper to safely extract amount from an optional Currency field (handles union types). */
+    function amt(field: any): number | null {
+        if (field != null && !Array.isArray(field) && typeof field === 'object' && 'amount' in field) return Number(field.amount);
+        return null;
+    }
+
+    // EUR mode: stacked area (open_cost_basis + cash + in_transit_book_value) + NAV overlay
+    const eurStackedData = $derived({
+        costBasis: history.map((pt) => amt(pt.open_cost_basis)),
+        cash: history.map((pt) => (pt.cash_value != null ? Number(pt.cash_value.amount) : null)),
+        inTransit: history.map((pt) => amt(pt.in_transit_book_value)),
+        nav: history.map((pt) => (pt.nav_value != null ? Number(pt.nav_value.amount) : null)),
+    });
 
     const pctSeries = $derived([
         {
@@ -89,21 +82,18 @@
             data: history.map((pt) => (pt.mwrr != null ? Number(pt.mwrr) * 100 : null)),
             lineStyle: 'solid' as const,
             colorKey: 'nav' as const,
-            areaOpacity: 0,
         },
         {
             name: $_('dashboard.twrr'),
             data: history.map((pt) => (pt.twrr != null ? Number(pt.twrr) * 100 : null)),
             lineStyle: 'dashed' as const,
             colorKey: 'invested' as const,
-            areaOpacity: 0,
         },
         {
             name: $_('dashboard.simpleRoi'),
             data: history.map((pt) => (pt.roi != null ? Number(pt.roi) * 100 : null)),
             lineStyle: 'dotted' as const,
-            colorKey: 'cash' as const,
-            areaOpacity: 0,
+            colorKey: 'pctCash' as const,
         },
     ]);
 
@@ -154,8 +144,6 @@
     function renderChart() {
         if (!chartContainer || loading) return;
 
-        // If chartInstance points to a stale/detached element (e.g. after {#if loading}
-        // unmounted and remounted the container), dispose it and start fresh.
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
             chartInstance.dispose();
             chartInstance = undefined;
@@ -166,7 +154,6 @@
         }
 
         const isDark = document.documentElement.classList.contains('dark');
-        const activeSeries = viewMode === 'eur' ? eurSeries : pctSeries;
         const activeDates = dates;
 
         const textColor = isDark ? '#94a3b8' : '#64748b';
@@ -174,31 +161,74 @@
         const tooltipBg = isDark ? '#1e293b' : '#ffffff';
         const tooltipBorder = isDark ? '#334155' : '#e2e8f0';
 
-        const series: echarts.SeriesOption[] = activeSeries.map((s) => ({
-            name: s.name,
-            type: 'line',
-            data: s.data,
-            smooth: false,
-            connectNulls: false,
-            symbol: 'none',
-            lineStyle: {
-                color: COLORS[s.colorKey][isDark ? 'dark' : 'light'],
-                width: 2,
-                type: s.lineStyle,
-            },
-            itemStyle: {
-                color: COLORS[s.colorKey][isDark ? 'dark' : 'light'],
-            },
-            areaStyle:
-                s.areaOpacity > 0
-                    ? {
-                          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                              {offset: 0, color: COLORS[s.colorKey][isDark ? 'dark' : 'light'] + '1a'},
-                              {offset: 1, color: COLORS[s.colorKey][isDark ? 'dark' : 'light'] + '00'},
-                          ]),
-                      }
-                    : undefined,
-        }));
+        let series: echarts.SeriesOption[];
+
+        if (viewMode === 'eur') {
+            const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
+            series = [
+                // Stacked area: open_cost_basis (bottom)
+                {
+                    name: $_('dashboard.openCostBasis'),
+                    type: 'line',
+                    stack: 'bookValue',
+                    data: eurStackedData.costBasis,
+                    smooth: false,
+                    symbol: 'none',
+                    lineStyle: {width: 0},
+                    areaStyle: {color: cc('costBasis') + '40'},
+                    itemStyle: {color: cc('costBasis')},
+                },
+                // Stacked area: cash (middle)
+                {
+                    name: $_('dashboard.cashValue'),
+                    type: 'line',
+                    stack: 'bookValue',
+                    data: eurStackedData.cash,
+                    smooth: false,
+                    symbol: 'none',
+                    lineStyle: {width: 0},
+                    areaStyle: {color: cc('cash') + '40'},
+                    itemStyle: {color: cc('cash')},
+                },
+                // Stacked area: in-transit book value (top)
+                {
+                    name: $_('dashboard.inTransit'),
+                    type: 'line',
+                    stack: 'bookValue',
+                    data: eurStackedData.inTransit,
+                    smooth: false,
+                    symbol: 'none',
+                    lineStyle: {width: 0},
+                    areaStyle: {color: cc('inTransit') + '40'},
+                    itemStyle: {color: cc('inTransit')},
+                },
+                // Overlay line: NAV (not stacked)
+                {
+                    name: $_('dashboard.navValue'),
+                    type: 'line',
+                    data: eurStackedData.nav,
+                    smooth: false,
+                    symbol: 'none',
+                    lineStyle: {color: cc('nav'), width: 2, type: 'solid'},
+                    itemStyle: {color: cc('nav')},
+                },
+            ];
+        } else {
+            series = pctSeries.map((s) => ({
+                name: s.name,
+                type: 'line' as const,
+                data: s.data,
+                smooth: false,
+                connectNulls: false,
+                symbol: 'none',
+                lineStyle: {
+                    color: COLORS[s.colorKey][isDark ? 'dark' : 'light'],
+                    width: 2,
+                    type: s.lineStyle,
+                },
+                itemStyle: {color: COLORS[s.colorKey][isDark ? 'dark' : 'light']},
+            }));
+        }
 
         const yAxisFormatter = viewMode === 'eur' ? (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)) : (v: number) => `${v.toFixed(1)}%`;
 
@@ -213,13 +243,43 @@
                 borderWidth: 1,
                 textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
                 formatter: (params: any) => {
-                    const date = Array.isArray(params) ? params[0]?.axisValue : '';
-                    const lines = (Array.isArray(params) ? params : [params])
-                        .filter((p: any) => p.value != null)
-                        .map((p: any) => {
-                            const val = viewMode === 'eur' ? `${baseCurrency} ${Number(p.value).toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `${Number(p.value).toFixed(2)}%`;
-                            return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:6px"></span>${p.seriesName}: <b>${val}</b>`;
-                        });
+                    const items = Array.isArray(params) ? params : [params];
+                    const date = items[0]?.axisValue ?? '';
+
+                    if (viewMode === 'eur') {
+                       // Rich tooltip: show NAV, Book Value, UGL
+                       const navVal = items.find((p: any) => p.seriesName === $_('dashboard.navValue'))?.value;
+                       const costVal = items.find((p: any) => p.seriesName === $_('dashboard.openCostBasis'))?.value;
+                       const cashVal = items.find((p: any) => p.seriesName === $_('dashboard.cashValue'))?.value;
+                       const itVal = items.find((p: any) => p.seriesName === $_('dashboard.inTransit'))?.value;
+
+                       const fmtNum = (v: number | null | undefined) =>
+                           v != null ? `${baseCurrency} ${v.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '—';
+
+                       const bv = (costVal ?? 0) + (cashVal ?? 0) + (itVal ?? 0);
+                       const ugl = navVal != null ? navVal - bv : null;
+
+                       let html = `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>`;
+                       html += `<b>${$_('dashboard.navValue')}:</b> ${fmtNum(navVal)}<br/>`;
+                       html += `<b>${$_('dashboard.bookValue')}:</b> ${fmtNum(bv)}<br/>`;
+                       if (ugl != null) {
+                           const uglColor = ugl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : (isDark ? '#f87171' : '#dc2626');
+                           html += `<b style="color:${uglColor}">${ugl >= 0 ? '+' : ''}${fmtNum(ugl)}</b><br/>`;
+                       }
+                       html += `<hr style="border-color:${tooltipBorder};margin:4px 0"/>`;
+                       html += `${$_('dashboard.openCostBasis')}: ${fmtNum(costVal)}<br/>`;
+                       html += `${$_('dashboard.cashValue')}: ${fmtNum(cashVal)}<br/>`;
+                       if (itVal && itVal > 0) html += `${$_('dashboard.inTransit')}: ${fmtNum(itVal)}<br/>`;
+                       return html;
+                    }
+
+                    // % mode: simple list
+                    const lines = items
+                       .filter((p: any) => p.value != null)
+                       .map((p: any) => {
+                           const val = `${Number(p.value).toFixed(2)}%`;
+                           return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:6px"></span>${p.seriesName}: <b>${val}</b>`;
+                       });
                     return `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>${lines.join('<br/>')}`;
                 },
             },

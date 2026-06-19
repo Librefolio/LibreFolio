@@ -35,7 +35,6 @@ from backend.app.db.models import (
     Transaction,
     TransactionType,
 )
-from backend.app.schemas.assets import FAClassificationParams
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.portfolio import (
     AllocationItem,
@@ -43,6 +42,7 @@ from backend.app.schemas.portfolio import (
     BrokerBreakdown,
     ClosedLotSchema,
     FIFOLotsResponse,
+    MissingPriceAsset,
     OpenLotSchema,
     PortfolioHistoryPoint,
     PortfolioHolding,
@@ -54,7 +54,6 @@ from backend.app.services.settings_service import get_global_setting
 from backend.app.utils.financial.fifo_utils import FIFOTransactionInput, calculate_fifo_lots
 from backend.app.utils.financial.roi_utils import (
     CashFlowInput,
-    NAVSnapshot,
     calculate_mwrr,
     calculate_mwrr_series,
     calculate_simple_roi,
@@ -321,7 +320,7 @@ class _HistoryCalcPoint:
 
     date: date_type
     cash_value: Decimal
-    invested_value: Decimal
+    market_value: Decimal
     nav_value: Decimal
     twrr: Decimal | None = None
     mwrr: Decimal | None = None
@@ -365,7 +364,7 @@ def _build_history_series(
     - Cash follows the signed transaction ledger exactly.
     - One output point per calendar day from first transaction to `date_to` (or the
       last transaction date if `date_to` is omitted).
-    - `invested_value`/`nav_value` are temporary placeholders at this stage and
+    - `market_value`/`nav_value` are temporary placeholders at this stage and
       are patched later by the mark-to-market layer in `get_history()`.
 
     Args:
@@ -398,7 +397,7 @@ def _build_history_series(
             _HistoryCalcPoint(
                 date=current_date,
                 cash_value=cumulative_cash,
-                invested_value=Decimal("0"),
+                market_value=Decimal("0"),
                 nav_value=cumulative_cash,
             )
         )
@@ -559,47 +558,65 @@ class PortfolioService:
         include_breakdown: bool = False,
         target_currency_override: str | None = None,
     ) -> PortfolioSummary:
-        """Return aggregated portfolio summary.
+        """Return aggregated portfolio summary via PortfolioCalculationEngine.
 
-        Flow:
-        1. Get accessible brokers for user (optionally filtered by broker_ids).
-        2. Per broker: compute WAC per asset, get current prices, aggregate.
-        3. Apply share_percentage on broker-level values BEFORE aggregation.
-        4. Compute ROI metrics (simple ROI, TWRR, MWRR).
-        5. Build allocation breakdown (by type, sector, geo).
+        Uses the new engine for aggregate values (NAV, market_value, book_value,
+        allocation, performance) while keeping the per-asset holdings loop for
+        individual holding details and broker breakdown.
+
+        Fixes:
+        - TWRR/MWRR now uses per-day NAV (not flat today's NAV)
+        - Allocation uses engine's scope-aware calculation
+        - Data quality report populated
         """
+        from backend.app.services.portfolio_engine import (  # noqa: PLC0415
+            DerivedViewsBuilder,
+            PortfolioCalculationEngine,
+        )
 
         today = date_type.today()
-
         base_currency = target_currency_override or await self._get_base_currency()
+
+        # ── 1. Run engine for aggregate values + performance ──
+        engine = PortfolioCalculationEngine(self.db)
+        engine_result = await engine.calculate(
+            user_id=user_id,
+            broker_ids=broker_ids,
+            date_from=None,
+            date_to=None,
+            target_currency=base_currency,
+        )
+
+        views = DerivedViewsBuilder(engine_result.daily_states, base_currency)
+
+        # ── 2. Extract aggregate values from last daily state ──
+        last_state = engine_result.daily_states[-1] if engine_result.daily_states else None
+        engine_nav = last_state.nav_value if last_state else Decimal("0")
+        engine_cash = last_state.cash_value if last_state else Decimal("0")
+        engine_market_value = last_state.market_value if last_state else Decimal("0")
+
+        # ── 3. Per-asset holdings loop (kept for individual holding details) ──
         accesses = await self._get_user_broker_access(user_id, broker_ids)
 
-        total_nav = Decimal("0")
-        total_invested = Decimal("0")  # capital deployed = deposits - withdrawals (in base currency)
-        total_cost_basis = Decimal("0")  # cost basis of current holdings (for per-holding P&L)
-        total_cash = Decimal("0")
+        total_invested = Decimal("0")
+        total_cost_basis = Decimal("0")
         all_cash_balances: dict[str, Decimal] = defaultdict(Decimal)
         all_holdings: list[PortfolioHolding] = []
         by_broker_list: list[BrokerBreakdown] = []
-        nav_snapshots: list[NAVSnapshot] = []
-        cash_flows: list[CashFlowInput] = []
         all_missing_pairs: list[WACMissingPairInfo] = []
-        missing_prices_assets: set[str] = set()
-        allocation_by_type: dict[str, Decimal] = defaultdict(Decimal)
-        allocation_by_sector: dict[str, Decimal] = defaultdict(Decimal)
-        allocation_by_geo: dict[str, Decimal] = defaultdict(Decimal)
+        missing_price_assets: list[MissingPriceAsset] = []
 
         for access in accesses:
             broker_id = access.broker_id
             share = access.share_percentage or Decimal("1")
+            broker = await self._get_broker(broker_id)
+            broker_name = broker.name if broker else f"Broker {broker_id}"
 
-            # --- All signed transaction amounts contribute to residual cash ---
             broker_txns = await self._get_transactions(broker_id)
             broker_cash: dict[str, Decimal] = defaultdict(Decimal)
             for tx in broker_txns:
                 if tx.amount is None or tx.currency is None:
                     continue
-
                 broker_cash[tx.currency] += tx.amount * share
 
                 if tx.currency == base_currency:
@@ -619,10 +636,8 @@ class PortfolioService:
 
                 if tx.type in _CASH_FLOW_TYPES:
                     total_invested += amount_base_signed * share
-                    cash_flows.append(CashFlowInput(tx.date, -(amount_base_signed * share)))
 
-            # --- Holding transactions ---
-            # Group by asset
+            # Holding transactions — group by asset
             txns_by_asset: dict[int, list[Transaction]] = defaultdict(list)
             for tx in broker_txns:
                 if tx.type not in _HOLDING_TYPES:
@@ -638,13 +653,9 @@ class PortfolioService:
                     continue
 
                 wac_result = await compute_wac_iterative(
-                    session=self.db,
-                    broker_id=broker_id,
-                    asset_id=asset_id,
-                    as_of_date=today,
-                    asset_currency=asset.currency or base_currency,
+                    session=self.db, broker_id=broker_id, asset_id=asset_id,
+                    as_of_date=today, asset_currency=asset.currency or base_currency,
                 )
-
                 if wac_result.wac is None:
                     if wac_result.wac_missing_pairs:
                         all_missing_pairs.extend(wac_result.wac_missing_pairs)
@@ -652,13 +663,10 @@ class PortfolioService:
 
                 wac_per_unit = wac_result.wac.amount
                 wac_currency = wac_result.wac.code
-
-                # Get pool quantity — compute net from txns directly
                 net_qty = sum((tx.quantity or Decimal("0")) for tx in asset_txns if tx.type in (TransactionType.BUY, TransactionType.SELL))
                 if net_qty <= 0:
                     continue
 
-                # Get current market price
                 price_data = await self._get_latest_price(asset_id)
                 current_price: Decimal | None = None
                 current_value: Decimal | None = None
@@ -671,26 +679,16 @@ class PortfolioService:
                         converted, mp = await self._convert_to_base(raw_price, price_ccy, base_currency, price_date)
                         if converted is not None:
                             current_price = converted
-                            all_missing_pairs.extend(mp)
-                        else:
-                            all_missing_pairs.extend(mp)
+                        all_missing_pairs.extend(mp)
                     else:
                         current_price = raw_price
 
                 if current_price is not None:
-                    current_value = (
-                        compute_holding_value(
-                            net_qty,
-                            current_price,
-                            asset.quote_base_quantity,
-                        )
-                        * share
-                    )
+                    current_value = compute_holding_value(net_qty, current_price, asset.quote_base_quantity) * share
                     broker_market_value += current_value
-                elif price_data is None:
-                    missing_prices_assets.add(asset.display_name)
 
-                # Convert WAC to base_currency for comparisons
+                has_missing_price = price_data is None and current_price is None
+
                 if wac_currency != base_currency:
                     wac_base, mp = await self._convert_to_base(wac_per_unit, wac_currency, base_currency, today)
                     all_missing_pairs.extend(mp)
@@ -700,49 +698,32 @@ class PortfolioService:
                 cost_basis = (wac_base or wac_per_unit) * net_qty * share
                 total_cost_basis += cost_basis
 
+                if has_missing_price:
+                    first_date = min((tx.date for tx in asset_txns), default=None)
+                    missing_price_assets.append(MissingPriceAsset(
+                        asset_id=asset_id, symbol=asset.identifier_ticker,
+                        name=asset.display_name, broker_id=broker_id,
+                        broker_name=broker_name, first_position_date=first_date,
+                        quantity=net_qty,
+                        open_cost_basis=cost_basis if wac_base is not None else None,
+                        currency=base_currency,
+                    ))
+
                 if current_value is not None and wac_base is not None:
                     gain_loss = current_value - cost_basis
                     gain_loss_pct = (gain_loss / cost_basis) if cost_basis != 0 else Decimal("0")
 
-                # Allocation data — parse classification_params for sector/geo distributions
-                cp: FAClassificationParams | None = None
-                if asset.classification_params:
-                    try:
-                        cp = FAClassificationParams.model_validate_json(asset.classification_params)
-                    except Exception:
-                        pass
+                all_holdings.append(PortfolioHolding(
+                    asset_id=asset_id, asset_name=asset.display_name,
+                    asset_ticker=asset.identifier_ticker,
+                    asset_type=asset.asset_type.value if asset.asset_type else "Unknown",
+                    quantity=net_qty, wac_per_unit=wac_base if wac_base else wac_per_unit,
+                    current_price=current_price, current_value=current_value,
+                    gain_loss=gain_loss, gain_loss_percent=gain_loss_pct,
+                    allocation_percent=None,
+                ))
 
-                asset_type = asset.asset_type.value if asset.asset_type else "Unknown"
-                if current_value:
-                    allocation_by_type[asset_type] += current_value
-                    if cp and cp.sector_area and cp.sector_area.distribution:
-                        for sector, weight in cp.sector_area.distribution.items():
-                            allocation_by_sector[sector] += current_value * weight
-                    else:
-                        allocation_by_sector["Unknown"] += current_value
-                    if cp and cp.geographic_area and cp.geographic_area.distribution:
-                        for country, weight in cp.geographic_area.distribution.items():
-                            allocation_by_geo[country] += current_value * weight
-                    else:
-                        allocation_by_geo["Unknown"] += current_value
-
-                all_holdings.append(
-                    PortfolioHolding(
-                        asset_id=asset_id,
-                        asset_name=asset.display_name,
-                        asset_ticker=asset.identifier_ticker,
-                        asset_type=asset_type,
-                        quantity=net_qty,
-                        wac_per_unit=wac_base if wac_base else wac_per_unit,
-                        current_price=current_price,
-                        current_value=current_value,
-                        gain_loss=gain_loss,
-                        gain_loss_percent=gain_loss_pct,
-                        allocation_percent=None,  # computed after full aggregation
-                    )
-                )
-
-            # --- Broker-level cash in base currency ---
+            # Broker-level cash
             broker_cash_base = Decimal("0")
             for ccy, amt in broker_cash.items():
                 if ccy == base_currency:
@@ -755,95 +736,84 @@ class PortfolioService:
                         broker_cash_base += converted
                         all_cash_balances[ccy] += amt
 
-            total_cash += broker_cash_base
             broker_nav = broker_market_value + broker_cash_base
-            total_nav += broker_nav
 
-            # Broker breakdown
             if include_breakdown:
-                broker = await self._get_broker(broker_id)
-                broker_name = broker.name if broker else f"Broker {broker_id}"
-                broker_gain = broker_nav - total_invested  # approx per broker
+                broker_gain = broker_nav - total_invested
                 broker_gl_pct = (broker_gain / total_invested) if total_invested else Decimal("0")
-                by_broker_list.append(
-                    BrokerBreakdown(
-                        broker_id=broker_id,
-                        broker_name=broker_name,
-                        net_worth=Currency(code=base_currency, amount=broker_nav),
-                        gain_loss=Currency(code=base_currency, amount=broker_gain),
-                        gain_loss_percent=broker_gl_pct,
-                        cash_total=Currency(code=base_currency, amount=broker_cash_base),
-                    )
-                )
+                by_broker_list.append(BrokerBreakdown(
+                    broker_id=broker_id, broker_name=broker_name,
+                    net_worth=Currency(code=base_currency, amount=broker_nav),
+                    gain_loss=Currency(code=base_currency, amount=broker_gain),
+                    gain_loss_percent=broker_gl_pct,
+                    cash_total=Currency(code=base_currency, amount=broker_cash_base),
+                ))
 
-        # --- Compute allocation percentages ---
-        total_market = sum(allocation_by_type.values()) or Decimal("1")
+        # ── 4. Allocation from engine (scope-aware, includes in-transit) ──
+        alloc_type, alloc_sector, alloc_geo = views.build_allocation_current()
 
-        def _alloc(d: dict[str, Decimal]) -> list[AllocationItem]:
-            return [
-                AllocationItem(
-                    name=name,
-                    value=(amt / total_market * 100).quantize(Decimal("0.01")),
-                    amount=amt,
-                )
-                for name, amt in sorted(d.items(), key=lambda x: -x[1])
-            ]
+        def _alloc_from_engine(items: list[dict]) -> list[AllocationItem]:
+            return [AllocationItem(**item) for item in items]
 
-        # Update holdings allocation_percent
+        total_market = sum(h.current_value for h in all_holdings if h.current_value) or Decimal("1")
         for h in all_holdings:
             if h.current_value and total_market:
                 object.__setattr__(h, "allocation_percent", (h.current_value / total_market * 100).quantize(Decimal("0.01")))
 
-        # --- ROI Metrics ---
-        simple_roi = calculate_simple_roi(total_nav, total_invested)
-
-        # Build NAV snapshots at CF dates + today for TWRR/MWRR
-        cf_dates = sorted({cf.date for cf in cash_flows})
+        # ── 5. Performance from engine (correct daily NAV) ──
+        nav_snapshots, cash_flows_perf = views.build_performance_inputs()
+        simple_roi = calculate_simple_roi(engine_nav, total_invested)
         twrr_result: Decimal | None = None
         mwrr_result: Decimal | None = None
 
-        if len(cf_dates) >= 1 and total_nav > 0:
-            nav_snapshots = [NAVSnapshot(d, total_nav) for d in cf_dates] + [NAVSnapshot(today, total_nav)]
+        if nav_snapshots and cash_flows_perf and engine_nav > 0:
             try:
-                twrr_point = calculate_twrr(nav_snapshots, cash_flows)
+                twrr_point = calculate_twrr(nav_snapshots, cash_flows_perf)
                 twrr_result = twrr_point.twrr
             except (ValueError, ZeroDivisionError):
                 twrr_result = None
-
             if total_invested > 0:
                 mwrr_point = await asyncio.to_thread(
-                    calculate_mwrr,
-                    cash_flows,
-                    total_invested,  # initial capital deployed
-                    total_nav,
-                    cf_dates[0],
-                    today,
+                    calculate_mwrr, cash_flows_perf, total_invested,
+                    engine_nav, nav_snapshots[0].date, today,
                 )
                 mwrr_result = mwrr_point.mwrr
 
-        # total_gl = net_worth - capital_deployed  (how much the portfolio grew vs what was put in)
-        total_gl = total_nav - total_invested
+        total_gl = engine_nav - total_invested
         total_gl_pct = (total_gl / total_invested) if total_invested > 0 else Decimal("0")
-
         cash_balances_list = [Currency(code=ccy, amount=amt) for ccy, amt in all_cash_balances.items()]
 
+        # ── 6. Data quality report ──
+        data_quality = views.build_data_quality_report(
+            missing_price_assets_dto=missing_price_assets,
+            missing_fx_pairs_dto=self._merge_missing_pairs(all_missing_pairs),
+        )
+
         return PortfolioSummary(
-            net_worth=Currency(code=base_currency, amount=total_nav),
+            net_worth=Currency(code=base_currency, amount=engine_nav),
             total_invested=Currency(code=base_currency, amount=total_invested),
             total_gain_loss=Currency(code=base_currency, amount=total_gl),
             total_gain_loss_percent=total_gl_pct,
-            cash_total=Currency(code=base_currency, amount=total_cash),
+            cash_total=Currency(code=base_currency, amount=engine_cash),
             cash_balances=cash_balances_list,
+            market_value=Currency(code=base_currency, amount=engine_market_value),
+            broker_nav_value=Currency(code=base_currency, amount=last_state.broker_nav_value) if last_state else None,
+            in_transit_market_value=Currency(code=base_currency, amount=last_state.in_transit_market_value) if last_state and last_state.in_transit_market_value else None,
+            open_cost_basis=Currency(code=base_currency, amount=last_state.open_cost_basis) if last_state else None,
+            in_transit_book_value=Currency(code=base_currency, amount=last_state.in_transit_book_value) if last_state and last_state.in_transit_book_value else None,
+            book_value=Currency(code=base_currency, amount=last_state.book_value) if last_state else None,
+            unrealized_gain_loss=Currency(code=base_currency, amount=last_state.unrealized_gain_loss) if last_state else None,
             twrr_percent=twrr_result,
             mwrr_percent=mwrr_result,
             simple_roi_percent=simple_roi,
-            allocation_by_type=_alloc(allocation_by_type),
-            allocation_by_sector=_alloc(allocation_by_sector),
-            allocation_by_geography=_alloc(allocation_by_geo),
+            allocation_by_type=_alloc_from_engine(alloc_type),
+            allocation_by_sector=_alloc_from_engine(alloc_sector),
+            allocation_by_geography=_alloc_from_engine(alloc_geo),
             holdings=all_holdings,
             by_broker=by_broker_list if include_breakdown else None,
             missing_fx_pairs=self._merge_missing_pairs(all_missing_pairs),
-            missing_prices_assets=sorted(missing_prices_assets),
+            missing_price_assets=missing_price_assets,
+            data_quality=data_quality,
         )
 
     async def get_history(
@@ -854,226 +824,109 @@ class PortfolioService:
         date_to: date_type | None = None,
         target_currency_override: str | None = None,
     ) -> list[PortfolioHistoryPoint]:
-        """Return daily portfolio value series (cash, invested, NAV) in base currency.
+        """Return daily portfolio value series via PortfolioCalculationEngine.
 
-        NAV is computed as mark-to-market: cumulative_cash + Σ(qty_i × price_i × FX_i).
-        This makes TWRR/ROI non-zero when asset prices change between snapshots.
-
-        The engine builds a dense daily calendar from the first transaction date
-        through `date_to` (or today), then marks holdings to market on each day.
-        The visible series is sliced afterwards and ROI metrics are re-based to
-        the selected period start so that TWRR/MWRR/ROI show the return OF that
-        specific period (starting from ~0%).
+        Uses the new engine to produce a DailyPortfolioState[] vector, then derives
+        history + performance metrics. Fixes known bugs:
+        - NAV is per-day (not flat today's NAV for all dates)
+        - Quantity tracking includes TRANSFER + ADJUSTMENT (not just BUY/SELL)
+        - Linked internal transfers excluded from external cash flows
         """
+        from backend.app.services.portfolio_engine import (  # noqa: PLC0415
+            DerivedViewsBuilder,
+            PortfolioCalculationEngine,
+        )
+
         base_currency = target_currency_override or await self._get_base_currency()
-        accesses = await self._get_user_broker_access(user_id, broker_ids)
+        engine = PortfolioCalculationEngine(self.db)
+        result = await engine.calculate(
+            user_id=user_id,
+            broker_ids=broker_ids,
+            date_from=None,  # Always compute from t=0 for correct cumulative values
+            date_to=date_to,
+            target_currency=base_currency,
+        )
 
-        rows: list[_HistoryTxRow] = []
-        qty_rows: list[_HistoryQtyRow] = []
-
-        for access in accesses:
-            broker_id = access.broker_id
-            share = access.share_percentage or Decimal("1")
-
-            # Always fetch full history from t=0 — date_from only slices the output.
-            all_txns = await self._get_transactions(
-                broker_id,
-                date_from=None,
-                date_to=date_to,
-            )
-
-            for tx in all_txns:
-                if tx.amount is None or tx.currency is None:
-                    continue
-
-                # Convert to base currency
-                if tx.currency == base_currency:
-                    amount_base: Decimal | None = tx.amount
-                else:
-                    fx_results, _ = await convert_bulk(
-                        self.db,
-                        [(Currency(code=tx.currency, amount=tx.amount), base_currency, tx.date)],
-                        raise_on_error=False,
-                    )
-                    amount_base = fx_results[0][0].amount if fx_results and fx_results[0] is not None else None
-
-                if amount_base is None:
-                    continue
-
-                rows.append(
-                    _HistoryTxRow(
-                        date=tx.date,
-                        type=tx.type.value if hasattr(tx.type, "value") else str(tx.type),
-                        amount=amount_base,
-                        share=share,
-                    )
-                )
-
-                # Track per-asset quantities for mark-to-market NAV computation.
-                if tx.type in _HOLDING_TYPES and tx.asset_id is not None and tx.quantity is not None and tx.quantity != 0:
-                    qty_sign = Decimal("1") if tx.type == TransactionType.BUY else Decimal("-1")
-                    qty_rows.append(_HistoryQtyRow(date=tx.date, asset_id=tx.asset_id, qty_delta=abs(tx.quantity) * qty_sign * share))
-
-        all_history = _build_history_series(rows, date_to=date_to or date_type.today())
-        if not all_history:
+        if not result.daily_states:
             return []
 
-        # ── Mark-to-market: patch invested_value / nav_value ─────────────────
-        # Build cumulative quantity snapshots keyed by snapshot date.
-        held_asset_ids = {r.asset_id for r in qty_rows}
-        if held_asset_ids:
-            date_min = all_history[0].date
-            date_max = all_history[-1].date
-            price_map = await self._bulk_load_asset_prices(held_asset_ids, date_min, date_max)
-            quote_base_map = await self._get_quote_base_map(held_asset_ids)
+        views = DerivedViewsBuilder(result.daily_states, base_currency)
 
-            # Collect all (price_ccy → base_ccy, date) conversions needed — one bulk call.
-            # First pass: build snap_qtys (cumulative quantities at each snapshot date)
-            # and collect FX conversion requests for market values priced in non-base currency.
-            fx_inputs: list[tuple[Currency, str, date_type]] = []
-            fx_index: list[tuple[int, date_type]] = []  # (asset_id, date) for each fx_inputs entry
+        # ── Build history dicts ──
+        history_dicts = views.build_history()
 
-            snap_qtys: dict[date_type, dict[int, Decimal]] = {}
-            cumulative_qtys_snapshot: dict[int, Decimal] = defaultdict(Decimal)
-            qi = 0
-            qty_rows_sorted = sorted(qty_rows, key=lambda r: r.date)
+        # ── Performance metrics ──
+        nav_snapshots, cash_flows = views.build_performance_inputs()
 
-            for pt in all_history:
-                while qi < len(qty_rows_sorted) and qty_rows_sorted[qi].date <= pt.date:
-                    r = qty_rows_sorted[qi]
-                    cumulative_qtys_snapshot[r.asset_id] += r.qty_delta
-                    qi += 1
-                snap_qtys[pt.date] = dict(cumulative_qtys_snapshot)
+        # Period re-basing for ROI metrics
+        if date_from and nav_snapshots:
+            pre_period = [s for s in nav_snapshots if s.date <= date_from]
+            period_start_nav = pre_period[-1].nav if pre_period else nav_snapshots[0].nav
+            period_start_date = pre_period[-1].date if pre_period else nav_snapshots[0].date
 
-                for asset_id, qty in snap_qtys[pt.date].items():
-                    if qty <= Decimal("0"):
-                        continue
-                    price_info = _price_on_date(price_map.get(asset_id, []), pt.date)
-                    if price_info is None:
-                        continue
-                    price, price_ccy = price_info
-                    raw_market_value = compute_holding_value(
-                        qty,
-                        price,
-                        quote_base_map.get(asset_id),
-                    )
-                    if price_ccy != base_currency:
-                        fx_inputs.append((Currency(code=price_ccy, amount=raw_market_value), base_currency, pt.date))
-                        fx_index.append((asset_id, pt.date))
-                    # else identity — no FX conversion needed
-
-            # Bulk FX conversion for all market values that need it.
-            fx_results_bulk: list = []
-            if fx_inputs:
-                fx_results_bulk, _ = await convert_bulk(self.db, fx_inputs, raise_on_error=False)
-
-            # Build lookup: (asset_id, date) → converted_market_value (or None).
-            fx_mv_map: dict[tuple[int, date_type], Decimal] = {}
-            for i, (asset_id, snap_date) in enumerate(fx_index):
-                if i < len(fx_results_bulk) and fx_results_bulk[i] is not None:
-                    converted, _, _ = fx_results_bulk[i]
-                    fx_mv_map[(asset_id, snap_date)] = converted.amount
-                # else: no conversion available → asset excluded from market value
-
-            # Second pass: patch each history point with mark-to-market values.
-            for pt in all_history:
-                market_value = Decimal("0")
-                for asset_id, qty in snap_qtys[pt.date].items():
-                    if qty <= Decimal("0"):
-                        continue
-                    price_info = _price_on_date(price_map.get(asset_id, []), pt.date)
-                    if price_info is None:
-                        continue
-                    price, price_ccy = price_info
-                    if price_ccy == base_currency:
-                        market_value += compute_holding_value(
-                            qty,
-                            price,
-                            quote_base_map.get(asset_id),
-                        )
-                    else:
-                        mv = fx_mv_map.get((asset_id, pt.date))
-                        if mv is not None:
-                            market_value += mv
-
-                pt.invested_value = market_value
-                pt.nav_value = pt.cash_value + market_value
-
-        # Slice display series to [date_from, date_to]
-        if date_from:
-            history = [pt for pt in all_history if pt.date >= date_from]
-        else:
-            history = all_history
-
-        if not history:
-            return []
-
-        # ── Full NAV snapshots and cash flows (from t=0) ──────────────────────
-        all_nav_snapshots = [NAVSnapshot(date=pt.date, nav=pt.nav_value) for pt in all_history]
-        all_cash_flows: list[CashFlowInput] = []
-        for row in rows:
-            if row.type in {"DEPOSIT", "WITHDRAWAL"}:
-                all_cash_flows.append(CashFlowInput(date=row.date, amount=-(row.amount * row.share)))
-
-        # ── Period re-basing for ROI metrics ─────────────────────────────────
-        # If date_from is set, inject the period-start NAV as a synthetic negative
-        # cash flow so that TWRR/MWRR/ROI represent the return OF this period.
-        if date_from and all_history:
-            # NAV at (or just before) date_from — last available point <= date_from
-            pre_period = [pt for pt in all_history if pt.date <= date_from]
-            period_start_nav = pre_period[-1].nav_value if pre_period else all_history[0].nav_value
-            period_start_date = pre_period[-1].date if pre_period else history[0].date
-
-            # Synthetic "investor starts with this NAV" cash flow
             synthetic_cf = CashFlowInput(date=period_start_date, amount=-period_start_nav)
-            # Only keep original cash flows strictly after period start
-            period_cash_flows = [synthetic_cf] + [cf for cf in all_cash_flows if cf.date > period_start_date]
-            # NAV snapshots from the period start onwards
-            period_nav_snapshots = [s for s in all_nav_snapshots if s.date >= period_start_date]
+            period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date > period_start_date]
+            period_nav_snapshots = [s for s in nav_snapshots if s.date >= period_start_date]
         else:
-            period_cash_flows = all_cash_flows
-            period_nav_snapshots = all_nav_snapshots
+            period_cash_flows = cash_flows
+            period_nav_snapshots = nav_snapshots
+
+        twrr_map: dict[date_type, Decimal] = {}
+        roi_map: dict[date_type, Decimal] = {}
+        mwrr_map: dict[date_type, Decimal] = {}
 
         if period_nav_snapshots and period_cash_flows:
-            # TWRR and Simple ROI are O(N) CPU-light — run inline.
             twrr_series = calculate_twrr_series(period_nav_snapshots, period_cash_flows)
             roi_series = calculate_simple_roi_series(period_nav_snapshots, period_cash_flows)
-            # MWRR runs Newton-Raphson per point — offload to thread pool.
-            mwrr_series = await asyncio.to_thread(calculate_mwrr_series, period_nav_snapshots, period_cash_flows)
-
-            # Build date-keyed lookup dicts for O(1) mapping
+            mwrr_series = await asyncio.to_thread(
+                calculate_mwrr_series, period_nav_snapshots, period_cash_flows
+            )
             twrr_map = {pt.date: pt.twrr for pt in twrr_series}
             roi_map = {pt.date: pt.roi for pt in roi_series}
             mwrr_map = {pt.date: pt.mwrr for pt in mwrr_series}
 
-            for pt in history:
-                pt.twrr = twrr_map.get(pt.date)
-                pt.roi = roi_map.get(pt.date)
-                pt.mwrr = mwrr_map.get(pt.date)
+        # ── Slice to [date_from, date_to] and merge performance ──
+        history_points: list[PortfolioHistoryPoint] = []
+        for h in history_dicts:
+            d = h["date"]
+            if date_from and d < date_from:
+                continue
 
-            # The first history point is always index-0 in the series: both
-            # twrr_series and mwrr_series skip it by design (no prior period).
-            # For chart continuity the starting value is mathematically 0%.
-            if history:
-                if history[0].twrr is None:
-                    history[0].twrr = Decimal("0")
-                if history[0].mwrr is None:
-                    history[0].mwrr = Decimal("0")
-                if history[0].roi is None:
-                    history[0].roi = Decimal("0")
+            twrr = twrr_map.get(d)
+            roi = roi_map.get(d)
+            mwrr = mwrr_map.get(d)
 
-        return [
-            PortfolioHistoryPoint(
-                date=pt.date,
-                cash_value=Currency(code=base_currency, amount=pt.cash_value),
-                invested_value=Currency(code=base_currency, amount=pt.invested_value),
-                nav_value=Currency(code=base_currency, amount=pt.nav_value),
-                twrr=pt.twrr,
-                mwrr=pt.mwrr,
-                roi=pt.roi,
+            history_points.append(
+                PortfolioHistoryPoint(
+                    date=d,
+                    cash_value=h["cash_value"],
+                    market_value=h["market_value"],
+                    broker_nav_value=h.get("broker_nav_value"),
+                    in_transit_cash_value=h.get("in_transit_cash_value"),
+                    in_transit_asset_market_value=h.get("in_transit_asset_market_value"),
+                    in_transit_market_value=h.get("in_transit_market_value"),
+                    nav_value=h["nav_value"],
+                    open_cost_basis=h.get("open_cost_basis"),
+                    in_transit_asset_cost_basis=h.get("in_transit_asset_cost_basis"),
+                    in_transit_book_value=h.get("in_transit_book_value"),
+                    book_value=h.get("book_value"),
+                    unrealized_gain_loss=h.get("unrealized_gain_loss"),
+                    twrr=twrr,
+                    mwrr=mwrr,
+                    roi=roi,
+                )
             )
-            for pt in history
-        ]
+
+        # First point gets 0% for chart continuity
+        if history_points:
+            if history_points[0].twrr is None:
+                history_points[0].twrr = Decimal("0")
+            if history_points[0].mwrr is None:
+                history_points[0].mwrr = Decimal("0")
+            if history_points[0].roi is None:
+                history_points[0].roi = Decimal("0")
+
+        return history_points
 
     async def get_asset_history(
         self,

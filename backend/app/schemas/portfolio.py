@@ -4,9 +4,11 @@ Portfolio schemas for LibreFolio.
 Schemas for the /api/v1/portfolio/ endpoints:
 - WAC time series (point-per-transaction where WAC changes)
 - Portfolio summary (net worth, ROI, allocations, holdings)
-- Portfolio history (daily cash/invested/nav series)
+- Portfolio history (daily cash/market_value/nav series)
 - Asset history (WAC vs market price series)
 - FIFO lots (open and closed lot details)
+- Data quality (missing prices, stale prices, missing FX)
+- Allocation history (time series by type/sector/geography)
 """
 
 from datetime import date as date_type
@@ -104,6 +106,89 @@ class AllocationItem(BaseModel):
     amount: SafeDecimal = Field(..., description="Absolute value in base currency")
 
 
+# =============================================================================
+# DATA QUALITY — Missing prices, stale prices, quality report
+# =============================================================================
+
+
+class MissingPriceAsset(BaseModel):
+    """Asset excluded from NAV because no PriceHistory was available."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int
+    symbol: Optional[str] = None
+    name: str
+    broker_id: int
+    broker_name: str
+    first_position_date: Optional[date_type] = Field(None, description="Date of first qualifying transaction for this holding")
+    quantity: SafeDecimal
+    open_cost_basis: Optional[SafeDecimal] = Field(None, description="WAC × qty in base currency, None if FX missing")
+    currency: str
+
+
+class StalePriceAsset(BaseModel):
+    """Asset whose latest price is older than the staleness threshold."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int
+    name: str
+    last_price_date: date_type
+    stale_days: int
+
+
+class DataQualityReport(BaseModel):
+    """Aggregated data quality information for a portfolio calculation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    missing_price_assets: List[MissingPriceAsset] = Field(default_factory=list)
+    missing_fx_pairs: List[WACMissingPairInfo] = Field(default_factory=list)
+    stale_prices: List[StalePriceAsset] = Field(default_factory=list)
+    incomplete_nav_dates: List[date_type] = Field(default_factory=list)
+    incomplete_book_value_dates: List[date_type] = Field(default_factory=list)
+    incomplete_allocation_dates: List[date_type] = Field(default_factory=list)
+    in_transit_cost_basis_warnings: List[str] = Field(default_factory=list)
+    share_mismatch_warnings: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+
+
+# =============================================================================
+# ALLOCATION HISTORY — Time series by dimension
+# =============================================================================
+
+
+class AllocationHistoryPoint(BaseModel):
+    """Single point in the allocation history time series."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    date: date_type
+    components: List[AllocationItem]
+
+
+class AllocationHistoryQuery(BaseModel):
+    """Request body for POST /portfolio/allocation-history."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    broker_ids: Optional[List[int]] = Field(None, description="Optional broker filter")
+    date_range: Optional[OpenDateRangeModel] = Field(None, description="Date range filter. None = full history.")
+    target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217)")
+    dimension: str = Field("type", pattern="^(type|sector|geography)$", description="Allocation dimension")
+
+
+class AllocationHistoryResponse(BaseModel):
+    """Response for POST /portfolio/allocation-history."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dimension: str
+    series: List[AllocationHistoryPoint]
+    data_quality: Optional[DataQualityReport] = None
+
+
 class PortfolioHolding(BaseModel):
     """Single asset holding in the portfolio."""
 
@@ -140,6 +225,13 @@ class PortfolioSummary(BaseModel):
     total_gain_loss_percent: SafeDecimal
     cash_total: Currency
     cash_balances: List[Currency] = Field(default_factory=list)
+    market_value: Optional[Currency] = Field(None, description="Total mark-to-market value of held assets")
+    broker_nav_value: Optional[Currency] = Field(None, description="market_value + cash_value (before in-transit)")
+    in_transit_market_value: Optional[Currency] = Field(None, description="Market value of assets/cash in transit")
+    open_cost_basis: Optional[Currency] = Field(None, description="WAC × quantity for all held assets")
+    in_transit_book_value: Optional[Currency] = Field(None, description="Cost basis of assets/cash in transit")
+    book_value: Optional[Currency] = Field(None, description="open_cost_basis + cash + in_transit_book_value")
+    unrealized_gain_loss: Optional[Currency] = Field(None, description="nav_value - book_value")
     twrr_percent: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return (None if not calculable)")
     mwrr_percent: Optional[SafeDecimal] = Field(None, description="Money-Weighted Return / XIRR (None if not converged)")
     simple_roi_percent: SafeDecimal
@@ -152,10 +244,11 @@ class PortfolioSummary(BaseModel):
         default_factory=list,
         description="FX pairs with missing rates (aggregated by range for compact payload)",
     )
-    missing_prices_assets: List[str] = Field(
+    missing_price_assets: List[MissingPriceAsset] = Field(
         default_factory=list,
         description="Assets excluded from NAV because no PriceHistory was available",
     )
+    data_quality: Optional[DataQualityReport] = Field(None, description="Aggregated data quality report")
 
 
 class PortfolioHistoryPoint(BaseModel):
@@ -163,8 +256,17 @@ class PortfolioHistoryPoint(BaseModel):
 
     date: date_type
     cash_value: Currency
-    invested_value: Currency
+    market_value: Currency = Field(..., description="Total mark-to-market value of held assets")
+    broker_nav_value: Optional[Currency] = Field(None, description="market_value + cash_value (before in-transit)")
+    in_transit_cash_value: Optional[Currency] = Field(None, description="Cash in transit between brokers")
+    in_transit_asset_market_value: Optional[Currency] = Field(None, description="Market value of assets in transit")
+    in_transit_market_value: Optional[Currency] = Field(None, description="Total in-transit market value")
     nav_value: Currency
+    open_cost_basis: Optional[Currency] = Field(None, description="WAC × quantity for all held assets")
+    in_transit_asset_cost_basis: Optional[Currency] = Field(None, description="Cost basis of assets in transit")
+    in_transit_book_value: Optional[Currency] = Field(None, description="Cost basis of all in-transit items")
+    book_value: Optional[Currency] = Field(None, description="open_cost_basis + cash + in_transit_book_value")
+    unrealized_gain_loss: Optional[Currency] = Field(None, description="nav_value - book_value")
     twrr: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return series point")
     mwrr: Optional[SafeDecimal] = Field(None, description="Money-Weighted Return series point")
     roi: Optional[SafeDecimal] = Field(None, description="Simple ROI series point")

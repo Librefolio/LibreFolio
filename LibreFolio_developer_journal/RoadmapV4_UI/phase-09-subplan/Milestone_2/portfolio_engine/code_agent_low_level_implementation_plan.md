@@ -54,9 +54,11 @@ Sostituire le logiche sparse in `PortfolioService.get_summary()` e `get_history(
 
 ---
 
-### STEP A — Backend Schemas / DTO
+### STEP A — Backend Schemas / DTO ✅ 2026-06-19
 
 **PR isolabile: sì — safe, API breaking, richiede frontend sync**
+
+> **Note implementazione**: Completato. Rename `invested_value` → `market_value` in schema, service, frontend, tests. `missing_prices_assets: List[str]` → `missing_price_assets: List[MissingPriceAsset]` con oggetti ricchi (asset_id, symbol, name, broker_id, broker_name, quantity, open_cost_basis, currency). Aggiunto DTOs: MissingPriceAsset, StalePriceAsset, DataQualityReport, AllocationHistoryPoint/Query/Response. Nuovi campi Optional in PortfolioHistoryPoint e PortfolioSummary. API sync + frontend svelte-check passano. 23/23 service tests + 20/20 API tests passano (1 pre-existing failure escluso: test_summary_uses_quote_base_quantity).
 
 #### A.1 Nuovi schema in `backend/app/schemas/portfolio.py`
 
@@ -179,6 +181,8 @@ class AllocationHistoryResponse(BaseModel):
 ### STEP B — Portfolio Engine Core
 
 **PR isolabile: sì — safe, non rompe API (le API continuano a usare il vecchio codice finché non si collegano)**
+
+> **Note implementazione (B.2)**: ✅ 2026-06-19. Creato `backend/app/services/portfolio_engine.py` con dataclass runtime (ClassifiedTransaction, InTransitInterval, ClassificationResult) e `ScopeAwareTransactionClassifier`. 19/19 unit test passano in `test_scope_classifier.py`. Lint clean. La classe è pure (no I/O), riceve paired txs dall'esterno.
 
 #### B.1 Nuovo file: `backend/app/services/portfolio_engine.py`
 
@@ -347,6 +351,8 @@ def classify(self) -> ClassificationResult:
 - `test_scope_classifier_share_mismatch_warning`
 
 #### B.3 `DailyStateBuilder`
+
+> **Note implementazione**: ✅ 2026-06-19. Implementato in `portfolio_engine.py`. DailyPortfolioState dataclass completa (14 valuation/accounting fields + allocation + data quality). Builder implementa: cash ledger cumulativo, quantity ledger (tutti i tipi tx), market_value con backward-fill price + quote_base + FX, WAC forward-fill per open_cost_basis, in-transit cash/asset computation, allocation distribution (tipo/settore/geografia), stale price detection (7gg threshold). 16/16 test in `test_daily_state_builder.py`. FX conversion via pre-loaded fx_rate_map dict.
 
 **Input (pre-caricati, niente I/O):**
 - `classified_txs: list[ClassifiedTransaction]`
@@ -533,6 +539,8 @@ def _compute_open_cost_basis(self, cumulative_qty, d) -> Decimal:
 
 #### B.4 `DerivedViewsBuilder`
 
+> **Note implementazione**: ✅ 2026-06-19. Implementato in `portfolio_engine.py`. Metodi: `build_history()` (→ PortfolioHistoryPoint-compatible dicts), `build_performance_inputs()` (NAV snapshots + cash flows con sign flip per roi_utils), `build_allocation_current()`, `build_allocation_history(dimension)`, `aggregate_missing_price_ids/stale_price_ids/missing_fx_pairs()`. Pure function, no I/O.
+
 **Input:**
 - `daily_states: list[DailyPortfolioState]`
 - `target_currency: str`
@@ -569,6 +577,10 @@ def build_performance(self, date_from) -> ...:
 **Questo corregge il bug NAV flat:** il `get_summary()` attuale usa `NAVSnapshot(d, total_nav)` con un unico total_nav per tutte le date. Il nuovo engine produce NAV giornaliero reale da DailyPortfolioState.
 
 #### B.5 `PortfolioCalculationEngine`
+
+#### B.5 `PortfolioCalculationEngine`
+
+> **Note implementazione**: ✅ 2026-06-19. Async orchestrator in `portfolio_engine.py`. Pipeline completa: resolve scope → load txs → classify (scope-aware) → load paired txs → preload prices/WAC/FX/asset types in bulk → build daily states → return result. FX preloading usa `convert_bulk` con batch di (ccy, target, date). WAC usa `compute_wac_iterative` deferred import per evitare circular. `PortfolioCalculationResult` dataclass con daily_states + metadati.
 
 **Orchestrator principale — classe async.**
 
@@ -928,9 +940,12 @@ La logica di re-basing per `date_from` (`portfolio_service.py:1019-1035`) viene 
 
 ---
 
-### STEP G — API Integration
+### STEP G — API Integration ✅ 2026-06-19
 
 **PR non isolabile — richiede che il nuovo engine sia funzionante**
+
+> **Note implementazione**: `get_history()` in `portfolio_service.py` completamente riscritto come adapter del nuovo `PortfolioCalculationEngine`. Il vecchio codice (~220 righe di mark-to-market, FX batch, quantity tracking) è stato sostituito da una chiamata engine.calculate() + DerivedViewsBuilder. Performance metrics (TWRR/MWRR/ROI) calcolati dai NAV giornalieri reali del DailyPortfolioState. Corregge i 3 bug principali: NAV flat in TWRR, quantity tracking solo BUY/SELL, linked tx non classificate. `get_summary()` rimane non wired per ora (più complesso, ha holdings/breakdown). 77/77 test passano.
+> **⚠️ Fuori pista**: Fix `assets_list` UnboundLocalError in engine.calculate() — la variabile non era inizializzata quando `held_asset_ids` era vuoto.
 
 #### G.1 `get_summary()` come adapter
 
@@ -1003,9 +1018,12 @@ async def get_allocation_history(
 
 ---
 
-### STEP H — Frontend
+### STEP H — Frontend ✅ 2026-06-19
 
 **PR richiede api sync completato**
+
+> **Note implementazione**: GrowthChart eurSeries aggiornato: "Invested Capital" (market_value) → "Book Value" (book_value) con type guard per union type generato da Zod. i18n `bookValue` aggiunto in EN/IT/FR/ES. Dashboard `missing_prices_assets` → `missing_price_assets` con `.map((a) => a.name)` (fatto in PR1). svelte-check 0 errori.
+> **⚠️ Fuori pista**: La riscrittura completa con stacked areas ECharts è rimandata — richiede refactor sostanziale del chart. Per ora le 3 serie sono: NAV (solid), Book Value (dashed), Cash (dotted).
 
 #### H.1 GrowthChart ABS — riscrittura
 
@@ -1182,16 +1200,16 @@ test_allocation_tab_type_sector_geo → tabs work
 
 ## 4. Strategia incrementale (PR sequence)
 
-| PR | Step | Safe? | API Breaking? | Frontend sync? | Testabile isolatamente? |
-|----|------|-------|---------------|----------------|------------------------|
-| **PR 1** | A — Schema/DTO | ✅ Safe | ⚠️ Breaking (invested_value rename, missing_prices_assets type change) | ✅ Serve api sync + frontend update | ✅ Pydantic unit test |
-| **PR 2** | B.2 — ScopeClassifier | ✅ Safe | ❌ No API change | ❌ No | ✅ Pure function unit tests |
-| **PR 3** | B.3 — DailyStateBuilder | ✅ Safe | ❌ No API change | ❌ No | ✅ Pure function + integration tests |
-| **PR 4** | B.4+B.5 — DerivedViews + Engine | ✅ Safe | ❌ No API change | ❌ No | ✅ Integration tests |
-| **PR 5** | G — API adapter wiring | ⚠️ Rischio | ⚠️ Comportamento API cambia (valori più corretti) | ❌ No | ✅ API tests |
-| **PR 6** | H.1+H.2+H.3 — Frontend GrowthChart + Banner + rename | ✅ Safe | ❌ No | — (è il frontend) | ✅ E2E smoke |
-| **PR 7** | G.3+H.4 — Allocation history endpoint + frontend | ✅ Safe | ✅ Additive | ✅ api sync | ✅ API + E2E |
-| **PR 8** | F — Performance validation | ✅ Safe | ❌ No | ❌ No | ✅ Regression tests |
+| PR | Step | Safe? | API Breaking? | Frontend sync? | Testabile isolatamente? | Status |
+|----|------|-------|---------------|----------------|------------------------|--------|
+| **PR 1** | A — Schema/DTO | ✅ Safe | ⚠️ Breaking (invested_value rename, missing_prices_assets type change) | ✅ Serve api sync + frontend update | ✅ Pydantic unit test | ✅ Done |
+| **PR 2** | B.2 — ScopeClassifier | ✅ Safe | ❌ No API change | ❌ No | ✅ Pure function unit tests | ✅ Done (19 tests) |
+| **PR 3** | B.3 — DailyStateBuilder | ✅ Safe | ❌ No API change | ❌ No | ✅ Pure function + integration tests | ✅ Done (16 tests) |
+| **PR 4** | B.4+B.5 — DerivedViews + Engine | ✅ Safe | ❌ No API change | ❌ No | ✅ Integration tests | ✅ Done |
+| **PR 5** | G — API adapter wiring | ⚠️ Rischio | ⚠️ Comportamento API cambia (valori più corretti) | ❌ No | ✅ API tests | ✅ Done (get_history wired) |
+| **PR 6** | H.1+H.2+H.3 — Frontend GrowthChart + Banner + rename | ✅ Safe | ❌ No | — (è il frontend) | ✅ E2E smoke | ⏳ Pending |
+| **PR 7** | G.3+H.4 — Allocation history endpoint + frontend | ✅ Safe | ✅ Additive | ✅ api sync | ✅ API + E2E | ⏳ Pending |
+| **PR 8** | F — Performance validation | ✅ Safe | ❌ No | ❌ No | ✅ Regression tests | ⏳ Pending |
 
 ### Nota: PR 1 e PR 2-4 possono procedere in parallelo
 
