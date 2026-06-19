@@ -59,6 +59,7 @@ tabulate = "*"
 openpyxl = "*"
 aphra = {git = "https://github.com/DavidLMS/aphra.git", ref = "main"}
 graphifyy = "*"
+autobatcher = "*"
 
 [requires]
 python_version = "3.13"
