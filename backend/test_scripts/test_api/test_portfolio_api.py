@@ -148,7 +148,7 @@ class TestPortfolioSummaryEndpoint:
         assert "cash_total" in data
         assert "simple_roi_percent" in data
         assert "missing_fx_pairs" in data
-        assert "missing_prices_assets" in data
+        assert "missing_price_assets" in data
         print_success("Summary structure OK")
 
     async def test_summary_cash_uses_full_signed_ledger(self, test_server):
@@ -176,7 +176,7 @@ class TestPortfolioSummaryEndpoint:
         assert data["cash_total"]["amount"].startswith("765")
         assert data["net_worth"]["amount"].startswith("765")
         assert data["total_invested"]["amount"].startswith("1000")
-        assert len(data["missing_prices_assets"]) == 1
+        assert len(data["missing_price_assets"]) == 1
         assert data["holdings"][0]["current_value"] is None
         print_success("Signed cash ledger and missing-price reporting OK")
 
@@ -308,7 +308,7 @@ class TestPortfolioHistoryEndpoint:
             point = data[0]
             assert "date" in point
             assert "cash_value" in point
-            assert "invested_value" in point
+            assert "market_value" in point
             assert "nav_value" in point
         print_success("History structure OK")
 
@@ -397,7 +397,7 @@ class TestPortfolioHistoryEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert len(data) == 1
-        assert data[0]["invested_value"]["amount"].startswith("204")
+        assert data[0]["market_value"]["amount"].startswith("204")
         assert data[0]["nav_value"]["amount"].startswith("504")
         print_success("quote_base_quantity history valuation OK")
 

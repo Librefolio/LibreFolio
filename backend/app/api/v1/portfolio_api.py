@@ -20,6 +20,9 @@ from backend.app.db.models import Asset, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.portfolio import (
+    AllocationHistoryQuery,
+    AllocationHistoryResponse,
+    AllocationItem,
     AssetHistoryPoint,
     FIFOLotsResponse,
     PortfolioHistoryPoint,
@@ -174,6 +177,49 @@ async def get_portfolio_history(
         date_from=body.date_range.start if body.date_range else None,
         date_to=body.date_range.end if body.date_range else None,
         target_currency_override=body.target_currency,
+    )
+
+
+@portfolio_router.post(
+    "/allocation-history",
+    response_model=AllocationHistoryResponse,
+    summary="Allocation history",
+    description="Time series of portfolio allocation by type, sector, or geography.",
+)
+async def get_allocation_history(
+    body: AllocationHistoryQuery,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> AllocationHistoryResponse:
+    """Return allocation history series for the given dimension."""
+    from backend.app.services.portfolio_engine import (  # noqa: PLC0415
+        DerivedViewsBuilder,
+        PortfolioCalculationEngine,
+    )
+
+    engine = PortfolioCalculationEngine(session)
+    result = await engine.calculate(
+        user_id=current_user.id,
+        broker_ids=body.broker_ids,
+        date_from=body.date_range.start if body.date_range else None,
+        date_to=body.date_range.end if body.date_range else None,
+        target_currency=body.target_currency,
+    )
+    views = DerivedViewsBuilder(result.daily_states, result.target_currency)
+    series_dicts = views.build_allocation_history(body.dimension)
+
+    from backend.app.schemas.portfolio import AllocationHistoryPoint  # noqa: PLC0415
+
+    series = [
+        AllocationHistoryPoint(
+            date=s["date"],
+            components=[AllocationItem(**c) for c in s["components"]],
+        )
+        for s in series_dicts
+    ]
+    return AllocationHistoryResponse(
+        dimension=body.dimension,
+        series=series,
     )
 
 
