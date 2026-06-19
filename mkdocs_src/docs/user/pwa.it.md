@@ -1,6 +1,6 @@
 # 📱 Installa come App (PWA)
 
-LibreFolio può essere installato come **Progressive Web App (PWA)** sul tuo dispositivo. Questo ti offre un'esperienza simile a quella di un'app: modalità a schermo intero, nessuna barra degli indirizzi del browser e un'icona sulla schermata home — senza dover scaricare nulla da uno store di app.
+LibreFolio può essere installato come **Progressive Web App (PWA)** sul tuo dispositivo. Questo ti offre un'esperienza simile a quella di un'app: modalità a schermo intero, nessuna barra degli indirizzi del browser e un'icona sulla schermata home — senza dover scaricare nulla da un app store.
 
 ---
 
@@ -8,10 +8,10 @@ LibreFolio può essere installato come **Progressive Web App (PWA)** sul tuo dis
 
 | Funzionalità | Descrizione |
 |---------|-------------|
-| **Modalità a schermo intero** | Nessuna barra degli indirizzi o elementi superflui dell'interfaccia del browser |
-| **Icona sulla schermata home** | Avvia LibreFolio come un'app nativa |
-| **Nessuna interferenza dei gesti** | Swipe-back e zoom con doppio tocco disabilitati |
-| **Sessione persistente** | Resta collegato tra un avvio e l'altro |
+| **Modalità a schermo intero** | Nessuna barra degli indirizzi o elementi dell'interfaccia del browser |
+| **Icona nella schermata home** | Avvia LibreFolio come un'app nativa |
+| **Nessuna interferenza dai gesti** | Swipe-back e zoom con doppio tocco disabilitati |
+| **Sessione persistente** | Resta connesso tra un avvio e l'altro |
 
 !!! note "Online Only"
 
@@ -28,9 +28,9 @@ LibreFolio può essere installato come **Progressive Web App (PWA)** sul tuo dis
 3. Tocca **Installa** quando richiesto
 4. LibreFolio apparirà sulla tua schermata home
 
-!!! tip "Metodo alternativo"
+!!! tip "Alternative method"
 
-    Se il pulsante di Installazione non appare, tocca il **menu ⋮ del browser → "Aggiungi alla schermata Home"** o **"Installa app"**.
+    Se il pulsante di installazione non appare, tocca il **menu ⋮** del browser → **"Aggiungi alla schermata Home"** o **"Installa app"**.
 
 ### iOS (Safari)
 
@@ -41,7 +41,7 @@ LibreFolio può essere installato come **Progressive Web App (PWA)** sul tuo dis
 
 !!! warning "iOS Limitation"
 
-    Il prompt di installazione automatica non è disponibile su iOS. Usa il menu Condividi come descritto sopra. Il menu Help mostrerà le istruzioni se ti trovi su un dispositivo iOS.
+    Il prompt di installazione automatica non è disponibile su iOS. Utilizza il menu Condividi come descritto sopra. Il menu Help & Support mostrerà le istruzioni se ti trovi su un dispositivo iOS.
 
 ### Desktop (Chrome / Edge)
 
@@ -54,17 +54,17 @@ LibreFolio può essere installato come **Progressive Web App (PWA)** sul tuo dis
 
 ## 🌐 HTTP vs HTTPS
 
-| Configurazione | Installazione PWA | Prompt Automatico |
+| Setup | PWA Install | Auto-prompt |
 |-------|-------------|-------------|
 | `https://` (Tailscale, reverse proxy) | ✅ Supporto completo | ✅ Chrome mostra il banner |
 | `http://localhost` | ✅ Funziona | ✅ Funziona |
 | `http://192.168.x.x` (LAN) | ⚠️ Solo manuale | ❌ Nessun prompt automatico |
 
-!!! info "Self-hosted su LAN"
+!!! info "Self-hosted on LAN"
 
-    Se accedi a LibreFolio tramite HTTP sulla tua rete locale (es. `http://192.168.1.100:6040`), il prompt di installazione automatica non apparirà. Puoi comunque installarlo manualmente:
+    Se accedi a LibreFolio via HTTP sulla tua rete locale (es. `http://192.168.1.100:6040`), il prompt di installazione automatica non apparirà. Puoi comunque installarlo manualmente:
 
-    - **Android**: Menu browser → "Aggiungi alla schermata Home"
+    - **Android**: Menu del browser → "Aggiungi alla schermata Home"
     - **iOS**: Condividi → "Aggiungi alla schermata Home"
     - **Desktop**: Non disponibile su HTTP (usa Tailscale per HTTPS)
 
@@ -72,11 +72,11 @@ LibreFolio può essere installato come **Progressive Web App (PWA)** sul tuo dis
 
 ---
 
-## 🔧 Risoluzione dei Problemi
+## 🔧 Troubleshooting
 
 | Problema | Soluzione |
 |---------|----------|
-| Pulsante di installazione non visibile | Potresti averlo già installato, oppure sei su HTTP LAN |
-| iOS: nessuna opzione di installazione | È necessario usare **Safari** — Chrome/Firefox su iOS non supportano le PWA |
+| Il pulsante di installazione non appare | Potresti averlo già installato, oppure sei su HTTP LAN |
+| iOS: nessuna opzione di installazione | Devi usare **Safari** — Chrome/Firefox su iOS non supportano le PWA |
 | L'app non si aggiorna | Chiudi e riapri l'app — scarica sempre l'ultima versione |
 | Sessione persa dopo l'aggiornamento | Effettua nuovamente il login — è normale dopo il riavvio del server |

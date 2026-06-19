@@ -1,93 +1,41 @@
 # 💸 Transactions
 
-Les transactions sont le **cœur de LibreFolio** — chaque achat, vente, dividende, frais, transfert et mouvement de trésorerie que vous enregistrez se trouve ici. Chaque courtier possède sa propre liste de transactions, accessible depuis la page de détails du courtier.
+Les transactions représentent chaque activité financière au sein de votre portefeuille. Chaque achat, vente, dividende, frais, transfert d'actifs et mouvement de fonds est enregistré ici pour maintenir à jour les statistiques de votre portefeuille, ses performances et vos dossiers fiscaux.
 
-## 📋 Tableau des transactions
+Chaque compte de courtier dans LibreFolio possède son propre journal de transactions dédié, affichant tous les mouvements par ordre chronologique inverse.
 
-Le tableau des transactions affiche tous les mouvements d'un courtier par ordre chronologique inverse. Chaque ligne indique :
-
-| Colonne | Description |
-|--------|-------------|
-| **Date** | Date d'exécution de la transaction |
-| **Type** | Icône + libellé : BUY, SELL, DIVIDEND, FEE, TRANSFER, etc. |
-| **Actif** | Nom de l'actif lié (vide pour les opérations de trésorerie) |
-| **Quantité** | Nombre d'unités achetées/vendues/transférées |
-| **Prix** | Prix unitaire à l'exécution |
-| **Montant** | Valeur totale (quantité × prix ± frais) |
-| **Devise** | Devise de la transaction |
-| **Notes** | Note utilisateur facultative |
-
-### Tri et Filtrage
-
-- Cliquez sur l'**en-tête d'une colonne** pour trier par ordre croissant/décroissant.
-- Utilisez la **barre de recherche** pour filtrer par nom d'actif, type ou notes.
-- Utilisez les boutons de **filtre de type** pour afficher uniquement des types de transactions spécifiques.
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="transactions" data-name="list" alt="Liste des transactions">
+</div>
 
 ---
 
-## ➕ Ajouter des transactions
+## 🚀 Premiers Pas
 
-Cliquez sur **+ Nouvelle transaction** pour ouvrir le [Formulaire de transaction](form.md). Vous pouvez :
+La gestion de vos transactions est simple :
 
-- Créer une **transaction unique** (un formulaire par opération)
-- Créer des **transactions en masse** via la fenêtre modale d'importation groupée — collez ou téléchargez un tableau de lignes
-
----
-
-## ✏️ Modification et Suppression
-
-- Cliquez sur n'importe quelle ligne pour **ouvrir le formulaire** pré-rempli avec les données de cette transaction.
-- Cliquez sur l'**icône de corbeille** (:material-delete:) pour supprimer une transaction.
-- Sélectionnez plusieurs lignes avec la colonne des **cases à cocher**, puis utilisez la barre d'outils pour effectuer une **suppression groupée**.
-
-!!! warning "Les suppressions sont permanentes"
-
-    Il n'y a pas d'annulation possible pour les transactions supprimées. Exportez une sauvegarde au préalable si vous avez un doute.
+* 📝 **Saisie manuelle et modification** : Ouvrez le **[Formulaire de transaction](form.md)** interactif pour ajouter, modifier ou ajuster manuellement des opérations individuelles.
+* 📥 **Importation simplifiée depuis le courtier** : Vous n'avez pas besoin de tout saisir à la main ! LibreFolio vous permet de télécharger des exports CSV ou PDF de votre courtier et de les associer et les importer automatiquement en quelques secondes. Pour en savoir plus, consultez le guide **[Importation depuis le courtier](import/index.md)**.
 
 ---
 
-## ✂️ Division et Promotion
+## 🛠️ Fonctionnalités de la page
 
-Deux opérations spéciales sont disponibles sur les **transactions composites** (TRANSFER et FX_CONVERSION) :
+Voici un résumé des opérations et outils disponibles directement sur la page des transactions :
 
-### Division { #split }
-
-Une **division** divise une transaction composite en ses deux composantes. Utilisez cette fonction lorsqu'une seule ligne importée représente en réalité deux événements distincts (par exemple, un CSV de courtier qui enregistre un transfert inter-devises sur une seule ligne).
-
-1. Sélectionnez la ligne de la transaction composite.
-2. Cliquez sur **Division** dans la barre d'outils d'action.
-3. LibreFolio la sépare en deux transactions indépendantes.
-
-### Promotion
-
-La **promotion** transforme une paire de transactions enregistrées individuellement (par exemple, un WITHDRAWAL du courtier A et un DEPOSIT dans le courtier B) en une transaction composite **TRANSFER** liée. C'est la méthode standard pour enregistrer un mouvement d'actif entre vos propres courtiers.
-
-1. Sélectionnez **exactement deux transactions** de types compatibles.
-2. Cliquez sur **Promotion** dans la barre d'outils.
-3. LibreFolio valide la compatibilité (même actif, directions opposées, quantité correspondante) et les lie.
-
----
-
-## 📊 WAC — Coût Moyen Pondéré
-
-Le tableau des transactions intègre le **WAC (Weighted Average Cost)** en ligne. Lorsque vous ajoutez ou modifiez un BUY/SELL :
-
-- Un **aperçu du WAC** apparaît dans le formulaire, affichant la base de coût projetée avant l'enregistrement.
-- Après l'enregistrement, les lignes qui affectent la base de coût sont marquées d'un **indicateur ⚡**.
-- Le WAC est calculé à l'exécution selon les règles FIFO/WAC — aucune étape séparée n'est nécessaire.
-
-Consultez [Théorie Financière → Coût Moyen Pondéré](../../financial-theory/portfolio-theory/weighted-average-cost.md) pour la méthodologie sous-jacente.
-
----
-
-## 📥 Importation depuis un Courtier (BRIM)
-
-Au lieu de saisir les transactions manuellement, vous pouvez importer directement depuis le fichier d'exportation de votre courtier. Consultez le guide étape par étape **[Importation depuis un Courtier](import/index.md)**.
+| Fonctionnalité | Description | Référence |
+|---------|-------------|-----------|
+| **Ajouter et Modifier** | Cliquez sur **+ Nouvelle transaction** pour ouvrir le formulaire, ou cliquez sur n'importe quelle ligne existante pour modifier ses détails. | [Formulaire de transaction](form.md) |
+| **Importation depuis le courtier** | Glissez-déposez votre relevé de courtier pour importer votre historique automatiquement. | [Importation depuis le courtier](import/index.md) |
+| **Tri et Filtrage** | Cliquez sur l'en-tête de n'importe quelle colonne pour trier la liste. Utilisez la barre de recherche pour filtrer par nom d'actif, type ou notes. | |
+| **Suppression et Actions groupées** | Faites un clic droit sur une ligne pour ouvrir le menu contextuel et accéder aux actions rapides, cliquez sur l'icône de la corbeille pour supprimer, ou cochez plusieurs lignes pour effectuer des suppressions groupées. | |
+| **Division et Promotion** | **Divisez** une transaction composite (comme un transfert ou une conversion FX) en segments de trésorerie/actifs individuels, ou **Promouvez** deux opérations distinctes pour les lier ensemble. | |
+| **Coût Moyen Pondéré (CMP)** | LibreFolio calcule votre prix de revient en temps réel. Les lignes impactées sont marquées d'un indicateur ⚡, affichant des aperçus en ligne. | |
 
 ---
 
 ## 🔗 Liens connexes
 
-- 📝 **[Formulaire de transaction](form.md)** — Champs, validation et options spécifiques au type
-- 📥 **[Importation depuis un Courtier](import/index.md)** — Flux de travail d'importation BRIM
-- 📖 **[Types de transactions](../../financial-theory/instruments/transaction-types/index.md)** — Théorie financière derrière chaque type
+* 📝 **[Formulaire de transaction](form.md)** — Champs, validation et options spécifiques au type
+* 📥 **[Importation depuis le courtier](import/index.md)** — Flux de travail d'importation BRIM
+* 📖 **[Types de transactions](../../financial-theory/instruments/transaction-types/index.md)** — Théorie financière derrière chaque type
