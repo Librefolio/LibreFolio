@@ -347,7 +347,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
 
     @property
     def docs_url(self) -> Optional[str]:
-        return "/mkdocs/user/brokers/coinbase/"
+        return "/mkdocs/user/transactions/import/coinbase/"
 
     def preview_columns(self) -> List[BRIMPreviewColumn]:
         return [
