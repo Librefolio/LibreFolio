@@ -443,7 +443,6 @@
     }
 
     .lf-btn-primary, .lf-btn-secondary {
-        width: 100%;
         text-align: center;
         box-sizing: border-box;
     }
@@ -475,22 +474,45 @@
 
 /* Deep Dives */
 .deep-dive {
-    display: flex;
-    align-items: center;
-    gap: 4rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr auto auto 1fr;
+    grid-template-areas:
+        ". image"
+        "text image"
+        "actions image"
+        ". image";
+    gap: 0 4rem;
     margin-top: 2rem;
 }
 
 .deep-dive.reverse {
-    flex-direction: row-reverse;
+    grid-template-areas:
+        "image ."
+        "image text"
+        "image actions"
+        "image .";
 }
 
 .deep-dive-content {
-    flex: 1;
+    grid-area: text;
+    align-self: end;
+    margin-bottom: 2rem;
 }
 
-.deep-dive-content h2 {
+.deep-dive-actions {
+    grid-area: actions;
+    align-self: start;
+    padding-bottom: 0;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+}
+
+.md-typeset .deep-dive-content h2 {
     font-size: 2.5rem;
+    margin-top: 0 !important;
     margin-bottom: 1.5rem;
     line-height: 1.2;
 }
@@ -499,11 +521,12 @@
     font-size: 1.2rem;
     line-height: 1.6;
     color: var(--md-default-fg-color--light);
-    margin-bottom: 2rem;
+    margin-bottom: 0;
 }
 
 .deep-dive-image {
-    flex: 1;
+    grid-area: image;
+    align-self: center;
     position: relative;
     width: 100%;
     min-width: 0;
@@ -514,6 +537,7 @@
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
     width: 100%;
     display: block;
+    background-color: transparent !important;
     transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease;
 }
 
@@ -629,6 +653,7 @@
     height: 80px;
     display: block;
     object-fit: contain;
+    background-color: transparent !important;
 }
 
 .satellite-track {
@@ -724,14 +749,26 @@
         font-size: 2.5rem;
     }
     
-    .strengths-grid, .deep-dive {
+    .strengths-grid {
         grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+
+    .deep-dive, .deep-dive.reverse {
+        display: flex;
         flex-direction: column;
         gap: 2rem;
     }
-    
-    .deep-dive.reverse {
-        flex-direction: column;
+
+    .deep-dive-actions {
+        justify-content: flex-end;
+        align-self: stretch;
+    }
+
+    .provider-row {
+        flex-direction: row !important;
+        align-items: center !important;
+        text-align: left !important;
     }
 }
 
@@ -1169,8 +1206,7 @@
   overflow: hidden;
   position: relative;
   border-radius: 12px;
-  background-color: transparent;
-  padding: 10px 0;
+  background-color: transparent !important;
 }
 
 .lf-screenshot-carousel-item {
@@ -1182,10 +1218,18 @@
   margin: 0 auto;
   object-fit: contain;
   border-radius: 12px;
+  background-color: transparent !important;
   box-shadow: 0 10px 30px rgba(0,0,0,0.15);
   transition: transform 2s cubic-bezier(0.25, 1, 0.5, 1), opacity 2s ease, filter 2s ease !important;
   will-change: transform, opacity, filter;
   cursor: default;
+}
+
+.lf-screenshot-carousel-item:not(.is-active) {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
 }
 
 /* Cover Flow States */
