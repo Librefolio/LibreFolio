@@ -50,7 +50,7 @@ SOURCE_LANG = "en"
 FALLBACK_TARGETS = ["it", "fr", "es"]
 
 # EN-only nav sections (not translated)
-EN_ONLY_SECTIONS = {"Developer Manual", "POC UX"}
+EN_ONLY_SECTIONS = {"💻 Developer Manual", "POC UX"}
 
 # Aphra model configuration (overridable per-role via .env)
 DEFAULT_APHRA_MODEL = "google/gemini-2.5-flash"
@@ -1330,6 +1330,12 @@ def _create_doubleword_client(api_key: str, models: dict):
         print("   ➜  Install with: pipenv install --dev autobatcher", file=sys.stderr)
         sys.exit(1)
 
+    # Generate config.toml even in Doubleword mode so Aphra's workflow.load_config()
+    # picks up our model names (writer, critiquer, searcher) instead of its built-in
+    # defaults (e.g. anthropic/claude-sonnet-4). Without this, the model_name Aphra
+    # passes to call_model() for the Critique step would be the default critiquer.
+    _generate_config_toml(api_key, models)
+
     base_url = _get_base_url() or DOUBLEWORD_BASE_URL
     writer_model = models["writer"]
 
@@ -1344,7 +1350,17 @@ def _create_doubleword_client(api_key: str, models: dict):
         guarantee thread-safety when --workers > 1 is used.
         """
 
-        def call_model(self, prompt: str, **kwargs) -> str:  # noqa: D401
+        def call_model(  # noqa: D401
+            self,
+            system_prompt: str,
+            user_prompt: str,
+            model_name: str,
+            *,
+            log_call: bool = False,
+            enable_web_search: bool = False,
+            web_search_context: str = "high",
+            **kwargs,
+        ) -> str:
             """Submit prompt to Doubleword via autobatcher and return response text."""
             import asyncio
             from autobatcher import AsyncOpenAI
@@ -1352,13 +1368,19 @@ def _create_doubleword_client(api_key: str, models: dict):
             timeout_s = _get_step_timeout()
 
             async def _call() -> str:
-                # New client per invocation → safe across threads/event loops
-                client = AsyncOpenAI(api_key=api_key, base_url=base_url)
-                response = await client.chat.completions.create(
-                    model=writer_model,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                return response.choices[0].message.content or ""
+                # Use a context manager to ensure the AsyncOpenAI client (and its underlying
+                # HTTPX AsyncClient) is cleanly closed before the event loop shuts down.
+                # This prevents the 'Event loop is closed' RuntimeError from background tasks.
+                async with AsyncOpenAI(api_key=api_key, base_url=base_url) as client:
+                    messages = []
+                    if system_prompt:
+                        messages.append({"role": "system", "content": system_prompt})
+                    messages.append({"role": "user", "content": user_prompt})
+                    response = await client.chat.completions.create(
+                        model=model_name,
+                        messages=messages,
+                    )
+                    return response.choices[0].message.content or ""
 
             # asyncio.wait_for enforces the queue timeout (HTTP-level timeout
             # does not apply here — Doubleword may hold the request for hours)
@@ -1372,6 +1394,7 @@ def _create_doubleword_client(api_key: str, models: dict):
             if result and "<think>" in result:
                 result = _strip_think_blocks(result)
             return result
+
 
     return DoublewordClient()
 

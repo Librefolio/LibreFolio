@@ -1,6 +1,6 @@
 # 📱 Instalar como Aplicación (PWA)
 
-LibreFolio puede instalarse como una **Aplicación Web Progresiva (PWA)** en tu dispositivo. Esto te brinda una experiencia similar a la de una app: modo de pantalla completa, sin barra de direcciones del navegador y un icono en la pantalla de inicio, sin necesidad de descargarla de una tienda de aplicaciones.
+LibreFolio puede instalarse como una **Aplicación Web Progresiva (PWA)** en tu dispositivo. Esto te brinda una experiencia similar a una aplicación: modo de pantalla completa, sin barra de direcciones del navegador y un icono en la pantalla de inicio, sin necesidad de descargarla de una tienda de aplicaciones.
 
 ---
 
@@ -8,14 +8,14 @@ LibreFolio puede instalarse como una **Aplicación Web Progresiva (PWA)** en tu 
 
 | Característica | Descripción |
 |---------|-------------|
-| **Modo de pantalla completa** | Sin barra de direcciones ni elementos distractores de la interfaz del navegador |
-| **Icono en la pantalla de inicio** | Inicia LibreFolio como si fuera una aplicación nativa |
-| **Sin interferencias de gestos** | Desactiva el deslizamiento para volver y el zoom de doble toque |
+| **Modo pantalla completa** | Sin barra de direcciones ni elementos distractores de la interfaz del navegador |
+| **Icono en pantalla de inicio** | Inicia LibreFolio como una aplicación nativa |
+| **Sin interferencia de gestos** | Deslizar para volver y zoom de doble toque desactivados |
 | **Sesión persistente** | Permanece conectado entre lanzamientos |
 
-!!! note "Solo en línea"
+!!! note "Online Only"
 
-    La PWA de LibreFolio requiere una conexión de red activa. No existe un modo offline: tus datos residen en tu servidor.
+    La PWA de LibreFolio requiere una conexión de red activa. No existe un modo fuera de línea: tus datos residen en tu servidor.
 
 ---
 
@@ -28,20 +28,20 @@ LibreFolio puede instalarse como una **Aplicación Web Progresiva (PWA)** en tu 
 3. Toca **Instalar** cuando se te solicite
 4. LibreFolio aparecerá en tu pantalla de inicio
 
-!!! tip "Método alternativo"
+!!! tip "Alternative method"
 
-    Si el botón de Instalación no aparece, toca el **menú ⋮ del navegador → "Agregar a la pantalla de inicio"** o **"Instalar aplicación"**.
+    Si el botón de instalar no aparece, toca el **menú ⋮ del navegador → "Agregar a la pantalla de inicio"** o **"Instalar aplicación"**.
 
 ### iOS (Safari)
 
-1. Abre LibreFolio en **Safari** (obligatorio; otros navegadores no son compatibles con PWA en iOS)
+1. Abre LibreFolio en **Safari** (obligatorio — otros navegadores no admiten PWA en iOS)
 2. Toca el botón **Compartir** (cuadrado con flecha)
-3. Desliza hacia abajo y toca **"Agregar a la pantalla de inicio"**
+3. Desplázate hacia abajo y toca **"Agregar a la pantalla de inicio"**
 4. Toca **Agregar**
 
-!!! warning "Limitación de iOS"
+!!! warning "iOS Limitation"
 
-    El aviso de instalación automática no está disponible en iOS. Utiliza el menú de Compartir como se describió anteriormente. El menú de Ayuda mostrará instrucciones si estás en un dispositivo iOS.
+    El aviso de instalación automática no está disponible en iOS. Utiliza el menú Compartir como se describe anteriormente. El menú de Ayuda mostrará instrucciones si estás en un dispositivo iOS.
 
 ### Escritorio (Chrome / Edge)
 
@@ -60,9 +60,9 @@ LibreFolio puede instalarse como una **Aplicación Web Progresiva (PWA)** en tu 
 | `http://localhost` | ✅ Funciona | ✅ Funciona |
 | `http://192.168.x.x` (LAN) | ⚠️ Solo manual | ❌ Sin aviso automático |
 
-!!! info "Autoalojado en LAN"
+!!! info "Self-hosted on LAN"
 
-    Si accedes a LibreFolio vía HTTP en tu red local (ej. `http://192.168.1.100:6040`), el aviso de instalación automática no aparecerá. Aún puedes instalarlo manualmente:
+    Si accedes a LibreFolio a través de HTTP en tu red local (ej. `http://192.168.1.100:6040`), el aviso de instalación automática no aparecerá. Aún puedes instalarlo manualmente:
 
     - **Android**: Menú del navegador → "Agregar a la pantalla de inicio"
     - **iOS**: Compartir → "Agregar a la pantalla de inicio"
@@ -72,11 +72,11 @@ LibreFolio puede instalarse como una **Aplicación Web Progresiva (PWA)** en tu 
 
 ---
 
-## 🔧 Resolución de problemas
+## 🔧 Solución de problemas
 
 | Problema | Solución |
 |---------|----------|
-| El botón de instalación no aparece | Es posible que ya lo tengas instalado o que estés accediendo a través de HTTP en tu red local (LAN) |
-| iOS: no aparece la opción de instalar | Debes usar **Safari**; Chrome/Firefox en iOS no son compatibles con PWA |
+| El botón de instalación no aparece | Es posible que ya esté instalado, o que estés usando HTTP en LAN |
+| iOS: no hay opción de instalar | Debes usar **Safari**; Chrome/Firefox en iOS no admiten PWA |
 | La aplicación no se actualiza | Cierra y vuelve a abrir la aplicación; siempre descarga la versión más reciente |
-| Sesión perdida después de una actualización | Inicia sesión nuevamente; esto es normal tras reiniciar el servidor |
+| Sesión perdida tras actualización | Inicia sesión nuevamente; esto es normal tras reinicios del servidor |

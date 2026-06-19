@@ -22,8 +22,8 @@ où :
 
 | Ratio de Sharpe | Qualité |
 |---|---|
-| $< 0$ | Le portefeuille a sous-performé par rapport au taux sans risque |
-| $0 - 0.5$ | Rendement ajusté au risque sous-optimal |
+| $< 0$ | Le portefeuille a sous-performé le taux sans risque |
+| $0 - 0.5$ | Rendement ajusté au risque suboptimal |
 | $0.5 - 1.0$ | Acceptable |
 | $1.0 - 2.0$ | Bon |
 | $> 2.0$ | Excellent (rare sur de longues périodes) |
@@ -34,7 +34,7 @@ où :
 
     $$S = \frac{0.12 - 0.03}{0.15} = 0.60$$
 
-    Pour chaque 1 % de volatilité, le portefeuille a généré 0,60 % de rendement excédentaire.
+    Pour chaque 1 % de volatilité, le portefeuille a généré 0.60 % de rendement excédentaire.
 
 ---
 
@@ -46,30 +46,30 @@ $$
 S_{annual} = S_{daily} \times \sqrt{252}
 $$
 
-où 252 est le nombre typique de jours de bourse par an. Cela suppose que les rendements sont IID (indépendants et identiquement distribués) — une approximation qui ne s'applique plus pour les rendements autocorrélés.
+où 252 est le nombre typique de jours de trading par an. Cela suppose que les rendements sont IID (indépendants et identiquement distribués) — une approximation qui devient erronée pour les rendements autocorréles.
 
 ---
 
 ## ⚠️ Limitations
 
-### 📊 Pénalité symétrique
+### 📊 Pénalité Symétrique
 
-Le ratio de Sharpe pénalise la **volatilité à la hausse** autant que la volatilité à la baisse. Un actif qui connaît fréquemment des pics à la hausse (très souhaitable !) aura un ratio de Sharpe inférieur à un actif ayant le même rendement mais moins de mouvements haussiers.
+Le ratio de Sharpe pénalise la **volatilité à la hausse** autant que la volatilité à la baisse. Un actif qui connaît fréquemment des pics à la hausse (ce qui est très souhaitable !) aura un ratio de Sharpe inférieur à un actif ayant le même rendement mais moins de mouvements haussiers.
 
 → Pour les distributions de rendements asymétriques, préférez le **[Ratio de Sortino](sortino-ratio.md)**.
 
-### 📈 Sensibilité aux valeurs aberrantes
+### 📈 Sensibilité aux Valeurs Aberrantes
 
 Quelques rendements extrêmes peuvent fausser considérablement l'écart-type, rendant le ratio de Sharpe instable sur de courtes périodes.
 
-### 🔄 Dépendance à la période
+### 🔄 Dépendance à la Période Temporelle
 
-Le ratio de Sharpe peut varier considérablement selon la fenêtre d'observation. Une stratégie avec un excellent ratio de Sharpe sur 5 ans peut avoir un mauvais ratio sur 1 an (ou inversement).
+Le ratio de Sharpe peut varier considérablement selon la fenêtre d'observation. Une stratégie avec un excellent ratio de Sharpe sur 5 ans peut avoir un mauvais ratio sur 1 an (ou vice versa).
 
 ---
 
 ## 🔗 Liens connexes
 
-- 📊 **[Ratio de Sortino](sortino-ratio.md)** — Variante basée uniquement sur la volatilité à la baisse
+- 📊 **[Ratio de Sortino](sortino-ratio.md)** — Variante limitée à la baisse
 - 📊 **[Volatilité](volatility.md)** — Le dénominateur du ratio de Sharpe
 - 📈 **[Rendements](../../fundamentals/returns.md)** — Le numérateur du ratio de Sharpe

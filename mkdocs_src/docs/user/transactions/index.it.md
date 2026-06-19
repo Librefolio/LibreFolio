@@ -1,93 +1,41 @@
 # 💸 Transazioni
 
-Le transazioni sono il **cuore di LibreFolio** — ogni acquisto, vendita, dividendo, commissione, trasferimento e movimento di cassa che registrate risiede qui. Ogni broker ha la propria lista di transazioni, accessibile dalla pagina di dettaglio del broker.
+Le transazioni rappresentano ogni attività finanziaria all'interno del tuo portafoglio. Ogni acquisto, vendita, dividendo, commissione, trasferimento di asset e movimento di cassa viene registrato qui per mantenere aggiornate le statistiche del portafoglio, le performance e la documentazione fiscale.
 
-## 📋 Tabella delle Transazioni
+Ogni conto broker in LibreFolio ha il proprio registro delle transazioni dedicato, che mostra tutti i movimenti in ordine cronologico inverso.
 
-La tabella delle transazioni mostra tutti i movimenti di un broker in ordine cronologico inverso. Ogni riga mostra:
-
-| Colonna | Descrizione |
-|--------|-------------|
-| **Data** | Data di esecuzione della transazione |
-| **Tipo** | Icona + etichetta: BUY, SELL, DIVIDEND, FEE, TRANSFER, ecc. |
-| **Asset** | Nome dell'asset collegato (vuoto per le operazioni di cassa) |
-| **Quantità** | Numero di unità acquistate/vendute/trasferite |
-| **Prezzo** | Prezzo unitario all'esecuzione |
-| **Importo** | Valore totale (quantità × prezzo ± commissioni) |
-| **Valuta** | Valuta della transazione |
-| **Note** | Nota utente opzionale |
-
-### Ordinamento e Filtraggio
-
-- Cliccate su qualsiasi **intestazione di colonna** per ordinare in modo crescente/decrescente.
-- Usate la **barra di ricerca** per filtrare per nome dell'asset, tipo o note.
-- Usate i pulsanti del **filtro per tipo** per mostrare solo tipi specifici di transazioni.
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="transactions" data-name="list" alt="Lista Transazioni">
+</div>
 
 ---
 
-## ➕ Aggiungere Transazioni
+## 🚀 Primi Passi
 
-Cliccate su **+ Nuova Transazione** per aprire il [Modulo di Transazione](form.md). Potete:
+Gestire le tue transazioni è semplice:
 
-- Creare una **singola transazione** (un modulo per operazione)
-- Creare **transazioni in blocco** tramite il modale di importazione massiva — incollate o caricate una tabella di righe
-
----
-
-## ✏️ Modifica e Cancellazione
-
-- Cliccate su qualsiasi riga per **aprire il modulo** precompilato con i dati di quella transazione.
-- Cliccate sull'**icona del cestino** (:material-delete:) per eliminare una transazione.
-- Selezionate più righe tramite la colonna con le **caselle di controllo**, quindi usate la barra degli strumenti per la **cancellazione in blocco**.
-
-!!! warning "Le cancellazioni sono permanenti"
-
-    Non è possibile annullare l'eliminazione delle transazioni. Effettuate prima un backup tramite esportazione se non siete sicuri.
+* 📝 **Inserimento Manuale e Modifica**: Apri il **[Modulo Transazione](form.md)** interattivo per aggiungere, modificare o regolare manualmente le singole operazioni.
+* 📥 **Importazione Broker Super-Facile**: Non è necessario digitare tutto a mano! LibreFolio ti permette di caricare esportazioni CSV o PDF dal tuo broker e di mapparle e importarle automaticamente in pochi secondi. Scopri di più nella guida **[Importazione da Broker](import/index.md)**.
 
 ---
 
-## ✂️ Frazionamento e Promote
+## 🛠️ Funzionalità della Pagina
 
-Due operazioni speciali sono disponibili per le **transazioni composite** (TRANSFER e FX_CONVERSION):
+إcco un riepilogo delle operazioni e degli strumenti disponibili direttamente all'interno della pagina delle transazioni:
 
-### Frazionamento { #split }
-
-Un **frazionamento** scompone una transazione composta nelle sue due componenti costitutive. Usate questa funzione quando una singola riga importata rappresenta in realtà due eventi separati (ad esempio, un CSV di un broker che registra un trasferimento tra valute diverse come un'unica riga).
-
-1. Selezionate la riga della transazione composta.
-2. Cliccate su **Frazionamento** nella barra degli strumenti delle azioni.
-3. LibreFolio la separa in due transazioni indipendenti.
-
-### Promote
-
-**Promote** eleva una coppia di transazioni registrate individualmente (ad esempio, un PRELIEVO (WITHDRAWAL) dal broker A e un VERSAMENTO (DEPOSIT) nel broker B) in un **TRANSFER** composto e collegato. Questo è il modo standard per registrare lo spostamento di un asset tra i propri broker.
-
-1. Selezionate **esattamente due transazioni** di tipi compatibili.
-2. Cliccate su **Promote** nella barra degli strumenti.
-3. LibreFolio convalida la compatibilità (stesso asset, direzioni opposte, quantità corrispondente) e le collega.
-
----
-
-## 📊 WAC — Weighted Average Cost
-
-La tabella delle transazioni integra il **WAC (Weighted Average Cost)** inline. Quando aggiungete o modificate un BUY/SELL:
-
-- Un'**anteprima del WAC** appare nel modulo mostrando la base di costo prevista prima del salvataggio.
-- Dopo il salvataggio, le righe che influenzano la base di costo sono contrassegnate con un **indicatore ⚡**.
-- Il WAC viene calcolato al runtime utilizzando le regole FIFO/WAC — non è necessario alcun passaggio separato.
-
-Consultate [Teoria Finanziaria → Weighted Average Cost](../../financial-theory/portfolio-theory/weighted-average-cost.md) per la metodologia sottostante.
-
----
-
-## 📥 Importazione dal Broker (BRIM)
-
-Invece di inserire le transazioni manualmente, potete importarle direttamente dal file di esportazione del vostro broker. Consultate **[Importazione dal Broker](import/index.md)** per la guida passo dopo passo.
+| Funzionalità | Descrizione | Riferimento |
+|---------|-------------|-----------|
+| **Aggiungi e Modifica** | Clicca su **+ Nuova Transazione** per aprire il modulo, oppure clicca su qualsiasi riga esistente per modificarne i dettagli. | [Modulo Transazione](form.md) |
+| **Importazione Broker** | Trascina e rilascia il file dell'estratto conto del tuo broker per importare automaticamente la tua cronologia. | [Importazione da Broker](import/index.md) |
+| **Ordinamento e Filtro** | Clicca su qualsiasi intestazione di colonna per ordinare la lista. Usa la barra di ricerca per filtrare per nome dell'asset, tipo o note. | |
+| **Eliminazione e Azioni in blocco** | Clicca con il tasto destro su qualsiasi riga per aprire il Menu Contestuale per azioni rapide, clicca l'icona del cestino per eliminare, o seleziona più righe per eseguire eliminazioni multiple. | |
+| **Frazionamento e Unione** | **Fraziona** una transazione composta (come un trasferimento o una conversione valutaria) in singoli tronconi di cassa/asset, oppure **unisci** due operazioni separate per collegarle tra loro. | |
+| **Costo Medio Ponderato (WAC)** | LibreFolio calcola la tua base di costo in tempo reale. Le righe interessate sono contrassegnate con un indicatore ⚡, che mostra anteprime inline. | |
 
 ---
 
 ## 🔗 Correlati
 
-- 📝 **[Modulo di Transazione](form.md)** — Campi, convalida e opzioni specifiche per tipo
-- 📥 **[Importazione dal Broker](import/index.md)** — Workflow di importazione BRIM
-- 📖 **[Tipi di Transazione](../../financial-theory/instruments/transaction-types/index.md)** — Teoria finanziaria dietro ogni tipo
+* 📝 **[Modulo Transazione](form.md)** — Campi, convalida e opzioni specifiche per tipo
+* 📥 **[Importazione da Broker](import/index.md)** — Workflow di importazione BRIM
+* 📖 **[Tipi di Transazione](../../financial-theory/instruments/transaction-types/index.md)** — Teoria finanziaria dietro ogni tipo

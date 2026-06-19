@@ -13,7 +13,7 @@ $$
 dove:
 
 - $R_p$ = rendimento del portafoglio (annualizzato)
-- $R_f$ = tasso risk-free (ad es. il tasso dei Treasury bill)
+- $R_f$ = tasso risk-free (es. tasso dei titoli del Tesoro)
 - $\sigma_p$ = deviazione standard del portafoglio (annualizzata)
 
 ---
@@ -46,7 +46,7 @@ $$
 S_{annual} = S_{daily} \times \sqrt{252}
 $$
 
-dove 252 è il numero tipico di giorni di trading per anno. Ciò presuppone che i rendimenti siano IID (indipendenti e identicamente distribuiti), un'approssimazione che non è più valida per i rendimenti autocorrelati.
+dove 252 è il numero tipico di giorni di trading per anno. Questo presuppone che i rendimenti siano IID (indipendenti e identicamente distribuiti) — un'approssimazione che non è più valida in caso di rendimenti autocorrelati.
 
 ---
 
@@ -54,7 +54,7 @@ dove 252 è il numero tipico di giorni di trading per anno. Ciò presuppone che 
 
 ### 📊 Penalità Simmetrica
 
-L'indice di Sharpe penalizza la **volatilità al rialzo** tanto quanto quella al ribasso. Un asset che presenta frequenti picchi verso l'alto (estremamente desiderabile!) avrà un indice di Sharpe più basso rispetto a uno con lo stesso rendimento e meno movimenti al rialzo.
+L'indice di Sharpe penalizza la **volatilità al rialzo** tanto quanto quella negativa. Un asset che presenta frequenti picchi verso l'alto (estremamente desiderabile!) avrà un indice di Sharpe più basso rispetto a uno con lo stesso rendimento ma con meno movimenti al rialzo.
 
 → Per distribuzioni di rendimento asimmetriche, preferire l'**[Indice di Sortino](sortino-ratio.md)**.
 
@@ -64,12 +64,12 @@ Alcuni rendimenti estremi possono distorcere significativamente la deviazione st
 
 ### 🔄 Dipendenza dal Periodo Temporale
 
-L'indice di Sharpe può variare drasticamente a seconda della finestra di osservazione. Una strategia con un eccellente Sharpe a 5 anni potrebbe avere un pessimo Sharpe a 1 anno (o viceversa).
+L'indice di Sharpe può variare drasticamente a seconda della finestra temporale considerata (lookback window). Una strategia con un eccellente indice di Sharpe a 5 anni potrebbe avere un indice di Sharpe a 1 anno scarso (o viceversa).
 
 ---
 
 ## 🔗 Correlati
 
-- 📊 **[Indice di Sortino](sortino-ratio.md)** — Variante focalizzata solo sul ribasso
+- 📊 **[Indice di Sortino](sortino-ratio.md)** — Variante basata solo sulla volatilità al ribasso
 - 📊 **[Volatilità](volatility.md)** — Il denominatore dell'indice di Sharpe
 - 📈 **[Rendimenti](../../fundamentals/returns.md)** — Il numeratore dell'indice di Sharpe

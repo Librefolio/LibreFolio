@@ -1,6 +1,6 @@
 # 📐 Ratio de Sharpe
 
-El ratio de Sharpe es la métrica de **rendimiento ajustado al riesgo** más utilizada. Mide cuánto rendimiento excedente se recibe por cada unidad de volatilidad total.
+El ratio de Sharpe es la métrica de **rendimiento ajustado al riesgo** más utilizada. Mide cuánto rendimiento excedente recibe por cada unidad de volatilidad total.
 
 ---
 
@@ -46,7 +46,7 @@ $$
 S_{annual} = S_{daily} \times \sqrt{252}
 $$
 
-donde 252 es el número típico de días de negociación por año. Esto asume que los rendimientos son IID (independientes e idénticamente distribuidos), una aproximación que falla en el caso de rendimientos autocorrelacionados.
+donde 252 es el número típico de días bursátiles por año. Esto asume que los rendimientos son IID (independientes e idénticamente distribuidos), una aproximación que deja de ser válida en el caso de rendimientos autocorrelacionados.
 
 ---
 
@@ -54,13 +54,13 @@ donde 252 es el número típico de días de negociación por año. Esto asume qu
 
 ### 📊 Penalización Simétrica
 
-El ratio de Sharpe penaliza la **volatilidad alcista** tanto como la volatilidad bajista. Un activo que experimenta picos frecuentes hacia arriba (¡muy deseable!) tendrá un ratio de Sharpe más bajo que uno con el mismo rendimiento y menos movimiento alcista.
+El ratio de Sharpe penaliza la **volatilidad alcista** tanto como la volatilidad bajista. Un activo que presenta picos alcistas frecuentes (¡lo cual es muy deseable!) tendrá un ratio de Sharpe menor que uno con el mismo rendimiento y menos movimiento alcista.
 
 → Para distribuciones de rendimiento asimétricas, prefiera el **[Ratio de Sortino](sortino-ratio.md)**.
 
 ### 📈 Sensibilidad a Valores Atípicos
 
-Unos pocos rendimientos extremos pueden distorsionar significativamente la desviación estándar, haciendo que el ratio de Sharpe sea inestable para periodos de tiempo cortos.
+Algunos rendimientos extremos pueden distorsionar significativamente la desviación estándar, haciendo que el ratio de Sharpe sea inestable en periodos de tiempo cortos.
 
 ### 🔄 Dependencia del Periodo de Tiempo
 
@@ -68,8 +68,8 @@ El ratio de Sharpe puede variar drásticamente dependiendo de la ventana de aná
 
 ---
 
-## 🔗 Relacionados
+## 🔗 Relacionado
 
-- 📊 **[Ratio de Sortino](sortino-ratio.md)** — Variante solo para el riesgo a la baja
+- 📊 **[Ratio de Sortino](sortino-ratio.md)** — Variante enfocada solo en la volatilidad bajista
 - 📊 **[Volatilidad](volatility.md)** — El denominador del ratio de Sharpe
 - 📈 **[Rendimientos](../../fundamentals/returns.md)** — El numerador del ratio de Sharpe
