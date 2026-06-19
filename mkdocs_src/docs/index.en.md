@@ -53,7 +53,7 @@ description: Free to understand, free to act. LibreFolio brings all your investm
     <!-- Quick Install -->
   <section class="lf-quick-install-section" id="get-started-quick">
     <div class="lf-quick-install-card">
-      <h2 class="lf-quick-install-title">Ready to try LibreFolio?</h2>
+      <h2 class="lf-quick-install-title">Ready to try<br><img src="static/logo.png" alt="LibreFolio Logo" style="height: 1em; width: auto; vertical-align: text-bottom; margin-right: 0.2em; border-radius: 4px;">LibreFolio?</h2>
       
       <div class="lf-quick-install-docker">
         <span class="lf-quick-install-eyebrow">Recommended</span>
@@ -96,19 +96,25 @@ description: Free to understand, free to act. LibreFolio brings all your investm
                style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
       </div>
     </div>
+    <div class="deep-dive-actions">
+      <a href="user/dashboard/" class="lf-btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">Explore dashboard &rarr;</a>
+    </div>
   </div>
 
   <!-- Deep Dive 2: Brokers -->
   <div class="deep-dive reverse">
     <div class="deep-dive-content">
       <h2>Brokers Integration</h2>
-      <p>Seamlessly import data from your brokers. Standardize your transaction history and keep everything organized automatically.</p>
+      <p>Import data <b>directly</b> from your broker's report files using dedicated plugins.</p>
     </div>
     <div class="deep-dive-image">
       <div class="screenshot-container">
           <img class="gallery-img" data-category="brokers" data-name="list" alt="Brokers List"
                style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
       </div>
+    </div>
+    <div class="deep-dive-actions">
+      <a href="user/transactions/import/" class="lf-btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">See all supported brokers &rarr;</a>
     </div>
   </div>
 
@@ -124,16 +130,19 @@ description: Free to understand, free to act. LibreFolio brings all your investm
                style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
       </div>
     </div>
+    <div class="deep-dive-actions">
+      <a href="financial-theory/instruments/transaction-types/" class="lf-btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">View transaction types &rarr;</a>
+    </div>
   </div>
 
   <!-- Deep Dive 4: Assets -->
   <div class="deep-dive reverse">
     <div class="deep-dive-content">
-      <h2>Assets & Analytics</h2>
-      <p>Dive deep into individual assets. Advanced charts, technical indicators (EMA, MACD, RSI), and historical data directly imported from global providers.</p>
+      <h2>Deep Dive Insights</h2>
+      <p>Uncover market trends with precision. Powerful technical analysis, trading signals, and historical performance metrics for every single asset in your portfolio.</p>
     </div>
     <div class="deep-dive-image">
-      <div class="lf-screenshot-carousel" data-carousel="assets" data-carousel-interval="4000">
+      <div class="lf-screenshot-carousel" data-carousel="assets" data-carousel-interval="18000">
         <img class="gallery-img lf-screenshot-carousel-item is-active" 
              data-category="assets" data-name="detail-chart" alt="Asset Details Base Chart">
         <img class="gallery-img lf-screenshot-carousel-item" loading="lazy"
@@ -144,16 +153,19 @@ description: Free to understand, free to act. LibreFolio brings all your investm
              data-category="assets" data-name="detail-signals-bollinger" alt="Asset Details Bollinger Bands">
       </div>
     </div>
+    <div class="deep-dive-actions">
+      <a href="financial-theory/technical-analysis/" class="lf-btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">Explore technical analysis &rarr;</a>
+    </div>
   </div>
 
   <!-- Deep Dive 5: Forex -->
   <div class="deep-dive">
     <div class="deep-dive-content">
-      <h2>Forex & Currencies</h2>
-      <p>Track exchange rates automatically. Manage multi-currency portfolios with live rates fetched straight from central banks.</p>
+      <h2>Asset & Forex</h2>
+      <p>Track asset valuations and exchange rates automatically. Manage multi-currency portfolios with live data fetched straight from financial providers and central banks.</p>
     </div>
     <div class="deep-dive-image">
-      <div class="lf-screenshot-carousel" data-carousel="fx-assets-table" data-carousel-interval="4000">
+      <div class="lf-screenshot-carousel" data-carousel="fx-assets-table" data-carousel-interval="18000">
         <img class="gallery-img lf-screenshot-carousel-item is-active" 
              data-category="fx" data-name="list" data-title="Forex Grid" alt="Forex Grid">
         <img class="gallery-img lf-screenshot-carousel-item" loading="lazy"
@@ -164,15 +176,21 @@ description: Free to understand, free to act. LibreFolio brings all your investm
              data-category="assets" data-name="list-table" data-title="Assets Table" alt="Assets Table">
       </div>
     </div>
+    <div class="deep-dive-actions">
+      <a href="financial-theory/instruments/asset-types/" class="lf-btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">Asset types &rarr;</a>
+      <a href="user/fx/" class="lf-btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">Forex management &rarr;</a>
+    </div>
   </div>
 
   <!-- Deep Dive: Expandable by the Community -->
   <div class="deep-dive" style="margin-top: 4rem; display: block; text-align: center;">
     <h2 style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-      Expandable by the Community
+      A Modular Ecosystem
       <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
     </h2>
-    <p style="max-width: 600px; margin: 0 auto 3rem auto; color: var(--md-default-fg-color--light);">LibreFolio is built around a plugin architecture. It's incredibly easy to write new integrations or leverage existing ones.</p>
+    <p style="max-width: 680px; margin: 0 auto 3rem auto; color: var(--md-default-fg-color--light); font-size: 1.05rem; line-height: 1.6;">
+      Free yourself from spreadsheets. LibreFolio is engineered to <b>connect seamlessly</b> with the financial tools you already use, extending its capabilities through a growing ecosystem of <b>community-driven plugins</b>.
+    </p>
     
     <div class="plugin-radial-hub">
       <div class="hub-core">
@@ -196,11 +214,11 @@ description: Free to understand, free to act. LibreFolio brings all your investm
           
           <div class="hub-node node-top">
             <div class="hub-node-unscale">
-              <a href="user/brokers/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
+              <a href="user/transactions/import/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="6" rx="2"/><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
                 <div class="provider-info">
-                  <h4>Import Brokers Report</h4>
-                  <p>Load your transactions directly from your broker's export files in one click.</p>
+                  <h4>Smart Parsers</h4>
+                  <p><b>Map and import</b> complex broker export files <b>automatically</b> using community parsers.</p>
                 </div>
               </a>
             </div>
@@ -211,8 +229,8 @@ description: Free to understand, free to act. LibreFolio brings all your investm
               <a href="user/assets/providers/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
                 <div class="provider-info">
-                  <h4>Asset Providers</h4>
-                  <p>Sync real-time asset valuations from your preferred financial data sources.</p>
+                  <h4>Valuation Modules</h4>
+                  <p><b>Plug into</b> your preferred financial APIs to stream <b>live pricing data</b>.</p>
                 </div>
               </a>
             </div>
@@ -223,8 +241,8 @@ description: Free to understand, free to act. LibreFolio brings all your investm
               <a href="user/fx/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
                 <div class="provider-info">
-                  <h4>Forex Providers</h4>
-                  <p>Fetch reliable daily currency exchange rates from your trusted financial providers.</p>
+                  <h4>Exchange Rate Engines</h4>
+                  <p><b>Integrate</b> custom forex providers to perfectly balance <b>multi-currency accounts</b>.</p>
                 </div>
               </a>
             </div>
