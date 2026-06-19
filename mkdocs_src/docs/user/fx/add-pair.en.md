@@ -9,30 +9,27 @@ To add a new currency pair to your FX dashboard:
 
 ---
 
-## 🔗 Direct Routes
+## 🛤️ Conversion Routes (Direct & Chain)
 
-If a provider supports both currencies directly (e.g., ECB for EUR→USD), you'll see a **Direct Routes** section:
+When you select a base and quote currency, LibreFolio queries all installed providers to discover the best available exchange rate routes.
 
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="fx" data-name="add-pair-routes" alt="Add Pair — Direct Routes" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+<div class="lf-screenshot-carousel" data-carousel="carousel-fx-routes" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="fx" data-name="add-pair-routes" data-title="🔗 Direct Routes" alt="Add Pair — Direct Routes">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="fx" data-name="add-pair-chain" data-title="🔀 Chain Routes (Multi-hop)" alt="Add Pair — Chain Routes">
 </div>
 
----
+### 🔗 Direct Routes
+If a provider directly supports exchange rates between both currencies (e.g. ECB quoting rates for EUR 🇪🇺 / USD 🇺🇸), the system displays it as a direct route option.
 
-## 🔀 Chain Routes
-
-For exotic pairs (e.g., RON→JPY) where no single provider covers both currencies, the system builds **conversion chains** — multi-step paths through intermediate currencies:
-
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Add Pair — Chain Routes" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-</div>
+### 🔀 Chain Routes
+For exotic pairs (e.g., RON 🇷🇴 / JPY 🇯🇵) where no single central bank publishes rates directly, the system automatically builds **conversion chains** — multi-step paths through intermediate currencies (typically EUR 🇪🇺 or USD 🇺🇸).
 
 !!! example "Chain Example"
 
-    **RON → JPY** via ECB:
+    **RON 🇷🇴 → JPY 🇯🇵** via ECB:
 
-    1. RON → EUR (ECB provides RON/EUR)
-    2. EUR → JPY (ECB provides EUR/JPY)
+    1. RON 🇷🇴 → EUR 🇪🇺 (ECB provides RON 🇷🇴 / EUR 🇪🇺)
+    2. EUR 🇪🇺 → JPY 🇯🇵 (ECB provides EUR 🇪🇺 / JPY 🇯🇵)
 
     The final rate is computed by multiplying the intermediate rates.
 
@@ -43,7 +40,7 @@ For exotic pairs (e.g., RON→JPY) where no single provider covers both currenci
 When you select two currencies, LibreFolio queries all installed providers to find:
 
 - 🔗 **Direct routes**: a single provider that covers both currencies
-- 🔀 **Chain routes**: two or more providers that together can connect the currencies through an intermediate currency (e.g., EUR)
+- 🔀 **Chain routes**: two or more providers that together can connect the currencies through an intermediate currency (e.g., EUR 🇪🇺)
 
 Each route shows:
 
@@ -53,4 +50,8 @@ Each route shows:
 
 You can choose any available route based on your preference for data source, coverage period, or update frequency.
 
-For technical details on the routing algorithm, see the developer documentation: [FX Configuration & Routing](../../developer/backend/fx/configuration.md).
+!!! info "For the Curious: Behind the Scenes"
+
+    If you are interested in the mathematical details of how multi-hop conversion chains are computed and routed, you can read the developer documentation: [FX Configuration & Routing](../../developer/backend/fx/configuration.md) and [FX Chain Algorithm](../../developer/frontend/fx-chain-algorithm.md). 
+    
+    *Note: This technical documentation is only for developers and is not required to use this feature.*

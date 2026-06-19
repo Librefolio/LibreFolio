@@ -57,6 +57,6 @@ This means:
 - 🔀 Exotic pairs use multi-step chains through intermediate currencies (e.g., RON → EUR → JPY)
 - ⚙️ You can customize which provider to use for each pair
 
-For the list of supported providers, see the [FX Providers List](../../developer/backend/fx/providers_list.md).
+For the list of supported providers, see the [FX Providers](providers/index.md).
 
 For technical details on the routing algorithm and configuration, see the developer documentation: [FX Configuration & Routing](../../developer/backend/fx/configuration.md).

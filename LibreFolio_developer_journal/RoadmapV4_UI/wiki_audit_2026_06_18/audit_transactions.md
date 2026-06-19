@@ -11,11 +11,8 @@ Di seguito viene riportata la valutazione dettagliata per ogni singolo argomento
 ---
 
 ### 1. Modals
-* **Stato:** Assente (lato Developer) / Completa ma da migliorare esteticamente (lato User)
-* **Analisi:** Il file utente `form.en.md` descrive bene i campi e le tipologie di transazione che compaiono nel form modale, tuttavia un arricchimento visuale con screenshot o video-pillole renderebbe la guida esteticamente più appagante e chiara per gli utenti. Lato sviluppatore, non esiste alcuna documentazione tecnica su come i modali siano implementati nel frontend (gestione dello stato, chiusura, sovrapposizioni).
-* **Proposta:**
-  - *Developer:* Creare una documentazione per il componente modale in `mkdocs_src/docs/developer/frontend/components/modal.md`.
-  - *User:* Aggiungere asset visuali in `form.en.md`.
+* **Stato:** Completa
+* **Analisi:** Il file utente `form.en.md` descrive bene i campi e include un carosello di screenshot per i vari tipi di transazione. Lato sviluppatore, la documentazione tecnica su come i modali sono implementati nel frontend (gestione dello stato `isOpen`, chiusura su backdrop/Escape, focus trap e sovrapposizioni via `zIndex`) è presente in `mkdocs_src/docs/developer/frontend/components/core-ui/modals.md`.
 
 ### 2. Validation
 * **Stato:** Completa e allineata agli standard estetici
@@ -64,6 +61,6 @@ Partendo da questo audit, abbiamo svolto le seguenti attività:
    - Risolto conflitti CSS tra l'hover effect delle immagini e lo zoom dei contenitori Deep-Dive.
 
 **Rimane da fare (Prossime Sessioni)**:
-- Inserire materialmente gli screenshot generati *all'interno* di `form.en.md` (attualmente sono solo nella Gallery).
-- Creare il documento developer per le Modals (`modal.md`).
-- Creare il documento developer per `DraftRow vs PendingOp`.
+- `[x]` Inserire materialmente gli screenshot generati *all'interno* di `form.en.md` (attualmente sono solo nella Gallery).
+- `[x]` Creare il documento developer per le Modals (`core-ui/modals.md`).
+- `[ ]` Creare il documento developer per `DraftRow vs PendingOp`.

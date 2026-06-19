@@ -190,7 +190,7 @@ class RevolutBrokerProvider(BRIMProvider):
 
     @property
     def icon_url(self) -> str:
-        return "https://www.revolut.com/favicon.ico"
+        return "https://assets.revolut.com/assets/favicons/favicon-32x32.png"
 
     def can_parse(self, file_path: Path) -> bool:
         """Detect Revolut format by checking for distinctive headers."""

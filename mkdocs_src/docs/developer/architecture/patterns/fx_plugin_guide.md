@@ -150,6 +150,6 @@ fx_providers/
 
 - [FX Architecture](../../backend/fx/architecture.md) — Multi-provider design, sync process
 - [FX Configuration & Routing](../../backend/fx/configuration.md) — Chain routing algorithm, fallback
-- [FX Providers List](../../backend/fx/providers_list.md) — ECB, FED, BOE, SNB details
+- [FX Providers](../../backend/fx/providers/index.md) — ECB, FED, BOE, SNB technical details
 - [Registry Pattern Overview](registry_pattern.md) — How the plugin system works
 

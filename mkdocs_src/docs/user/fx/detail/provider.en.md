@@ -61,7 +61,7 @@ When multiple routes are configured for a pair:
 
 - ➕ **[Adding a Pair](../add-pair.md)** — Full route discovery (direct + chain routes)
 - 🔄 **[Synchronization](../sync.md)** — How sync uses the configured providers
-- 📋 **[FX Providers List](../../../developer/backend/fx/providers_list.md)** — Technical details on each provider (ECB, FED, BOE, SNB)
+- 🔌 **[FX Providers](../providers/index.md)** — User guide and details on each provider (ECB, FED, BOE, SNB)
 
 !!! tip "🔗 How chain routes are calculated"
 

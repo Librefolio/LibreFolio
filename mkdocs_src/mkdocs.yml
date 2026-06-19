@@ -99,6 +99,10 @@ plugins:
             CSS Scraper: CSS Scraper
             Scheduled Investment: Investimento Programmato
             Borsa Italiana: Borsa Italiana
+            European Central Bank (ECB): Banca Centrale Europea (BCE)
+            Federal Reserve (FED): Federal Reserve (FED)
+            Bank of England (BOE): Banca d'Inghilterra (BoE)
+            Swiss National Bank (SNB): Banca Nazionale Svizzera (BNS)
             # Developer provider entries — kept in English per dev-manual policy
             Overview Providers: Overview Providers
             Yahoo Finance Tech: Yahoo Finance Tech
@@ -106,6 +110,10 @@ plugins:
             CSS Scraper Tech: CSS Scraper Tech
             Scheduled Investment Tech: Scheduled Investment Tech
             Borsa Italiana Tech: Borsa Italiana Tech
+            ECB Tech: ECB Tech
+            FED Tech: FED Tech
+            BOE Tech: BOE Tech
+            SNB Tech: SNB Tech
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
@@ -225,6 +233,10 @@ plugins:
             justETF: justETF
             CSS Scraper: CSS Scraper
             Scheduled Investment: Investissement Programmé
+            European Central Bank (ECB): Banque Centrale Européenne (BCE)
+            Federal Reserve (FED): Federal Reserve (FED)
+            Bank of England (BOE): Banque d'Angleterre (BoE)
+            Swiss National Bank (SNB): Banque Nationale Suisse (BNS)
             # Developer provider entries — kept in English per dev-manual policy
             Overview Providers: Overview Providers
             Yahoo Finance Tech: Yahoo Finance Tech
@@ -232,6 +244,10 @@ plugins:
             CSS Scraper Tech: CSS Scraper Tech
             Scheduled Investment Tech: Scheduled Investment Tech
             Borsa Italiana Tech: Borsa Italiana Tech
+            ECB Tech: ECB Tech
+            FED Tech: FED Tech
+            BOE Tech: BOE Tech
+            SNB Tech: SNB Tech
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
@@ -352,6 +368,10 @@ plugins:
             justETF: justETF
             CSS Scraper: CSS Scraper
             Scheduled Investment: Inversión Programada
+            European Central Bank (ECB): Banco Central Europeo (BCE)
+            Federal Reserve (FED): Federal Reserve (FED)
+            Bank of England (BOE): Banco de Inglaterra (BoE)
+            Swiss National Bank (SNB): Banco Nacional Suizo (BNS)
             # Developer provider entries — kept in English per dev-manual policy
             Overview Providers: Overview Providers
             Yahoo Finance Tech: Yahoo Finance Tech
@@ -359,6 +379,10 @@ plugins:
             CSS Scraper Tech: CSS Scraper Tech
             Scheduled Investment Tech: Scheduled Investment Tech
             Borsa Italiana Tech: Borsa Italiana Tech
+            ECB Tech: ECB Tech
+            FED Tech: FED Tech
+            BOE Tech: BOE Tech
+            SNB Tech: SNB Tech
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
@@ -517,6 +541,12 @@ nav:
           - Overview: user/fx/index.md
           - Adding a Pair: user/fx/add-pair.md
           - Synchronization: user/fx/sync.md
+          - 🔌 Providers:
+              - Overview: user/fx/providers/index.md
+              - European Central Bank (ECB): user/fx/providers/ecb.md
+              - Federal Reserve (FED): user/fx/providers/fed.md
+              - Bank of England (BOE): user/fx/providers/boe.md
+              - Swiss National Bank (SNB): user/fx/providers/snb.md
           - 🔎 Pair Detail:
               - Overview: user/fx/detail/index.md
               - Interactive Chart: user/fx/detail/chart.md
@@ -658,7 +688,12 @@ nav:
           - "💱 FX (Currency)":
               - Architecture: developer/backend/fx/architecture.md
               - Configuration & Routing: developer/backend/fx/configuration.md
-              - Providers List: developer/backend/fx/providers_list.md
+              - 🔌 Providers:
+                  - Overview Providers: developer/backend/fx/providers/index.md
+                  - ECB Tech: developer/backend/fx/providers/ecb.md
+                  - FED Tech: developer/backend/fx/providers/fed.md
+                  - BOE Tech: developer/backend/fx/providers/boe.md
+                  - SNB Tech: developer/backend/fx/providers/snb.md
       - 🎨 Frontend Development:
           - Overview: developer/frontend/index.md
           - "🧠 Core Architecture & State":

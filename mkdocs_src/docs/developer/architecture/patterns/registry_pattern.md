@@ -125,5 +125,5 @@ Each plugin subsystem also has architecture docs, provider lists, and configurat
 
 - [Architecture](../../backend/fx/architecture.md) — Multi-provider design, sync process
 - [Configuration & Routing](../../backend/fx/configuration.md) — Chain routing algorithm, priority fallback
-- [Providers List](../../backend/fx/providers_list.md) — ECB, FED, BOE, SNB details
+- [Providers](../../backend/fx/providers/index.md) — ECB, FED, BOE, SNB technical details
 

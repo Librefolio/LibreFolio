@@ -1,94 +1,41 @@
 # 💸 Transactions
 
-Transactions are the **core of LibreFolio** — every purchase, sale, dividend, fee, transfer, and cash movement you record lives here. Each broker has its own transaction list, accessible from the broker's detail page.
+Transactions represent every financial activity within your portfolio. Every purchase, sale, dividend, fee, asset transfer, and cash movement is recorded here to keep your portfolio statistics, performance, and tax records up to date.
 
-## 📋 Transaction Table
+Each broker account in LibreFolio has its own dedicated transaction log, showing all movements in reverse chronological order.
 
-The transaction table displays all movements for a broker in reverse chronological order. Each row shows:
-
-| Column | Description |
-|--------|-------------|
-| **Date** | Execution date of the transaction |
-| **Type** | Icon + label: BUY, SELL, DIVIDEND, FEE, TRANSFER, etc. |
-| **Asset** | Linked asset name (blank for cash operations) |
-| **Quantity** | Number of units bought/sold/transferred |
-| **Price** | Unit price at execution |
-| **Amount** | Total value (quantity × price ± fees) |
-| **Currency** | Transaction currency |
-| **Notes** | Optional user note |
-
-### Sorting & Filtering
-
-- Click any **column header** to sort ascending/descending.
-- Use the **search bar** to filter by asset name, type, or notes.
-- Use the **type filter** buttons to show only specific transaction types.
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="list" alt="Transaction List">
+</div>
 
 ---
 
-## ➕ Adding Transactions
+## 🚀 Getting Started
 
-Click **+ New Transaction** to open the [Transaction Form](form.md). You can:
+Managing your transactions is straightforward:
 
-- Create a **single transaction** (one form per operation)
-- Create a **bulk transaction** via the bulk import modal — paste or upload a table of rows
-
----
-
-## ✏️ Editing & Deleting
-
-- Click any row to **open the form** pre-filled with that transaction's data.
-- **Right-click** any row to open the **Context Menu** for quick actions (Edit, Delete, Split, etc.).
-- Click the **trash icon** (:material-delete:) to delete a transaction.
-- Select multiple rows with the **checkbox** column, then use the toolbar to **bulk delete**.
-
-!!! warning "Deletions are permanent"
-
-    There is no undo for deleted transactions. Export a backup first if you are unsure.
+* 📝 **Manual Entry & Editing**: Open the interactive **[Transaction Form](form.md)** to manually add, edit, or adjust individual operations.
+* 📥 **Super-Easy Broker Import**: You don't need to type everything by hand! LibreFolio allows you to upload CSV or PDF exports from your broker and automatically map and import them in seconds. Learn more in the **[Import from Broker](import/index.md)** guide.
 
 ---
 
-## ✂️ Split & Promote
+## 🛠️ Page Features
 
-Two special operations are available on **composite transactions** (TRANSFER and FX_CONVERSION):
+Here is a summary of the operations and tools available directly within the transaction page:
 
-### Split
-
-A **split** breaks a composite transaction into its two constituent legs. Use this when a single imported row actually represents two separate events (e.g., a broker CSV that records a cross-currency transfer as one line).
-
-1. Select the composite transaction row.
-2. Click **Split** in the action toolbar.
-3. LibreFolio separates it into two independent transactions.
-
-### Promote
-
-**Promote** upgrades a pair of individually-recorded transactions (e.g., a WITHDRAWAL from broker A and a DEPOSIT into broker B) into a linked **TRANSFER** composite. This is the standard way to record an asset move between your own brokers.
-
-1. Select **exactly two transactions** of compatible types.
-2. Click **Promote** in the toolbar.
-3. LibreFolio validates compatibility (same asset, opposite directions, matching quantity) and links them.
-
----
-
-## 📊 WAC — Weighted Average Cost
-
-The transaction table integrates **WAC (Weighted Average Cost)** inline. When you add or edit a BUY/SELL:
-
-- A **WAC preview** appears in the form showing the projected cost basis before saving.
-- After saving, rows that affect the cost basis are marked with a **⚡ indicator**.
-- The WAC is computed at runtime using FIFO/WAC rules — no separate step needed.
-
-See [Financial Theory → Weighted Average Cost](../../financial-theory/portfolio-theory/weighted-average-cost.md) for the underlying methodology.
-
----
-
-## 📥 Importing from Broker (BRIM)
-
-Instead of entering transactions manually, you can import directly from your broker's export file. See **[Import from Broker](import/index.md)** for the step-by-step guide.
+| Feature | Description | Reference |
+|---------|-------------|-----------|
+| **Add & Edit** | Click **+ New Transaction** to open the form, or click any existing row to edit its details. | [Transaction Form](form.md) |
+| **Broker Import** | Drag-and-drop your broker statement file to import your history automatically. | [Import from Broker](import/index.md) |
+| **Sorting & Filtering** | Click any column header to sort the list. Use the search bar to filter by asset name, type, or notes. | |
+| **Deleting & Bulk Actions** | Click the trash icon to delete, or check multiple rows to perform bulk deletions. | |
+| **Split & Promote** | **Split** a composite transaction (like a transfer or FX conversion) into individual cash/asset legs, or **Promote** two separate operations to link them together. | |
+| **Weighted Average Cost (WAC)** | LibreFolio calculates your cost basis in real-time. Impacted rows are marked with a ⚡ indicator, showing inline previews. | |
 
 ---
 
 ## 🔗 Related
 
-- 📝 **[Transaction Form](form.md)** — Fields, validation, and type-specific options
-- 📥 **[Import from Broker](import/index.md)** — BRIM import workflow
-- 📖 **[Transaction Types](../../financial-theory/instruments/transaction-types/index.md)** — Financial theory behind each type
+* 📝 **[Transaction Form](form.md)** — Fields, validation, and type-specific options
+* 📥 **[Import from Broker](import/index.md)** — BRIM import workflow
+* 📖 **[Transaction Types](../../financial-theory/instruments/transaction-types/index.md)** — Financial theory behind each type

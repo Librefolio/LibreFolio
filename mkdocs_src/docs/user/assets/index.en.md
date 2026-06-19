@@ -2,8 +2,9 @@
 
 Assets are the core of LibreFolio. They represent any financial instrument you own or track: stocks, ETFs, bonds, cryptocurrencies, or custom instruments like savings accounts with scheduled interest.
 
-<div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="assets" data-name="list" alt="Assets List Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+<div class="lf-screenshot-carousel" data-carousel="carousel-assets-list" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="list" data-title="🔲 Card Grid View" alt="Asset List Page (Grid)">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="list-table" data-title="📋 Data Table View" alt="Asset List Page (Table)">
 </div>
 
 ## 📌 What is an Asset?
@@ -21,14 +22,13 @@ An asset in LibreFolio is a financial instrument with:
 
 Navigate to **Assets** in the sidebar to see all your assets. The list page provides:
 
-- **Grid / Table toggle**: switch between card grid and sortable data table (choice is persisted)
-- **Search**: filter assets by name, ISIN, or ticker
-- **Type filter**: show only specific asset types (ETF, Stock, Bond, etc.)
-- **Active/All toggle**: show only active assets or include archived ones
-- **Price change period**: select the time window for price change (Δ) display (1D, 1W, 1M, 3M, 6M, 1Y, YTD, ALL)
-- **Sync All**: fetch latest prices for all assets with a provider
-- **Refresh All**: reload asset data from the database
-- **Context Menu**: right-click any row in the table view to access quick actions (Edit, Delete, etc.)
+- 🔀 **Grid / Table Layouts**: Choose between a card-based visual grid or a dense, sortable data table. Your layout preference is automatically persisted in your browser's `localStorage` and will be loaded in future sessions.
+- 🔎 **Smart Search**: Filter assets in real-time by entering a name, ISIN, ticker, or broker name.
+- 🏷️ **Type Filters**: Filter the list to display only specific classes (e.g. ETFs, Stocks, Bonds, Crypto).
+- 🗃️ **Archived Assets**: Toggle between active holdings and archived assets to keep your list clean.
+- ⏱️ **Time Delta Selector**: Change the timeframe used to calculate price changes (e.g., `1D`, `1W`, `1M`, `YTD`, `ALL`).
+- 🔄 **Sync & Refresh**: Sync real-time pricing data for all configured providers or manually refresh the list.
+- 🖱️ **Context Menu**: Right-click any row in the data table layout for quick actions (Edit, Delete, Sync).
 
 Click on any asset card to navigate to its **[detail page](detail/index.md)**.
 

@@ -57,6 +57,6 @@ Ciò significa che:
 - 🔀 Le coppie esotiche utilizzano catene multi-step attraverso valute intermedie (es. RON → EUR → JPY)
 - ⚙️ Puoi personalizzare quale provider utilizzare per ogni coppia
 
-Per l'elenco dei provider supportati, consulta la [Lista Provider FX](../../developer/backend/fx/providers_list.md).
+Per l'elenco dei provider supportati, consulta i [Provider FX](providers/index.md).
 
 Per i dettagli tecnici sull'algoritmo di routing e sulla configurazione, consulta la documentazione per sviluppatori: [Configurazione e Routing FX](../../developer/backend/fx/configuration.md).
