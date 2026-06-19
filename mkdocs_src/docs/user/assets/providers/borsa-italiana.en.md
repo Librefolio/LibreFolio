@@ -1,4 +1,4 @@
-# 🇮🇹 Borsa Italiana
+# <img src="https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico" alt=""> Borsa Italiana
 
 **Borsa Italiana** is the Italian stock exchange, operated by Euronext. LibreFolio includes a dedicated **asset data provider** that fetches prices, historical series, and instrument metadata directly from the Borsa Italiana website.
 

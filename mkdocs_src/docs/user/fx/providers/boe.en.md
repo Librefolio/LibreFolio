@@ -1,4 +1,4 @@
-# 🇬🇧 Bank of England (BOE)
+# <img src="https://www.bankofengland.co.uk/favicon.svg?ver=2c06d" alt=""> Bank of England (BOE)
 
 The **Bank of England (BOE)** provider offers daily reference exchange rates quoted against the British Pound Sterling (GBP). It serves as an excellent reference for Sterling-denominated portfolios.
 

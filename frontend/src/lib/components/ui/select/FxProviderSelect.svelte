@@ -600,7 +600,7 @@
                                 {@const provWarning = getProviderWarning(prov.code)}
                                 <Tooltip html={legendTooltipHtml(prov)} position="top">
                                     <a
-                                        href={prov.docs_url ?? '/mkdocs/developer/backend/fx/providers_list/'}
+                                        href={prov.docs_url ?? '/mkdocs/user/fx/providers/'}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         class="inline-flex items-center gap-1 px-1.5 py-1 rounded border transition-all cursor-pointer hover:shadow-sm"

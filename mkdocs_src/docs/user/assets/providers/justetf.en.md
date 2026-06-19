@@ -1,4 +1,4 @@
-# 📊 justETF Provider
+# <img src="https://www.justetf.com/android-chrome-144x144.png?v2" alt=""> justETF
 
 justETF provides detailed data for European ETFs, including current prices and historical data with multi-currency support.
 

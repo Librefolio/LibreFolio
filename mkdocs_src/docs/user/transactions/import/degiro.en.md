@@ -1,4 +1,4 @@
-# 🏦 Degiro
+# <img src="https://www.degiro.com/favicon.ico" alt=""> Degiro
 
 !!! info "Beta"
 

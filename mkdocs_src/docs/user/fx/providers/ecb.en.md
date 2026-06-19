@@ -1,4 +1,4 @@
-# 🇪🇺 European Central Bank (ECB)
+# <img src="https://www.ecb.europa.eu/favicon-32.png" alt=""> European Central Bank (ECB)
 
 The **European Central Bank (ECB)** is the primary reference rate provider for European portfolios. It publishes daily exchange rates for the Euro against approximately 45 major and emerging currencies.
 

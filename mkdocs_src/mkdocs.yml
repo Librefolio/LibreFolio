@@ -702,6 +702,7 @@ nav:
                   - App & UI State: developer/frontend/state/app-state.md
                   - Reference State: developer/frontend/state/reference-state.md
                   - Domain State: developer/frontend/state/domain-state.md
+                  - Transaction Staging: developer/frontend/state/transaction-draft.md
                   - Registries & Caches: developer/frontend/state/registries.md
                   - Core Infrastructure: developer/frontend/state/core-infrastructure.md
               - FX Chain Algorithm: developer/frontend/fx-chain-algorithm.md

@@ -1,4 +1,4 @@
-# 🏦 Interactive Brokers (IBKR)
+# <img src="https://www.interactivebrokers.com/favicon.ico" alt=""> Interactive Brokers (IBKR)
 
 !!! info "Beta"
 

@@ -1,4 +1,4 @@
-# 🏦 Finpension
+# <img src="https://www.finpension.ch/favicon.ico" alt=""> Finpension
 
 !!! info "Beta"
 

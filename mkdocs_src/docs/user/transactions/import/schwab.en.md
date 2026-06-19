@@ -1,4 +1,4 @@
-# 🏦 Charles Schwab
+# <img src="https://www.schwab.com/favicon.ico" alt=""> Charles Schwab
 
 !!! info "Beta"
 

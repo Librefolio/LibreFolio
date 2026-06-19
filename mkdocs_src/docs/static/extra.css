@@ -931,3 +931,36 @@
     transform: scale(1.05);
 }
 
+/* Page Title Favicon Header Alignment (Responsive) */
+.md-content h1 {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.md-content h1 img, .md-content h1 svg {
+    height: 1.6em !important;
+    width: 1.6em !important;
+    object-fit: contain;
+    border-radius: 6px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+@media screen and (max-width: 76.1875em) {
+    .md-content h1 {
+        flex-direction: column;
+        justify-content: center;
+        text-align: center;
+        align-items: center;
+        gap: 0.6rem;
+    }
+    .md-content h1 img, .md-content h1 svg {
+        margin-right: 0;
+        margin-bottom: 0.2rem;
+    }
+}
+
+
