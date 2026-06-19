@@ -383,7 +383,7 @@ class DirectaBrokerProvider(BRIMProvider):
 
     @property
     def docs_url(self) -> Optional[str]:
-        return "/mkdocs/user/brokers/directa/"
+        return "/mkdocs/user/transactions/import/directa/"
 
     def preview_columns(self) -> List[BRIMPreviewColumn]:
         return [

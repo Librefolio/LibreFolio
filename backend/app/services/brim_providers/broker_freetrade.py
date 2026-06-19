@@ -338,7 +338,7 @@ class FreetradeBrokerProvider(BRIMProvider):
 
     @property
     def docs_url(self) -> Optional[str]:
-        return "/mkdocs/user/brokers/freetrade/"
+        return "/mkdocs/user/transactions/import/freetrade/"
 
     def preview_columns(self) -> List[BRIMPreviewColumn]:
         return [

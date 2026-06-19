@@ -330,7 +330,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
     @property
     def icon_url(self) -> str:
-        return "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjMjJjNTVlIj48cGF0aCBkPSJNMTQgMkg2YTIgMiAwIDAgMC0yIDJ2MTZhMiAyIDAgMCAwIDIgMmgxMmEyIDIgMCAwIDAgMi-yVjhsLTYtNm0xLjggMThIMTR2LTJoMS44djJtMC0zSDE0di0yaDEuOHYybTAtM0gxNFY5LjhoMS44djQuMk0xMyA5VjMuNUwxOC41IDlIMTNNNiAyMFY0aDV2N2g3djlINnoiLz48L3N2Zz4="
+        return "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjMjJjNTVlIj48cGF0aCBkPSJNMTQgMkg2YTIgMiAwIDAgMC0yIDJ2MTZhMiAyIDAgMCAwIDIgMmgxMmEyIDIgMCAwIDAgMi0yVjhsLTYtNm0xLjggMThIMTR2LTJoMS44djJtMC0zSDE0di0yaDEuOHYybTAtM0gxNFY5LjhoMS44djQuMk0xMyA5VjMuNUwxOC41IDlIMTNNNiAyMFY0aDV2N2g3djlINnoiLz48L3N2Zz4="
 
     @property
     def supported_extensions(self) -> List[str]:
@@ -646,7 +646,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
     @property
     def docs_url(self) -> Optional[str]:
-        return "/mkdocs/user/brokers/generic-csv/"
+        return "/mkdocs/user/transactions/import/generic-csv/"
 
     def preview_columns(self) -> List[BRIMPreviewColumn]:
         return [

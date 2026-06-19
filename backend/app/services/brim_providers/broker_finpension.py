@@ -275,7 +275,7 @@ class FinpensionBrokerProvider(BRIMProvider):
 
     @property
     def docs_url(self) -> Optional[str]:
-        return "/mkdocs/user/brokers/finpension/"
+        return "/mkdocs/user/transactions/import/finpension/"
 
     def preview_columns(self) -> List[BRIMPreviewColumn]:
         return [

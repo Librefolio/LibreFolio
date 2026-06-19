@@ -369,7 +369,7 @@ class Trading212BrokerProvider(BRIMProvider):
 
     @property
     def docs_url(self) -> Optional[str]:
-        return "/mkdocs/user/brokers/trading212/"
+        return "/mkdocs/user/transactions/import/trading212/"
 
     def preview_columns(self) -> List[BRIMPreviewColumn]:
         return [
