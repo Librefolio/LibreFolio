@@ -60,10 +60,10 @@
     });
 
     function getDocsUrl(p: ProviderInfo): string | null {
-        if (!p.code) return null;
+        if (!p.docs_url) return null;
         const lang = localStorage.getItem('librefolio-locale') || 'en';
-        const prefix = lang !== 'en' ? `${lang}/` : '';
-        return `/mkdocs/${prefix}user-guide/import/${p.code}/`;
+        if (lang === 'en') return p.docs_url;
+        return p.docs_url.replace('/mkdocs/', `/mkdocs/${lang}/`);
     }
 
     function getProviderUrl(p: ProviderInfo): string | null {

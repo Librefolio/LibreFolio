@@ -346,7 +346,7 @@ class EtoroBrokerProvider(BRIMProvider):
 
     @property
     def docs_url(self) -> Optional[str]:
-        return "/mkdocs/user/brokers/etoro/"
+        return "/mkdocs/user/transactions/import/etoro/"
 
     def preview_columns(self) -> List[BRIMPreviewColumn]:
         return [

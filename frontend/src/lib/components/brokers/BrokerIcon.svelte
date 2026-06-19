@@ -105,7 +105,9 @@
         const url = currentDisplayUrl ?? '';
         if (url !== prevDisplayUrl) {
             prevDisplayUrl = url;
-            imageLoaded = false;
+            // Data URIs are decoded inline — treat as already loaded to avoid
+            // the onload race condition when many items render simultaneously.
+            imageLoaded = url.startsWith('data:');
         }
     });
 

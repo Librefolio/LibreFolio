@@ -403,7 +403,7 @@ class SchwabBrokerProvider(BRIMProvider):
 
     @property
     def docs_url(self) -> Optional[str]:
-        return "/mkdocs/user/brokers/schwab/"
+        return "/mkdocs/user/transactions/import/schwab/"
 
     def preview_columns(self) -> List[BRIMPreviewColumn]:
         return [

@@ -359,7 +359,7 @@ class RevolutBrokerProvider(BRIMProvider):
 
     @property
     def docs_url(self) -> Optional[str]:
-        return "/mkdocs/user/brokers/revolut/"
+        return "/mkdocs/user/transactions/import/revolut/"
 
     def preview_columns(self) -> List[BRIMPreviewColumn]:
         return [

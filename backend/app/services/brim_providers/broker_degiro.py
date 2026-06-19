@@ -457,7 +457,7 @@ class DegiroBrokerProvider(BRIMProvider):
 
     @property
     def docs_url(self) -> Optional[str]:
-        return "/mkdocs/user/brokers/degiro/"
+        return "/mkdocs/user/transactions/import/degiro/"
 
     def preview_columns(self) -> List[BRIMPreviewColumn]:
         return [
