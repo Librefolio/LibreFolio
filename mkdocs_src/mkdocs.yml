@@ -137,6 +137,8 @@ plugins:
             Generic CSV: CSV Generico
             "📊 Dashboard": "📊 Dashboard"
             "⚙️ Settings": "⚙️ Impostazioni"
+            User Preferences: Preferenze Utente
+            About: Informazioni
             "🛠️ Admin Manual": "🛠️ Manuale Admin"
             CLI Tools: Strumenti CLI
             Global Settings: Impostazioni Globali
@@ -271,6 +273,8 @@ plugins:
             Generic CSV: CSV Générique
             "📊 Dashboard": "📊 Tableau de Bord"
             "⚙️ Settings": "⚙️ Paramètres"
+            User Preferences: Préférences Utilisateur
+            About: À propos
             Borsa Italiana: Borsa Italiana
             "🛠️ Admin Manual": "🛠️ Manuel Admin"
             CLI Tools: Outils CLI
@@ -406,6 +410,8 @@ plugins:
             Generic CSV: CSV Genérico
             "📊 Dashboard": "📊 Panel Principal"
             "⚙️ Settings": "⚙️ Configuración"
+            User Preferences: Preferencias de Usuario
+            About: Acerca de
             Borsa Italiana: Borsa Italiana
             "🛠️ Admin Manual": "🛠️ Manual de Admin"
             CLI Tools: Herramientas CLI
@@ -559,6 +565,9 @@ nav:
           - Overview: user/files/index.md
       - ⚙️ Settings:
           - Overview: user/settings/index.md
+          - User Preferences: user/settings/preferences.md
+          - Global Settings: user/settings/admin.md
+          - About: user/settings/about.md
       - 🧩 Misc:
           - Image Crop: user/misc/image-crop.md
   - 🛠️ Admin Manual:
@@ -694,6 +703,7 @@ nav:
                   - FED Tech: developer/backend/fx/providers/fed.md
                   - BOE Tech: developer/backend/fx/providers/boe.md
                   - SNB Tech: developer/backend/fx/providers/snb.md
+          - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
       - 🎨 Frontend Development:
           - Overview: developer/frontend/index.md
           - "🧠 Core Architecture & State":
@@ -734,6 +744,7 @@ nav:
               - PWA & Mobile: developer/frontend/pwa.md
       - 🧪 Test Walkthrough:
           - Overview: developer/test-walkthrough/index.md
+          - Runner Architecture: developer/test-walkthrough/runner_architecture.md
           - 🐍 Backend Tests:
               - External: developer/test-walkthrough/external.md
               - Database: developer/test-walkthrough/db.md

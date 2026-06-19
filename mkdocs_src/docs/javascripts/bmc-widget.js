@@ -55,9 +55,8 @@
 
     /* ---------- 2. Footer BMC Image Button ---------- */
     function addFooterBmc() {
-        var footer = document.querySelector('.md-footer') ||
-                     document.querySelector('.md-content');
-        if (!footer) return;
+        var contentInner = document.querySelector('.md-content__inner');
+        if (!contentInner) return;
 
         var container = document.createElement('div');
         container.className = 'bmc-footer-container';
@@ -66,11 +65,7 @@
             '<img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me a Coffee" style="height:60px !important;width:217px !important;" />' +
             '</a>';
 
-        if (document.querySelector('.md-footer')) {
-            footer.parentNode.insertBefore(container, footer);
-        } else {
-            footer.appendChild(container);
-        }
+        contentInner.appendChild(container);
     }
 
     // Run when DOM is ready

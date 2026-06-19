@@ -48,6 +48,35 @@ Automatic price fetching from Yahoo Finance, justETF, CSS Scraper, or the Schedu
 
 ---
 
+## 📡 Real-time Pricing & Live Ticker
+
+To keep you updated on market movements without forcing constant page refreshes, LibreFolio displays compact, live price badges on the **Dashboard** and **Asset Detail** pages.
+
+### ⏱️ Automatic Polling
+
+When viewing these pages, your browser polls the backend every **30 seconds** for current asset prices. This process runs silently in the background and is completely non-blocking (the UI is ready instantly, and prices load as they arrive).
+
+### 🎨 Visual Indicators
+
+Badges transition colors dynamically to indicate recent price movements relative to the previous poll:
+
+* 🟢 **Green (Up)**: The asset price has increased.
+* 🔴 **Red (Down)**: The asset price has decreased.
+* ⚪ **Gray (Neutral)**: The price is unchanged, loading, or the market is currently closed.
+
+!!! note "Market Closure & Fallbacks"
+
+    During weekends or market closures, the Live Ticker will display the last available closing price in a neutral gray badge.
+
+### 🔌 Caching & Background Scheduler
+
+To ensure fast load times and prevent your instance from getting rate-limited or blocked by external providers (such as Yahoo Finance), LibreFolio uses a dual-layer strategy:
+
+1. **Background Scheduler**: A background daemon on the server refreshes all active asset prices at a regular interval (default: every 10 minutes, configurable by administrators in Global Settings). This keeps the database and local price cache warm.
+2. **On-Demand Polling Cache**: When the frontend polls the backend, it reads from this warm local cache. If the cache is cold, the provider fetches the price and stores it with a 120-second TTL (Time-To-Live). Subsequent page refreshes or dashboard views from other users hit the local cache directly.
+
+---
+
 ## 🔗 Related
 
 - 📚 **[Financial Theory — Asset Types](../../financial-theory/instruments/asset-types/index.md)** — Stock, ETF, Bond, Crypto, etc.
