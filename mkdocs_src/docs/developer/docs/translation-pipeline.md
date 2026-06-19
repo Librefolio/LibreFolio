@@ -244,6 +244,115 @@ APHRA_MODEL=google/gemini-2.5-flash
 ./dev.py mkdocs translate
 ```
 
+### 🦋 Cloud mode — Doubleword.ai (Autobatcher / Flex Queue)
+
+[Doubleword.ai](https://app.doubleword.ai) provides an OpenAI-compatible API with a
+**flex queue** pricing model: requests are batched and processed at reduced rates during
+off-peak periods, making it significantly cheaper than synchronous cloud inference.
+
+Configure `.env`:
+
+```env
+APHRA_BASE_URL=https://api.doubleword.ai/v1
+DOUBLEWORD_API_KEY=dw-your-key-here
+APHRA_MODEL=google/gemma-4-31B-it
+
+# Optional: lower from 4h default if you prefer faster failure + retry
+# DOUBLEWORD_QUEUE_TIMEOUT=14400
+```
+
+Run with parallel language branches for maximum throughput:
+
+```bash
+./dev.py mkdocs translate --workers 3
+```
+
+!!! info "Model recommendation"
+
+    `google/gemma-4-31B-it` is the recommended model for Doubleword — it balances
+    translation quality and cost. Because Doubleword uses flex pricing, you can use a
+    single model for all 4 roles without worrying about per-step cost differences.
+
+#### How queue scheduling works with the 4-step pipeline
+
+Aphra's workflow makes **one LLM call per step**. Each call to `DoublewordClient.call_model()`
+becomes one independent request submitted to Doubleword's flex queue via `autobatcher`.
+
+For a single file translated into 3 languages, the pipeline submits **10 requests total**:
+
+```mermaid
+---
+config:
+  layout: elk
+---
+graph LR
+    A1["🧠 Step 1\nAnalyze\n× 1"] --> T1["✍️ Step 3\nTranslate IT\n× 1"]
+    A1 --> T2["✍️ Step 3\nTranslate FR\n× 1"]
+    A1 --> T3["✍️ Step 3\nTranslate ES\n× 1"]
+
+    T1 --> C1["🔎 Step 4\nCritique IT\n× 1"]
+    T2 --> C2["🔎 Step 4\nCritique FR\n× 1"]
+    T3 --> C3["🔎 Step 4\nCritique ES\n× 1"]
+
+    C1 --> R1["✨ Step 5\nRefine IT\n× 1"]
+    C2 --> R2["✨ Step 5\nRefine FR\n× 1"]
+    C3 --> R3["✨ Step 5\nRefine ES\n× 1"]
+
+    style A1 fill:#e3f2fd,stroke:#1565c0
+    style T1 fill:#fff8e1,stroke:#f57f17
+    style T2 fill:#fff8e1,stroke:#f57f17
+    style T3 fill:#fff8e1,stroke:#f57f17
+    style C1 fill:#e3f2fd,stroke:#1565c0
+    style C2 fill:#e3f2fd,stroke:#1565c0
+    style C3 fill:#e3f2fd,stroke:#1565c0
+    style R1 fill:#fff8e1,stroke:#f57f17
+    style R2 fill:#fff8e1,stroke:#f57f17
+    style R3 fill:#fff8e1,stroke:#f57f17
+```
+
+!!! tip "Greedy parallel execution with `--workers`"
+
+    Use `--workers 3` to translate IT, FR, ES **in parallel** via independent threads.
+    Each language branch advances to its next step as soon as it finishes the current
+    one — without waiting for the other languages:
+
+    ```
+    Thread IT: [Translate]──→[Critique]──→[Refine]     ← finishes first
+    Thread FR:    [Translate]────→[Critique]──→[Refine]
+    Thread ES:       [Translate]──────→[Critique]──→[Refine]
+    ```
+
+    Each step is a **new, independent conversation** — Doubleword has no context window
+    continuity between steps. This is by design: Aphra's prompts are self-contained and
+    include all necessary context (source text, analysis, prior translation) in each
+    individual request.
+
+#### Technical: sync shim over async autobatcher (thread-safe)
+
+Aphra's `call_model()` interface is fully synchronous. `autobatcher.AsyncOpenAI` is async.
+`DoublewordClient` bridges both while remaining thread-safe for `--workers`:
+
+```python
+# In translate_docs.py — DoublewordClient.call_model()
+# A new AsyncOpenAI client is created per call so each thread
+# gets its own event loop + client (httpx.AsyncClient is not
+# safe to share across asyncio.run() boundaries).
+async def _call() -> str:
+    client = AsyncOpenAI(api_key=api_key, base_url=base_url)  # per-call
+    response = await client.chat.completions.create(
+        model=writer_model,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.choices[0].message.content or ""
+
+# asyncio.wait_for enforces DOUBLEWORD_QUEUE_TIMEOUT (default 4h)
+result = asyncio.run(asyncio.wait_for(_call(), timeout=timeout_s))
+
+```
+
+`asyncio.run()` creates a fresh event loop per call, which is safe in Python 3.10+.
+The `autobatcher` library handles queue submission and polling transparently.
+
 ---
 
 ## Caching

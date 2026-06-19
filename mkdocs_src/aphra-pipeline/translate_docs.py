@@ -62,6 +62,13 @@ GLOSSARIES_DIR = SCRIPT_DIR / "glossaries"
 # Default Ollama base URL (OpenAI-compatible API)
 DEFAULT_OLLAMA_URL = "http://localhost:11434/v1"
 
+# Default Doubleword base URL (autobatcher flex queue)
+DOUBLEWORD_BASE_URL = "https://api.doubleword.ai/v1"
+
+# Doubleword flex queue timeout — much higher than Ollama step timeout
+# because the flex queue can hold requests for hours before processing.
+DEFAULT_DOUBLEWORD_QUEUE_TIMEOUT = 14400  # 4 hours
+
 
 # ---------------------------------------------------------------------------
 # Language detection from frontend
@@ -200,9 +207,29 @@ def _file_md5(filepath: Path) -> str:
 # ---------------------------------------------------------------------------
 
 def _is_local_mode() -> bool:
-    """Check if using a local LLM backend (Ollama, llama.cpp, etc.)."""
+    """Check if using a local LLM backend (Ollama, llama.cpp, etc.).
+
+    Doubleword.ai is explicitly excluded: even though it uses a custom base URL,
+    it is a cloud provider (handled via autobatcher) not a local backend.
+    """
     base_url = _load_env_var("APHRA_BASE_URL", "")
-    return base_url != "" and "openrouter.ai" not in base_url
+    return base_url != "" and "openrouter.ai" not in base_url and "doubleword.ai" not in base_url
+
+
+def _is_doubleword_mode() -> bool:
+    """Check if using Doubleword.ai as LLM backend (via autobatcher)."""
+    base_url = _load_env_var("APHRA_BASE_URL", "")
+    return "doubleword.ai" in base_url
+
+
+def _load_doubleword_api_key() -> str:
+    """Load Doubleword.ai API key from .env (DOUBLEWORD_API_KEY)."""
+    key = _load_env_var("DOUBLEWORD_API_KEY", "")
+    if not key:
+        print("ERROR: DOUBLEWORD_API_KEY not found in .env for Doubleword mode.", file=sys.stderr)
+        print("   ➜  Add DOUBLEWORD_API_KEY=dw-... to your .env file", file=sys.stderr)
+        sys.exit(1)
+    return key
 
 
 def _get_base_url() -> str | None:
@@ -214,9 +241,14 @@ def _get_base_url() -> str | None:
 def _load_api_key() -> str:
     """Load API key from .env file.
 
-    In local mode (APHRA_BASE_URL set to non-OpenRouter), a dummy key
-    is returned since Ollama/llama.cpp don't require authentication.
+    Routing:
+    - Doubleword mode (APHRA_BASE_URL contains doubleword.ai): uses DOUBLEWORD_API_KEY
+    - Local mode (APHRA_BASE_URL set to non-OpenRouter): dummy key (Ollama needs none)
+    - Cloud mode (default): uses OPENROUTER_API_KEY
     """
+    if _is_doubleword_mode():
+        return _load_doubleword_api_key()
+
     if _is_local_mode():
         return _load_env_var("OPENROUTER_API_KEY", "ollama-local")
 
@@ -1037,7 +1069,18 @@ def _format_elapsed(seconds: float) -> str:
 
 
 def _get_step_timeout() -> int:
-    """Get per-step timeout in seconds from .env or default."""
+    """Get per-step timeout in seconds from .env or default.
+
+    In Doubleword mode, uses DOUBLEWORD_QUEUE_TIMEOUT (default 4h) instead of
+    APHRA_STEP_TIMEOUT (default 15min). The flex queue can hold requests for
+    hours before processing, so a much higher ceiling is required.
+    """
+    if _is_doubleword_mode():
+        val = _load_env_var("DOUBLEWORD_QUEUE_TIMEOUT", str(DEFAULT_DOUBLEWORD_QUEUE_TIMEOUT))
+        try:
+            return int(val)
+        except ValueError:
+            return DEFAULT_DOUBLEWORD_QUEUE_TIMEOUT
     val = _load_env_var("APHRA_STEP_TIMEOUT", str(DEFAULT_STEP_TIMEOUT))
     try:
         return int(val)
@@ -1257,13 +1300,99 @@ def _robust_refine(workflow, context, source_text: str, *,
     return ""
 
 
-def _create_model_client(api_key: str, models: dict):
-    """Create an Aphra LLMModelClient, patching base_url for local backends.
+def _create_doubleword_client(api_key: str, models: dict):
+    """Create a synchronous model client backed by autobatcher.AsyncOpenAI.
 
-    Also:
+    Doubleword.ai accepts standard OpenAI-compatible requests; autobatcher
+    transparently queues them for flex pricing and polls until done.
+
+    Thread-safety design
+    --------------------
+    asyncio.AsyncOpenAI (via httpx.AsyncClient) is NOT safe to share across
+    threads with different event loops. Since the pipeline uses
+    ThreadPoolExecutor for parallel language branches (--workers N), each
+    worker thread calls asyncio.run() which creates its own event loop.
+
+    Fix: create a fresh AsyncOpenAI instance INSIDE call_model(), so every
+    asyncio.run() call owns its client. The overhead is negligible compared
+    to the flex queue wait time.
+
+    Queue timeout
+    -------------
+    _apply_client_timeout() (HTTP-level) does not apply to DoublewordClient.
+    Instead, asyncio.wait_for() enforces DOUBLEWORD_QUEUE_TIMEOUT (default 4h)
+    around the full async call, including queue wait time.
+    """
+    try:
+        from autobatcher import AsyncOpenAI  # noqa: F401 — verify importable
+    except ImportError:
+        print("ERROR: 'autobatcher' package not found.", file=sys.stderr)
+        print("   ➜  Install with: pipenv install --dev autobatcher", file=sys.stderr)
+        sys.exit(1)
+
+    base_url = _get_base_url() or DOUBLEWORD_BASE_URL
+    writer_model = models["writer"]
+
+    class DoublewordClient:
+        """Synchronous shim over autobatcher.AsyncOpenAI.
+
+        Exposes call_model(prompt) → str, identical to Aphra's LLMModelClient
+        interface so the rest of the pipeline is completely unaware of the
+        underlying async/batch mechanism.
+
+        A new AsyncOpenAI client is created per call_model() invocation to
+        guarantee thread-safety when --workers > 1 is used.
+        """
+
+        def call_model(self, prompt: str, **kwargs) -> str:  # noqa: D401
+            """Submit prompt to Doubleword via autobatcher and return response text."""
+            import asyncio
+            from autobatcher import AsyncOpenAI
+
+            timeout_s = _get_step_timeout()
+
+            async def _call() -> str:
+                # New client per invocation → safe across threads/event loops
+                client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+                response = await client.chat.completions.create(
+                    model=writer_model,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return response.choices[0].message.content or ""
+
+            # asyncio.wait_for enforces the queue timeout (HTTP-level timeout
+            # does not apply here — Doubleword may hold the request for hours)
+            try:
+                result = asyncio.run(asyncio.wait_for(_call(), timeout=timeout_s))
+            except TimeoutError:
+                raise TimeoutError(
+                    f"Doubleword flex queue timeout after {_format_elapsed(timeout_s)}. "
+                    f"Increase DOUBLEWORD_QUEUE_TIMEOUT in .env (current: {timeout_s}s)."
+                )
+            if result and "<think>" in result:
+                result = _strip_think_blocks(result)
+            return result
+
+    return DoublewordClient()
+
+
+def _create_model_client(api_key: str, models: dict):
+    """Create a model client for the configured backend.
+
+    Backend selection (based on APHRA_BASE_URL):
+    - doubleword.ai  → DoublewordClient (autobatcher flex queue)
+    - any other URL  → Aphra LLMModelClient (OpenRouter or Ollama)
+    - not set        → Aphra LLMModelClient (OpenRouter cloud)
+
+    For Aphra clients:
     - Sets HTTP-level timeout (so Ollama actually stops on timeout)
     - Wraps call_model() to strip <think> blocks from reasoning models
     """
+    # ── Doubleword.ai branch (autobatcher) ──
+    if _is_doubleword_mode():
+        return _create_doubleword_client(api_key, models)
+
+    # ── Aphra LLMModelClient (OpenRouter / Ollama / local) ──
     from aphra.core.llm_client import LLMModelClient
 
     _generate_config_toml(api_key, models)
@@ -1737,7 +1866,12 @@ def run_translate(args) -> int:
     print(f"\n🚀 [{_now()}] Starting translation...")
     local = _is_local_mode()
     base_url = _get_base_url()
-    backend_label = f"🏠 Local ({base_url})" if local else "☁️  OpenRouter"
+    if _is_doubleword_mode():
+        backend_label = f"🦋 Doubleword ({base_url}) [autobatcher flex queue]"
+    elif local:
+        backend_label = f"🏠 Local ({base_url})"
+    else:
+        backend_label = "☁️  OpenRouter"
     print(f"   Backend: {backend_label}")
     unique_models = set(models.values())
     if len(unique_models) == 1:
@@ -2278,7 +2412,18 @@ def run_check(args) -> int:
         ok = False
 
     # ── 2. Backend + API key ──
-    if local:
+    if _is_doubleword_mode():
+        print("2️⃣  Backend + API key ...", end=" ", flush=True)
+        dw_key = _load_env_var("DOUBLEWORD_API_KEY", "")
+        if dw_key:
+            masked = dw_key[:8] + "..." + dw_key[-4:]
+            print(f"✅ 🦋 Doubleword ({base_url}) — autobatcher flex queue")
+            print(f"   Key: {masked}")
+        else:
+            print("❌ DOUBLEWORD_API_KEY non trovata nel file .env")
+            print("   ➜  Aggiungi DOUBLEWORD_API_KEY=dw-... al file .env")
+            ok = False
+    elif local:
         print(f"2️⃣  Backend ...", end=" ", flush=True)
         print(f"✅ 🏠 Locale ({base_url})")
     else:
