@@ -27,28 +27,27 @@ L' "Event Loop Blocking Rule" è evidenziata in modo marcato tramite un apposito
 ---
 
 ## 3. Test Runner Modulare
-**Stato:** 🟡 Gap da colmare (analisi del gap)
+**Stato:** 🟢 Completa e allineata agli standard
 
 **Analisi:**
 Dal punto di vista dell'utilizzatore, il sistema di testing (`test-walkthrough/index.md`) è documentato in modo magistrale: è completo di diagrammi Mermaid, flag descritti e un walkthrough sul meccanismo di isolamento della code coverage (`.coverage_data`).
-Tuttavia, c'è un disallineamento storico: il file fa ancora riferimento a `test_runner.py` (linee 145, 160) ma il componente è stato rifattorizzato come un package modulare in `scripts/test_runner/` (`_backend_api.py`, `_registry.py`, `_cli.py`, ecc.). Manca un'esposizione architetturale della sua natura modulare.
+Tuttavia, c'era un disallineamento storico: il file faceva ancora riferimento a `test_runner.py` (linee 145, 160) ma il componente è stato rifattorizzato come un package modulare in `scripts/test_runner/` (`_backend_api.py`, `_registry.py`, `_cli.py`, ecc.). Mancava un'esposizione architetturale della sua natura modulare.
 
-**Proposte per colmare il gap:**
-- **Dove:** Aggiornare `test-walkthrough/index.md` rimuovendo l'estensione `.py` o, meglio, aggiungere un sub-documento `test-walkthrough/runner_architecture.md`.
-- **Cosa:** Documentare il funzionamento del modulo `scripts/test_runner/`, in particolare il meccanismo in `_registry.py`, la gestione delle suite differenziate (`_suites.py`), e come definire un nuovo layer di frontend/backend test.
+**Risoluzione (19 Giugno 2026):**
+- **Sorgenti Corretti:** Aggiornato `test-walkthrough/index.md` rimuovendo i riferimenti a `test_runner.py` e sostituendoli con `scripts/test_runner/`.
+- **Nuovo Documento Architetturale:** Creato `test-walkthrough/runner_architecture.md` per descrivere il Registry Pattern, l'orchestrazione delle suite, la gestione del swap-in/swap-out di `.coverage` e le guide per estendere il runner.
+- **Grafici Aggiornati:** Tutti i diagrammi Mermaid del test runner sono stati configurati con il nuovo layout ELK (`layout: elk`) e la panoramica principale è stata disposta orizzontalmente (`graph LR`).
+- **Navigazione:** Registrato il nuovo documento in `mkdocs.yml`.
 
 ---
 
 ## 4. WorkspaceIntent API
-**Stato:** 🔴 Assente
+**Stato:** 🟢 Chiarita e Documentata (lato Frontend)
 
-**Analisi:**
-Non vi è alcuna traccia dell'API `WorkspaceIntent` nella documentazione per sviluppatori all'interno di `mkdocs_src/docs/developer`. Il termine non compare in alcun `.md` file, il che rappresenta una lacuna importante per comprendere il ciclo di vita delle richieste e il multi-tenancy/isolamento degli asset nel backend.
+**Analisi & Chiarimento Critico:**
+Non vi era alcuna traccia dell'API `WorkspaceIntent` nella documentazione per sviluppatori in `mkdocs_src/docs/developer`.
+*Nota bene:* L'audit ipotizzava che fosse un'infrastruttura backend per il multi-tenancy e l'isolamento dei dati. L'analisi del codice conferma invece che il backend isola le risorse tramite cookie di sessione JWT (`get_current_user` in `auth.py`) e filtri a livello di servizio DB (es. `BrokerUserAccess`). `WorkspaceIntent` è invece una **declarative API del frontend (Svelte 5)** per definire le intenzioni di modifica massiva (create, edit, clone, delete, import) all'interno di `TransactionBulkModal.svelte` dialogando con il reactive store `txStore` ed i messaggi `ImportTodo` (BRIM).
 
-**Proposte per colmare il gap:**
-- **Dove:** Creare un nuovo file in `architecture/patterns/workspace_intent.md` o inserirlo in una sezione ad-hoc sotto `backend/`.
-- **Cosa:**
-  1. Definizione dell'astrazione `WorkspaceIntent` (cosa rappresenta e quando va usata).
-  2. Implementazione tecnica: come viene passato il contesto (es. tramite Header HTTP, Token JWT) e intercettato dai dependency injectors di FastAPI.
-  3. Scope a livello Database: come il servizio interagisce con SQLAlchemy per filtrare o isolare le entity a livello di workspace (RBAC e sharing models).
-  4. Code snippet o diagramma architetturale per le best practices di integrazione di questa API su nuovi endpoint.
+**Risoluzione (19 Giugno 2026):**
+- **Documentazione Frontend State:** Modificato il file `developer/frontend/state/transaction-draft.md` aggiungendo una sezione dedicata al pattern `WorkspaceIntent` (con definizioni dei tipi TypeScript) e al meccanismo di staging di `ImportTodo` (gestione dei warning e blocker del parser BRIM).
+- **Riferimenti allineati:** Il manuale riflette ora il corretto posizionamento architetturale (lato client) di questo pattern.

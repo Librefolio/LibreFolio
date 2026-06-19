@@ -7,25 +7,29 @@ Di seguito l'esito dell'audit condotto sulle sezioni relative alla gestione degl
 
 ---
 
-## 1. Live-polling asset (Recupero prezzi in tempo reale)
+## 1. Live-polling asset (Recupero prezzi in tempo reale) & Backend Scheduler
 
 **File analizzati:**
 - `docs/developer/backend/assets/architecture.md`
 - `docs/developer/backend/assets/system_providers.md`
+- `docs/developer/backend/scheduler.md`
 - `docs/user/assets/index.en.md`
+- `docs/user/settings/index.en.md`
 
-**Valutazione:** 🟡 **Completa ma da migliorare esteticamente / Gap da colmare**
+**Valutazione:** 🟢 **Completa e allineata agli standard**
 
 **Analisi:**
-La documentazione tecnica (Developer) è di altissimo livello ("Completa e allineata agli standard estetici"). Descrive in modo esauriente la pipeline di sincronizzazione, i meccanismi di caching (`_asset_current_cache`) e l'endpoint dedicato `POST /assets/prices/current` utilizzato per il componente *LiveTicker*.
-Lato utente (User Manual), tuttavia, manca un focus specifico sul concetto di "live-polling". Le meccaniche sono accennate nelle sezioni dei singoli provider (es. CSS Scraper o Yahoo Finance) e si parla di "Refresh" o "Sync" nella pagina indice degli assets, ma non c'è una rappresentazione visiva chiara dell'indicatore Live Ticker in azione.
+La documentazione tecnica e utente copre ora in modo integrato sia il polling in tempo reale del frontend (Live Ticker) sia l'infrastruttura di sincronizzazione periodica del backend (Scheduler).
 
-**Proposta:**
-- **Dove scrivere:** Integrare in `docs/user/assets/index.en.md` (o creare una sotto-pagina dedicata) una sezione "Real-time Pricing & Live Ticker".
-- **Cosa scrivere:** Spiegare in termini utente come e quando l'applicazione effettua il polling (vs. il sync batch), aggiungendo uno screenshot o una GIF del componente Live Ticker nell'interfaccia.
-- **NOTA OPERATIVA (Cross-reference con lo Scheduler):** La feature di aggiornamento del *Live Ticker* lato frontend, seppur indipendente a livello di componente UI, concettualmente ricade nella stessa categoria architetturale dello **Scheduler di backend**. Quando si affronterà questo task, le due tematiche verranno trattate congiuntamente per garantire coerenza tra il polling frontend e i cron job di sistema.
+**Risoluzione (19 Giugno 2026):**
+- **Documentazione Tecnica Scheduler:** Creato il file [scheduler.md](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/mkdocs_src/docs/developer/backend/scheduler.md) descrivendo il ciclo del demone asincrono integrato nel lifespan di FastAPI, l'algoritmo di Leader Election (`leader.py` basato su file-lock), i job di sincronizzazione dei prezzi e delle cronologie storiche, e il sistema rotativo dei log JSONL (`scheduler_jobs.jsonl`). Aggiunto un diagramma del ciclo di vita con il layout ELK (`layout: elk`).
+- **Guida Utente Live Ticker:** Aggiornato [index.en.md (Assets)](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/mkdocs_src/docs/user/assets/index.en.md) con la sezione *Real-time Pricing & Live Ticker*, spiegando le tempistiche di polling (30 secondi), il codice colore visivo dei badge (verde/rosso/grigio) e l'interazione con la cache del backend e lo scheduler.
+- **Impostazioni di Amministrazione:** Aggiornato [index.en.md (Settings)](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/mkdocs_src/docs/user/settings/index.en.md) per includere le opzioni dello scheduler nella tabella dei Global Settings e documentare i dettagli dei modali di configurazione ed ispezione dei log.
+- **Integrazione Galleria:** Inseriti i due screenshot ufficiali (`scheduler-config` e `scheduler-log` nella categoria `settings`) nel manuale utente delle impostazioni.
+- **Navigazione:** Registrato il documento dello scheduler in [mkdocs.yml](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/mkdocs_src/mkdocs.yml).
 
 ---
+
 
 ## 2. Charts (Grafici interattivi, Segnali, Eventi)
 
@@ -65,17 +69,15 @@ La gestione dei permessi e la segregazione dei dati utente/broker sono documenta
 **File analizzati:**
 - `docs/developer/backend/brim/architecture.md`
 - `docs/user/transactions/import/index.en.md`
-- `docs/user/transactions/import/ibkr.en.md` (e omologhi per altri broker)
+- `docs/user/transactions/import/ibkr.en.md` (e altri 9 broker: Degiro, Coinbase, Directa, eToro, Finpension, Freetrade, Revolut, Schwab, Trading212)
 
-**Valutazione mista:**
-- Core Architecture e Index: 🟢 **Completa e allineata agli standard estetici**
-- Pagine specifiche dei Broker: 🟠 **Gap da colmare**
+**Valutazione:** 🟢 **Completa e allineata agli standard**
 
 **Analisi:**
-La documentazione generale di BRIM è ottima. Il workflow di parsing a fasi (Upload -> Preview -> Mapping -> Import) è documentato tecnicamente con un diagramma Mermaid e spiegato in modo semplice all'utente finale nel file `index.en.md`.
+La documentazione generale e le guide specifiche dei singoli broker sono state estese per offrire un percorso chiaro ed esauriente sia dal lato tecnico che utente.
 
-Il problema sorge nelle **sotto-pagine dedicate ai singoli broker** (es. `coinbase.en.md`, `degiro.en.md`, `ibkr.en.md`). Attualmente sono estremamente brevi, composte da un elenco testuale di 3 passaggi su come effettuare l'esportazione dal broker e segnate come "Beta".
-
-**Proposta (Analisi del gap):**
-- **Dove scrivere:** All'interno di ogni file `.en.md` dei singoli broker (es. `ibkr.en.md`, `degiro.en.md`).
-- **Cosa scrivere:** È necessario arricchire la guida di esportazione inserendo screenshot catturati dai portali originali dei broker (evidenziando i menu "Report", "Esporta in CSV", etc.). Un blocco di testo non è sufficiente, in quanto l'interfaccia dei broker cambia spesso e una guida visiva riduce la frustrazione dell'utente durante il setup dell'importazione.
+**Risoluzione (19 Giugno 2026):**
+- **Arricchimento Guide Broker:** Estesi e riscritti tutti i 10 manuali dei singoli broker (`ibkr.en.md`, `degiro.en.md`, `coinbase.en.md`, `directa.en.md`, `etoro.en.md`, `finpension.en.md`, `freetrade.en.md`, `revolut.en.md`, `schwab.en.md`, `trading212.en.md`).
+- **Istruzioni Dettagliate di Export:** Aggiunti passaggi rigorosi e dettagliati per orientare l'utente nei portali originali dei broker (compresa la configurazione di Flex Query su Interactive Brokers).
+- **Admonitions e Pitfalls:** Inserite avvertenze specifiche (`!!! warning`) riguardanti i formati dei file (es. obbligo di CSV rispetto a PDF), la lingua dei report (obbligo della lingua inglese per Interactive Brokers e altri provider) e il trattamento di split/dividendi o valute.
+- **Placeholder Screenshot UI originali:** Inseriti elementi `<div class="screenshot-container">` con commenti e istruzioni esplicite per evidenziare dove posizionare le immagini dell'interfaccia dei portali originali.

@@ -159,9 +159,51 @@ On commit, the frontend resolves `PendingOp[]` into three clean payloads (create
 
 ---
 
+## 🗺️ The `WorkspaceIntent` Pattern
+
+To keep components decoupled and avoid passing large, stale arrays of transaction objects, LibreFolio uses a declarative routing pattern to open the bulk transaction workspace. 
+
+Instead of passing copies of data, the calling component (such as the transactions page or toolbar) sets a reactive `intent` property on the `TransactionBulkModal`:
+
+```typescript
+export type WorkspaceIntent = 
+  | { action: 'create'; }                      // Open empty grid to add new rows
+  | { action: 'import'; }                      // Mount BRIM wizard to parse files
+  | { action: 'edit'; txIds: number[]; }       // Edit specific existing rows
+  | { action: 'delete'; txIds: number[]; }     // Pre-mark specific rows for deletion
+  | { action: 'clone'; txIds: number[]; };     // Copy existing rows with today's date
+```
+
+Upon receiving the intent, `TransactionBulkModal` resolves the actual row data directly from `txStore` (the Single Source of Truth) using the provided transaction IDs. This ensures the modal always operates on the most up-to-date ledger state.
+
+---
+
+## 📥 `ImportTodo` (BRIM Staging Integration)
+
+When running a file import (`action: 'import'`), LibreFolio's backend BRIM parser plugins might accept a transaction but leave some fields incomplete if they cannot be computed automatically (e.g. cost basis on complex corporate mergers). These are returned to the frontend as a list of `field_todos` (`BRIMFieldTodo` schema).
+
+On the frontend, these are loaded into the bulk modal grid as an array of `ImportTodo` objects linked to the staging row:
+
+```typescript
+export interface ImportTodo {
+    field: string;                  // The field requiring manual input (e.g. 'cost_basis_override')
+    severity: 'blocker' | 'warning'; // blocker = prevents saving; warning = informational
+    reasonCode: string;             // Machine-readable code (e.g., 'stock_merger')
+    message: string;                // Human-readable fallback message
+}
+```
+
+### Validation & Resolution Lifecycle:
+1. **Highlighting:** Rows containing active `ImportTodo` items are marked in the grid with specific visual warnings.
+2. **Blocker Prevention:** If any row has a todo with `severity: 'blocker'`, the **Commit Changes** button is disabled, and the user is shown the specific reason in a tooltip.
+3. **Resolution:** The user edits the row inline or opens the single transaction form. Once the missing field is filled, the `ImportTodo` is resolved, and the row is cleared for saving.
+
+---
+
 ## 🔗 Related
 
 - ⚖️ **[Backend Transactions Service](../../backend/transactions/service.md)** — Batch commit endpoint and execution pipeline
 - ✂️ **[Backend Split & Promote](../../backend/transactions/split_promote.md)** — Split and promote rules
 - 🔒 **[Backend Balance Validation](../../backend/transactions/balance_validation.md)** — Balance walk validation rules
 - ✏️ **[Transaction Form Feature](../components/features/transaction-form.md)** — Single item editor modal and form schemas
+

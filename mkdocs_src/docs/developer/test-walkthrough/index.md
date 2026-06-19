@@ -2,6 +2,11 @@
 
 This section guides you through the LibreFolio test suite. Understanding the tests is one of the best ways to understand the codebase.
 
+!!! note "Modular Test Runner Architecture"
+
+    LibreFolio uses a modular test orchestrator package located in `scripts/test_runner/` to manage, register, and isolate coverage for all backend and frontend test suites. For details on how the runner is structured and how to extend it, see the [Test Runner Architecture](runner_architecture.md) documentation.
+
+
 ## 🚀 Running Tests
 
 All tests are executed through `dev.py`:
@@ -86,6 +91,10 @@ LibreFolio organizes tests into **11 categories**, grouped by layer:
 ## 🏗️ Architecture Overview
 
 ```mermaid
+---
+config:
+  layout: elk
+---
 graph TD
     ALL["./dev.py test all"]
 
@@ -142,7 +151,7 @@ Coverage data is stored in SQLite databases and HTML reports:
 ```text
 LibreFolio/
 ├── .coveragerc                 # Coverage configuration (parallel=true, sigterm=true)
-├── .coverage                   # Working copy — swapped in/out by test_runner.py
+├── .coverage                   # Working copy — swapped in/out by scripts/test_runner/
 ├── .coverage_data/
 │   ├── backend                 # Accumulated backend-only coverage DB
 │   ├── frontend                # Accumulated frontend-only coverage DB
