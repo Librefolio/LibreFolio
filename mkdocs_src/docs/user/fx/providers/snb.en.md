@@ -1,4 +1,4 @@
-# 🇨🇭 Swiss National Bank (SNB)
+# <img src="https://data.snb.ch/favicon.ico" alt=""> Swiss National Bank (SNB)
 
 The **Swiss National Bank (SNB)** provider publishes daily exchange rates for the Swiss Franc (CHF). It is highly stable and precise, making it a valuable source for CHF-based assets.
 

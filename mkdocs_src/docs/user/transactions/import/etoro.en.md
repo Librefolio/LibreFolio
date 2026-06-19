@@ -1,4 +1,4 @@
-# 🏦 eToro
+# <img src="https://www.etoro.com/favicon.ico" alt=""> eToro
 
 !!! info "Beta"
 

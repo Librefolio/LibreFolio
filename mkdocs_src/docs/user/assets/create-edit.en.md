@@ -12,7 +12,7 @@ In LibreFolio, you can create new assets in two different ways:
 === "Manual Creation (with Smart Search)"
 
     ```mermaid
-    graph TD
+    flowchart LR
         A[Start: Click '+ New Asset'] --> B[Type Name, ISIN, or Ticker in Smart Search]
         B --> C{Match Found?}
         C -->|Yes| D[Auto-fill details from external providers]
@@ -26,7 +26,7 @@ In LibreFolio, you can create new assets in two different ways:
 === "Broker Import Auto-Creation"
 
     ```mermaid
-    graph TD
+    flowchart LR
         A[Start: Upload CSV report in Import Wizard] --> B[Parse report rows]
         B --> C{Asset ID recognized?}
         C -->|Yes| D[Auto-match with existing asset]

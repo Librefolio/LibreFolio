@@ -1,4 +1,4 @@
-# 🏦 Trading212
+# <img src="https://www.trading212.com/favicon.ico" alt=""> Trading212
 
 !!! info "Beta"
 

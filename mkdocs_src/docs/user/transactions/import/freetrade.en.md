@@ -1,4 +1,4 @@
-# 🏦 Freetrade
+# <img src="https://cdn.prod.website-files.com/66289cd2c30bc8d40bd60733/66f526a076ad61485c78771c_favicon.png" alt=""> Freetrade
 
 !!! info "Beta"
 

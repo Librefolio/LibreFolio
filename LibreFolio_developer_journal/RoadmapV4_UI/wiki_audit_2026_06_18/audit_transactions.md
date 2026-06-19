@@ -25,11 +25,8 @@ Di seguito viene riportata la valutazione dettagliata per ogni singolo argomento
 * **Proposta:** Nessuna azione richiesta.
 
 ### 4. Context Menus
-* **Stato:** Assente
-* **Analisi:** Nessuna traccia di documentazione riguardante i menu contestuali, né nel frontend (sviluppo) né nelle guide utente. Il file `data-table.md` parla di "Row Actions" ma non menziona l'esistenza o l'implementazione di un vero *Context Menu* (clic destro).
-* **Proposta:**
-  - *Developer:* Inserire l'implementazione tecnica (gestione dell'evento di right-click, posizionamento) all'interno di `mkdocs_src/docs/developer/frontend/components/context-menu.md` (o integrare in `data-table.md`).
-  - *User:* Aggiungere in `mkdocs_src/docs/user/transactions/index.en.md` un paragrafo illustrato sull'uso dei menu contestuali per accedere rapidamente alle azioni sulle transazioni.
+* **Stato:** Completa
+* **Analisi:** La gestione e implementazione del Context Menu globale del frontend è documentata in `data-table.md`. Lato utente, l'indice delle transazioni `index.en.md` segnala chiaramente che il tasto destro apre il Context Menu per le azioni rapide sulle transazioni.
 
 ### 5. Table UX
 * **Stato:** Completa e allineata agli standard estetici
@@ -42,10 +39,8 @@ Di seguito viene riportata la valutazione dettagliata per ogni singolo argomento
 * **Proposta:** Nessuna azione richiesta.
 
 ### 7. DraftRow vs PendingOp
-* **Stato:** Assente
-* **Analisi:** Questi due concetti tecnici, legati alla fase transitoria in cui una transazione è creata/modificata prima di essere persistita sul database, non sono documentati da nessuna parte. È presente solo un piccolo accenno a un campo `is_pending` per il WAC preview all'interno del file `wac.md`.
-* **Proposta:**
-  - *Developer:* Scrivere un documento dedicato (es. `mkdocs_src/docs/developer/frontend/state/transaction-draft.md`) o aggiungere un blocco sostanziale nel file di architettura del frontend, per spiegare la differenza tra `DraftRow` (UI transitoria) e `PendingOp` (gestione delle queue/operazioni in sospeso) in relazione al form e alla validazione real-time.
+* **Stato:** Completa
+* **Analisi:** Abbiamo rimosso interamente il vecchio pattern `DraftRow` ed introdotto il modello reattivo di staging `PendingOp` (tagged union) + `DraftFields`. L'intera architettura del ciclo di vita dello staging delle transazioni è documentata in `developer/frontend/state/transaction-draft.md` e in `transaction-form.md`.
 
 ## 🏁 Recap Attività (Sessione 18 Giugno)
 Partendo da questo audit, abbiamo svolto le seguenti attività:
@@ -63,4 +58,4 @@ Partendo da questo audit, abbiamo svolto le seguenti attività:
 **Rimane da fare (Prossime Sessioni)**:
 - `[x]` Inserire materialmente gli screenshot generati *all'interno* di `form.en.md` (attualmente sono solo nella Gallery).
 - `[x]` Creare il documento developer per le Modals (`core-ui/modals.md`).
-- `[ ]` Creare il documento developer per `DraftRow vs PendingOp`.
+- `[x]` Creare il documento developer per `DraftRow vs PendingOp` (`transaction-draft.md`).

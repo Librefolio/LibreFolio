@@ -1,4 +1,4 @@
-# 🏦 Coinbase
+# <img src="https://www.coinbase.com/favicon.ico" alt=""> Coinbase
 
 !!! info "Beta"
 

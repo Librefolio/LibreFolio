@@ -1,4 +1,4 @@
-# 📈 Yahoo Finance Provider
+# <img src="https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" alt=""> Yahoo Finance
 
 Yahoo Finance is the default provider for stocks, ETFs, and mutual funds. It offers the widest coverage and supports asset search.
 

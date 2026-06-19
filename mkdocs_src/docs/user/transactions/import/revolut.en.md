@@ -1,4 +1,4 @@
-# 🏦 Revolut
+# <img src="https://assets.revolut.com/assets/favicons/favicon-32x32.png" alt=""> Revolut
 
 !!! info "Beta"
 

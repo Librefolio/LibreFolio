@@ -1,4 +1,4 @@
-# 🇺🇸 Federal Reserve (FED)
+# <img src="https://fred.stlouisfed.org/favicon.ico" alt=""> Federal Reserve (FED)
 
 The **Federal Reserve (FRED)** provider retrieves exchange rate data from the Federal Reserve Economic Data (FRED) database. It is the ideal primary or fallback source for portfolios centered around the US Dollar.
 

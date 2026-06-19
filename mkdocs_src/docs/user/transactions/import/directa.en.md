@@ -1,4 +1,4 @@
-# 🏦 Directa SIM
+# <img src="https://www.directa.it/favicon.ico" alt=""> Directa SIM
 
 !!! info "Beta"
 

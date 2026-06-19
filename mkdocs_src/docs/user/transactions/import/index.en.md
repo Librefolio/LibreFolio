@@ -112,9 +112,25 @@
     </a>
 </div>
 
+### 📊 Importer Capabilities
+
+| Broker | Format | Buy/Sell | Dividends | Deposits/Cash | Fees/Taxes | Notes |
+|:---|:---:|:---:|:---:|:---:|:---:|:---|
+| **Interactive Brokers** | CSV (Flex) | ✅ | ✅ | ✅ | ✅ | Best for multi-currency accounts |
+| **Degiro** | CSV | ✅ | ✅ | ✅ | ✅ | Support for standard account statement |
+| **eToro** | XLSX/CSV | ✅ | ✅ | ✅ | ✅ | Realized gains and dividends support |
+| **Directa SIM** | CSV | ✅ | ✅ | ✅ | ✅ | Italian broker tax statement support |
+| **Charles Schwab** | CSV | ✅ | ✅ | ✅ | ✅ | Standard US broker activity statement |
+| **Revolut** | PDF/CSV | ✅ | ✅ | ✅ | ✅ | Stock and crypto transaction support |
+| **Coinbase** | CSV | ✅ | ❌ | ✅ | ✅ | Crypto-only transaction reports |
+| **Freetrade** | CSV | ✅ | ✅ | ✅ | ✅ | Simple UK brokerage statements |
+| **Finpension** | CSV | ✅ | ✅ | ✅ | ✅ | Swiss pension 3a statements |
+| **Trading212** | CSV | ✅ | ✅ | ✅ | ✅ | European trading activity CSV |
+| **Generic CSV** | CSV | ✅ | ✅ | ✅ | ✅ | Manual column mapper fallback |
+
 !!! note "All providers are in Beta"
 
-    Import plugins are community-maintained and improve over time. If a specific report format has quirks, the **[Generic CSV](generic-csv.md)** provider allows manual column mapping as a fallback.
+    Import plugins are community-maintained and improve over time. If a specific report format has quirks, the **[Generic CSV](generic-csv/)** provider allows manual column mapping as a fallback.
 
 ---
 
