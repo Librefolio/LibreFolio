@@ -46,5 +46,5 @@ A confirmation dialog for **destructive actions**. Extends `ModalBase`.
 - Confirm button styled as danger (red) by default
 - Optional loading state on confirm button
 
-**Used by**: [DeleteBrokerDialog](../brokers/modals.md), file deletion, data editor row deletion.
+**Used by**: [DeleteBrokerDialog](../features/brokers/modals.md), file deletion, data editor row deletion.
 

@@ -125,7 +125,7 @@ When assets move from Broker A to Broker B, Broker B needs to know the historica
 
 At commit time, the backend **computes the Weighted Average Cost (WAC)** at the source broker and writes it to `cost_basis_override` on the **receiver** transaction (qty > 0).
 
-See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/portfolio-theory/weighted-average-cost.md)** for the full formula, transaction effects, and examples.
+See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)** for the full formula, transaction effects, and examples.
 
 ### Rules
 

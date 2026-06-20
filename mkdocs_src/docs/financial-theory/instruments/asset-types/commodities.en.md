@@ -40,7 +40,7 @@
 ## 🔗 Related
 
 - 🔀 **[Diversification](../../portfolio-theory/diversification.md)** — Commodities as portfolio diversifiers
-- 📊 **[Volatility](../../portfolio-theory/risk-metrics/volatility.md)** — Measuring commodity price risk
+- 📊 **[Volatility](../../technical-analysis/risk-metrics/volatility.md)** — Measuring commodity price risk
 - 📈 **[Returns & Growth Rates](../../fundamentals/returns.md)** — Measuring commodity performance
 
 

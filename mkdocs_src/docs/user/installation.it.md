@@ -28,11 +28,11 @@ Questa guida spiega come distribuire LibreFolio per l'uso regolare utilizzando D
 Clona il repository:
 
 ```bash
-git clone https://github.com/Alfystar/LibreFolio.git
+git clone https://github.com/Librefolio/LibreFolio.git
 cd LibreFolio
 ```
 
-Oppure scarica l'ultimo rilascio da [GitHub Releases](https://github.com/Alfystar/LibreFolio/releases) e scompattalo.
+Oppure scarica l'ultimo rilascio da [GitHub Releases](https://github.com/Librefolio/LibreFolio/releases) e scompattalo.
 
 ## ⚙️ 2. Configura l'Ambiente
 

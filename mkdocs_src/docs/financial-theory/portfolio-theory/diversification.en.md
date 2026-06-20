@@ -85,7 +85,7 @@ $$
 ## 🔗 Related
 
 - ⚖️ **[Asset Allocation](asset-allocation.md)** — How to choose portfolio weights
-- 📊 **[Volatility](risk-metrics/volatility.md)** — Measuring the risk that diversification reduces
-- 📈 **[Max Drawdown](risk-metrics/max-drawdown.md)** — The worst-case scenario metric
+- 📊 **[Volatility](../technical-analysis/risk-metrics/volatility.md)** — Measuring the risk that diversification reduces
+- 📈 **[Max Drawdown](../technical-analysis/risk-metrics/max-drawdown.md)** — The worst-case scenario metric
 
 

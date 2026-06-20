@@ -1,6 +1,10 @@
-# ![](../../../static/icons/transactions/fx-conversion.png){: width="32" style="vertical-align: middle;" } Conversión de divisas
+# ![](../../../static/icons/transactions/fx-conversion.png){: width="32" style="vertical-align: middle;" } Conversión de divisa
 
-Las **conversiones de divisas** intercambian una moneda por otra dentro de la **misma cuenta de bróker**. El saldo de una moneda disminuye mientras que el de otra aumenta; no hay cambios en los activos ni en los brókers.
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="transactions" data-name="form-modal-fxconversion" alt="Formulario de Transacción — Conversión de divisa">
+</div>
+
+Las **conversiones de divisa** intercambian una moneda por otra dentro de la **misma cuenta de bróker**. El saldo de una moneda disminuye mientras que el de otra aumenta; no hay cambios en los activos ni en los brókers.
 
 ---
 
@@ -19,16 +23,16 @@ Las **conversiones de divisas** intercambian una moneda por otra dentro de la **
 
 ## 📊 Cómo Funciona
 
-Una conversión de divisas registra **dos entradas** en el mismo bróker con **monedas diferentes**. El tipo de cambio es implícito, basado en los montos:
+Una conversión de divisa registra **dos entradas** en el mismo bróker con **monedas diferentes**. El tipo de cambio de conversión es implícito a partir de los montos:
 
 $$
 FX_{rate} = \frac{\text{Amount}_{target}}{\lvert\text{Amount}_{source}\rvert}
 $$
 
-Las conversiones de divisas pueden ser:
+Las conversiones de divisa pueden ser:
 
-- **Explícitas**: El usuario convierte deliberadamente las monedas (por ejemplo, EUR → USD antes de comprar acciones estadounidenses).
-- **Implícitas**: El bróker convierte automáticamente al comprar un activo denominado en moneda extranjera.
+- **Explícitas**: El usuario convierte monedas deliberadamente (p. ej., EUR → USD antes de comprar acciones estadounidenses)
+- **Implícitas**: El bróker convierte automáticamente al comprar un activo denominado en moneda extranjera
 
 !!! info "FX Implícito y Comisiones"
 
@@ -66,21 +70,21 @@ $$
 
 ## 🔀 Relación con Depósitos/Retiros
 
-Internamente, una Conversión de divisas se compone de un Retiro (moneda de origen) y un Depósito (moneda de destino). LibreFolio admite:
+Internamente, una Conversión de divisa se compone de un Retiro (moneda de origen) y un Depósito (moneda de destino). LibreFolio permite:
 
 | Operación | Resultado |
 |-----------|--------|
-| **División** (desvincular) | Conversión de divisas → Retiro independiente + Depósito |
-| **Promover** (vincular) | Retiro + Depósito → Conversión de divisas |
+| **División** (desvincular) | Conversión de divisa → Retiro + Depósito independientes |
+| **Promover** (vincular) | Retiro + Depósito → Conversión de divisa |
 
-**Restricciones de promoción**: monedas diferentes, mismo bróker.
+**Restricciones de Promover**: monedas diferentes, mismo bróker.
 
 ---
 
 ## 🔗 Relacionado
 
-- 💵 **[Depósito y Retiro](deposit-withdrawal.md)** — Movimientos de efectivo de un solo lado
-- 🔄 **[Transferencia de Activos](transfer.md)** — Movimiento de activos entre brókers
+- 💵 **[Depósito y Retiro](deposit-withdrawal.md)** — Movimientos de efectivo unilaterales
+- 🔄 **[Transferencia de Activos](transfer.md)** — Movimiento de valores entre brókers
 - 🏦 **[Transferencia de Efectivo](cash-transfer.md)** — Transferencias bancarias entre brókers
 
 ---

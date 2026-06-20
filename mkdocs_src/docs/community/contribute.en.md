@@ -37,7 +37,7 @@ Aesthetic improvements, layout suggestions, accessibility enhancements — if yo
 
 ### :bug: Bug Reports
 
-Finding and clearly reporting issues is incredibly helpful. Open a new [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) with keyword **`[BUG]`** at the beginning of the title.
+Finding and clearly reporting issues is incredibly helpful. Open a new [GitHub Issue](https://github.com/Librefolio/LibreFolio/issues) with keyword **`[BUG]`** at the beginning of the title.
 
 Include screenshots, browser info, and steps to reproduce — even aesthetic inconsistencies count.
 
@@ -45,7 +45,7 @@ Include screenshots, browser info, and steps to reproduce — even aesthetic inc
 
 ## :bulb: Share Ideas & Request Features
 
-Have an idea or want a new feature? Open a [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) using the appropriate keyword at the beginning of the title:
+Have an idea or want a new feature? Open a [GitHub Issue](https://github.com/Librefolio/LibreFolio/issues) using the appropriate keyword at the beginning of the title:
 
 | Keyword | When to use |
 |---------|------------|
@@ -60,7 +60,7 @@ Every request will be evaluated and taken on as soon as there's capacity to deve
 
 If you're a developer and want to contribute directly:
 
-1. **Fork** the [repository](https://github.com/Alfystar/LibreFolio)
+1. **Fork** the [repository](https://github.com/Librefolio/LibreFolio)
 2. **Create a branch** for your feature or fix
 3. **Develop and test** in your own repo
 4. **Submit a Pull Request** with a clear description and keyword prefix in the title:
@@ -84,7 +84,7 @@ Check the [Developer Manual](../developer/index.md) for architecture details, co
 
 A simple but powerful way to help: **star the repository** on GitHub! It increases visibility and helps other users discover LibreFolio.
 
-[:octicons-star-fill-24: Star on GitHub](https://github.com/Alfystar/LibreFolio){ .md-button .md-button--primary }
+[:octicons-star-fill-24: Star on GitHub](https://github.com/Librefolio/LibreFolio){ .md-button .md-button--primary }
 
 ---
 

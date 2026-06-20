@@ -25,11 +25,24 @@ A **dismissible banner** for contextual information or warnings.
 - Optional icon and dismiss button
 - Inline within page content (not a toast)
 
-**Used by**: [BrokerModal](../brokers/modals.md) (validation errors), settings pages, import previews.
+**Used by**: [BrokerModal](../features/brokers/modals.md) (validation errors), settings pages, import previews.
 
 ---
 
-## ⏳ LoadingSpinner
+## 🛡️ DataQualityBanner { #dataqualitybanner }
+
+The **unified data quality banner component** for surfacing data warnings across the dashboard, asset detail, and forex detail pages. Replaces ad-hoc inline banners with a standardized `DataQualityIssue` model.
+
+See [DataQualityBanner Developer Manual](../../data-quality-banner.md) for full documentation.
+
+**Modes**:
+
+- `grouped` — dashboard: single container with all issues sorted by severity
+- `flat` — detail pages: one banner per issue
+
+**CTA**: actions are emitted via `onaction(action, target, issue)` — the component does not navigate or open modals directly.
+
+**Used by**: Dashboard (`/dashboard`), Asset detail (`/assets/:id`), FX detail (`/fx/:pair`).
 
 A simple **animated spinner** for async loading states.
 

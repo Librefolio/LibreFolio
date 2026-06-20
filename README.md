@@ -29,7 +29,7 @@ Your data stays on your server. No third-party cloud. No tracking.
 **Prerequisites**: Python 3.13+, [Pipenv](https://pipenv.pypa.io/en/latest/installation.html), [Node.js](https://nodejs.org/) 20.19+
 
 ```bash
-git clone https://github.com/Alfystar/LibreFolio.git
+git clone https://github.com/Librefolio/LibreFolio.git
 cd LibreFolio
 
 pipenv install --dev
@@ -53,7 +53,7 @@ For full setup details see the [Developer Installation Guide](https://alfystar.g
 <summary><strong>Docker Deployment</strong></summary>
 
 ```bash
-git clone https://github.com/Alfystar/LibreFolio.git
+git clone https://github.com/Librefolio/LibreFolio.git
 cd LibreFolio
 
 cp .env.example .env       # Configure environment
@@ -79,11 +79,11 @@ LibreFolio values **every form of contribution equally** — code, ideas, and do
   - 💱 **[FX Plugins](https://alfystar.github.io/LibreFolio/developer/architecture/patterns/fx_plugin_guide/)** — Add a new exchange rate provider
 - **Chart Signal Plugins** — New technical indicators and chart overlays
 - **UI/UX Ideas** — Aesthetic improvements and design suggestions
-- **Bug Reports** — Finding and reporting issues on [GitHub Issues](https://github.com/Alfystar/LibreFolio/issues)
+- **Bug Reports** — Finding and reporting issues on [GitHub Issues](https://github.com/Librefolio/LibreFolio/issues)
 
 ### 🛠️ How to Contribute Code
 
-1. **Fork** the [repository](https://github.com/Alfystar/LibreFolio)
+1. **Fork** the [repository](https://github.com/Librefolio/LibreFolio)
 2. **Create a branch** for your feature or fix
 3. **Submit a Pull Request** with a clear description
 
@@ -102,5 +102,5 @@ See [LICENSE](LICENSE) for the full text and the [Credits & Legal](https://alfys
   If LibreFolio helps you manage your investments, consider supporting its development:<br><br>
   <a href="https://www.buymeacoffee.com/librefolio" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me a Coffee" height="40"></a>
   <br><br>
-  ⭐ <a href="https://github.com/Alfystar/LibreFolio">Star on GitHub</a> · 💡 <a href="https://github.com/Alfystar/LibreFolio/discussions">Share Ideas</a> · 🐛 <a href="https://github.com/Alfystar/LibreFolio/issues">Report Bugs</a>
+  ⭐ <a href="https://github.com/Librefolio/LibreFolio">Star on GitHub</a> · 💡 <a href="https://github.com/Librefolio/LibreFolio/discussions">Share Ideas</a> · 🐛 <a href="https://github.com/Librefolio/LibreFolio/issues">Report Bugs</a>
 </p>

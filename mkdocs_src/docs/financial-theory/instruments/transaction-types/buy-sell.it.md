@@ -1,4 +1,9 @@
-# ![](../../../static/icons/transactions/buy.png){: width="32" style="vertical-align: middle;" } Acquisto e Vendita
+# ![](../../../static/icons/transactions/buy.png){: width="32" style="vertical-align: middle;" } Acquisto e Vendita ![](../../../static/icons/transactions/sell.png){: width="32" style="vertical-align: middle;" }
+
+<div class="lf-screenshot-carousel" data-carousel="buy-sell" data-carousel-interval="4000" data-show-titles="true">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="transactions" data-name="form-modal" data-title='<img src="/LibreFolio/static/icons/transactions/buy.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> BUY' alt="Buy">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-sell" data-title='<img src="/LibreFolio/static/icons/transactions/sell.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> SELL' alt="Sell">
+</div>
 
 I tipi di transazione più fondamentali: l'**acquisto** aumenta le tue posizioni e diminuisce la liquidità; la **vendita** fa l'opposto e realizza un profitto o una perdita.
 
@@ -43,6 +48,6 @@ $$
 
 ## 🔗 Correlati
 
-- 📊 **[Costo Medio Ponderato (WAC)](../../portfolio-theory/weighted-average-cost.md)** — Costo medio per unità su più acquisti
+- 📊 **[Costo Medio Ponderato (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Costo medio per unità su più acquisti
 - 💰 **[Tassazione](../../fundamentals/taxation.md)** — Plusvalenze, metodi di associazione, riporto delle perdite
 - 📈 **[Rendimenti](../../fundamentals/returns.md)** — Misurazione delle performance dell'investimento

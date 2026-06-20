@@ -93,6 +93,6 @@ Oltre all'allocazione per classi di asset, la diversificazione geografica distri
 ## 🔗 Correlati
 
 - 🔀 **[Diversificazione](diversification.md)** — La matematica dietro le decisioni di allocazione
-- 📊 **[Metriche di Rischio](risk-metrics/index.md)** — Misurare il rischio del portafoglio
+- 📊 **[Metriche di Rischio](../technical-analysis/risk-metrics/index.md)** — Misurare il rischio del portafoglio
 - 📊 **[Tipi di Asset](../instruments/asset-types/index.md)** — Le classi di asset tra cui allocare
 - 💰 **[Tassazione](../fundamentals/taxation.md)** — Strategie di allocazione fiscalmente efficienti

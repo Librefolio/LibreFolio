@@ -1,4 +1,4 @@
-# 🧮 Fournisseur d'Investissement à échéancier
+# <img src="../../static/scheduled_investment.png" alt=""> Fournisseur d'Investissement à échéancier
 
 Le fournisseur d'Investissement à échéancier (Scheduled Investment) est conçu pour les instruments à revenu fixe dont la valeur est calculée à partir d'un calendrier de taux d'intérêt plutôt que sur les prix du marché. Les exemples incluent les comptes d'épargne, les dépôts à terme et les obligations d'État avec des taux de coupon connus.
 

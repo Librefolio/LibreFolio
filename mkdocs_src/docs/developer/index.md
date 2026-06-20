@@ -8,8 +8,8 @@ Welcome to the Developer Manual. This section contains in-depth technical docume
 
 Set up your local development environment and learn the daily workflow:
 
-- 📦 **[Installation (Development)](dev-installation.md)** — Clone, install dependencies, start the server
-- 🔄 **[Development Workflow](dev-installation.md#development-workflow)** — All `dev.py` commands at a glance
+- 📦 **[Host Installation](../admin/host_installation.md)** — Set up Python, Node.js, and Pipenv environment
+- 🔄 **[Developer Workflow](dev_workflow.md)** — Start Vite dev server and view all development CLI commands
 
 !!! tip "Quick start"
 
@@ -29,7 +29,7 @@ Set up your local development environment and learn the daily workflow:
     - ⚡ [Async Architecture](architecture/patterns/async.md) — async/await, aiosqlite, non-blocking I/O
     - 🔌 [Registry & Plugin System](architecture/patterns/registry_pattern.md) — Provider plugins for BRIM, Assets, FX
     - 🗄️ [Database Migrations](architecture/patterns/alembic.md) — Alembic workflow, SQLite batch mode
-    - ⚙️ [Configuration](architecture/patterns/configuration.md) — `.env`, Pydantic BaseSettings
+    - ⚙️ [Configuration](../admin/configuration.md) — `.env`, Pydantic BaseSettings
 - 🔐 **Core Systems**:
     - 🛡️ [Security & Authentication](architecture/security.md) — JWT cookies, endpoint protection
     - 👤 [Users & Roles](architecture/users_and_brokers.md) — Login flow, session, user roles

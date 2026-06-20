@@ -30,7 +30,7 @@ LibreFolio può essere installato come **Progressive Web App (PWA)** sul tuo dis
 
 !!! tip "Alternative method"
 
-    Se il pulsante di installazione non appare, tocca il **menu ⋮** del browser → **"Aggiungi alla schermata Home"** o **"Installa app"**.
+    Se il pulsante di installazione non appare, tocca il **menu ⋮ del browser → "Aggiungi alla schermata Home"** o **"Installa app"**.
 
 ### iOS (Safari)
 

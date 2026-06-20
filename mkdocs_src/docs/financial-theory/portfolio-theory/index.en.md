@@ -42,14 +42,14 @@ The mathematical foundation of "don't put all your eggs in one basket." How comb
 
 Strategic vs tactical allocation, glide paths, target-date strategies, and the art of rebalancing. How to decide *how much* of each asset class to hold.
 
-### 📊 [Risk Metrics](risk-metrics/index.md)
+### 📊 [Risk Metrics](../technical-analysis/risk-metrics/index.md)
 
 Quantitative measures of portfolio risk. From standard deviation to Sharpe ratio, each metric captures a different aspect of risk:
 
-- **[Sharpe Ratio](risk-metrics/sharpe-ratio.md)** — Risk-adjusted return (total volatility)
-- **[Sortino Ratio](risk-metrics/sortino-ratio.md)** — Risk-adjusted return (downside only)
-- **[Max Drawdown](risk-metrics/max-drawdown.md)** — Worst peak-to-trough decline
-- **[Volatility](risk-metrics/volatility.md)** — Standard deviation of returns
+- **[Sharpe Ratio](../technical-analysis/risk-metrics/sharpe-ratio.md)** — Risk-adjusted return (total volatility)
+- **[Sortino Ratio](../technical-analysis/risk-metrics/sortino-ratio.md)** — Risk-adjusted return (downside only)
+- **[Max Drawdown](../technical-analysis/risk-metrics/max-drawdown.md)** — Worst peak-to-trough decline
+- **[Volatility](../technical-analysis/risk-metrics/volatility.md)** — Standard deviation of returns
 
 ---
 

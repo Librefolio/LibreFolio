@@ -695,6 +695,165 @@ def check_html_blocks(
     return issues
 
 
+
+# ---------------------------------------------------------------------------
+# HTML attribute integrity check (technical attrs must not be translated)
+# ---------------------------------------------------------------------------
+
+def check_html_attrs(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Verify that technical HTML attributes are preserved verbatim in translations.
+
+    Translatable attributes (alt, title, placeholder, aria-label, data-title):
+        These carry human-readable text — translation is correct and expected.
+
+    Non-translatable attributes (class, id, src, href, data-*, style, type,
+    width, height, loading, etc.):
+        These are structural/functional identifiers — must NOT be changed.
+
+    Skips content inside Markdown code blocks to avoid false positives.
+    """
+    import re
+
+    # Attributes that carry human text → legitimately translated
+    TRANSLATABLE_ATTRS = frozenset({
+        "alt", "title", "placeholder", "aria-label", "aria-labelledby",
+        "aria-describedby", "data-title",
+    })
+
+    def _extract_tag_attrs(text: str) -> list[tuple[str, dict[str, str]]]:
+        """Return list of (tag_name, {attr: value}) for every HTML opening tag."""
+        results = []
+        # Match opening tags (not self-closing handled the same way)
+        for tag_m in re.finditer(r"<([a-zA-Z][\w-]*)([^>]*)>", text):
+            tag_name = tag_m.group(1).lower()
+            attr_str = tag_m.group(2)
+            attrs = {}
+            for attr_m in re.finditer(
+                r"""([\w:@-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?""",
+                attr_str,
+            ):
+                attr_name = attr_m.group(1).lower()
+                attr_val = attr_m.group(2) or attr_m.group(3) or attr_m.group(4) or ""
+                attrs[attr_name] = attr_val
+            results.append((tag_name, attrs))
+        return results
+
+    issues = []
+    src_clean = _strip_code_blocks(source)
+    tr_clean = _strip_code_blocks(translated)
+
+    src_tags = _extract_tag_attrs(src_clean)
+    tr_tags = _extract_tag_attrs(tr_clean)
+
+    # Only compare if same number of tags (structural check already handles count)
+    if len(src_tags) != len(tr_tags):
+        return issues
+
+    for idx, ((s_tag, s_attrs), (t_tag, t_attrs)) in enumerate(zip(src_tags, tr_tags)):
+        if s_tag != t_tag:
+            continue  # tag mismatch handled by html-tag-mismatch check
+
+        for attr, s_val in s_attrs.items():
+            if attr in TRANSLATABLE_ATTRS:
+                continue  # legitimately translated
+            t_val = t_attrs.get(attr)
+            if t_val is None:
+                issues.append(Issue(
+                    severity=Severity.WARN,
+                    file=cache_key, lang=lang,
+                    check="html-attr-missing",
+                    message=(
+                        f"<{s_tag}> tag #{idx + 1}: attribute `{attr}` missing "
+                        f"in translation (expected: {s_val!r})"
+                    ),
+                ))
+            elif t_val != s_val:
+                issues.append(Issue(
+                    severity=Severity.WARN,
+                    file=cache_key, lang=lang,
+                    check="html-attr-mismatch",
+                    message=(
+                        f"<{s_tag}> tag #{idx + 1}: attribute `{attr}` changed "
+                        f"— source: {s_val!r}, translation: {t_val!r}"
+                    ),
+                ))
+
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# HTML static-path detection (breaks in dev or language subdirectories)
+# ---------------------------------------------------------------------------
+
+def check_html_relative_src(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Detect HTML src/href attributes with static resource paths that are
+    environment-specific and will break either in dev or in production.
+
+    Two problematic patterns:
+    1. src="static/..."          -- bare relative path, breaks in /{lang}/ subdirs
+    2. src="/LibreFolio/static/" -- hardcoded production base path, breaks in dev
+                                    (where MkDocs is served at /mkdocs/)
+
+    Fix: use JS dynamic base calculation, like:
+        <img id="my-img">
+        <script>(function(){
+          var p = window.location.pathname.replace(/[/]+$/, "");
+          var base = p.replace(/[/](it|fr|es)$/, "");
+          document.getElementById("my-img").src = base + "/static/...";
+        })();</script>
+    """
+    issues = []
+    tr_clean = _strip_code_blocks(translated)
+    lines = tr_clean.split("\n")
+
+    def _add_issue(m, description):
+        pos = tr_clean[:m.start()].count("\n") + 1
+        line_content = lines[pos - 1][:80] if pos <= len(lines) else ""
+        issues.append(Issue(
+            severity=Severity.WARN,
+            file=cache_key, lang=lang,
+            check="html-relative-src",
+            message=(
+                f"L{pos}: {description} -- "
+                f"use JS dynamic base pattern instead. "
+                f"Context: {line_content!r}"
+            ),
+        ))
+
+    # Pattern 1: bare relative src/href="static/..." (breaks in /lang/ subdirs)
+    for m in re.finditer(r'(?:src|href)="static/', tr_clean, re.IGNORECASE):
+        _add_issue(m, f"'{m.group(0)}...' is a relative path that breaks in /{lang}/ subdirectory")
+
+    # Pattern 2: hardcoded production base /LibreFolio/static/ (breaks in dev at /mkdocs/)
+    # Exclude:
+    #   a) occurrences inside data-title="..." (JS carousel labels, not rendered directly)
+    #   b) <img id="..."> followed within ~300 chars by getElementById(id).src = ... (JS override)
+    for m in re.finditer(r'(?:src|href)="/LibreFolio/static/', tr_clean, re.IGNORECASE):
+        before_line = tr_clean[:m.start()].split("\n")[-1]
+        after_ctx = tr_clean[m.start():m.start() + 400]
+
+        # Skip if inside data-title attribute
+        if re.search(r'data-title=["\'](?:[^"\']*)', before_line):
+            continue
+
+        # Skip if this img has an id and a nearby <script> overrides .src via getElementById
+        id_match = re.search(r'id="([^"]+)"', before_line + after_ctx[:100])
+        if id_match:
+            elem_id = id_match.group(1)
+            if re.search(re.escape(elem_id) + r'[^<]*\.src\s*=', after_ctx):
+                continue
+
+        _add_issue(m, f"'{m.group(0)}...' hardcodes production base path, breaks in dev (/mkdocs/)")
+
+    return issues
+
+
 # ---------------------------------------------------------------------------
 # Truncated word detection (common LLM artifact)
 # ---------------------------------------------------------------------------
@@ -780,7 +939,7 @@ def check_latex(
 
     # Inline math ($...$) — avoid display math, currency ($0.25 / 500 $), bash vars (${VAR})
     # Uses finditer to have access to surrounding context for suffix-currency detection
-    _INLINE_RE = re.compile(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)')
+    _INLINE_RE = re.compile(r'(?<![\\\$])\$(?!\$)(.+?)(?<![\\\$])\$(?!\$)')
     _NON_MATH_CONTENT_RE = re.compile(r'^[\d,.]|^\{')  # prefix currency or bash var
     # Suffix currency: $ preceded by digit+optional-space (e.g. "500 $" or "500$")
     _SUFFIX_CURRENCY_CTX_RE = re.compile(r'\d\s?$')
@@ -844,6 +1003,8 @@ ALL_CHECKS = [
     ("list-structure", check_list_structure, True),
     ("admonitions", check_admonitions, True),
     ("html-blocks", check_html_blocks, True),
+    ("html-attrs", check_html_attrs, True),
+    ("html-relative-src", check_html_relative_src, True),
     ("front-matter", check_front_matter, True),
     ("latex", check_latex, True),
     ("file-size", check_file_size, True),

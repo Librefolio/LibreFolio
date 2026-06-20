@@ -1,36 +1,40 @@
-# ![](../../../static/icons/transactions/fx-conversion.png){: width="32" style="vertical-align: middle;" } Conversione FX
+# ![](../../../static/icons/transactions/fx-conversion.png){: width="32" style="vertical-align: middle;" } Conversione valutaria
 
-Le **conversioni valutarie (FX)** scambiano una valuta con un'altra all'interno dello **stesso conto broker**. Il saldo di una valuta diminuisce mentre quello di un'altra aumenta — non vi è alcun cambiamento di titoli o broker.
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="transactions" data-name="form-modal-fxconversion" alt="Modulo Transazione — Conversione valutaria">
+</div>
+
+Le **conversioni valutarie** scambiano una valuta con un'altra all'interno dello **stesso conto broker**. Il saldo di una valuta diminuisce mentre quello di un'altra aumenta — non vi è alcun cambiamento di titoli o di broker.
 
 ---
 
 ## 🔑 Proprietà Principali
 
-| Proprietà | Da (sorgente) | A (destinazione) |
+| Proprietà | Da (origine) | A (destinazione) |
 |----------|---------------|-------------|
 | **Codice** | `FX_CONVERSION` | `FX_CONVERSION` |
-| **Effetto cassa** | ⬇️ Valuta sorgente | ⬆️ Valuta destinazione |
-| **Effetto asset** | — | — |
-| **Broker** | Stesso per entrambi i lati | Stesso per entrambi i lati |
-| **Valuta** | Diversa per ogni lato | Diversa per ogni lato |
-| **Evento fiscale** | Varia a seconda della giurisdizione | Varia |
+| **Effetto Cassa** | ⬇️ Valuta di origine | ⬆️ Valuta di destinazione |
+| **Effetto Asset** | — | — |
+| **Broker** | Lo stesso per entrambi | Lo stesso per entrambi |
+| **Valuta** | Diversa su ciascun lato | Diversa su ciascun lato |
+| **Evento Fiscale** | Varia in base alla giurisdizione | Varia |
 
 ---
 
 ## 📊 Come Funziona
 
-Una conversione FX registra **due voci** sullo stesso broker con **valute diverse**. Il tasso di conversione è implicito negli importi:
+Una conversione valutaria registra **due registrazioni** sullo stesso broker con **valute diverse**. Il tasso di conversione è implicito negli importi:
 
 $$
 FX_{rate} = \frac{\text{Amount}_{target}}{\lvert\text{Amount}_{source}\rvert}
 $$
 
-Le conversioni FX possono essere:
+Le conversioni valutarie possono essere:
 
-- **Esplicite**: L'utente converte deliberatamente le valute (es. EUR → USD prima di acquistare azioni USA)
-- **Implicite**: Il broker converte automaticamente l'importo durante l'acquisto di un asset denominato in valuta estera
+- **Esplicite**: L'utente converte deliberatamente le valute (ad es. EUR → USD prima di acquistare azioni USA)
+- **Implicite**: Il broker converte automaticamente quando si acquista un asset denominato in valuta estera
 
-!!! info "Implicit FX and Fees"
+!!! info "Conversione FX Implicita e Commissioni"
 
     Quando un broker converte automaticamente la valuta, il tasso effettivo spesso include uno spread. La differenza tra il tasso di mercato e il tasso effettivo è essenzialmente una commissione nascosta:
 
@@ -48,7 +52,7 @@ $$
 \text{Implied Rate} = \frac{\lvert\text{Amount}_{target}\rvert}{\lvert\text{Amount}_{source}\rvert}
 $$
 
-Questo viene confrontato con il **tasso di mercato** del sottosistema FX alla data della transazione. La differenza è lo **spread del broker**:
+Questo valore viene confrontato con il **tasso di mercato** del sottosistema FX alla data della transazione. La differenza è lo **spread del broker**:
 
 $$
 \text{Spread} = \text{Implied Rate} - \text{Market Rate}
@@ -58,22 +62,22 @@ $$
 \text{%Spread} = \frac{\text{Spread}}{\text{Market Rate}} \times 100
 $$
 
-!!! warning "Market Rate Availability"
+!!! warning "Disponibilità del Tasso di Mercato"
 
-    Il confronto con il tasso di mercato richiede che la coppia FX pertinente sia configurata nel sistema FX di LibreFolio. Se la coppia non è configurata o non esiste alcun tasso per la data della transazione, verrà mostrato solo il tasso implicito.
+    Il confronto con il tasso di mercato richiede che la relativa coppia FX sia configurata nel sistema FX di LibreFolio. Se la coppia non è configurata o non esiste un tasso per la data della transazione, verrà mostrato solo il tasso implicito.
 
 ---
 
 ## 🔀 Relazione con Depositi/Prelievi
 
-Sotto il cofano, una Conversione FX è composta da un Prelievo (valuta sorgente) e un Deposito (valuta destinazione). LibreFolio supporta:
+Sotto il cofano, una Conversione valutaria è composta da un Prelievo (valuta di origine) e un Deposito (valuta di destinazione). LibreFolio supporta:
 
 | Operazione | Risultato |
 |-----------|--------|
-| **Split** (scollega) | Conversione FX → Prelievo + Deposito indipendenti |
-| **Promote** (collega) | Prelievo + Deposito → Conversione FX |
+| **Split** (scollega) | Conversione valutaria → Prelievo + Deposito indipendenti |
+| **Promote** (collega) | Prelievo + Deposito → Conversione valutaria |
 
-**Vincoli per il Promote**: valute diverse, stesso broker.
+**Vincoli Promote**: valute diverse, stesso broker.
 
 ---
 

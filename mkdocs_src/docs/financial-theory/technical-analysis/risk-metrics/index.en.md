@@ -40,8 +40,8 @@ Risk metrics provide **quantitative measures** of portfolio risk. Each metric ca
 
 ## 🔗 Related
 
-- 🔀 **[Diversification](../diversification.md)** — How risk reduction works mathematically
-- ⚖️ **[Asset Allocation](../asset-allocation.md)** — Using risk metrics to guide allocation
+- 🔀 **[Diversification](../../portfolio-theory/diversification.md)** — How risk reduction works mathematically
+- ⚖️ **[Asset Allocation](../../portfolio-theory/asset-allocation.md)** — Using risk metrics to guide allocation
 - 📈 **[Returns & Growth Rates](../../fundamentals/returns.md)** — The "return" side of risk-return
 
 

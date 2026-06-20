@@ -28,4 +28,4 @@ Each sub-section has its own detailed composition diagram. See the pages below.
 | **[Forms](forms.md)** | BrokerForm, BrokerIcon | Create/edit form and smart icon with fallback |
 | **[Modals](modals.md)** | BrokerModal, BrokerSharingModal, BrokerImportFilesModal, DeleteBrokerDialog, CashTransactionModal | All broker-related modal dialogs |
 
-All modals extend [ModalBase](../ui-base/modals.md) from the UI Base components.
+All modals extend [ModalBase](../../core-ui/modals.md) from the UI Base components.

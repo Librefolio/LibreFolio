@@ -1,6 +1,6 @@
 # 📉 Máximo Drawdown
 
-El Máximo Drawdown (MDD) mide la **mayor caída desde el pico hasta el valle** en el valor de la cartera antes de que se establezca un nuevo pico. Responde a la pregunta: *"¿Cuál fue la peor pérdida que un inversor podría haber experimentado?"*
+El Máximo Drawdown (MDD) mide la **mayor caída desde el pico hasta el valle** en el valor de la cartera antes de que se establezca un nuevo pico. Responde a la pregunta: *"¿Cuál fue la peor pérdida que podría haber experimentado un inversor?"*
 
 ---
 
@@ -18,7 +18,7 @@ $$
 DD_t = \frac{V_t - V_{peak}}{V_{peak}}
 $$
 
-El Máximo Drawdown es el valor mínimo (más negativo) de $DD_t$ durante todo el periodo de observación.
+El máximo drawdown es el valor mínimo (el más negativo) de $DD_t$ durante todo el periodo de observación.
 
 ---
 
@@ -28,7 +28,7 @@ El Máximo Drawdown es el valor mínimo (más negativo) de $DD_t$ durante todo e
 |---|---|
 | $-5\%$ a $-10\%$ | Corrección normal, cartera bien diversificada |
 | $-10\%$ a $-20\%$ | Corrección significativa |
-| $-20\%$ a $-30\%$ | Territorio de mercado bajista (Bear market) |
+| $-20\%$ a $-30\%$ | Mercado bajista |
 | $-30\%$ a $-50\%$ | Mercado bajista severo (2008, COVID-2020) |
 | $> -50\%$ | Catastrófico (posiciones concentradas, crypto) |
 
@@ -36,22 +36,22 @@ El Máximo Drawdown es el valor mínimo (más negativo) de $DD_t$ durante todo e
 
     Secuencia de valor de la cartera: 100 → 120 → 90 → 110 → 130
 
-    - Pico (Peak): 120
-    - Valle (Trough): 90
+    - Pico: 120
+    - Valle: 90
     - MDD: $(90 - 120) / 120 = -25\%$
     - Recuperación: alcanzó 120 nuevamente, luego un nuevo máximo en 130
 
 ---
 
-## ⏱️ Tiempo de Recuperación
+## ⏱️ Tiempo de recuperación
 
-Una métrica igualmente importante es el **tiempo de recuperación** — cuánto tiempo toma recuperarse del drawdown y alcanzar un nuevo pico:
+Una métrica igualmente importante es el **tiempo de recuperación** — cuánto tiempo se tarda en recuperarse del drawdown y alcanzar un nuevo pico:
 
 $$
 T_{recovery} = t_{new\_peak} - t_{trough}
 $$
 
-| Clase de Activo | Tiempo de Recuperación Típico (tras un drawdown importante) |
+| Clase de activo | Tiempo de recuperación típico (tras un drawdown importante) |
 |-------------|---------------------------------------------|
 | Acciones EE. UU. (S&P 500) | 1-5 años |
 | Bonos | Meses a 1-2 años |
@@ -67,7 +67,7 @@ $$
 
     <div style="display: flex; justify-content: center;">
 
-    | Pérdida | Ganancia Requerida |
+    | Pérdida | Ganancia requerida |
     |:----:|:-------------:|
     | -10% | +11.1% |
     | -25% | +33.3% |
@@ -80,16 +80,16 @@ $$
 
 ## 📊 Gráfico de Drawdown
 
-Un gráfico de drawdown representa $DD_t$ a lo largo del tiempo. Siempre es cero o negativo, tocando el cero en cada nuevo pico. El valle más profundo es el Máximo Drawdown. Esta visualización facilita:
+Un gráfico de drawdown representa $DD_t$ a lo largo del tiempo. Siempre es cero o negativo, tocando el cero en cada nuevo pico. El valle más profundo es el máximo drawdown. Esta visualización facilita:
 
 - Identificar el **momento** de los periodos más críticos
 - Ver con qué frecuencia ocurren los drawdowns
-- Comparar patrones de recuperación entre diferentes estrategias
+- Comparar los patrones de recuperación entre diferentes estrategias
 
 ---
 
 ## 🔗 Relacionado
 
-- 📊 **[Volatilidad](volatility.md)** — La desviación estándar no captura la gravedad del drawdown
-- 📐 **[Ratio de Sharpe](sharpe-ratio.md)** — Rendimiento ajustado al riesgo (utiliza volatilidad, no drawdown)
-- 🔀 **[Diversificación](../diversification.md)** — La herramienta principal para reducir el Máximo Drawdown
+- 📊 **[Volatilidad](volatility.md)** — La desviación estándar no captura la severidad del drawdown
+- 📐 **[Sharpe Ratio](sharpe-ratio.md)** — Rentabilidad ajustada al riesgo (utiliza la volatilidad, no el drawdown)
+- 🔀 **[Diversificación](../../portfolio-theory/diversification.md)** — La herramienta principal para reducir el máximo drawdown

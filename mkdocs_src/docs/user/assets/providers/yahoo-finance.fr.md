@@ -1,16 +1,16 @@
-# 📈 Fournisseur Yahoo Finance
+# <img src="https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" alt=""> Yahoo Finance
 
 Yahoo Finance est le fournisseur par défaut pour les actions, les ETF et les fonds communs de placement. Il offre la couverture la plus large et prend en charge la recherche d'actifs.
 
 ## 📊 Fonctionnalités
 
 - ✅ **Prix actuel** : Cotations en temps réel ou différées
-- ✅ **Historique** : Données de prix historiques complètes
+- ✅ **Historique** : Données historiques complètes des prix
 - ✅ **Recherche** : Recherche d'actifs par nom ou par ticker
 
 ## 🔧 Configuration
 
-- **Identifiant** : Symbole ticker de Yahoo Finance (ex: `AAPL`, `VWCE.DE`, `BTC-USD`)
+- **Identifiant** : Ticker Yahoo Finance (ex: `AAPL`, `VWCE.DE`, `BTC-USD`)
 - **Type d'identifiant** : `TICKER`
 - **Paramètres** : Aucun requis
 
@@ -26,4 +26,4 @@ Yahoo Finance est le fournisseur par défaut pour les actions, les ETF et les fo
 ## 📝 Notes
 
 - Pour les ETF cotés en Europe, ajoutez le suffixe de la place boursière (ex: `.DE` pour Xetra, `.MI` pour Milan, `.AS` pour Amsterdam)
-- Les données de Yahoo Finance peuvent présenter un retard de 15 minutes pour certaines bourses
+- Les données de Yahoo Finance peuvent présenter un retard de 15 minutes pour certaines places boursières

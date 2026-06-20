@@ -1,98 +1,72 @@
 # 📝 Formulaire de Transaction
 
-Le formulaire de transaction s'ouvre chaque fois que vous **créez** ou **modifiez** une transaction. Il s'adapte dynamiquement au type de transaction sélectionné, affichant uniquement les champs pertinents pour cette opération.
+Le Formulaire de Transaction s'ouvre chaque fois que vous **créez** ou **modifiez** une transaction. Il s'adapte dynamiquement au type de transaction sélectionné, n'affichant que les champs pertinents pour cette opération.
 
 ---
 
 ## 🏷️ Types de Transactions
 
-| Type | Icône | Description |
-|------|------|-------------|
-| **BUY** | 🟢 | Achat d'un actif |
-| **SELL** | 🔴 | Vente d'un actif |
-| **DIVIDEND** | 💰 | Dividende en espèces reçu |
-| **INTEREST** | 📈 | Revenus d'intérêts (obligations, P2P) |
-| **FEE** | 💸 | Frais de courtage ou frais de plateforme |
-| **DEPOSIT** | ⬇️ | Dépôt d'espèces sur le compte du courtier |
-| **WITHDRAWAL** | ⬆️ | Retrait d'espèces du compte du courtier |
-| **ADJUSTMENT** | 🔧 | Correction manuelle de la quantité ou du prix |
-| **TRANSFER** | 🔄 | Actif déplacé entre deux de vos courtiers (composite) |
-| **FX_CONVERSION** | 💱 | Conversion de devise au sein d'un courtier (composite) |
+Pour une définition conceptuelle approfondie de chaque opération, veuillez vous référer au [guide de Théorie Financière](../../financial-theory/instruments/transaction-types/index.md).
 
-Voir [Théorie Financière → Types de Transactions](../../financial-theory/instruments/transaction-types/index.md) pour la définition conceptuelle de chaque type.
+<div class="lf-screenshot-carousel" data-carousel="transactions" data-carousel-interval="3000" data-show-titles="true">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="transactions" data-name="form-modal" data-title='<img src="/LibreFolio/static/icons/transactions/buy.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> ACHAT' alt="Achat">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-sell" data-title='<img src="/LibreFolio/static/icons/transactions/sell.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> VENTE' alt="Vente">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-dividend" data-title='<img src="/LibreFolio/static/icons/transactions/dividend.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> DIVIDENDE' alt="Dividende">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-deposit" data-title='<img src="/LibreFolio/static/icons/transactions/deposit.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> DÉPÔT' alt="Dépôt">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-adjustment" data-title='<img src="/LibreFolio/static/icons/transactions/adjustment.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> AJUSTEMENT' alt="Ajustement">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-transfer" data-title='<img src="/LibreFolio/static/icons/transactions/transfer.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> TRANSFERT' alt="Transfert d'actif">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fxconversion" data-title='<img src="/LibreFolio/static/icons/transactions/fx-conversion.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> CONVERSION FX' alt="Conversion FX">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-cash-transfer" data-title='<img src="/LibreFolio/static/icons/transactions/cash-transfer.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> TRANSFERT DE LIQUIDITÉS' alt="Transfert de cash">
+</div>
 
----
+### Transactions Simples
 
-## 📋 Champs Communs
+Celles-ci opèrent indépendamment sur un seul compte de courtage.
 
-Ces champs apparaissent pour **tous** les types de transactions :
+| Type | Description | Guide Théorique |
+|------|-------------|--------------|
+| ![](../../static/icons/transactions/buy.png){: width="24" style="vertical-align: middle;" } **ACHAT / VENTE** ![](../../static/icons/transactions/sell.png){: width="24" style="vertical-align: middle;" } | Achat ou vente d'un actif | [📖 Lire](../../financial-theory/instruments/transaction-types/buy-sell.md) |
+| ![](../../static/icons/transactions/deposit.png){: width="24" style="vertical-align: middle;" } **DÉPÔT / RETRAIT** ![](../../static/icons/transactions/withdrawal.png){: width="24" style="vertical-align: middle;" } | Ajout ou retrait de liquidités d'un compte de courtage | [📖 Lire](../../financial-theory/instruments/transaction-types/deposit-withdrawal.md) |
+| ![](../../static/icons/transactions/dividend.png){: width="24" style="vertical-align: middle;" } **DIVIDENDE / INTÉRÊT** ![](../../static/icons/transactions/interest.png){: width="24" style="vertical-align: middle;" } | Rendement d'actifs actions ou à taux fixe | [📖 Lire](../../financial-theory/instruments/transaction-types/dividend-interest.md) |
+| ![](../../static/icons/transactions/fee.png){: width="24" style="vertical-align: middle;" } **FRAIS / TAXE** ![](../../static/icons/transactions/tax.png){: width="24" style="vertical-align: middle;" } | Coûts tels que les frais de courtage ou les taxes | [📖 Lire](../../financial-theory/instruments/transaction-types/fee.md) |
+| ![](../../static/icons/transactions/adjustment.png){: width="24" style="vertical-align: middle;" } **AJUSTEMENT** | Correction manuelle des soldes | [📖 Lire](../../financial-theory/instruments/transaction-types/adjustment.md) |
 
-| Champ | Requis | Description |
-|-------|:--------:|-------------|
-| **Type** | ✅ | Sélecteur du type de transaction |
-| **Date** | ✅ | Date d'exécution (AAAA-MM-JJ) |
-| **Currency** | ✅ | Devise de la transaction |
-| **Amount** | ✅ | Montant brut total |
-| **Fee** | ❌ | Commission de courtage ou taxe retenue |
-| **Notes** | ❌ | Mémo en texte libre |
+### Transactions Composites
 
----
+Celles-ci représentent des mouvements **entre** des comptes ou des devises. Elles produisent deux entrées liées qui s'équilibrent.
 
-## 🏦 Opérations sur Actifs (BUY / SELL / TRANSFER)
-
-Lorsqu'un actif est impliqué, des champs supplémentaires apparaissent :
-
-| Champ | Requis | Description |
-|-------|:--------:|-------------|
-| **Asset** | ✅ | L'actif négocié (recherchable) |
-| **Quantity** | ✅ | Nombre d'unités |
-| **Unit Price** | ✅ | Prix par unité |
-
-!!! tip "Auto-calcul"
-
-    Si vous renseignez la **Quantity** et le **Unit Price**, le **Amount** est calculé automatiquement, et vice versa.
+| Type | Description | Guide Théorique |
+|------|-------------|--------------|
+| ![](../../static/icons/transactions/transfer.png){: width="24" style="vertical-align: middle;" } **TRANSFERT** | Actif déplacé entre deux de vos courtiers | [📖 Lire](../../financial-theory/instruments/transaction-types/transfer.md) |
+| ![](../../static/icons/transactions/cash-transfer.png){: width="24" style="vertical-align: middle;" } **TRANSFERT DE LIQUIDITÉS** | Virement bancaire entre courtiers | [📖 Lire](../../financial-theory/instruments/transaction-types/cash-transfer.md) |
+| ![](../../static/icons/transactions/fx-conversion.png){: width="24" style="vertical-align: middle;" } **CONVERSION FX** | Change de devises au sein d'un courtier | [📖 Lire](../../financial-theory/instruments/transaction-types/fx-conversion.md) |
 
 ---
 
-## 💰 Aperçu WAC
+## 📋 L'Interface du Formulaire
 
-Pour les transactions **BUY** et **SELL**, un panneau d'**aperçu WAC (Coût Moyen Pondéré)** apparaît sous les champs principaux. Il affiche en temps réel :
+Le formulaire est conçu pour être intuitif et dynamique. Lorsque vous sélectionnez un **Type de Transaction**, le formulaire s'ajuste automatiquement pour n'afficher que les champs pertinents.
 
-- Le **prix de revient actuel** avant cette transaction
-- Le **nouveau prix de revient projeté** après l'enregistrement
-- Le **gain/perte réalisé** (SELL uniquement)
+- **Détails de base :** Date, Type, Devise et Montant.
+- **Spécificités de l'actif :** Si la transaction implique un actif (comme ACHAT ou VENTE), des champs pour sélectionner l'actif, saisir la quantité et définir le prix unitaire apparaîtront.
+- **Panneau de prévisualisation (WAC) :** Pour les opérations affectant votre portefeuille, une prévisualisation en temps réel apparaît en bas. Elle affiche votre prix de revient actuel, le nouveau prix de revient projeté, ainsi que tout gain ou perte réalisé.
 
-Cet aperçu est calculé en direct — nul besoin d'enregistrer au préalable.
-
-!!! note "Surcharge manuelle du WAC"
-
-    Vous pouvez passer le mode WAC de **Auto** (calculé par LibreFolio) à **Manual** (saisissez votre propre prix de revient). Ceci est utile lors de la migration de données historiques depuis un autre système.
+> **💡 Note :** Le système gère automatiquement les calculs standard pour vous (comme la multiplication de la quantité par le prix unitaire) afin que vous n'ayez pas à faire les calculs manuellement.
 
 ---
 
 ## 🔄 Transactions Composites
 
-**TRANSFER** et **FX_CONVERSION** sont *composites* — ils lient deux volets :
+**TRANSFERT** et **CONVERSION FX** sont *composites* — ils lient deux volets :
 
-- **TRANSFER** : spécifie un **courtier source** et un **courtier de destination**, ainsi que l'actif et la quantité. LibreFolio enregistre les deux volets de manière atomique.
-- **FX_CONVERSION** : spécifie le **montant de la devise source** et le **montant de la devise de destination** au sein du même courtier.
+- **TRANSFERT** : spécifie un **courtier source** et un **courtier de destination**, ainsi que l'actif et la quantité. LibreFolio enregistre les deux volets de manière atomique.
+- **CONVERSION FX** : spécifie le **montant de la devise source** et le **montant de la devise de destination** au sein du même courtier.
 
-Pour effectuer la division d'une transaction composite en deux transactions indépendantes, utilisez l'opération [Split](index.md#split) dans le tableau des transactions.
-
----
-
-## ✅ Validation
-
-Le formulaire valide les données lors de l'enregistrement :
-
-- Les dates doivent être dans une plage valide (pas dans le futur par défaut).
-- La quantité et le prix doivent être positifs.
-- Pour SELL : la quantité ne peut pas excéder la position actuelle (avertissement, pas d'erreur bloquante).
-- Le montant doit correspondre à la quantité × prix avec une faible tolérance.
+Pour diviser une transaction composite en deux transactions indépendantes, utilisez l'opération [division](index.md) dans le tableau des transactions.
 
 ---
 
 ## 🔗 Liens connexes
 
 - 📋 **[Tableau des Transactions](index.md)** — Vue en liste, filtrage, opérations groupées
-- 📥 **[Import depuis Courtier](import/index.md)** — Évitez la saisie manuelle avec l'import BRIM
+- 📥 **[Importer depuis un Courtier](import/index.md)** — Évitez la saisie manuelle avec l'import BRIM

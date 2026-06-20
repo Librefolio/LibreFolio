@@ -40,5 +40,5 @@ Le **Materie Prime** (Commodities) sono asset fisici — materie prime o beni di
 ## 🔗 Correlati
 
 - 🔀 **[Diversificazione](../../portfolio-theory/diversification.md)** — Le materie prime come diversificatori di portafoglio
-- 📊 **[Volatilità](../../portfolio-theory/risk-metrics/volatility.md)** — Misurare il rischio del prezzo delle materie prime
+- 📊 **[Volatilità](../../technical-analysis/risk-metrics/volatility.md)** — Misurare il rischio del prezzo delle materie prime
 - 📈 **[Rendimenti e Tassi di Crescita](../../fundamentals/returns.md)** — Misurare la performance delle materie prime

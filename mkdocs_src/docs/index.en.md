@@ -53,7 +53,7 @@ description: Free to understand, free to act. LibreFolio brings all your investm
     <!-- Quick Install -->
   <section class="lf-quick-install-section" id="get-started-quick">
     <div class="lf-quick-install-card">
-      <h2 class="lf-quick-install-title">Ready to try<br><img src="static/logo.png" alt="LibreFolio Logo" style="height: 1em; width: auto; vertical-align: text-bottom; margin-right: 0.2em; border-radius: 4px;">LibreFolio?</h2>
+      <h2 class="lf-quick-install-title">Ready to try<br><img id="quick-install-logo" alt="LibreFolio Logo" style="height: 1em; width: auto; vertical-align: text-bottom; margin-right: 0.2em; border-radius: 4px;"><script>(function(){var p=window.location.pathname.replace(/\/+$/,"");var base=p.replace(/\/(it|fr|es)$/,"");document.getElementById("quick-install-logo").src=base+"/static/logo.png";})();</script>LibreFolio?</h2>
       
       <div class="lf-quick-install-docker">
         <span class="lf-quick-install-eyebrow">Recommended</span>
@@ -75,11 +75,11 @@ description: Free to understand, free to act. LibreFolio brings all your investm
             <span class="lf-quick-install-icon lf-quick-install-icon-secondary">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
             </span>
-            <h4>Developer?</h4>
+            <h4>Run on Host?</h4>
           </div>
-          <p>Set up the Python + Pipenv environment to contribute or customize.</p>
+          <p>Set up the Python + Pipenv environment to run LibreFolio directly on your host machine.</p>
         </div>
-        <a href="developer/dev-installation/" class="lf-btn-secondary">Developer installation &rarr;</a>
+        <a href="admin/host_installation/" class="lf-btn-secondary">Host installation &rarr;</a>
       </div>
     </div>
   </section>
@@ -217,37 +217,37 @@ description: Free to understand, free to act. LibreFolio brings all your investm
               <a href="user/transactions/import/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="6" rx="2"/><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
                 <div class="provider-info">
-                  <h4>Smart Parsers</h4>
-                  <p><b>Map and import</b> complex broker export files <b>automatically</b> using community parsers.</p>
+                  <h4>Broker Imports</h4>
+                  <p><b>Upload and process</b> your broker export files <b>in seconds</b> using smart community-driven parsers.</p>
                 </div>
               </a>
             </div>
           </div>
 
-          <div class="hub-node node-bottom-left">
-            <div class="hub-node-unscale">
-              <a href="user/assets/providers/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
-                <div class="provider-info">
-                  <h4>Valuation Modules</h4>
-                  <p><b>Plug into</b> your preferred financial APIs to stream <b>live pricing data</b>.</p>
-                </div>
-              </a>
+            <div class="hub-node node-bottom-left">
+              <div class="hub-node-unscale">
+                <a href="user/assets/providers/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                  <div class="provider-info">
+                    <h4>Asset Prices & Quotes</h4>
+                    <p><b>Automatically update</b> the values of stocks, ETFs, and crypto by connecting to real-time data providers.</p>
+                  </div>
+                </a>
+              </div>
             </div>
-          </div>
 
-          <div class="hub-node node-bottom-right">
-            <div class="hub-node-unscale">
-              <a href="user/fx/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
-                <div class="provider-info">
-                  <h4>Exchange Rate Engines</h4>
-                  <p><b>Integrate</b> custom forex providers to perfectly balance <b>multi-currency accounts</b>.</p>
-                </div>
-              </a>
+            <div class="hub-node node-bottom-right">
+              <div class="hub-node-unscale">
+                <a href="user/fx/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
+                  <div class="provider-info">
+                    <h4>Exchange Rates & Forex</h4>
+                    <p><b>Sync exchange rates</b> (FX) to precisely calculate and balance your <b>multi-currency portfolios</b>.</p>
+                  </div>
+                </a>
+              </div>
             </div>
           </div>
-        </div>
       </div>
     </div>
   </div>
@@ -366,8 +366,8 @@ description: Free to understand, free to act. LibreFolio brings all your investm
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
             </div>
             <div class="lf-fit-cell-content">
-              <h4>Privacy-aware data ownership</h4>
-              <p>Keep your financial data in an environment you control.</p>
+              <h4>Code-guaranteed privacy</h4>
+              <p>100% free and viewable code gives you absolute control over your financial data, with the certainty that no backdoors exist.</p>
             </div>
           </div>
         </article>
@@ -382,8 +382,8 @@ description: Free to understand, free to act. LibreFolio brings all your investm
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
             </div>
             <div class="lf-fit-cell-content">
-              <h4>Hands-off hosted workflow</h4>
-              <p>If you want someone else to operate the service end-to-end, a managed product may fit better.</p>
+              <h4>Privacy not a priority</h4>
+              <p>If you prefer to rely on the security promises written in the Terms of Service of private companies without being able to verify them.</p>
             </div>
           </div>
         </article>

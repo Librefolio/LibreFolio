@@ -104,6 +104,6 @@ Scheduler options are fully integrated into LibreFolio's database-backed Global 
 
 ## 🔗 Related
 
-* 📡 **[LiveTicker Component Overview](../../frontend/components/features/live-ticker.md)** — Frontend polling component
-* 💰 **[Asset Architecture](../assets/architecture.md)** — Pricing provider pipelines and sync steps
-* ⚙️ **[Settings System](../settings.md)** — Dynamic global configuration variables
+* 📡 **[LiveTicker Component Overview](../frontend/components/features/live-ticker.md)** — Frontend polling component
+* 💰 **[Asset Architecture](assets/architecture.md)** — Pricing provider pipelines and sync steps
+* ⚙️ **[Settings System](../architecture/settings.md)** — Dynamic global configuration variables

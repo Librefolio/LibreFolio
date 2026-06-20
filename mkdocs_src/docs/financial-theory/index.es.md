@@ -37,4 +37,4 @@ Teoría Moderna de Carteras y gestión de riesgos:
 
 - **[Diversificación](portfolio-theory/diversification.md)** — Correlación, riesgo sistemático vs idiosincrásico
 - **[Asignación de Activos](portfolio-theory/asset-allocation.md)** — Estratégica, táctica, trayectorias de deslizamiento (glide paths), rebalanceo
-- **[Métricas de Riesgo](portfolio-theory/risk-metrics/index.md)** — Sharpe, Sortino, Máxima Caída (Max Drawdown), Volatilidad
+- **[Métricas de Riesgo](technical-analysis/risk-metrics/index.md)** — Sharpe, Sortino, Máxima Caída (Max Drawdown), Volatilidad

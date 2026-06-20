@@ -1,5 +1,9 @@
 # ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Trasferimento di Asset
 
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Transaction Form — TRANSFER">
+</div>
+
 I **trasferimenti di asset** spostano i titoli tra conti di broker **senza una vendita**. La posizione lascia un broker e arriva a un altro: non c'è scambio di contanti e, nella maggior parte delle giurisdizioni, questo non costituisce un evento imponibile.
 
 ---
@@ -30,7 +34,7 @@ Scenari comuni:
 
     Durante il trasferimento di asset, il **costo di acquisizione originale** deve essere preservato. Il trasferimento stesso non è un evento imponibile nella maggior parte delle giurisdizioni (sebbene le norme varino). LibreFolio consente un **override del costo di acquisizione** opzionale sul lato ricevente.
 
-    Consulta **[📊 Costo Medio Ponderato (WAC)](../../portfolio-theory/weighted-average-cost.md)** per scoprire come viene calcolato automaticamente il costo di acquisizione.
+    Consulta **[📊 Costo Medio Ponderato (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** per scoprire come viene calcolato automaticamente il costo di acquisizione.
 
 ---
 
@@ -49,7 +53,7 @@ Sotto il cofano, un Trasferimento è composto da due voci di Rettifica. LibreFol
 
 ## 🔗 Correlati
 
-- 📊 **[Costo Medio Ponderato](../../portfolio-theory/weighted-average-cost.md)** — Come viene calcolato il costo di acquisizione sui trasferimenti
+- 📊 **[Costo Medio Ponderato](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Come viene calcolato il costo di acquisizione sui trasferimenti
 - 🏦 **[Trasferimento di Liquidità](cash-transfer.md)** — Bonifici bancari (contanti, non asset)
 - 💱 **[Conversione Valutaria](fx-conversion.md)** — Cambio valuta
 - 📊 **[Rettifica](adjustment.md)** — Correzioni manuali

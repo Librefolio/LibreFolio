@@ -1,6 +1,6 @@
 # 📈 Interessi
 
-Un evento di **interesse** rappresenta un pagamento periodico di interessi derivante da uno strumento di debito, un titolo a reddito fisso o un accordo di prestito.
+Un evento di **interessi** rappresenta un pagamento periodico di interessi derivante da uno strumento di debito, un titolo a reddito fisso o un accordo di prestito.
 
 ---
 
@@ -8,9 +8,9 @@ Un evento di **interesse** rappresenta un pagamento periodico di interessi deriv
 
 L'interesse è il costo del denaro preso in prestito, pagato dall'emittente (mutuatario) al detentore (prestatore). Per gli investitori, i pagamenti degli interessi rappresentano il reddito guadagnato dal possesso di obbligazioni, titoli, depositi a termine o prestiti peer-to-peer.
 
-A differenza dei dividendi (che dipendono dagli utili dell'azienda), i pagamenti degli interessi sono **obblighi contrattuali**: l'emittente deve pagare il tasso concordato indipendentemente dalle prestazioni finanziarie.
+A differenza dei dividendi (che dipendono dai profitti aziendali), i pagamenti degli interessi sono **contrattualmente obbligatori**: l'emittente deve pagare il tasso concordato indipendentemente dalle prestazioni finanziarie.
 
-**Frequenze di pagamento comuni:**
+**Calendari di interesse comuni:**
 
 | Frequenza | Strumenti Tipici |
 |-----------|-------------------|
@@ -35,10 +35,10 @@ A differenza dei dividendi (che dipendono dagli utili dell'azienda), i pagamenti
     Dove:
 
     - $P$ = capitale (investimento iniziale)
-    - $r$ = tasso di interesse annuale (es. 0,04 per il 4%)
+    - $r$ = tasso di interesse annuo (es. 0,04 per il 4%)
     - $t$ = tempo in anni
 
-    Utilizzato per: prestiti a breve termine, alcuni conti di risparmio, buoni del tesoro.
+    Utilizzato per: prestiti a breve termine, alcuni conti di risparmio, BOT.
 
 ??? example "📈 Interesse Composto"
 
@@ -52,8 +52,8 @@ A differenza dei dividendi (che dipendono dagli utili dell'azienda), i pagamenti
 
     - $A$ = importo finale (capitale + interessi)
     - $P$ = capitale
-    - $r$ = tasso di interesse annuale
-    - $n$ = frequenza di capitalizzazione per anno (12 = mensile, 4 = trimestrale, 1 = annuale)
+    - $r$ = tasso di interesse annuo
+    - $n$ = frequenza di capitalizzazione all'anno (12 = mensile, 4 = trimestrale, 1 = annuale)
     - $t$ = tempo in anni
 
     L'interesse guadagnato è: $I = A - P$
@@ -72,7 +72,7 @@ Per le **obbligazioni con cedola**, i pagamenti degli interessi causano un reset
 
 ??? example "Ciclo della cedola obbligazionaria"
 
-    Un'obbligazione con valore nominale 1.000 € paga una cedola annuale del 4% ogni sei mesi (20 € ogni 6 mesi).
+    Un'obbligazione con valore nominale 1.000 € paga una cedola annuale del 4% semestralmente (20 € ogni 6 mesi).
 
     - **Giorno prima della cedola**: Clean price 980 €, Interesse maturato 20 € → Dirty price 1.000 €
     - **Data della cedola**: L'interesse maturato torna a 0 €, l'investitore riceve 20 € in contanti
@@ -94,22 +94,22 @@ Dove:
 
 ## 📊 Metriche di Rendimento
 
-??? example "📐 Current Yield"
+??? example "📐 Rendimento Corrente (Current Yield)"
 
-    La misura di rendimento più semplice — reddito annuale relativo al prezzo attuale:
+    La misura di rendimento più semplice — reddito annuo rispetto al prezzo corrente:
 
     $$
-    \text{Current Yield} = \frac{\text{Annual Coupon}}{\text{Current Market Price}} \times 100
+    \text{Current Yield} = \frac{\text{Cedola Annuale}}{\text{Prezzo di Mercato Corrente}} \times 100
     $$
 
     Dove:
 
-    - **Annual Coupon** = pagamenti totali della cedola per anno (es. 40 € per un'obbligazione al 4% con valore nominale di 1.000 €)
-    - **Current Market Price** = quanto pagheresti per comprare l'obbligazione oggi
+    - **Cedola Annuale** = pagamenti totali delle cedole all'anno (es. 40 € per un'obbligazione al 4% con valore nominale di 1.000 €)
+    - **Prezzo di Mercato Corrente** = quanto pagheresti per acquistare l'obbligazione oggi
 
-    Limitazione: ignora la plusvalenza/minusvalenza se detenuta fino a scadenza.
+    Limite: ignora la plusvalenza/minusvalenza se mantenuta fino a scadenza.
 
-??? example "📐 Yield to Maturity (YTM)"
+??? example "📐 Rendimento a Scadenza (Yield to Maturity - YTM)"
 
     Il rendimento totale previsto se l'obbligazione viene mantenuta fino alla scadenza, tenendo conto di **tutti** i flussi di cassa: pagamenti delle cedole, rimborso del valore nominale e la differenza tra il prezzo di acquisto e il valore nominale.
 
@@ -121,25 +121,31 @@ Dove:
 
     Dove:
 
-    - $P$ = prezzo di mercato attuale
+    - $P$ = prezzo di mercato corrente
     - $C$ = pagamento della cedola per periodo
-    - $F$ = valore nominale (restituito a scadenza)
+    - $F$ = valore nominale (restituito alla scadenza)
     - $T$ = numero di periodi fino alla scadenza
     - $y$ = rendimento a scadenza (per periodo)
 
-    YTM deve essere risolto numericamente (non esiste una soluzione in forma chiusa).
+    L'YTM deve essere risolto numericamente (non esiste una soluzione a forma chiusa).
 
 ---
 
-## 🧮 Come LibreFolio gestisce gli interessi
+## 🧮 Come LibreFolio Gestisce gli Interessi
 
-In LibreFolio, un evento `INTEREST` viene registrato con:
+In LibreFolio, un evento `INTEREST` (e la corrispondente transazione di portafoglio) viene registrato con:
 
-- **Date**: La data di pagamento dell'interesse
-- **Amount**: L'importo in denaro ricevuto
+- **Date**: La data di pagamento degli interessi
+- **Amount**: L'importo in contanti ricevuto
 - **Currency**: La valuta del pagamento
 
-Per gli asset del provider di **investimento programmato**, gli eventi di interesse vengono generati automaticamente dal calendario degli interessi configurato e influenzano direttamente il calcolo del prezzo. Per le obbligazioni con prezzo di mercato, servono come marker informativi.
+### La Differenza Contabile: Interessi vs Dividendi
+È fondamentale distinguere tra una transazione di **Interessi** e una di **Dividendi** a livello di database:
+
+1. **Interessi (basati su Debito/Rendimento)**: Un pagamento di interessi rappresenta il rendimento su debiti o depositi di liquidità (es. conti di risparmio bancari, prestiti P2P o cedole obbligazionarie). Nel tracciamento del portafoglio a partita doppia, questi rappresentano entrate di cassa (`cash.amount > 0`) dove l'asset sottostante è opzionale. La transazione nel database richiede `quantity = 0` perché non vengono scambiate unità dell'asset durante un pagamento di interessi in contanti.
+2. **Dividendi (basati su Equity)**: Un dividendo è una distribuzione di utili pagata agli azionisti. Richiede strettamente l'esistenza di un asset azionario sottostante (l'asset è obbligatorio), e l'erogazione dipende direttamente dal numero di azioni possedute alla data ex-date. Proprio come gli interessi, i dividendi sono puri movimenti di cassa (`quantity = 0`).
+
+Per gli asset di provider di **investimento programmato**, gli eventi di interesse vengono generati automaticamente dal calendario di interessi configurato e influenzano direttamente il calcolo del prezzo. Per le obbligazioni con prezzo di mercato, fungono da indicatori informativi.
 
 ---
 

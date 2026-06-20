@@ -12,7 +12,7 @@ A **light/dark/auto theme toggle** with animated icons.
 - Smooth icon transition animation
 - Persists choice in user settings
 
-**Used by**: [Settings PreferencesTab](../settings.md), header.
+**Used by**: [Settings PreferencesTab](../features/settings.md), header.
 
 ---
 
@@ -60,7 +60,7 @@ A **password field with visibility toggle** (eye icon).
 - Toggle between `type="password"` and `type="text"`
 - Eye / EyeOff icon from lucide-svelte
 
-**Used by**: [LoginCard, RegisterCard](../auth.md), `PasswordChangeModal`.
+**Used by**: [LoginCard, RegisterCard](../features/auth.md), `PasswordChangeModal`.
 
 ---
 
@@ -74,4 +74,4 @@ A **password strength indicator** powered by `zxcvbn`.
 - Textual feedback and suggestions
 - Score: 0 (very weak) to 4 (very strong)
 
-**Used by**: [RegisterCard](../auth.md) (below password field).
+**Used by**: [RegisterCard](../features/auth.md) (below password field).

@@ -35,13 +35,13 @@ LibreFolio soporta:
 
 !!! tip "¿Falta algo? 💡"
 
-    Si hay alguna clase de activo o función que te gustaría ver y en la que aún no hemos pensado, ¡nos encantaría saberlo! Abre una [solicitud de función en GitHub](https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement) y cuéntanos.
+    Si hay alguna clase de activo o función que te gustaría ver y en la que aún no hemos pensado, ¡nos encantaría saberlo! Abre una [solicitud de función en GitHub](https://github.com/Librefolio/LibreFolio/issues/new?labels=enhancement) y cuéntanos.
 
 ## 🚀 Primeros Pasos
 
 ### 📦 ¿Cómo instalo LibreFolio?
 
-Consulta nuestra [Guía de Instalación](../developer/dev-installation.md) para obtener instrucciones detalladas.
+Consulte nuestra [Guía de Instalación en Host](../admin/host_installation.md) o la [Guía de Instalación con Docker](../user/installation.md) para obtener instrucciones detalladas.
 
 ### 👤 ¿Cómo creo una cuenta?
 
@@ -92,5 +92,5 @@ Consulta la guía [Instalar como App (PWA)](../user/pwa.md) para obtener instruc
 ## 🆘 ¿Necesitas más ayuda?
 
 - [Documentación Completa](../index.md)
-- [Informar de un Error](https://github.com/Alfystar/LibreFolio/issues)
-- [Discusiones de GitHub](https://github.com/Alfystar/LibreFolio/discussions)
+- [Informar de un Error](https://github.com/Librefolio/LibreFolio/issues)
+- [Discusiones de GitHub](https://github.com/Librefolio/LibreFolio/discussions)

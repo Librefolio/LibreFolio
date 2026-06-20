@@ -37,4 +37,4 @@ Modern Portfolio Theory and risk management:
 
 - **[Diversification](portfolio-theory/diversification.md)** — Correlation, systematic vs idiosyncratic risk
 - **[Asset Allocation](portfolio-theory/asset-allocation.md)** — Strategic, tactical, glide paths, rebalancing
-- **[Risk Metrics](portfolio-theory/risk-metrics/index.md)** — Sharpe, Sortino, Max Drawdown, Volatility
+- **[Risk Metrics](technical-analysis/risk-metrics/index.md)** — Sharpe, Sortino, Max Drawdown, Volatility

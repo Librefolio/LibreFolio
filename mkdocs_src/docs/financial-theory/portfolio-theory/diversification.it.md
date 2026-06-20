@@ -85,5 +85,5 @@ $$
 ## 🔗 Correlati
 
 - ⚖️ **[Asset Allocation](asset-allocation.md)** — Come scegliere l'allocazione del portafoglio
-- 📊 **[Volatilità](risk-metrics/volatility.md)** — Misurare il rischio che la diversificazione riduce
-- 📈 **[Max Drawdown](risk-metrics/max-drawdown.md)** — La metrica dello scenario peggiore
+- 📊 **[Volatilità](../technical-analysis/risk-metrics/volatility.md)** — Misurare il rischio che la diversificazione riduce
+- 📈 **[Max Drawdown](../technical-analysis/risk-metrics/max-drawdown.md)** — La metrica dello scenario peggiore

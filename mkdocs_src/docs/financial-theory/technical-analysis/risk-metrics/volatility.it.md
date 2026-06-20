@@ -1,6 +1,6 @@
 # 📊 Volatilità
 
-La volatilità misura la **dispersione dei rendimenti** — ovvero quanto il prezzo di un asset fluttua nel tempo. È la misura del rischio più fondamentale in finanza e la base di quasi tutte le altre metriche di rischio.
+La volatilità misura la **dispersione dei rendimenti** — ovvero quanto il prezzo di un asset fluttua nel tempo. È la misura del rischio più fondamentale in finanza e il mattone costruttivo per quasi tutte le altre metriche di rischio.
 
 ---
 
@@ -16,7 +16,7 @@ dove $R_i$ sono i rendimenti dei singoli periodi e $\bar{R}$ è il rendimento me
 
 ### 📈 Annualizzazione
 
-La volatilità giornaliera viene annualizzata moltiplicando per la radice quadrata del numero di giorni di trading:
+La volatilità giornaliera viene annualizzata moltiplicandola per la radice quadrata del numero di giorni di trading:
 
 $$
 \sigma_{annual} = \sigma_{daily} \times \sqrt{252}
@@ -24,7 +24,7 @@ $$
 
 !!! info "Perché √252?"
 
-    Si assume che i rendimenti siano indipendenti tra i giorni. La varianza di una somma di $N$ variabili indipendenti è $N$ volte la varianza individuale. Pertanto:
+    Si assume che i rendimenti siano indipendenti tra i vari giorni. La varianza di una somma di $N$ variabili indipendenti è $N$ volte la varianza individuale. Pertanto:
 
     $$\text{Var}_{annual} = 252 \times \text{Var}_{daily}$$
     $$\sigma_{annual} = \sqrt{252} \times \sigma_{daily}$$
@@ -36,7 +36,7 @@ $$
 | Volatilità Annualizzata | Asset Tipici |
 |---|---|
 | 1-5% | Mercato monetario, obbligazioni a breve termine |
-| 5-15% | Obbligazioni governative, corporate investment grade |
+| 5-15% | Obbligazioni governative, corporate investment-grade |
 | 15-25% | Azioni large-cap, ETF azionari diversificati |
 | 25-40% | Azioni small-cap, singole azioni |
 | 40-80%+ | Crypto, meme stocks, prodotti a leva |
@@ -61,13 +61,13 @@ $$
 C = f(S, K, T, r, \sigma_{implied})
 $$
 
-La volatilità implicita guarda al futuro ma è disponibile solo per gli asset su cui sono negoziabili opzioni.
+La volatilità implicita è orientata al futuro ma è disponibile solo per gli asset con opzioni negoziabili.
 
 ---
 
 ## 🔄 Volatilità a Finestra Mobile (Rolling Window)
 
-Invece di calcolare un singolo valore di volatilità per l'intero periodo, la **volatilità a finestra mobile** calcola $\sigma$ su una finestra scorrevole (ad esempio, 30 giorni), producendo una serie temporale che mostra come evolve la volatilità:
+Invece di calcolare un unico valore di volatilità per l'intero periodo, la **volatilità a finestra mobile** calcola $\sigma$ su una finestra scorrevole (ad esempio, 30 giorni), producendo una serie temporale che mostra come evolve la volatilità:
 
 $$
 \sigma_t^{(w)} = \text{StdDev}(R_{t-w+1}, R_{t-w+2}, \ldots, R_t)
@@ -75,20 +75,20 @@ $$
 
 Questo è utile per:
 
-- Identificare i **regimi di volatilità** (periodi calmi rispetto a periodi turbolenti)
-- Rilevare il **clustering della volatilità** (i giorni ad alta volatilità tendono a essere seguiti da giorni ad alta volatilità)
+- Identificare i **regimi di volatilità** (periodi di calma rispetto a periodi turbolenti)
+- Rilevare il **clustering della volatilità** (i giorni ad alta volatilità tendono a essere seguiti da altri giorni ad alta volatilità)
 - Impostare dimensioni di posizione dinamiche (ridurre l'esposizione durante i periodi di alta volatilità)
 
 ---
 
 ## 📐 Volatilità e Teoria di Portafoglio
 
-La volatilità gioca un ruolo centrale nella [Teoria Moderna di Portafoglio](../index.md):
+La volatilità svolge un ruolo centrale nella [Teoria Moderna di Portafoglio](../index.md):
 
 - È il **denominatore** dello [Sharpe Ratio](sharpe-ratio.md)
 - Determina l'**ampiezza** delle [Bollinger Bands](../../technical-analysis/indicators/bollinger-bands.md)
-- È l'input chiave per l'ottimizzazione del portafoglio (minimizzare $\sigma_p$ per un target $R_p$)
-- La [Diversificazione](../diversification.md) riduce la volatilità del portafoglio quando le correlazioni tra gli asset sono inferiori a 1
+- È l'input chiave per l'ottimizzazione del portafoglio (minimizzazione di $\sigma_p$ per un target $R_p$)
+- La [Diversificazione](../../portfolio-theory/diversification.md) riduce la volatilità del portafoglio quando le correlazioni tra gli asset sono inferiori a 1
 
 ---
 
@@ -102,9 +102,9 @@ La volatilità gioca un ruolo centrale nella [Teoria Moderna di Portafoglio](../
 
     I rendimenti finanziari tipicamente presentano:
 
-    - **Code grasse** (eventi più estremi di quanto previsto da una distribuzione normale)
-    - **Asimmetria negativa** (crolli significativi più comuni di rialzi significativi)
-    - **Clustering della volatilità** (periodi di calma e turbolenza)
+    - **Code pesanti** (eventi più estremi di quanto previsto da una distribuzione normale)
+    - **Asimmetria negativa** (crolli significativi più comuni di guadagni significativi)
+    - **Clustering della volatilità** (alternanza di periodi calmi e turbolenti)
 
     La sola deviazione standard non cattura queste caratteristiche.
 
@@ -113,6 +113,6 @@ La volatilità gioca un ruolo centrale nella [Teoria Moderna di Portafoglio](../
 ## 🔗 Correlati
 
 - 📐 **[Sharpe Ratio](sharpe-ratio.md)** — Utilizza la volatilità come denominatore del rischio
-- 📊 **[Sortino Ratio](sortino-ratio.md)** — Variante della volatilità focalizzata solo sul ribasso
+- 📊 **[Sortino Ratio](sortino-ratio.md)** — Variante della volatilità focalizzata esclusivamente sul rischio di ribasso
 - 📏 **[Bollinger Bands](../../technical-analysis/indicators/bollinger-bands.md)** — Inviluppo di volatilità sui grafici
-- 🔀 **[Diversificazione](../diversification.md)** — Riduzione della volatilità di portafoglio
+- 🔀 **[Diversificazione](../../portfolio-theory/diversification.md)** — Ridurre la volatilità del portafoglio

@@ -54,4 +54,4 @@ Alcune criptovalute proof-of-stake (PoS) consentono ai possessori di fare lo "st
 
 - 📈 **[Rendimenti e Tassi di Crescita](../../fundamentals/returns.md)** — Misurare le performance delle crypto
 - 💰 **[Tassazione](../../fundamentals/taxation.md)** — Considerazioni fiscali specifiche per le crypto
-- 📊 **[Volatilità](../../portfolio-theory/risk-metrics/volatility.md)** — Misurare il rischio in asset volatili
+- 📊 **[Volatilità](../../technical-analysis/risk-metrics/volatility.md)** — Misurare il rischio in asset volatili

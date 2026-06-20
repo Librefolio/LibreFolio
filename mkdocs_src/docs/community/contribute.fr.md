@@ -37,7 +37,7 @@ Améliorations esthétiques, suggestions de mise en page, optimisations de l'acc
 
 ### :bug: Rapports de bugs
 
-Trouver et signaler clairement des problèmes est extrêmement utile. Ouvrez un nouveau [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) avec le mot-clé **`[BUG]`** au début du titre.
+Trouver et signaler clairement des problèmes est extrêmement utile. Ouvrez un nouveau [GitHub Issue](https://github.com/Librefolio/LibreFolio/issues) avec le mot-clé **`[BUG]`** au début du titre.
 
 Incluez des captures d'écran, des informations sur le navigateur et les étapes pour reproduire le problème — même les défauts esthétiques comptent.
 
@@ -45,7 +45,7 @@ Incluez des captures d'écran, des informations sur le navigateur et les étapes
 
 ## :bulb: Partager des idées & demander des fonctionnalités
 
-Vous avez une idée ou souhaitez une nouvelle fonctionnalité ? Ouvrez un [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) en utilisant le mot-clé approprié au début du titre :
+Vous avez une idée ou souhaitez une nouvelle fonctionnalité ? Ouvrez un [GitHub Issue](https://github.com/Librefolio/LibreFolio/issues) en utilisant le mot-clé approprié au début du titre :
 
 | Mot-clé | Quand l'utiliser |
 |---------|------------|
@@ -60,7 +60,7 @@ Chaque demande sera évaluée et prise en compte dès qu'il y aura la capacité 
 
 Si vous êtes développeur et souhaitez contribuer directement :
 
-1. **Créez un fork** du [dépôt](https://github.com/Alfystar/LibreFolio)
+1. **Créez un fork** du [dépôt](https://github.com/Librefolio/LibreFolio)
 2. **Créez une branche** pour votre fonctionnalité ou votre correction
 3. **Développez et testez** dans votre propre dépôt
 4. **Soumettez une Pull Request** avec une description claire et un préfixe de mot-clé dans le titre :
@@ -84,7 +84,7 @@ Consultez le [Manuel du Développeur](../developer/index.md) pour les détails d
 
 Un moyen simple mais puissant d'aider : **mettez une étoile au dépôt** sur GitHub ! Cela augmente la visibilité et aide d'autres utilisateurs à découvrir LibreFolio.
 
-[:octicons-star-fill-24: Mettre une étoile sur GitHub](https://github.com/Alfystar/LibreFolio){ .md-button .md-button--primary }
+[:octicons-star-fill-24: Mettre une étoile sur GitHub](https://github.com/Librefolio/LibreFolio){ .md-button .md-button--primary }
 
 ---
 

@@ -1,5 +1,9 @@
 # ![](../../../static/icons/transactions/adjustment.png){: width="32" style="vertical-align: middle;" } Ajuste
 
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-adjustment" alt="Transaction Form — Adjustment">
+</div>
+
 Los **Ajustes** son un tipo de transacción comodín para correcciones manuales de los saldos de efectivo o de activos. A diferencia de los tipos emparejados (Transferencia, Transferencia de Efectivo, Conversión de FX), los ajustes son **independientes**: cada ajuste es una fila única e independiente.
 
 ---
@@ -52,7 +56,7 @@ Al transferir activos entre brókeres, LibreFolio **calcula automáticamente** l
 !!! tip "Más información"
 
     Para ver la fórmula completa, ejemplos y casos especiales, consulte la página dedicada:
-    **[📊 Costo Promedio Ponderado (WAC)](../../portfolio-theory/weighted-average-cost.md)**
+    **[📊 Costo Promedio Ponderado (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)**
 
 ??? note "✏️ Cuándo Anular Manualmente"
 
@@ -74,7 +78,7 @@ Al transferir activos entre brókeres, LibreFolio **calcula automáticamente** l
 
 ## 🔗 Relacionados
 
-- 📊 **[Costo Promedio Ponderado (WAC)](../../portfolio-theory/weighted-average-cost.md)** — Cómo se calcula la base de costo automática
+- 📊 **[Costo Promedio Ponderado (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Cómo se calcula la base de costo automática
 - 🔄 **[Transferencia de Activos](transfer.md)** — Dos ajustes vinculados pueden promoverse a una transferencia
 - 🛒 **[Compra y Venta](buy-sell.md)** — Transacciones estándar de activos con efectivo
 - 💰 **[Comisión e Impuesto](fee.md)** — Correcciones solo de efectivo (use Comisión/Impuesto en lugar de Ajuste)

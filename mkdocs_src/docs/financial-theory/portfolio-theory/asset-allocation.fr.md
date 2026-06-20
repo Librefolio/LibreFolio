@@ -93,6 +93,6 @@ Au-delà de l'allocation par classe d'actifs, la diversification géographique r
 ## 🔗 Liens connexes
 
 - 🔀 **[Diversification](diversification.md)** — Les mathématiques derrière les décisions d'allocation
-- 📊 **[Métriques de Risque](risk-metrics/index.md)** — Mesurer le risque du portefeuille
+- 📊 **[Métriques de Risque](../technical-analysis/risk-metrics/index.md)** — Mesurer le risque du portefeuille
 - 📊 **[Types d'Actifs](../instruments/asset-types/index.md)** — Les classes d'actifs pour l'allocation
 - 💰 **[Fiscalité](../fundamentals/taxation.md)** — Stratégies d'allocation optimisées fiscalement

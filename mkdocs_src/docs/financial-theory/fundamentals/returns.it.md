@@ -1,12 +1,12 @@
 # 📈 Rendimenti e Tassi di Crescita
 
-Questa pagina tratta le basi matematiche dei **rendimenti degli investimenti** — come misurare, confrontare e annualizzare i tassi di crescita. Questi concetti sono utilizzati in tutti gli strumenti di misurazione e nelle analisi del portafoglio di LibreFolio.
+Questa pagina copre le basi matematiche dei **rendimenti degli investimenti** — come misurare, confrontare e annualizzare i tassi di crescita. Questi concetti sono utilizzati in tutti gli strumenti di misurazione e nelle analisi di portafoglio di LibreFolio.
 
 ---
 
 ## 📊 Rendimento Semplice (Discreto)
 
-Il **rendimento semplice** in un determinato periodo è la variazione percentuale:
+Il **rendimento semplice** in un periodo è la variazione percentuale:
 
 $$
 R_{simple} = \frac{P_{end} - P_{start}}{P_{start}} = \frac{P_{end}}{P_{start}} - 1
@@ -21,8 +21,8 @@ $$
 ### 📊 Proprietà
 
 - **Intuitivo**: rappresenta direttamente "quanto si è guadagnato/perso"
-- **Non additivo**: non è possibile sommare semplicemente i rendimenti semplici tra diversi periodi per ottenere il rendimento totale
-- **Capitalizzazione**: i rendimenti multi-periodo devono essere **moltiplicati**, non sommati
+- **Non additivo**: non è possibile sommare semplicemente i rendimenti semplici tra i periodi per ottenere il rendimento totale
+- **Capitalizzazione**: i rendimenti su più periodi devono essere **moltiplicati**, non sommati
 
 $$
 R_{total} = (1 + R_1)(1 + R_2) \cdots (1 + R_n) - 1
@@ -40,7 +40,7 @@ $$
 
 ### 📊 Proprietà
 
-- **Additivo nel tempo**: il rendimento logaritmico totale = somma dei rendimenti logaritmici dei singoli sotto-periodi
+- **Additivo nel tempo**: rendimento log totale = somma dei rendimenti log dei sotto-periodi
 
 $$
 r_{total} = r_1 + r_2 + \cdots + r_n
@@ -59,7 +59,7 @@ $$
 
 ## 📅 Rendimento Annualizzato
 
-Per confrontare i rendimenti di periodi temporali diversi, li **annualizziamo** — proiettando il tasso di crescita osservato su un intero anno.
+Per confrontare i rendimenti tra diversi periodi di tempo, li **annualizziamo** — proiettando il tasso di crescita osservato su un intero anno.
 
 ### 📈 Tasso di Crescita Annuale Composto (CAGR)
 
@@ -69,7 +69,7 @@ $$
 R_{annual} = \left(\frac{P_{end}}{P_{start}}\right)^{365/d} - 1
 $$
 
-Questo è ciò che visualizza lo [strumento di misura](../../user/fx/detail/measures.md) di LibreFolio.
+Questo è ciò che visualizza lo [strumento Misure](../../user/fx/detail/measures.md) di LibreFolio.
 
 !!! example
 
@@ -79,7 +79,7 @@ Questo è ciò che visualizza lo [strumento di misura](../../user/fx/detail/meas
 
 ### 📐 Rendimento Log Annualizzato
 
-Per i rendimenti logaritmici, l'annualizzazione è semplicemente un riscalamento:
+Per i rendimenti logaritmici, l'annualizzazione è un semplice ridimensionamento:
 
 $$
 r_{annual} = r_{log} \times \frac{365}{d}
@@ -89,21 +89,21 @@ Questa linearità è uno dei vantaggi chiave dei rendimenti logaritmici nella fi
 
 ---
 
-## 🔄 Relazione tra Rendimenti Semplici e Log
+## 🔄 Relazione tra Rendimenti Semplici e Logaritmici
 
 | Proprietà | Rendimento Semplice $R$ | Rendimento Log $r$ |
 |----------|:---:|:---:|
 | **Capitalizzazione** | Moltiplicativa: $(1+R_1)(1+R_2)$ | Additiva: $r_1 + r_2$ |
-| **Simmetria** | Asimmetrica: +10% e poi −10% ≠ 0 | Simmetrica: +10% e poi −10% = 0 |
+| **Simmetria** | Asimmetrica: +10% poi −10% ≠ 0 | Simmetrica: +10% poi −10% = 0 |
 | **Annualizzazione** | $(1+R)^{365/d} - 1$ | $r \times 365/d$ |
-| **Rendimenti portafoglio** | La somma ponderata funziona ✅ | La somma ponderata non funziona ❌ |
+| **Rendimenti portafoglio** | La somma ponderata è applicabile ✅ | La somma ponderata non è applicabile ❌ |
 | **Serie temporali** | Non additiva ❌ | Additiva ✅ |
-| **Interpretazione** | "Il rendimento è stato del 5%" | "Il tasso di crescita log è stato 0,0488" |
+| **Interpretazione** | "Ho guadagnato il 5%" | "Il tasso di crescita log era 0,0488" |
 
 !!! tip "Quale usare?"
 
     - **Rendimenti semplici** per i report agli utenti e per il calcolo dei rendimenti a livello di portafoglio
-    - **Rendimenti log** per l'analisi statistica, la stima della volatilità e i modelli di serie temporali
+    - **Rendimenti logaritmici** per l'analisi statistica, la stima della volatilità e i modelli di serie temporali
 
 ---
 
@@ -111,52 +111,28 @@ Questa linearità è uno dei vantaggi chiave dei rendimenti logaritmici nella fi
 
 Il numero di giorni $d$ può essere calcolato diversamente a seconda della convenzione:
 
-- **Actual/365**: Giorni solari (quello utilizzato da LibreFolio)
+- **Actual/365**: Giorni solari (quello usato da LibreFolio)
 - **Actual/360**: Giorni solari su un anno di 360 giorni (comune nei mercati monetari)
 - **30/360**: Assume mesi di 30 giorni e un anno di 360 giorni
 
-Per maggiori dettagli, consulta [Convenzioni di Conteggio dei Giorni](day-count.md).
+Per maggiori dettagli, vedi [Convenzioni di Conteggio dei Giorni](day-count.md).
 
 ---
 
 ## 💰 Metodi di Rendimento del Portafoglio
 
-Quando un portafoglio presenta **flussi di cassa** (depositi, prelievi), una singola formula di rendimento non è sufficiente. Esistono due metodi per isolare la performance dagli effetti dei flussi di cassa:
+Quando un portafoglio ha **flussi di cassa** (depositi, prelievi), una singola formula di rendimento non è sufficiente, poiché gli apporti o i prelievi di capitale diluirebbero o gonfierebbero artificialmente il rendimento percentuale.
 
-### ⏱️ Rendimento Ponderato nel Tempo (TWR)
+Per risolvere questo problema, vengono utilizzate metriche di performance avanzate:
+- **TWRR (Time-Weighted Rate of Return):** Isola la performance degli asset, ignorando il tempismo dei flussi di cassa dell'investitore.
+- **MWRR (Money-Weighted Rate of Return):** Misura la performance personale dell'investitore, tenendo conto del tempismo dei flussi di cassa.
 
-Elimina l'effetto dei flussi di cassa calcolando i rendimenti dei sotto-periodi tra ogni evento di flusso e concatenandoli:
-
-$$
-R_{TWR} = \prod_{i=1}^{n} (1 + r_i) - 1
-$$
-
-- Misura la **pura performance del portafoglio** indipendentemente dal momento dei depositi/prelievi
-- Utilizzato dai gestori di fondi per il benchmarking (conforme GIPS)
-- Non influenzato dal comportamento dell'investitore (aggiungere denaro ai picchi, prelevare ai minimi)
-
-### 💵 Rendimento Ponderato per il Capitale (MWR / IRR)
-
-Tiene conto del **momento e dell'entità** dei flussi di cassa — è il tasso interno di rendimento che porta il VAN di tutti i flussi a zero:
-
-$$
-0 = \sum_{i=0}^{n} \frac{CF_i}{(1 + r)^{t_i}}
-$$
-
-dove $CF_i$ è ogni singolo flusso di cassa (depositi positivi, prelievi negativi, valore finale del portafoglio positivo).
-
-- Misura l'**esperienza specifica dell'investitore** (il tuo rendimento reale dato il momento in cui hai aggiunto/rimosso capitale)
-- Penalizza un timing errato (depositare ai massimi, prelevare ai minimi)
-- Utilizzato per la performance del portafoglio personale
-
-!!! info "Quale usa LibreFolio?"
-
-    LibreFolio calcolerà sia il TWR che il MWR nella dashboard di analisi del portafoglio. TWR per il confronto con i benchmark, MWR per la valutazione della performance personale.
+Per un approfondimento su come funzionano queste metriche, perché differiscono e come LibreFolio le utilizza, consulta il capitolo dedicato [Metriche di Performance](../technical-analysis/performance-metrics/index.md).
 
 ---
 
 ## ⚠️ Insidie
 
-1. **Periodi molto brevi**: Annualizzare un rendimento di 3 giorni può produrre cifre fuorvianti (es. un movimento dello 0,1% in 3 giorni → 12,5% annualizzato)
-2. **Prezzi negativi**: I rendimenti log non sono definiti per valori negativi — non è un problema per i tassi FX
-3. **Frequenza di capitalizzazione**: Il CAGR assume una capitalizzazione continua; gli strumenti finanziari di mercato possono capitalizzare giornalmente, mensilmente o trimestralmente
+1. **Periodi molto brevi**: L'annualizzazione di un rendimento di 3 giorni può produrre cifre fuorvianti (es. un movimento dello 0,1% in 3 giorni → 12,5% annualizzato)
+2. **Prezzi negativi**: I rendimenti logaritmici non sono definiti per valori negativi — non è un problema per i tassi FX
+3. **Frequenza di capitalizzazione**: Il CAGR assume una capitalizzazione continua; gli strumenti reali possono prevedere una capitalizzazione giornaliera, mensile o trimestrale

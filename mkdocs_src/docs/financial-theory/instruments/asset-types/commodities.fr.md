@@ -40,5 +40,5 @@ Les **matières premières** sont des actifs physiques — ressources brutes ou 
 ## 🔗 Liens connexes
 
 - 🔀 **[Diversification](../../portfolio-theory/diversification.md)** — Les matières premières comme diversificateurs de portefeuille
-- 📊 **[Volatilité](../../portfolio-theory/risk-metrics/volatility.md)** — Mesure du risque de prix des matières premières
+- 📊 **[Volatilité](../../technical-analysis/risk-metrics/volatility.md)** — Mesure du risque de prix des matières premières
 - 📈 **[Rendements & Taux de croissance](../../fundamentals/returns.md)** — Mesure de la performance des matières premières

@@ -54,4 +54,4 @@ Certaines cryptomonnaies basées sur la preuve d'enjeu (PoS) permettent aux dét
 
 - 📈 **[Rendements et taux de croissance](../../fundamentals/returns.md)** — Mesurer la performance des cryptos
 - 💰 **[Fiscalité](../../fundamentals/taxation.md)** — Considérations fiscales spécifiques aux cryptos
-- 📊 **[Volatilité](../../portfolio-theory/risk-metrics/volatility.md)** — Mesurer le risque dans les actifs volatils
+- 📊 **[Volatilité](../../technical-analysis/risk-metrics/volatility.md)** — Mesurer le risque dans les actifs volatils

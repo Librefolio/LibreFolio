@@ -2,37 +2,34 @@
 
 Per aggiungere una nuova coppia di valute alla tua dashboard FX:
 
-1. Clicca su **"Add Pair"** nella pagina della lista FX
+1. Clicca su **"Add Pair"** nella pagina dell'elenco FX
 2. Seleziona le **due valute** utilizzando il menu a tendina di ricerca
-3. Il sistema scopre automaticamente i **percorsi dati** disponibili — sia percorsi diretti che a catena
+3. Il sistema scopre automaticamente i **percorsi dati** disponibili — sia i percorsi diretti che quelli a catena
 4. Seleziona il percorso preferito e clicca su **Confirm** — la coppia viene creata e la sincronizzazione dei dati inizia automaticamente
 
 ---
 
-## 🔗 Percorsi Diretti
+## 🛤️ Percorsi di Conversione (Diretti e a Catena)
 
-Se un provider supporta entrambe le valute direttamente (ad esempio, ECB per EUR→USD), visualizzerai la sezione **Direct Routes**:
+Quando selezioni una valuta di base e una di quotazione, LibreFolio interroga tutti i provider installati per scoprire i migliori percorsi di tasso di cambio disponibili.
 
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="add-pair-routes" alt="Aggiungi Coppia — Percorsi Diretti" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+<div class="lf-screenshot-carousel" data-carousel="carousel-fx-routes" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="fx" data-name="add-pair-routes" data-title="🔗 Percorsi Diretti" alt="Aggiungi Coppia — Percorsi Diretti">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="fx" data-name="add-pair-chain" data-title="🔀 Percorsi a Catena (Multi-hop)" alt="Aggiungi Coppia — Percorsi a Catena">
 </div>
 
----
+### 🔗 Percorsi Diretti
+Se un provider supporta direttamente i tassi di cambio tra entrambe le valute (ad esempio, la BCE che fornisce i tassi per EUR 🇪🇺 / USD 🇺🇸), il sistema lo visualizza come un percorso diretto.
 
-## 🔀 Percorsi a Catena
+### 🔀 Percorsi a Catena
+Per coppie esotiche (ad esempio, RON 🇷🇴 / JPY 🇯🇵) in cui nessuna singola banca centrale pubblica i tassi direttamente, il sistema costruisce automaticamente **catene di conversione** — percorsi multi-step attraverso valute intermedie (tipicamente EUR 🇪🇺 o USD 🇺🇸).
 
-Per le coppie esotiche (ad esempio, RON→JPY) in cui nessun singolo provider copre entrambe le valute, il sistema costruisce delle **catene di conversione** — percorsi multi-step attraverso valute intermedie:
+!!! example "Esempio di Catena"
 
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Aggiungi Coppia — Percorsi a Catena" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-</div>
+    **RON 🇷🇴 → JPY 🇯🇵** via BCE:
 
-!!! example "Chain Example"
-
-    **RON → JPY** via ECB:
-
-    1. RON → EUR (ECB fornisce RON/EUR)
-    2. EUR → JPY (ECB fornisce EUR/JPY)
+    1. RON 🇷🇴 → EUR 🇪🇺 (la BCE fornisce RON 🇷🇴 / EUR 🇪🇺)
+    2. EUR 🇪🇺 → JPY 🇯🇵 (la BCE fornisce EUR 🇪🇺 / JPY 🇯🇵)
 
     Il tasso finale è calcolato moltiplicando i tassi intermedi.
 
@@ -43,14 +40,18 @@ Per le coppie esotiche (ad esempio, RON→JPY) in cui nessun singolo provider co
 Quando selezioni due valute, LibreFolio interroga tutti i provider installati per trovare:
 
 - 🔗 **Percorsi diretti**: un singolo provider che copre entrambe le valute
-- 🔀 **Percorsi a catena**: due o più provider che insieme possono collegare le valute attraverso una valuta intermedia (ad esempio, EUR)
+- 🔀 **Percorsi a catena**: due o più provider che insieme possono collegare le valute attraverso una valuta intermedia (ad esempio, EUR 🇪🇺)
 
 Ogni percorso mostra:
 
 - 🏛️ Il nome e l'icona del **provider**
 - ➡️ La **direzione** (base → quotazione)
-- 🔢 Per le catene: la **valuta intermedia** e il **numero di passaggi**
+- 🔢 Per le catene: la **valuta intermedia** e il **numero di hop**
 
-Puoi scegliere qualsiasi percorso disponibile in base alla tua preferenza per la sorgente dei dati, il periodo di copertura o la frequenza di aggiornamento.
+Puoi scegliere qualsiasi percorso disponibile in base alla tua preferenza per la fonte dei dati, il periodo di copertura o la frequenza di aggiornamento.
 
-Per i dettagli tecnici sull'algoritmo di routing, consulta la documentazione per sviluppatori: [FX Configuration & Routing](../../developer/backend/fx/configuration.md).
+!!! info "Per i Curiosi: Dietro le Quinte"
+
+    Se sei interessato ai dettagli matematici su come vengono calcolate e instradate le catene di conversione multi-hop, puoi leggere la documentazione per sviluppatori: [FX Configuration & Routing](../../developer/backend/fx/configuration.md) e [FX Chain Algorithm](../../developer/frontend/fx-chain-algorithm.md). 
+ 
+    *Nota: Questa documentazione tecnica è rivolta solo agli sviluppatori e non è necessaria per utilizzare questa funzionalità.*

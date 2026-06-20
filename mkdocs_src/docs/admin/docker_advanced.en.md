@@ -41,6 +41,20 @@ Host (build)                    Docker Image (runtime)
 
 The `docker-compose.yml` file defines the service and persistent data directory.
 
+### 🔝 Resolution Priority {: #resolution-priority }
+
+When resolving configuration variables, LibreFolio respects the following order of precedence (from lowest to highest priority):
+
+```mermaid
+graph LR
+    CodeDefaults[1. Code Defaults] --> EnvFile[2. .env File]
+    HostShell[3. Host Env Variables]
+    DockerCompose[4. docker-compose.yml environment block]
+
+    EnvFile --> HostShell
+    HostShell --> DockerCompose
+```
+
 ### 🔧 Service: `librefolio`
 
 - 🏗️ **`build: .`**: Builds from the `Dockerfile` in the project root.

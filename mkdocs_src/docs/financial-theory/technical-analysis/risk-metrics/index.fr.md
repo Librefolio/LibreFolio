@@ -40,6 +40,6 @@ Les métriques de risque fournissent des **mesures quantitatives** du risque du 
 
 ## 🔗 Liens connexes
 
-- 🔀 **[Diversification](../diversification.md)** — Comment fonctionne mathématiquement la réduction du risque
-- ⚖️ **[Allocation d'actifs](../asset-allocation.md)** — Utiliser les métriques de risque pour guider l'allocation
+- 🔀 **[Diversification](../../portfolio-theory/diversification.md)** — Comment fonctionne mathématiquement la réduction du risque
+- ⚖️ **[Allocation d'actifs](../../portfolio-theory/asset-allocation.md)** — Utiliser les métriques de risque pour guider l'allocation
 - 📈 **[Rendements & Taux de croissance](../../fundamentals/returns.md)** — Le côté "rendement" du couple risque-rendement

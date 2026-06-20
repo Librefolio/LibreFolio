@@ -54,4 +54,4 @@ Algunas criptomonedas de prueba de participación (PoS) permiten a los poseedore
 
 - 📈 **[Rendimientos y Tasas de Crecimiento](../../fundamentals/returns.md)** — Medición del rendimiento de las criptomonedas
 - 💰 **[Impuestos](../../fundamentals/taxation.md)** — Consideraciones fiscales específicas para criptomonedas
-- 📊 **[Volatilidad](../../portfolio-theory/risk-metrics/volatility.md)** — Medición del riesgo en activos volátiles
+- 📊 **[Volatilidad](../../technical-analysis/risk-metrics/volatility.md)** — Medición del riesgo en activos volátiles

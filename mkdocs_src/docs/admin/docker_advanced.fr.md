@@ -20,7 +20,7 @@ Ce guide propose un examen approfondi de la configuration Docker pour LibreFolio
 
     ```bash
     cp .env.example .env
-    $EDITOR .env # examiner et personnaliser les paramètres
+    $EDITOR .env          # review and customize parameters
     ```
 
 ## 🏗️ Architecture
@@ -40,6 +40,21 @@ Host (build)                    Docker Image (runtime)
 ## 📄 `docker-compose.yml`
 
 Le fichier `docker-compose.yml` définit le service et le répertoire de données persistantes.
+
+### 🔝 Priorité de Résolution {: #resolution-priority }
+
+Lors de la résolution des variables de configuration, LibreFolio respecte l'ordre de priorité suivant (de la priorité la plus basse à la plus haute) :
+
+```mermaid
+graph LR
+    CodeDefaults[1. Défauts du Code] --> EnvFile[2. Fichier .env]
+    HostShell[3. Variables d'Environnement de l'Hôte]
+    DockerCompose[4. Bloc 'environment' dans docker-compose.yml]
+
+    EnvFile --> HostShell
+    HostShell --> DockerCompose
+```
+
 
 ### 🔧 Service : `librefolio`
 
@@ -78,32 +93,32 @@ GID=1000
     **Découvrir votre UID et GID actuels :**
 
     ```bash
-    id -u # votre ID utilisateur (ex: 1000)
-    id -g # votre ID de groupe principal (ex: 1000)
-    id # infos complètes : uid, gid, groups
+    id -u              # your user ID (e.g. 1000)
+    id -g              # your primary group ID (e.g. 1000)
+    id                 # full info: uid, gid, groups
     ```
 
     **Trouver l'UID/GID de n'importe quel utilisateur :**
 
     ```bash
-    id -u username # UID de 'username'
-    id -g username # GID principal de 'username'
+    id -u username     # UID of 'username'
+    id -g username     # primary GID of 'username'
     ```
 
     **Créer un nouveau groupe :**
 
     ```bash
-    sudo groupadd librefolio # créer le groupe (assigne un GID auto)
-    sudo groupadd -g 1500 librefolio # créer le groupe avec un GID spécifique
+    sudo groupadd librefolio          # create group (auto-assigns GID)
+    sudo groupadd -g 1500 librefolio  # create group with specific GID
     ```
 
     **Créer un nouvel utilisateur :**
 
     ```bash
- # Utilisateur système (pas de home, pas de login — idéal pour les services)
+    # System user (no home, no login — ideal for services)
     sudo useradd --system --no-create-home --gid librefolio --shell /usr/sbin/nologin librefolio
 
- # Utilisateur régulier avec répertoire personnel
+    # Regular user with home directory
     sudo useradd -m -g librefolio librefolio
     ```
 
@@ -118,13 +133,13 @@ GID=1000
 
     ```bash
     sudo usermod -aG librefolio $USER
-    newgrp librefolio # activer dans la session actuelle (ou se déconnecter/reconnecter)
+    newgrp librefolio    # activate in current session (or log out/in)
     ```
 
     **Vérifier l'appartenance aux groupes :**
 
     ```bash
-    groups $USER # lister tous les groupes de votre utilisateur
+    groups $USER         # list all groups for your user
     ```
 
     **Définir la propriété du répertoire de données :**
@@ -140,14 +155,14 @@ GID=1000
 Toutes les opérations Docker sont disponibles via `dev.py` :
 
 ```bash
-./dev.py docker build # Construire l'image (construit auto frontend + docs)
-./dev.py docker build --no-cache # Reconstruction complète sans cache Docker
-./dev.py docker rebuild # Build → stop → restart (déploiement en une étape)
-./dev.py docker up # Démarrer les conteneurs
-./dev.py docker down # Arrêter les conteneurs
-./dev.py docker logs -f # Suivre les logs du conteneur
-./dev.py docker status # Afficher le statut du conteneur
-./dev.py docker exec <cmd> # Exécuter une commande dev.py à l'intérieur du conteneur
+./dev.py docker build          # Build image (auto-builds frontend + docs)
+./dev.py docker build --no-cache  # Full rebuild without Docker cache
+./dev.py docker rebuild        # Build → stop → restart (one-step deploy)
+./dev.py docker up             # Start containers
+./dev.py docker down           # Stop containers
+./dev.py docker logs -f        # Follow container logs
+./dev.py docker status         # Show container status
+./dev.py docker exec <cmd>     # Run a dev.py command inside the container
 ```
 
 !!! tip "Documentation avec captures d'écran"
@@ -223,7 +238,7 @@ La configuration Docker Compose expose **deux ports** :
     ```yaml
     volumes:
       - ./LibreFolio-data:/app/backend/data/prod-docker
-    - ./LibreFolio-test-data:/app/backend/data/test # ← ajouter ceci
+      - ./LibreFolio-test-data:/app/backend/data/test    # ← add this
     ```
 
 ## 🏭 Considérations pour la Production
@@ -235,24 +250,24 @@ Le dépôt inclut un fichier `docker-compose.yml` prêt à l'emploi. Voici le fi
 ```yaml
 services:
   librefolio:
-    image: librefolio:latest # Construit par ./dev.py docker build
+    image: librefolio:latest           # Built by ./dev.py docker build
     build:
       context: .
       args:
-    UID: ${UID:-1000} # (1) Correspondre à l'UID de l'utilisateur hôte
-    GID: ${GID:-1000} # (1) Correspondre au GID de l'utilisateur hôte
+        UID: ${UID:-1000}              # (1) Match host user UID
+        GID: ${GID:-1000}              # (1) Match host user GID
     container_name: librefolio
- # Pas de directive 'user:' — l'entrypoint démarre en root, corrige les permissions,
- # puis bascule vers l'utilisateur 'librefolio' via gosu (même modèle que postgres/redis).
+    # No 'user:' directive — entrypoint starts as root, fixes permissions,
+    # then drops to 'librefolio' user via gosu (same pattern as postgres/redis).
     restart: unless-stopped
     ports:
-    - "${PORT:-6040}:6040" # (2) Port de production — modifier via PORT dans .env
-    - "${TEST_PORT:-6041}:6041" # (3) Port du serveur de test (optionnel)
+      - "${PORT:-6040}:6040"           # (2) Production port — change via PORT in .env
+      - "${TEST_PORT:-6041}:6041"      # (3) Test server port (optional)
     volumes:
-    - ./LibreFolio-data:/app/backend/data/prod-docker # (4) Données persistantes (bind mount)
-    env_file: .env # (5) Toute la config depuis le fichier .env
+      - ./LibreFolio-data:/app/backend/data/prod-docker  # (4) Persistent data (bind mount)
+    env_file: .env                     # (5) All config from .env file
     environment:
-    - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker # Écrasement spécifique à Docker
+      - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker  # Docker-specific override
       - HOST=0.0.0.0
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]

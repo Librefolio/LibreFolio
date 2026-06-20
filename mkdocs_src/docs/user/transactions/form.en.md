@@ -25,11 +25,11 @@ These operate independently on a single broker account.
 
 | Type | Description | Theory Guide |
 |------|-------------|--------------|
-| ![](../../../static/icons/transactions/buy.png){: width="24" style="vertical-align: middle;" } **BUY / SELL** ![](../../../static/icons/transactions/sell.png){: width="24" style="vertical-align: middle;" } | Purchase or sale of an asset | [📖 Read](../../financial-theory/instruments/transaction-types/buy-sell.md) |
-| ![](../../../static/icons/transactions/deposit.png){: width="24" style="vertical-align: middle;" } **DEPOSIT / WITHDRAWAL** ![](../../../static/icons/transactions/withdrawal.png){: width="24" style="vertical-align: middle;" } | Adding or removing cash from a broker account | [📖 Read](../../financial-theory/instruments/transaction-types/deposit-withdrawal.md) |
-| ![](../../../static/icons/transactions/dividend.png){: width="24" style="vertical-align: middle;" } **DIVIDEND / INTEREST** ![](../../../static/icons/transactions/interest.png){: width="24" style="vertical-align: middle;" } | Yield from equity or fixed-income assets | [📖 Read](../../financial-theory/instruments/transaction-types/dividend-interest.md) |
-| ![](../../../static/icons/transactions/fee.png){: width="24" style="vertical-align: middle;" } **FEE / TAX** ![](../../../static/icons/transactions/tax.png){: width="24" style="vertical-align: middle;" } | Costs like broker fees or taxes | [📖 Read](../../financial-theory/instruments/transaction-types/fee.md) |
-| ![](../../../static/icons/transactions/adjustment.png){: width="24" style="vertical-align: middle;" } **ADJUSTMENT** | Manual correction to balances | [📖 Read](../../financial-theory/instruments/transaction-types/adjustment.md) |
+| ![](../../static/icons/transactions/buy.png){: width="24" style="vertical-align: middle;" } **BUY / SELL** ![](../../static/icons/transactions/sell.png){: width="24" style="vertical-align: middle;" } | Purchase or sale of an asset | [📖 Read](../../financial-theory/instruments/transaction-types/buy-sell.md) |
+| ![](../../static/icons/transactions/deposit.png){: width="24" style="vertical-align: middle;" } **DEPOSIT / WITHDRAWAL** ![](../../static/icons/transactions/withdrawal.png){: width="24" style="vertical-align: middle;" } | Adding or removing cash from a broker account | [📖 Read](../../financial-theory/instruments/transaction-types/deposit-withdrawal.md) |
+| ![](../../static/icons/transactions/dividend.png){: width="24" style="vertical-align: middle;" } **DIVIDEND / INTEREST** ![](../../static/icons/transactions/interest.png){: width="24" style="vertical-align: middle;" } | Yield from equity or fixed-income assets | [📖 Read](../../financial-theory/instruments/transaction-types/dividend-interest.md) |
+| ![](../../static/icons/transactions/fee.png){: width="24" style="vertical-align: middle;" } **FEE / TAX** ![](../../static/icons/transactions/tax.png){: width="24" style="vertical-align: middle;" } | Costs like broker fees or taxes | [📖 Read](../../financial-theory/instruments/transaction-types/fee.md) |
+| ![](../../static/icons/transactions/adjustment.png){: width="24" style="vertical-align: middle;" } **ADJUSTMENT** | Manual correction to balances | [📖 Read](../../financial-theory/instruments/transaction-types/adjustment.md) |
 
 ### Composite Transactions
 
@@ -37,9 +37,9 @@ These represent movements **between** accounts or currencies. They produce two l
 
 | Type | Description | Theory Guide |
 |------|-------------|--------------|
-| ![](../../../static/icons/transactions/transfer.png){: width="24" style="vertical-align: middle;" } **TRANSFER** | Asset moved between two of your brokers | [📖 Read](../../financial-theory/instruments/transaction-types/transfer.md) |
-| ![](../../../static/icons/transactions/cash-transfer.png){: width="24" style="vertical-align: middle;" } **CASH_TRANSFER** | Wire transfer between brokers | [📖 Read](../../financial-theory/instruments/transaction-types/cash-transfer.md) |
-| ![](../../../static/icons/transactions/fx-conversion.png){: width="24" style="vertical-align: middle;" } **FX_CONVERSION** | Currency exchange within a broker | [📖 Read](../../financial-theory/instruments/transaction-types/fx-conversion.md) |
+| ![](../../static/icons/transactions/transfer.png){: width="24" style="vertical-align: middle;" } **TRANSFER** | Asset moved between two of your brokers | [📖 Read](../../financial-theory/instruments/transaction-types/transfer.md) |
+| ![](../../static/icons/transactions/cash-transfer.png){: width="24" style="vertical-align: middle;" } **CASH_TRANSFER** | Wire transfer between brokers | [📖 Read](../../financial-theory/instruments/transaction-types/cash-transfer.md) |
+| ![](../../static/icons/transactions/fx-conversion.png){: width="24" style="vertical-align: middle;" } **FX_CONVERSION** | Currency exchange within a broker | [📖 Read](../../financial-theory/instruments/transaction-types/fx-conversion.md) |
 
 ---
 
@@ -62,7 +62,7 @@ The form is designed to be intuitive and dynamic. When you select a **Transactio
 - **TRANSFER**: specifies a **source broker** and a **destination broker**, plus the asset and quantity. LibreFolio records both legs atomically.
 - **FX_CONVERSION**: specifies the **source currency amount** and the **destination currency amount** within the same broker.
 
-To split a composite back into two independent transactions, use the [Split](index.md#split) operation on the transaction table.
+To split a composite back into two independent transactions, use the [Split](index.md) operation on the transaction table.
 
 ---
 

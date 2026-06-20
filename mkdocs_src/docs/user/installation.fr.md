@@ -28,11 +28,11 @@ Ce guide explique comment déployer LibreFolio pour un usage régulier à l'aide
 Clonez le dépôt :
 
 ```bash
-git clone https://github.com/Alfystar/LibreFolio.git
+git clone https://github.com/Librefolio/LibreFolio.git
 cd LibreFolio
 ```
 
-Ou téléchargez la dernière version depuis [GitHub Releases](https://github.com/Alfystar/LibreFolio/releases) et décompressez-la.
+Ou téléchargez la dernière version depuis [GitHub Releases](https://github.com/Librefolio/LibreFolio/releases) et décompressez-la.
 
 ## ⚙️ 2. Configurer l'Environnement
 

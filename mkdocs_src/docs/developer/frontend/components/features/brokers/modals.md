@@ -1,6 +1,6 @@
 # 🪟 Broker Modals
 
-All broker-related modal dialogs. Each extends [ModalBase](../ui-base/modals.md).
+All broker-related modal dialogs. Each extends [ModalBase](../../core-ui/modals.md).
 
 ```mermaid
 graph TD
@@ -33,7 +33,7 @@ Modal wrapper for creating or editing a broker.
 
 - **Create mode**: Empty form, calls `POST /brokers` on save
 - **Edit mode**: Pre-fills [BrokerForm](forms.md) with existing data, calls `PATCH /brokers/{id}`
-- Shows [InfoBanner](../ui-base/feedback.md#infobanner) for validation errors
+- Shows [InfoBanner](../../core-ui/feedback.md#infobanner) for validation errors
 - Closes on successful save and emits `created` or `updated` event
 
 ### 📋 Props
@@ -55,7 +55,7 @@ Modal for managing broker sharing with RBAC permissions.
 
 ### ⚡ Features
 
-- **User search** via [SearchSelect](../select.md#searchselect) — find users to share with
+- **User search** via [SearchSelect](../../core-ui/select.md#searchselect) — find users to share with
 - **Role assignment**: dropdown to select Owner, Editor, or Viewer
 - **Share percentage** — ownership percentage (0-100%) for portfolio aggregation calculations (e.g., 50% for joint accounts)
 - **Access list** — shows all users with access, with inline role editing and removal
@@ -66,7 +66,7 @@ Modal for managing broker sharing with RBAC permissions.
 - `GET /brokers/{id}/access` — load current access list
 - `PUT /brokers/{id}/access` — save updated access list
 
-See [Broker Sharing (User Guide)](../../../../user/brokers/sharing.md) and [Access Control (RBAC)](../../../architecture/access_control.md) for details.
+See [Broker Sharing (User Guide)](../../../../../user/brokers/sharing.md) and [Access Control (RBAC)](../../../../architecture/access_control.md) for details.
 
 ---
 
@@ -76,8 +76,8 @@ Modal for importing broker report files via the BRIM system.
 
 ### ⚡ Features
 
-- **Plugin selection** via [ImportPluginSelect](../select.md#importpluginselect) — choose the parser for this broker's CSV/Excel format
-- **File upload** with drag & drop via [FileUploader](../file-upload.md)
+- **Plugin selection** via [ImportPluginSelect](../../core-ui/select.md#importpluginselect) — choose the parser for this broker's CSV/Excel format
+- **File upload** with drag & drop via [FileUploader](../../core-ui/file-upload.md)
 - Preview of uploaded files with status indicators
 - Triggers BRIM parsing pipeline on submit
 
@@ -86,13 +86,13 @@ Modal for importing broker report files via the BRIM system.
 - `POST /brim/upload` — upload file
 - `POST /brim/files/{id}/parse` — trigger parsing
 
-For details on the BRIM plugin system, see [Registry & Plugin System](../../../architecture/patterns/registry_pattern.md).
+For details on the BRIM plugin system, see [Registry & Plugin System](../../../../architecture/patterns/registry_pattern.md).
 
 ---
 
 ## 🗑️ DeleteBrokerDialog
 
-A [ConfirmModal](../ui-base/modals.md#confirmmodal) for broker deletion.
+A [ConfirmModal](../../core-ui/modals.md#confirmmodal) for broker deletion.
 
 - Shows broker name in the warning message
 - Warns about irreversible data loss (transactions, reports, access)
@@ -111,8 +111,8 @@ Modal for recording cash operations.
 |-------|------|-------------|
 | **Type** | Radio | Deposit or Withdrawal |
 | **Amount** | Number input | Transaction amount |
-| **Currency** | [CurrencySearchSelect](../select.md#currencysearchselect) | Transaction currency |
-| **Date** | [SingleDatePicker](../ui-base/datePickers.md#singledatepicker) | Transaction date |
+| **Currency** | [CurrencySearchSelect](../../core-ui/select.md#currencysearchselect) | Transaction currency |
+| **Date** | [SingleDatePicker](../../core-ui/datePickers.md#singledatepicker) | Transaction date |
 | **Notes** | Textarea | Optional description |
 
 ### API Call

@@ -4,19 +4,33 @@ This manual is for system administrators and advanced users who need to perform 
 
 ## 📖 Overview
 
-Most administrative tasks are handled through the main CLI tool:
+Most administrative and maintenance tasks are handled through the main command-line interface or configured via environment variables.
 
-1. **`dev.py`**: The main orchestration script for development and maintenance. It provides a tree-structured CLI for all tasks: running tests, managing the database, building the
-   frontend, user management, translations, and more.
+---
 
 ## 📚 Guides
 
-- 🛠️ **[CLI Tools](cli_tools.md)**: Detailed documentation on `dev.py` commands and subcommands.
-- ⚙️ **[Global Settings](settings.md)**: Configure system-wide parameters (session TTL, upload limits, sync intervals, defaults).
-- 📂 **[Filesystem Structure](filesystem.md)**: Understand where data is stored, how to back up, and how to access the system from the host terminal.
-- 🐳 **[Advanced Docker](docker_advanced.md)**: A deep dive into the Docker setup, including networking, volumes, and customization for production environments.
-- 🌐 **[Exposing with Tailscale](tailscale_exposure.md)**: Securely expose your LibreFolio instance over the internet using Tailscale.
+The documentation is organized into three main areas:
 
-## 🔐 Authentication
+### 🐳 Deployment & Exposure
+- 📦 **[Host Installation](host_installation.md)**: Manual setup using Python, Node.js, and Pipenv directly on the host machine.
+- 🐳 **[Advanced Docker](docker_advanced.md)**: Containerized deployment using Docker Compose, volume bindings, and user GID/UID ownership configuration.
+- 🌐 **[Exposing with Tailscale](tailscale_exposure.md)**: Securely expose your private LibreFolio instance over the internet using Tailscale.
 
-LibreFolio uses **JWT (JSON Web Tokens)** for authentication. The server generates a random signing secret at startup, shared across all workers. Tokens expire after a configurable number of hours (see [Global Settings](settings.md)). For technical details, see [Security Architecture](../developer/architecture/security.md).
+### ⚙️ System Configuration
+- 📝 **[Environment Variables](configuration.md)**: Full list of supported `.env` variables (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) and variable resolution precedence.
+- ⚙️ **[Global Settings](settings.md)**: Configure system-wide runtime settings (session TTL, upload limits, market data sync intervals).
+
+### 🧹 Maintenance & Operations
+- 🛠️ **[CLI Admin Tools](cli_tools.md)**: How to use the `dev.py` script for administrative tasks (user management, database upgrades).
+- 📂 **[Filesystem Structure](filesystem.md)**: Details on where databases, logs, uploads, and temporary folders are stored, and how to perform backups.
+
+---
+
+## 🔐 Authentication & Session Persistence
+
+LibreFolio uses **JWT (JSON Web Tokens)** for user authentication. By default:
+- If the **`JWT_SECRET`** environment variable is left empty in your `.env` file, the server generates a random signing secret at startup. This provides maximum security, but user sessions will be lost if the server is restarted.
+- To persist sessions across server restarts (or when running multiple independent server instances behind a load balancer), define a stable **`JWT_SECRET`** key. Note that multiple uvicorn workers spawned on the same host will automatically share the parent process's generated secret, meaning session persistence is maintained across workers even when `JWT_SECRET` is left empty.
+
+For technical details, see the developer-focused [Security Architecture](../developer/architecture/security.md) page.
