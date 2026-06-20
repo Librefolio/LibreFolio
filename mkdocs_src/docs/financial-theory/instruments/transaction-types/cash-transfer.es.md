@@ -1,5 +1,9 @@
 # ![](../../../static/icons/transactions/cash-transfer.png){: width="32" style="vertical-align: middle;" } Transferencia de Efectivo
 
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-cash-transfer" alt="Transaction Form — Cash Transfer">
+</div>
+
 **Las transferencias de efectivo** (transferencias bancarias / bonifici) mueven dinero entre cuentas de bróker. El saldo disminuye en el origen y aumenta en el destino; no hay activos involucrados.
 
 ---

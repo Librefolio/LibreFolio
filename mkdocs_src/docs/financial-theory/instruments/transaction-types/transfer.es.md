@@ -1,5 +1,9 @@
 # ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Transferencia de Activos
 
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Transaction Form — TRANSFER">
+</div>
+
 Las **transferencias de activos** mueven valores entre cuentas de brókers **sin realizar una venta**. La posición sale de un bróker y llega a otro; no hay intercambio de efectivo y, en la mayoría de las jurisdicciones, esto no es un evento fiscal.
 
 ---
@@ -30,7 +34,7 @@ Escenarios comunes:
 
     Al transferir activos, se debe preservar el **costo base original**. La transferencia en sí misma no es un evento fiscal en la mayoría de las jurisdicciones (aunque las reglas varían). LibreFolio permite una **anulación del costo base** opcional en el lado receptor.
 
-    Consulte **[📊 Costo Promedio Ponderado (WAC)](../../portfolio-theory/weighted-average-cost.md)** para saber cómo se calcula el costo base automático.
+    Consulte **[📊 Costo Promedio Ponderado (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** para saber cómo se calcula el costo base automático.
 
 ---
 
@@ -49,7 +53,7 @@ Internamente, una Transferencia se compone de dos entradas de Ajuste. LibreFolio
 
 ## 🔗 Relacionados
 
-- 📊 **[Costo Promedio Ponderado](../../portfolio-theory/weighted-average-cost.md)** — Cómo se calcula el costo base en las transferencias
+- 📊 **[Costo Promedio Ponderado](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Cómo se calcula el costo base en las transferencias
 - 🏦 **[Transferencia de Efectivo](cash-transfer.md)** — Transferencias bancarias (efectivo, no activos)
 - 💱 **[Conversión de divisa](fx-conversion.md)** — Cambio de divisas
 - 📊 **[Ajuste](adjustment.md)** — Correcciones manuales

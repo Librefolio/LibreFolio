@@ -1,18 +1,34 @@
-# 🏦 Charles Schwab
+# <img src="https://www.schwab.com/favicon.ico" alt=""> Charles Schwab
 
-!!! info "Bêta"
+!!! info "Beta"
 
-    Ce plugin est en version **Bêta** — testé avec des fichiers d'exemple, mais des cas particuliers peuvent exister.
+    Ce plugin est en **Bêta** — testé avec des fichiers d'exemple, mais des cas particuliers peuvent exister.
 
-## Comment exporter
+## 📥 Comment exporter
 
-1. Connectez-vous à [Charles Schwab](https://www.schwab.com).
-2. Allez dans **Accounts → History → Export** et téléchargez en CSV.
+Pour exporter l'historique de vos transactions depuis Charles Schwab :
 
-## Notes
+1. Connectez-vous à votre [Charles Schwab Client Portal](https://www.schwab.com).
+2. Allez dans l'onglet **Accounts** et sélectionnez **History**.
+3. Sélectionnez le compte que vous souhaitez exporter (si vous possédez plusieurs comptes).
+4. Sélectionnez la plage de dates souhaitée.
+5. Cliquez sur le lien **Export** (généralement situé dans le coin supérieur droit du tableau des transactions) et sélectionnez **CSV**.
+6. Enregistrez le fichier sur votre ordinateur.
 
-- CSV au format US (dates MM/DD/YYYY, montants en USD).
-- Transactions sur actions et dividendes prises en charge.
+<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
+ <!-- [Screenshot Placeholder: Charles Schwab Portal - History tab and Export link] -->
+</div>
+
+## ⚠️ Pièges courants
+
+!!! warning "Ne modifiez pas la structure du fichier"
+
+    Les fichiers CSV de Schwab ont une mise en page spécifique avec des lignes de métadonnées en bas (commençant généralement par "Transactions Total"). Le parseur BRIM détecte et ignore automatiquement ces lignes de métadonnées. Ne supprimez pas manuellement les lignes du bas du CSV.
+
+## 📝 Notes
+
+- Prise en charge des paramètres CSV au format US (structures de date MM/DD/YYYY et devises en USD).
+- Analyse les transactions d'achat/vente, les paiements de dividendes, les réinvestissements et les frais de transaction.
 
 ## 🔗 Référence développeur
 

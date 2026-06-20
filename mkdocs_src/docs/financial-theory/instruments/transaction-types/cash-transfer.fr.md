@@ -1,5 +1,9 @@
 # ![](../../../static/icons/transactions/cash-transfer.png){: width="32" style="vertical-align: middle;" } Transfert de fonds
 
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-cash-transfer" alt="Transaction Form — Cash Transfer">
+</div>
+
 Les **transferts de fonds** (virements bancaires / bonifici) déplacent de l'argent entre des comptes de courtage. Le solde diminue à la source et augmente à la destination — aucun actif n'est impliqué.
 
 ---

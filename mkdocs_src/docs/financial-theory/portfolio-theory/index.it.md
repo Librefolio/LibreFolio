@@ -42,14 +42,14 @@ Il fondamento matematico del principio "non mettere tutte le uova in un solo pan
 
 Allocazione strategica vs tattica, glide path, strategie target-date e l'arte del ribilanciamento. Come decidere *quanto* di ogni asset class detenere.
 
-### 📊 [Metriche di Rischio](risk-metrics/index.md)
+### 📊 [Metriche di Rischio](../technical-analysis/risk-metrics/index.md)
 
 Misure quantitative del rischio di portafoglio. Dalla deviazione standard all'indice di Sharpe, ogni metrica cattura un aspetto diverso del rischio:
 
-- **[Indice di Sharpe](risk-metrics/sharpe-ratio.md)** — Rendimento aggiustato per il rischio (volatilità totale)
-- **[Indice di Sortino](risk-metrics/sortino-ratio.md)** — Rendimento aggiustato per il rischio (solo il rischio di ribasso)
-- **[Max Drawdown](risk-metrics/max-drawdown.md)** — Calo massimo da picco a minimo
-- **[Volatilità](risk-metrics/volatility.md)** — Deviazione standard dei rendimenti
+- **[Indice di Sharpe](../technical-analysis/risk-metrics/sharpe-ratio.md)** — Rendimento aggiustato per il rischio (volatilità totale)
+- **[Indice di Sortino](../technical-analysis/risk-metrics/sortino-ratio.md)** — Rendimento aggiustato per il rischio (solo il rischio di ribasso)
+- **[Max Drawdown](../technical-analysis/risk-metrics/max-drawdown.md)** — Calo massimo da picco a minimo
+- **[Volatilità](../technical-analysis/risk-metrics/volatility.md)** — Deviazione standard dei rendimenti
 
 ---
 

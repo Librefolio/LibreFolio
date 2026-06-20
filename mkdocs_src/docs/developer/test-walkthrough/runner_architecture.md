@@ -153,4 +153,4 @@ To add a new test action to an existing category:
 
 * 🧪 **[Test Walkthrough Overview](index.md)** — Listing of test commands and categories.
 * 🖥️ **[Frontend E2E Tests Overview](front-overview.md)** — Guide to running Playwright E2E suites.
-* 📦 **[dev.py Installation Guide](../dev-installation.md)** — Command catalog for `dev.py`.
+* 📦 **[Developer Workflow Guide](../dev_workflow.md)** — Command catalog for `dev.py`.

@@ -34,7 +34,7 @@ Common scenarios:
 
     When transferring assets, the **original cost basis** should be preserved. The transfer itself is not a taxable event in most jurisdictions (though rules vary). LibreFolio allows an optional **cost basis override** on the receiving side.
 
-    See **[📊 Weighted Average Cost (WAC)](../../portfolio-theory/weighted-average-cost.md)** for how the automatic cost basis is computed.
+    See **[📊 Weighted Average Cost (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** for how the automatic cost basis is computed.
 
 ---
 
@@ -53,7 +53,7 @@ Under the hood, a Transfer is composed of two Adjustment entries. LibreFolio sup
 
 ## 🔗 Related
 
-- 📊 **[Weighted Average Cost](../../portfolio-theory/weighted-average-cost.md)** — How cost basis is computed on transfers
+- 📊 **[Weighted Average Cost](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — How cost basis is computed on transfers
 - 🏦 **[Cash Transfer](cash-transfer.md)** — Wire transfers (cash, not assets)
 - 💱 **[FX Conversion](fx-conversion.md)** — Currency exchange
 - 📊 **[Adjustment](adjustment.md)** — Manual corrections

@@ -144,6 +144,7 @@ plugins:
             Global Settings: Impostazioni Globali
             Filesystem Structure: Struttura Filesystem
             Advanced Docker: Docker Avanzato
+            Host Installation: Installazione su Host
             Exposing with Tailscale: Esporre con Tailscale
             "📚 Financial Theory": "📚 Teoria Finanziaria"
             "🏷️ Asset Types": "🏷️ Tipi di Asset"
@@ -281,6 +282,7 @@ plugins:
             Global Settings: Paramètres Globaux
             Filesystem Structure: Structure du Système de Fichiers
             Advanced Docker: Docker Avancé
+            Host Installation: Installation sur l'Hôte
             Exposing with Tailscale: Exposer avec Tailscale
             "📚 Financial Theory": "📚 Théorie Financière"
             "🏷️ Asset Types": "🏷️ Types d'Actifs"
@@ -418,6 +420,7 @@ plugins:
             Global Settings: Configuración Global
             Filesystem Structure: Estructura del Sistema de Archivos
             Advanced Docker: Docker Avanzado
+            Host Installation: Instalación en Host
             Exposing with Tailscale: Exponer con Tailscale
             "📚 Financial Theory": "📚 Teoría Financiera"
             "🏷️ Asset Types": "🏷️ Tipos de Activos"
@@ -572,11 +575,16 @@ nav:
           - Image Crop: user/misc/image-crop.md
   - 🛠️ Admin Manual:
       - Overview: admin/index.md
-      - CLI Tools: admin/cli_tools.md
-      - Global Settings: admin/settings.md
-      - Filesystem Structure: admin/filesystem.md
-      - Advanced Docker: admin/docker_advanced.md
-      - Exposing with Tailscale: admin/tailscale_exposure.md
+      - 🐳 Deployment & Exposure:
+          - Host Installation: admin/host_installation.md
+          - Advanced Docker: admin/docker_advanced.md
+          - Exposing with Tailscale: admin/tailscale_exposure.md
+      - ⚙️ System Configuration:
+          - Environment Variables: admin/configuration.md
+          - Global Settings: admin/settings.md
+      - 🧹 Maintenance & Operations:
+          - CLI Admin Tools: admin/cli_tools.md
+          - Filesystem Structure: admin/filesystem.md
   - 📚 Financial Theory:
       - Overview: financial-theory/index.md
       - 🗃️ Instruments:
@@ -647,7 +655,7 @@ nav:
           - Asset Allocation: financial-theory/portfolio-theory/asset-allocation.md
   - 💻 Developer Manual:
       - System Overview: developer/index.md
-      - Dev Installation: developer/dev-installation.md
+      - Developer Workflow: developer/dev_workflow.md
       - 🏛️ Architecture:
           - System Overview: developer/architecture/overview.md
           - 🧩 Technologies & Patterns:
@@ -658,7 +666,6 @@ nav:
                   - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
                   - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
               - Database Migrations (Alembic): developer/architecture/patterns/alembic.md
-              - Configuration: developer/architecture/patterns/configuration.md
           - ⚙️ Core Systems:
               - Security & Authentication: developer/architecture/security.md
               - Users & Roles: developer/architecture/users_and_brokers.md
@@ -722,14 +729,16 @@ nav:
               - Styling: developer/frontend/styling.md
               - 🧩 Components:
                   - Overview: developer/frontend/components/index.md
-                  - Modals: developer/frontend/components/core-ui/modals.md
-                  - Feedback: developer/frontend/components/core-ui/feedback.md
-                  - Date Pickers: developer/frontend/components/core-ui/datePickers.md
-                  - Atoms: developer/frontend/components/core-ui/atoms.md
-                  - Datapoint Editor: developer/frontend/components/core-ui/data-editor.md
-                  - DataTable: developer/frontend/components/core-ui/data-table.md
-                  - File Upload & Media: developer/frontend/components/core-ui/file-upload.md
-                  - Select & Dropdowns: developer/frontend/components/core-ui/select.md
+                  - 🏗️ Core UI:
+                      - Overview: developer/frontend/components/core-ui/index.md
+                      - Modals: developer/frontend/components/core-ui/modals.md
+                      - Feedback: developer/frontend/components/core-ui/feedback.md
+                      - Date Pickers: developer/frontend/components/core-ui/datePickers.md
+                      - Atoms: developer/frontend/components/core-ui/atoms.md
+                      - Datapoint Editor: developer/frontend/components/core-ui/data-editor.md
+                      - DataTable: developer/frontend/components/core-ui/data-table.md
+                      - File Upload & Media: developer/frontend/components/core-ui/file-upload.md
+                      - Select & Dropdowns: developer/frontend/components/core-ui/select.md
                   - Transaction Form: developer/frontend/components/features/transaction-form.md
                   - Authentication: developer/frontend/components/features/auth.md
                   - Settings: developer/frontend/components/features/settings.md
@@ -742,6 +751,7 @@ nav:
           - "⚙️ App Configuration":
               - Internationalization: developer/frontend/i18n.md
               - PWA & Mobile: developer/frontend/pwa.md
+          - "🛡️ Data Quality Banner": developer/frontend/data-quality-banner.md
       - 🧪 Test Walkthrough:
           - Overview: developer/test-walkthrough/index.md
           - Runner Architecture: developer/test-walkthrough/runner_architecture.md

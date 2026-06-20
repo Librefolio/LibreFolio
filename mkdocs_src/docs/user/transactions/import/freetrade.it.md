@@ -1,18 +1,35 @@
-# 🏦 Freetrade
+# <img src="https://freetrade.io/favicon.ico" alt=""> Freetrade
 
 !!! info "Beta"
 
-    Questo plugin è in versione **Beta** — testato con file di esempio, ma potrebbero esserci casi limite.
+    Questo plugin è in fase **Beta** — testato con file di esempio, ma potrebbero esserci casi limite.
 
-## Come Esportare
+## 📥 Come Esportare
 
-1. Accedi a [Freetrade](https://www.freetrade.io).
-2. Vai su **Account → Activity → Export** e scarica il CSV.
+Per esportare l'estratto conto delle transazioni da Freetrade:
 
-## Note
+1. Apri l'**app Freetrade** sul tuo dispositivo mobile (o accedi al portale web se disponibile).
+2. Tocca l'icona del tuo **Account** nell'angolo in alto.
+3. Scorri verso il basso e seleziona **Activity**.
+4. Tocca il pulsante **Export** (solitamente rappresentato da un'icona di download o condivisione nell'angolo in alto).
+5. Seleziona **CSV** come formato, scegli l'intervallo di date ed esporta il file. Trasferisci il file sul tuo computer.
 
-- Broker del Regno Unito. Supportati gli strumenti in GBP e USD.
+<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
+ <!-- [Screenshot Placeholder: Freetrade App - Account Activity Export CSV view] -->
+</div>
 
-## 🔗 Riferimenti per gli sviluppatori
+## ⚠️ Errori Comuni
+
+!!! warning "Formato di Esportazione"
+
+    Assicurati di richiedere l'esportazione **CSV** grezza. I PDF o le copie di schermate delle transazioni non supereranno la validazione.
+
+## 📝 Note
+
+- Broker con sede nel Regno Unito.
+- Supporta operazioni su azioni ed ETF, dividendi, depositi di liquidità e prelievi.
+- Pieno supporto multi-valuta per asset in GBP, EUR e USD.
+
+## 🔗 Riferimenti per Sviluppatori
 
 → [Freetrade Provider — Dettagli di Implementazione](../../../developer/backend/brim/providers_list.md)

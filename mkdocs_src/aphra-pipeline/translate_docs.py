@@ -578,8 +578,9 @@ _RE_NUMBERED = re.compile(r'^\s*\d+\.\s')
 # ---------------------------------------------------------------------------
 
 # Match $$...$$ (block) first, then $...$ (inline, non-greedy)
+# Escaped \$ is explicitly excluded from acting as a delimiter
 _RE_LATEX_BLOCK = re.compile(r'\$\$(.+?)\$\$', re.DOTALL)
-_RE_LATEX_INLINE = re.compile(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)')
+_RE_LATEX_INLINE = re.compile(r'(?<![\\\$])\$(?!\$)(.+?)(?<![\\\$])\$(?!\$)')
 
 
 def _extract_latex_formulas(text: str) -> list[str]:
@@ -670,8 +671,8 @@ def _validate_latex_syntax(formula: str) -> list[str]:
         errors.append(f"\\begin/{begins} vs \\end/{ends}")
 
     # 4. Orphan backslash (single \ not followed by a letter, another \, or valid symbols)
-    # Valid after \: letters (commands), \, {, }, space, !, ,, ;, :, > (spacing), %, &, #, _, ^
-    orphans = re.findall(r'(?<!\\)\\(?![a-zA-Z\\{} !,;:>%&#_^\n])', inner)
+    # Valid after \: letters (commands), \, {, }, space, !, ,, ;, :, > (spacing), %, &, #, _, ^, $
+    orphans = re.findall(r'(?<!\\)\\(?![a-zA-Z\\{} !,;:>%&#_^$\n])', inner)
     if orphans:
         errors.append(f"orphan backslash(es): {len(orphans)}")
 
@@ -1371,7 +1372,7 @@ def _create_doubleword_client(api_key: str, models: dict):
                 # Use a context manager to ensure the AsyncOpenAI client (and its underlying
                 # HTTPX AsyncClient) is cleanly closed before the event loop shuts down.
                 # This prevents the 'Event loop is closed' RuntimeError from background tasks.
-                async with AsyncOpenAI(api_key=api_key, base_url=base_url) as client:
+                async with AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=timeout_s) as client:
                     messages = []
                     if system_prompt:
                         messages.append({"role": "system", "content": system_prompt})

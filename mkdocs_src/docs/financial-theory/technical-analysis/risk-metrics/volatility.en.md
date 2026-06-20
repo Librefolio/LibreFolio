@@ -88,7 +88,7 @@ Volatility plays a central role in [Modern Portfolio Theory](../index.md):
 - It is the **denominator** of the [Sharpe Ratio](sharpe-ratio.md)
 - It determines the **width** of [Bollinger Bands](../../technical-analysis/indicators/bollinger-bands.md)
 - It is the key input for portfolio optimization (minimizing $\sigma_p$ for a target $R_p$)
-- [Diversification](../diversification.md) reduces portfolio volatility when asset correlations are less than 1
+- [Diversification](../../portfolio-theory/diversification.md) reduces portfolio volatility when asset correlations are less than 1
 
 ---
 
@@ -115,6 +115,6 @@ Volatility plays a central role in [Modern Portfolio Theory](../index.md):
 - 📐 **[Sharpe Ratio](sharpe-ratio.md)** — Uses volatility as risk denominator
 - 📊 **[Sortino Ratio](sortino-ratio.md)** — Downside-only volatility variant
 - 📏 **[Bollinger Bands](../../technical-analysis/indicators/bollinger-bands.md)** — Volatility envelope on charts
-- 🔀 **[Diversification](../diversification.md)** — Reducing portfolio volatility
+- 🔀 **[Diversification](../../portfolio-theory/diversification.md)** — Reducing portfolio volatility
 
 

@@ -16,6 +16,7 @@
     --md-primary-fg-color: #1a4031; /* libre-green */
     --md-primary-bg-color: #f5f4ef; /* libre-beige */
     --md-accent-fg-color: #5a947c; /* primary-400 */
+    --md-typeset-a-color: #217d56; /* Rich visible green for links in light mode */
 
     --md-sidebar-width: 12rem;
 }

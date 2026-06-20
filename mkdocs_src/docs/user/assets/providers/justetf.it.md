@@ -1,30 +1,30 @@
-# 📊 Provider justETF
+# <img src="https://www.justetf.com/android-chrome-144x144.png?v2" alt=""> justETF
 
 justETF fornisce dati dettagliati per gli ETF europei, inclusi i prezzi attuali e i dati storici con supporto multi-valuta.
 
 ## 📊 Capacità
 
-- ✅ **Prezzo Attuale**: Quote gettex in tempo reale (solo EUR)
-- ✅ **Storico**: Dati storici dei prezzi in EUR, USD, CHF o GBP
-- ✅ **Ricerca**: Ricerca full-text tra più di 3000 ETF europei
+- ✅ **Prezzo Attuale**: quotazioni gettex in tempo reale (solo EUR)
+- ✅ **Storico**: dati storici dei prezzi in EUR, USD, CHF o GBP
+- ✅ **Ricerca**: ricerca full-text tra oltre 3000 ETF europei
 
 ## 💱 Selezione della Valuta
 
 justETF supporta il recupero dei prezzi in **4 valute**: EUR, USD, CHF, GBP.
 
-Quando cerchi un ETF, i risultati appaiono con le bandiere della valuta:
+Quando cerchi un ETF, i risultati appaiono con le bandiere delle valute:
 
 | Bandiera | Significato |
 |------|---------|
-| 🇪🇺 | Prezzi in Euro |
-| 🇺🇸 | Prezzi in Dollari USA |
-| 🇨🇭 | Prezzi in Franchi Svizzeri |
-| 🇬🇧 | Prezzi in Sterline Britanniche |
-| 👑 | Valuta NAV nativa del fondo (mostrata accanto alla bandiera) |
+| 🇪🇺 | prezzi in Euro |
+| 🇺🇸 | prezzi in Dollari USA |
+| 🇨🇭 | prezzi in Franchi Svizzeri |
+| 🇬🇧 | prezzi in Sterline Britanniche |
+| 👑 | valuta NAV nativa del fondo (mostrata accanto alla bandiera) |
 
 !!! note "Conversione Valutaria"
 
-    JustETF esegue la conversione valutaria lato server utilizzando i propri tassi di cambio.
+    JustETF esegue la conversione lato server utilizzando i propri tassi di cambio.
     Per le valute non presenti nell'elenco supportato (JPY, SEK, ecc.), utilizza il sistema di conversione valutaria integrato di LibreFolio.
 
 ## ⚠️ Limitazioni
@@ -33,19 +33,19 @@ Quando cerchi un ETF, i risultati appaiono con le bandiere della valuta:
 
     I prezzi in tempo reale (valore attuale) sono disponibili solo in **EUR** perché provengono dal WebSocket dell'exchange **gettex**, che è un exchange europeo che quota in EUR.
 
-    Per le valute diverse dall'EUR (USD, CHF, GBP):
+    Per le valute non-EUR (USD, CHF, GBP):
 
     - ✅ I dati storici sono disponibili (convertiti da JustETF)
     - ❌ Il prezzo in tempo reale **non** è disponibile — la sincronizzazione dell'asset mostrerà "current value unavailable"
 
-    **Raccomandazione**: Se hai bisogno di prezzi in tempo reale, usa EUR. Per il tracciamento del portafoglio dove i prezzi di chiusura giornalieri sono sufficienti, qualsiasi valuta va bene.
+    **Raccomandazione**: se hai bisogno di prezzi in tempo reale, usa l'EUR. Per il monitoraggio del portafoglio dove i prezzi di chiusura giornalieri sono sufficienti, qualsiasi valuta può funzionare.
 
 ## 🔧 Configurazione
 
-- **Identificatore**: codice ISIN (es. `IE00BK5BQT80`)
-- **Tipo Identificatore**: `ISIN`
-- **Parametri**:
- - `currency`: Valuta del prezzo — EUR (default), USD, CHF o GBP
+- **Identifier**: codice ISIN (es. `IE00BK5BQT80`)
+- **Identifier Type**: `ISIN`
+- **Parameters**:
+ - `currency`: valuta del prezzo — EUR (default), USD, CHF o GBP
 
 ## 💡 Esempi
 
@@ -57,6 +57,6 @@ Quando cerchi un ETF, i risultati appaiono con le bandiere della valuta:
 
 ## 📝 Note
 
-- Ideale per ETF domiciliati in Europa quotati su justETF
+- Più indicato per gli ETF con domicilio europeo quotati su justETF
 - Utilizza l'ISIN come identificatore primario
-- La 👑 nei risultati di ricerca indica la valuta NAV nativa del fondo — questa è la valuta che il gestore del fondo utilizza internamente, non necessariamente la valuta in cui effettui il trading
+- La 👑 nei risultati di ricerca indica la denominazione NAV nativa del fondo — questa è la valuta che il gestore del fondo utilizza internamente, non necessariamente la valuta in cui effettui il trading

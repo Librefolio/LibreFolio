@@ -42,14 +42,14 @@ Le fondement mathématique du principe "ne pas mettre tous ses œufs dans le mê
 
 Allocation stratégique vs tactique, trajectoires de glissement (glide paths), stratégies à date cible et l'art du rééquilibrage. Comment décider *quelle quantité* de chaque classe d'actifs détenir.
 
-### 📊 [Mesures de Risque](risk-metrics/index.md)
+### 📊 [Mesures de Risque](../technical-analysis/risk-metrics/index.md)
 
 Mesures quantitatives du risque de portefeuille. De l'écart-type au ratio de Sharpe, chaque mesure capture un aspect différent du risque :
 
-- **[Ratio de Sharpe](risk-metrics/sharpe-ratio.md)** — Rendement ajusté au risque (volatilité totale)
-- **[Ratio de Sortino](risk-metrics/sortino-ratio.md)** — Rendement ajusté au risque (risque de baisse uniquement)
-- **[Maximum Drawdown](risk-metrics/max-drawdown.md)** — La pire baisse du sommet au creux
-- **[Volatilité](risk-metrics/volatility.md)** — Écart-type des rendements
+- **[Ratio de Sharpe](../technical-analysis/risk-metrics/sharpe-ratio.md)** — Rendement ajusté au risque (volatilité totale)
+- **[Ratio de Sortino](../technical-analysis/risk-metrics/sortino-ratio.md)** — Rendement ajusté au risque (risque de baisse uniquement)
+- **[Maximum Drawdown](../technical-analysis/risk-metrics/max-drawdown.md)** — La pire baisse du sommet au creux
+- **[Volatilité](../technical-analysis/risk-metrics/volatility.md)** — Écart-type des rendements
 
 ---
 

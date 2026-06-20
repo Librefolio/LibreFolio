@@ -48,7 +48,7 @@ $$
 
 ## 🔗 Related
 
-- 📊 **[Weighted Average Cost (WAC)](../../portfolio-theory/weighted-average-cost.md)** — Average cost per unit across multiple buys
+- 📊 **[Weighted Average Cost (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Average cost per unit across multiple buys
 - 💰 **[Taxation](../../fundamentals/taxation.md)** — Capital gains, matching methods, loss carry-forward
 - 📈 **[Returns](../../fundamentals/returns.md)** — Measuring investment performance
 

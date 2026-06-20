@@ -42,14 +42,14 @@ El fundamento matemático de "no poner todos los huevos en la misma cesta". Cóm
 
 Asignación estratégica frente a táctica, rutas de deslizamiento, estrategias de fecha objetivo y el arte del rebalanceo. Cómo decidir *cuánto* poseer de cada clase de activo.
 
-### 📊 [Métricas de Riesgo](risk-metrics/index.md)
+### 📊 [Métricas de Riesgo](../technical-analysis/risk-metrics/index.md)
 
 Medidas cuantitativas del riesgo de la cartera. Desde la desviación estándar hasta el ratio de Sharpe, cada métrica captura un aspecto diferente del riesgo:
 
-- **[Ratio de Sharpe](risk-metrics/sharpe-ratio.md)** — Rendimiento ajustado al riesgo (volatilidad total)
-- **[Ratio de Sortino](risk-metrics/sortino-ratio.md)** — Rendimiento ajustado al riesgo (solo riesgo de caída)
-- **[Max Drawdown](risk-metrics/max-drawdown.md)** — La mayor caída desde el punto máximo al punto más bajo
-- **[Volatilidad](risk-metrics/volatility.md)** — Desviación estándar de los rendimientos
+- **[Ratio de Sharpe](../technical-analysis/risk-metrics/sharpe-ratio.md)** — Rendimiento ajustado al riesgo (volatilidad total)
+- **[Ratio de Sortino](../technical-analysis/risk-metrics/sortino-ratio.md)** — Rendimiento ajustado al riesgo (solo riesgo de caída)
+- **[Max Drawdown](../technical-analysis/risk-metrics/max-drawdown.md)** — La mayor caída desde el punto máximo al punto más bajo
+- **[Volatilidad](../technical-analysis/risk-metrics/volatility.md)** — Desviación estándar de los rendimientos
 
 ---
 

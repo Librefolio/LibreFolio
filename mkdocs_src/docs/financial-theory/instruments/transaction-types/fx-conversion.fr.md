@@ -1,5 +1,9 @@
 # ![](../../../static/icons/transactions/fx-conversion.png){: width="32" style="vertical-align: middle;" } Conversion de devise
 
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-fxconversion" alt="Transaction Form — FX Conversion">
+</div>
+
 **Les conversions de devise** permettent d'échanger une devise contre une autre au sein du **même compte de courtier**. Le solde d'une devise diminue tandis que celui d'une autre augmente — aucun titre ni courtier ne change.
 
 ---

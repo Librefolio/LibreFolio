@@ -37,4 +37,4 @@ Théorie Moderne du Portefeuille et gestion des risques :
 
 - **[Diversification](portfolio-theory/diversification.md)** — Corrélation, risque systématique vs idiosyncrasique
 - **[Allocation d'actifs](portfolio-theory/asset-allocation.md)** — Stratégique, tactique, trajectoires de glissement, rééquilibrage
-- **[Métriques de risque](portfolio-theory/risk-metrics/index.md)** — Sharpe, Sortino, Perte maximale (Max Drawdown), Volatilité
+- **[Métriques de risque](technical-analysis/risk-metrics/index.md)** — Sharpe, Sortino, Perte maximale (Max Drawdown), Volatilité

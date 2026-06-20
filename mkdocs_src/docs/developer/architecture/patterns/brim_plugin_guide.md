@@ -124,7 +124,7 @@ class MyBrokerProvider(BRIMProvider):
 
 ### 🔍 Auto-Discovery
 
-Place the file in `brim_providers/` and restart the app. The `BRIMProviderRegistry` will automatically discover and register it. The plugin will appear in the [ImportPluginSelect](../../frontend/components/select.md#importpluginselect) dropdown.
+Place the file in `brim_providers/` and restart the app. The `BRIMProviderRegistry` will automatically discover and register it. The plugin will appear in the [ImportPluginSelect](../../frontend/components/core-ui/select.md#importpluginselect) dropdown.
 
 ---
 
