@@ -37,4 +37,4 @@ Teoria Moderna di Portafoglio e gestione del rischio:
 
 - **[Diversificazione](portfolio-theory/diversification.md)** — Correlazione, rischio sistematico vs idiosincratico
 - **[Allocazione degli Asset](portfolio-theory/asset-allocation.md)** — Strategica, tattica, glide path, ribilanciamento
-- **[Metriche di Rischio](portfolio-theory/risk-metrics/index.md)** — Sharpe, Sortino, Max Drawdown, Volatilità
+- **[Metriche di Rischio](technical-analysis/risk-metrics/index.md)** — Sharpe, Sortino, Max Drawdown, Volatilità

@@ -59,7 +59,7 @@ the source broker's position.
 !!! tip "Learn more"
 
     For the full formula, examples, and edge cases, see the dedicated page:
-    **[📊 Weighted Average Cost (WAC)](../../portfolio-theory/weighted-average-cost.md)**
+    **[📊 Weighted Average Cost (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)**
 
 ??? note "✏️ When to Override Manually"
 
@@ -84,7 +84,7 @@ the source broker's position.
 
 ## 🔗 Related
 
-- 📊 **[Weighted Average Cost (WAC)](../../portfolio-theory/weighted-average-cost.md)** — How automatic cost basis is computed
+- 📊 **[Weighted Average Cost (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — How automatic cost basis is computed
 - 🔄 **[Asset Transfer](transfer.md)** — Two linked adjustments can be promoted to a transfer
 - 🛒 **[Buy & Sell](buy-sell.md)** — Standard asset transactions with cash
 - 💰 **[Fee & Tax](fee.md)** — Cash-only corrections (use Fee/Tax instead of Adjustment)

@@ -1,21 +1,36 @@
-# 🛡️ Manual del Administrador
+# 🛡️ Manual de Admin
 
-Este manual está dirigido a administradores de sistemas y usuarios avanzados que necesitan realizar tareas de mantenimiento, gestionar usuarios o interactuar con el sistema mediante la línea de comandos.
+Este manual es para administradores de sistemas y usuarios avanzados que necesitan realizar mantenimiento, gestionar usuarios o interactuar con el sistema a través de la línea de comandos.
 
 ## 📖 Descripción General
 
-La mayoría de las tareas administrativas se gestionan a través de la herramienta CLI principal:
+La mayoría de las tareas de administración y mantenimiento se manejan a través de la interfaz de línea de comandos principal o se configuran mediante variables de entorno.
 
-1. **`dev.py`**: El script de orquestación principal para desarrollo y mantenimiento. Proporciona una CLI estructurada en árbol para todas las tareas: ejecutar pruebas, gestionar la base de datos, construir el frontend, gestión de usuarios, traducciones y más.
+---
 
 ## 📚 Guías
 
-- 🛠️ **[Herramientas CLI](cli_tools.md)**: Documentación detallada sobre comandos y subcomandos de `dev.py`.
-- ⚙️ **[Configuración Global](settings.md)**: Configure parámetros de todo el sistema (TTL de sesión, límites de carga, intervalos de sincronización, valores predeterminados).
-- 📂 **[Estructura del Sistema de Archivos](filesystem.md)**: Comprenda dónde se almacenan los datos, cómo realizar copias de seguridad y cómo acceder al sistema desde el terminal del host.
-- 🐳 **[Docker Avanzado](docker_advanced.md)**: Una exploración profunda de la configuración de Docker, incluyendo redes, volúmenes y personalización para entornos de producción.
-- 🌐 **[Exponer mediante Tailscale](tailscale_exposure.md)**: Exponga su instancia de LibreFolio de forma segura a través de Internet usando Tailscale.
+La documentación está organizada en tres áreas principales:
 
-## 🔐 Autenticación
+### 🐳 Despliegue y Exposición
+- 📦 **[Instalación en Host](host_installation.md)**: Configuración manual utilizando Python, Node.js y Pipenv directamente en la máquina host.
+- 🐳 **[Docker Avanzado](docker_advanced.md)**: Despliegue en contenedores usando Docker Compose, enlaces de volumen y configuración de propiedad GID/UID del usuario.
+- 🌐 **[Exponer con Tailscale](tailscale_exposure.md)**: Exponga de forma segura su instancia privada de LibreFolio a través de Internet usando Tailscale.
 
-LibreFolio utiliza **JWT (JSON Web Tokens)** para la autenticación. El servidor genera un secreto de firma aleatorio al iniciar, compartido entre todos los workers. Los tokens expiran después de un número de horas configurable (ver [Configuración Global](settings.md)). Para detalles técnicos, consulte [Arquitectura de Seguridad](../developer/architecture/security.md).
+### ⚙️ Configuración del Sistema
+- 📝 **[Variables de Entorno](configuration.md)**: Lista completa de las variables `.env` soportadas (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) y orden de precedencia de resolución.
+- ⚙️ **[Configuración Global](settings.md)**: Configure los ajustes de tiempo de ejecución de todo el sistema (TTL de la sesión, límites de subida, intervalos de sincronización de datos de mercado).
+
+### 🧹 Mantenimiento y Operaciones
+- 🛠️ **[Herramientas CLI de Admin](cli_tools.md)**: Cómo utilizar el script `dev.py` para tareas administrativas (gestión de usuarios, actualizaciones de bases de datos).
+- 📂 **[Estructura del Sistema de Archivos](filesystem.md)**: Detalles sobre dónde se almacenan las bases de datos, los logs, las subidas y las carpetas temporales, y cómo realizar copias de seguridad.
+
+---
+
+## 🔐 Autenticación y Persistencia de Sesiones
+
+LibreFolio utiliza **JWT (JSON Web Tokens)** para la autenticación de usuarios. Por defecto:
+- Si la variable de entorno **`JWT_SECRET`** se deja vacía en su archivo `.env`, el servidor genera una clave secreta de firma aleatoria al iniciar. Esto proporciona la máxima seguridad, pero las sesiones de usuario se perderán si el servidor se reinicia.
+- Para mantener las sesiones de usuario entre reinicios del servidor (o al ejecutar varias instancias independientes del servidor detrás de un balanceador de carga), defina una clave **`JWT_SECRET`** estable. Tenga en cuenta que los múltiples procesos de trabajo de uvicorn iniciados en el mismo host compartirán automáticamente el secreto generado por el proceso principal, lo que significa que la persistencia de la sesión entre procesos de trabajo se mantiene incluso cuando `JWT_SECRET` se deja vacía.
+
+Para obtener detalles técnicos, consulte la página dedicada a la [Seguridad y Autenticación](../developer/architecture/security.md) en el manual del desarrollador.

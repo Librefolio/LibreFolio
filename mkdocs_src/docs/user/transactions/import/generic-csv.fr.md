@@ -1,4 +1,4 @@
-# 📄 CSV Générique
+# <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m1.8 18H14v-2h1.8v2m0-3H14v-2h1.8v2m0-3H14V9.8h1.8v4.2M13 9V3.5L18.5 9H13M6 20V4h5v7h7v9H6z"/></svg> CSV Générique
 
 Le fournisseur **CSV Générique** est un fallback flexible pour les courtiers qui ne sont pas directement pris en charge. Il permet une correspondance manuelle des colonnes afin que vous puissiez importer depuis n'importe quel export basé sur un fichier CSV.
 

@@ -42,7 +42,7 @@ A **single-date picker** dropdown with calendar.
 - Month/year navigation with arrows
 - Formats date according to locale
 
-**Used by**: [DataEditor](data-editor.md) (FX rate date), [CashTransactionModal](../brokers/modals.md), transaction forms.
+**Used by**: [DataEditor](data-editor.md) (FX rate date), [CashTransactionModal](../features/brokers/modals.md), transaction forms.
 
 ---
 

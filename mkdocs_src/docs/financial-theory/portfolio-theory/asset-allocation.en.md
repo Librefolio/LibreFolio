@@ -93,7 +93,7 @@ Beyond asset class allocation, geographic diversification spreads risk across ec
 ## 🔗 Related
 
 - 🔀 **[Diversification](diversification.md)** — The mathematics behind allocation decisions
-- 📊 **[Risk Metrics](risk-metrics/index.md)** — Measuring portfolio risk
+- 📊 **[Risk Metrics](../technical-analysis/risk-metrics/index.md)** — Measuring portfolio risk
 - 📊 **[Asset Types](../instruments/asset-types/index.md)** — The asset classes to allocate across
 - 💰 **[Taxation](../fundamentals/taxation.md)** — Tax-efficient allocation strategies
 

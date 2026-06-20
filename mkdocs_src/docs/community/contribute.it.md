@@ -37,7 +37,7 @@ Miglioramenti estetici, suggerimenti per il layout, potenziamenti dell'accessibi
 
 ### :bug: Segnalazione Bug
 
-Trovare e segnalare chiaramente i problemi è incredibilmente utile. Apri una nuova [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) con la parola chiave **`[BUG]`** all'inizio del titolo.
+Trovare e segnalare chiaramente i problemi è incredibilmente utile. Apri una nuova [GitHub Issue](https://github.com/Librefolio/LibreFolio/issues) con la parola chiave **`[BUG]`** all'inizio del titolo.
 
 Includi screenshot, informazioni sul browser e i passaggi per riprodurre l'errore — contano anche le incongruenze estetiche.
 
@@ -45,7 +45,7 @@ Includi screenshot, informazioni sul browser e i passaggi per riprodurre l'error
 
 ## :bulb: Condividi Idee e Richiedi Funzionalità
 
-Hai un'idea o desideri una nuova funzionalità? Apri una [GitHub Issue](https://github.com/Alfystar/LibreFolio/issues) utilizzando la parola chiave appropriata all'inizio del titolo:
+Hai un'idea o desideri una nuova funzionalità? Apri una [GitHub Issue](https://github.com/Librefolio/LibreFolio/issues) utilizzando la parola chiave appropriata all'inizio del titolo:
 
 | Parola chiave | Quando usarla |
 |---------|------------|
@@ -60,7 +60,7 @@ Ogni richiesta sarà valutata e presa in considerazione non appena ci sarà la c
 
 Se sei uno sviluppatore e vuoi contribuire direttamente:
 
-1. Fai il **Fork** del [repository](https://github.com/Alfystar/LibreFolio)
+1. Fai il **Fork** del [repository](https://github.com/Librefolio/LibreFolio)
 2. **Crea un branch** per la tua funzionalità o correzione
 3. **Sviluppa e testa** nel tuo repo
 4. **Invia una Pull Request** con una descrizione chiara e il prefisso della parola chiave nel titolo:
@@ -84,7 +84,7 @@ Consulta il [Manuale dello Sviluppatore](../developer/index.md) per i dettagli s
 
 Un modo semplice ma potente per aiutare: **metti una stella al repository** su GitHub! Aumenta la visibilità e aiuta altri utenti a scoprire LibreFolio.
 
-[:octicons-star-fill-24: Stella su GitHub](https://github.com/Alfystar/LibreFolio){ .md-button .md-button--primary }
+[:octicons-star-fill-24: Stella su GitHub](https://github.com/Librefolio/LibreFolio){ .md-button .md-button--primary }
 
 ---
 

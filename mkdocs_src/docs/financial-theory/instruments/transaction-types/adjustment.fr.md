@@ -1,5 +1,9 @@
 # ![](../../../static/icons/transactions/adjustment.png){: width="32" style="vertical-align: middle;" } Ajustement
 
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-adjustment" alt="Transaction Form — Adjustment">
+</div>
+
 Les **ajustements** sont un type de transaction polyvalent permettant d'effectuer des corrections manuelles soit sur les soldes de trésorerie, soit sur les soldes d'actifs. Contrairement aux types appairés (Transfert, Transfert de trésorerie, Conversion FX), les ajustements sont **autonomes** — chaque ajustement constitue une ligne unique et indépendante.
 
 ---
@@ -52,7 +56,7 @@ Lors du transfert d'actifs entre courtiers, LibreFolio **calcule automatiquement
 !!! tip "En savoir plus"
 
     Pour la formule complète, des exemples et les cas particuliers, consultez la page dédiée :
-    **[📊 Coût Moyen Pondéré (WAC)](../../portfolio-theory/weighted-average-cost.md)**
+    **[📊 Coût Moyen Pondéré (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)**
 
 ??? note "✏️ Quand forcer la valeur manuellement"
 
@@ -74,7 +78,7 @@ Lors du transfert d'actifs entre courtiers, LibreFolio **calcule automatiquement
 
 ## 🔗 Liens connexes
 
-- 📊 **[Coût Moyen Pondéré (WAC)](../../portfolio-theory/weighted-average-cost.md)** — Comment le prix de revient automatique est calculé
+- 📊 **[Coût Moyen Pondéré (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Comment le prix de revient automatique est calculé
 - 🔄 **[Transfert d'actifs](transfer.md)** — Deux ajustements liés peuvent être promus en transfert
 - 🛒 **[Achat & Vente](buy-sell.md)** — Transactions d'actifs standard avec trésorerie
 - 💰 **[Frais & Taxes](fee.md)** — Corrections uniquement de trésorerie (utilisez Frais/Taxes au lieu d'Ajustement)

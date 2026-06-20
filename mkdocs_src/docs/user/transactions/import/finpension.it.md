@@ -1,19 +1,35 @@
-# 🏦 Finpension
+# <img src="https://www.finpension.ch/favicon.ico" alt=""> Finpension
 
 !!! info "Beta"
 
-    Questo plugin è in versione **Beta** — testato con file di esempio, ma potrebbero esserci casi limite.
+    Questo plugin è in fase **Beta** — testato con file di esempio, ma potrebbero esserci dei casi limite.
 
-## Come esportare
+## 📥 Come Esportare
 
-1. Accedi a [Finpension](https://www.finpension.ch).
-2. Vai su **Account → Transazioni → Export** e scarica il CSV.
+Per esportare le tue transazioni da Finpension:
 
-## Note
+1. Accedi al tuo [account Finpension](https://app.finpension.ch).
+2. Vai alla dashboard del tuo portafoglio/conto attivo.
+3. Clicca sulla scheda **Transactions** (Transazioni / Transaktionen).
+4. Clicca sul pulsante **Export** o di download e seleziona **CSV**.
+5. Salva il file sul tuo computer.
 
-- Piattaforma previdenziale svizzera.
-- Utilizza il punto e virgola (`;`) come delimitatore CSV — il plugin lo gestisce automaticamente.
+<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
+ <!-- [Screenshot Placeholder: Finpension Portal - Transactions page and Export button] -->
+</div>
 
-## 🔗 Riferimenti per sviluppatori
+## ⚠️ Errori Comuni
 
-→ [Finpension Provider — Dettagli di implementazione](../../../developer/backend/brim/providers_list.md)
+!!! warning "Non Modificare i Delimitatori"
+
+    Le esportazioni di Finpension utilizzano il punto e virgola `;` come separatore di colonna e formati tedeschi/svizzeri. Il parser BRIM rileva automaticamente queste impostazioni locali. Evita di aprire il file in editor di fogli di calcolo (come Excel) e di salvarlo nuovamente, poiché ciò potrebbe modificare la struttura grezza del CSV.
+
+## 📝 Note
+
+- Piattaforma pensionistica svizzera.
+- Supporta depositi di contanti, acquisti, vendite, ritenute fiscali e commissioni di gestione.
+- Denominato in CHF.
+
+## 🔗 Riferimenti per Sviluppatori
+
+→ [Finpension Provider — Dettagli di Implementazione](../../../developer/backend/brim/providers_list.md)

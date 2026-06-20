@@ -47,7 +47,7 @@ Files uploaded by users through the Files page. Each upload creates two files:
 - 📄 `{uuid}.{ext}` — The actual binary file (e.g., `a1b2c3d4.png`)
 - 📋 `{uuid}.json` — Metadata including: original filename, MIME type, file size, upload date, uploader user ID
 
-:material-arrow-right: **Developer deep-dive**: [File Upload Component](../developer/frontend/components/file-upload.md)
+:material-arrow-right: **Developer deep-dive**: [File Upload Component](../developer/frontend/components/core-ui/file-upload.md)
 
 ### 📊 `broker_reports/`
 

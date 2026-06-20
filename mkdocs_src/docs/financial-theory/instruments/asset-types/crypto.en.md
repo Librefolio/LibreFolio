@@ -54,4 +54,4 @@ Some proof-of-stake (PoS) cryptocurrencies allow holders to "stake" their tokens
 
 - 📈 **[Returns & Growth Rates](../../fundamentals/returns.md)** — Measuring crypto performance
 - 💰 **[Taxation](../../fundamentals/taxation.md)** — Crypto-specific tax considerations
-- 📊 **[Volatility](../../portfolio-theory/risk-metrics/volatility.md)** — Measuring risk in volatile assets
+- 📊 **[Volatility](../../technical-analysis/risk-metrics/volatility.md)** — Measuring risk in volatile assets

@@ -93,6 +93,6 @@ Más allá de la asignación por clase de activo, la diversificación geográfic
 ## 🔗 Relacionado
 
 - 🔀 **[Diversificación](diversification.md)** — La base matemática de las decisiones de asignación
-- 📊 **[Métricas de Riesgo](risk-metrics/index.md)** — Medición del riesgo de la cartera
+- 📊 **[Métricas de Riesgo](../technical-analysis/risk-metrics/index.md)** — Medición del riesgo de la cartera
 - 📊 **[Tipos de Activos](../instruments/asset-types/index.md)** — Las clases de activos para la asignación
 - 💰 **[Tributación](../fundamentals/taxation.md)** — Estrategias de asignación fiscalmente eficientes

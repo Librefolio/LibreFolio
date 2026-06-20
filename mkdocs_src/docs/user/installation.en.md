@@ -28,11 +28,11 @@ This guide explains how to deploy LibreFolio for regular use using Docker. This 
 Clone the repository:
 
 ```bash
-git clone https://github.com/Alfystar/LibreFolio.git
+git clone https://github.com/Librefolio/LibreFolio.git
 cd LibreFolio
 ```
 
-Or download the latest release from [GitHub Releases](https://github.com/Alfystar/LibreFolio/releases) and unzip it.
+Or download the latest release from [GitHub Releases](https://github.com/Librefolio/LibreFolio/releases) and unzip it.
 
 ## ⚙️ 2. Configure Environment
 

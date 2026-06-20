@@ -130,4 +130,4 @@ class WACPreviewResultItem:
 ## Related
 
 - 🏗️ **[Transaction Service](service.md)** — How WAC is invoked in the batch pipeline
-- 📖 **[Weighted Average Cost Theory](../../../financial-theory/portfolio-theory/weighted-average-cost.md)** — Financial methodology
+- 📖 **[Weighted Average Cost Theory](../../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)** — Financial methodology

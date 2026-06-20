@@ -4,20 +4,9 @@ LibreFolio fournit le script `dev.py` pour les tâches d'administration. Cette p
 
 !!! info "👩‍💻 Pour les développeurs"
 
-    Pour les commandes spécifiques au développement (build frontend, lanceur de tests, synchronisation API, audit i18n), consultez le [Guide d'installation pour les développeurs](../developer/dev-installation.md).
+    Pour les commandes spécifiques au développement (build frontend, lanceur de tests, synchronisation API, audit i18n), consultez le [Guide de Workflow pour les Développeurs](../developer/dev_workflow.md).
 
 ---
-
-## 🚀 Installation
-
-Installez toutes les dépendances du projet (Python et Node.js) :
-
-```bash
-./dev.py install
-```
-
----
-
 ## 🖥️ Serveur (Production)
 
 ### ▶️ Démarrage du serveur

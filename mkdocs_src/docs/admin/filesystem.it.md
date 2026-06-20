@@ -8,19 +8,19 @@ LibreFolio memorizza tutti i dati persistenti in una directory strutturata sotto
 
 ```
 backend/data/
-├── 📂 prod/ # Production data (default)
-│ ├── 🗃️ sqlite/
-│ │ └── 📄 app.db # Main SQLite database (WAL mode)
-│ ├── 🖼️ custom-uploads/ # User-uploaded files
-│ │ ├── 📄 {uuid}.{ext} # Binary file (image, document, etc.)
-│ │ └── 📋 {uuid}.json # Metadata sidecar (uploader, date, MIME type)
-│ ├── 📊 broker_reports/
-│ │ ├── 📥 uploaded/ # Reports waiting to be parsed
-│ │ ├── ✅ parsed/ # Successfully parsed reports
-│ │ └── ❌ failed/ # Reports that failed parsing
-│ └── 📝 logs/ # Application log files
+├── 📂 prod/                          # Production data (default)
+│   ├── 🗃️ sqlite/
+│   │   └── 📄 app.db                 # Main SQLite database (WAL mode)
+│   ├── 🖼️ custom-uploads/            # User-uploaded files
+│   │   ├── 📄 {uuid}.{ext}          # Binary file (image, document, etc.)
+│   │   └── 📋 {uuid}.json           # Metadata sidecar (uploader, date, MIME type)
+│   ├── 📊 broker_reports/
+│   │   ├── 📥 uploaded/              # Reports waiting to be parsed
+│   │   ├── ✅ parsed/               # Successfully parsed reports
+│   │   └── ❌ failed/               # Reports that failed parsing
+│   └── 📝 logs/                      # Application log files
 │
-└── 🧪 test/ # Test data (completely isolated)
+└── 🧪 test/                          # Test data (completely isolated)
     ├── 🗃️ sqlite/app.db
     ├── 🖼️ custom-uploads/
     ├── 📊 broker_reports/
@@ -47,7 +47,7 @@ File caricati dagli utenti tramite la pagina Files. Ogni caricamento crea due fi
 - 📄 `{uuid}.{ext}` — Il file binario effettivo (es. `a1b2c3d4.png`)
 - 📋 `{uuid}.json` — Metadata inclusi: nome file originale, tipo MIME, dimensione file, data di caricamento, ID dell'utente che ha effettuato il caricamento
 
-:material-arrow-right: **Approfondimento per sviluppatori**: [File Upload Component](../developer/frontend/components/file-upload.md)
+:material-arrow-right: **Approfondimento per sviluppatori**: [File Upload Component](../developer/frontend/components/core-ui/file-upload.md)
 
 ### 📊 `broker_reports/`
 
@@ -161,12 +161,12 @@ docker exec -it librefolio-container /bin/bash
 
 ```bash
 # From the project root
-./dev.py user list # List all users
+./dev.py user list              # List all users
 ./dev.py user reset <user> <pw> # Reset a user's password
-./dev.py user promote <user> # Grant superuser privileges
-./dev.py user demote <user> # Remove superuser privileges
-./dev.py db upgrade # Apply pending migrations
-./dev.py db create-clean # Reset database (WARNING: deletes all data)
+./dev.py user promote <user>    # Grant superuser privileges
+./dev.py user demote <user>     # Remove superuser privileges
+./dev.py db upgrade             # Apply pending migrations
+./dev.py db create-clean        # Reset database (WARNING: deletes all data)
 ```
 
 Per l'elenco completo dei comandi CLI, vedi [CLI Tools](cli_tools.md).

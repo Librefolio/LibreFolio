@@ -1,5 +1,9 @@
 # ![](../../../static/icons/transactions/cash-transfer.png){: width="32" style="vertical-align: middle;" } Trasferimento di Liquidità
 
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-cash-transfer" alt="Transaction Form — Cash Transfer">
+</div>
+
 I **trasferimenti di liquidità** (bonifici) spostano denaro tra conti di broker. Il saldo diminuisce alla fonte e aumenta alla destinazione — non sono coinvolti asset.
 
 ---

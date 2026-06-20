@@ -40,5 +40,5 @@ Las **Materias Primas** son activos físicos —materias primas o bienes primari
 ## 🔗 Relacionado
 
 - 🔀 **[Diversificación](../../portfolio-theory/diversification.md)** — Las materias primas como instrumentos de diversificación de la cartera
-- 📊 **[Volatilidad](../../portfolio-theory/risk-metrics/volatility.md)** — Medición del riesgo de precio de las materias primas
+- 📊 **[Volatilidad](../../technical-analysis/risk-metrics/volatility.md)** — Medición del riesgo de precio de las materias primas
 - 📈 **[Rentabilidades y Tasas de Crecimiento](../../fundamentals/returns.md)** — Medición del rendimiento de las materias primas

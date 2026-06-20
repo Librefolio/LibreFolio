@@ -40,6 +40,6 @@ Le metriche di rischio forniscono **misure quantitative** del rischio di portafo
 
 ## 🔗 Correlati
 
-- 🔀 **[Diversificazione](../diversification.md)** — Come funziona matematicamente la riduzione del rischio
-- ⚖️ **[Asset Allocation](../asset-allocation.md)** — Utilizzo delle metriche di rischio per guidare l'allocazione
+- 🔀 **[Diversificazione](../../portfolio-theory/diversification.md)** — Come funziona matematicamente la riduzione del rischio
+- ⚖️ **[Asset Allocation](../../portfolio-theory/asset-allocation.md)** — Utilizzo delle metriche di rischio per guidare l'allocazione
 - 📈 **[Rendimenti e Tassi di Crescita](../../fundamentals/returns.md)** — Il lato "rendimento" del binomio rischio-rendimento

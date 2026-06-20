@@ -20,7 +20,9 @@ Le risorse statiche sono **visibili a tutti gli utenti** del sistema. Qui trover
 
 Questi file risiedono nella directory `custom-uploads/` sul server.
 
-Puoi passare dalla **visualizzazione a elenco** alla **visualizzazione a griglia** per un'anteprima visiva dei file immagine:
+**Menu Contestuale**: fai clic con il tasto destro su qualsiasi riga di un file (nella vista elenco) per accedere alle azioni rapide (Anteprima, Rinomina, Elimina).
+
+Puoi passare dalla **vista elenco** alla **vista griglia** per un'anteprima visiva dei file immagine:
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
  <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -32,20 +34,22 @@ Puoi passare dalla **visualizzazione a elenco** alla **visualizzazione a griglia
  <img class="gallery-img" data-category="files" data-name="brim-tab" alt="Broker Reports Tab" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-I report dei broker hanno una **visibilità ristretta**: puoi vedere solo i report dei broker a cui hai accesso (come proprietario, editor o visualizzatore). Questi file includono:
+I report dei broker hanno una **visibilità ristretta** — puoi vedere solo i report dei broker a cui hai accesso (come proprietario, editor o visualizzatore). Questi file includono:
 
-- 📋 **Esportazioni transazioni** in CSV o Excel dal tuo broker
+- 📋 **Export di transazioni** in formato CSV o Excel dal tuo broker
 - ✅ **Risultati del parsing** dal sistema di importazione automatica (BRIM)
-- ❌ File il cui **parsing è fallito** (conservati per il debugging)
+- ❌ File che hanno **fallito il parsing** (conservati per il debugging)
+
+**Menu Contestuale**: fai clic con il tasto destro su qualsiasi riga di un report per accedere alle azioni rapide (Anteprima, Rinomina, Elimina).
 
 ---
 
-## ⬆️ Caricare File
+## ⬆️ Caricamento File
 
 Per caricare un file:
 
-1. Clicca l'**area di caricamento** o **trascina e rilascia** i file direttamente
-2. Per i **file immagine**, lo [strumento di ritaglio immagini](../misc/image-crop.md) si apre automaticamente, permettendoti di ridimensionare e ritagliare prima del caricamento
+1. Clicca sull'**area di caricamento** o usa il **trascinamento (drag & drop)** dei file direttamente nell'area
+2. Per i **file immagine**, lo [strumento di ritaglio immagine](../misc/image-crop.md) si apre automaticamente, permettendoti di ridimensionare e ritagliare prima del caricamento
 3. Per i **file non immagine** (CSV, PDF, ecc.), puoi rinominare il file prima di confermare
 
 <div class="screenshot-container" style="max-width: 500px; margin: 1rem auto;">
@@ -54,22 +58,22 @@ Per caricare un file:
 
 !!! tip "Limite Dimensioni File"
 
-    La dimensione massima di caricamento è configurata dall'amministratore di sistema nelle [Impostazioni Globali](../../admin/settings.md). Il valore predefinito è solitamente 10 MB.
+    La dimensione massima di caricamento è configurata dall'amministratore di sistema nelle [Impostazioni Globali](../../admin/settings.md). Il valore predefinito è tipicamente di 10 MB.
 
 ---
 
-## 📤 Caricare Report dei Broker
+## 📤 Caricamento Report dei Broker
 
-Se desideri importare le transazioni dal tuo broker:
+Se desideri importare transazioni dal tuo broker:
 
 1. Vai alla scheda **Report dei Broker**
 2. Carica il file CSV o Excel esportato dal tuo broker (Degiro, Interactive Brokers, eToro, Directa, ecc.)
-3. Scegli quale **broker associare** al file: è qui che verranno memorizzate le transazioni importate
-4. Il sistema tenterà successivamente di **rilevare automaticamente** il formato del file tramite il sistema di importazione BRIM e di effettuare il parsing delle transazioni
+3. Scegli a quale **broker associare** il file — è qui che verranno memorizzate le transazioni importate
+4. Il sistema tenterà successivamente di **rilevare automaticamente** il formato del file tramite il sistema di importazione BRIM e di eseguire il parsing delle transazioni
 
 !!! info "Associazione ≠ Parsing"
 
-    Il broker scelto durante il caricamento serve solo per l'**associazione**: determina quale account broker riceve le transazioni importate. Il rilevamento del formato e il parsing avvengono in un passaggio separato e sono **indipendenti** dal broker: lo stesso plugin BRIM può funzionare per più broker se esportano nello stesso formato.
+    Il broker che scegli durante il caricamento serve solo per l'**associazione** — determina quale account broker riceve le transazioni importate. Il rilevamento del formato e il parsing avvengono in un passaggio separato e sono **indipendenti** dal broker: lo stesso plugin BRIM può funzionare per più broker se esportano nello stesso formato.
 
 !!! note "Lavoro in Corso"
 
@@ -80,6 +84,6 @@ Se desideri importare le transazioni dal tuo broker:
 ## 🔒 Sicurezza
 
 - 🌐 I **file statici** sono accessibili a chiunque possieda un account LibreFolio
-- 🔐 I **report dei broker** rispettano il controllo di accesso del broker: solo gli utenti con accesso a quel broker possono visualizzarne i report
+- 🔐 I **report dei broker** rispettano il controllo di accesso del broker — solo gli utenti con accesso a quel broker possono visualizzare i relativi report
 - 🚫 I **file eseguibili** (`.exe`, `.sh`, `.py`, ecc.) sono bloccati per motivi di sicurezza
-- 🔍 Il **MIME type** del file viene validato lato server per evitare la falsificazione dell'estensione (es. rinominare un `.exe` in `.jpg`)
+- 🔍 Il **MIME type** del file viene validato lato server per prevenire la falsificazione del tipo di file (ad esempio, rinominare un `.exe` in `.jpg`)

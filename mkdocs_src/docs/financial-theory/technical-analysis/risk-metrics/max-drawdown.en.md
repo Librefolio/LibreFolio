@@ -92,4 +92,4 @@ A drawdown chart plots $DD_t$ over time. It's always zero or negative, touching 
 
 - 📊 **[Volatility](volatility.md)** — Standard deviation doesn't capture drawdown severity
 - 📐 **[Sharpe Ratio](sharpe-ratio.md)** — Risk-adjusted return (uses volatility, not drawdown)
-- 🔀 **[Diversification](../diversification.md)** — The primary tool for reducing max drawdown
+- 🔀 **[Diversification](../../portfolio-theory/diversification.md)** — The primary tool for reducing max drawdown

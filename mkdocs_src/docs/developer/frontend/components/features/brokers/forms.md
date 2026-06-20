@@ -18,10 +18,10 @@ The create/edit form for a broker. Used inside `BrokerModal`.
 |-------|-----------|----------|-------------|
 | **Name** | Text input | ✅ | Broker display name |
 | **Description** | Textarea | ❌ | Optional description |
-| **Base Currency** | [CurrencySearchSelect](../select.md#currencysearchselect) | ✅ | Default currency for cash tracking |
+| **Base Currency** | [CurrencySearchSelect](../../core-ui/select.md#currencysearchselect) | ✅ | Default currency for cash tracking |
 | **Portal URL** | Text input | ❌ | Broker website (used for favicon fallback) |
-| **Icon** | [ImagePickerWrapper](../file-upload.md) | ❌ | Custom broker icon |
-| **Default Plugin** | [ImportPluginSelect](../select.md#importpluginselect) | ❌ | Default BRIM parser for this broker |
+| **Icon** | [ImagePickerWrapper](../../core-ui/file-upload.md) | ❌ | Custom broker icon |
+| **Default Plugin** | [ImportPluginSelect](../../core-ui/select.md#importpluginselect) | ❌ | Default BRIM parser for this broker |
 | **Allow Overdraft** | Toggle | ❌ | Allow negative cash balance |
 
 ### ✅ Validation
@@ -65,4 +65,4 @@ graph LR
 | `size` | `'sm' \| 'md' \| 'lg'` | Icon size |
 | `altText` | `string` | Accessible alt text |
 
-**Used by**: [BrokerCard](cards.md), [BrokerSearchSelect](../select.md#brokersearchselect), broker detail page.
+**Used by**: [BrokerCard](cards.md), [BrokerSearchSelect](../../core-ui/select.md#brokersearchselect), broker detail page.

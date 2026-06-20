@@ -40,6 +40,6 @@ Las métricas de riesgo proporcionan **medidas cuantitativas** del riesgo de la 
 
 ## 🔗 Relacionado
 
-- 🔀 **[Diversificación](../diversification.md)** — Cómo funciona matemáticamente la reducción del riesgo
-- ⚖️ **[Asignación de Activos](../asset-allocation.md)** — Uso de métricas de riesgo para guiar la asignación
+- 🔀 **[Diversificación](../../portfolio-theory/diversification.md)** — Cómo funciona matemáticamente la reducción del riesgo
+- ⚖️ **[Asignación de Activos](../../portfolio-theory/asset-allocation.md)** — Uso de métricas de riesgo para guiar la asignación
 - 📈 **[Rendimientos y Tasas de Crecimiento](../../fundamentals/returns.md)** — La vertiente del "rendimiento" en la relación riesgo-rendimiento

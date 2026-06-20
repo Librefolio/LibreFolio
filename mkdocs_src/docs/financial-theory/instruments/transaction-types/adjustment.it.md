@@ -1,6 +1,10 @@
 # ![](../../../static/icons/transactions/adjustment.png){: width="32" style="vertical-align: middle;" } Rettifica
 
-Le **Rettifiche** sono un tipo di transazione generico per correzioni manuali dei saldi di cassa o degli asset. A differenza dei tipi a coppie (Trasferimento, Trasferimento di Liquidità, Conversione FX), le rettifiche sono **autonome**: ogni rettifica è una riga singola e indipendente.
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="transactions" data-name="form-modal-adjustment" alt="Modulo Transazione — Rettifica">
+</div>
+
+Le **Rettifiche** sono un tipo di transazione generica per correzioni manuali dei saldi di cassa o di asset. A differenza dei tipi accoppiati (Trasferimento Asset, Trasferimento di Cassa, Conversione FX), le rettifiche sono **autonome**: ogni rettifica è una riga singola e indipendente.
 
 ---
 
@@ -19,24 +23,24 @@ Le **Rettifiche** sono un tipo di transazione generico per correzioni manuali de
 
 Le rettifiche vengono utilizzate quando nessun altro tipo di transazione è adatto:
 
-- **Correzione di errori di importazione** — ad esempio, l'importazione di un broker ha omesso un'operazione societaria
-- **Frazionamento / frazionamento inverso** — rettifica della quantità senza movimento di cassa
+- **Correzione di errori di importazione** — ad es., l'importazione dal broker ha omesso un'operazione societaria
+- **Frazionamento / frazionamento inverso** — regolazione della quantità senza movimento di cassa
 - **Regali** — ricezione o donazione di azioni
-- **Configurazione del saldo iniziale** — inizializzazione di un portafoglio da uno snapshot
+- **Configurazione saldo iniziale** — avvio di un portafoglio partendo da uno snapshot
 - **Operazioni societarie** non coperte da altri tipi (spin-off, fusioni, ecc.)
 
 !!! note "Promuovi a Trasferimento"
 
-    Due righe `ADJUSTMENT` con **quantità opposte**, **stesso asset** e **broker diversi** possono essere **promosse** a una coppia di Asset Transfer. Questo è utile quando inizialmente sono state registrate rettifiche separate e successivamente si desidera collegarle come un trasferimento.
+    Due righe `ADJUSTMENT` con **quantità opposte**, **stesso asset** e **broker differenti** possono essere **promosse** a una coppia di Trasferimento Asset. Questo è utile quando inizialmente sono state registrate rettifiche separate e successivamente si desidera collegarle come un Trasferimento Asset.
 
 ---
 
-## 📐 Impatto sul Cost Basis
+## 📐 Impatto sul Costo di Carico
 
-Le rettifiche con quantità positiva **aumentano** il numero di lotti (FIFO). Il Cost Basis per i lotti creati tramite rettifica dipende dalla presenza di un **Cost Basis Override**:
+Le rettifiche con quantità positiva **aumentano** la quantità dei lotti (FIFO). Il costo di carico per i lotti creati tramite rettifica dipende dalla presenza di un **Cost Basis Override**:
 
 - **Con override**: il valore specificato viene utilizzato come **costo di acquisizione per unità** (WAC — Weighted Average Cost)
-- **Senza override**: il lotto viene creato con costo zero (acquisizione gratuita — ad esempio regali, airdrop)
+- **Senza override**: il lotto viene creato con costo zero (acquisizione gratuita — ad es. regali, airdrop)
 
 !!! info "Valore per unità"
 
@@ -45,41 +49,36 @@ Le rettifiche con quantità positiva **aumentano** il numero di lotti (FIFO). Il
 
     $$\text{Costo totale} = \text{WAC} \times \text{quantità}$$
 
-### 🏦 Cost Basis Automatico nei Trasferimenti
+### 🏦 Costo di Carico Automatico nei Trasferimenti
 
-Quando si trasferiscono asset tra broker, LibreFolio **calcola automaticamente** il
-Cost Basis Override sul lato ricevente utilizzando il **Weighted Average Cost (WAC)** della
-posizione del broker di origine.
+Quando si trasferiscono asset tra broker, LibreFolio **calcola automaticamente** il Cost Basis Override lato ricevente utilizzando il **Weighted Average Cost (WAC)** della posizione del broker di origine.
 
 !!! tip "Scopri di più"
 
-    Per la formula completa, gli esempi e i casi limite, consulta la pagina dedicata:
-    **[📊 Weighted Average Cost (WAC)](../../portfolio-theory/weighted-average-cost.md)**
+    Per la formula completa, esempi e casi particolari, consulta la pagina dedicata:
+    **[📊 Weighted Average Cost (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)**
 
-??? note "✏️ Quando Sovrascrivere Manualmente"
+??? note "✏️ Quando effettuare l'Override Manualmente"
 
-    La formula automatica funziona per il caso standard (stesso regime fiscale, nessun evento
-    fiscale al momento del trasferimento). Nei seguenti scenari l'utente deve impostare il valore manualmente:
+    La formula automatica funziona per il caso standard (stesso regime fiscale, nessun evento fiscale al trasferimento). Nei seguenti scenari l'utente deve impostare il valore manualmente:
 
     | Scenario | Cosa impostare |
     |----------|------------|
     | **Trasferimento normale** | Lasciare vuoto — calcolato automaticamente |
     | **Exit Tax** | Valore di mercato alla data del trasferimento (specifico per giurisdizione) |
     | **Eredità** | Valore equo di mercato alla data del decesso (o stepped-up basis) |
-    | **Regalo** | Cost Basis originale del donatore (carryover basis) |
-    | **Operazione societaria** | Cost Basis rettificato secondo i termini dell'operazione societaria |
+    | **Regalo** | Costo di carico originale del donatore (carryover basis) |
+    | **Operazione societaria** | Costo di carico rettificato secondo i termini dell'operazione societaria |
 
     !!! warning "Responsabilità dell'Utente"
 
-        Quando si sovrascrive manualmente il Cost Basis, l'utente è responsabile della
-        correttezza del valore. LibreFolio non valida gli importi di override
-        rispetto alle norme fiscali — consulta un consulente fiscale per indicazioni specifiche per la tua giurisdizione.
+    Quando si effettua l'override manuale del costo di carico, l'utente è responsabile della correttezza del valore. LibreFolio non valida gli importi di override rispetto alle norme fiscali — consultare un consulente fiscale per indicazioni specifiche per la propria giurisdizione.
 
 ---
 
 ## 🔗 Correlati
 
-- 📊 **[Weighted Average Cost (WAC)](../../portfolio-theory/weighted-average-cost.md)** — Come viene calcolato il Cost Basis automatico
-- 🔄 **[Asset Transfer](transfer.md)** — Due rettifiche collegate possono essere promosse a un trasferimento
-- 🛒 **[Buy & Sell](buy-sell.md)** — Transazioni standard di asset con cassa
-- 💰 **[Fee & Tax](fee.md)** — Correzioni solo di cassa (utilizzare Fee/Tax invece di Rettifica)
+- 📊 **[Weighted Average Cost (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Come viene calcolato il costo di carico automatico
+- 🔄 **[Trasferimento Asset](transfer.md)** — Due rettifiche collegate possono essere promosse a un Trasferimento Asset
+- 🛒 **[Acquisto e Vendita](buy-sell.md)** — Transazioni standard di asset con cassa
+- 💰 **[Commissioni e Tasse](fee.md)** — Correzioni di sola cassa (usare Commissioni/Tasse invece di Rettifica)

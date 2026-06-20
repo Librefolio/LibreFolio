@@ -1,98 +1,72 @@
-# 📝 Modulo Transazione
+# 📝 Modulo Transazioni
 
-Il Modulo Transazione si apre ogni volta che **crei** o **modifichi** una transazione. Si adatta dinamicamente al tipo di transazione selezionato, mostrando solo i campi pertinenti a quell'operazione.
+Il Modulo Transazioni si apre ogni volta che si **crea** o si **modifica** una transazione. Si adatta dinamicamente al tipo di transazione selezionato, mostrando solo i campi pertinenti a quell'operazione.
 
 ---
 
 ## 🏷️ Tipi di Transazione
 
-| Tipo | Icona | Descrizione |
-|------|------|-------------|
-| **BUY** | 🟢 | Acquisto di un asset |
-| **SELL** | 🔴 | Vendita di un asset |
-| **DIVIDEND** | 💰 | Dividendo in contanti ricevuto |
-| **INTEREST** | 📈 | Interessi (obbligazioni, P2P) |
-| **FEE** | 💸 | Commissione del broker o costo della piattaforma |
-| **DEPOSIT** | ⬇️ | Contanti depositati nel conto del broker |
-| **WITHDRAWAL** | ⬆️ | Contanti prelevati dal conto del broker |
-| **ADJUSTMENT** | 🔧 | Correzione manuale di quantità o prezzo |
-| **TRANSFER** | 🔄 | Asset spostato tra due dei tuoi broker (composita) |
-| **FX_CONVERSION** | 💱 | Cambio valuta all'interno di un broker (composita) |
+Per una definizione concettuale approfondita di ogni operazione, fare riferimento alla [guida alla Teoria Finanziaria](../../financial-theory/instruments/transaction-types/index.md).
 
-Consulta [Financial Theory → Transaction Types](../../financial-theory/instruments/transaction-types/index.md) per la definizione concettuale di ogni tipo.
+<div class="lf-screenshot-carousel" data-carousel="transactions" data-carousel-interval="3000" data-show-titles="true">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="transactions" data-name="form-modal" data-title='<img src="/LibreFolio/static/icons/transactions/buy.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> ACQUISTO' alt="Acquisto">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-sell" data-title='<img src="/LibreFolio/static/icons/transactions/sell.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> VENDITA' alt="Vendita">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-dividend" data-title='<img src="/LibreFolio/static/icons/transactions/dividend.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> DIVIDENDO' alt="Dividendo">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-deposit" data-title='<img src="/LibreFolio/static/icons/transactions/deposit.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> VERSAMENTO' alt="Versamento">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-adjustment" data-title='<img src="/LibreFolio/static/icons/transactions/adjustment.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> REGOLAZIONE' alt="Regolazione">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-transfer" data-title='<img src="/LibreFolio/static/icons/transactions/transfer.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> TRASFERIMENTO' alt="Trasferimento Asset">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fxconversion" data-title='<img src="/LibreFolio/static/icons/transactions/fx-conversion.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> CONVERSIONE VALUTARIA' alt="Conversione FX">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-cash-transfer" data-title='<img src="/LibreFolio/static/icons/transactions/cash-transfer.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> TRASFERIMENTO CONTANTE' alt="Trasferimento Contante">
+</div>
 
----
+### Transazioni Singole
 
-## 📋 Campi Comuni
+Queste operano indipendentemente su un singolo conto broker.
 
-Questi campi appaiono per **tutti** i tipi di transazione:
+| Tipo | Descrizione | Guida Teorica |
+|------|-------------|--------------|
+| ![](../../static/icons/transactions/buy.png){: width="24" style="vertical-align: middle;" } **ACQUISTO / VENDITA** ![](../../static/icons/transactions/sell.png){: width="24" style="vertical-align: middle;" } | Acquisto o vendita di un asset | [📖 Leggi](../../financial-theory/instruments/transaction-types/buy-sell.md) |
+| ![](../../static/icons/transactions/deposit.png){: width="24" style="vertical-align: middle;" } **VERSAMENTO / PRELIEVO** ![](../../static/icons/transactions/withdrawal.png){: width="24" style="vertical-align: middle;" } | Versamento o prelievo di liquidità da un conto broker | [📖 Leggi](../../financial-theory/instruments/transaction-types/deposit-withdrawal.md) |
+| ![](../../static/icons/transactions/dividend.png){: width="24" style="vertical-align: middle;" } **DIVIDENDO / INTERESSE** ![](../../static/icons/transactions/interest.png){: width="24" style="vertical-align: middle;" } | Rendimento da asset azionari o a reddito fisso | [📖 Leggi](../../financial-theory/instruments/transaction-types/dividend-interest.md) |
+| ![](../../static/icons/transactions/fee.png){: width="24" style="vertical-align: middle;" } **COMMISSIONE / TASSA** ![](../../static/icons/transactions/tax.png){: width="24" style="vertical-align: middle;" } | Costi come commissioni del broker o tasse | [📖 Leggi](../../financial-theory/instruments/transaction-types/fee.md) |
+| ![](../../static/icons/transactions/adjustment.png){: width="24" style="vertical-align: middle;" } **REGOLAZIONE** | Correzione manuale dei saldi | [📖 Leggi](../../financial-theory/instruments/transaction-types/adjustment.md) |
 
-| Campo | Obbligatorio | Descrizione |
-|-------|:--------:|-------------|
-| **Type** | ✅ | Selettore del tipo di transazione |
-| **Date** | ✅ | Data di esecuzione (AAAA-MM-GG) |
-| **Currency** | ✅ | Valuta della transazione |
-| **Amount** | ✅ | Importo lordo totale |
-| **Fee** | ❌ | Commissione di intermediazione o tassa trattenuta |
-| **Notes** | ❌ | Nota a testo libero |
+### Transazioni Composite
 
----
+Queste rappresentano movimenti **tra** conti o valute. Producono due voci collegate che si compensano a vicenda.
 
-## 🏦 Operazioni su Asset (BUY / SELL / TRANSFER)
-
-Quando è coinvolto un asset, appaiono campi aggiuntivi:
-
-| Campo | Obbligatorio | Descrizione |
-|-------|:--------:|-------------|
-| **Asset** | ✅ | L'asset oggetto dello scambio (ricercabile) |
-| **Quantity** | ✅ | Numero di unità |
-| **Unit Price** | ✅ | Prezzo per unità |
-
-!!! tip "Calcolo automatico"
-
-    Se compili **Quantity** e **Unit Price**, l'**Amount** viene calcolato automaticamente, e viceversa.
+| Tipo | Descrizione | Guida Teorica |
+|------|-------------|--------------|
+| ![](../../static/icons/transactions/transfer.png){: width="24" style="vertical-align: middle;" } **TRASFERIMENTO** | Asset spostato tra due dei tuoi broker | [📖 Leggi](../../financial-theory/instruments/transaction-types/transfer.md) |
+| ![](../../static/icons/transactions/cash-transfer.png){: width="24" style="vertical-align: middle;" } **TRASFERIMENTO CONTANTE** | Bonifico tra broker | [📖 Leggi](../../financial-theory/instruments/transaction-types/cash-transfer.md) |
+| ![](../../static/icons/transactions/fx-conversion.png){: width="24" style="vertical-align: middle;" } **CONVERSIONE VALUTARIA** | Cambio valuta all'interno di un broker | [📖 Leggi](../../financial-theory/instruments/transaction-types/fx-conversion.md) |
 
 ---
 
-## 💰 Anteprima WAC
+## 📋 L'Interfaccia del Modulo
 
-Per le transazioni **BUY** e **SELL**, un pannello di **anteprima WAC (Weighted Average Cost)** appare sotto i campi principali. Mostra in tempo reale:
+Il modulo è progettato per essere intuitivo e dinamico. Quando si seleziona un **Tipo di Transazione**, il modulo si aggiorna automaticamente per mostrare solo i campi pertinenti.
 
-- Il **costo medio attuale** prima di questa transazione
-- Il **nuovo costo medio previsto** dopo il salvataggio
-- Il **guadagno/perdita realizzato** (solo per SELL)
+- **Dettagli Base:** Data, Tipo, Valuta e Importo.
+- **Specifiche dell'Asset:** Se la transazione coinvolge un asset (come ACQUISTO o VENDITA), appariranno i campi per selezionare l'asset, inserire la quantità e impostare il prezzo unitario.
+- **Pannello di Anteprima (WAC):** Per le operazioni che influenzano il portafoglio, in basso appare un'anteprima in tempo reale. Questa mostra il costo di carico attuale, il nuovo costo di carico previsto e qualsiasi guadagno/perdita realizzato.
 
-Questa anteprima viene calcolata live — non è necessario salvare preventivamente.
-
-!!! note "Override manuale WAC"
-
-    Puoi cambiare la modalità WAC da **Auto** (calcolato da LibreFolio) a **Manual** (inserisci il tuo costo medio). Questo è utile quando si migrano dati storici da un altro sistema.
+> **💡 Note:** Il sistema gestisce automaticamente i calcoli standard per te (come la moltiplicazione della quantità per il prezzo unitario), evitando così di dover effettuare i calcoli manualmente.
 
 ---
 
 ## 🔄 Transazioni Composite
 
-**TRANSFER** e **FX_CONVERSION** sono *composite* — collegano due componenti:
+**TRASFERIMENTO** e **CONVERSIONE VALUTARIA** sono *composite* — collegano due gambe:
 
-- **TRANSFER**: specifica un **broker di origine** e un **broker di destinazione**, oltre all'asset e alla quantità. LibreFolio registra entrambe le componenti in modo atomico.
-- **FX_CONVERSION**: specifica l'**importo della valuta di origine** e l'**importo della valuta di destinazione** all'interno dello stesso broker.
+- **TRASFERIMENTO**: specifica un **broker di origine** e un **broker di destinazione**, oltre all'asset e alla quantità. LibreFolio registra entrambe le gambe in modo atomico.
+- **CONVERSIONE VALUTARIA**: specifica l'**importo della valuta di origine** e l'**importo della valuta di destinazione** all'interno dello stesso broker.
 
-Per frazionare una transazione composita in due transazioni indipendenti, usa l'operazione [Split](index.md#split) nella tabella delle transazioni.
-
----
-
-## ✅ Validazione
-
-Il modulo effettua la validazione al salvataggio:
-
-- Le date devono essere in un intervallo valido (per impostazione predefinita, non nel futuro).
-- Quantità e prezzo devono essere positivi.
-- Per SELL: la quantità non può superare la posizione attuale (avviso, non un blocco rigido).
-- L'importo deve corrispondere a quantità × prezzo entro una piccola tolleranza.
+Per dividere una transazione composta in due transazioni indipendenti, utilizza l'operazione [frazionamento](index.md) nella tabella delle transazioni.
 
 ---
 
 ## 🔗 Correlati
 
 - 📋 **[Tabella Transazioni](index.md)** — Vista elenco, filtraggio, operazioni massive
-- 📥 **[Importazione dal Broker](import/index.md)** — Salta l'inserimento manuale con l'importazione BRIM
+- 📥 **[Importazione da Broker](import/index.md)** — Salta l'inserimento manuale con l'importazione BRIM

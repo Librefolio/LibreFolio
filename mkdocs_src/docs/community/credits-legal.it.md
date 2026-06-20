@@ -37,7 +37,7 @@ LibreFolio è un software open-source concesso in licenza ai sensi della **GNU A
 
 ### 📄 Testo Completo della Licenza
 
-Il testo integrale della licenza è disponibile nel file [LICENSE](https://github.com/Alfystar/LibreFolio/blob/main/LICENCE) nel repository.
+Il testo integrale della licenza è disponibile nel file [LICENSE](https://github.com/Librefolio/LibreFolio/blob/main/LICENCE) nel repository.
 
 ```text
 GNU AFFERO GENERAL PUBLIC LICENSE

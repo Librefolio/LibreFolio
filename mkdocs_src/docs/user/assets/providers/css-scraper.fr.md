@@ -1,12 +1,12 @@
-# 🔍 Fournisseur CSS Scraper
+# <img src="../../static/cssscraper.png" alt=""> CSS Scraper
 
 Le fournisseur CSS Scraper vous permet d'extraire des données de prix de n'importe quelle page web en utilisant des sélecteurs CSS. Ceci est particulièrement utile pour les instruments non couverts par d'autres fournisseurs, tels que les obligations d'État italiennes (BTP) sur Borsa Italiana.
 
 ## 📊 Capacités
 
 - ✅ **Prix actuel** : Extrait le prix d'une page web
-- ❌ **Historique** : Non pris en charge (⚠️ avertissement, pas une erreur)
-- ❌ **Recherche** : Non pris en charge
+- ❌ **Historique** : Non supporté (⚠️ avertissement, pas une erreur)
+- ❌ **Recherche** : Non supporté
 
 ## 🔧 Configuration
 
@@ -19,7 +19,7 @@ Le fournisseur CSS Scraper vous permet d'extraire des données de prix de n'impo
 | `current_css_selector` | ✅ | Sélecteur CSS pour l'élément du prix | `.summary-value strong` |
 | `currency` | ✅ | Code devise ISO 4217 | `EUR` |
 | `decimal_format` | ❌ | `us` (1,234.56) ou `eu` (1.234,56) | `eu` |
-| `timeout` | ❌ | Délai d'attente HTTP en secondes (par défaut : 30) | `30` |
+| `timeout` | ❌ | Timeout HTTP en secondes (par défaut : 30) | `30` |
 | `user_agent` | ❌ | En-tête User-Agent personnalisé | `LibreFolio/1.0` |
 
 ## 🔎 Comment trouver le sélecteur CSS
@@ -29,7 +29,7 @@ Le fournisseur CSS Scraper vous permet d'extraire des données de prix de n'impo
 1. Ouvrez la page contenant le prix dans Chrome
 2. Faites un **clic droit** sur la valeur du prix
 3. Sélectionnez **Inspecter** (ou appuyez sur `F12`)
-4. Dans le panneau Elements des DevTools, l'élément du prix sera mis en évidence
+4. Dans le panneau Éléments des DevTools, l'élément du prix sera mis en évidence
 5. Faites un **clic droit** sur l'élément mis en évidence dans les DevTools
 6. Sélectionnez **Copier** → **Copier le sélecteur**
 7. Collez-le dans le champ `current_css_selector`
@@ -45,7 +45,7 @@ Le fournisseur CSS Scraper vous permet d'extraire des données de prix de n'impo
 
 ### 💡 Exemple : Borsa Italiana BTP
 
-Pour un BTP sur Borsa Italiana (par exemple, `IT0005634800`) :
+Pour un BTP sur Borsa Italiana (ex: `IT0005634800`) :
 
 **URL** (version anglaise) :
 ```
@@ -69,19 +69,19 @@ Pour la version italienne, utilisez `decimal_format` : `eu` (la page italienne u
 
 | Format | Exemple | Quand l'utiliser |
 |--------|---------|-------------|
-| `us` | 1,234.56 | Pages anglaises/US (point comme séparateur décimal) |
-| `eu` | 1.234,56 | Pages italiennes/allemandes/françaises (virgule comme séparateur décimal) |
+| `us` | 1,234.56 | Pages en anglais/US (point comme séparateur décimal) |
+| `eu` | 1.234,56 | Pages en italien, allemand ou français (virgule comme séparateur décimal) |
 
 ## 🛠️ Dépannage
 
 ### "Selector not found"
-Le sélecteur CSS ne correspond à aucun élément sur la page. La structure de la page a peut-être changé — inspectez à nouveau l'élément et copiez un nouveau sélecteur.
+Le sélecteur CSS ne correspond à aucun élément sur la page. La structure de la page a peut-être changé — inspectez à nouveau et copiez un nouveau sélecteur.
 
 ### "Connection timeout"
 La page a mis trop de temps à répondre. Essayez d'augmenter le paramètre `timeout` ou vérifiez si l'URL est correcte.
 
 ### "Parse error"
-Le texte du prix n'a pas pu être interprété comme un nombre. Vérifiez le paramètre `decimal_format` — si la page affiche `100,39`, utilisez `eu` ; si elle affiche `100.39`, utilisez `us`.
+Le texte du prix n'a pas pu être analysé comme un nombre. Vérifiez le paramètre `decimal_format` — si la page affiche `100,39`, utilisez `eu` ; si elle affiche `100.39`, utilisez `us`.
 
-### Le prix affiche 0 ou une valeur incorrecte
+### Le prix affiche 0 ou une valeur erronée
 Le sélecteur correspond peut-être à un autre élément. Essayez un sélecteur plus spécifique. Utilisez les DevTools pour vérifier exactement quel élément votre sélecteur cible.

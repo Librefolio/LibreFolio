@@ -4,32 +4,21 @@ LibreFolio fornisce lo script `dev.py` per le attività di amministrazione. Ques
 
 !!! info "👩‍💻 Per gli Sviluppatori"
 
-    Per i comandi specifici per lo sviluppo (build del frontend, test runner, sincronizzazione API, audit i18n), consulta la [Guida all'Installazione per Sviluppatori](../developer/dev-installation.md).
+    Per i comandi specifici per lo sviluppo (build del frontend, test runner, sincronizzazione API, audit i18n), consulta la [Guida al Workflow per Sviluppatori](../developer/dev_workflow.md).
 
 ---
-
-## 🚀 Installazione
-
-Installa tutte le dipendenze del progetto (Python e Node.js):
-
-```bash
-./dev.py install
-```
-
----
-
 ## 🖥️ Server (Produzione)
 
 ### ▶️ Avvio del Server
 
 ```bash
-# Avvio standard
+# Standard start
 ./dev.py server
 
-# Con worker calcolati automaticamente (2 × (CPU-1))
+# With auto-calculated workers (2 × (CPU-1))
 ./dev.py server --workers N
 
-# Termina il processo esistente sulla porta prima di avviare
+# Kill existing process on port before starting
 ./dev.py server --force
 ```
 
@@ -44,19 +33,19 @@ Installa tutte le dipendenze del progetto (Python e Node.js):
 La gestione degli utenti avviene tramite i sottocomandi di `./dev.py user`:
 
 ```bash
-# Crea un utente (il primo utente diventa automaticamente admin)
+# Create a user (first user becomes admin automatically)
 ./dev.py user create <username> <email> <password>
 
-# Elenca tutti gli utenti
+# List all users
 ./dev.py user list
 
-# Resetta la password di un utente
+# Reset a user's password
 ./dev.py user reset <username> <new_password>
 
-# Promuovi un utente ad admin
+# Promote a user to admin
 ./dev.py user promote <username>
 
-# Rimuovi i privilegi di admin a un utente
+# Demote an admin to regular user
 ./dev.py user demote <username>
 ```
 
@@ -75,7 +64,7 @@ Inserisce i dati predefiniti delle [Impostazioni Globali](settings.md) nel datab
 ### 🗄️ Migrazioni del Database
 
 ```bash
-# Applica le migrazioni in sospeso
+# Apply pending migrations
 ./dev.py db upgrade
 ```
 
@@ -88,10 +77,10 @@ Inserisce i dati predefiniti delle [Impostazioni Globali](settings.md) nel datab
 ## 📚 Documentazione
 
 ```bash
-# Crea e distribuisci la documentazione MkDocs su GitHub Pages
+# Build and deploy MkDocs documentation to GitHub Pages
 ./dev.py mkdocs deploy
 
-# Genera gli screenshot della galleria (richiede il server attivo + dati di test)
+# Generate gallery screenshots (requires running server + test data)
 ./dev.py mkdocs gallery
 ```
 

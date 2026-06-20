@@ -8,19 +8,19 @@ LibreFolio almacena todos los datos persistentes en un directorio estructurado b
 
 ```
 backend/data/
-├── 📂 prod/ # Datos de producción (predeterminado)
-│ ├── 🗃️ sqlite/
-│ │ └── 📄 app.db # Base de datos SQLite principal (modo WAL)
-│ ├── 🖼️ custom-uploads/ # Archivos subidos por el usuario
-│ │ ├── 📄 {uuid}.{ext} # Archivo binario (imagen, documento, etc.)
-│ │ └── 📋 {uuid}.json # Archivo de metadatos complementario (quien subió, fecha, tipo MIME)
-│ ├── 📊 broker_reports/
-│ │ ├── 📥 uploaded/ # Reportes esperando ser procesados
-│ │ ├── ✅ parsed/ # Reportes procesados exitosamente
-│ │ └── ❌ failed/ # Reportes que fallaron en el procesamiento
-│ └── 📝 logs/ # Archivos de registro (logs) de la aplicación
+├── 📂 prod/                          # Production data (default)
+│   ├── 🗃️ sqlite/
+│   │   └── 📄 app.db                 # Main SQLite database (WAL mode)
+│   ├── 🖼️ custom-uploads/            # User-uploaded files
+│   │   ├── 📄 {uuid}.{ext}          # Binary file (image, document, etc.)
+│   │   └── 📋 {uuid}.json           # Metadata sidecar (uploader, date, MIME type)
+│   ├── 📊 broker_reports/
+│   │   ├── 📥 uploaded/              # Reports waiting to be parsed
+│   │   ├── ✅ parsed/               # Successfully parsed reports
+│   │   └── ❌ failed/               # Reports that failed parsing
+│   └── 📝 logs/                      # Application log files
 │
-└── 🧪 test/ # Datos de prueba (completamente aislados)
+└── 🧪 test/                          # Test data (completely isolated)
     ├── 🗃️ sqlite/app.db
     ├── 🖼️ custom-uploads/
     ├── 📊 broker_reports/
@@ -47,7 +47,7 @@ Archivos subidos por los usuarios a través de la página de Archivos. Cada subi
 - 📄 `{uuid}.{ext}` — El archivo binario real (ej. `a1b2c3d4.png`)
 - 📋 `{uuid}.json` — Metadatos que incluyen: nombre de archivo original, tipo MIME, tamaño del archivo, fecha de subida, ID del usuario que subió el archivo
 
-:material-arrow-right: **Inmersión para desarrolladores**: [Componente de Subida de Archivos](../developer/frontend/components/file-upload.md)
+:material-arrow-right: **Inmersión para desarrolladores**: [Componente de Subida de Archivos](../developer/frontend/components/core-ui/file-upload.md)
 
 ### 📊 `broker_reports/`
 
@@ -113,7 +113,7 @@ La verbosidad está controlada por la variable de entorno `LOG_LEVEL`.
 La forma más sencilla de respaldar LibreFolio es copiar todo el directorio de datos:
 
 ```bash
-# Detenga el servidor primero (para asegurar la consistencia de la base de datos)
+# Stop the server first (to ensure database consistency)
 cp -r backend/data/prod/ /path/to/backup/librefolio-$(date +%Y%m%d)/
 ```
 
@@ -122,10 +122,10 @@ cp -r backend/data/prod/ /path/to/backup/librefolio-$(date +%Y%m%d)/
 Si se ejecuta vía Docker, el directorio de datos normalmente está montado como un volumen:
 
 ```bash
-# Buscar el volumen
+# Find the volume
 docker volume inspect librefolio_data
 
-# Extraer los datos
+# Copy data out
 docker cp librefolio-container:/app/backend/data/prod/ ./backup/
 ```
 
@@ -148,10 +148,10 @@ Como mínimo, respalde:
 ### 🐳 Docker exec
 
 ```bash
-# Acceder al shell del contenedor
+# Access the container shell
 docker exec -it librefolio-container /bin/bash
 
-# Ejecutar comandos de dev.py dentro del contenedor
+# Run dev.py commands inside the container
 ./dev.py user list
 ./dev.py user reset admin newpassword
 ./dev.py db upgrade
@@ -160,13 +160,13 @@ docker exec -it librefolio-container /bin/bash
 ### 💻 Acceso directo (sin Docker)
 
 ```bash
-# Desde la raíz del proyecto
-./dev.py user list # Listar todos los usuarios
-./dev.py user reset <user> <pw> # Restablecer la contraseña de un usuario
-./dev.py user promote <user> # Otorgar privilegios de superusuario
-./dev.py user demote <user> # Eliminar privilegios de superusuario
-./dev.py db upgrade # Aplicar migraciones pendientes
-./dev.py db create-clean # Restablecer base de datos (ADVERTENCIA: elimina todos los datos)
+# From the project root
+./dev.py user list              # List all users
+./dev.py user reset <user> <pw> # Reset a user's password
+./dev.py user promote <user>    # Grant superuser privileges
+./dev.py user demote <user>     # Remove superuser privileges
+./dev.py db upgrade             # Apply pending migrations
+./dev.py db create-clean        # Reset database (WARNING: deletes all data)
 ```
 
 Para una lista completa de comandos CLI, consulte [Herramientas CLI](cli_tools.md).
