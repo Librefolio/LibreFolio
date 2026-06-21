@@ -34,7 +34,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       # ==========================================
       # 2. CACHE
@@ -70,8 +70,11 @@ jobs:
       # ==========================================
       # 3. INSTALLAZIONE E BUILD ASSET
       # ==========================================
-      - name: Installa Dipendenze (tramite dev.py install)
-        run: ./dev.py install
+      - name: Installa Dipendenze Python (necessarie per avviare dev.py)
+        run: pipenv install --dev
+
+      - name: Installa Dipendenze Frontend e Playwright (tramite dev.py)
+        run: pipenv run ./dev.py install
 
       - name: Compila il Frontend SvelteKit
         # Fondamentale per la gallery e per il Dockerfile che fa COPY frontend/build/
