@@ -2,6 +2,7 @@ name: LibreFolio Release
 run-name: Release ${{ github.event.release.tag_name }}
 
 on:
+  workflow_dispatch: # Permette di lanciare la pipeline manualmente dal tab "Actions"
   release:
     types: [published]
 
