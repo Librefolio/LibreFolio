@@ -455,6 +455,24 @@ def cmd_fe_build(args):
     # Generate favicon from logo before build
     generate_favicon()
 
+    # DIAGNOSTICS FOR GITHUB ACTIONS
+    print(Colors.info("[DEBUG] CWD is: " + str(Path.cwd())))
+    run_command_live(["ls", "-la"])
+    run_command_live(["ls", "-la", "frontend"])
+    print(Colors.info("[DEBUG] Node/npm versions:"))
+    run_command_live(["node", "-v"], cwd=PROJECT_ROOT / "frontend")
+    run_command_live(["npm", "-v"], cwd=PROJECT_ROOT / "frontend")
+    print(Colors.info("[DEBUG] Package versions:"))
+    run_command_live(["npm", "ls", "svelte", "@sveltejs/kit", "@sveltejs/vite-plugin-svelte", "vite", "typescript", "esbuild"], cwd=PROJECT_ROOT / "frontend")
+    for pkg in ['svelte', '@sveltejs/kit', '@sveltejs/vite-plugin-svelte', 'vite', 'typescript']:
+        run_command_live(["node", "-e", f"console.log('{pkg}', require('./node_modules/{pkg}/package.json').version)"], cwd=PROJECT_ROOT / "frontend")
+    print(Colors.info("[DEBUG] Git status and generated.ts diff:"))
+    run_command_live(["git", "status", "--short"])
+    run_command_live(["git", "diff", "--", "frontend/src/lib/api/generated.ts"])
+    print(Colors.info("[DEBUG] Running svelte-check..."))
+    run_command_live(["npx", "svelte-check", "--tsconfig", "./tsconfig.json"], cwd=PROJECT_ROOT / "frontend")
+    print(Colors.info("[DEBUG] END OF DIAGNOSTICS"))
+
     if args.debug:
         print(Colors.success("Building frontend in DEBUG mode (no minify, with sourcemaps)..."))
         result = run_command_live(["npm", "run", "build:debug"], cwd=PROJECT_ROOT / "frontend")
@@ -1519,11 +1537,13 @@ def cmd_install(args):
     print()
 
     print(Colors.info("[3/4] Installing frontend dependencies..."))
-    result = run_command_live(["npm", "install"], cwd=PROJECT_ROOT / "frontend")
+    result = run_command_live(["npm", "ci"], cwd=PROJECT_ROOT / "frontend")
     if result != 0:
         print_error("Failed to install frontend dependencies")
         return result
     print_success("Frontend dependencies installed")
+    print(Colors.info("[DEBUG] Git status after install:"))
+    run_command_live(["git", "status", "--short"])
     print()
 
     print(Colors.info("[4/4] Installing Playwright browsers..."))
