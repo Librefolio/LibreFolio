@@ -44,5 +44,5 @@ Après confirmation, votre session reste active — vous n'avez pas besoin de vo
 ## 🔗 Articles liés
 
 - ⚙️ **[Aperçu des paramètres](index.md)** — Résumé des paramètres généraux
-- 🛡️ **[Paramètres globaux](admin.md)** — Options d'administrateur et planificateur
+- 🛡️ **[Paramètres globaux](../../admin/settings.md)** — Options d'administrateur et planificateur
 - ℹ️ **[À propos](about.md)** — Informations sur la version et licence

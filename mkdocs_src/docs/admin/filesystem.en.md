@@ -97,12 +97,7 @@ The verbosity is controlled by the `LOG_LEVEL` environment variable.
 
 ## 🌍 Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Override the production data directory path |
-| `LIBREFOLIO_TEST_MODE` | `0` | Set to `1` to use `backend/data/test/` instead of `prod/` |
-| `PORT` | `6040` | Production server port |
-| `TEST_PORT` | `6041` | Test server port (used when `LIBREFOLIO_TEST_MODE=1`) |
+The storage paths and runtime behaviors of the filesystem are controlled by environment variables (such as `LIBREFOLIO_DATA_DIR` and `LIBREFOLIO_TEST_MODE`). For a complete list of all supported environment variables and how to configure them using the `.env` file, see the [Configuration](configuration.md) page.
 
 ---
 
@@ -119,15 +114,9 @@ cp -r backend/data/prod/ /path/to/backup/librefolio-$(date +%Y%m%d)/
 
 ### 🐳 Docker Backup
 
-If running via Docker, the data directory is typically mounted as a volume:
+If you are running LibreFolio via Docker Compose (the standard deployment method), the production data directory is bind-mounted directly to the `./LibreFolio-data` directory on your host machine (and mapped to `/app/backend/data/prod-docker` inside the container).
 
-```bash
-# Find the volume
-docker volume inspect librefolio_data
-
-# Copy data out
-docker cp librefolio-container:/app/backend/data/prod/ ./backup/
-```
+Therefore, you do not need any special Docker copy commands; simply backing up the `./LibreFolio-data` folder on your host machine is sufficient to secure your data.
 
 ### ✅ What to Back Up
 
@@ -140,33 +129,3 @@ At minimum, back up:
 !!! tip "Database-only backup"
 
     If storage is limited, backing up just `sqlite/app.db` preserves all structured data. Files can always be re-uploaded.
-
----
-
-## 🔧 Maintenance from Host Terminal
-
-### 🐳 Docker exec
-
-```bash
-# Access the container shell
-docker exec -it librefolio-container /bin/bash
-
-# Run dev.py commands inside the container
-./dev.py user list
-./dev.py user reset admin newpassword
-./dev.py db upgrade
-```
-
-### 💻 Direct access (non-Docker)
-
-```bash
-# From the project root
-./dev.py user list              # List all users
-./dev.py user reset <user> <pw> # Reset a user's password
-./dev.py user promote <user>    # Grant superuser privileges
-./dev.py user demote <user>     # Remove superuser privileges
-./dev.py db upgrade             # Apply pending migrations
-./dev.py db create-clean        # Reset database (WARNING: deletes all data)
-```
-
-For a full list of CLI commands, see [CLI Tools](cli_tools.md).

@@ -16,4 +16,4 @@ L'onglet **À propos** affiche :
 
 - ⚙️ **[Aperçu des paramètres](index.md)** — Résumé des paramètres généraux
 - 👤 **[Préférences utilisateur](preferences.md)** — Profil et préférences d'affichage
-- 🛡️ **[Paramètres globaux](admin.md)** — Options d'administration et planificateur
+- 🛡️ **[Paramètres globaux](../../admin/settings.md)** — Options d'administration et planificateur

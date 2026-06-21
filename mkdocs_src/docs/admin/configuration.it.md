@@ -22,7 +22,9 @@ cp .env.example .env
  - Default: `./backend/data/prod`
 
 - **`JWT_SECRET`**: La chiave segreta utilizzata per la firma dei JWT (JSON Web Tokens) per le sessioni utente.
- - **Importante**: Questa deve essere impostata su un valore stabile se si desidera evitare che i client perdano le sessioni al riavvio del server (o se si utilizzano più worker uvicorn). Tuttavia, per la massima sicurezza, la scelta consigliata è lasciarla vuota e permettere che venga ricalcolata dinamicamente a runtime.
+
+    !!! note "Importante"
+        Questa deve essere impostata su un valore stabile se si desidera evitare che i client perdano le sessioni al riavvio del server. (Nota che più worker uvicorn avviati sullo stesso host condividono lo spazio di memoria del processo padre, che contiene il segreto generato dinamicamente, quindi la persistenza della sessione è naturalmente mantenuta tra i worker senza una chiave statica). Tuttavia, per la massima sicurezza, la scelta consigliata è lasciarla vuota e permettere che venga ricalcolata dinamicamente a runtime.
 
 - **`LOG_LEVEL`**: Il livello di logging per l'applicazione.
  - Opzioni: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`

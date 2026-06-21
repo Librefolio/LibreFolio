@@ -44,5 +44,5 @@ Dopo la conferma, la sessione rimane attiva — non è necessario effettuare nuo
 ## 🔗 Correlati
 
 - ⚙️ **[Panoramica delle impostazioni](index.md)** — Riepilogo delle impostazioni generali
-- 🛡️ **[Impostazioni Globali](admin.md)** — Opzioni amministratore e scheduler
+- 🛡️ **[Impostazioni Globali](../../admin/settings.md)** — Opzioni amministratore e scheduler
 - ℹ️ **[Informazioni](about.md)** — Informazioni sulla versione e licenza

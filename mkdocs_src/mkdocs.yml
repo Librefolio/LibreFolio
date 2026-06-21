@@ -569,7 +569,6 @@ nav:
       - ⚙️ Settings:
           - Overview: user/settings/index.md
           - User Preferences: user/settings/preferences.md
-          - Global Settings: user/settings/admin.md
           - About: user/settings/about.md
       - 🧩 Misc:
           - Image Crop: user/misc/image-crop.md

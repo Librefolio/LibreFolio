@@ -5,7 +5,7 @@ Il pannello Impostazioni di LibreFolio ti consente di personalizzare l'applicazi
 Le impostazioni sono divise in tre aree principali:
 
 - 👤 **[Preferenze Utente](preferences.md)** — Lingua, valuta, tema, dettagli del profilo e impostazioni della password di sicurezza.
-- 🛡️ **[Impostazioni Globali](admin.md)** — Configurazione dell'intera istanza, interruttore di self-registration, timeout delle sessioni e scheduler dei dati di mercato in background.
+- 🛡️ **[Impostazioni Globali](../../admin/settings.md)** — Configurazione dell'intera istanza, interruttore di self-registration, timeout delle sessioni e scheduler dei dati di mercato in background.
 - ℹ️ **[Informazioni](about.md)** — Informazioni sulla licenza, numeri di versione e link alle risorse ufficiali.
 
 ---

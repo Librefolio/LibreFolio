@@ -97,12 +97,7 @@ La verbosità è controllata dalla variabile d'ambiente `LOG_LEVEL`.
 
 ## 🌍 Variabili d'Ambiente
 
-| Variabile | Default | Descrizione |
-|----------|---------|-------------|
-| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Sovrascrive il percorso della directory dei dati di produzione |
-| `LIBREFOLIO_TEST_MODE` | `0` | Impostare a `1` per usare `backend/data/test/` invece di `prod/` |
-| `PORT` | `6040` | Porta del server di produzione |
-| `TEST_PORT` | `6041` | Porta del server di test (usata quando `LIBREFOLIO_TEST_MODE=1`) |
+I percorsi di memorizzazione e i comportamenti a runtime del filesystem sono controllati da variabili d'ambiente (come `LIBREFOLIO_DATA_DIR` e `LIBREFOLIO_TEST_MODE`). Per un elenco completo di tutte le variabili d'ambiente supportate e su come configurarle tramite il file `.env`, consulta la pagina di [Configurazione](configuration.md).
 
 ---
 
@@ -119,15 +114,9 @@ cp -r backend/data/prod/ /path/to/backup/librefolio-$(date +%Y%m%d)/
 
 ### 🐳 Backup Docker
 
-Se eseguito tramite Docker, la directory dei dati è tipicamente montata come volume:
+Se si esegue LibreFolio tramite Docker Compose (il metodo di installazione standard), la directory dei dati di produzione è montata direttamente tramite bind-mount nella directory `./LibreFolio-data` sulla macchina host (e mappata su `/app/backend/data/prod-docker` all'interno del container).
 
-```bash
-# Find the volume
-docker volume inspect librefolio_data
-
-# Copy data out
-docker cp librefolio-container:/app/backend/data/prod/ ./backup/
-```
+Di conseguenza, non sono necessari comandi speciali di copia Docker; per salvare i propri dati è sufficiente eseguire il backup della cartella `./LibreFolio-data` sulla macchina host.
 
 ### ✅ Cosa salvare nel backup
 
@@ -140,33 +129,3 @@ Al minimo, eseguire il backup di:
 !!! tip "Backup solo del database"
 
     Se lo spazio di archiviazione è limitato, il backup di solo `sqlite/app.db` preserva tutti i dati strutturati. I file possono essere sempre ricaricati.
-
----
-
-## 🔧 Manutenzione dal Terminale Host
-
-### 🐳 Docker exec
-
-```bash
-# Access the container shell
-docker exec -it librefolio-container /bin/bash
-
-# Run dev.py commands inside the container
-./dev.py user list
-./dev.py user reset admin newpassword
-./dev.py db upgrade
-```
-
-### 💻 Accesso Diretto (non-Docker)
-
-```bash
-# From the project root
-./dev.py user list              # List all users
-./dev.py user reset <user> <pw> # Reset a user's password
-./dev.py user promote <user>    # Grant superuser privileges
-./dev.py user demote <user>     # Remove superuser privileges
-./dev.py db upgrade             # Apply pending migrations
-./dev.py db create-clean        # Reset database (WARNING: deletes all data)
-```
-
-Per l'elenco completo dei comandi CLI, vedi [CLI Tools](cli_tools.md).
