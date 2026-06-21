@@ -5,7 +5,7 @@
     import {Check, ChevronDown, Copy, ExternalLink, Github, Globe, HardDrive, Heart, Monitor, Scale, Tag} from 'lucide-svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
 
-    const githubUrl = 'https://github.com/Alfystar/LibreFolio';
+    const githubUrl = 'https://github.com/Librefolio/LibreFolio';
     const websiteUrl = 'https://librefolio.io'; // Placeholder for now
 
     interface DependencyInfo {

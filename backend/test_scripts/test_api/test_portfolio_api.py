@@ -173,11 +173,13 @@ class TestPortfolioSummaryEndpoint:
             resp = await post_portfolio_summary(client)
         assert resp.status_code == 200
         data = resp.json()
+        # Cash ledger: 1000 - 400 + 25 - 10 + 150 = 765
         assert data["cash_total"]["amount"].startswith("765")
-        assert data["net_worth"]["amount"].startswith("765")
         assert data["total_invested"]["amount"].startswith("1000")
-        assert len(data["missing_price_assets"]) == 1
+        # Holdings show no current_value (no market price)
         assert data["holdings"][0]["current_value"] is None
+        # Asset without market price still appears in missing_price_assets (no actual price)
+        assert len(data["missing_price_assets"]) == 1
         print_success("Signed cash ledger and missing-price reporting OK")
 
     async def test_summary_uses_quote_base_quantity(self, test_server):

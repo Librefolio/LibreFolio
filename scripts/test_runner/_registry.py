@@ -17,6 +17,7 @@ from ._frontend_user import populate_registry as _pop_front_user
 from ._frontend_fx import populate_registry as _pop_front_fx
 from ._frontend_asset import populate_registry as _pop_front_asset
 from ._frontend_transaction import populate_registry as _pop_front_transaction
+from ._frontend_portfolio import populate_registry as _pop_front_portfolio
 
 # ── Assemble the registry ───────────────────────────────────────────────
 # Order matters: it determines the order in CLI help and "all" suites.
@@ -35,3 +36,4 @@ _pop_front_user(TEST_REGISTRY)
 _pop_front_fx(TEST_REGISTRY)
 _pop_front_asset(TEST_REGISTRY)
 _pop_front_transaction(TEST_REGISTRY)
+_pop_front_portfolio(TEST_REGISTRY)

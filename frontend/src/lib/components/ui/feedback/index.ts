@@ -1,3 +1,4 @@
+export {default as DataQualityBanner} from './DataQualityBanner.svelte';
 export {default as InfoBanner} from './InfoBanner.svelte';
 export {default as LoadingSpinner} from './LoadingSpinner.svelte';
 export {default as ToastContainer} from './ToastContainer.svelte';

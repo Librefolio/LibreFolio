@@ -107,11 +107,21 @@
             }),
             smooth: false,
             symbol: 'none',
-            lineStyle: {width: 0},
-            areaStyle: {color: palette[i % palette.length]},
+            // Visible boundary line matching area color (same style as GrowthChart stacked)
+            lineStyle: {color: palette[i % palette.length], width: 1, opacity: 0.7},
+            areaStyle: {color: palette[i % palette.length] + '88'},
             itemStyle: {color: palette[i % palette.length]},
             emphasis: {focus: 'series'},
         }));
+
+        // Pre-build per-category data index for accurate tooltip values
+        const seriesDataByName: Record<string, number[]> = {};
+        for (const name of categoryNames) {
+            seriesDataByName[name] = data.map((pt) => {
+                const comp = pt.components.find((c) => c.name === name);
+                return comp ? Number(comp.value) : 0;
+            });
+        }
 
         const option: echarts.EChartsOption = {
             animation: false,
@@ -119,6 +129,7 @@
             grid: {left: '3%', right: '4%', bottom: '40px', top: '10px', containLabel: true},
             tooltip: {
                 trigger: 'axis',
+                axisPointer: {type: 'cross', label: {backgroundColor: '#6a7985'}},
                 backgroundColor: tooltipBg,
                 borderColor: tooltipBorder,
                 borderWidth: 1,
@@ -126,14 +137,24 @@
                 formatter: (params: any) => {
                     const items = Array.isArray(params) ? params : [params];
                     const date = items[0]?.axisValue ?? '';
-                    const lines = items
-                        .filter((p: any) => p.value > 0)
-                        .sort((a: any, b: any) => b.value - a.value)
+                    const idx = items[0]?.dataIndex ?? 0;
+
+                    // Use raw (non-cumulative) data for correct percentages
+                    const lines = categoryNames
+                        .map((name, i) => ({
+                            name,
+                            value: seriesDataByName[name]?.[idx] ?? 0,
+                            color: palette[i % palette.length],
+                        }))
+                        .filter((x) => x.value > 0.01)
+                        .sort((a, b) => b.value - a.value)
                         .map(
-                            (p: any) =>
-                                `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:6px"></span>${p.seriesName}: <b>${Number(p.value).toFixed(1)}%</b>`,
+                            (x) =>
+                                `<div style="display:flex;justify-content:space-between;gap:16px">` +
+                                `<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${x.color};margin-right:6px"></span>${x.name}</span>` +
+                                `<b>${x.value.toFixed(1)}%</b></div>`,
                         );
-                    return `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>${lines.join('<br/>')}`;
+                    return `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>${lines.join('')}`;
                 },
             },
             legend: {

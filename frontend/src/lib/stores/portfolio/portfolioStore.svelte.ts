@@ -1,30 +1,38 @@
 /**
- * portfolioStore — Session-level cache for portfolio summary and history.
+ * portfolioStore — Session-level cache for unified portfolio report.
  *
- * Provides reactive, parameterised caching for the two main portfolio API calls:
- * - POST /api/v1/portfolio/summary  → PortfolioSummary (KPIs + allocations)
- * - POST /api/v1/portfolio/history  → PortfolioHistoryPoint[] (daily time series)
+ * Uses POST /api/v1/portfolio/report to run the engine once and get
+ * summary + history + allocation_history + data_quality in a single call.
  *
- * Cache key = `broker_ids (sorted) | dateFrom | dateTo | targetCurrency` so each
- * unique filter combination is cached independently. Calling `invalidate()` clears
- * the entire cache (used by the [↻ Sync] button and after any transaction CRUD mutation).
+ * Cache key = `broker_ids (sorted) | dateFrom | dateTo | targetCurrency`
+ * Calling `invalidate()` clears the cache (used by [↻ Sync] and CRUD mutations).
  *
- * Architecture: Svelte 5 module-level $state() runes — same pattern as txStore.svelte.ts.
+ * Architecture: Svelte 5 module-level $state() runes.
  *
  * @module stores/portfolio/portfolioStore
  */
 
 import {zodiosApi} from '$lib/api';
-import type {z} from 'zod';
 
 // ============================================================================
-// TYPES (inferred from the generated Zodios client)
+// TYPES — inferred from direct-return endpoints for cleaner types
+// (PortfolioReport wraps fields in Optional unions that are harder to narrow)
 // ============================================================================
 
 type ApiReturnType<T extends (...args: never[]) => Promise<unknown>> = Awaited<ReturnType<T>>;
 
+// Use the direct endpoint return types — clean, no optional union wrappers
 export type PortfolioSummary = ApiReturnType<typeof zodiosApi.get_portfolio_summary_api_v1_portfolio_summary_post>;
 export type PortfolioHistoryPoint = ApiReturnType<typeof zodiosApi.get_portfolio_history_api_v1_portfolio_history_post> extends (infer U)[] ? U : never;
+export type PortfolioReport = ApiReturnType<typeof zodiosApi.get_portfolio_report_api_v1_portfolio_report_post>;
+
+// For allocation history dimensions we use the report type (no separate direct endpoint)
+type RawAlloc = PortfolioReport['allocation_history'];
+export type AllocationHistoryDimensions = Extract<NonNullable<RawAlloc>, {type?: unknown}>;
+
+// Data quality also from report
+type RawDQ = PortfolioReport['data_quality'];
+export type DataQualityReport = Extract<NonNullable<RawDQ>, {issues?: unknown}>;
 
 // ============================================================================
 // CACHE INFRASTRUCTURE
@@ -41,12 +49,9 @@ interface CacheEntry<T> {
 // MODULE-LEVEL REACTIVE STATE (Svelte 5 runes)
 // ============================================================================
 
-let summaryCache = $state(new Map<CacheKey, CacheEntry<PortfolioSummary>>());
-let historyCache = $state(new Map<CacheKey, CacheEntry<PortfolioHistoryPoint[]>>());
+let reportCache = $state(new Map<CacheKey, CacheEntry<PortfolioReport>>());
 
-/** Tracks which cache keys are currently being fetched to prevent duplicate in-flight requests. */
-const summaryInflight = new Map<CacheKey, Promise<PortfolioSummary>>();
-const historyInflight = new Map<CacheKey, Promise<PortfolioHistoryPoint[]>>();
+const reportInflight = new Map<CacheKey, Promise<PortfolioReport>>();
 
 let _isLoading = $state(false);
 let _error = $state<string | null>(null);
@@ -63,10 +68,7 @@ function makeCacheKey(brokerIds?: number[], dateFrom?: string, dateTo?: string, 
 // PUBLIC API
 // ============================================================================
 
-/**
- * Reactive loading indicator — true while at least one fetch is in-flight.
- * Use as: `$derived(portfolioIsLoading())`
- */
+/** Reactive loading indicator — true while a fetch is in-flight. */
 export function portfolioIsLoading(): boolean {
     return _isLoading;
 }
@@ -77,77 +79,44 @@ export function portfolioError(): string | null {
 }
 
 /**
- * Fetch (or return cached) portfolio summary.
+ * Fetch (or return cached) unified portfolio report.
+ *
+ * Returns summary + history + allocation_history + data_quality from a single engine run.
  *
  * @param brokerIds      — Filter by broker IDs. Omit or pass [] for all brokers.
- * @param includeBreakdown — Include per-broker breakdown (default false).
- * @param targetCurrency — Override base currency (ISO 4217, e.g. 'USD'). Defaults to user setting.
+ * @param dateFrom       — Start date for history (ISO string, e.g. '2024-01-01').
+ * @param dateTo         — End date for history (ISO string).
+ * @param targetCurrency — Override base currency (ISO 4217). Defaults to user setting.
  * @param force          — Bypass cache and re-fetch.
  */
-export async function fetchSummary(brokerIds?: number[], includeBreakdown = false, targetCurrency?: string, force = false): Promise<PortfolioSummary | null> {
-    const key = makeCacheKey(brokerIds, undefined, undefined, targetCurrency);
+export async function fetchReport(
+    brokerIds?: number[],
+    dateFrom?: string,
+    dateTo?: string,
+    targetCurrency?: string,
+    force = false,
+): Promise<PortfolioReport | null> {
+    const key = makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency);
 
     if (!force) {
-        const cached = summaryCache.get(key);
+        const cached = reportCache.get(key);
         if (cached) return cached.data;
     }
 
     // Deduplicate concurrent callers for the same key
-    const existing = summaryInflight.get(key);
-    if (existing) return existing;
+    const existing = reportInflight.get(key);
+    if (existing) return existing.catch(() => null);
 
     _isLoading = true;
     _error = null;
 
     const promise = (async () => {
         try {
-            const body: Record<string, unknown> = {};
-            if (brokerIds && brokerIds.length > 0) body.broker_ids = brokerIds;
-            if (includeBreakdown) body.include_breakdown = true;
-            if (targetCurrency) body.target_currency = targetCurrency;
-
-            const data = await zodiosApi.get_portfolio_summary_api_v1_portfolio_summary_post(body);
-            summaryCache = new Map(summaryCache).set(key, {data, timestamp: Date.now()});
-            return data;
-        } catch (err) {
-            _error = err instanceof Error ? err.message : 'Failed to fetch portfolio summary';
-            throw err;
-        } finally {
-            summaryInflight.delete(key);
-            if (summaryInflight.size === 0 && historyInflight.size === 0) _isLoading = false;
-        }
-    })();
-
-    summaryInflight.set(key, promise);
-    return promise.catch(() => null);
-}
-
-/**
- * Fetch (or return cached) portfolio history time series.
- *
- * @param brokerIds      — Filter by broker IDs. Omit or pass [] for all brokers.
- * @param dateFrom       — Start date (ISO string, e.g. '2024-01-01').
- * @param dateTo         — End date (ISO string).
- * @param targetCurrency — Override base currency (ISO 4217, e.g. 'USD'). Defaults to user setting.
- * @param force          — Bypass cache and re-fetch.
- */
-export async function fetchHistory(brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false): Promise<PortfolioHistoryPoint[]> {
-    const key = makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency);
-
-    if (!force) {
-        const cached = historyCache.get(key);
-        if (cached) return cached.data;
-    }
-
-    const existing = historyInflight.get(key);
-    if (existing) return existing;
-
-    _isLoading = true;
-    _error = null;
-
-    const promise = (async () => {
-        try {
-            const body: Record<string, unknown> = {};
+            const body: Record<string, unknown> = {
+                include_summary: true,
+                include_history: true,
+                include_allocation_history: true,
+            };
             if (brokerIds && brokerIds.length > 0) body.broker_ids = brokerIds;
             if (dateFrom || dateTo) {
                 body.date_range = {
@@ -157,21 +126,28 @@ export async function fetchHistory(brokerIds?: number[], dateFrom?: string, date
             }
             if (targetCurrency) body.target_currency = targetCurrency;
 
-            const data = await zodiosApi.get_portfolio_history_api_v1_portfolio_history_post(body);
-            historyCache = new Map(historyCache).set(key, {data, timestamp: Date.now()});
+            const data = await zodiosApi.get_portfolio_report_api_v1_portfolio_report_post(body);
+            reportCache = new Map(reportCache).set(key, {data, timestamp: Date.now()});
             return data;
         } catch (err) {
-            _error = err instanceof Error ? err.message : 'Failed to fetch portfolio history';
+            _error = err instanceof Error ? err.message : 'Failed to fetch portfolio report';
             throw err;
         } finally {
-            historyInflight.delete(key);
-            if (summaryInflight.size === 0 && historyInflight.size === 0) _isLoading = false;
+            reportInflight.delete(key);
+            if (reportInflight.size === 0) _isLoading = false;
         }
     })();
 
-    historyInflight.set(key, promise);
-    return promise.catch(() => []);
+    reportInflight.set(key, promise);
+    return promise.catch(() => null);
 }
+
+// Keep legacy exports for backward compatibility with any direct consumers of summary/history
+export const fetchSummary = (brokerIds?: number[], _includeBreakdown = false, targetCurrency?: string, force = false) =>
+    fetchReport(brokerIds, undefined, undefined, targetCurrency, force).then((r) => r?.summary ?? null);
+
+export const fetchHistory = (brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false) =>
+    fetchReport(brokerIds, dateFrom, dateTo, targetCurrency, force).then((r) => r?.history ?? []);
 
 /**
  * Clear the entire portfolio cache.
@@ -179,6 +155,5 @@ export async function fetchHistory(brokerIds?: number[], dateFrom?: string, date
  * Call this after any transaction CRUD mutation or when the user clicks [↻ Sync].
  */
 export function invalidate(): void {
-    summaryCache = new Map();
-    historyCache = new Map();
+    reportCache = new Map();
 }

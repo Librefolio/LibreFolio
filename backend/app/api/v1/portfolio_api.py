@@ -27,6 +27,8 @@ from backend.app.schemas.portfolio import (
     FIFOLotsResponse,
     PortfolioHistoryPoint,
     PortfolioHistoryQuery,
+    PortfolioReportQuery,
+    PortfolioReportResponse,
     PortfolioSummary,
     PortfolioSummaryQuery,
     WACAnalyticsRequest,
@@ -263,3 +265,24 @@ async def get_fifo_lots(
         broker_id=broker_id,
         asset_id=asset_id,
     )
+
+
+@portfolio_router.post(
+    "/report",
+    response_model=PortfolioReportResponse,
+    summary="Unified portfolio report",
+    description=(
+        "Run the PortfolioCalculationEngine once and return all requested views "
+        "(summary, history, allocation history, data quality) in a single response. "
+        "Use this instead of separate summary/history/allocation-history calls to avoid "
+        "multiple engine runs."
+    ),
+)
+async def get_portfolio_report(
+    body: PortfolioReportQuery,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> PortfolioReportResponse:
+    """Return a complete portfolio report from a single engine run."""
+    service = PortfolioService(session)
+    return await service.get_report(user_id=current_user.id, query=body)

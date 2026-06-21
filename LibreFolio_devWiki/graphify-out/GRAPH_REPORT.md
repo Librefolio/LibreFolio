@@ -505,7 +505,7 @@ Nodes (16): Dashboard Domain, Price History, Transaction API, Dashboard KPI & Ov
 
 ### Community 128 - "Community 128"
 Cohesion: 0.10
-Nodes (19): 📥 1. Download the Project, ⚙️ 2. Configure Environment, 📦 3. Install Dependencies, 🏗️ 4. Build the Docker Image, 🚀 5. Start with Docker Compose, 🌐 6. Access LibreFolio, code:bash (sudo usermod -aG docker $USER), code:bash (git clone https://github.com/Alfystar/LibreFolio.git) (+11 more)
+Nodes (19): 📥 1. Download the Project, ⚙️ 2. Configure Environment, 📦 3. Install Dependencies, 🏗️ 4. Build the Docker Image, 🚀 5. Start with Docker Compose, 🌐 6. Access LibreFolio, code:bash (sudo usermod -aG docker $USER), code:bash (git clone https://github.com/Librefolio/LibreFolio.git) (+11 more)
 
 ### Community 132 - "Community 132"
 Cohesion: 0.33

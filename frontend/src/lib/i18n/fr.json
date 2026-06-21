@@ -858,6 +858,30 @@
     "missingFxPrefix": "Taux de conversion manquants pour :",
     "missingFxSuffix": "Les totaux agrégés peuvent être incomplets."
   },
+  "dataQuality": {
+    "header": "Qualité des données : {errors} erreur(s), {warnings} avertissement(s)",
+    "headerInfoOnly": "Note de qualité des données",
+    "headerErrors": "{errors} erreur(s)",
+    "headerWarnings": "{warnings} avertissement(s)",
+    "missingPrice": "{count} actif(s) sans prix de marché — exclus du NAV",
+    "transactionImplied": "{count} actif(s) temporairement valorisé(s) au coût — prix de marché non encore disponible",
+    "stalePrice": "{count} actif(s) avec des prix obsolètes",
+    "missingFx": "Taux FX manquants pour {count} paire(s) — les totaux peuvent être incomplets",
+    "navIncomplete": "NAV incomplet pour {count} jour(s) entre {date_from} et {date_to}",
+    "mwrrNotAvailable": "Le MWRR ne peut pas être calculé pour cette période",
+    "archivedAsset": "Cet actif est archivé — non mis à jour par le planificateur",
+    "rangeBeforeData": "Données disponibles à partir du {date}",
+    "fxPairMissing": "Paire FX non configurée — conversion indisponible",
+    "fxPairNoData": "Aucune donnée disponible",
+    "fxPairPartialGap": "Lacune partielle dans les taux — données à partir du {date}",
+    "showDetails": "Afficher {count} de plus...",
+    "hideDetails": "Masquer les détails",
+    "cta": {
+      "navigate_asset": "Voir l'actif",
+      "navigate_fx": "Voir FX",
+      "add_fx_pair": "Ajouter paire FX"
+    }
+  },
   "dataEditor": {
     "clearSelection": "Effacer la sélection",
     "staleTooltip": "Masquer les lignes remplies rétroactivement (⚠️ obsolètes). Ce sont des points de remplissage copiés à partir du point réel le plus proche.",

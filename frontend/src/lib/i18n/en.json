@@ -858,6 +858,30 @@
     "missingFxPrefix": "Missing FX conversion rates for:",
     "missingFxSuffix": "Aggregated totals may be incomplete."
   },
+  "dataQuality": {
+    "header": "Data quality: {errors} error(s), {warnings} warning(s)",
+    "headerInfoOnly": "Data quality note",
+    "headerErrors": "{errors} error(s)",
+    "headerWarnings": "{warnings} warning(s)",
+    "missingPrice": "{count} asset(s) have no market price — excluded from NAV",
+    "transactionImplied": "{count} asset(s) temporarily valued at cost — no market price yet available",
+    "stalePrice": "{count} asset(s) have outdated prices",
+    "missingFx": "Missing FX rates for {count} pair(s) — totals may be incomplete",
+    "navIncomplete": "NAV incomplete for {count} day(s) between {date_from} and {date_to}",
+    "mwrrNotAvailable": "MWRR cannot be calculated for this period",
+    "archivedAsset": "This asset is archived — not updated by scheduler",
+    "rangeBeforeData": "Data available from {date}",
+    "fxPairMissing": "FX pair not configured — conversion not available",
+    "fxPairNoData": "No rate data available",
+    "fxPairPartialGap": "Partial gap in rates — data from {date}",
+    "showDetails": "Show {count} more...",
+    "hideDetails": "Hide details",
+    "cta": {
+      "navigate_asset": "View asset",
+      "navigate_fx": "View FX",
+      "add_fx_pair": "Add FX pair"
+    }
+  },
   "dataEditor": {
     "clearSelection": "Clear selection",
     "staleTooltip": "Hide backward-filled rows (⚠️ stale). These are gap-fill points copied from the nearest real data point.",
