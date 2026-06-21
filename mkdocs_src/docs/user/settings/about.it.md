@@ -16,4 +16,4 @@ La scheda **Informazioni** mostra:
 
 - ⚙️ **[Panoramica Impostazioni](index.md)** — Riepilogo delle impostazioni generali
 - 👤 **[Preferenze Utente](preferences.md)** — Profilo e preferenze di visualizzazione
-- 🛡️ **[Impostazioni Globali](admin.md)** — Opzioni di amministrazione e scheduler
+- 🛡️ **[Impostazioni Globali](../../admin/settings.md)** — Opzioni di amministrazione e scheduler

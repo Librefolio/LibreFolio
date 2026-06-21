@@ -44,5 +44,5 @@ After confirmation, your session remains active — you do not need to log in ag
 ## 🔗 Related
 
 - ⚙️ **[Settings Overview](index.md)** — General settings summary
-- 🛡️ **[Global Settings](admin.md)** — Administrator options and scheduler
+- 🛡️ **[Global Settings](../../admin/settings.md)** — Administrator options and scheduler
 - ℹ️ **[About](about.md)** — Version info and license

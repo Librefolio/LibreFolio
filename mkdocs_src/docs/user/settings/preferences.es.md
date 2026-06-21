@@ -44,5 +44,5 @@ Tras la confirmación, su sesión permanecerá activa; no es necesario volver a 
 ## 🔗 Relacionado
 
 - ⚙️ **[Descripción General de Configuración](index.md)** — Resumen de configuración general
-- 🛡️ **[Configuración Global](admin.md)** — Opciones de administrador y programador
+- 🛡️ **[Configuración Global](../../admin/settings.md)** — Opciones de administrador y programador
 - ℹ️ **[Acerca de](about.md)** — Información de versión y licencia

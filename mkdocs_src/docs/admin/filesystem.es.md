@@ -97,12 +97,7 @@ La verbosidad está controlada por la variable de entorno `LOG_LEVEL`.
 
 ## 🌍 Variables de Entorno
 
-| Variable | Predeterminado | Descripción |
-|----------|---------|-------------|
-| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Sobrescribe la ruta del directorio de datos de producción |
-| `LIBREFOLIO_TEST_MODE` | `0` | Establecer en `1` para usar `backend/data/test/` en lugar de `prod/` |
-| `PORT` | `6040` | Puerto del servidor de producción |
-| `TEST_PORT` | `6041` | Puerto del servidor de prueba (usado cuando `LIBREFOLIO_TEST_MODE=1`) |
+Las rutas de almacenamiento y los comportamientos en tiempo de ejecución del sistema de archivos están controlados por variables de entorno (como `LIBREFOLIO_DATA_DIR` y `LIBREFOLIO_TEST_MODE`). Para obtener una lista completa de todas las variables de entorno admitidas y cómo configurarlas mediante el archivo `.env`, consulte la página de [Configuración](configuration.md).
 
 ---
 
@@ -119,15 +114,9 @@ cp -r backend/data/prod/ /path/to/backup/librefolio-$(date +%Y%m%d)/
 
 ### 🐳 Copia de Seguridad con Docker
 
-Si se ejecuta vía Docker, el directorio de datos normalmente está montado como un volumen:
+Si ejecuta LibreFolio a través de Docker Compose (el método de despliegue estándar), el directorio de datos de producción está montado directamente (bind-mount) en el directorio `./LibreFolio-data` de su máquina host (y mapeado a `/app/backend/data/prod-docker` dentro del contenedor).
 
-```bash
-# Find the volume
-docker volume inspect librefolio_data
-
-# Copy data out
-docker cp librefolio-container:/app/backend/data/prod/ ./backup/
-```
+Por lo tanto, no necesita ningún comando especial de copia de Docker; simplemente realizar una copia de seguridad de la carpeta `./LibreFolio-data` en su máquina host es suficiente para asegurar sus datos.
 
 ### ✅ Qué respaldar
 
@@ -140,33 +129,3 @@ Como mínimo, respalde:
 !!! tip "Respaldo solo de la base de datos"
 
     Si el almacenamiento es limitado, respaldar solo `sqlite/app.db` preserva todos los datos estructurados. Los archivos siempre pueden volver a subirse.
-
----
-
-## 🔧 Mantenimiento desde la Terminal del Host
-
-### 🐳 Docker exec
-
-```bash
-# Access the container shell
-docker exec -it librefolio-container /bin/bash
-
-# Run dev.py commands inside the container
-./dev.py user list
-./dev.py user reset admin newpassword
-./dev.py db upgrade
-```
-
-### 💻 Acceso directo (sin Docker)
-
-```bash
-# From the project root
-./dev.py user list              # List all users
-./dev.py user reset <user> <pw> # Reset a user's password
-./dev.py user promote <user>    # Grant superuser privileges
-./dev.py user demote <user>     # Remove superuser privileges
-./dev.py db upgrade             # Apply pending migrations
-./dev.py db create-clean        # Reset database (WARNING: deletes all data)
-```
-
-Para una lista completa de comandos CLI, consulte [Herramientas CLI](cli_tools.md).

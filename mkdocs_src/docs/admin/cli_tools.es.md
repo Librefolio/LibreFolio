@@ -2,6 +2,12 @@
 
 LibreFolio proporciona el script `dev.py` para tareas de administración. Esta página cubre los comandos más relevantes para los **administradores del sistema**.
 
+!!! tip "Contexto del Entorno Virtual de Python"
+
+    Si ejecuta LibreFolio directamente en la **máquina host**, todas las operaciones de línea de comandos deben ejecutarse dentro del entorno virtual de Python. Puede anteponer `pipenv run` a cada comando (por ejemplo, `pipenv run ./dev.py server`) o ingresar al entorno virtual una vez ejecutando `pipenv shell`.
+
+    Si se encuentra dentro de la **terminal de un contenedor Docker** (por ejemplo, accediendo a través de `docker exec`), **no** es necesario usar `pipenv run` ni `pipenv shell`, ya que las dependencias están preinstaladas de forma global dentro de la imagen del contenedor. Puede ejecutar los comandos `./dev.py` directamente.
+
 !!! info "👩‍💻 Para Desarrolladores"
 
     Para comandos específicos de desarrollo (construcción del frontend, ejecutor de pruebas, sincronización de API, auditoría de i18n), consulte la [Guía de Workflow para Desarrolladores](../developer/dev_workflow.md).
@@ -13,13 +19,13 @@ LibreFolio proporciona el script `dev.py` para tareas de administración. Esta p
 
 ```bash
 # Standard start
-./dev.py server
+pipenv run ./dev.py server
 
 # With auto-calculated workers (2 × (CPU-1))
-./dev.py server --workers N
+pipenv run ./dev.py server --workers N
 
 # Kill existing process on port before starting
-./dev.py server --force
+pipenv run ./dev.py server --force
 ```
 
 !!! tip "Multi-worker"
@@ -34,19 +40,19 @@ La gestión de usuarios se realiza a través de los subcomandos `./dev.py user`:
 
 ```bash
 # Create a user (first user becomes admin automatically)
-./dev.py user create <username> <email> <password>
+pipenv run ./dev.py user create <username> <email> <password>
 
 # List all users
-./dev.py user list
+pipenv run ./dev.py user list
 
 # Reset a user's password
-./dev.py user reset <username> <new_password>
+pipenv run ./dev.py user reset <username> <new_password>
 
 # Promote a user to admin
-./dev.py user promote <username>
+pipenv run ./dev.py user promote <username>
 
 # Demote an admin to regular user
-./dev.py user demote <username>
+pipenv run ./dev.py user demote <username>
 ```
 
 ---
@@ -56,7 +62,7 @@ La gestión de usuarios se realiza a través de los subcomandos `./dev.py user`:
 ### 🔧 Inicializar Configuración Global
 
 ```bash
-./dev.py user init-settings
+pipenv run ./dev.py user init-settings
 ```
 
 Puebla la base de datos con la [Configuración Global](settings.md) predeterminada si esta aún no existe.
@@ -65,12 +71,12 @@ Puebla la base de datos con la [Configuración Global](settings.md) predetermina
 
 ```bash
 # Apply pending migrations
-./dev.py db upgrade
+pipenv run ./dev.py db upgrade
 ```
 
 !!! warning "🗄️ Reinicio de base de datos"
 
-    `./dev.py db create-clean` recrea la base de datos desde cero — **se pierden todos los datos**. Úselo solo si necesita empezar desde cero.
+    `pipenv run ./dev.py db create-clean` recrea la base de datos desde cero — **se pierden todos los datos**. Úselo solo si necesita empezar desde cero.
 
 ---
 
@@ -78,27 +84,27 @@ Puebla la base de datos con la [Configuración Global](settings.md) predetermina
 
 ```bash
 # Build and deploy MkDocs documentation to GitHub Pages
-./dev.py mkdocs deploy
+pipenv run ./dev.py mkdocs deploy
 
 # Generate gallery screenshots (requires running server + test data)
-./dev.py mkdocs gallery
+pipenv run ./dev.py mkdocs gallery
 ```
 
 ---
 
 ## 📋 Árbol Completo de Comandos
 
-Para obtener una lista completa de todos los comandos disponibles:
+Para obtener una lista completa de todos los comandos personalizados disponibles:
 
 ```bash
-./dev.py --help
+pipenv run ./dev.py --help
 ```
 
 !!! info "👩‍💻 Comandos de Desarrollador"
 
     Comandos adicionales para flujos de trabajo de desarrollo:
 
-    - **Frontend**: `./dev.py front build`, `front dev`, `front check` — consulte [Desarrollo del Frontend](../developer/frontend/index.md)
-    - **Pruebas**: `./dev.py test all` — consulte [Recorrido de Pruebas](../developer/test-walkthrough/index.md)
-    - **Cliente API**: `./dev.py api sync` — consulte [Descripción General de la API](../developer/api/overview.md)
-    - **i18n**: `./dev.py i18n audit` — consulte [Internacionalización](../developer/frontend/i18n.md)
+    - **Frontend**: `pipenv run ./dev.py front build`, `front dev`, `front check` — consulte [Desarrollo del Frontend](../developer/frontend/index.md)
+    - **Pruebas**: `pipenv run ./dev.py test all` — consulte [Recorrido de Pruebas](../developer/test-walkthrough/index.md)
+    - **Cliente API**: `pipenv run ./dev.py api sync` — consulte [Descripción General de la API](../developer/api/overview.md)
+    - **i18n**: `pipenv run ./dev.py i18n audit` — consulte [Internacionalización](../developer/frontend/i18n.md)

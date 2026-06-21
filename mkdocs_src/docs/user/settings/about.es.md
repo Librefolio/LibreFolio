@@ -16,4 +16,4 @@ La pestaña **Acerca de** muestra:
 
 - ⚙️ **[Descripción general de la configuración](index.md)** — Resumen de la configuración general
 - 👤 **[Preferencias de usuario](preferences.md)** — Preferencias de perfil y visualización
-- 🛡️ **[Configuración global](admin.md)** — Opciones de administrador y planificador
+- 🛡️ **[Configuración global](../../admin/settings.md)** — Opciones de administrador y planificador

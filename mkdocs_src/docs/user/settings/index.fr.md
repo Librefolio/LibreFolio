@@ -5,7 +5,7 @@ Le panneau Paramètres de LibreFolio vous permet de personnaliser l'application 
 Les paramètres sont divisés en trois domaines principaux :
 
 - 👤 **[Préférences utilisateur](preferences.md)** — Langue, devise, thème, détails du profil et paramètres du mot de passe de sécurité.
-- 🛡️ **[Paramètres globaux](admin.md)** — Configuration de l'instance, interrupteur d'auto-inscription, délais d'expiration de session et planificateur de données de marché en arrière-plan.
+- 🛡️ **[Paramètres globaux](../../admin/settings.md)** — Configuration de l'instance, interrupteur d'auto-inscription, délais d'expiration de session et planificateur de données de marché en arrière-plan.
 - ℹ️ **[À propos](about.md)** — Informations sur la licence, numéros de version et liens vers les ressources officielles.
 
 ---

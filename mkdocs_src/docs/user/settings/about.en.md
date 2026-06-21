@@ -16,4 +16,4 @@ The **About** tab shows:
 
 - ⚙️ **[Settings Overview](index.md)** — General settings summary
 - 👤 **[User Preferences](preferences.md)** — Profile and display preferences
-- 🛡️ **[Global Settings](admin.md)** — Administrator options and scheduler
+- 🛡️ **[Global Settings](../../admin/settings.md)** — Administrator options and scheduler

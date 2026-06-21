@@ -1,0 +1,143 @@
+name: LibreFolio Release
+run-name: Release ${{ github.event.release.tag_name }}
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write     # Necessario per spingere sul branch gh-pages con mkdocs gh-deploy
+  packages: write     # Necessario per eseguire il push delle immagini su GHCR
+
+jobs:
+  release-pipeline:
+    name: Full Release Pipeline
+    runs-on: ubuntu-latest
+    steps:
+      # ==========================================
+      # 1. SETUP BASE (Checkout & Ambienti)
+      # ==========================================
+      - name: Checkout del repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Necessario per mkdocs gh-deploy (storico e branch)
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          
+      - name: Installa Pipenv
+        run: pip install pipenv
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ==========================================
+      # 2. CACHE
+      # ==========================================
+      - name: Cache Pipenv
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/virtualenvs
+          key: ${{ runner.os }}-pipenv-${{ hashFiles('**/Pipfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pipenv-
+
+      - name: Cache NPM
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      # Per Playwright usiamo una cache fissa per versione
+      - name: Ottieni la versione di Playwright (dal package.json)
+        id: playwright-version
+        working-directory: ./frontend
+        run: echo "PLAYWRIGHT_VERSION=$(npm ls @playwright/test | grep @playwright | sed 's/.*@//' || echo 'fallback')" >> $GITHUB_ENV
+
+      - name: Cache Playwright Browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+
+      # ==========================================
+      # 3. INSTALLAZIONE E BUILD ASSET
+      # ==========================================
+      - name: Installa Dipendenze (tramite dev.py install)
+        run: ./dev.py install
+
+      - name: Compila il Frontend SvelteKit
+        # Fondamentale per la gallery e per il Dockerfile che fa COPY frontend/build/
+        run: pipenv run ./dev.py front build
+
+      - name: Genera Screenshot con Playwright
+        run: pipenv run ./dev.py mkdocs gallery
+
+      - name: Compila la Documentazione con MkDocs
+        run: pipenv run ./dev.py mkdocs build
+
+      - name: Genera requirements.txt per Docker
+        # Il Dockerfile installa le dipendenze da un requirements.txt nativo
+        run: pipenv requirements > requirements.txt
+
+      # ==========================================
+      # 4. BUILD E PUSH DOCKER (Singola Immagine)
+      # ==========================================
+      - name: Configura QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Configura Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Autenticazione su GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Estrai Metadati (Versione) per Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/librefolio/librefolio
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Build e Push Immagine Docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ==========================================
+      # 5. DEPLOY GITHUB PAGES
+      # ==========================================
+      - name: Setup Git User
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Esegui Deploy su branch gh-pages
+        run: pipenv run ./dev.py mkdocs deploy
+
+      # ==========================================
+      # 6. ARTEFATTI (Opzionale, per archivio)
+      # ==========================================
+      - name: Archivia gli Screenshot Generati
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots
+          path: mkdocs_src/docs/assets/screenshots/ 
+          retention-days: 1

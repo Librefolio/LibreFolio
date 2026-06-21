@@ -97,12 +97,7 @@ La verbosité est contrôlée par la variable d'environnement `LOG_LEVEL`.
 
 ## 🌍 Variables d'environnement
 
-| Variable | Valeur par défaut | Description |
-|----------|---------|-------------|
-| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Remplace le chemin du répertoire de données de production |
-| `LIBREFOLIO_TEST_MODE` | `0` | Régler sur `1` pour utiliser `backend/data/test/` au lieu de `prod/` |
-| `PORT` | `6040` | Port du serveur de production |
-| `TEST_PORT` | `6041` | Port du serveur de test (utilisé quand `LIBREFOLIO_TEST_MODE=1`) |
+Les chemins de stockage et les comportements à l'exécution du système de fichiers sont contrôlés par des variables d'environnement (telles que `LIBREFOLIO_DATA_DIR` et `LIBREFOLIO_TEST_MODE`). Pour obtenir une liste complète de toutes les variables d'environnement prises en charge et savoir comment les configurer à l'aide du fichier `.env`, consultez la page de [Configuration](configuration.md).
 
 ---
 
@@ -119,15 +114,9 @@ cp -r backend/data/prod/ /path/to/backup/librefolio-$(date +%Y%m%d)/
 
 ### 🐳 Sauvegarde Docker
 
-Si vous exécutez l'application via Docker, le répertoire de données est généralement monté comme un volume :
+Si vous exécutez LibreFolio via Docker Compose (la méthode de déploiement standard), le répertoire des données de production est directement monté (bind-mount) sur le répertoire `./LibreFolio-data` de votre machine hôte (et mappé sur `/app/backend/data/prod-docker` à l'intérieur du conteneur).
 
-```bash
-# Find the volume
-docker volume inspect librefolio_data
-
-# Copy data out
-docker cp librefolio-container:/app/backend/data/prod/ ./backup/
-```
+Par conséquent, vous n'avez pas besoin de commandes de copie Docker spécifiques ; il suffit de sauvegarder le dossier `./LibreFolio-data` sur votre machine hôte pour préserver vos données.
 
 ### ✅ Quoi sauvegarder
 
@@ -140,33 +129,3 @@ Au minimum, sauvegardez :
 !!! tip "Sauvegarde de la base de données uniquement"
 
     Si l'espace de stockage est limité, la sauvegarde de `sqlite/app.db` seul préserve toutes les données structurées. Les fichiers peuvent toujours être téléversés à nouveau.
-
----
-
-## 🔧 Maintenance depuis le terminal hôte
-
-### 🐳 Docker exec
-
-```bash
-# Access the container shell
-docker exec -it librefolio-container /bin/bash
-
-# Run dev.py commands inside the container
-./dev.py user list
-./dev.py user reset admin newpassword
-./dev.py db upgrade
-```
-
-### 💻 Accès direct (non-Docker)
-
-```bash
-# From the project root
-./dev.py user list              # List all users
-./dev.py user reset <user> <pw> # Reset a user's password
-./dev.py user promote <user>    # Grant superuser privileges
-./dev.py user demote <user>     # Remove superuser privileges
-./dev.py db upgrade             # Apply pending migrations
-./dev.py db create-clean        # Reset database (WARNING: deletes all data)
-```
-
-Pour une liste complète des commandes CLI, voir [CLI Tools](cli_tools.md).
