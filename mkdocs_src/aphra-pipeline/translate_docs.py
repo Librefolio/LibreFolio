@@ -581,10 +581,18 @@ _RE_NUMBERED = re.compile(r'^\s*\d+\.\s')
 # Escaped \$ is explicitly excluded from acting as a delimiter
 _RE_LATEX_BLOCK = re.compile(r'\$\$(.+?)\$\$', re.DOTALL)
 _RE_LATEX_INLINE = re.compile(r'(?<![\\\$])\$(?!\$)(.+?)(?<![\\\$])\$(?!\$)')
+# Strip <script>...</script> blocks to avoid JS regex $-signs being detected as LaTeX
+_RE_SCRIPT_BLOCK = re.compile(r'<script[^>]*>.*?</script>', re.DOTALL | re.IGNORECASE)
+
+
+def _strip_script_blocks(text: str) -> str:
+    """Remove <script>...</script> blocks to prevent JS $ signs from matching as LaTeX."""
+    return _RE_SCRIPT_BLOCK.sub('', text)
 
 
 def _extract_latex_formulas(text: str) -> list[str]:
     """Extract all LaTeX formulas from markdown (block $$ and inline $)."""
+    text = _strip_script_blocks(text)
     formulas = []
     # Block formulas first
     for m in _RE_LATEX_BLOCK.finditer(text):
@@ -601,6 +609,7 @@ def _extract_latex_with_lines(text: str) -> list[tuple[str, int]]:
 
     Returns list of (formula_text, line_number) tuples.
     """
+    text = _strip_script_blocks(text)
     results = []
     lines = text.split('\n')
 

@@ -101,7 +101,7 @@ Las rutas de almacenamiento y los comportamientos en tiempo de ejecución del si
 
 ---
 
-## 💾 Copia de Seguridad (Backup)
+## 💾 Copia de Seguridad (Backup) {: #backup}
 
 ### 📦 Copia de Seguridad Simple
 

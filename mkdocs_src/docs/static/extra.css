@@ -11,12 +11,12 @@
     display: none !important;
 }
 
-:root {
+:root, [data-md-color-scheme="default"] {
     /* Brand Colors from Frontend */
     --md-primary-fg-color: #1a4031; /* libre-green */
     --md-primary-bg-color: #f5f4ef; /* libre-beige */
     --md-accent-fg-color: #5a947c; /* primary-400 */
-    --md-typeset-a-color: #217d56; /* Rich visible green for links in light mode */
+    --md-typeset-a-color: #15a76d; /* Rich visible green for links in light mode */
 
     --md-sidebar-width: 12rem;
 }
@@ -963,5 +963,11 @@
         margin-bottom: 0.2rem;
     }
 }
+
+/* Custom link styling to enhance readability and prevent overflow */
+.md-typeset a {
+    word-break: break-word;
+}
+
 
 
