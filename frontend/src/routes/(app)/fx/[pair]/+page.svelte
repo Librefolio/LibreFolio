@@ -22,6 +22,8 @@
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
+    import {DataQualityBanner} from '$lib/components/ui/feedback';
+    import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
     import type {EventMarker} from '$lib/components/charts/PriceChartFull.svelte';
     import ChartAestheticsSection from '$lib/components/charts/ChartAestheticsSection.svelte';
@@ -211,6 +213,22 @@
     let firstDataDate = $derived(chartData.length > 0 ? chartData[0].date : null);
     /** True when the selected date range starts before the first available data point */
     let rangeStartsBeforeData = $derived(firstDataDate != null && dateStart < firstDataDate);
+
+    /** Build DataQualityIssue[] for the unified banner */
+    let fxDetailIssues: DataQualityIssue[] = $derived.by(() => {
+        const issues: DataQualityIssue[] = [];
+        if (rangeStartsBeforeData && !loading && !error) {
+            issues.push({
+                domain: 'forex',
+                code: 'RANGE_BEFORE_FIRST_DATA',
+                severity: 'info',
+                message_i18n_key: 'dataQuality.rangeBeforeData',
+                message_params: {date: firstDataDate ?? ''},
+                affected_fx_pairs: [data.canonicalSlug],
+            });
+        }
+        return issues;
+    });
 
     // True when no real provider is configured (MANUAL sentinel is already filtered out)
     let isManualOnly = $derived(providers.length === 0);
@@ -651,7 +669,7 @@
         </div>
     </div>
 
-    <!-- Error banner -->
+    <!-- Error banner (not data-quality — dismissible runtime error) -->
     {#if error}
         <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
             <span>⚠️</span> <span>{errorMessage}</span>
@@ -659,20 +677,8 @@
         </div>
     {/if}
 
-    <!-- Data availability banner: selected range starts before first data point -->
-    {#if rangeStartsBeforeData && !loading && !error}
-        <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-4 py-2.5 text-xs text-sky-700 dark:text-sky-400 flex items-center gap-2">
-            <span>📊</span>
-            <span class="font-medium inline-flex items-center gap-0.5">
-                <span class="emoji-flag">{baseFlag}</span>
-                {displayBase}
-                <ArrowLeftRight size={10} class="shrink-0 opacity-60" />
-                <span class="emoji-flag">{quoteFlag}</span>
-                {displayQuote}
-            </span>
-            <span class="opacity-80">— {$t('assetDetail.dataAvailableFrom', {values: {date: firstDataDate}})}</span>
-        </div>
-    {/if}
+    <!-- Unified data quality banners -->
+    <DataQualityBanner issues={fxDetailIssues} mode="flat" />
 
     <!-- ======================================================================= -->
     <!-- Filter bar: responsive layout matching FX list page -->

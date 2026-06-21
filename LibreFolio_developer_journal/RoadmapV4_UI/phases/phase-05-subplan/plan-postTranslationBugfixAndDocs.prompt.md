@@ -247,7 +247,7 @@ Dopo il blocco "What assets can I track?", aggiungere:
 
 ```markdown
 !!! tip "Missing something? 💡"
-    If there's an asset class or feature you'd like to see that we haven't thought of yet, we'd love to hear from you! Open a [feature request on GitHub](https://github.com/Alfystar/LibreFolio/issues/new?labels=enhancement&template=feature_request.md) and let us know.
+    If there's an asset class or feature you'd like to see that we haven't thought of yet, we'd love to hear from you! Open a [feature request on GitHub](https://github.com/Librefolio/LibreFolio/issues/new?labels=enhancement&template=feature_request.md) and let us know.
 ```
 
 ---

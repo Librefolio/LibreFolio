@@ -166,7 +166,7 @@
         if (viewMode === 'eur') {
             const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
             series = [
-                // Stacked area: open_cost_basis (bottom)
+                // Stacked area: open_cost_basis (bottom) — visible boundary line
                 {
                     name: $_('dashboard.openCostBasis'),
                     type: 'line',
@@ -174,11 +174,12 @@
                     data: eurStackedData.costBasis,
                     smooth: false,
                     symbol: 'none',
-                    lineStyle: {width: 0},
-                    areaStyle: {color: cc('costBasis') + '40'},
+                    lineStyle: {color: cc('costBasis'), width: 1, opacity: 0.7},
+                    areaStyle: {color: cc('costBasis') + '55'},
                     itemStyle: {color: cc('costBasis')},
+                    emphasis: {focus: 'series'},
                 },
-                // Stacked area: cash (middle)
+                // Stacked area: cash (middle) — visible boundary line
                 {
                     name: $_('dashboard.cashValue'),
                     type: 'line',
@@ -186,11 +187,12 @@
                     data: eurStackedData.cash,
                     smooth: false,
                     symbol: 'none',
-                    lineStyle: {width: 0},
-                    areaStyle: {color: cc('cash') + '40'},
+                    lineStyle: {color: cc('cash'), width: 1, opacity: 0.7},
+                    areaStyle: {color: cc('cash') + '55'},
                     itemStyle: {color: cc('cash')},
+                    emphasis: {focus: 'series'},
                 },
-                // Stacked area: in-transit book value (top)
+                // Stacked area: in-transit book value (top) — visible boundary line
                 {
                     name: $_('dashboard.inTransit'),
                     type: 'line',
@@ -198,11 +200,12 @@
                     data: eurStackedData.inTransit,
                     smooth: false,
                     symbol: 'none',
-                    lineStyle: {width: 0},
-                    areaStyle: {color: cc('inTransit') + '40'},
+                    lineStyle: {color: cc('inTransit'), width: 1, opacity: 0.7},
+                    areaStyle: {color: cc('inTransit') + '55'},
                     itemStyle: {color: cc('inTransit')},
+                    emphasis: {focus: 'series'},
                 },
-                // Overlay line: NAV (not stacked)
+                // Overlay line: NAV (not stacked) — prominent
                 {
                     name: $_('dashboard.navValue'),
                     type: 'line',
@@ -211,6 +214,7 @@
                     symbol: 'none',
                     lineStyle: {color: cc('nav'), width: 2, type: 'solid'},
                     itemStyle: {color: cc('nav')},
+                    emphasis: {focus: 'series'},
                 },
             ];
         } else {
@@ -230,7 +234,19 @@
             }));
         }
 
-        const yAxisFormatter = viewMode === 'eur' ? (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)) : (v: number) => `${v.toFixed(1)}%`;
+        const yAxisFormatter = viewMode === 'eur'
+            ? (v: number) => {
+                  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+                  if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)}k`;
+                  return String(v);
+              }
+            : (v: number) => `${v.toFixed(1)}%`;
+
+        /** Format a number as currency — same pattern as the dashboard formatMoney helper. */
+        const fmtCurrency = (v: number | null | undefined) =>
+            v != null
+                ? `${baseCurrency} ${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+                : '—';
 
         const option: echarts.EChartsOption = {
             animation: false,
@@ -238,6 +254,7 @@
             grid: {left: '3%', right: '4%', bottom: '30px', top: '10px', containLabel: true},
             tooltip: {
                 trigger: 'axis',
+                axisPointer: {type: 'cross', label: {backgroundColor: '#6a7985'}},
                 backgroundColor: tooltipBg,
                 borderColor: tooltipBorder,
                 borderWidth: 1,
@@ -247,40 +264,44 @@
                     const date = items[0]?.axisValue ?? '';
 
                     if (viewMode === 'eur') {
-                       // Rich tooltip: show NAV, Book Value, UGL
-                       const navVal = items.find((p: any) => p.seriesName === $_('dashboard.navValue'))?.value;
-                       const costVal = items.find((p: any) => p.seriesName === $_('dashboard.openCostBasis'))?.value;
-                       const cashVal = items.find((p: any) => p.seriesName === $_('dashboard.cashValue'))?.value;
-                       const itVal = items.find((p: any) => p.seriesName === $_('dashboard.inTransit'))?.value;
+                        // ECharts stacks values cumulatively in params[i].value — use raw data index instead
+                        const idx = items[0]?.dataIndex ?? 0;
+                        const costVal = eurStackedData.costBasis[idx];
+                        const cashVal = eurStackedData.cash[idx];
+                        const itVal = eurStackedData.inTransit[idx];
+                        const navVal = eurStackedData.nav[idx];
 
-                       const fmtNum = (v: number | null | undefined) =>
-                           v != null ? `${baseCurrency} ${v.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '—';
+                        const bv = (costVal ?? 0) + (cashVal ?? 0) + (itVal ?? 0);
+                        const ugl = navVal != null ? navVal - bv : null;
 
-                       const bv = (costVal ?? 0) + (cashVal ?? 0) + (itVal ?? 0);
-                       const ugl = navVal != null ? navVal - bv : null;
+                        const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
+                        const dot = (key: keyof typeof COLORS) =>
+                            `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${cc(key)};margin-right:6px;flex-shrink:0"></span>`;
 
-                       let html = `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>`;
-                       html += `<b>${$_('dashboard.navValue')}:</b> ${fmtNum(navVal)}<br/>`;
-                       html += `<b>${$_('dashboard.bookValue')}:</b> ${fmtNum(bv)}<br/>`;
-                       if (ugl != null) {
-                           const uglColor = ugl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : (isDark ? '#f87171' : '#dc2626');
-                           html += `<b style="color:${uglColor}">${ugl >= 0 ? '+' : ''}${fmtNum(ugl)}</b><br/>`;
-                       }
-                       html += `<hr style="border-color:${tooltipBorder};margin:4px 0"/>`;
-                       html += `${$_('dashboard.openCostBasis')}: ${fmtNum(costVal)}<br/>`;
-                       html += `${$_('dashboard.cashValue')}: ${fmtNum(cashVal)}<br/>`;
-                       if (itVal && itVal > 0) html += `${$_('dashboard.inTransit')}: ${fmtNum(itVal)}<br/>`;
-                       return html;
+                        let html = `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>`;
+                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('nav')}<b>${$_('dashboard.navValue')}</b></span><b>${fmtCurrency(navVal)}</b></div>`;
+                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span><b>${$_('dashboard.bookValue')}</b></span><b>${fmtCurrency(bv || null)}</b></div>`;
+                        if (ugl != null) {
+                            const uglColor = ugl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : (isDark ? '#f87171' : '#dc2626');
+                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${uglColor}"><span>± P/L</span><b>${ugl >= 0 ? '+' : ''}${fmtCurrency(Math.abs(ugl))}</b></div>`;
+                        }
+                        html += `<hr style="border:none;border-top:1px solid ${tooltipBorder};margin:4px 0"/>`;
+                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('costBasis')}${$_('dashboard.openCostBasis')}</span>${fmtCurrency(costVal)}</div>`;
+                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('cash')}${$_('dashboard.cashValue')}</span>${fmtCurrency(cashVal)}</div>`;
+                        if (itVal && itVal > 0) {
+                            html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('inTransit')}${$_('dashboard.inTransit')}</span>${fmtCurrency(itVal)}</div>`;
+                        }
+                        return html;
                     }
 
-                    // % mode: simple list
+                    // % mode: simple list with colored dots
                     const lines = items
-                       .filter((p: any) => p.value != null)
-                       .map((p: any) => {
-                           const val = `${Number(p.value).toFixed(2)}%`;
-                           return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:6px"></span>${p.seriesName}: <b>${val}</b>`;
-                       });
-                    return `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>${lines.join('<br/>')}`;
+                        .filter((p: any) => p.value != null)
+                        .map((p: any) => {
+                            const val = `${Number(p.value).toFixed(2)}%`;
+                            return `<div style="display:flex;justify-content:space-between;gap:16px"><span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:6px"></span>${p.seriesName}</span><b>${val}</b></div>`;
+                        });
+                    return `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>${lines.join('')}`;
                 },
             },
             legend: {
@@ -301,6 +322,10 @@
             },
             yAxis: {
                 type: 'value',
+                // Use a min function so the y-axis auto-scales rather than forcing 0.
+                // This gives detail visibility when portfolio values are large.
+                min: (value: {min: number; max: number}) =>
+                    Math.floor(value.min - (value.max - value.min) * 0.08),
                 axisLabel: {color: textColor, fontSize: 11, formatter: yAxisFormatter},
                 axisLine: {show: false},
                 splitLine: {lineStyle: {color: gridColor, type: 'dashed'}},

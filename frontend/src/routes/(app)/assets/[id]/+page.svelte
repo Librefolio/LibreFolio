@@ -19,7 +19,7 @@
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/app/navigationStore';
-    import {ArrowLeft, ArrowLeftRight, ChevronDown, Coins, ExternalLink, Info, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, X} from 'lucide-svelte';
+    import {ArrowLeft, ChevronDown, ExternalLink, Info, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, X} from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
@@ -34,6 +34,8 @@
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
     import AssetPriceSummary from '$lib/components/assets/AssetPriceSummary.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
+    import {DataQualityBanner} from '$lib/components/ui/feedback';
+    import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -410,6 +412,87 @@
 
         return pairs;
     });
+
+    /** Build DataQualityIssue[] from page state for unified banner rendering */
+    let assetDetailIssues: DataQualityIssue[] = $derived.by(() => {
+        const issues: DataQualityIssue[] = [];
+
+        // Archived banner
+        if (assetInfo && assetInfo.active === false) {
+            issues.push({
+                domain: 'asset',
+                code: 'ASSET_ARCHIVED',
+                severity: 'warning',
+                message_i18n_key: 'dataQuality.archivedAsset',
+            });
+        }
+
+        // Range starts before first data
+        if (rangeStartsBeforeData && !loading && !error && assetInfo) {
+            issues.push({
+                domain: 'asset',
+                code: 'RANGE_BEFORE_FIRST_DATA',
+                severity: 'info',
+                message_i18n_key: 'dataQuality.rangeBeforeData',
+                message_params: {date: firstDataDate ?? ''},
+            });
+        }
+
+        // FX pair issues
+        if (!loading && !error) {
+            for (const pair of requiredFxPairs.filter((p) => p.status !== 'ok')) {
+                const parts = pair.slug.split('-');
+                if (pair.status === 'missing') {
+                    issues.push({
+                        domain: 'forex',
+                        code: 'FX_PAIR_MISSING',
+                        severity: 'warning',
+                        message_i18n_key: 'dataQuality.fxPairMissing',
+                        affected_fx_pairs: [pair.slug],
+                        affected_asset_names: [pair.forAsset],
+                        cta_action: 'add_fx_pair',
+                        cta_target: pair.slug,
+                    });
+                } else if (pair.status === 'no-data') {
+                    issues.push({
+                        domain: 'forex',
+                        code: 'FX_PAIR_NO_DATA',
+                        severity: 'warning',
+                        message_i18n_key: 'dataQuality.fxPairNoData',
+                        affected_fx_pairs: [pair.slug],
+                        affected_asset_names: [pair.forAsset],
+                        cta_action: 'navigate_fx',
+                        cta_target: pair.slug,
+                    });
+                } else if (pair.status === 'partial-gap') {
+                    issues.push({
+                        domain: 'forex',
+                        code: 'FX_PAIR_PARTIAL_GAP',
+                        severity: 'info',
+                        message_i18n_key: 'dataQuality.fxPairPartialGap',
+                        message_params: {date: pair.firstDate ?? ''},
+                        affected_fx_pairs: [pair.slug],
+                        affected_asset_names: [pair.forAsset],
+                        cta_action: 'navigate_fx',
+                        cta_target: pair.slug,
+                    });
+                }
+            }
+        }
+
+        return issues;
+    });
+
+    function handleBannerAction(action: string, target: string | null, _issue: DataQualityIssue) {
+        if (action === 'add_fx_pair' && target) {
+            fxPairCreateSlug = target;
+            showFxPairAddModal = true;
+        } else if (action === 'navigate_fx' && target) {
+            goto(`/fx/${target}?start=${dateStart}&end=${dateEnd}`);
+        } else if (action === 'sync_fx' && target) {
+            handleSyncPair(target);
+        }
+    }
 
     let identifiersList = $derived.by((): [string, string][] => {
         if (!assetInfo) return [];
@@ -1345,15 +1428,7 @@
         {/if}
     </div>
 
-    <!-- Archived banner -->
-    {#if assetInfo && assetInfo.active === false}
-        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2" data-testid="asset-archived-banner">
-            <span>📦</span>
-            <span>{$t('assets.detail.archivedBanner')}</span>
-        </div>
-    {/if}
-
-    <!-- Error banner -->
+    <!-- Error banner (not data-quality — dismissible runtime error) -->
     {#if error}
         <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
             <span>⚠️</span> <span>{errorMessage}</span>
@@ -1361,99 +1436,8 @@
         </div>
     {/if}
 
-    <!-- Data availability banner: selected range starts before first data point -->
-    {#if rangeStartsBeforeData && !loading && !error && assetInfo}
-        {@const startDow = new Date(dateStart + 'T00:00:00').getDay()}
-        {@const isWeekendStart = startDow === 0 || startDow === 6}
-        <div class="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl px-4 py-2.5 text-xs text-sky-700 dark:text-sky-400 flex items-center gap-2 flex-wrap">
-            <span>📊</span>
-            {#if assetInfo.icon_url}
-                <img src={assetInfo.icon_url} alt="" class="w-4 h-4 rounded-sm object-contain shrink-0" />
-            {:else if assetInfo.asset_type}
-                <img src={getAssetTypeIconUrl(assetInfo.asset_type)} alt="" class="w-4 h-4 object-contain shrink-0" />
-            {/if}
-            <span class="font-medium">{assetInfo.display_name}</span>
-            <span class="opacity-80">— {$t('assetDetail.dataAvailableFrom', {values: {date: firstDataDate}})}</span>
-            {#if isWeekendStart}
-                <span class="text-sky-500 dark:text-sky-300 italic">({$t('assetDetail.weekendHint') ?? 'selected start date falls on a weekend — try adjusting'})</span>
-            {/if}
-        </div>
-    {/if}
-
-    <!-- FX pair status banners: one per problematic FX pair (main + comparison) -->
-    {#if !loading && !error}
-        {#each requiredFxPairs.filter((p) => p.status !== 'ok') as pair (pair.slug)}
-            {@const parts = pair.slug.split('-')}
-            {@const baseFlag = getCurrencyInfo(parts[0]).flag_emoji}
-            {@const quoteFlag = getCurrencyInfo(parts[1]).flag_emoji}
-            {@const isMissing = pair.status === 'missing'}
-            {@const isAmber = isMissing || pair.status === 'no-data'}
-            <div
-                class="{isAmber
-                    ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400'
-                    : 'bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-400'} border rounded-xl px-4 py-2.5 text-xs flex flex-col sm:flex-row items-start sm:items-center gap-2"
-            >
-                <!-- Left: icon + pair slug + message + asset -->
-                <div class="flex items-center gap-2 flex-wrap min-w-0">
-                    <Coins size={14} class="shrink-0" />
-                    <span class="font-medium inline-flex items-center gap-1">
-                        <span class="emoji-flag">{baseFlag}</span>
-                        {parts[0]}
-                        <ArrowLeftRight size={10} class="shrink-0" />
-                        <span class="emoji-flag">{quoteFlag}</span>
-                        {parts[1]}
-                    </span>
-                    <span class="opacity-80"
-                        >—
-                        {#if isMissing}
-                            {$t('assetDetail.fxPairMissing', {values: {base: parts[0], quote: parts[1]}})}
-                        {:else if pair.status === 'no-data'}
-                            {$t('assetDetail.fxPairNoRates', {values: {pair: pair.label}})}
-                        {:else}
-                            {$t('assetDetail.fxDataAvailableFrom', {values: {date: pair.firstDate ?? ''}})}
-                        {/if}
-                    </span>
-                    <span class="inline-flex items-center gap-1 text-[10px] opacity-60">
-                        {#if pair.forAssetIconUrl}
-                            <img src={pair.forAssetIconUrl} alt="" class="w-3.5 h-3.5 rounded-sm object-contain" />
-                        {:else if pair.forAssetType}
-                            <img src={getAssetTypeIconUrl(pair.forAssetType)} alt="" class="w-3.5 h-3.5 object-contain" />
-                        {/if}
-                        ({pair.forAsset})
-                    </span>
-                </div>
-                <!-- Right: action buttons (bottom-right in mobile, inline-right in desktop) -->
-                <div class="flex items-center gap-1 self-end sm:self-auto sm:ml-auto">
-                    {#if isMissing}
-                        <button
-                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded {isAmber ? 'bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40' : 'bg-sky-100 dark:bg-sky-800/40 hover:bg-sky-200 dark:hover:bg-sky-700/40'} transition-colors font-medium"
-                            onclick={() => {
-                                fxPairCreateSlug = pair.slug;
-                                showFxPairAddModal = true;
-                            }}
-                        >
-                            <Coins size={13} />
-                            {$t('assetDetail.addFxPair')}
-                        </button>
-                    {:else}
-                        <a
-                            href="/fx/{pair.slug}?start={dateStart}&end={dateEnd}"
-                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded {isAmber ? 'bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40' : 'bg-sky-100 dark:bg-sky-800/40 hover:bg-sky-200 dark:hover:bg-sky-700/40'} transition-colors"
-                        >
-                            <Coins size={13} />
-                        </a>
-                        <button
-                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded {isAmber ? 'bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40' : 'bg-sky-100 dark:bg-sky-800/40 hover:bg-sky-200 dark:hover:bg-sky-700/40'} transition-colors font-medium"
-                            onclick={() => handleSyncPair(pair.slug)}
-                        >
-                            <RotateCw size={13} class={fxSyncing ? 'animate-spin' : ''} />
-                            {$t('common.sync')}
-                        </button>
-                    {/if}
-                </div>
-            </div>
-        {/each}
-    {/if}
+    <!-- Unified data quality banners -->
+    <DataQualityBanner issues={assetDetailIssues} mode="flat" onaction={handleBannerAction} />
 
     <!-- ======================================================================= -->
     <!-- Filter bar -->

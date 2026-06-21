@@ -12,7 +12,7 @@
     let showIosHint = $state(false);
     let showDesktopHint = $state(false);
 
-    const githubIssuesUrl = 'https://github.com/Alfystar/LibreFolio/issues';
+    const githubIssuesUrl = 'https://github.com/Librefolio/LibreFolio/issues';
     const bmcUrl = 'https://www.buymeacoffee.com/librefolio';
 
     /** Build a MkDocs URL with locale prefix matching the app's current language. */

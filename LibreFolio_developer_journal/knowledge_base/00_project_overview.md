@@ -12,7 +12,7 @@ LibreFolio è un **portfolio tracker finanziario self-hosted e open-source** —
 - **Privacy**: dati sul proprio server
 - **Multi-utenza**: Owner/Editor/Viewer per broker condivisi
 - **Multi-lingua**: UI in EN/IT/FR/ES (840+ chiavi), documentazione tradotta via LLM
-- **Repository**: https://github.com/Alfystar/LibreFolio
+- **Repository**: https://github.com/Librefolio/LibreFolio
 
 ---
 

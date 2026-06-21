@@ -7,9 +7,8 @@
   3. Charts row: GrowthChart (3/5) | Allocation tabs (2/5)
   4. Bottom grid: Holdings (left) | Recent Transactions (right)
 
-  Data sources:
-  - portfolioStore.fetchSummary() → KPI cards + allocation charts + holdings
-  - portfolioStore.fetchHistory() → GrowthChart
+  Data source: portfolioStore.fetchReport() → single POST /portfolio/report
+  (summary + history + allocation_history in one engine run)
 
   Pattern: Svelte 5 Runes, Tailwind CSS 4, dark mode, data-testid everywhere.
 -->
@@ -18,7 +17,7 @@
     import {_} from '$lib/i18n';
     import {RefreshCw} from 'lucide-svelte';
 
-    import {fetchSummary, fetchHistory, invalidate, type PortfolioSummary, type PortfolioHistoryPoint} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
@@ -34,7 +33,11 @@
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import RecentTransactionsPanel from '$lib/components/dashboard/RecentTransactionsPanel.svelte';
     import HoldingsPanel from '$lib/components/dashboard/HoldingsPanel.svelte';
+    import {DataQualityBanner} from '$lib/components/ui/feedback';
+    import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
+    import {goto} from '$app/navigation';
 
     // =========================================================================
     // State
@@ -42,8 +45,11 @@
 
     let summary = $state<PortfolioSummary | null>(null);
     let history = $state<PortfolioHistoryPoint[]>([]);
-    let summaryLoading = $state(true);
-    let historyLoading = $state(true);
+    let allocationHistoryFromReport = $state<AllocationHistoryDimensions | null>(null);
+    let reportLoading = $state(true);
+    // Keep separate loading flags for GrowthChart skeleton
+    let summaryLoading = $derived(reportLoading);
+    let historyLoading = $derived(reportLoading);
     let syncLoading = $state(false);
 
     /** Broker IDs selected in the filter (empty = all brokers). */
@@ -73,10 +79,8 @@
     /** Allocation view mode: Now (pie/map) or History (stacked area). */
     let allocationView = $state<'now' | 'history'>('now');
 
-    /** Allocation history data (loaded on demand). */
-    let allocationHistoryData = $state<any[]>([]);
-    let allocationHistoryLoading = $state(false);
-    let allocationHistoryDimensionLoaded = $state<string | null>(null);
+    /** Allocation history data — derived from report (no separate fetch needed). */
+    let allocationHistoryLoading = $derived(reportLoading);
 
     /** Responsive layout — same utility as assets/fx pages. */
     const layout = createResponsiveLayout({wide: 900, tablet: 660, tabletS: 480, labelHide: 460});
@@ -143,11 +147,32 @@
         const unknown = (summary?.allocation_by_geography ?? []).find((i) => i.name === 'Unknown');
         return unknown ? parseFloat(unknown.value) : 0;
     });
-    const missingPriceAssets = $derived(summary?.missing_price_assets ?? []);
-    const missingFxPairs = $derived.by(() => {
-        const pairs = (summary?.missing_fx_pairs ?? []).map((item) => item.pair);
-        return [...new Set(pairs)].sort();
+    const dataQualityIssues = $derived<DataQualityIssue[]>((summary?.data_quality as {issues?: DataQualityIssue[]} | undefined)?.issues ?? []);
+
+    /** Allocation history data — derived from report, keyed by active tab dimension. */
+    const allocationHistoryData = $derived.by(() => {
+        if (!allocationHistoryFromReport) return [];
+        const dimMap: Record<string, keyof AllocationHistoryDimensions> = {type: 'type', sector: 'sector', geo: 'geography'};
+        const dim = dimMap[allocationTab] ?? 'type';
+        return (allocationHistoryFromReport as AllocationHistoryDimensions)[dim] ?? [];
     });
+
+    /** FxPairAddModal state for CTA-driven pair creation */
+    let showFxPairAddModal = $state(false);
+    let fxPairCreateSlug = $state('');
+
+    function handleBannerAction(action: string, target: string | null, _issue: DataQualityIssue) {
+        if (action === 'navigate_asset' && target) {
+            goto(`/assets/${target}`);
+        } else if (action === 'navigate_fx' && target) {
+            goto(`/fx/${target}`);
+        } else if (action === 'add_fx_pair') {
+            // Open modal — use first affected pair as slug hint
+            const pairs = _issue.affected_fx_pairs ?? [];
+            fxPairCreateSlug = pairs[0] ?? '';
+            showFxPairAddModal = true;
+        }
+    }
 
     // KPI formatted values
     const netWorthValue = $derived(summary ? formatMoney(summary.net_worth.code, summary.net_worth.amount) : '—');
@@ -171,49 +196,43 @@
     // =========================================================================
 
     async function loadSummary(force = false) {
-        summaryLoading = true;
-        try {
-            summary = await fetchSummary(activeBrokerIds, false, targetCurrency, force);
-        } finally {
-            summaryLoading = false;
-        }
+        // No-op: summary is loaded as part of loadAll via fetchReport
+        void force;
     }
 
     async function loadHistory(force = false) {
-        historyLoading = true;
-        try {
-            history = await fetchHistory(activeBrokerIds, dateFrom || undefined, dateTo || undefined, targetCurrency, force);
-        } finally {
-            historyLoading = false;
-        }
+        // No-op: history is loaded as part of loadAll via fetchReport
+        void force;
     }
 
     async function loadAll(force = false) {
-        await Promise.all([loadSummary(force), loadHistory(force)]);
+        // Invalidate allocation history cache whenever filters change
+        allocationHistoryCacheKey = null;
+        reportLoading = true;
+        try {
+            const report = await fetchReport(activeBrokerIds, dateFrom || undefined, dateTo || undefined, targetCurrency, force);
+            // Cast from the Zodios union types to the concrete types the dashboard expects
+            summary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
+            history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
+            allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
+        } finally {
+            reportLoading = false;
+        }
     }
 
+    /** Build a cache key that captures all query parameters. */
+    function allocHistoryCacheKey(dimension: string) {
+        return `${dimension}|${dateFrom ?? ''}|${dateTo ?? ''}|${(activeBrokerIds ?? []).join(',')}|${targetCurrency ?? ''}`;
+    }
+
+    let allocationHistoryCacheKey = $state<string | null>(null);
+
     async function loadAllocationHistory(dimension: string) {
+        // Allocation history is included in the report — no additional fetch needed
+        // Mark cache key as loaded so subsequent tab switches don't trigger re-fetch
         const dimMap: Record<string, string> = {type: 'type', sector: 'sector', geo: 'geography'};
         const apiDimension = dimMap[dimension] || 'type';
-        if (allocationHistoryDimensionLoaded === apiDimension && allocationHistoryData.length > 0) return;
-
-        allocationHistoryLoading = true;
-        try {
-            const {api} = await import('$lib/api/generated');
-            const resp = await api.get_allocation_history_api_v1_portfolio_allocation_history_post({
-                dimension: apiDimension,
-                broker_ids: activeBrokerIds?.length ? activeBrokerIds : undefined,
-                date_range: dateFrom || dateTo ? {start: dateFrom || undefined, end: dateTo || undefined} : undefined,
-                target_currency: targetCurrency || undefined,
-            } as any);
-            allocationHistoryData = (resp as any).series ?? [];
-            allocationHistoryDimensionLoaded = apiDimension;
-        } catch (e) {
-            console.error('Failed to load allocation history:', e);
-            allocationHistoryData = [];
-        } finally {
-            allocationHistoryLoading = false;
-        }
+        allocationHistoryCacheKey = allocHistoryCacheKey(apiDimension);
     }
 
     // =========================================================================
@@ -242,7 +261,7 @@
         dateFrom = from;
         dateTo = to;
         setDateRange(from, to);
-        void loadHistory();
+        void loadAll();
     }
 
     async function handleSync() {
@@ -395,27 +414,7 @@
         </button>
     </div>
 
-    {#if missingPriceAssets.length > 0}
-        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-start gap-2" data-testid="dashboard-missing-prices-banner">
-            <span>⚠️</span>
-            <span>
-                {$_('dashboard.missingPricesPrefix')}
-                <strong>{missingPriceAssets.map((a) => a.name).join(', ')}</strong>.
-                {$_('dashboard.missingPricesSuffix')}
-            </span>
-        </div>
-    {/if}
-
-    {#if missingFxPairs.length > 0}
-        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-start gap-2" data-testid="dashboard-missing-fx-banner">
-            <span>⚠️</span>
-            <span>
-                {$_('dashboard.missingFxPrefix')}
-                <strong>{missingFxPairs.join(', ')}</strong>.
-                {$_('dashboard.missingFxSuffix')}
-            </span>
-        </div>
-    {/if}
+    <DataQualityBanner issues={dataQualityIssues} mode="grouped" onaction={handleBannerAction} />
 
     <!-- ── KPI Row ── -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="kpi-row">
@@ -455,7 +454,7 @@
                 {#each [['type', 'dashboard.typeAllocation'], ['sector', 'dashboard.sectorAllocation'], ['geo', 'dashboard.geoAllocation']] as const as [tab, labelKey]}
                     <button
                         class="px-3 py-1 transition-colors {allocationTab === tab ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'} {tab !== 'type' ? 'border-l border-gray-200 dark:border-slate-600' : ''}"
-                        onclick={() => { allocationTab = tab; if (allocationView === 'history') { allocationHistoryDimensionLoaded = null; loadAllocationHistory(tab); } }}
+                        onclick={() => { allocationTab = tab; if (allocationView === 'history') loadAllocationHistory(tab); }}
                         data-testid="allocation-tab-{tab}"
                     >
                         {$_(labelKey)}
@@ -504,3 +503,9 @@
         <RecentTransactionsPanel limit={10} brokerIds={activeBrokerIds} {transactionsHref} />
     </div>
 </div>
+
+<!-- FxPairAddModal — opened from DataQualityBanner CTA -->
+{#if showFxPairAddModal}
+    {@const fxParts = fxPairCreateSlug.includes('-') ? fxPairCreateSlug.split('-') : fxPairCreateSlug.split('/')}
+    <FxPairAddModal bind:open={showFxPairAddModal} initialBase={fxParts[0] ?? ''} initialQuote={fxParts[1] ?? ''} oncreated={() => { invalidate(); loadAll(); }} />
+{/if}

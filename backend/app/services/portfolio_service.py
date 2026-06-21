@@ -37,6 +37,8 @@ from backend.app.db.models import (
 )
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.portfolio import (
+    AllocationHistoryDimensions,
+    AllocationHistoryPoint,
     AllocationItem,
     AssetHistoryPoint,
     BrokerBreakdown,
@@ -46,6 +48,9 @@ from backend.app.schemas.portfolio import (
     OpenLotSchema,
     PortfolioHistoryPoint,
     PortfolioHolding,
+    PortfolioReportMetadata,
+    PortfolioReportQuery,
+    PortfolioReportResponse,
     PortfolioSummary,
 )
 from backend.app.schemas.wac import WACMissingPairInfo, WACPreviewResultItem, WACQualifyingTX
@@ -557,6 +562,7 @@ class PortfolioService:
         broker_ids: list[int] | None = None,
         include_breakdown: bool = False,
         target_currency_override: str | None = None,
+        _precomputed_engine_result=None,
     ) -> PortfolioSummary:
         """Return aggregated portfolio summary via PortfolioCalculationEngine.
 
@@ -564,10 +570,7 @@ class PortfolioService:
         allocation, performance) while keeping the per-asset holdings loop for
         individual holding details and broker breakdown.
 
-        Fixes:
-        - TWRR/MWRR now uses per-day NAV (not flat today's NAV)
-        - Allocation uses engine's scope-aware calculation
-        - Data quality report populated
+        _precomputed_engine_result: if provided by get_report(), skip engine re-run.
         """
         from backend.app.services.portfolio_engine import (  # noqa: PLC0415
             DerivedViewsBuilder,
@@ -578,14 +581,17 @@ class PortfolioService:
         base_currency = target_currency_override or await self._get_base_currency()
 
         # ── 1. Run engine for aggregate values + performance ──
-        engine = PortfolioCalculationEngine(self.db)
-        engine_result = await engine.calculate(
-            user_id=user_id,
-            broker_ids=broker_ids,
-            date_from=None,
-            date_to=None,
-            target_currency=base_currency,
-        )
+        if _precomputed_engine_result is not None:
+            engine_result = _precomputed_engine_result
+        else:
+            engine = PortfolioCalculationEngine(self.db)
+            engine_result = await engine.calculate(
+                user_id=user_id,
+                broker_ids=broker_ids,
+                date_from=None,
+                date_to=None,
+                target_currency=base_currency,
+            )
 
         views = DerivedViewsBuilder(engine_result.daily_states, base_currency)
 
@@ -784,9 +790,26 @@ class PortfolioService:
         cash_balances_list = [Currency(code=ccy, amount=amt) for ccy, amt in all_cash_balances.items()]
 
         # ── 6. Data quality report ──
+        # Collect transaction-implied assets (valued at WAC cost, no market price yet)
+        implied_asset_ids = views.aggregate_transaction_implied_ids()
+        transaction_implied_assets: list[MissingPriceAsset] = []
+        for h in all_holdings:
+            if h.asset_id in implied_asset_ids and h.current_value is None:
+                transaction_implied_assets.append(MissingPriceAsset(
+                    asset_id=h.asset_id,
+                    symbol=h.asset_ticker,
+                    name=h.asset_name,
+                    broker_id=0,  # approximate — not tracked per-broker here
+                    broker_name="",
+                    quantity=h.quantity,
+                    currency=base_currency,
+                ))
+
         data_quality = views.build_data_quality_report(
             missing_price_assets_dto=missing_price_assets,
             missing_fx_pairs_dto=self._merge_missing_pairs(all_missing_pairs),
+            transaction_implied_assets_dto=transaction_implied_assets if transaction_implied_assets else None,
+            mwrr_available=mwrr_result is not None,
         )
 
         return PortfolioSummary(
@@ -823,14 +846,11 @@ class PortfolioService:
         date_from: date_type | None = None,
         date_to: date_type | None = None,
         target_currency_override: str | None = None,
+        _precomputed_engine_result=None,
     ) -> list[PortfolioHistoryPoint]:
         """Return daily portfolio value series via PortfolioCalculationEngine.
 
-        Uses the new engine to produce a DailyPortfolioState[] vector, then derives
-        history + performance metrics. Fixes known bugs:
-        - NAV is per-day (not flat today's NAV for all dates)
-        - Quantity tracking includes TRANSFER + ADJUSTMENT (not just BUY/SELL)
-        - Linked internal transfers excluded from external cash flows
+        _precomputed_engine_result: if provided by get_report(), skip engine re-run.
         """
         from backend.app.services.portfolio_engine import (  # noqa: PLC0415
             DerivedViewsBuilder,
@@ -838,14 +858,17 @@ class PortfolioService:
         )
 
         base_currency = target_currency_override or await self._get_base_currency()
-        engine = PortfolioCalculationEngine(self.db)
-        result = await engine.calculate(
-            user_id=user_id,
-            broker_ids=broker_ids,
-            date_from=None,  # Always compute from t=0 for correct cumulative values
-            date_to=date_to,
-            target_currency=base_currency,
-        )
+        if _precomputed_engine_result is not None:
+            result = _precomputed_engine_result
+        else:
+            engine = PortfolioCalculationEngine(self.db)
+            result = await engine.calculate(
+                user_id=user_id,
+                broker_ids=broker_ids,
+                date_from=None,  # Always compute from t=0 for correct cumulative values
+                date_to=date_to,
+                target_currency=base_currency,
+            )
 
         if not result.daily_states:
             return []
@@ -927,6 +950,103 @@ class PortfolioService:
                 history_points[0].roi = Decimal("0")
 
         return history_points
+
+    async def get_report(
+        self,
+        user_id: int,
+        query: PortfolioReportQuery,
+    ) -> PortfolioReportResponse:
+        """Run the engine ONCE and return all requested views in a single response.
+
+        Avoids the need for separate summary/history/allocation-history calls from
+        the dashboard. A single POST /portfolio/report is enough for a full page load.
+        """
+        from backend.app.services.portfolio_engine import (  # noqa: PLC0415
+            DerivedViewsBuilder,
+            PortfolioCalculationEngine,
+        )
+
+        today = date_type.today()
+        base_currency = query.target_currency or await self._get_base_currency()
+        date_from = query.date_range.start if query.date_range else None
+        date_to = query.date_range.end if query.date_range else None
+
+        # ── 1. Single engine run ──
+        engine = PortfolioCalculationEngine(self.db)
+        engine_result = await engine.calculate(
+            user_id=user_id,
+            broker_ids=query.broker_ids,
+            date_from=None,   # always from t=0 for correct cumulative values
+            date_to=date_to,
+            target_currency=base_currency,
+        )
+
+        views = DerivedViewsBuilder(engine_result.daily_states, base_currency)
+
+        included: list[str] = []
+
+        # ── 2. Summary (reuses get_summary logic inline to share engine result) ──
+        summary: PortfolioSummary | None = None
+        if query.include_summary:
+            included.append("summary")
+            summary = await self.get_summary(
+                user_id=user_id,
+                broker_ids=query.broker_ids,
+                target_currency_override=base_currency,
+                include_breakdown=query.include_breakdown,
+                _precomputed_engine_result=engine_result,
+            )
+
+        # ── 3. History ──
+        history: list[PortfolioHistoryPoint] | None = None
+        if query.include_history:
+            included.append("history")
+            history = await self.get_history(
+                user_id=user_id,
+                broker_ids=query.broker_ids,
+                date_from=date_from,
+                date_to=date_to,
+                target_currency_override=base_currency,
+                _precomputed_engine_result=engine_result,
+            )
+
+        # ── 4. Allocation history (all 3 dimensions from same engine result) ──
+        alloc_history: AllocationHistoryDimensions | None = None
+        if query.include_allocation_history:
+            included.append("allocation_history")
+            alloc_history = AllocationHistoryDimensions(
+                type=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("type")],
+                sector=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("sector")],
+                geography=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("geography")],
+            )
+
+        # ── 5. Data quality from engine (already computed if summary was built) ──
+        data_quality = summary.data_quality if summary else views.build_data_quality_report(
+            mwrr_available=False,
+        )
+
+        # ── 6. Metadata ──
+        computed_from = engine_result.daily_states[0].date if engine_result.daily_states else None
+        computed_to = engine_result.daily_states[-1].date if engine_result.daily_states else None
+
+        metadata = PortfolioReportMetadata(
+            broker_ids=query.broker_ids,
+            target_currency=base_currency,
+            requested_date_from=date_from,
+            requested_date_to=date_to,
+            computed_date_from=computed_from,
+            computed_date_to=computed_to,
+            generated_at=today,
+            included_features=included,
+        )
+
+        return PortfolioReportResponse(
+            metadata=metadata,
+            summary=summary,
+            history=history,
+            allocation_history=alloc_history,
+            data_quality=data_quality,
+        )
 
     async def get_asset_history(
         self,

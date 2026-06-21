@@ -27,7 +27,13 @@ from sqlalchemy import select
 
 from backend.app.db.models import Asset, BrokerUserAccess, PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency as CurrencySchema
-from backend.app.schemas.portfolio import DataQualityReport
+from backend.app.schemas.portfolio import (
+    DataQualityIssue,
+    DataQualityReport,
+    IssueCode,
+    IssueDomain,
+    IssueSeverity,
+)
 from backend.app.services.fx import convert_bulk
 from backend.app.services.settings_service import get_global_setting
 from backend.app.utils.financial.roi_utils import CashFlowInput, NAVSnapshot
@@ -351,6 +357,7 @@ class DailyPortfolioState:
     missing_price_asset_ids: set[int] = field(default_factory=set)
     missing_fx_pairs: set[str] = field(default_factory=set)
     stale_price_asset_ids: set[int] = field(default_factory=set)
+    transaction_implied_asset_ids: set[int] = field(default_factory=set)
     nav_complete: bool = True
 
 
@@ -448,22 +455,25 @@ class DailyStateBuilder:
             missing: set[int] = set()
             stale: set[int] = set()
             missing_fx: set[str] = set()
+            implied: set[int] = set()
 
             for (asset_id, _broker_id), qty in cumulative_qty.items():
                 if qty <= 0:
                     continue
-                mv, price_found, is_stale, fx_missing = self._market_value_for(
+                mv, price_found, is_stale, fx_missing, is_implied = self._market_value_for(
                     asset_id, qty, current
                 )
                 if mv is not None:
                     market_value += mv
                     self._distribute_allocation(asset_id, mv, by_type, by_sector, by_geo)
-                if not price_found:
+                if not price_found and not is_implied:
                     missing.add(asset_id)
                 if is_stale:
                     stale.add(asset_id)
                 if fx_missing:
                     missing_fx.add(fx_missing)
+                if is_implied:
+                    implied.add(asset_id)
 
             # 4d. In-transit values
             it_cash, it_asset_mv, it_asset_cb = self._compute_in_transit(current, missing_fx)
@@ -512,6 +522,7 @@ class DailyStateBuilder:
                     missing_price_asset_ids=missing,
                     missing_fx_pairs=missing_fx,
                     stale_price_asset_ids=stale,
+                    transaction_implied_asset_ids=implied,
                     nav_complete=len(missing) == 0,
                 )
             )
@@ -564,33 +575,58 @@ class DailyStateBuilder:
 
     def _market_value_for(
         self, asset_id: int, qty: Decimal, dt: date_type
-    ) -> tuple[Decimal | None, bool, bool, str | None]:
+    ) -> tuple[Decimal | None, bool, bool, str | None, bool]:
         """Compute market_value for one asset holding.
 
-        Returns: (value_in_target_ccy, price_found, is_stale, missing_fx_pair)
+        Returns: (value_in_target_ccy, price_found, is_stale, missing_fx_pair, is_implied)
+
+        Valuation sources (in priority order):
+        1. MARKET_PRICE: PriceHistory exists on or before dt → use market price
+        2. TRANSACTION_IMPLIED: No PriceHistory but WAC/cost_basis available →
+           use open_cost_basis as a temporary proxy (warning issued at report level)
+        3. MISSING: Neither price nor cost_basis → excluded from NAV (error)
         """
         prices = self.price_map.get(asset_id)
-        if not prices:
-            return None, False, False, None
+        result = self._price_on_date(prices, dt) if prices else None
 
-        result = self._price_on_date(prices, dt)
-        if result is None:
-            return None, False, False, None
+        if result is not None:
+            # --- MARKET_PRICE path ---
+            raw_price, price_ccy, actual_date = result
+            is_stale = (dt - actual_date).days > STALE_PRICE_THRESHOLD_DAYS
+            quote_base = self.quote_base_map.get(asset_id)
+            holding_value = compute_holding_value(qty, raw_price, quote_base)
 
-        raw_price, price_ccy, actual_date = result
-        is_stale = (dt - actual_date).days > STALE_PRICE_THRESHOLD_DAYS
+            if price_ccy == self.target_currency:
+                return holding_value, True, is_stale, None, False
 
-        quote_base = self.quote_base_map.get(asset_id)
-        holding_value = compute_holding_value(qty, raw_price, quote_base)
+            rate = self.fx_rate_map.get((price_ccy, self.target_currency, dt))
+            if rate is None:
+                return None, True, is_stale, f"{price_ccy}/{self.target_currency}", False
 
-        if price_ccy == self.target_currency:
-            return holding_value, True, is_stale, None
+            return holding_value * rate, True, is_stale, None, False
 
-        rate = self.fx_rate_map.get((price_ccy, self.target_currency, dt))
-        if rate is None:
-            return None, True, is_stale, f"{price_ccy}/{self.target_currency}"
+        # No market price — try TRANSACTION_IMPLIED via WAC/open_cost_basis
+        # Check all (asset_id, broker_id) WAC series for this asset
+        implied_value: Decimal | None = None
+        for (aid, _bid), wac_data in self.wac_series.items():
+            if aid != asset_id:
+                continue
+            wac_val, wac_ccy = self._wac_on_date(wac_data, dt)
+            if wac_val is None or wac_ccy is None:
+                continue
+            ocb = wac_val * qty
+            if wac_ccy == self.target_currency:
+                implied_value = (implied_value or Decimal("0")) + ocb
+            else:
+                rate = self.fx_rate_map.get((wac_ccy, self.target_currency, dt))
+                if rate is not None:
+                    implied_value = (implied_value or Decimal("0")) + ocb * rate
 
-        return holding_value * rate, True, is_stale, None
+        if implied_value is not None and implied_value > 0:
+            return implied_value, False, False, None, True
+
+        # Neither market price nor WAC — fully missing
+        return None, False, False, None, False
 
     def _compute_in_transit(
         self, dt: date_type, missing_fx: set[str]
@@ -620,7 +656,7 @@ class DailyStateBuilder:
                     dep = interval.departure_leg
                     qty = abs(dep.quantity) if dep.quantity else zero
                     if qty > 0:
-                        mv, _, _, fx_miss = self._market_value_for(
+                        mv, _, _, fx_miss, _ = self._market_value_for(
                             interval.asset_id, qty, dt
                         )
                         if mv is not None:
@@ -858,13 +894,132 @@ class DerivedViewsBuilder:
             pairs.update(s.missing_fx_pairs)
         return pairs
 
+    def aggregate_transaction_implied_ids(self) -> set[int]:
+        """Collect all asset IDs valued via transaction-implied (no market price)."""
+        ids: set[int] = set()
+        for s in self.daily_states:
+            ids.update(s.transaction_implied_asset_ids)
+        return ids
+
     def build_data_quality_report(
         self,
         missing_price_assets_dto: list | None = None,
         stale_prices_dto: list | None = None,
         missing_fx_pairs_dto: list | None = None,
+        transaction_implied_assets_dto: list | None = None,
         classifier_warnings: list[str] | None = None,
+        mwrr_available: bool = True,
     ) -> DataQualityReport:
+        """Aggregate per-day data quality into a DataQualityReport DTO.
+
+        missing_price_assets_dto / stale_prices_dto / missing_fx_pairs_dto are
+        pre-built DTO lists (caller constructs them with full asset/broker info).
+        transaction_implied_assets_dto: assets valued at cost (no market price but WAC present).
+        If None, the report still populates date-level fields.
+        """
+        incomplete_nav: list[date_type] = []
+        for s in self.daily_states:
+            if not s.nav_complete:
+                incomplete_nav.append(s.date)
+
+        # Build structured issues list
+        issues: list[DataQualityIssue] = []
+
+        # MISSING_PRICE — error: assets excluded from NAV
+        if missing_price_assets_dto:
+            issues.append(DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.MISSING_PRICE,
+                severity=IssueSeverity.ERROR,
+                message_i18n_key="dataQuality.missingPrice",
+                message_params={"count": len(missing_price_assets_dto)},
+                count=len(missing_price_assets_dto),
+                affected_asset_ids=[a.asset_id for a in missing_price_assets_dto],
+                affected_asset_names=[a.name for a in missing_price_assets_dto],
+                cta_action="navigate_asset",
+                group_key="missing_price",
+            ))
+
+        # TRANSACTION_IMPLIED — warning: assets at cost (pre-market, e.g. BTP collocamento)
+        if transaction_implied_assets_dto:
+            issues.append(DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.TRANSACTION_IMPLIED,
+                severity=IssueSeverity.WARNING,
+                message_i18n_key="dataQuality.transactionImplied",
+                message_params={"count": len(transaction_implied_assets_dto)},
+                count=len(transaction_implied_assets_dto),
+                affected_asset_ids=[a.asset_id for a in transaction_implied_assets_dto],
+                affected_asset_names=[a.name for a in transaction_implied_assets_dto],
+                cta_action="navigate_asset",
+                group_key="transaction_implied",
+            ))
+
+        # STALE_PRICE — warning: prices older than threshold
+        if stale_prices_dto:
+            issues.append(DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.STALE_PRICE,
+                severity=IssueSeverity.WARNING,
+                message_i18n_key="dataQuality.stalePrice",
+                message_params={"count": len(stale_prices_dto)},
+                count=len(stale_prices_dto),
+                affected_asset_ids=[a.asset_id for a in stale_prices_dto],
+                affected_asset_names=[a.name for a in stale_prices_dto],
+                cta_action="navigate_asset",
+                group_key="stale_price",
+            ))
+
+        # MISSING_FX_MARKET — warning: FX pairs needed but missing
+        if missing_fx_pairs_dto:
+            pairs = list({p.pair for p in missing_fx_pairs_dto})
+            issues.append(DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.MISSING_FX_MARKET,
+                severity=IssueSeverity.WARNING,
+                message_i18n_key="dataQuality.missingFx",
+                message_params={"count": len(pairs)},
+                count=len(pairs),
+                affected_fx_pairs=pairs,
+                cta_action="add_fx_pair",
+                group_key="missing_fx",
+            ))
+
+        # NAV_INCOMPLETE — info: some days had incomplete NAV
+        if incomplete_nav:
+            incomplete_nav_sorted = sorted(incomplete_nav)
+            issues.append(DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.NAV_INCOMPLETE,
+                severity=IssueSeverity.INFO,
+                message_i18n_key="dataQuality.navIncomplete",
+                message_params={
+                    "count": len(incomplete_nav_sorted),
+                    "date_from": incomplete_nav_sorted[0].isoformat(),
+                    "date_to": incomplete_nav_sorted[-1].isoformat(),
+                },
+                count=len(incomplete_nav_sorted),
+                group_key="nav_incomplete",
+            ))
+
+        # MWRR_NOT_CALCULABLE — info
+        if not mwrr_available:
+            issues.append(DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.MWRR_NOT_CALCULABLE,
+                severity=IssueSeverity.INFO,
+                message_i18n_key="dataQuality.mwrrNotAvailable",
+                group_key="mwrr",
+            ))
+
+        return DataQualityReport(
+            issues=issues,
+            missing_price_assets=missing_price_assets_dto or [],
+            missing_fx_pairs=missing_fx_pairs_dto or [],
+            stale_prices=stale_prices_dto or [],
+            incomplete_nav_dates=incomplete_nav,
+            warnings=classifier_warnings or [],
+        )
         """Aggregate per-day data quality into a DataQualityReport DTO.
 
         missing_price_assets_dto / stale_prices_dto / missing_fx_pairs_dto are
@@ -876,7 +1031,83 @@ class DerivedViewsBuilder:
             if not s.nav_complete:
                 incomplete_nav.append(s.date)
 
+        # Build structured issues list
+        issues: list[DataQualityIssue] = []
+
+        # MISSING_PRICE — error: assets excluded from NAV
+        if missing_price_assets_dto:
+            issues.append(DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.MISSING_PRICE,
+                severity=IssueSeverity.ERROR,
+                message_i18n_key="dataQuality.missingPrice",
+                message_params={"count": len(missing_price_assets_dto)},
+                count=len(missing_price_assets_dto),
+                affected_asset_ids=[a.asset_id for a in missing_price_assets_dto],
+                affected_asset_names=[a.name for a in missing_price_assets_dto],
+                cta_action="navigate_asset",
+                group_key="missing_price",
+            ))
+
+        # STALE_PRICE — warning: prices older than threshold
+        if stale_prices_dto:
+            issues.append(DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.STALE_PRICE,
+                severity=IssueSeverity.WARNING,
+                message_i18n_key="dataQuality.stalePrice",
+                message_params={"count": len(stale_prices_dto)},
+                count=len(stale_prices_dto),
+                affected_asset_ids=[a.asset_id for a in stale_prices_dto],
+                affected_asset_names=[a.name for a in stale_prices_dto],
+                cta_action="navigate_asset",
+                group_key="stale_price",
+            ))
+
+        # MISSING_FX_MARKET — warning: FX pairs needed but missing
+        if missing_fx_pairs_dto:
+            pairs = list({p.pair for p in missing_fx_pairs_dto})
+            issues.append(DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.MISSING_FX_MARKET,
+                severity=IssueSeverity.WARNING,
+                message_i18n_key="dataQuality.missingFx",
+                message_params={"count": len(pairs)},
+                count=len(pairs),
+                affected_fx_pairs=pairs,
+                cta_action="add_fx_pair",
+                group_key="missing_fx",
+            ))
+
+        # NAV_INCOMPLETE — info: some days had incomplete NAV
+        if incomplete_nav:
+            incomplete_nav_sorted = sorted(incomplete_nav)
+            issues.append(DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.NAV_INCOMPLETE,
+                severity=IssueSeverity.INFO,
+                message_i18n_key="dataQuality.navIncomplete",
+                message_params={
+                    "count": len(incomplete_nav_sorted),
+                    "date_from": incomplete_nav_sorted[0].isoformat(),
+                    "date_to": incomplete_nav_sorted[-1].isoformat(),
+                },
+                count=len(incomplete_nav_sorted),
+                group_key="nav_incomplete",
+            ))
+
+        # MWRR_NOT_CALCULABLE — info
+        if not mwrr_available:
+            issues.append(DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.MWRR_NOT_CALCULABLE,
+                severity=IssueSeverity.INFO,
+                message_i18n_key="dataQuality.mwrrNotAvailable",
+                group_key="mwrr",
+            ))
+
         return DataQualityReport(
+            issues=issues,
             missing_price_assets=missing_price_assets_dto or [],
             missing_fx_pairs=missing_fx_pairs_dto or [],
             stale_prices=stale_prices_dto or [],

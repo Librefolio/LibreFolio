@@ -858,6 +858,30 @@
     "missingFxPrefix": "Mancano i tassi di conversione valuta per:",
     "missingFxSuffix": "I totali aggregati potrebbero essere incompleti."
   },
+  "dataQuality": {
+    "header": "Qualità dati: {errors} errore/i, {warnings} avviso/i",
+    "headerInfoOnly": "Note sulla qualità dei dati",
+    "headerErrors": "{errors} errore/i",
+    "headerWarnings": "{warnings} avviso/i",
+    "missingPrice": "{count} asset senza prezzo di mercato — esclusi dal NAV",
+    "transactionImplied": "{count} asset valorizzati temporaneamente al costo — prezzo di mercato non ancora disponibile",
+    "stalePrice": "{count} asset con prezzi obsoleti",
+    "missingFx": "Mancano tassi FX per {count} coppia/e — i totali potrebbero essere incompleti",
+    "navIncomplete": "NAV incompleto per {count} giorno/i tra {date_from} e {date_to}",
+    "mwrrNotAvailable": "MWRR non calcolabile per questo periodo",
+    "archivedAsset": "Questo asset è archiviato — non aggiornato dallo scheduler",
+    "rangeBeforeData": "Dati disponibili dal {date}",
+    "fxPairMissing": "Coppia FX non configurata — conversione non disponibile",
+    "fxPairNoData": "Nessun dato disponibile",
+    "fxPairPartialGap": "Gap parziale nei tassi — dati dal {date}",
+    "showDetails": "Mostra altri {count}...",
+    "hideDetails": "Nascondi dettagli",
+    "cta": {
+      "navigate_asset": "Vedi asset",
+      "navigate_fx": "Vedi FX",
+      "add_fx_pair": "Aggiungi coppia FX"
+    }
+  },
   "dataEditor": {
     "clearSelection": "Deseleziona",
     "staleTooltip": "Nascondi righe riempite all'indietro (⚠️ non aggiornate). Sono punti di riempimento copiati dal dato reale più vicino.",

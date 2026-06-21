@@ -89,10 +89,11 @@ onaction?: (action: string, target: string | null, issue: DataQualityIssue) => v
 
 | Code | Severity | Condition | CTA Action |
 |------|----------|-----------|------------|
-| `MISSING_PRICE` | 🔴 Error | Asset held with no PriceHistory and no valuation fallback | `navigate_asset` |
+| `MISSING_PRICE` | 🔴 Error | Asset held with no PriceHistory and no WAC/cost basis fallback | `navigate_asset` |
+| `TRANSACTION_IMPLIED` | 🟡 Warning | Asset held with no PriceHistory but WAC/cost basis available — valued at cost temporarily | `navigate_asset` |
 | `STALE_PRICE` | 🟡 Warning | Latest price older than staleness threshold | `navigate_asset` |
 | `MISSING_FX_MARKET` | 🟡 Warning | Asset in foreign currency without a configured FX pair | `add_fx_pair` |
-| `NAV_INCOMPLETE` | 🔵 Info | One or more days had incomplete NAV (caused by above) | none |
+| `NAV_INCOMPLETE` | 🔵 Info | One or more days had incomplete NAV (caused by MISSING_PRICE) | none |
 | `MWRR_NOT_CALCULABLE` | 🔵 Info | MWRR did not converge or period is too short | none |
 
 ### 📈 Asset Detail Issues (built client-side in `assets/[id]/+page.svelte`)
@@ -119,10 +120,11 @@ onaction?: (action: string, target: string | null, issue: DataQualityIssue) => v
 
 | Issue | How to Trigger |
 |-------|----------------|
-| `MISSING_PRICE` | Add a BUY transaction for an asset that has no PriceHistory entries. The NAV will exclude it. |
+| `MISSING_PRICE` | Add a BUY transaction for an asset that has no PriceHistory entries AND no WAC/cost basis is available. The NAV will exclude it. |
+| `TRANSACTION_IMPLIED` | Buy an asset (e.g. BTP in collocamento) before its first PriceHistory is available. WAC must exist. The engine uses WAC as a temporary proxy; the issue disappears once the first price becomes available. |
 | `STALE_PRICE` | Use an asset that hasn't been synced recently, or manually set `last_price_date` far in the past in the DB. |
 | `MISSING_FX_MARKET` | Add an asset in a foreign currency (e.g. USD) when the dashboard target currency is EUR and the EUR/USD pair is not configured. |
-| `NAV_INCOMPLETE` | Same scenario as `MISSING_PRICE` or `MISSING_FX_MARKET` — appears automatically when NAV is incomplete for ≥1 day. |
+| `NAV_INCOMPLETE` | Same scenario as `MISSING_PRICE` — appears automatically when NAV is incomplete for ≥1 day. |
 | `MWRR_NOT_CALCULABLE` | Portfolio with only 1 transaction on 1 day. MWRR needs ≥2 nav snapshots with a non-zero cash flow. |
 
 ### 📈 Asset Detail
@@ -194,7 +196,7 @@ Run test suite:
 ```bash
 pipenv run ./dev.py test services roi-fifo-utils
 ```
-*(Covers all of `test_services/test_financial/`)*
+*(Covers `test_services/test_financial/` — includes `test_data_quality_report.py` and `test_transaction_implied.py`)*
 
 ### 🎭 Frontend E2E Tests (`e2e/portfolio/data-quality-banners.spec.ts`)
 * Dashboard loads without JS errors.
