@@ -19,7 +19,7 @@ Bring all your investments into one private, secure dashboard. Track stocks, ETF
 
 Your data stays on your server. No third-party cloud. No tracking.
 
-📚 **Full Documentation**: [https://alfystar.github.io/LibreFolio/](https://alfystar.github.io/LibreFolio/)
+📚 **Full Documentation**: [https://librefolio.github.io/LibreFolio//](https://librefolio.github.io/LibreFolio//)
 
 ## 🚀 Quick Start
 
