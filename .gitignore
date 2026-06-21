@@ -49,7 +49,7 @@ frontend/dist/
 frontend/build/
 
 # Pipenv
-Pipfile.lock
+# Pipfile.lock
 
 # Generated for Docker (from Pipfile.lock via dev.py docker build)
 requirements.txt
@@ -57,7 +57,7 @@ LibreFolio-data/
 
 # Node.js
 **/node_modules/
-**/package-lock.json
+# **/package-lock.json
 **/yarn.lock
 **/npm-debug.log*
 **/yarn-debug.log*
