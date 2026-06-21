@@ -101,7 +101,7 @@ Les chemins de stockage et les comportements à l'exécution du système de fich
 
 ---
 
-## 💾 Sauvegarde
+## 💾 Sauvegarde {: #backup}
 
 ### 📦 Sauvegarde simple
 
