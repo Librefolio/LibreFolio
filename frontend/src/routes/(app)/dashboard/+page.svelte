@@ -129,7 +129,11 @@
         return v;
     }
 
-    function formatMoney(code: string | undefined, amount: string | null | undefined, opts?: {signed?: boolean; absolute?: boolean}): string {
+    interface FormatMoneyOpts {
+        signed?: boolean;
+        absolute?: boolean;
+    }
+    function formatMoney(code: string | undefined, amount: string | null | undefined, opts?: FormatMoneyOpts): string {
         if (amount == null) return '—';
         const num = parseFloat(amount);
         const signed = opts?.signed ?? false;
