@@ -25,13 +25,13 @@ Prima di procedere, assicurati di avere i seguenti requisiti installati sul tuo 
       sudo apt install python3.13 python3.13-venv python3.13-dev
       ```
 
-??? info "📦 Node.js 20.19+"
+??? info "📦 Node.js 24+"
 
     Node.js è richiesto per compilare il frontend SvelteKit.
     
     * **macOS**: Installa tramite Homebrew:
       ```bash
-      brew install node@20
+      brew install node@24
       ```
     * **Windows/Linux**: Installa usando [nvm](https://github.com/nvm-sh/nvm) (Linux/macOS) o [nvm-windows](https://github.com/coreybutler/nvm-windows) (Windows), oppure scarica direttamente da [nodejs.org](https://nodejs.org/).
 
