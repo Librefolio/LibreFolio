@@ -111,7 +111,7 @@ jobs:
 
       - name: Generate Screenshots with Playwright
         timeout-minutes: 120
-        run: pipenv run ./dev.py mkdocs gallery --workers 12
+        run: pipenv run ./dev.py mkdocs gallery --workers 8
 
       - name: Build MkDocs Documentation
         run: pipenv run ./dev.py mkdocs build

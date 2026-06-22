@@ -192,7 +192,7 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
-                await page.waitForLoadState('networkidle');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'main');
             });
@@ -211,7 +211,7 @@ test.describe('Gallery Screenshots', () => {
                 for (const theme of THEMES) {
                     // Navigate fresh to dashboard for each combo (ensures clean state)
                     await page.goto('/dashboard');
-                    await page.waitForLoadState('networkidle');
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await freezeAnimations(page);
 
                     // Set language and theme while menu is closed
@@ -234,7 +234,7 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
-                await page.waitForLoadState('networkidle');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
                 // Scroll to the allocation panel
                 const allocPanel = page.getByTestId('allocation-panel');
@@ -263,7 +263,7 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
-                await page.waitForLoadState('networkidle');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'empty-state');
             });
@@ -465,7 +465,7 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/files?tab=static');
-                await page.waitForLoadState('networkidle');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
                 await screenshot(page, viewport, lang, theme, 'files', 'static-tab');
             });
@@ -476,7 +476,7 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/files?tab=brim');
-                await page.waitForLoadState('networkidle');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
                 await screenshot(page, viewport, lang, theme, 'files', 'brim-tab');
             });
@@ -487,7 +487,7 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/files?tab=static');
-                await page.waitForLoadState('networkidle');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
                 // Switch to grid view if toggle exists
                 const gridBtn = page.getByTestId('view-mode-grid');
@@ -507,7 +507,7 @@ test.describe('Gallery Screenshots', () => {
                     await page.goto('/files?tab=brim');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
-                    await page.waitForLoadState('networkidle');
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await freezeAnimations(page);
                     await page.waitForTimeout(500);
 
@@ -543,7 +543,7 @@ test.describe('Gallery Screenshots', () => {
                         await page.goto(`/files?tab=static&filename=${encodeURIComponent(filename)}`);
                         await setLanguage(page, lang);
                         await setTheme(page, theme);
-                        await page.waitForLoadState('networkidle');
+                        await page.waitForLoadState('networkidle', {timeout: 20_000});
                         await freezeAnimations(page);
                         await page.waitForTimeout(500);
 
@@ -921,7 +921,7 @@ test.describe('Gallery Screenshots', () => {
                     const card = page.locator('[data-testid^="broker-card-"]').first();
                     await expect(card).toBeVisible({timeout: 3000});
                     await card.click();
-                    await page.waitForLoadState('networkidle');
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
                     // Wait for broker icon to load
                     await page.waitForTimeout(1000);
                     await screenshot(page, viewport, lang, theme, 'brokers', 'detail');
@@ -979,7 +979,7 @@ test.describe('Gallery Screenshots', () => {
                     const card = page.locator('[data-testid^="broker-card-"]').first();
                     await expect(card).toBeVisible({timeout: 3000});
                     await card.click();
-                    await page.waitForLoadState('networkidle');
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await page.waitForTimeout(500);
 
                     // Scroll to and click import files button
@@ -1263,7 +1263,7 @@ test.describe('Gallery Screenshots', () => {
                 for (const theme of THEMES) {
                     // Navigate fresh each time to avoid leftover modal state
                     await navigateTo(page, '/files');
-                    await page.waitForLoadState('networkidle');
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await page.waitForTimeout(300);
                     await setLanguage(page, lang);
                     await page.getByTestId('files-tab-static').click();
@@ -1315,7 +1315,7 @@ test.describe('Gallery Screenshots', () => {
                 for (const theme of THEMES) {
                     // Navigate fresh each iteration to ensure clean state
                     await navigateTo(page, '/brokers');
-                    await page.waitForLoadState('networkidle');
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await page.waitForTimeout(300);
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
@@ -1325,7 +1325,7 @@ test.describe('Gallery Screenshots', () => {
                     const card = page.locator('[data-testid^="broker-card-"]').first();
                     if (await card.isVisible({timeout: 2000}).catch(() => false)) {
                         await card.click();
-                        await page.waitForLoadState('networkidle');
+                        await page.waitForLoadState('networkidle', {timeout: 20_000});
                         await page.waitForTimeout(500);
 
                         // Click edit button to open BrokerModal
@@ -1364,7 +1364,7 @@ test.describe('Gallery Screenshots', () => {
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
                     await navigateTo(page, '/files');
-                    await page.waitForLoadState('networkidle');
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await page.waitForTimeout(300);
                     await setLanguage(page, lang);
                     await page.getByTestId('files-tab-static').click();
@@ -1389,7 +1389,7 @@ test.describe('Gallery Screenshots', () => {
                 for (const theme of THEMES) {
                     // Navigate to brokers page
                     await navigateTo(page, '/brokers');
-                    await page.waitForLoadState('networkidle');
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await page.waitForTimeout(300);
                     await setLanguage(page, lang);
                     await setTheme(page, theme);

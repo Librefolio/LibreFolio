@@ -43,32 +43,34 @@ async def get_user_settings(user_id: int, session: AsyncSession) -> Optional[Use
 
 
 async def get_or_create_user_settings(user_id: int, session: AsyncSession) -> UserSettingsRead:
-    """Get user settings, creating with defaults if not exists."""
+    """Get user settings, creating with defaults if not exists.
+
+    Uses INSERT OR IGNORE (on_conflict_do_nothing) to be safe against concurrent
+    requests for the same user (e.g. multiple Playwright workers calling /api/v1/settings/user
+    simultaneously right after login).
+    """
+    now = utcnow()
+    stmt = (
+        sqlite_insert(UserSettings)
+        .values(
+            user_id=user_id,
+            language="en",
+            base_currency="EUR",
+            theme="light",
+            created_at=now,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(index_elements=["user_id"])
+    )
+    await session.execute(stmt)
+    await session.commit()
+
     settings = await get_user_settings(user_id, session)
     if settings:
         return settings
 
-    # Create default settings
-    new_settings = UserSettings(
-        user_id=user_id,
-        language="en",
-        base_currency="EUR",
-        theme="light",
-        created_at=utcnow(),
-        updated_at=utcnow(),
-    )
-    session.add(new_settings)
-    await session.commit()
-    await session.refresh(new_settings)
-
-    logger.info("Created default user settings", user_id=user_id)
-
-    return UserSettingsRead(
-        language=new_settings.language,
-        base_currency=new_settings.base_currency,
-        theme=new_settings.theme,
-        avatar_url=new_settings.avatar_url,
-    )
+    # Should never happen — but guard against unexpected state
+    raise RuntimeError(f"user_settings for user_id={user_id} not found after upsert")
 
 
 async def update_user_settings(user_id: int, updates: UserSettingsUpdate, session: AsyncSession) -> UserSettingsRead:
