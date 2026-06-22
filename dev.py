@@ -456,19 +456,6 @@ def cmd_fe_build(args):
     generate_favicon()
 
     # DIAGNOSTICS FOR GITHUB ACTIONS
-    print(Colors.info("[DEBUG] CWD is: " + str(Path.cwd())))
-    run_command_live(["ls", "-la"])
-    run_command_live(["ls", "-la", "frontend"])
-    print(Colors.info("[DEBUG] Node/npm versions:"))
-    run_command_live(["node", "-v"], cwd=PROJECT_ROOT / "frontend")
-    run_command_live(["npm", "-v"], cwd=PROJECT_ROOT / "frontend")
-    print(Colors.info("[DEBUG] Package versions:"))
-    run_command_live(["npm", "ls", "svelte", "@sveltejs/kit", "@sveltejs/vite-plugin-svelte", "vite", "typescript", "esbuild"], cwd=PROJECT_ROOT / "frontend")
-    for pkg in ['svelte', '@sveltejs/kit', '@sveltejs/vite-plugin-svelte', 'vite', 'typescript']:
-        run_command_live(["node", "-e", f"console.log('{pkg}', require('./node_modules/{pkg}/package.json').version)"], cwd=PROJECT_ROOT / "frontend")
-    print(Colors.info("[DEBUG] Git status and generated.ts diff:"))
-    run_command_live(["git", "status", "--short"])
-    run_command_live(["git", "diff", "--", "frontend/src/lib/api/generated.ts"])
     print(Colors.info("[DEBUG] Running svelte-check..."))
     run_command_live(["npx", "svelte-check", "--tsconfig", "./tsconfig.json"], cwd=PROJECT_ROOT / "frontend")
     print(Colors.info("[DEBUG] END OF DIAGNOSTICS"))
@@ -1556,6 +1543,14 @@ def cmd_install(args):
     print()
 
     print_header("✅ All dependencies installed!")
+    
+    # DIAGNOSTICS FOR GITHUB ACTIONS
+    print()
+    print(Colors.info("[DEBUG] Backend Package versions:"))
+    run_command_live(["pipenv", "run", "pip", "list"])
+    print(Colors.info("[DEBUG] Frontend Package versions:"))
+    run_command_live(["npm", "ls", "svelte", "@sveltejs/kit", "@sveltejs/vite-plugin-svelte", "vite", "typescript", "esbuild"], cwd=PROJECT_ROOT / "frontend")
+    
     return 0
 
 
