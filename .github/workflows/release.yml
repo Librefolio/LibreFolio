@@ -73,7 +73,7 @@ jobs:
       - name: Installa Dipendenze Python
         run: pipenv install --dev
 
-      - name: "[DIAGNOSTICA] Stato prima di NPM"
+      - name: "[INFO] Environment summary before install"
         run: |
           pwd
           ls -la
@@ -88,30 +88,11 @@ jobs:
           ls -la ~/.cache/ms-playwright || true
           find ~/.cache/ms-playwright -maxdepth 2 -type d | sort || true
 
-      - name: Installa dipendenze frontend per Playwright
-        working-directory: ./frontend
-        timeout-minutes: 10
-        run: npm ci
-
-      - name: Installa Playwright Chromium fuori da dev.py
-        working-directory: ./frontend
-        timeout-minutes: 10
-        env:
-          DEBUG: pw:install
-        run: |
-          pwd
-          node -v
-          npm -v
-          npx --no-install playwright --version
-          npx --no-install playwright install chromium
-          ls -la ~/.cache/ms-playwright || true
-          find ~/.cache/ms-playwright -maxdepth 2 -type d | sort || true
-
       - name: Installa Dipendenze Frontend e Playwright (tramite dev.py)
         timeout-minutes: 15
         run: pipenv run ./dev.py install
 
-      - name: "[DIAGNOSTICA] Stato post-installazione"
+      - name: "[INFO] Playwright installation check"
         run: |
           npm --prefix frontend exec -- playwright --version || true
 
