@@ -71,7 +71,7 @@ cd librefolio
 
     ```bash
     # 📥 Download the official docker-compose.yml file
-    wget https://raw.githubusercontent.com/Librefolio/LibreFolio/main/docker-compose.yml
+    wget https://raw.githubusercontent.com/Librefolio/LibreFolio/main/docker-compose.prod.yml -O docker-compose.yml
 
     # 🔑 Download the .env.example file and save it as .env
     wget https://raw.githubusercontent.com/Librefolio/LibreFolio/main/.env.example -O .env
@@ -81,7 +81,7 @@ cd librefolio
 
     ```bash
     # 📥 Download the official docker-compose.yml file
-    curl -L https://raw.githubusercontent.com/Librefolio/LibreFolio/main/docker-compose.yml -o docker-compose.yml
+    curl -L https://raw.githubusercontent.com/Librefolio/LibreFolio/main/docker-compose.prod.yml -o docker-compose.yml
 
     # 🔑 Download the .env.example file and save it as .env
     curl -L https://raw.githubusercontent.com/Librefolio/LibreFolio/main/.env.example -o .env
