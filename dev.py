@@ -701,7 +701,8 @@ def cmd_mkdocs_deploy(args):
     """Deploy MkDocs to GitHub Pages."""
     print(Colors.success("Deploying MkDocs site to GitHub Pages..."))
     copy_docs_assets()
-    return run_pipenv(["mkdocs", "gh-deploy", "-f", "mkdocs_src/mkdocs.yml"])
+    return run_pipenv(["mkdocs", "gh-deploy", "--force", "-f", "mkdocs_src/mkdocs.yml"])
+
 
 
 def cmd_mkdocs_gallery(args):

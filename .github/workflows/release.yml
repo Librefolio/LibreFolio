@@ -2,9 +2,16 @@ name: LibreFolio Release
 run-name: Release ${{ github.event.release.tag_name }}
 
 on:
-  workflow_dispatch: # Allows running the pipeline manually from the "Actions" tab
+  workflow_dispatch:
+    inputs:
+      force_gallery:
+        description: 'Force Playwright gallery screenshot regeneration (bypasses cache)'
+        required: false
+        type: boolean
+        default: false
   release:
     types: [published]
+
 
 permissions:
   contents: write     # Required to push to the gh-pages branch with mkdocs gh-deploy
@@ -109,9 +116,37 @@ jobs:
       - name: Validate cross-boundary links
         run: pipenv run ./dev.py mkdocs check-links
 
+      - name: Extract Minor Version for Cache
+        id: minor-version
+        run: |
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          if [ -z "$TAG_NAME" ]; then
+            TAG_NAME="${{ github.ref_name }}"
+          fi
+          if [[ "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+ ]]; then
+            MINOR=$(echo "$TAG_NAME" | cut -d'.' -f1,2)
+          else
+            MINOR="$TAG_NAME"
+          fi
+          echo "val=$MINOR" >> $GITHUB_OUTPUT
+
+      - name: Cache Gallery Screenshots
+        id: cache-screenshots
+        uses: actions/cache@v4
+        with:
+          path: |
+            mkdocs_src/docs/gallery/**/*.png
+          key: screenshots-${{ steps.minor-version.outputs.val }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            screenshots-${{ steps.minor-version.outputs.val }}-
+
       - name: Generate Screenshots with Playwright
+        if: |
+          steps.cache-screenshots.outputs.cache-hit != 'true' ||
+          github.event.inputs.force_gallery == 'true'
         timeout-minutes: 120
         run: pipenv run ./dev.py mkdocs gallery --workers 8
+
 
       - name: Build MkDocs Documentation
         run: pipenv run ./dev.py mkdocs build
@@ -173,18 +208,22 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-screenshots
-          path: mkdocs_src/docs/gallery/
+          path: |
+            mkdocs_src/docs/gallery/**/*.png
           retention-days: 1
+
 
       # ==========================================
       # 7. RELEASE NOTES UPDATE
       # ==========================================
       - name: Append Docker info to Release Notes
+        if: github.event.release.tag_name != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_NAME=${{ github.event.release.tag_name }}
+          TAG_NAME="${{ github.event.release.tag_name }}"
           DOCKER_CMD="\n\n## 📦 Docker Installation\n\n\`\`\`bash\n# Install the latest version\ndocker pull ghcr.io/librefolio/librefolio:latest\n\n# Or install this specific release\ndocker pull ghcr.io/librefolio/librefolio:${TAG_NAME}\n\`\`\`\n"
           
           # Append the instructions to the existing release body
           gh release edit "$TAG_NAME" --notes-append "$DOCKER_CMD"
+
