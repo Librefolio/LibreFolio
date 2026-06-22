@@ -25,6 +25,7 @@
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {_ as t, locale} from '$lib/i18n';
     import {getEventTypeOptions, EVENT_TYPES_ALL} from '$lib/utils/transactions/eventTypes';
+    import {generateUUID} from '$lib/utils/core/uuid';
 
     // =========================================================================
     // Props
@@ -147,7 +148,7 @@
             // Use "new-<uuid>" for rows without a DB id so parseInt() cannot silently
             // extract leading digits from a raw UUID (e.g. "83959abc-..." → 83959)
             // and send a fake id to the delete endpoint.
-            rowId: ev.id != null ? String(ev.id) : `new-${crypto.randomUUID()}`,
+            rowId: ev.id != null ? String(ev.id) : `new-${generateUUID()}`,
             date: ev.date,
             status: 'original' as const,
             originalStatus: 'original' as const,

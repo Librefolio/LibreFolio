@@ -38,6 +38,7 @@
     import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
     import ParseDetailModal from '$lib/components/transactions/modals/ParseDetailModal.svelte';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
+    import {generateUUID} from '$lib/utils/core/uuid';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
@@ -940,7 +941,7 @@ ${arrow}<span>${label}</span></span>`,
                 pendingFiles = [
                     ...pendingFiles,
                     {
-                        id: crypto.randomUUID(),
+                        id: generateUUID(),
                         file,
                         fileName: file.name,
                         brokerId: globalBrokerId,
@@ -952,7 +953,7 @@ ${arrow}<span>${label}</span></span>`,
                 pendingFiles = [
                     ...pendingFiles,
                     {
-                        id: crypto.randomUUID(),
+                        id: generateUUID(),
                         file,
                         fileName: file.name,
                         brokerId: globalBrokerId,
@@ -988,7 +989,7 @@ ${arrow}<span>${label}</span></span>`,
             if (result.status === 'error') {
                 pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'error', errorMessage: result.message} : f));
             } else {
-                const serverFileId = result.data?.data?.file_id ?? crypto.randomUUID();
+                const serverFileId = result.data?.data?.file_id ?? generateUUID();
                 pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'uploaded', serverFileId} : f));
             }
         }
