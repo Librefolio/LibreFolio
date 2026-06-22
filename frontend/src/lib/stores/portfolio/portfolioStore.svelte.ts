@@ -89,13 +89,7 @@ export function portfolioError(): string | null {
  * @param targetCurrency — Override base currency (ISO 4217). Defaults to user setting.
  * @param force          — Bypass cache and re-fetch.
  */
-export async function fetchReport(
-    brokerIds?: number[],
-    dateFrom?: string,
-    dateTo?: string,
-    targetCurrency?: string,
-    force = false,
-): Promise<PortfolioReport | null> {
+export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false): Promise<PortfolioReport | null> {
     const key = makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency);
 
     if (!force) {
@@ -143,11 +137,9 @@ export async function fetchReport(
 }
 
 // Keep legacy exports for backward compatibility with any direct consumers of summary/history
-export const fetchSummary = (brokerIds?: number[], _includeBreakdown = false, targetCurrency?: string, force = false) =>
-    fetchReport(brokerIds, undefined, undefined, targetCurrency, force).then((r) => r?.summary ?? null);
+export const fetchSummary = (brokerIds?: number[], _includeBreakdown = false, targetCurrency?: string, force = false) => fetchReport(brokerIds, undefined, undefined, targetCurrency, force).then((r) => r?.summary ?? null);
 
-export const fetchHistory = (brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false) =>
-    fetchReport(brokerIds, dateFrom, dateTo, targetCurrency, force).then((r) => r?.history ?? []);
+export const fetchHistory = (brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false) => fetchReport(brokerIds, dateFrom, dateTo, targetCurrency, force).then((r) => r?.history ?? []);
 
 /**
  * Clear the entire portfolio cache.

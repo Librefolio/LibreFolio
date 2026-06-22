@@ -30,10 +30,11 @@
     /** Show circular preview overlay (for avatars/icons) */
     export let circularPreview: boolean = false;
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         select: {url: string};
         cancel: void;
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     type TabType = 'url' | 'existing' | 'upload';
 

@@ -12,7 +12,7 @@
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import {Info, Plus, Trash2, Upload} from 'lucide-svelte';
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         submit: {
             name: string;
             description?: string;
@@ -26,7 +26,8 @@
             initial_balances?: Array<{code: string; amount: number}>;
         };
         cancel: void;
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     // Props
     export let mode: 'create' | 'edit' = 'create';

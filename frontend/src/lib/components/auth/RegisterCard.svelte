@@ -7,9 +7,10 @@
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         gotoLogin: {message?: string};
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     let username = '';
     let email = '';

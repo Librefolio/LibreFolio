@@ -36,8 +36,8 @@
         gridLines = $bindable(true),
         staleGradient = $bindable(true),
         yAxisMode = $bindable<'auto' | 'include0' | 'custom'>('auto'),
-        yAxisMin = $bindable<number | undefined>(undefined),
-        yAxisMax = $bindable<number | undefined>(undefined),
+        yAxisMin = $bindable<number | undefined>(),
+        yAxisMax = $bindable<number | undefined>(),
         onchange,
         disabledFields = new Set<string>(),
     }: Props = $props();

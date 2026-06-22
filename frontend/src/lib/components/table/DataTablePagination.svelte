@@ -24,7 +24,7 @@
 
     // Custom dropdown state
     let showDropdown = $state(false);
-    let dropdownRef = $state<HTMLDivElement | null>(null);
+    let dropdownRef: HTMLDivElement | null = $state(null);
 
     $effect(() => {
         pageInputValue = String(currentPage);

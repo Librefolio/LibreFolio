@@ -74,7 +74,7 @@
     let maxWidthValue = $derived(maxWidthMap[maxWidth] || maxWidth);
 
     // Ref for backdrop focus
-    let backdropEl = $state<HTMLDivElement | undefined>(undefined);
+    let backdropEl: HTMLDivElement | undefined = $state(undefined);
     let hasFocusedOnOpen = $state(false);
     let bodyScrollLocked = false;
 

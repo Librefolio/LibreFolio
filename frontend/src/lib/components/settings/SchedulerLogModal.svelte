@@ -73,12 +73,12 @@
 
     let {open = $bindable(false)}: Props = $props();
 
-    let entries = $state<LogEntry[]>([]);
+    let entries: LogEntry[] = $state([]);
     let loading = $state(false);
     let filterJob = $state('all');
     let filterStatus = $state('all');
     let filterTime = $state('24h');
-    let expandedKeys = $state<Set<string>>(new Set());
+    let expandedKeys: Set<string> = $state(new Set());
 
     // =========================================================================
     // Filter options with emojis

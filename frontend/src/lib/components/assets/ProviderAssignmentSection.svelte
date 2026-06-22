@@ -90,12 +90,12 @@
     // State
     // =========================================================================
 
-    let providers = $state<ProviderInfo[]>([]);
+    let providers: ProviderInfo[] = $state([]);
     let providersLoaded = $state(false);
-    let testStatus = $state<TestStatus>('not_tested');
-    let testResults = $state<TestResult[]>([]);
+    let testStatus: TestStatus = $state('not_tested');
+    let testResults: TestResult[] = $state([]);
     let totalExecutionMs = $state(0);
-    let paramsValues = $state<Record<string, any>>({});
+    let paramsValues: Record<string, any> = $state({});
 
     // =========================================================================
     // Derived
@@ -138,7 +138,7 @@
     });
 
     /** Provider options for SimpleSelect (excluding mockprov, no empty option) */
-    let providerOptions = $derived<SelectOption[]>(
+    let providerOptions: SelectOption[] = $derived(
         providers
             .filter((p) => p.code !== 'mockprov')
             .map((p) => ({

@@ -34,7 +34,7 @@
 
     // Resolved values (editable merge area)
     let resDescription = $state('');
-    let resTags = $state<string[]>([]);
+    let resTags: string[] = $state([]);
 
     // Dirty guard
     let showDiscardConfirm = $state(false);

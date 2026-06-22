@@ -69,7 +69,7 @@
     let calendarOpen = $state(false);
     let pendingDate: string | null = $state(null);
     let hoveredDate: string | null = $state(null);
-    let triggerEl = $state<HTMLButtonElement | null>(null);
+    let triggerEl: HTMLButtonElement | null = $state(null);
     let popoverStyle = $state('');
 
     // Semi-independent left/right month+year
@@ -409,7 +409,7 @@
     });
 
     // Ref for the custom edit container to detect click-outside reliably
-    let customEditRef = $state<HTMLDivElement | null>(null);
+    let customEditRef: HTMLDivElement | null = $state(null);
 
     function handleClickOutside(e: MouseEvent) {
         const target = e.target as HTMLElement;

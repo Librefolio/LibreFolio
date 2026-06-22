@@ -5,10 +5,11 @@
     import {goto} from '$app/navigation';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         gotoRegister: void;
         gotoForgot: void;
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     export let redirectTo = '/dashboard';
     export let successMessage = '';

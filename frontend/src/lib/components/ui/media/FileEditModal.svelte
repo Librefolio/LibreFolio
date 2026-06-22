@@ -22,11 +22,12 @@
     /** Z-index for modal stacking (default 60 = second-level modal) */
     export let zIndex: number = 60;
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         complete: {url: string | null; file: File};
         cancel: void;
         error: {message: string};
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     // Internal state
     let isUploading = false;

@@ -48,7 +48,7 @@
         return types ?? [...TX_TYPES];
     });
 
-    let options = $derived<SelectOption[]>(
+    let options: SelectOption[] = $derived(
         optionTypes.map((tt) => {
             const label = $t(`transactions.types.${tt}`) || tt;
             const isPair = getTypeRule(tt).requiresPair;

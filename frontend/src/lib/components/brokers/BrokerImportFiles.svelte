@@ -20,15 +20,15 @@
     let {brokerId}: Props = $props();
 
     // State
-    let files = $state<BrimFile[]>([]);
+    let files: BrimFile[] = $state([]);
     let loading = $state(true);
-    let error = $state<string | null>(null);
+    let error: string | null = $state(null);
     let uploading = $state(false);
 
     // Delete confirmation modal state
     let showDeleteConfirm = $state(false);
-    let pendingDeleteFileId = $state<string | null>(null);
-    let pendingDeleteFileName = $state<string>('');
+    let pendingDeleteFileId: string | null = $state(null);
+    let pendingDeleteFileName: string = $state('');
 
     // File input ref
     let fileInputRef: HTMLInputElement;

@@ -69,12 +69,12 @@
     // State
     // =========================================================================
 
-    let entries = $state<DistEntry[]>([]);
-    let countries = $state<CountryInfo[]>([]);
+    let entries: DistEntry[] = $state([]);
+    let countries: CountryInfo[] = $state([]);
     let skipNextSync = false;
-    let selectedIds = $state<string[]>([]);
+    let selectedIds: string[] = $state([]);
     let showDeleteConfirm = $state(false);
-    let pendingDeleteIds = $state<string[]>([]);
+    let pendingDeleteIds: string[] = $state([]);
 
     // Sync from prop value → internal entries (only on external changes)
     $effect(() => {
@@ -331,7 +331,7 @@
         return cols;
     });
 
-    let rowActions = $derived<RowAction<DistEntry>[]>(
+    let rowActions: RowAction<DistEntry>[] = $derived(
         isReadonly || disabled
             ? []
             : [

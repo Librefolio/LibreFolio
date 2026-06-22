@@ -67,7 +67,7 @@
     let calendarOpen = $state(false);
     let calYear = $state(new Date().getFullYear());
     let calMonth = $state(new Date().getMonth());
-    let triggerEl = $state<HTMLButtonElement | null>(null);
+    let triggerEl: HTMLButtonElement | null = $state(null);
     let popoverStyle = $state('');
 
     // =========================================================================

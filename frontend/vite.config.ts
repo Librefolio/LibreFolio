@@ -1,5 +1,5 @@
 import {sveltekit} from '@sveltejs/kit/vite';
-import {defineConfig} from 'vite';
+import {defineConfig, createLogger} from 'vite';
 import {execSync} from 'child_process';
 
 /**
@@ -14,8 +14,30 @@ function getGitVersion(): string {
     }
 }
 
+/**
+ * Custom logger that suppresses Rollup @__PURE__ annotation warnings.
+ *
+ * These warnings fire when Rollup injects @__PURE__ annotations (for tree-shaking)
+ * at positions that don't align with sourcemaps after TypeScript type erasure.
+ * Rollup handles this automatically ("The comment will be removed to avoid issues")
+ * so the warnings are purely noise. They cannot be silenced via rollupOptions.onwarn
+ * because SvelteKit runs multiple Rollup environments (client + SSR).
+ */
+const suppressedWarnPatterns = [
+    'annotation that Rollup cannot interpret',
+    "Can't resolve original location of error",
+];
+
+const logger = createLogger();
+const origWarn = logger.warn.bind(logger);
+logger.warn = (msg, opts) => {
+    if (suppressedWarnPatterns.some((p) => msg.includes(p))) return;
+    origWarn(msg, opts);
+};
+
 export default defineConfig(({mode}) => ({
     plugins: [sveltekit()],
+    customLogger: logger,
     // Inject version at build time
     define: {
         __APP_VERSION__: JSON.stringify(getGitVersion()),

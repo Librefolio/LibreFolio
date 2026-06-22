@@ -148,12 +148,7 @@
                         }))
                         .filter((x) => x.value > 0.01)
                         .sort((a, b) => b.value - a.value)
-                        .map(
-                            (x) =>
-                                `<div style="display:flex;justify-content:space-between;gap:16px">` +
-                                `<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${x.color};margin-right:6px"></span>${x.name}</span>` +
-                                `<b>${x.value.toFixed(1)}%</b></div>`,
-                        );
+                        .map((x) => `<div style="display:flex;justify-content:space-between;gap:16px">` + `<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${x.color};margin-right:6px"></span>${x.name}</span>` + `<b>${x.value.toFixed(1)}%</b></div>`);
                     return `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>${lines.join('')}`;
                 },
             },

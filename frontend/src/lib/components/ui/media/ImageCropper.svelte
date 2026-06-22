@@ -17,9 +17,10 @@
     export let showZoomSlider: boolean = true;
     export let showRotateControls: boolean = true;
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         change: {selection: {x: number; y: number; width: number; height: number}};
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     /** Helper to emit current selection state as a 'change' event */
     function dispatchCurrentChange() {

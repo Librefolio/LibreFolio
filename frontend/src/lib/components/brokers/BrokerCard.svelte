@@ -8,10 +8,11 @@
     import {Crown, ExternalLink, Eye, Pencil, Trash2, Wallet} from 'lucide-svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         edit: {id: number};
         delete: {id: number; name: string};
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     // Props
     export let broker: {

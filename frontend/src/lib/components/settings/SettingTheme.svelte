@@ -8,12 +8,13 @@
     import {_} from '$lib/i18n';
     import {RotateCcw, Save, Undo} from 'lucide-svelte';
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         save: void;
         undo: void;
         reset: void;
         change: 'light' | 'dark' | 'auto';
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     // Props
     export let value: 'light' | 'dark' | 'auto' = 'auto';

@@ -138,7 +138,10 @@ async function openFirstAssetSelectDropdown(page: Page) {
 
     // Use waitFor instead of isVisible+conditional to avoid race-condition where
     // a fast false-negative causes us to click the toggle on an already-open section.
-    const appeared = await assetSelect.waitFor({state: 'visible', timeout: 4_000}).then(() => true).catch(() => false);
+    const appeared = await assetSelect
+        .waitFor({state: 'visible', timeout: 4_000})
+        .then(() => true)
+        .catch(() => false);
     if (!appeared) {
         // Section body is not visible → click toggle to expand it
         await step4.getByTestId('import-wizard-resolve-toggle').click();
@@ -313,8 +316,7 @@ test.describe('Import Wizard — Asset Resolution', () => {
         // One of: identifier prompt appears OR asset is directly resolved
         const skipBtn = page.getByTestId('identifier-prompt-skip');
         const confirmBtn = page.getByTestId('identifier-prompt-confirm');
-        const promptVisible = await skipBtn.isVisible({timeout: 2_000}).catch(() => false)
-            || await confirmBtn.isVisible({timeout: 500}).catch(() => false);
+        const promptVisible = (await skipBtn.isVisible({timeout: 2_000}).catch(() => false)) || (await confirmBtn.isVisible({timeout: 500}).catch(() => false));
 
         if (promptVisible) {
             // Identifier prompt appeared — skip it
@@ -394,10 +396,16 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
                 // Wait for AssetSelect in unresolved card (target UNRESOLVED cards only)
                 const assetSelectLocator = resolveSection.locator('.border-gray-200 [data-testid="asset-select"]').first();
-                const appeared = await assetSelectLocator.waitFor({state: 'visible', timeout: 4_000}).then(() => true).catch(() => false);
+                const appeared = await assetSelectLocator
+                    .waitFor({state: 'visible', timeout: 4_000})
+                    .then(() => true)
+                    .catch(() => false);
                 if (!appeared) {
                     await step4Inner.getByTestId('import-wizard-resolve-toggle').click();
-                    const ok = await assetSelectLocator.waitFor({state: 'visible', timeout: 5_000}).then(() => true).catch(() => false);
+                    const ok = await assetSelectLocator
+                        .waitFor({state: 'visible', timeout: 5_000})
+                        .then(() => true)
+                        .catch(() => false);
                     if (!ok) break;
                 }
 

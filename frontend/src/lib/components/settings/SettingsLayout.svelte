@@ -10,12 +10,13 @@
     import {_} from '$lib/i18n';
     import {ChevronDown, ChevronRight, Lock, RotateCcw, Save, Undo, Unlock} from 'lucide-svelte';
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         saveAll: void;
         undoAll: void;
         resetAll: void;
         toggleLock: void;
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     interface Category {
         id: string;

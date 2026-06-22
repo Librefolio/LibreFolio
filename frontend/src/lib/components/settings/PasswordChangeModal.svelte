@@ -13,10 +13,11 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         close: void;
         success: void;
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     // Props
     export let isOpen: boolean = false;

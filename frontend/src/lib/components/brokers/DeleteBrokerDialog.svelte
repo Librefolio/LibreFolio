@@ -8,10 +8,11 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         confirm: {force: boolean};
         cancel: void;
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     // Props
     export let isOpen = false;

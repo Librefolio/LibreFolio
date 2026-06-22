@@ -26,11 +26,12 @@
     export let allowPresetChange: boolean = true;
     export let uploadOnComplete: boolean = true;
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         complete: {url: string | null; file: File};
         cancel: void;
         error: {message: string};
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     const presetOptions: Array<{value: PresetName; labelKey: string}> = [
         {value: 'avatar', labelKey: 'common.avatar'},

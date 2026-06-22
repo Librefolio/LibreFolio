@@ -41,9 +41,9 @@
 
     let {value = $bindable(''), disabled = false, placeholder = '', compatiblePlugins, compact = false, onchange}: Props = $props();
 
-    let plugins = $state<BrimPlugin[]>([]);
+    let plugins: BrimPlugin[] = $state([]);
     let loading = $state(!cachedPlugins); // Start as not-loading if cache exists
-    let error = $state<string | null>(null);
+    let error: string | null = $state(null);
 
     // Filter and order plugins by compatible list
     let filteredPlugins = $derived.by(() => {
@@ -59,7 +59,7 @@
     });
 
     // Convert plugins to SelectOption format with icon_url in data
-    let pluginOptions = $derived<SelectOption[]>(
+    let pluginOptions: SelectOption[] = $derived(
         filteredPlugins.map((p) => ({
             value: p.code,
             label: p.name,

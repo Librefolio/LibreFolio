@@ -24,7 +24,7 @@
 
     // Internal state
     let isOpen = $state(false);
-    let containerRef = $state<HTMLDivElement | null>(null);
+    let containerRef: HTMLDivElement | null = $state(null);
 
     // Close on click outside
     $effect(() => {
