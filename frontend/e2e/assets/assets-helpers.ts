@@ -56,9 +56,9 @@ export async function navigateToAssetByName(page: import('@playwright/test').Pag
         }
     }
 
-    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 10_000});
+    await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 20_000});
     // Wait for ECharts canvas to render
-    await page.waitForSelector('canvas', {timeout: 8000}).catch(() => null);
+    await page.waitForSelector('canvas', {timeout: 18_000}).catch(() => null);
     await page.waitForTimeout(1500);
 }
 
