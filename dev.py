@@ -751,7 +751,7 @@ def cmd_mkdocs_gallery(args):
         # Populate test database with realistic data (creates fresh DB with --force)
         print(f"\n{Colors.CYAN}🗄️  Populating test database with sample data...{Colors.NC}")
         result = subprocess.run(
-            ["python", "dev.py", "test", "db", "populate", "--force", "--clean", "--with-static", "--with-reports"],
+            ["python", "dev.py", "test", "-q", "db", "populate", "--force", "--clean", "--with-static", "--with-reports"],
             cwd=PROJECT_ROOT
             )
         if result.returncode != 0:
