@@ -65,16 +65,38 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+          key: ${{ runner.os }}-playwright-v2-${{ env.PLAYWRIGHT_VERSION }}
 
       # ==========================================
       # 3. INSTALLAZIONE E BUILD ASSET
       # ==========================================
-      - name: Installa Dipendenze Python (necessarie per avviare dev.py)
+      - name: Installa Dipendenze Python
         run: pipenv install --dev
 
+      - name: [DIAGNOSTICA] Stato prima di NPM
+        run: |
+          pwd
+          ls -la
+          node -v
+          npm -v
+          python --version
+          pipenv --version
+          git log -1 --oneline
+          git status --short
+          npm exec playwright --version || true
+          npm --prefix frontend exec playwright --version || true
+          node -p "require('./package.json').devDependencies?.['@playwright/test'] || require('./package.json').dependencies?.['@playwright/test'] || 'None'" || true
+          node -p "require('./frontend/package.json').devDependencies?.['@playwright/test'] || require('./frontend/package.json').dependencies?.['@playwright/test'] || 'None'" || true
+          ls -la ~/.cache/ms-playwright || true
+          find ~/.cache/ms-playwright -maxdepth 2 -type d | sort || true
+
       - name: Installa Dipendenze Frontend e Playwright (tramite dev.py)
+        timeout-minutes: 10
         run: pipenv run ./dev.py install
+
+      - name: [DIAGNOSTICA] Stato post-installazione
+        run: |
+          npm --prefix frontend exec playwright --version || true
 
       - name: Compila il Frontend SvelteKit
         # Fondamentale per la gallery e per il Dockerfile che fa COPY frontend/build/
