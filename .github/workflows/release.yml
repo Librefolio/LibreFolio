@@ -175,3 +175,16 @@ jobs:
           name: playwright-screenshots
           path: mkdocs_src/docs/gallery/
           retention-days: 1
+
+      # ==========================================
+      # 7. RELEASE NOTES UPDATE
+      # ==========================================
+      - name: Append Docker info to Release Notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME=${{ github.event.release.tag_name }}
+          DOCKER_CMD="\n\n## 📦 Docker Installation\n\n\`\`\`bash\n# Install the latest version\ndocker pull ghcr.io/librefolio/librefolio:latest\n\n# Or install this specific release\ndocker pull ghcr.io/librefolio/librefolio:${TAG_NAME}\n\`\`\`\n"
+          
+          # Append the instructions to the existing release body
+          gh release edit "$TAG_NAME" --notes-append "$DOCKER_CMD"

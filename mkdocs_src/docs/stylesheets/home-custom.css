@@ -1236,14 +1236,14 @@
 .lf-screenshot-carousel-item.is-active {
   transform: translateX(0) scale(1);
   opacity: 1;
-  z-index: 10;
+  z-index: 3;
   filter: none;
 }
 
 .lf-screenshot-carousel-item.is-prev {
   transform: translateX(-95%) scale(0.85);
   opacity: 0.6;
-  z-index: 5;
+  z-index: 2;
   filter: brightness(0.6) contrast(0.9);
   cursor: pointer;
 }
@@ -1251,7 +1251,7 @@
 .lf-screenshot-carousel-item.is-next {
   transform: translateX(95%) scale(0.85);
   opacity: 0.6;
-  z-index: 5;
+  z-index: 2;
   filter: brightness(0.6) contrast(0.9);
   cursor: pointer;
 }
@@ -1281,7 +1281,7 @@
   color: white;
   border: none;
   cursor: pointer;
-  z-index: 20;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1321,7 +1321,7 @@
   top: 1rem;
   left: 50%;
   transform: translateX(-50%) translateY(-10px);
-  z-index: 100;
+  z-index: 3;
   background: rgba(15, 23, 42, 0.85);
   color: white;
   padding: 0.35rem 0.9rem;
@@ -1348,7 +1348,7 @@
   position: absolute;
   left: 50%;
   bottom: 0.75rem;
-  z-index: 20;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
