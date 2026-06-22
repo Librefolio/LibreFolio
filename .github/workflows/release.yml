@@ -109,9 +109,9 @@ jobs:
       - name: Validate cross-boundary links
         run: pipenv run ./dev.py mkdocs check-links
 
-      # - name: Generate Screenshots with Playwright
-      #   timeout-minutes: 120
-      #   run: pipenv run ./dev.py mkdocs gallery --workers 8
+      - name: Generate Screenshots with Playwright
+        timeout-minutes: 120
+        run: pipenv run ./dev.py mkdocs gallery --workers 8
 
       - name: Build MkDocs Documentation
         run: pipenv run ./dev.py mkdocs build
@@ -170,9 +170,9 @@ jobs:
       # ==========================================
       # 6. ARTIFACTS (Optional, for archival)
       # ==========================================
-      # - name: Archive Generated Screenshots
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: playwright-screenshots
-      #     path: mkdocs_src/docs/gallery/
-      #     retention-days: 1
+      - name: Archive Generated Screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots
+          path: mkdocs_src/docs/gallery/
+          retention-days: 1
