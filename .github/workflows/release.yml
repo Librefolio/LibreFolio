@@ -144,7 +144,6 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest
-            type=raw,value=test
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
