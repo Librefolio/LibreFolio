@@ -769,6 +769,8 @@ nav:
               - Front-FX: developer/test-walkthrough/front-fx.md
       - 📝 Documentation:
           - Translation Pipeline: developer/docs/translation-pipeline.md
+          - Release Pipeline: developer/docs/release-pipeline.md
+
   - 🖼️ Gallery:
       - Overview: gallery/index.md
       - Desktop: gallery/desktop.md
