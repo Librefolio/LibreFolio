@@ -2,6 +2,9 @@ name: LibreFolio Release
 run-name: Release ${{ github.event.release.tag_name }}
 
 on:
+  push:
+    branches:
+      - dev
   workflow_dispatch:
     inputs:
       force_gallery:
@@ -11,6 +14,7 @@ on:
         default: false
   release:
     types: [published]
+
 
 
 permissions:
@@ -178,7 +182,9 @@ jobs:
           images: ghcr.io/librefolio/librefolio
           tags: |
             type=semver,pattern={{version}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=nightly,enable=${{ github.ref_name == 'dev' }}
+
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
@@ -199,7 +205,9 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Deploy to gh-pages branch
+        if: github.ref_name == 'main' || github.event_name == 'release'
         run: pipenv run ./dev.py mkdocs deploy
+
 
       # ==========================================
       # 6. ARTIFACTS (Optional, for archival)
