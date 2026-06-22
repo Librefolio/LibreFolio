@@ -73,7 +73,7 @@ jobs:
       - name: Installa Dipendenze Python
         run: pipenv install --dev
 
-      - name: [DIAGNOSTICA] Stato prima di NPM
+      - name: "[DIAGNOSTICA] Stato prima di NPM"
         run: |
           pwd
           ls -la
@@ -94,7 +94,7 @@ jobs:
         timeout-minutes: 10
         run: pipenv run ./dev.py install
 
-      - name: [DIAGNOSTICA] Stato post-installazione
+      - name: "[DIAGNOSTICA] Stato post-installazione"
         run: |
           npm --prefix frontend exec playwright --version || true
 
