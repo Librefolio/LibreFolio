@@ -284,7 +284,9 @@
                 border-radius: 0 0 4px 4px;
             }
             .lang-flag {
-                font-size: 1rem;
+                font-size: 1.1rem;
+                font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Segoe UI Symbol", "Android Emoji", "EmojiSymbols", sans-serif !important;
+                line-height: 1;
             }
             /* Readonly mode for EN-only pages */
             .site-lang-selector.lang-readonly {

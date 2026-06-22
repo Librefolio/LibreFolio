@@ -33,7 +33,7 @@
     
     
       
-        <title>Installazione (Docker) - LibreFolio Docs</title>
+        <title>Installazione (Docker) - LibreFolio</title>
       
     
     
@@ -61,6 +61,8 @@
     
       <link rel="stylesheet" href="../../../static/extra.css">
     
+      <link rel="stylesheet" href="../../../stylesheets/home-custom.css">
+    
     <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -81,7 +83,7 @@
     {
       "@type": "ListItem",
       "position": 2,
-      "name": "Manuale Utente",
+      "name": "📘 Manuale Utente",
       "item": "https://librefolio.github.io/LibreFolio/it/user/"
     },
     {
@@ -112,7 +114,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#installazione-utente" class="md-skip">
+        <a href="#installazione-con-docker-utente" class="md-skip">
           Vai al contenuto
         </a>
       
@@ -126,7 +128,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Intestazione">
-    <a href="../../" title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
+    <a href="../../" title="LibreFolio" class="md-header__button md-logo" aria-label="LibreFolio" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
@@ -139,7 +141,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Docs
+            LibreFolio
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -321,7 +323,7 @@
           
   
   
-  Manuale Utente
+  📘 Manuale Utente
 
         </a>
       </li>
@@ -341,7 +343,7 @@
           
   
   
-  Manuale Admin
+  🛠️ Manuale Admin
 
         </a>
       </li>
@@ -361,7 +363,7 @@
           
   
   
-  Teoria Finanziaria
+  📚 Teoria Finanziaria
 
         </a>
       </li>
@@ -381,7 +383,7 @@
           
   
   
-  Developer Manual
+  💻 Developer Manual
 
         </a>
       </li>
@@ -401,7 +403,27 @@
           
   
   
-  Galleria
+  🖼️ Galleria
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../community/faq/" class="md-tabs__link">
+          
+  
+  
+  ❤️ Comunità
 
         </a>
       </li>
@@ -428,26 +450,6 @@
   
 
       
-        
-  
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../community/faq/" class="md-tabs__link">
-          
-  
-  
-  Comunità
-
-        </a>
-      </li>
-    
-  
-
-      
     </ul>
   </div>
 </nav>
@@ -470,12 +472,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigazione" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../" title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
+    <a href="../../" title="LibreFolio" class="md-nav__button md-logo" aria-label="LibreFolio" data-md-component="logo">
       
   <img src="../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Docs
+    LibreFolio
   </label>
   
     <div class="md-nav__source">
@@ -554,7 +556,7 @@
   <span class="md-ellipsis">
     
   
-    Manuale Utente
+    📘 Manuale Utente
   
 
     
@@ -570,7 +572,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Manuale Utente
+    📘 Manuale Utente
   
 
           </label>
@@ -710,10 +712,110 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#1-scarica-il-progetto" class="md-nav__link">
+  <a href="#installazione-passo-passo" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📥 1. Scarica il Progetto
+        🚀 Installazione Passo-Passo
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🚀 Installazione Passo-Passo">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-crea-una-cartella-per-il-progetto" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📁 1. Crea una cartella per il progetto
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-ottieni-i-file-di-configurazione-base" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📥 2. Ottieni i file di configurazione base
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-avvia-lapplicazione" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ▶️ 3. Avvia l'applicazione
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-accedi-a-librefolio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🌐 4. Accedi a LibreFolio
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-accesso-in-rete-locale-e-remoto" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📶 5. Accesso in Rete Locale e Remoto
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📶 5. Accesso in Rete Locale e Remoto">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configurazione-del-firewall-facoltativo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🛡️ Configurazione del Firewall (facoltativo)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#accesso-remoto" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🌐 Accesso Remoto
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#opzioni-di-configurazione" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ⚙️ Opzioni di Configurazione
       
     </span>
   </a>
@@ -721,10 +823,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-configura-lambiente" class="md-nav__link">
+  <a href="#backup-dei-dati" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ⚙️ 2. Configura l'Ambiente
+        💾 Backup dei Dati
       
     </span>
   </a>
@@ -732,68 +834,63 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-installa-le-dipendenze" class="md-nav__link">
+  <a href="#aggiornamento-di-librefolio" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📦 3. Installa le Dipendenze
+        🔄 Aggiornamento di LibreFolio
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔄 Aggiornamento di LibreFolio">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#attenzione-stato-di-alpha" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ⚠️ Attenzione: Stato di Alpha
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#4-costruisci-limmagine-docker" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#1-aggiornamento-manuale" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🏗️ 4. Costruisci l'Immagine Docker
+        🛠️ 1. Aggiornamento Manuale
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#5-avvia-con-docker-compose" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#2-aggiornamento-automatico-watchtower" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🚀 5. Avvia con Docker Compose
+        🤖 2. Aggiornamento Automatico (Watchtower)
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#6-accedi-a-librefolio" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#3-altre-alternative-di-gestione" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🌐 6. Accedi a LibreFolio
+        🔌 3. Altre Alternative di Gestione
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#aggiorna-librefolio" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🔄 Aggiorna LibreFolio
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#prova-con-dati-di-test-opzionale" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🧪 Prova con Dati di Test (Opzionale)
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -869,7 +966,7 @@
   <span class="md-ellipsis">
     
   
-    Dashboard
+    📊 Dashboard
   
 
     
@@ -885,7 +982,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Dashboard
+    📊 Dashboard
   
 
           </label>
@@ -962,7 +1059,7 @@
   <span class="md-ellipsis">
     
   
-    Broker
+    🏦 Broker
   
 
     
@@ -978,7 +1075,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Broker
+    🏦 Broker
   
 
           </label>
@@ -1083,7 +1180,7 @@
   <span class="md-ellipsis">
     
   
-    Transazioni
+    💸 Transazioni
   
 
     
@@ -1099,7 +1196,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Transazioni
+    💸 Transazioni
   
 
           </label>
@@ -1193,7 +1290,7 @@
   <span class="md-ellipsis">
     
   
-    Importa da Broker
+    📥 Importa da Broker
   
 
     
@@ -1209,7 +1306,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Importa da Broker
+    📥 Importa da Broker
   
 
           </label>
@@ -1602,7 +1699,7 @@
   <span class="md-ellipsis">
     
   
-    Asset
+    📈 Asset
   
 
     
@@ -1618,7 +1715,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Asset
+    📈 Asset
   
 
           </label>
@@ -1712,7 +1809,7 @@
   <span class="md-ellipsis">
     
   
-    Asset Detail
+    🔎 Asset Detail
   
 
     
@@ -1728,7 +1825,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Asset Detail
+    🔎 Asset Detail
   
 
           </label>
@@ -1970,7 +2067,7 @@
   <span class="md-ellipsis">
     
   
-    Provider
+    🔌 Provider
   
 
     
@@ -1986,7 +2083,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Provider
+    🔌 Provider
   
 
           </label>
@@ -2211,7 +2308,7 @@
   <span class="md-ellipsis">
     
   
-    Tassi di Cambio
+    💱 Tassi di Cambio
   
 
     
@@ -2227,7 +2324,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Tassi di Cambio
+    💱 Tassi di Cambio
   
 
           </label>
@@ -2349,7 +2446,7 @@
   <span class="md-ellipsis">
     
   
-    Dettaglio Coppia
+    🔌 Provider
   
 
     
@@ -2365,7 +2462,209 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Dettaglio Coppia
+    🔌 Provider
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fx/providers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Panoramica
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fx/providers/ecb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Banca Centrale Europea (BCE)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fx/providers/fed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Federal Reserve (FED)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fx/providers/boe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Banca d'Inghilterra (BoE)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fx/providers/snb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Banca Nazionale Svizzera (BNS)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_9_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_9_5" id="__nav_2_9_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🔎 Dettaglio Coppia
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_9_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_9_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🔎 Dettaglio Coppia
   
 
           </label>
@@ -2618,7 +2917,7 @@
   <span class="md-ellipsis">
     
   
-    File
+    📁 File
   
 
     
@@ -2634,7 +2933,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    File
+    📁 File
   
 
           </label>
@@ -2711,7 +3010,7 @@
   <span class="md-ellipsis">
     
   
-    Impostazioni
+    ⚙️ Impostazioni
   
 
     
@@ -2727,7 +3026,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Impostazioni
+    ⚙️ Impostazioni
   
 
           </label>
@@ -2748,6 +3047,62 @@
     
   
     Panoramica
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/preferences/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preferenze Utente
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/about/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Informazioni
   
 
     
@@ -2804,7 +3159,7 @@
   <span class="md-ellipsis">
     
   
-    Varie
+    🧩 Varie
   
 
     
@@ -2820,7 +3175,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Varie
+    🧩 Varie
   
 
           </label>
@@ -2901,7 +3256,7 @@
   <span class="md-ellipsis">
     
   
-    Manuale Admin
+    🛠️ Manuale Admin
   
 
     
@@ -2917,7 +3272,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Manuale Admin
+    🛠️ Manuale Admin
   
 
           </label>
@@ -2957,15 +3312,33 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../admin/cli_tools/" class="md-nav__link">
+    
+    
+    
+    
+      
+      
         
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
     
   
-    Strumenti CLI
+    🐳 Deployment & Exposure
   
 
     
@@ -2973,11 +3346,19 @@
   
   
 
-      </a>
-    </li>
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🐳 Deployment & Exposure
   
 
-              
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
             
               
                 
@@ -2986,42 +3367,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../admin/settings/" class="md-nav__link">
+      <a href="../../admin/host_installation/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Impostazioni Globali
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../admin/filesystem/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Struttura Filesystem
+    Installazione su Host
   
 
     
@@ -3097,6 +3450,250 @@
     </li>
   
 
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ⚙️ System Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    ⚙️ System Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../admin/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../admin/settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Impostazioni Globali
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🧹 Maintenance & Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🧹 Maintenance & Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../admin/cli_tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Admin Tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../admin/filesystem/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Struttura Filesystem
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
     
       
       
@@ -3130,7 +3727,7 @@
   <span class="md-ellipsis">
     
   
-    Teoria Finanziaria
+    📚 Teoria Finanziaria
   
 
     
@@ -3146,7 +3743,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Teoria Finanziaria
+    📚 Teoria Finanziaria
   
 
           </label>
@@ -3212,7 +3809,7 @@
   <span class="md-ellipsis">
     
   
-    Strumenti
+    🗃️ Strumenti
   
 
     
@@ -3228,7 +3825,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Strumenti
+    🗃️ Strumenti
   
 
           </label>
@@ -3294,7 +3891,7 @@
   <span class="md-ellipsis">
     
   
-    Tipi di Transazione
+    🔄 Tipi di Transazione
   
 
     
@@ -3310,7 +3907,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Tipi di Transazione
+    🔄 Tipi di Transazione
   
 
           </label>
@@ -3376,7 +3973,7 @@
   <span class="md-ellipsis">
     
   
-    Singole
+    1️⃣ Single
   
 
     
@@ -3392,7 +3989,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Singole
+    1️⃣ Single
   
 
           </label>
@@ -3461,14 +4058,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../financial-theory/instruments/transaction-types/dividend/" class="md-nav__link">
+      <a href="../../financial-theory/instruments/transaction-types/dividend-interest/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Dividendo
+    Dividendo & Interesse
   
 
     
@@ -3497,34 +4094,6 @@
     
   
     Commissioni & Tasse
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../financial-theory/instruments/transaction-types/interest/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Interesse
   
 
     
@@ -3606,7 +4175,7 @@
   <span class="md-ellipsis">
     
   
-    Composite
+    🔢 Composite
   
 
     
@@ -3622,7 +4191,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Composite
+    🔢 Composite
   
 
           </label>
@@ -3760,7 +4329,7 @@
   <span class="md-ellipsis">
     
   
-    Tipi di Asset
+    🏷️ Tipi di Asset
   
 
     
@@ -3776,7 +4345,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Tipi di Asset
+    🏷️ Tipi di Asset
   
 
           </label>
@@ -4102,7 +4671,7 @@
   <span class="md-ellipsis">
     
   
-    Eventi Asset
+    📅 Eventi Asset
   
 
     
@@ -4118,7 +4687,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Eventi Asset
+    📅 Eventi Asset
   
 
           </label>
@@ -4166,7 +4735,7 @@
   <span class="md-ellipsis">
     
   
-    Dividendo
+    Dividend
   
 
     
@@ -4194,7 +4763,7 @@
   <span class="md-ellipsis">
     
   
-    Interesse
+    Interest
   
 
     
@@ -4340,7 +4909,7 @@
   <span class="md-ellipsis">
     
   
-    Analisi Tecnica
+    📉 Analisi Tecnica
   
 
     
@@ -4356,7 +4925,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Analisi Tecnica
+    📉 Analisi Tecnica
   
 
           </label>
@@ -4422,7 +4991,7 @@
   <span class="md-ellipsis">
     
   
-    Indicatori
+    📐 Indicatori
   
 
     
@@ -4438,7 +5007,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Indicatori
+    📐 Indicatori
   
 
           </label>
@@ -4624,7 +5193,7 @@
   <span class="md-ellipsis">
     
   
-    Benchmark Sintetici
+    🧪 Benchmark Sintetici
   
 
     
@@ -4640,7 +5209,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Benchmark Sintetici
+    🧪 Benchmark Sintetici
   
 
           </label>
@@ -4766,6 +5335,410 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3_4" id="__nav_4_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🏆 Metriche di Performance
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🏆 Metriche di Performance
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/performance-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Panoramica
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/performance-metrics/roi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ROI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/performance-metrics/twrr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TWRR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/performance-metrics/mwrr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MWRR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Costo Medio Ponderato
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3_5" id="__nav_4_3_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ⚠️ Metriche di Rischio
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    ⚠️ Metriche di Rischio
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Panoramica
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Indice di Sharpe
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/sortino-ratio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Indice di Sortino
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/max-drawdown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Massimo Drawdown
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/volatility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Volatilità
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4806,7 +5779,7 @@
   <span class="md-ellipsis">
     
   
-    Fondamenti
+    📖 Fondamenti
   
 
     
@@ -4822,7 +5795,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Fondamenti
+    📖 Fondamenti
   
 
           </label>
@@ -4980,7 +5953,7 @@
   <span class="md-ellipsis">
     
   
-    Teoria del Portafoglio
+    🧮 Teoria del Portafoglio
   
 
     
@@ -4996,7 +5969,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Teoria del Portafoglio
+    🧮 Teoria del Portafoglio
   
 
           </label>
@@ -5086,236 +6059,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../financial-theory/portfolio-theory/weighted-average-cost/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Costo Medio Ponderato
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_5_5" >
-        
-          
-          <label class="md-nav__link" for="__nav_4_5_5" id="__nav_4_5_5_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Metriche di Rischio
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_5_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_5_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Metriche di Rischio
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../financial-theory/portfolio-theory/risk-metrics/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Panoramica
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../financial-theory/portfolio-theory/risk-metrics/sharpe-ratio/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Indice di Sharpe
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../financial-theory/portfolio-theory/risk-metrics/sortino-ratio/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Indice di Sortino
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../financial-theory/portfolio-theory/risk-metrics/max-drawdown/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Massimo Drawdown
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../financial-theory/portfolio-theory/risk-metrics/volatility/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Volatilità
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -5363,7 +6106,7 @@
   <span class="md-ellipsis">
     
   
-    Developer Manual
+    💻 Developer Manual
   
 
     
@@ -5379,7 +6122,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Developer Manual
+    💻 Developer Manual
   
 
           </label>
@@ -5420,14 +6163,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/dev-installation/" class="md-nav__link">
+      <a href="../../developer/dev_workflow/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Dev Installation
+    Developer Workflow
   
 
     
@@ -5473,7 +6216,7 @@
   <span class="md-ellipsis">
     
   
-    Architecture
+    🏛️ Architecture
   
 
     
@@ -5489,7 +6232,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Architecture
+    🏛️ Architecture
   
 
           </label>
@@ -5555,7 +6298,7 @@
   <span class="md-ellipsis">
     
   
-    Technologies & Patterns
+    🧩 Technologies & Patterns
   
 
     
@@ -5571,7 +6314,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Technologies & Patterns
+    🧩 Technologies & Patterns
   
 
           </label>
@@ -5637,7 +6380,7 @@
   <span class="md-ellipsis">
     
   
-    Registry & Plugin System
+    🔌 Registry & Plugin System
   
 
     
@@ -5653,7 +6396,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Registry & Plugin System
+    🔌 Registry & Plugin System
   
 
           </label>
@@ -5807,34 +6550,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../developer/architecture/patterns/configuration/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Configuration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -5875,7 +6590,7 @@
   <span class="md-ellipsis">
     
   
-    Core Systems
+    ⚙️ Core Systems
   
 
     
@@ -5891,7 +6606,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Core Systems
+    ⚙️ Core Systems
   
 
           </label>
@@ -6049,7 +6764,7 @@
   <span class="md-ellipsis">
     
   
-    Database Schema
+    🗄️ Database Schema
   
 
     
@@ -6065,7 +6780,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Database Schema
+    🗄️ Database Schema
   
 
           </label>
@@ -6259,7 +6974,7 @@
   <span class="md-ellipsis">
     
   
-    API & Communication
+    📡 API & Communication
   
 
     
@@ -6275,7 +6990,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    API & Communication
+    📡 API & Communication
   
 
           </label>
@@ -6405,7 +7120,7 @@
   <span class="md-ellipsis">
     
   
-    Backend Development
+    🐍 Backend Development
   
 
     
@@ -6421,7 +7136,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Backend Development
+    🐍 Backend Development
   
 
           </label>
@@ -6459,7 +7174,7 @@
   <span class="md-ellipsis">
     
   
-    Transactions (User Data)
+    💸 Transactions (User Data)
   
 
     
@@ -6475,7 +7190,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Transactions (User Data)
+    💸 Transactions (User Data)
   
 
           </label>
@@ -6625,7 +7340,7 @@
   <span class="md-ellipsis">
     
   
-    Import (BRIM)
+    📥 Import (BRIM)
   
 
     
@@ -6641,7 +7356,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Import (BRIM)
+    📥 Import (BRIM)
   
 
           </label>
@@ -6779,7 +7494,7 @@
   <span class="md-ellipsis">
     
   
-    Assets (Pricing)
+    📈 Assets (Pricing)
   
 
     
@@ -6795,7 +7510,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Assets (Pricing)
+    📈 Assets (Pricing)
   
 
           </label>
@@ -6861,7 +7576,7 @@
   <span class="md-ellipsis">
     
   
-    Provider
+    🔌 Provider
   
 
     
@@ -6877,7 +7592,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Provider
+    🔌 Provider
   
 
           </label>
@@ -7127,7 +7842,7 @@
   <span class="md-ellipsis">
     
   
-    FX (Currency)
+    💱 FX (Currency)
   
 
     
@@ -7143,7 +7858,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    FX (Currency)
+    💱 FX (Currency)
   
 
           </label>
@@ -7211,15 +7926,181 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_5_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5_3_3" id="__nav_5_5_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🔌 Provider
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_5_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🔌 Provider
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
-      <a href="../../developer/backend/fx/providers_list/" class="md-nav__link">
+      <a href="../../developer/backend/fx/providers/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Providers List
+    Overview Providers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/backend/fx/providers/ecb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ECB Tech
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/backend/fx/providers/fed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FED Tech
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/backend/fx/providers/boe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BOE Tech
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/backend/fx/providers/snb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SNB Tech
   
 
     
@@ -7236,6 +8117,42 @@
           </ul>
         </nav>
       
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/backend/scheduler/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🕐 Scheduler (Daemon)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -7281,7 +8198,7 @@
   <span class="md-ellipsis">
     
   
-    Frontend Development
+    🎨 Frontend Development
   
 
     
@@ -7297,7 +8214,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Frontend Development
+    🎨 Frontend Development
   
 
           </label>
@@ -7363,7 +8280,7 @@
   <span class="md-ellipsis">
     
   
-    Components
+    🧠 Core Architecture & State
   
 
     
@@ -7379,7 +8296,527 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Components
+    🧠 Core Architecture & State
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6_2_1" id="__nav_5_6_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🗃️ Store Client System
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_6_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🗃️ Store Client System
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Panoramica
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/state/app-state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    App & UI State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/state/reference-state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/state/domain-state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Domain State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/state/transaction-draft/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transaction Staging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/state/registries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Registries & Caches
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/state/core-infrastructure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Infrastructure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/fx-chain-algorithm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FX Chain Algorithm
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6_3" id="__nav_5_6_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🗺️ Routing & Pages
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🗺️ Routing & Pages
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/pages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pages
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6_4" id="__nav_5_6_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🎨 Design System & UI
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_6_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🎨 Design System & UI
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/styling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Styling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6_4_2" id="__nav_5_6_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🧩 Components
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_6_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🧩 Components
   
 
           </label>
@@ -7435,17 +8872,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_2_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_4_2_2" >
         
           
-          <label class="md-nav__link" for="__nav_5_6_2_2" id="__nav_5_6_2_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_6_4_2_2" id="__nav_5_6_4_2_2_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    UI Base
+    🏗️ Core UI
   
 
     
@@ -7456,12 +8893,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_6_2_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_6_2_2">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_6_4_2_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_4_2_2">
             <span class="md-nav__icon md-icon"></span>
             
   
-    UI Base
+    🏗️ Core UI
   
 
           </label>
@@ -7474,7 +8911,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/ui-base/" class="md-nav__link">
+      <a href="../../developer/frontend/components/core-ui/" class="md-nav__link">
         
   
   
@@ -7502,7 +8939,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/ui-base/modals/" class="md-nav__link">
+      <a href="../../developer/frontend/components/core-ui/modals/" class="md-nav__link">
         
   
   
@@ -7530,7 +8967,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/ui-base/feedback/" class="md-nav__link">
+      <a href="../../developer/frontend/components/core-ui/feedback/" class="md-nav__link">
         
   
   
@@ -7558,7 +8995,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/ui-base/datePickers/" class="md-nav__link">
+      <a href="../../developer/frontend/components/core-ui/datePickers/" class="md-nav__link">
         
   
   
@@ -7586,7 +9023,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/ui-base/atoms/" class="md-nav__link">
+      <a href="../../developer/frontend/components/core-ui/atoms/" class="md-nav__link">
         
   
   
@@ -7614,7 +9051,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/ui-base/data-editor/" class="md-nav__link">
+      <a href="../../developer/frontend/components/core-ui/data-editor/" class="md-nav__link">
         
   
   
@@ -7622,6 +9059,90 @@
     
   
     Datapoint Editor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/components/core-ui/data-table/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DataTable
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/components/core-ui/file-upload/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    File Upload & Media
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/components/core-ui/select/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Select & Dropdowns
   
 
     
@@ -7650,14 +9171,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/data-table/" class="md-nav__link">
+      <a href="../../developer/frontend/components/features/transaction-form/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    DataTable
+    Modulo Transazione
   
 
     
@@ -7678,7 +9199,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/auth/" class="md-nav__link">
+      <a href="../../developer/frontend/components/features/auth/" class="md-nav__link">
         
   
   
@@ -7706,14 +9227,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/settings/" class="md-nav__link">
+      <a href="../../developer/frontend/components/features/settings/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Impostazioni
+    Settings
   
 
     
@@ -7734,63 +9255,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/file-upload/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    File Upload & Media
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../developer/frontend/components/select/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Select & Dropdowns
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../developer/frontend/components/live-ticker/" class="md-nav__link">
+      <a href="../../developer/frontend/components/features/live-ticker/" class="md-nav__link">
         
   
   
@@ -7833,17 +9298,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_2_9" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_4_2_7" >
         
           
-          <label class="md-nav__link" for="__nav_5_6_2_9" id="__nav_5_6_2_9_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_6_4_2_7" id="__nav_5_6_4_2_7_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Broker
+    🏦 Broker
   
 
     
@@ -7854,12 +9319,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_6_2_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_6_2_9">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_6_4_2_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_4_2_7">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Broker
+    🏦 Broker
   
 
           </label>
@@ -7872,7 +9337,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/brokers/" class="md-nav__link">
+      <a href="../../developer/frontend/components/features/brokers/" class="md-nav__link">
         
   
   
@@ -7900,7 +9365,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/brokers/cards/" class="md-nav__link">
+      <a href="../../developer/frontend/components/features/brokers/cards/" class="md-nav__link">
         
   
   
@@ -7928,7 +9393,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/brokers/forms/" class="md-nav__link">
+      <a href="../../developer/frontend/components/features/brokers/forms/" class="md-nav__link">
         
   
   
@@ -7956,7 +9421,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend/components/brokers/modals/" class="md-nav__link">
+      <a href="../../developer/frontend/components/features/brokers/modals/" class="md-nav__link">
         
   
   
@@ -7993,29 +9458,9 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../developer/frontend/fx-chain-algorithm/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    FX Chain Algorithm
-  
-
-    
-  </span>
-  
-  
-
-      </a>
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -8027,43 +9472,33 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../developer/frontend/pages/" class="md-nav__link">
+    
+    
+    
+    
+      
+      
         
-  
-  
-  <span class="md-ellipsis">
+      
     
-  
-    Pages
-  
-
     
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6_5" id="__nav_5_6_5_label" tabindex="0">
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../developer/frontend/state/" class="md-nav__link">
-        
   
   
   <span class="md-ellipsis">
     
   
-    State Management
+    ⚙️ App Configuration
   
 
     
@@ -8071,11 +9506,19 @@
   
   
 
-      </a>
-    </li>
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_6_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    ⚙️ App Configuration
   
 
-              
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
             
               
                 
@@ -8092,34 +9535,6 @@
     
   
     Internationalization
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../developer/frontend/styling/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Styling
   
 
     
@@ -8175,6 +9590,42 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/data-quality-banner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🛡️ Data Quality Banner
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
     
@@ -8201,7 +9652,7 @@
   <span class="md-ellipsis">
     
   
-    Test Walkthrough
+    🧪 Test Walkthrough
   
 
     
@@ -8217,7 +9668,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Test Walkthrough
+    🧪 Test Walkthrough
   
 
           </label>
@@ -8257,6 +9708,34 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../developer/test-walkthrough/runner_architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
     
@@ -8273,17 +9752,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_3" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_2" id="__nav_5_7_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_3" id="__nav_5_7_3_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Backend Tests
+    🐍 Backend Tests
   
 
     
@@ -8294,12 +9773,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_7_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_2">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_7_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_3">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Backend Tests
+    🐍 Backend Tests
   
 
           </label>
@@ -8531,17 +10010,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_3" id="__nav_5_7_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_4" id="__nav_5_7_4_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Frontend Tests (Playwright)
+    🎭 Frontend Tests (Playwright)
   
 
     
@@ -8552,12 +10031,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_7_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_3">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_4">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Frontend Tests (Playwright)
+    🎭 Frontend Tests (Playwright)
   
 
           </label>
@@ -8723,7 +10202,7 @@
   <span class="md-ellipsis">
     
   
-    Documentation
+    📝 Documentation
   
 
     
@@ -8739,7 +10218,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Documentation
+    📝 Documentation
   
 
           </label>
@@ -8820,7 +10299,7 @@
   <span class="md-ellipsis">
     
   
-    Galleria
+    🖼️ Galleria
   
 
     
@@ -8836,7 +10315,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Galleria
+    🖼️ Galleria
   
 
           </label>
@@ -8939,33 +10418,6 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../POC_UX/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    POC UX
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
     
     
     
@@ -8982,17 +10434,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Comunità
+    ❤️ Comunità
   
 
     
@@ -9003,12 +10455,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Comunità
+    ❤️ Comunità
   
 
           </label>
@@ -9105,6 +10557,33 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../POC_UX/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    POC UX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -9143,10 +10622,110 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#1-scarica-il-progetto" class="md-nav__link">
+  <a href="#installazione-passo-passo" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📥 1. Scarica il Progetto
+        🚀 Installazione Passo-Passo
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🚀 Installazione Passo-Passo">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-crea-una-cartella-per-il-progetto" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📁 1. Crea una cartella per il progetto
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-ottieni-i-file-di-configurazione-base" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📥 2. Ottieni i file di configurazione base
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-avvia-lapplicazione" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ▶️ 3. Avvia l'applicazione
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-accedi-a-librefolio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🌐 4. Accedi a LibreFolio
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-accesso-in-rete-locale-e-remoto" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📶 5. Accesso in Rete Locale e Remoto
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📶 5. Accesso in Rete Locale e Remoto">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configurazione-del-firewall-facoltativo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🛡️ Configurazione del Firewall (facoltativo)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#accesso-remoto" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🌐 Accesso Remoto
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#opzioni-di-configurazione" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ⚙️ Opzioni di Configurazione
       
     </span>
   </a>
@@ -9154,10 +10733,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-configura-lambiente" class="md-nav__link">
+  <a href="#backup-dei-dati" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ⚙️ 2. Configura l'Ambiente
+        💾 Backup dei Dati
       
     </span>
   </a>
@@ -9165,68 +10744,63 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-installa-le-dipendenze" class="md-nav__link">
+  <a href="#aggiornamento-di-librefolio" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📦 3. Installa le Dipendenze
+        🔄 Aggiornamento di LibreFolio
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔄 Aggiornamento di LibreFolio">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#attenzione-stato-di-alpha" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ⚠️ Attenzione: Stato di Alpha
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#4-costruisci-limmagine-docker" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#1-aggiornamento-manuale" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🏗️ 4. Costruisci l'Immagine Docker
+        🛠️ 1. Aggiornamento Manuale
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#5-avvia-con-docker-compose" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#2-aggiornamento-automatico-watchtower" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🚀 5. Avvia con Docker Compose
+        🤖 2. Aggiornamento Automatico (Watchtower)
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#6-accedi-a-librefolio" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#3-altre-alternative-di-gestione" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🌐 6. Accedi a LibreFolio
+        🔌 3. Altre Alternative di Gestione
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#aggiorna-librefolio" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🔄 Aggiorna LibreFolio
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#prova-con-dati-di-test-opzionale" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🧪 Prova con Dati di Test (Opzionale)
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -9250,111 +10824,200 @@
   
 
 
-<h1 id="installazione-utente">🐳 Installazione (Utente)</h1>
-<p>Questa guida spiega come distribuire LibreFolio per l'uso regolare utilizzando Docker. Questo è il metodo raccomandato per gli utenti che non intendono modificare il codice sorgente.</p>
-<h2 id="prerequisiti">✅ Prerequisiti</h2>
-<ul>
-<li>🐍 <strong>Python 3.13+</strong>: <a href="https://www.python.org/downloads/">Installa Python</a></li>
-<li>📦 <strong>Node.js 20.19+</strong>: <a href="https://nodejs.org/">Installa Node.js</a> (include npm)</li>
-<li>📋 <strong>Pipenv</strong>: <code>pip install pipenv</code></li>
-<li>🐋 <strong>Docker</strong>: <a href="https://docs.docker.com/get-docker/">Installa Docker</a> (include Docker Compose)</li>
-</ul>
-<div class="admonition warning">
-<p class="admonition-title">Gruppo Docker (Linux)</p>
-<p>Su Linux, l'utente deve appartenere al gruppo <code>docker</code> per eseguire i comandi Docker senza <code>sudo</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>sudo<span class="w"> </span>usermod<span class="w"> </span>-aG<span class="w"> </span>docker<span class="w"> </span><span class="nv">$USER</span>
-</code></pre></div>
-<p>Quindi <strong>effettua il logout e accedi nuovamente</strong>, oppure esegui <code>newgrp docker</code> per attivare il gruppo nella sessione corrente.</p>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Perché Python e Node.js?</p>
-<p>LibreFolio utilizza un'<strong>immagine Docker solo per il runtime</strong> — il frontend e la documentazione vengono sottoposti a build sull'host prima di essere impacchettati nell'immagine Docker. Immagini pre-buildate su un registro di container sono previste per rilasci futuri.</p>
-</div>
-<h2 id="1-scarica-il-progetto">📥 1. Scarica il Progetto</h2>
-<p>Clona il repository:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/Alfystar/LibreFolio.git
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">cd</span><span class="w"> </span>LibreFolio
-</code></pre></div>
-<p>Oppure scarica l'ultimo rilascio da <a href="https://github.com/Alfystar/LibreFolio/releases">GitHub Releases</a> e scompattalo.</p>
-<h2 id="2-configura-lambiente">⚙️ 2. Configura l'Ambiente</h2>
-<ol>
-<li>
-<p><strong>Copia il file di esempio</strong> (obbligatorio — la build si rifiuterà di procedere senza il file <code>.env</code>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
-</code></pre></div>
-</li>
-<li>
-<p><strong>Modifica <code>.env</code></strong> per personalizzare:</p>
-<ul>
-<li>🔌 <code>PORT</code>: Cambia la porta se la <code>6040</code> è già in uso.</li>
-<li>💰 <code>PORTFOLIO_BASE_CURRENCY</code>: La valuta di base del tuo portafoglio (default: <code>EUR</code>).</li>
-<li>📊 <code>LOG_LEVEL</code>: Verbosità del logging (default: <code>INFO</code>).</li>
-</ul>
-</li>
-</ol>
-<h2 id="3-installa-le-dipendenze">📦 3. Installa le Dipendenze</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>./dev.py<span class="w"> </span>install
-</code></pre></div>
-<p>Questo installa le dipendenze Python (backend) e Node.js (frontend).</p>
-<h2 id="4-costruisci-limmagine-docker">🏗️ 4. Costruisci l'Immagine Docker</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span>build
-</code></pre></div>
-<p>Questo comando esegue automaticamente:</p>
-<ol>
-<li>La build del frontend (SvelteKit production build)</li>
-<li>La build del sito di documentazione (MkDocs)</li>
-<li>L'impacchettamento di tutto in un'unica immagine Docker taggata come <code>librefolio:latest</code></li>
-</ol>
-<h2 id="5-avvia-con-docker-compose">🚀 5. Avvia con Docker Compose</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
-</code></pre></div>
-<ul>
-<li>🔄 <code>-d</code> esegue l'applicazione in modalità distaccata (in background).</li>
-</ul>
-<h2 id="6-accedi-a-librefolio">🌐 6. Accedi a LibreFolio</h2>
-<p>Apri il tuo browser e vai su:</p>
-<p><strong><code>http://localhost:6040</code></strong></p>
-<p>(Oppure usa la porta che hai configurato in <code>.env</code>).</p>
-<p>La prima volta che accedi a LibreFolio, ti verrà presentata una <strong>pagina di registrazione</strong> — crea il tuo account direttamente dal browser. Il primo utente registrato diventa automaticamente l'amministratore.</p>
-<p>Endpoint disponibili:</p>
-<ul>
-<li>🏠 <strong>Frontend</strong>: <code>http://localhost:6040/</code></li>
-<li>📚 <strong>Documentazione Utente</strong>: <code>http://localhost:6040/mkdocs/</code></li>
-</ul>
-<div class="admonition tip">
-<p class="admonition-title">Gestione utenti da CLI</p>
-<p>È possibile gestire gli utenti anche dalla riga di comando. Consulta il <a href="../../admin/cli_tools/">Manuale Amministratore — Strumenti CLI</a> per i comandi relativi alla creazione, promozione ed elencazione degli utenti.</p>
-</div>
-<h2 id="aggiorna-librefolio">🔄 Aggiorna LibreFolio</h2>
-<p>Per aggiornare a una nuova versione:</p>
-<ol>
-<li>
-<p><strong>Scarica l'ultimo codice</strong>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>git<span class="w"> </span>pull
-</code></pre></div>
-</li>
-<li>
-<p><strong>Ricostruisci l'immagine Docker</strong> (esegue automaticamente la build di frontend e documentazione se modificati):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span>rebuild
-</code></pre></div>
-<p>Questo comando costruisce una nuova immagine, interrompe i container in esecuzione e li riavvia con la nuova versione.</p>
-</li>
-<li>
-<p>Le <strong>migrazioni del database</strong> vengono applicate automaticamente all'avvio.</p>
-</li>
-</ol>
-<h2 id="prova-con-dati-di-test-opzionale">🧪 Prova con Dati di Test (Opzionale)</h2>
-<p>Puoi avviare un server di test con dati mock pre-popolati per esplorare l'applicazione prima di inserire dati reali:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span><span class="nb">test</span><span class="w"> </span>db<span class="w"> </span>populate<span class="w"> </span>--force<span class="w"> </span>--with-static
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>server<span class="w"> </span>--test
-</code></pre></div>
-<p>Accedi all'indirizzo <strong><code>http://localhost:6041</code></strong> con l'utente <code>e2e_test_user</code> / <code>E2eTestPass123!</code>.</p>
-<p>Il server di test gira parallelamente a quello di produzione, utilizzando un database separato. Consulta la <a href="../../admin/docker_advanced/#test-mode">Guida Avanzata a Docker</a> per i dettagli.</p>
+<h1 id="installazione-con-docker-utente">🐳 Installazione con Docker (Utente)</h1>
+<p>Questa guida spiega come installare ed eseguire LibreFolio per l'uso regolare utilizzando l'immagine Docker ufficiale precompilata. Questo è il metodo più semplice e raccomandato per gli utenti finali.</p>
+<p>Non è necessario installare strumenti di sviluppo o compilare il codice sulla propria macchina host (nessun requisito di Python, Node.js o Pipenv).</p>
 <hr />
-<div class="admonition tip">
-<p class="admonition-title">Argomenti avanzati</p>
-<p>Per la configurazione di un reverse proxy, backup del database, percorsi dati personalizzati e considerazioni per la produzione, consulta la <a href="../../admin/docker_advanced/">🐳 Guida Avanzata a Docker</a>.</p>
+<h2 id="prerequisiti">✅ Prerequisiti</h2>
+<p>Prima di iniziare, assicurati di aver installato <strong>Docker</strong> (che include Docker Compose) sulla tua macchina host. A seconda del tuo sistema operativo, puoi seguire questi passaggi:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux</label><label for="__tabbed_1_2">macOS</label><label for="__tabbed_1_3">Windows</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>La maggior parte delle distribuzioni Linux consente l'installazione tramite i repository ufficiali.</p>
+<p>Per distribuzioni basate su Debian/Ubuntu:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>sudo<span class="w"> </span>apt-get<span class="w"> </span>update
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>sudo<span class="w"> </span>apt-get<span class="w"> </span>install<span class="w"> </span>docker-ce<span class="w"> </span>docker-ce-cli<span class="w"> </span>containerd.io<span class="w"> </span>docker-buildx-plugin<span class="w"> </span>docker-compose-plugin
+</code></pre></div></p>
+<div class="admonition warning">
+<p class="admonition-title">Permessi del gruppo Docker (Linux)</p>
+<p>Su Linux, il tuo utente di sistema deve appartenere al gruppo <code>docker</code> per poter eseguire i comandi senza <code>sudo</code>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>sudo<span class="w"> </span>usermod<span class="w"> </span>-aG<span class="w"> </span>docker<span class="w"> </span><span class="nv">$USER</span>
+</code></pre></div>
+Quindi <strong>effettua il logout e accedi nuovamente</strong> (oppure esegui <code>newgrp docker</code>) per applicare le modifiche alla sessione corrente del terminale.</p>
 </div>
+</div>
+<div class="tabbed-block">
+<p>Su macOS, il modo consigliato è installare <strong>Docker Desktop</strong>:</p>
+<ul>
+<li><a href="https://docs.docker.com/desktop/install/mac-install/">Scarica Docker Desktop per Mac</a> (disponibile per Apple Silicon o Intel).</li>
+<li>In alternativa, se utilizzi Homebrew, puoi installarlo da terminale:
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>brew<span class="w"> </span>install<span class="w"> </span>--cask<span class="w"> </span>docker
+</code></pre></div></li>
+</ul>
+</div>
+<div class="tabbed-block">
+<p>Su Windows, installa <strong>Docker Desktop</strong>:</p>
+<ul>
+<li>Scarica e installa <a href="https://docs.docker.com/desktop/install/windows-install/">Docker Desktop per Windows</a>.</li>
+<li>Assicurati di abilitare il backend basato su <strong>WSL 2</strong> durante l'installazione per ottenere le migliori prestazioni.</li>
+</ul>
+</div>
+</div>
+</div>
+<hr />
+<h2 id="installazione-passo-passo">🚀 Installazione Passo-Passo</h2>
+<h3 id="1-crea-una-cartella-per-il-progetto">📁 1. Crea una cartella per il progetto</h3>
+<p>📂 Naviga nella cartella in cui desideri salvare il progetto (ad esempio la tua cartella utente o dei documenti), crea una nuova directory per LibreFolio e accedi ad essa:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># 🏠 Vai alla cartella principale dove vuoi posizionare il progetto (es. Documenti)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">cd</span><span class="w"> </span>/percorso/della/tua/cartella
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># 📁 Crea e accedi alla cartella di LibreFolio</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>mkdir<span class="w"> </span>librefolio
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nb">cd</span><span class="w"> </span>librefolio
+</code></pre></div>
+<h3 id="2-ottieni-i-file-di-configurazione-base">📥 2. Ottieni i file di configurazione base</h3>
+<p>⚙️ Per avviare LibreFolio, avrai bisogno del file <code>docker-compose.yml</code> (che descrive lo stack dei container) e del file <code>.env</code> (che contiene le impostazioni personalizzate del tuo ambiente).</p>
+<p>⬇️ Puoi scaricarli direttamente dal repository GitHub ufficiale utilizzando uno dei seguenti comandi:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">wget</label><label for="__tabbed_2_2">curl</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># 📥 Scarica il file docker-compose.yml ufficiale</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>wget<span class="w"> </span>https://raw.githubusercontent.com/Librefolio/LibreFolio/main/docker-compose.yml
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># 🔑 Scarica il file .env.example e salvalo come .env</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>wget<span class="w"> </span>https://raw.githubusercontent.com/Librefolio/LibreFolio/main/.env.example<span class="w"> </span>-O<span class="w"> </span>.env
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># 📥 Scarica il file docker-compose.yml ufficiale</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>curl<span class="w"> </span>-L<span class="w"> </span>https://raw.githubusercontent.com/Librefolio/LibreFolio/main/docker-compose.yml<span class="w"> </span>-o<span class="w"> </span>docker-compose.yml
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># 🔑 Scarica il file .env.example e salvalo come .env</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>curl<span class="w"> </span>-L<span class="w"> </span>https://raw.githubusercontent.com/Librefolio/LibreFolio/main/.env.example<span class="w"> </span>-o<span class="w"> </span>.env
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>✍️ In alternativa, puoi creare manualmente un file chiamato <code>docker-compose.yml</code> e incollarvi all'interno il seguente codice:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">services</span><span class="p">:</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">librefolio</span><span class="p">:</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/librefolio/librefolio:latest</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nt">container_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">librefolio</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;6040:6040&quot;</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./librefolio-data:/app/backend/data/prod-docker</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="nt">env_file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.env</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HOST=0.0.0.0</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span><span class="nt">healthcheck</span><span class="p">:</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">      </span><span class="nt">test</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;CMD&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;python&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;import</span><span class="nv"> </span><span class="s">urllib.request;</span><span class="nv"> </span><span class="s">urllib.request.urlopen(&#39;http://localhost:6040/api/v1/system/health&#39;)&quot;</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30s</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">      </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">      </span><span class="nt">start_period</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">15s</span>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">      </span><span class="nt">retries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+</code></pre></div>
+<p>💡 <em>(Se non hai scaricato il file <code>.env.example</code>, rimuovi la riga <code>env_file: .env</code> dal codice sopra, o crea un file <code>.env</code> vuoto, per evitare errori all'avvio).</em></p>
+<h3 id="3-avvia-lapplicazione">▶️ 3. Avvia l'applicazione</h3>
+<p>🚀 Avvia il container in background (in modalità <em>detached</em>) eseguendo:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
+</code></pre></div>
+<p>📦 Docker scaricherà l'immagine ufficiale dal registro GitHub Container Registry (GHCR) e avvierà LibreFolio.</p>
+<h3 id="4-accedi-a-librefolio">🌐 4. Accedi a LibreFolio</h3>
+<p>🖥️ Una volta avviato il container, apri il browser e vai su:</p>
+<p><strong><code>http://localhost:6040</code></strong></p>
+<p>👤 Al primo accesso, ti verrà presentata la pagina di registrazione per creare l'account amministratore di LibreFolio. Il primo utente che si registra riceverà automaticamente i privilegi di amministratore.</p>
+<div class="admonition tip">
+<p class="admonition-title">Visualizzazione dello Stato e dei Log con Portainer</p>
+<p>Se preferisci una comoda interfaccia grafica per monitorare lo stato del tuo container LibreFolio e leggerne i log in tempo reale, ti consigliamo l'uso di <strong><a href="https://github.com/portainer/portainer">Portainer</a></strong>, uno strumento di gestione Docker leggero ed estremamente diffuso.</p>
+</div>
+<h3 id="5-accesso-in-rete-locale-e-remoto">📶 5. Accesso in Rete Locale e Remoto</h3>
+<p>Una volta avviato, LibreFolio sarà raggiungibile:</p>
+<ul>
+<li>💻 Direttamente dal <strong>computer host</strong> visitando <code>http://localhost:6040</code>.</li>
+<li>📱 Da <strong>altri dispositivi sulla stessa rete locale (LAN)</strong> (es. smartphone, tablet, altri PC) inserendo nel browser l'indirizzo IP locale del computer host (es. <code>http://192.168.1.100:6040</code>).</li>
+</ul>
+<h4 id="configurazione-del-firewall-facoltativo">🛡️ Configurazione del Firewall (facoltativo)</h4>
+<p>Se non riesci ad accedere a LibreFolio da altri dispositivi della rete locale, potrebbe essere necessario aprire la porta <code>6040</code> nel firewall del computer host:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Debian / Ubuntu (UFW)</label><label for="__tabbed_3_2">RHEL / Rocky Linux / Fedora (Firewalld)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>sudo<span class="w"> </span>ufw<span class="w"> </span>allow<span class="w"> </span><span class="m">6040</span>/tcp
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>sudo<span class="w"> </span>firewall-cmd<span class="w"> </span>--add-port<span class="o">=</span><span class="m">6040</span>/tcp<span class="w"> </span>--permanent
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>sudo<span class="w"> </span>firewall-cmd<span class="w"> </span>--reload
+</code></pre></div>
+</div>
+</div>
+</div>
+<h4 id="accesso-remoto">🌐 Accesso Remoto</h4>
+<p>Per accedere a LibreFolio in sicurezza quando sei fuori casa (fuori dalla rete locale), sei libero di configurare la soluzione che preferisci (come un reverse proxy con certificato SSL).</p>
+<p>Tuttavia, per la massima semplicità e sicurezza senza dover aprire porte sul tuo router, <strong>consigliamo l'uso di Tailscale</strong>. Trovi tutti i dettagli e la guida passo-passo nella pagina <a href="../../admin/tailscale_exposure/">Esposizione con Tailscale</a>.</p>
+<hr />
+<h2 id="opzioni-di-configurazione">⚙️ Opzioni di Configurazione</h2>
+<p>Tutte le impostazioni di LibreFolio (come porte, valuta di base e chiavi di sicurezza delle sessioni) sono gestite tramite variabili d'ambiente nel file <code>.env</code>.</p>
+<p>Per i dettagli completi su ciascuna opzione e sulle modalità di risoluzione delle variabili, consulta la <a href="../../admin/configuration/">Guida alla Configurazione nel Manuale Amministratore</a>.</p>
+<hr />
+<h2 id="backup-dei-dati">💾 Backup dei Dati</h2>
+<p>Tutti i dati di LibreFolio (database SQLite, file caricati dagli utenti, report caricati e log) sono salvati localmente all'interno della cartella <code>./librefolio-data</code> creata a fianco del file <code>docker-compose.yml</code>.</p>
+<p>Per le istruzioni dettagliate su cosa salvare e su come eseguire backup consistenti, consulta la <a href="../../admin/filesystem/#backup">Sezione Backup del Manuale Amministratore</a>.</p>
+<hr />
+<h2 id="aggiornamento-di-librefolio">🔄 Aggiornamento di LibreFolio</h2>
+<h3 id="attenzione-stato-di-alpha">⚠️ Attenzione: Stato di Alpha</h3>
+<p>LibreFolio è attualmente in fase di sviluppo <strong>Alpha</strong>. Questo significa che tra una versione e l'altra potrebbero esserci modifiche strutturali o migrazioni del database che potrebbero impedire l'avvio della nuova versione, richiedendo un intervento manuale o il ripristino di una versione precedente.</p>
+<ul>
+<li>Usando il tag <code>:latest</code> nel file <code>docker-compose.yml</code>, riceverai subito le ultime funzionalità ma ti esporrai a potenziali incompatibilità durante gli aggiornamenti automatici.</li>
+<li>Se preferisci stabilità e controllo assoluto, ti consigliamo di bloccare l'immagine sostituendo <code>:latest</code> con un tag di versione specifico (ad esempio, <code>ghcr.io/librefolio/librefolio:v0.10.0</code>).</li>
+</ul>
+<h3 id="1-aggiornamento-manuale">🛠️ 1. Aggiornamento Manuale</h3>
+<p>Per aggiornare LibreFolio manualmente all'ultima versione disponibile:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># 🛑 Arresta il container in esecuzione</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>down
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># 📥 Scarica la versione più recente dell&#39;immagine dal registro</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>docker<span class="w"> </span>compose<span class="w"> </span>pull
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># 🚀 Riavvia LibreFolio applicando la nuova immagine</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
+</code></pre></div>
+<p>Le migrazioni del database verranno eseguite automaticamente all'avvio del container.</p>
+<h3 id="2-aggiornamento-automatico-watchtower">🤖 2. Aggiornamento Automatico (Watchtower)</h3>
+<p>Se desideri automatizzare l'aggiornamento del container non appena viene rilasciata una nuova immagine sul registro, puoi utilizzare <strong>Watchtower</strong> (ti consigliamo il fork attivo e aggiornato di <a href="https://github.com/nicholas-fedor/watchtower">nicholas-fedor/watchtower</a>).</p>
+<div class="admonition note">
+<p class="admonition-title">Comportamento di default</p>
+<p>Di default, Watchtower monitora e aggiorna tutti i container attivi sul sistema. Per maggiori dettagli e opzioni avanzate, consulta il <a href="https://github.com/nicholas-fedor/watchtower">repository ufficiale del progetto</a>.</p>
+</div>
+<p>Per comodità, se desideri limitare il controllo del software solo a LibreFolio ed eseguire la verifica a cadenza settimanale (ad esempio, ogni domenica alle 4:00 del mattino tramite espressione Cron), puoi avviare Watchtower con questo comando:</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span>--name<span class="w"> </span>watchtower<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>-v<span class="w"> </span>/var/run/docker.sock:/var/run/docker.sock<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">TZ</span><span class="o">=</span>Europe/Rome<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>nicholas-fedor/watchtower<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span>--cleanup<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span>--schedule<span class="w"> </span><span class="s2">&quot;0 0 4 * * 0&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span>librefolio
+</code></pre></div>
+💡 <em>(Questo comando avvia Watchtower in background con accesso al socket di Docker. Verificherà la presenza di nuove immagini sul registro solo per il container <code>librefolio</code> ogni domenica alle 04:00:00, eliminando le vecchie immagini per risparmiare spazio. Modifica <code>TZ</code> impostando il tuo fuso orario di riferimento).</em></p>
+<h3 id="3-altre-alternative-di-gestione">🔌 3. Altre Alternative di Gestione</h3>
+<p>Se desideri un approccio diverso o più controllo sulle notifiche e sull'applicazione delle release, esistono valide alternative:</p>
+<ul>
+<li>
+<p><strong><a href="https://github.com/fmartinou/whats-up-docker">WUD (What's Up Docker)</a></strong><br />
+  Tool moderno per homelab dotato di una comoda <strong>interfaccia web</strong>.<br />
+  È estremamente modulare e supporta notifiche su Telegram, Discord e Gotify.<br />
+  Permette di inviare avvisi sulle nuove release senza aggiornare automaticamente, lasciandoti la scelta di quando farlo.  </p>
+</li>
+<li>
+<p><strong><a href="https://github.com/crazy-max/diun">Diun (Docker Image Update Notifier)</a></strong><br />
+  Un notificatore puro, leggero e sicuro.<br />
+  Non richiede i permessi di scrittura sul socket di Docker.<br />
+  Monitora i registri delle immagini in sola lettura e ti avvisa quando viene pubblicata una nuova versione di LibreFolio.</p>
+</li>
+</ul>
 
 
 
@@ -9414,6 +11077,8 @@
     
     
       <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../javascripts/mermaid.mjs" type="module"></script>
       
         <script src="../../../javascripts/mathjax.js"></script>
       

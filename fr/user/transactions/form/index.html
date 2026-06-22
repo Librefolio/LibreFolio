@@ -33,7 +33,7 @@
     
     
       
-        <title>Formulaire de Transaction - LibreFolio Docs</title>
+        <title>Formulaire de Transaction - LibreFolio</title>
       
     
     
@@ -61,6 +61,8 @@
     
       <link rel="stylesheet" href="../../../../static/extra.css">
     
+      <link rel="stylesheet" href="../../../../stylesheets/home-custom.css">
+    
     <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -81,13 +83,13 @@
     {
       "@type": "ListItem",
       "position": 2,
-      "name": "Manuel Utilisateur",
+      "name": "📘 Manuel Utilisateur",
       "item": "https://librefolio.github.io/LibreFolio/fr/user/"
     },
     {
       "@type": "ListItem",
       "position": 3,
-      "name": "Transactions",
+      "name": "💸 Transactions",
       "item": "https://librefolio.github.io/LibreFolio/fr/user/transactions/"
     },
     {
@@ -132,7 +134,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="En-tête">
-    <a href="../../../" title="LibreFolio Docs" class="md-header__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
+    <a href="../../../" title="LibreFolio" class="md-header__button md-logo" aria-label="LibreFolio" data-md-component="logo">
       
   <img src="../../../../static/logo.png" alt="logo">
 
@@ -145,7 +147,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            LibreFolio Docs
+            LibreFolio
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -327,7 +329,7 @@
           
   
   
-  Manuel Utilisateur
+  📘 Manuel Utilisateur
 
         </a>
       </li>
@@ -347,7 +349,7 @@
           
   
   
-  Manuel Admin
+  🛠️ Manuel Admin
 
         </a>
       </li>
@@ -367,7 +369,7 @@
           
   
   
-  Théorie Financière
+  📚 Théorie Financière
 
         </a>
       </li>
@@ -387,7 +389,7 @@
           
   
   
-  Developer Manual
+  💻 Developer Manual
 
         </a>
       </li>
@@ -407,7 +409,27 @@
           
   
   
-  Galerie
+  🖼️ Galerie
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../community/faq/" class="md-tabs__link">
+          
+  
+  
+  ❤️ Communauté
 
         </a>
       </li>
@@ -434,26 +456,6 @@
   
 
       
-        
-  
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../../community/faq/" class="md-tabs__link">
-          
-  
-  
-  Communauté
-
-        </a>
-      </li>
-    
-  
-
-      
     </ul>
   </div>
 </nav>
@@ -476,12 +478,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../" title="LibreFolio Docs" class="md-nav__button md-logo" aria-label="LibreFolio Docs" data-md-component="logo">
+    <a href="../../../" title="LibreFolio" class="md-nav__button md-logo" aria-label="LibreFolio" data-md-component="logo">
       
   <img src="../../../../static/logo.png" alt="logo">
 
     </a>
-    LibreFolio Docs
+    LibreFolio
   </label>
   
     <div class="md-nav__source">
@@ -560,7 +562,7 @@
   <span class="md-ellipsis">
     
   
-    Manuel Utilisateur
+    📘 Manuel Utilisateur
   
 
     
@@ -576,7 +578,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Manuel Utilisateur
+    📘 Manuel Utilisateur
   
 
           </label>
@@ -729,7 +731,7 @@
   <span class="md-ellipsis">
     
   
-    Tableau de Bord
+    📊 Tableau de Bord
   
 
     
@@ -745,7 +747,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Tableau de Bord
+    📊 Tableau de Bord
   
 
           </label>
@@ -822,7 +824,7 @@
   <span class="md-ellipsis">
     
   
-    Courtiers
+    🏦 Courtiers
   
 
     
@@ -838,7 +840,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Courtiers
+    🏦 Courtiers
   
 
           </label>
@@ -943,7 +945,7 @@
   <span class="md-ellipsis">
     
   
-    Transactions
+    💸 Transactions
   
 
     
@@ -959,7 +961,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Transactions
+    💸 Transactions
   
 
           </label>
@@ -1068,46 +1070,41 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#champs-communs" class="md-nav__link">
+    <nav class="md-nav" aria-label="🏷️ Types de Transactions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#transactions-simples" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📋 Champs Communs
+        Transactions Simples
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#operations-sur-actifs-buy-sell-transfer" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🏦 Opérations sur Actifs (BUY / SELL / TRANSFER)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#apercu-wac" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        💰 Aperçu WAC
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#transactions-composites" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔄 Transactions Composites
+        Transactions Composites
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linterface-du-formulaire" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 L'Interface du Formulaire
       
     </span>
   </a>
@@ -1115,10 +1112,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#validation" class="md-nav__link">
+  <a href="#transactions-composites_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ✅ Validation
+        🔄 Transactions Composites
       
     </span>
   </a>
@@ -1177,7 +1174,7 @@
   <span class="md-ellipsis">
     
   
-    Importer depuis le Courtier
+    📥 Importer depuis le Courtier
   
 
     
@@ -1193,7 +1190,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Importer depuis le Courtier
+    📥 Importer depuis le Courtier
   
 
           </label>
@@ -1586,7 +1583,7 @@
   <span class="md-ellipsis">
     
   
-    Actifs
+    📈 Actifs
   
 
     
@@ -1602,7 +1599,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Actifs
+    📈 Actifs
   
 
           </label>
@@ -1696,7 +1693,7 @@
   <span class="md-ellipsis">
     
   
-    Asset Detail
+    🔎 Asset Detail
   
 
     
@@ -1712,7 +1709,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Asset Detail
+    🔎 Asset Detail
   
 
           </label>
@@ -1954,7 +1951,7 @@
   <span class="md-ellipsis">
     
   
-    Fournisseurs
+    🔌 Fournisseurs
   
 
     
@@ -1970,7 +1967,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Fournisseurs
+    🔌 Fournisseurs
   
 
           </label>
@@ -2195,7 +2192,7 @@
   <span class="md-ellipsis">
     
   
-    Taux de Change
+    💱 Taux de Change
   
 
     
@@ -2211,7 +2208,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Taux de Change
+    💱 Taux de Change
   
 
           </label>
@@ -2333,7 +2330,7 @@
   <span class="md-ellipsis">
     
   
-    Détail de la Paire
+    🔌 Fournisseurs
   
 
     
@@ -2349,7 +2346,209 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Détail de la Paire
+    🔌 Fournisseurs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fx/providers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aperçu
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fx/providers/ecb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Banque Centrale Européenne (BCE)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fx/providers/fed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Federal Reserve (FED)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fx/providers/boe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Banque d'Angleterre (BoE)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fx/providers/snb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Banque Nationale Suisse (BNS)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_9_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_9_5" id="__nav_2_9_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🔎 Détail de la Paire
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_9_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_9_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🔎 Détail de la Paire
   
 
           </label>
@@ -2602,7 +2801,7 @@
   <span class="md-ellipsis">
     
   
-    Fichiers
+    📁 Fichiers
   
 
     
@@ -2618,7 +2817,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Fichiers
+    📁 Fichiers
   
 
           </label>
@@ -2695,7 +2894,7 @@
   <span class="md-ellipsis">
     
   
-    Paramètres
+    ⚙️ Paramètres
   
 
     
@@ -2711,7 +2910,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Paramètres
+    ⚙️ Paramètres
   
 
           </label>
@@ -2732,6 +2931,62 @@
     
   
     Aperçu
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../settings/preferences/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Préférences Utilisateur
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../settings/about/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    À propos
   
 
     
@@ -2788,7 +3043,7 @@
   <span class="md-ellipsis">
     
   
-    Divers
+    🧩 Divers
   
 
     
@@ -2804,7 +3059,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Divers
+    🧩 Divers
   
 
           </label>
@@ -2885,7 +3140,7 @@
   <span class="md-ellipsis">
     
   
-    Manuel Admin
+    🛠️ Manuel Admin
   
 
     
@@ -2901,7 +3156,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Manuel Admin
+    🛠️ Manuel Admin
   
 
           </label>
@@ -2941,15 +3196,33 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../../admin/cli_tools/" class="md-nav__link">
+    
+    
+    
+    
+      
+      
         
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
     
   
-    Outils CLI
+    🐳 Deployment & Exposure
   
 
     
@@ -2957,11 +3230,19 @@
   
   
 
-      </a>
-    </li>
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🐳 Deployment & Exposure
   
 
-              
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
             
               
                 
@@ -2970,42 +3251,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../admin/settings/" class="md-nav__link">
+      <a href="../../../admin/host_installation/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Paramètres Globaux
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../admin/filesystem/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Structure du Système de Fichiers
+    Installation sur l'Hôte
   
 
     
@@ -3081,6 +3334,250 @@
     </li>
   
 
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ⚙️ System Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    ⚙️ System Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../admin/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../admin/settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Paramètres Globaux
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🧹 Maintenance & Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🧹 Maintenance & Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../admin/cli_tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Admin Tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../admin/filesystem/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structure du Système de Fichiers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
     
       
       
@@ -3114,7 +3611,7 @@
   <span class="md-ellipsis">
     
   
-    Théorie Financière
+    📚 Théorie Financière
   
 
     
@@ -3130,7 +3627,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Théorie Financière
+    📚 Théorie Financière
   
 
           </label>
@@ -3196,7 +3693,7 @@
   <span class="md-ellipsis">
     
   
-    Instruments
+    🗃️ Instruments
   
 
     
@@ -3212,7 +3709,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Instruments
+    🗃️ Instruments
   
 
           </label>
@@ -3278,7 +3775,7 @@
   <span class="md-ellipsis">
     
   
-    Types de Transactions
+    🔄 Types de Transactions
   
 
     
@@ -3294,7 +3791,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Types de Transactions
+    🔄 Types de Transactions
   
 
           </label>
@@ -3360,7 +3857,7 @@
   <span class="md-ellipsis">
     
   
-    Simples
+    1️⃣ Single
   
 
     
@@ -3376,7 +3873,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Simples
+    1️⃣ Single
   
 
           </label>
@@ -3445,14 +3942,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../financial-theory/instruments/transaction-types/dividend/" class="md-nav__link">
+      <a href="../../../financial-theory/instruments/transaction-types/dividend-interest/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Dividende
+    Dividende & Intérêt
   
 
     
@@ -3481,34 +3978,6 @@
     
   
     Frais & Taxes
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../financial-theory/instruments/transaction-types/interest/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Intérêt
   
 
     
@@ -3590,7 +4059,7 @@
   <span class="md-ellipsis">
     
   
-    Composites
+    🔢 Composites
   
 
     
@@ -3606,7 +4075,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Composites
+    🔢 Composites
   
 
           </label>
@@ -3744,7 +4213,7 @@
   <span class="md-ellipsis">
     
   
-    Types d'Actifs
+    🏷️ Types d'Actifs
   
 
     
@@ -3760,7 +4229,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Types d'Actifs
+    🏷️ Types d'Actifs
   
 
           </label>
@@ -4086,7 +4555,7 @@
   <span class="md-ellipsis">
     
   
-    Événements d'Actifs
+    📅 Événements d'Actifs
   
 
     
@@ -4102,7 +4571,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Événements d'Actifs
+    📅 Événements d'Actifs
   
 
           </label>
@@ -4150,7 +4619,7 @@
   <span class="md-ellipsis">
     
   
-    Dividende
+    Dividend
   
 
     
@@ -4178,7 +4647,7 @@
   <span class="md-ellipsis">
     
   
-    Intérêt
+    Interest
   
 
     
@@ -4324,7 +4793,7 @@
   <span class="md-ellipsis">
     
   
-    Analyse Technique
+    📉 Analyse Technique
   
 
     
@@ -4340,7 +4809,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Analyse Technique
+    📉 Analyse Technique
   
 
           </label>
@@ -4406,7 +4875,7 @@
   <span class="md-ellipsis">
     
   
-    Indicateurs
+    📐 Indicateurs
   
 
     
@@ -4422,7 +4891,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Indicateurs
+    📐 Indicateurs
   
 
           </label>
@@ -4608,7 +5077,7 @@
   <span class="md-ellipsis">
     
   
-    Benchmarks Synthétiques
+    🧪 Benchmarks Synthétiques
   
 
     
@@ -4624,7 +5093,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Benchmarks Synthétiques
+    🧪 Benchmarks Synthétiques
   
 
           </label>
@@ -4750,6 +5219,410 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3_4" id="__nav_4_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🏆 Métriques de Performance
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🏆 Métriques de Performance
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../financial-theory/technical-analysis/performance-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aperçu
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../financial-theory/technical-analysis/performance-metrics/roi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ROI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../financial-theory/technical-analysis/performance-metrics/twrr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TWRR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../financial-theory/technical-analysis/performance-metrics/mwrr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MWRR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coût Moyen Pondéré
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3_5" id="__nav_4_3_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ⚠️ Métriques de Risque
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    ⚠️ Métriques de Risque
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../financial-theory/technical-analysis/risk-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aperçu
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ratio de Sharpe
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../financial-theory/technical-analysis/risk-metrics/sortino-ratio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ratio de Sortino
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../financial-theory/technical-analysis/risk-metrics/max-drawdown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drawdown Maximum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../financial-theory/technical-analysis/risk-metrics/volatility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Volatilité
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4790,7 +5663,7 @@
   <span class="md-ellipsis">
     
   
-    Fondamentaux
+    📖 Fondamentaux
   
 
     
@@ -4806,7 +5679,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Fondamentaux
+    📖 Fondamentaux
   
 
           </label>
@@ -4964,7 +5837,7 @@
   <span class="md-ellipsis">
     
   
-    Théorie du Portefeuille
+    🧮 Théorie du Portefeuille
   
 
     
@@ -4980,7 +5853,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Théorie du Portefeuille
+    🧮 Théorie du Portefeuille
   
 
           </label>
@@ -5070,236 +5943,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../financial-theory/portfolio-theory/weighted-average-cost/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Coût Moyen Pondéré
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_5_5" >
-        
-          
-          <label class="md-nav__link" for="__nav_4_5_5" id="__nav_4_5_5_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Métriques de Risque
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_4_5_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_5_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Métriques de Risque
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../financial-theory/portfolio-theory/risk-metrics/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Aperçu
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../financial-theory/portfolio-theory/risk-metrics/sharpe-ratio/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Ratio de Sharpe
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../financial-theory/portfolio-theory/risk-metrics/sortino-ratio/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Ratio de Sortino
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../financial-theory/portfolio-theory/risk-metrics/max-drawdown/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Drawdown Maximum
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../financial-theory/portfolio-theory/risk-metrics/volatility/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Volatilité
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -5347,7 +5990,7 @@
   <span class="md-ellipsis">
     
   
-    Developer Manual
+    💻 Developer Manual
   
 
     
@@ -5363,7 +6006,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Developer Manual
+    💻 Developer Manual
   
 
           </label>
@@ -5404,14 +6047,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/dev-installation/" class="md-nav__link">
+      <a href="../../../developer/dev_workflow/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Dev Installation
+    Developer Workflow
   
 
     
@@ -5457,7 +6100,7 @@
   <span class="md-ellipsis">
     
   
-    Architecture
+    🏛️ Architecture
   
 
     
@@ -5473,7 +6116,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Architecture
+    🏛️ Architecture
   
 
           </label>
@@ -5539,7 +6182,7 @@
   <span class="md-ellipsis">
     
   
-    Technologies & Patterns
+    🧩 Technologies & Patterns
   
 
     
@@ -5555,7 +6198,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Technologies & Patterns
+    🧩 Technologies & Patterns
   
 
           </label>
@@ -5621,7 +6264,7 @@
   <span class="md-ellipsis">
     
   
-    Registry & Plugin System
+    🔌 Registry & Plugin System
   
 
     
@@ -5637,7 +6280,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Registry & Plugin System
+    🔌 Registry & Plugin System
   
 
           </label>
@@ -5791,34 +6434,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../developer/architecture/patterns/configuration/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Configuration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -5859,7 +6474,7 @@
   <span class="md-ellipsis">
     
   
-    Core Systems
+    ⚙️ Core Systems
   
 
     
@@ -5875,7 +6490,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Core Systems
+    ⚙️ Core Systems
   
 
           </label>
@@ -6033,7 +6648,7 @@
   <span class="md-ellipsis">
     
   
-    Database Schema
+    🗄️ Database Schema
   
 
     
@@ -6049,7 +6664,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Database Schema
+    🗄️ Database Schema
   
 
           </label>
@@ -6243,7 +6858,7 @@
   <span class="md-ellipsis">
     
   
-    API & Communication
+    📡 API & Communication
   
 
     
@@ -6259,7 +6874,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    API & Communication
+    📡 API & Communication
   
 
           </label>
@@ -6389,7 +7004,7 @@
   <span class="md-ellipsis">
     
   
-    Backend Development
+    🐍 Backend Development
   
 
     
@@ -6405,7 +7020,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Backend Development
+    🐍 Backend Development
   
 
           </label>
@@ -6443,7 +7058,7 @@
   <span class="md-ellipsis">
     
   
-    Transactions (User Data)
+    💸 Transactions (User Data)
   
 
     
@@ -6459,7 +7074,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Transactions (User Data)
+    💸 Transactions (User Data)
   
 
           </label>
@@ -6609,7 +7224,7 @@
   <span class="md-ellipsis">
     
   
-    Import (BRIM)
+    📥 Import (BRIM)
   
 
     
@@ -6625,7 +7240,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Import (BRIM)
+    📥 Import (BRIM)
   
 
           </label>
@@ -6763,7 +7378,7 @@
   <span class="md-ellipsis">
     
   
-    Assets (Pricing)
+    📈 Assets (Pricing)
   
 
     
@@ -6779,7 +7394,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Assets (Pricing)
+    📈 Assets (Pricing)
   
 
           </label>
@@ -6845,7 +7460,7 @@
   <span class="md-ellipsis">
     
   
-    Fournisseurs
+    🔌 Fournisseurs
   
 
     
@@ -6861,7 +7476,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Fournisseurs
+    🔌 Fournisseurs
   
 
           </label>
@@ -7111,7 +7726,7 @@
   <span class="md-ellipsis">
     
   
-    FX (Currency)
+    💱 FX (Currency)
   
 
     
@@ -7127,7 +7742,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    FX (Currency)
+    💱 FX (Currency)
   
 
           </label>
@@ -7195,15 +7810,181 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_5_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5_3_3" id="__nav_5_5_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🔌 Fournisseurs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_5_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🔌 Fournisseurs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
-      <a href="../../../developer/backend/fx/providers_list/" class="md-nav__link">
+      <a href="../../../developer/backend/fx/providers/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Providers List
+    Overview Providers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/backend/fx/providers/ecb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ECB Tech
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/backend/fx/providers/fed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FED Tech
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/backend/fx/providers/boe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BOE Tech
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/backend/fx/providers/snb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SNB Tech
   
 
     
@@ -7220,6 +8001,42 @@
           </ul>
         </nav>
       
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/backend/scheduler/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🕐 Scheduler (Daemon)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -7265,7 +8082,7 @@
   <span class="md-ellipsis">
     
   
-    Frontend Development
+    🎨 Frontend Development
   
 
     
@@ -7281,7 +8098,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Frontend Development
+    🎨 Frontend Development
   
 
           </label>
@@ -7347,7 +8164,7 @@
   <span class="md-ellipsis">
     
   
-    Components
+    🧠 Core Architecture & State
   
 
     
@@ -7363,7 +8180,527 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Components
+    🧠 Core Architecture & State
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6_2_1" id="__nav_5_6_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🗃️ Store Client System
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_6_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🗃️ Store Client System
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aperçu
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/state/app-state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    App & UI State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/state/reference-state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/state/domain-state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Domain State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/state/transaction-draft/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transaction Staging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/state/registries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Registries & Caches
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/state/core-infrastructure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Infrastructure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/fx-chain-algorithm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FX Chain Algorithm
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6_3" id="__nav_5_6_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🗺️ Routing & Pages
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🗺️ Routing & Pages
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/pages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pages
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6_4" id="__nav_5_6_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🎨 Design System & UI
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_6_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🎨 Design System & UI
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/styling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Styling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6_4_2" id="__nav_5_6_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🧩 Components
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_6_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🧩 Components
   
 
           </label>
@@ -7419,17 +8756,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_2_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_4_2_2" >
         
           
-          <label class="md-nav__link" for="__nav_5_6_2_2" id="__nav_5_6_2_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_6_4_2_2" id="__nav_5_6_4_2_2_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    UI Base
+    🏗️ Core UI
   
 
     
@@ -7440,12 +8777,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_6_2_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_6_2_2">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_6_4_2_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_4_2_2">
             <span class="md-nav__icon md-icon"></span>
             
   
-    UI Base
+    🏗️ Core UI
   
 
           </label>
@@ -7458,7 +8795,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/ui-base/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/core-ui/" class="md-nav__link">
         
   
   
@@ -7486,7 +8823,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/ui-base/modals/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/core-ui/modals/" class="md-nav__link">
         
   
   
@@ -7514,7 +8851,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/ui-base/feedback/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/core-ui/feedback/" class="md-nav__link">
         
   
   
@@ -7542,7 +8879,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/ui-base/datePickers/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/core-ui/datePickers/" class="md-nav__link">
         
   
   
@@ -7570,7 +8907,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/ui-base/atoms/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/core-ui/atoms/" class="md-nav__link">
         
   
   
@@ -7598,7 +8935,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/ui-base/data-editor/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/core-ui/data-editor/" class="md-nav__link">
         
   
   
@@ -7606,6 +8943,90 @@
     
   
     Datapoint Editor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/components/core-ui/data-table/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DataTable
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/components/core-ui/file-upload/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    File Upload & Media
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/components/core-ui/select/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Select & Dropdowns
   
 
     
@@ -7634,14 +9055,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/data-table/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/features/transaction-form/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    DataTable
+    Formulaire de Transaction
   
 
     
@@ -7662,7 +9083,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/auth/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/features/auth/" class="md-nav__link">
         
   
   
@@ -7690,14 +9111,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/settings/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/features/settings/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Paramètres
+    Settings
   
 
     
@@ -7718,63 +9139,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/file-upload/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    File Upload & Media
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/select/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Select & Dropdowns
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/live-ticker/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/features/live-ticker/" class="md-nav__link">
         
   
   
@@ -7817,17 +9182,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_2_9" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_4_2_7" >
         
           
-          <label class="md-nav__link" for="__nav_5_6_2_9" id="__nav_5_6_2_9_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_6_4_2_7" id="__nav_5_6_4_2_7_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Courtiers
+    🏦 Courtiers
   
 
     
@@ -7838,12 +9203,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_6_2_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_6_2_9">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_6_4_2_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_4_2_7">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Courtiers
+    🏦 Courtiers
   
 
           </label>
@@ -7856,7 +9221,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/brokers/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/features/brokers/" class="md-nav__link">
         
   
   
@@ -7884,7 +9249,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/brokers/cards/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/features/brokers/cards/" class="md-nav__link">
         
   
   
@@ -7912,7 +9277,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/brokers/forms/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/features/brokers/forms/" class="md-nav__link">
         
   
   
@@ -7940,7 +9305,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../developer/frontend/components/brokers/modals/" class="md-nav__link">
+      <a href="../../../developer/frontend/components/features/brokers/modals/" class="md-nav__link">
         
   
   
@@ -7977,29 +9342,9 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../developer/frontend/fx-chain-algorithm/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    FX Chain Algorithm
-  
-
-    
-  </span>
-  
-  
-
-      </a>
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -8011,43 +9356,33 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../../developer/frontend/pages/" class="md-nav__link">
+    
+    
+    
+    
+      
+      
         
-  
-  
-  <span class="md-ellipsis">
+      
     
-  
-    Pages
-  
-
     
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6_5" id="__nav_5_6_5_label" tabindex="0">
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../developer/frontend/state/" class="md-nav__link">
-        
   
   
   <span class="md-ellipsis">
     
   
-    State Management
+    ⚙️ App Configuration
   
 
     
@@ -8055,11 +9390,19 @@
   
   
 
-      </a>
-    </li>
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_6_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    ⚙️ App Configuration
   
 
-              
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
             
               
                 
@@ -8076,34 +9419,6 @@
     
   
     Internationalization
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../developer/frontend/styling/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Styling
   
 
     
@@ -8159,6 +9474,42 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../../developer/frontend/data-quality-banner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🛡️ Data Quality Banner
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
     
@@ -8185,7 +9536,7 @@
   <span class="md-ellipsis">
     
   
-    Test Walkthrough
+    🧪 Test Walkthrough
   
 
     
@@ -8201,7 +9552,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Test Walkthrough
+    🧪 Test Walkthrough
   
 
           </label>
@@ -8241,6 +9592,34 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../../developer/test-walkthrough/runner_architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
     
@@ -8257,17 +9636,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_3" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_2" id="__nav_5_7_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_3" id="__nav_5_7_3_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Backend Tests
+    🐍 Backend Tests
   
 
     
@@ -8278,12 +9657,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_7_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_2">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_7_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_3">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Backend Tests
+    🐍 Backend Tests
   
 
           </label>
@@ -8515,17 +9894,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_3" id="__nav_5_7_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_4" id="__nav_5_7_4_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Frontend Tests (Playwright)
+    🎭 Frontend Tests (Playwright)
   
 
     
@@ -8536,12 +9915,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_7_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_3">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_4">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Frontend Tests (Playwright)
+    🎭 Frontend Tests (Playwright)
   
 
           </label>
@@ -8707,7 +10086,7 @@
   <span class="md-ellipsis">
     
   
-    Documentation
+    📝 Documentation
   
 
     
@@ -8723,7 +10102,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Documentation
+    📝 Documentation
   
 
           </label>
@@ -8804,7 +10183,7 @@
   <span class="md-ellipsis">
     
   
-    Galerie
+    🖼️ Galerie
   
 
     
@@ -8820,7 +10199,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Galerie
+    🖼️ Galerie
   
 
           </label>
@@ -8923,33 +10302,6 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../../POC_UX/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    POC UX
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
     
     
     
@@ -8966,17 +10318,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Communauté
+    ❤️ Communauté
   
 
     
@@ -8987,12 +10339,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Communauté
+    ❤️ Communauté
   
 
           </label>
@@ -9089,6 +10441,33 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../POC_UX/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    POC UX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -9124,46 +10503,41 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#champs-communs" class="md-nav__link">
+    <nav class="md-nav" aria-label="🏷️ Types de Transactions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#transactions-simples" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📋 Champs Communs
+        Transactions Simples
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#operations-sur-actifs-buy-sell-transfer" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🏦 Opérations sur Actifs (BUY / SELL / TRANSFER)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#apercu-wac" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        💰 Aperçu WAC
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#transactions-composites" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔄 Transactions Composites
+        Transactions Composites
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linterface-du-formulaire" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 L'Interface du Formulaire
       
     </span>
   </a>
@@ -9171,10 +10545,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#validation" class="md-nav__link">
+  <a href="#transactions-composites_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ✅ Validation
+        🔄 Transactions Composites
       
     </span>
   </a>
@@ -9213,183 +10587,111 @@
 
 
 <h1 id="formulaire-de-transaction">📝 Formulaire de Transaction</h1>
-<p>Le formulaire de transaction s'ouvre chaque fois que vous <strong>créez</strong> ou <strong>modifiez</strong> une transaction. Il s'adapte dynamiquement au type de transaction sélectionné, affichant uniquement les champs pertinents pour cette opération.</p>
+<p>Le Formulaire de Transaction s'ouvre chaque fois que vous <strong>créez</strong> ou <strong>modifiez</strong> une transaction. Il s'adapte dynamiquement au type de transaction sélectionné, n'affichant que les champs pertinents pour cette opération.</p>
 <hr />
 <h2 id="types-de-transactions">🏷️ Types de Transactions</h2>
+<p>Pour une définition conceptuelle approfondie de chaque opération, veuillez vous référer au <a href="../../../financial-theory/instruments/transaction-types/">guide de Théorie Financière</a>.</p>
+<div class="lf-screenshot-carousel" data-carousel="transactions" data-carousel-interval="3000" data-show-titles="true">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="transactions" data-name="form-modal" data-title='<img src="/LibreFolio/static/icons/transactions/buy.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> ACHAT' alt="Achat">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-sell" data-title='<img src="/LibreFolio/static/icons/transactions/sell.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> VENTE' alt="Vente">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-dividend" data-title='<img src="/LibreFolio/static/icons/transactions/dividend.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> DIVIDENDE' alt="Dividende">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-deposit" data-title='<img src="/LibreFolio/static/icons/transactions/deposit.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> DÉPÔT' alt="Dépôt">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-adjustment" data-title='<img src="/LibreFolio/static/icons/transactions/adjustment.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> AJUSTEMENT' alt="Ajustement">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-transfer" data-title='<img src="/LibreFolio/static/icons/transactions/transfer.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> TRANSFERT' alt="Transfert d'actif">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fxconversion" data-title='<img src="/LibreFolio/static/icons/transactions/fx-conversion.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> CONVERSION FX' alt="Conversion FX">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-cash-transfer" data-title='<img src="/LibreFolio/static/icons/transactions/cash-transfer.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> TRANSFERT DE LIQUIDITÉS' alt="Transfert de cash">
+</div>
+
+<h3 id="transactions-simples">Transactions Simples</h3>
+<p>Celles-ci opèrent indépendamment sur un seul compte de courtage.</p>
 <table>
 <thead>
 <tr>
 <th>Type</th>
-<th>Icône</th>
 <th>Description</th>
+<th>Guide Théorique</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><strong>BUY</strong></td>
-<td>🟢</td>
-<td>Achat d'un actif</td>
+<td><img alt="" src="../../../../static/icons/transactions/buy.png" style="vertical-align: middle;" width="24" /> <strong>ACHAT / VENTE</strong> <img alt="" src="../../../../static/icons/transactions/sell.png" style="vertical-align: middle;" width="24" /></td>
+<td>Achat ou vente d'un actif</td>
+<td><a href="../../../financial-theory/instruments/transaction-types/buy-sell/">📖 Lire</a></td>
 </tr>
 <tr>
-<td><strong>SELL</strong></td>
-<td>🔴</td>
-<td>Vente d'un actif</td>
+<td><img alt="" src="../../../../static/icons/transactions/deposit.png" style="vertical-align: middle;" width="24" /> <strong>DÉPÔT / RETRAIT</strong> <img alt="" src="../../../../static/icons/transactions/withdrawal.png" style="vertical-align: middle;" width="24" /></td>
+<td>Ajout ou retrait de liquidités d'un compte de courtage</td>
+<td><a href="../../../financial-theory/instruments/transaction-types/deposit-withdrawal/">📖 Lire</a></td>
 </tr>
 <tr>
-<td><strong>DIVIDEND</strong></td>
-<td>💰</td>
-<td>Dividende en espèces reçu</td>
+<td><img alt="" src="../../../../static/icons/transactions/dividend.png" style="vertical-align: middle;" width="24" /> <strong>DIVIDENDE / INTÉRÊT</strong> <img alt="" src="../../../../static/icons/transactions/interest.png" style="vertical-align: middle;" width="24" /></td>
+<td>Rendement d'actifs actions ou à taux fixe</td>
+<td><a href="../../../financial-theory/instruments/transaction-types/dividend-interest/">📖 Lire</a></td>
 </tr>
 <tr>
-<td><strong>INTEREST</strong></td>
-<td>📈</td>
-<td>Revenus d'intérêts (obligations, P2P)</td>
+<td><img alt="" src="../../../../static/icons/transactions/fee.png" style="vertical-align: middle;" width="24" /> <strong>FRAIS / TAXE</strong> <img alt="" src="../../../../static/icons/transactions/tax.png" style="vertical-align: middle;" width="24" /></td>
+<td>Coûts tels que les frais de courtage ou les taxes</td>
+<td><a href="../../../financial-theory/instruments/transaction-types/fee/">📖 Lire</a></td>
 </tr>
 <tr>
-<td><strong>FEE</strong></td>
-<td>💸</td>
-<td>Frais de courtage ou frais de plateforme</td>
-</tr>
-<tr>
-<td><strong>DEPOSIT</strong></td>
-<td>⬇️</td>
-<td>Dépôt d'espèces sur le compte du courtier</td>
-</tr>
-<tr>
-<td><strong>WITHDRAWAL</strong></td>
-<td>⬆️</td>
-<td>Retrait d'espèces du compte du courtier</td>
-</tr>
-<tr>
-<td><strong>ADJUSTMENT</strong></td>
-<td>🔧</td>
-<td>Correction manuelle de la quantité ou du prix</td>
-</tr>
-<tr>
-<td><strong>TRANSFER</strong></td>
-<td>🔄</td>
-<td>Actif déplacé entre deux de vos courtiers (composite)</td>
-</tr>
-<tr>
-<td><strong>FX_CONVERSION</strong></td>
-<td>💱</td>
-<td>Conversion de devise au sein d'un courtier (composite)</td>
+<td><img alt="" src="../../../../static/icons/transactions/adjustment.png" style="vertical-align: middle;" width="24" /> <strong>AJUSTEMENT</strong></td>
+<td>Correction manuelle des soldes</td>
+<td><a href="../../../financial-theory/instruments/transaction-types/adjustment/">📖 Lire</a></td>
 </tr>
 </tbody>
 </table>
-<p>Voir <a href="../../../financial-theory/instruments/transaction-types/">Théorie Financière → Types de Transactions</a> pour la définition conceptuelle de chaque type.</p>
-<hr />
-<h2 id="champs-communs">📋 Champs Communs</h2>
-<p>Ces champs apparaissent pour <strong>tous</strong> les types de transactions :</p>
+<h3 id="transactions-composites">Transactions Composites</h3>
+<p>Celles-ci représentent des mouvements <strong>entre</strong> des comptes ou des devises. Elles produisent deux entrées liées qui s'équilibrent.</p>
 <table>
 <thead>
 <tr>
-<th>Champ</th>
-<th style="text-align: center;">Requis</th>
+<th>Type</th>
 <th>Description</th>
+<th>Guide Théorique</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><strong>Type</strong></td>
-<td style="text-align: center;">✅</td>
-<td>Sélecteur du type de transaction</td>
+<td><img alt="" src="../../../../static/icons/transactions/transfer.png" style="vertical-align: middle;" width="24" /> <strong>TRANSFERT</strong></td>
+<td>Actif déplacé entre deux de vos courtiers</td>
+<td><a href="../../../financial-theory/instruments/transaction-types/transfer/">📖 Lire</a></td>
 </tr>
 <tr>
-<td><strong>Date</strong></td>
-<td style="text-align: center;">✅</td>
-<td>Date d'exécution (AAAA-MM-JJ)</td>
+<td><img alt="" src="../../../../static/icons/transactions/cash-transfer.png" style="vertical-align: middle;" width="24" /> <strong>TRANSFERT DE LIQUIDITÉS</strong></td>
+<td>Virement bancaire entre courtiers</td>
+<td><a href="../../../financial-theory/instruments/transaction-types/cash-transfer/">📖 Lire</a></td>
 </tr>
 <tr>
-<td><strong>Currency</strong></td>
-<td style="text-align: center;">✅</td>
-<td>Devise de la transaction</td>
-</tr>
-<tr>
-<td><strong>Amount</strong></td>
-<td style="text-align: center;">✅</td>
-<td>Montant brut total</td>
-</tr>
-<tr>
-<td><strong>Fee</strong></td>
-<td style="text-align: center;">❌</td>
-<td>Commission de courtage ou taxe retenue</td>
-</tr>
-<tr>
-<td><strong>Notes</strong></td>
-<td style="text-align: center;">❌</td>
-<td>Mémo en texte libre</td>
+<td><img alt="" src="../../../../static/icons/transactions/fx-conversion.png" style="vertical-align: middle;" width="24" /> <strong>CONVERSION FX</strong></td>
+<td>Change de devises au sein d'un courtier</td>
+<td><a href="../../../financial-theory/instruments/transaction-types/fx-conversion/">📖 Lire</a></td>
 </tr>
 </tbody>
 </table>
 <hr />
-<h2 id="operations-sur-actifs-buy-sell-transfer">🏦 Opérations sur Actifs (BUY / SELL / TRANSFER)</h2>
-<p>Lorsqu'un actif est impliqué, des champs supplémentaires apparaissent :</p>
-<table>
-<thead>
-<tr>
-<th>Champ</th>
-<th style="text-align: center;">Requis</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Asset</strong></td>
-<td style="text-align: center;">✅</td>
-<td>L'actif négocié (recherchable)</td>
-</tr>
-<tr>
-<td><strong>Quantity</strong></td>
-<td style="text-align: center;">✅</td>
-<td>Nombre d'unités</td>
-</tr>
-<tr>
-<td><strong>Unit Price</strong></td>
-<td style="text-align: center;">✅</td>
-<td>Prix par unité</td>
-</tr>
-</tbody>
-</table>
-<div class="admonition tip">
-<p class="admonition-title">Auto-calcul</p>
-<p>Si vous renseignez la <strong>Quantity</strong> et le <strong>Unit Price</strong>, le <strong>Amount</strong> est calculé automatiquement, et vice versa.</p>
-</div>
-<hr />
-<h2 id="apercu-wac">💰 Aperçu WAC</h2>
-<p>Pour les transactions <strong>BUY</strong> et <strong>SELL</strong>, un panneau d'<strong>aperçu WAC (Coût Moyen Pondéré)</strong> apparaît sous les champs principaux. Il affiche en temps réel :</p>
+<h2 id="linterface-du-formulaire">📋 L'Interface du Formulaire</h2>
+<p>Le formulaire est conçu pour être intuitif et dynamique. Lorsque vous sélectionnez un <strong>Type de Transaction</strong>, le formulaire s'ajuste automatiquement pour n'afficher que les champs pertinents.</p>
 <ul>
-<li>Le <strong>prix de revient actuel</strong> avant cette transaction</li>
-<li>Le <strong>nouveau prix de revient projeté</strong> après l'enregistrement</li>
-<li>Le <strong>gain/perte réalisé</strong> (SELL uniquement)</li>
+<li><strong>Détails de base :</strong> Date, Type, Devise et Montant.</li>
+<li><strong>Spécificités de l'actif :</strong> Si la transaction implique un actif (comme ACHAT ou VENTE), des champs pour sélectionner l'actif, saisir la quantité et définir le prix unitaire apparaîtront.</li>
+<li><strong>Panneau de prévisualisation (WAC) :</strong> Pour les opérations affectant votre portefeuille, une prévisualisation en temps réel apparaît en bas. Elle affiche votre prix de revient actuel, le nouveau prix de revient projeté, ainsi que tout gain ou perte réalisé.</li>
 </ul>
-<p>Cet aperçu est calculé en direct — nul besoin d'enregistrer au préalable.</p>
-<div class="admonition note">
-<p class="admonition-title">Surcharge manuelle du WAC</p>
-<p>Vous pouvez passer le mode WAC de <strong>Auto</strong> (calculé par LibreFolio) à <strong>Manual</strong> (saisissez votre propre prix de revient). Ceci est utile lors de la migration de données historiques depuis un autre système.</p>
-</div>
+<blockquote>
+<p><strong>💡 Note :</strong> Le système gère automatiquement les calculs standard pour vous (comme la multiplication de la quantité par le prix unitaire) afin que vous n'ayez pas à faire les calculs manuellement.</p>
+</blockquote>
 <hr />
-<h2 id="transactions-composites">🔄 Transactions Composites</h2>
-<p><strong>TRANSFER</strong> et <strong>FX_CONVERSION</strong> sont <em>composites</em> — ils lient deux volets :</p>
+<h2 id="transactions-composites_1">🔄 Transactions Composites</h2>
+<p><strong>TRANSFERT</strong> et <strong>CONVERSION FX</strong> sont <em>composites</em> — ils lient deux volets :</p>
 <ul>
-<li><strong>TRANSFER</strong> : spécifie un <strong>courtier source</strong> et un <strong>courtier de destination</strong>, ainsi que l'actif et la quantité. LibreFolio enregistre les deux volets de manière atomique.</li>
-<li><strong>FX_CONVERSION</strong> : spécifie le <strong>montant de la devise source</strong> et le <strong>montant de la devise de destination</strong> au sein du même courtier.</li>
+<li><strong>TRANSFERT</strong> : spécifie un <strong>courtier source</strong> et un <strong>courtier de destination</strong>, ainsi que l'actif et la quantité. LibreFolio enregistre les deux volets de manière atomique.</li>
+<li><strong>CONVERSION FX</strong> : spécifie le <strong>montant de la devise source</strong> et le <strong>montant de la devise de destination</strong> au sein du même courtier.</li>
 </ul>
-<p>Pour effectuer la division d'une transaction composite en deux transactions indépendantes, utilisez l'opération <a href="../#split">Split</a> dans le tableau des transactions.</p>
-<hr />
-<h2 id="validation">✅ Validation</h2>
-<p>Le formulaire valide les données lors de l'enregistrement :</p>
-<ul>
-<li>Les dates doivent être dans une plage valide (pas dans le futur par défaut).</li>
-<li>La quantité et le prix doivent être positifs.</li>
-<li>Pour SELL : la quantité ne peut pas excéder la position actuelle (avertissement, pas d'erreur bloquante).</li>
-<li>Le montant doit correspondre à la quantité × prix avec une faible tolérance.</li>
-</ul>
+<p>Pour diviser une transaction composite en deux transactions indépendantes, utilisez l'opération <a href="../">division</a> dans le tableau des transactions.</p>
 <hr />
 <h2 id="liens-connexes">🔗 Liens connexes</h2>
 <ul>
 <li>📋 <strong><a href="../">Tableau des Transactions</a></strong> — Vue en liste, filtrage, opérations groupées</li>
-<li>📥 <strong><a href="../import/">Import depuis Courtier</a></strong> — Évitez la saisie manuelle avec l'import BRIM</li>
+<li>📥 <strong><a href="../import/">Importer depuis un Courtier</a></strong> — Évitez la saisie manuelle avec l'import BRIM</li>
 </ul>
 
 
@@ -9450,6 +10752,8 @@
     
     
       <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../javascripts/mermaid.mjs" type="module"></script>
       
         <script src="../../../../javascripts/mathjax.js"></script>
       
