@@ -1548,7 +1548,7 @@ def cmd_install(args):
 
     print(Colors.info("[4/4] Installing Playwright browsers..."))
     print(Colors.warning("   (This will download Chromium, ~150MB)"))
-    result = run_command_live(["npm", "exec", "playwright", "install", "chromium", "--with-deps"], cwd=PROJECT_ROOT / "frontend")
+    result = run_command_live(["npx", "playwright", "install", "chromium"], cwd=PROJECT_ROOT / "frontend")
     if result != 0:
         print_warning("Playwright browser installation had issues (non-critical)")
     else:
