@@ -13,10 +13,11 @@
     import {trySave} from '$lib/utils/trySave';
     import {invalidate as invalidatePortfolioCache} from '$lib/stores/portfolio/portfolioStore.svelte';
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         close: void;
         success: void;
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     // Props
     export let isOpen = false;

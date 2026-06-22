@@ -39,21 +39,21 @@
 
     let isOpen = $state(false);
     let daysRange = $state(loadDays());
-    let events = $state<Array<{id: number; date: string; type: string; amount: string; code: string; notes: string | null}>>([]);
+    let events: Array<{id: number; date: string; type: string; amount: string; code: string; notes: string | null}> = $state([]);
     let loading = $state(false);
     let fetchKey = $state('');
     let highlightedIndex = $state(-1);
 
     // DOM refs
-    let triggerRef = $state<HTMLButtonElement | null>(null);
-    let dropdownRef = $state<HTMLDivElement | null>(null);
+    let triggerRef: HTMLButtonElement | null = $state(null);
+    let dropdownRef: HTMLDivElement | null = $state(null);
 
     // Fixed positioning state
     let fixedTop = $state(0);
     let fixedLeft = $state(0);
     let fixedWidth = $state(0);
     let dropdownMaxHeight = $state('15rem');
-    let computedPosition = $state<'top' | 'bottom'>('bottom');
+    let computedPosition: 'top' | 'bottom' = $state('bottom');
 
     const _uid = `event-picker-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -196,7 +196,7 @@
     // =========================================================================
 
     // Pinned event: fetched independently when value points to an event outside the slider range
-    let pinnedEvent = $state<{id: number; date: string; type: string; amount: string; code: string; notes: string | null} | null>(null);
+    let pinnedEvent: {id: number; date: string; type: string; amount: string; code: string; notes: string | null} | null = $state(null);
 
     let selectedEvent = $derived.by(() => {
         if (value == null) return null;

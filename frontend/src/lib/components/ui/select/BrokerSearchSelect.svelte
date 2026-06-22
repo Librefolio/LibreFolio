@@ -41,7 +41,7 @@
     let {brokers, value = $bindable(null), placeholder = '', disabled = false, disabledIds = new Set(), dropdownPosition = 'auto', maxVisibleItems = 6, createLabel = '', onCreateNew, onchange}: Props = $props();
 
     // Convert brokers to SelectOption format
-    let brokerOptions = $derived<SelectOption[]>(
+    let brokerOptions: SelectOption[] = $derived(
         brokers.map((b) => ({
             value: String(b.id),
             label: b.name,

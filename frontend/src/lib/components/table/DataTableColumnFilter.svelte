@@ -112,7 +112,7 @@
 
     // Text filter state
     let textValue = $state(getInitialTextValue());
-    let textMatchMode = $state<TextMatchMode>(getInitialTextMatchMode());
+    let textMatchMode: TextMatchMode = $state(getInitialTextMatchMode());
 
     // Number filter state
     let numMin = $state(getInitialNumMin());
@@ -204,13 +204,13 @@
     let dateTo = $state(getInitialDateTo());
 
     // Enum filter state
-    let selectedEnums = $state<Set<string>>(getInitialEnums());
+    let selectedEnums: Set<string> = $state(getInitialEnums());
 
     // Multi-enum filter state (tags-like) — start with empty selection (= no filter)
     function getInitialMultiEnums(): Set<string> {
         return new Set(initialValue?.type === 'multi-enum' ? initialValue.selected : []);
     }
-    let multiEnums = $state<Set<string>>(getInitialMultiEnums());
+    let multiEnums: Set<string> = $state(getInitialMultiEnums());
     let multiEnumSearch = $state('');
     let enumSearch = $state('');
 
@@ -219,14 +219,14 @@
     function getInitialCurrencyStack(): CurrencyStackItem[] {
         return initialValue?.type === 'currency-stack' ? initialValue.items.map((i) => ({...i})) : [];
     }
-    let currencyStack = $state<CurrencyStackItem[]>(getInitialCurrencyStack());
+    let currencyStack: CurrencyStackItem[] = $state(getInitialCurrencyStack());
     let currencyToAdd = $state('');
     /** Index of the currency-stack row whose range editor is currently open. */
-    let currencyOpenIdx = $state<number | null>(null);
+    let currencyOpenIdx: number | null = $state(null);
     /** Per-row slider position state for the currency-stack range editor.
      *  Mirrors the linear scale used by `type:'number'` so the UX is identical. */
-    let currencyMinPos = $state<Record<number, number>>({});
-    let currencyMaxPos = $state<Record<number, number>>({});
+    let currencyMinPos: Record<number, number> = $state({});
+    let currencyMaxPos: Record<number, number> = $state({});
 
     /** Per-currency linear helpers — same math as the global num slider but
      *  scoped to the min/max of the specific currency code. Falls back to
@@ -294,9 +294,9 @@
     }
 
     let sizeMinInputValue = $state(initializeMinFromBytes().value);
-    let sizeMinUnit = $state<SizeUnit>(initializeMinFromBytes().unit);
+    let sizeMinUnit: SizeUnit = $state(initializeMinFromBytes().unit);
     let sizeMaxInputValue = $state(initializeMaxFromBytes().value);
-    let sizeMaxUnit = $state<SizeUnit>(initializeMaxFromBytes().unit);
+    let sizeMaxUnit: SizeUnit = $state(initializeMaxFromBytes().unit);
 
     // Slider positions (0-100)
     // svelte-ignore state_referenced_locally

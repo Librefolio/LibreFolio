@@ -30,15 +30,15 @@
     let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', children}: Props = $props();
 
     let visible = $state(false);
-    let tooltipElement = $state<HTMLDivElement | undefined>(undefined);
-    let triggerElement = $state<HTMLDivElement | undefined>(undefined);
+    let tooltipElement: HTMLDivElement | undefined = $state(undefined);
+    let triggerElement: HTMLDivElement | undefined = $state(undefined);
 
     // Fixed position coordinates (viewport-relative)
     let fixedTop = $state(0);
     let fixedLeft = $state(0);
 
     /** Auto-dismiss timer for mobile (touch) interactions */
-    let autoDismissTimer = $state<ReturnType<typeof setTimeout> | null>(null);
+    let autoDismissTimer: ReturnType<typeof setTimeout> | null = $state(null);
     /** Whether the current interaction is touch-based */
     let isTouchInteraction = $state(false);
 

@@ -175,18 +175,18 @@
     // State
     // =========================================================================
 
-    let rows = $state<ScheduleRow[]>([]);
-    let selectedIds = $state<string[]>([]);
+    let rows: ScheduleRow[] = $state([]);
+    let selectedIds: string[] = $state([]);
     let internalUpdate = false;
 
     // Initial Value + Currency + Asset Events state
-    let initialValue = $state<number>(10000);
-    let currencyValue = $state<string>('EUR');
-    let assetEvents = $state<AssetEventRow[]>([]);
+    let initialValue: number = $state(10000);
+    let currencyValue: string = $state('EUR');
+    let assetEvents: AssetEventRow[] = $state([]);
 
     // Global schedule properties (apply to ALL periods)
-    let interestType = $state<string>('SIMPLE');
-    let dayCount = $state<string>('ACT/365');
+    let interestType: string = $state('SIMPLE');
+    let dayCount: string = $state('ACT/365');
 
     // Sync from prop (only on external changes)
     $effect(() => {
@@ -219,7 +219,7 @@
 
     // Modal state
     let showBoundaryModal = $state(false);
-    let boundaryModalMode = $state<'delete' | 'split'>('delete');
+    let boundaryModalMode: 'delete' | 'split' = $state('delete');
     let boundaryModalMin = $state('');
     let boundaryModalMax = $state('');
     let boundaryModalDefault = $state('');
@@ -231,7 +231,7 @@
         defaultDate: string;
         label?: string;
     }
-    let pendingBulkGaps = $state<PendingGap[]>([]);
+    let pendingBulkGaps: PendingGap[] = $state([]);
     /** Full pending bulk delete info (indices + auto-resolved head/tail) */
     let pendingBulkDeleteData = $state<{
         indices: number[];
@@ -882,7 +882,7 @@
     // DataTable Configuration
     // =========================================================================
 
-    let columns = $derived<ColumnDef<ScheduleRow>[]>([
+    let columns: ColumnDef<ScheduleRow>[] = $derived([
         {
             id: 'period',
             header: () => $t('assets.schedule.period'),
@@ -964,7 +964,7 @@
         },
     ]);
 
-    let rowActions = $derived<RowAction<ScheduleRow>[]>([
+    let rowActions: RowAction<ScheduleRow>[] = $derived([
         {
             id: 'split',
             icon: Scissors,

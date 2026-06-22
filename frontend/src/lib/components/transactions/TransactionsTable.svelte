@@ -21,6 +21,7 @@
 -->
 <script lang="ts">
     import {_ as t, locale} from '$lib/i18n';
+    import {untrack} from 'svelte';
     import {goto} from '$app/navigation';
     import {Eye, Pencil, Copy, Trash2, Unlink} from 'lucide-svelte';
 
@@ -138,8 +139,7 @@
 
     /** Track active column filters so we can pre-filter displayRows before
      *  the pair-never-split paginator. Initialized from `initialFilters`. */
-    // svelte-ignore state_referenced_locally
-    let activeColumnFilters = $state<Record<string, FilterValue>>(initialFilters ? {...initialFilters} : {});
+    let activeColumnFilters: Record<string, FilterValue> = $state(untrack(() => (initialFilters ? {...initialFilters} : {})));
 
     /** Intercept filter changes: update local state and forward to parent. */
     function handleFiltersChangeInternal(record: Record<string, FilterValue>) {

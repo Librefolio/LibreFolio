@@ -36,7 +36,7 @@
     let {isOpen = false, mode = 'create', brokerId = null, zIndex = 50, initialData = {}, onclose, oncreated, onupdated}: Props = $props();
 
     let loading = $state(false);
-    let error = $state<string | null>(null);
+    let error: string | null = $state(null);
     let formTouched = $state(false);
     let showDiscardConfirm = $state(false);
 

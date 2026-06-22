@@ -46,7 +46,7 @@
 
     // Internal state
     let showImageEditor = $state(false);
-    let imageEditorFile = $state<File | null>(null);
+    let imageEditorFile: File | null = $state(null);
 
     // Handle asset picker selection (URL or existing file)
     function handlePickerSelect(event: CustomEvent<{url: string}>) {

@@ -3,9 +3,10 @@
     import {AlertTriangle, ArrowLeft, Terminal} from 'lucide-svelte';
     import {_} from '$lib/i18n';
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         gotoLogin: void;
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 </script>
 
 <div class="w-full max-w-lg bg-libre-beige rounded-2xl shadow-2xl overflow-hidden flex flex-col font-sans" data-testid="forgot-modal">

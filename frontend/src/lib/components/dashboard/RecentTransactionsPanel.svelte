@@ -48,7 +48,7 @@
 
     let rows: ApiTXRow[] = $state([]);
     let loading = $state(true);
-    let error = $state<string | null>(null);
+    let error: string | null = $state(null);
     let lastLoadKey = $state('');
 
     // =========================================================================

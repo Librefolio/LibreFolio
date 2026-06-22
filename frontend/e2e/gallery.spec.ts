@@ -863,7 +863,10 @@ test.describe('Gallery Screenshots', () => {
                                 const deleteModal = page.getByTestId('tx-delete-modal');
                                 if (await deleteModal.isVisible({timeout: 3_000}).catch(() => false)) {
                                     // Check if it's the linked layout (shows From/To)
-                                    const isLinked = await deleteModal.locator('[data-testid="tx-delete-paired-details"]').isVisible({timeout: 1_000}).catch(() => false);
+                                    const isLinked = await deleteModal
+                                        .locator('[data-testid="tx-delete-paired-details"]')
+                                        .isVisible({timeout: 1_000})
+                                        .catch(() => false);
                                     if (isLinked) {
                                         await page.waitForTimeout(300);
                                         await screenshot(page, viewport, lang, theme, 'transactions', 'bulk-delete-pair-modal');
@@ -2115,7 +2118,10 @@ test.describe('Gallery Screenshots', () => {
                         if (await indicatorSelect.isVisible({timeout: 2000}).catch(() => false)) {
                             await indicatorSelect.click();
                             await page.waitForTimeout(300);
-                            const bollingerOption = page.locator('[role="menuitem"]').filter({hasText: /Bollinger/i}).first();
+                            const bollingerOption = page
+                                .locator('[role="menuitem"]')
+                                .filter({hasText: /Bollinger/i})
+                                .first();
                             if (await bollingerOption.isVisible({timeout: 1000}).catch(() => false)) {
                                 await bollingerOption.click();
                                 await page.waitForTimeout(1500);

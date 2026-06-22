@@ -55,7 +55,7 @@
     let brkrs = $derived(getAllBrokers() as BrokerLike[]);
     let isPaired = $derived(transaction?.related_transaction_id != null);
     let isBlocked = $derived(isPaired && (partnerInaccessible || (!partner && transaction?.related_transaction_id != null)));
-    let layout = $derived<'A' | 'B' | 'C'>(!isPaired ? 'A' : isBlocked ? 'C' : 'B');
+    let layout: 'A' | 'B' | 'C' = $derived(!isPaired ? 'A' : isBlocked ? 'C' : 'B');
 
     function aName(id: number | null | undefined): string {
         if (!id) return '\u2014';

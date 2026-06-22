@@ -29,8 +29,8 @@
 
     // Local editable state — reset on open
     let frequency = $state(10);
-    let timeSlots = $state<string[]>([]);
-    let selectedDays = $state<Record<string, boolean>>({
+    let timeSlots: string[] = $state([]);
+    let selectedDays: Record<string, boolean> = $state({
         mon: false,
         tue: false,
         wed: false,
@@ -42,7 +42,7 @@
     let horizon = $state(14);
     let newTime = $state('');
     let saving = $state(false);
-    let error = $state<string | null>(null);
+    let error: string | null = $state(null);
 
     const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 

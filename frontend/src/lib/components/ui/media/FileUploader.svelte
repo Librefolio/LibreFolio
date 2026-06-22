@@ -23,13 +23,14 @@
     // Blocked extensions (same as backend)
     const BLOCKED_EXTENSIONS = new Set(['.exe', '.dll', '.so', '.dylib', '.bat', '.cmd', '.ps1', '.vbs', '.vbe', '.sh', '.bash', '.csh', '.zsh', '.py', '.pyc', '.pyo', '.pl', '.pm', '.rb', '.php', '.php3', '.php4', '.php5', '.phtml', '.js', '.mjs', '.cjs', '.jar', '.class', '.com', '.scr', '.pif']);
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         upload: {files: File[]};
         error: {message: string};
         change: {files: File[]}; // Emitted when files are selected/changed
         editImage: {file: File; index: number}; // Emitted when user wants to edit an image
         editFile: {file: File; index: number}; // Emitted when user wants to edit a non-image file
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     let isDragging = false;
     let selectedFiles: File[] = [];

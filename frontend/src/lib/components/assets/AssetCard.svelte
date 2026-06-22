@@ -71,7 +71,7 @@
     // State
     // =========================================================================
 
-    let localViewModeOverride = $state<'absolute' | 'percentage' | null>(null);
+    let localViewModeOverride: 'absolute' | 'percentage' | null = $state(null);
     let cardViewMode = $derived(localViewModeOverride ?? globalViewMode);
 
     let prevGlobal: string | undefined;

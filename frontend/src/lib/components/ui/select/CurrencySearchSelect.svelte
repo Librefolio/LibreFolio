@@ -48,9 +48,9 @@
 
     let {value = $bindable(''), allowedCurrencies, excludedCurrencies, includeAll = false, placeholder = '', disabled = false, loading: externalLoading = false, maxVisibleItems = 6, dropdownPosition = 'auto', onchange, compact = false, originalCurrency}: Props = $props();
 
-    let allCurrencies = $state<CurrencyInfo[]>([]);
+    let allCurrencies: CurrencyInfo[] = $state([]);
     let internalLoading = $state(true);
-    let error = $state<string | null>(null);
+    let error: string | null = $state(null);
 
     // Filter currencies: allowedCurrencies (include list) then excludedCurrencies (exclude set)
     let filteredCurrencies = $derived.by(() => {

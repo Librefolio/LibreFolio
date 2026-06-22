@@ -24,18 +24,18 @@
 
     let {open = false, preview = null, loading = false, error = null, onRequestClose = () => {}, onSheetChange = () => {}, zIndex = 50}: Props = $props();
 
-    let markdownMode = $state<'rendered' | 'raw'>('rendered');
+    let markdownMode: 'rendered' | 'raw' = $state('rendered');
     let copied = $state(false);
     let imageZoom = $state(1);
-    let imageStage = $state<HTMLDivElement | null>(null);
+    let imageStage: HTMLDivElement | null = $state(null);
     let imageDragging = $state(false);
     let renderedMarkdown = $state('');
-    let markdownError = $state<string | null>(null);
-    let pdfError = $state<string | null>(null);
-    let tableError = $state<string | null>(null);
+    let markdownError: string | null = $state(null);
+    let pdfError: string | null = $state(null);
+    let tableError: string | null = $state(null);
 
-    let pdfHost = $state<HTMLDivElement | null>(null);
-    let tableHost = $state<HTMLDivElement | null>(null);
+    let pdfHost: HTMLDivElement | null = $state(null);
+    let tableHost: HTMLDivElement | null = $state(null);
 
     let markdownToken = 0;
     let pdfToken = 0;

@@ -41,35 +41,35 @@
     let {open, brokerId, brokerName, onClose}: Props = $props();
 
     // State
-    let files = $state<BrimFile[]>([]);
+    let files: BrimFile[] = $state([]);
     let loading = $state(true);
-    let error = $state<string | null>(null);
+    let error: string | null = $state(null);
     let uploading = $state(false);
     let showUploader = $state(false);
 
     // Pending files tracking for close confirmation
-    let pendingFiles = $state<globalThis.File[]>([]);
+    let pendingFiles: globalThis.File[] = $state([]);
     let showCloseConfirm = $state(false);
 
     // #R6-7 (Batch 4.d-part3) — Bulk delete confirmation gating.
     let confirmBulkDeleteOpen = $state(false);
-    let pendingBulkDeleteIds = $state<string[]>([]);
+    let pendingBulkDeleteIds: string[] = $state([]);
 
     // File edit (rename) state
-    let editingFile = $state<File | null>(null);
-    let editingFileIndex = $state<number>(-1);
+    let editingFile: File | null = $state(null);
+    let editingFileIndex: number = $state(-1);
     let showFileEdit = $state(false);
 
     // FilesTable ref + selection tracking
     let filesTableRef: FilesTable | undefined = $state(undefined);
-    let selectedFileIds = $state<string[]>([]);
+    let selectedFileIds: string[] = $state([]);
 
     // BRIM preview modal state
     let showPreviewModal = $state(false);
     let previewLoading = $state(false);
-    let previewError = $state<string | null>(null);
-    let previewData = $state<FilePreviewResponse | null>(null);
-    let previewFileId = $state<string | null>(null);
+    let previewError: string | null = $state(null);
+    let previewData: FilePreviewResponse | null = $state(null);
+    let previewFileId: string | null = $state(null);
     let previewRequestToken = 0;
 
     // Load files when modal opens or brokerId changes

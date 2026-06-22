@@ -45,9 +45,9 @@
     // Internal state
     let isOpen = $state(false);
     let highlightedIndex = $state(-1);
-    let containerRef = $state<HTMLDivElement | null>(null);
-    let computedPosition = $state<'top' | 'bottom'>('bottom');
-    let dropdownMaxHeight = $state<string>('15rem');
+    let containerRef: HTMLDivElement | null = $state(null);
+    let computedPosition: 'top' | 'bottom' = $state('bottom');
+    let dropdownMaxHeight: string = $state('15rem');
 
     // Fixed positioning state (viewport-relative coordinates)
     let fixedTop = $state(0);

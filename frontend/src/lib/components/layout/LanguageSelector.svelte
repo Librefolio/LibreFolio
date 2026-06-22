@@ -9,7 +9,7 @@
     import {ChevronDown} from 'lucide-svelte';
 
     let isOpen = $state(false);
-    let containerRef = $state<HTMLDivElement | null>(null);
+    let containerRef: HTMLDivElement | null = $state(null);
 
     // Get current language info
     let currentLangInfo = $derived(LANGUAGE_OPTIONS.find((l) => l.code === $currentLanguage) || LANGUAGE_OPTIONS[0]);

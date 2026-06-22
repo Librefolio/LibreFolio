@@ -58,7 +58,7 @@
 
     let importModalOpen = $state(false);
     let dataTableRef: DataTable<DataRow> | undefined = $state(undefined);
-    let selectedIds = $state<string[]>([]);
+    let selectedIds: string[] = $state([]);
     let hideStale = $state(false);
 
     // =========================================================================

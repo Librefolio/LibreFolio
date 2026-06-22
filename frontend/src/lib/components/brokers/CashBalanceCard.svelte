@@ -6,10 +6,11 @@
     import {_} from '$lib/i18n';
     import {ArrowDownLeft, ArrowUpRight} from 'lucide-svelte';
 
-    const dispatch = createEventDispatcher<{
+    type _DispatchEvents = {
         deposit: {currency: string};
         withdraw: {currency: string};
-    }>();
+    };
+    const dispatch = createEventDispatcher();
 
     // Props
     export let code: string;

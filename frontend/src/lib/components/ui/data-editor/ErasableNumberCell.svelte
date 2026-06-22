@@ -46,7 +46,7 @@
     // and the subsequent `.trim()` call in commit() would throw silently (TypeError
     // "draft.trim is not a function") — with the net effect that `onchange` was
     // never fired and the parent's dirty tracker never saw the edit (I-bis #9).
-    let draft = $state<number | null>(null);
+    let draft: number | null = $state(null);
 
     // Sync draft FROM incoming value only when we are NOT actively editing.
     // Guarded with equality check to avoid spurious writes that would interrupt the

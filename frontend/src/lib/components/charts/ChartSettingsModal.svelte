@@ -61,10 +61,10 @@
     let areaFill = $state(true);
     let gridLines = $state(true);
     let staleGradient = $state(true);
-    let yAxisMode = $state<'auto' | 'include0' | 'custom'>('auto');
-    let yAxisMin = $state<number | undefined>(undefined);
-    let yAxisMax = $state<number | undefined>(undefined);
-    let signals = $state<SignalConfig[]>([]);
+    let yAxisMode: 'auto' | 'include0' | 'custom' = $state('auto');
+    let yAxisMin: number | undefined = $state(undefined);
+    let yAxisMax: number | undefined = $state(undefined);
+    let signals: SignalConfig[] = $state([]);
 
     // Reset local state when modal opens
     $effect(() => {
@@ -142,7 +142,7 @@
     // Preview chart data
     // =========================================================================
 
-    let previewViewMode = $state<'absolute' | 'percentage'>('percentage');
+    let previewViewMode: 'absolute' | 'percentage' = $state('percentage');
 
     function generateSyntheticData(): LineDataPoint[] {
         const baseDates: LineDataPoint[] = [];

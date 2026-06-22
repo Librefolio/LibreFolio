@@ -121,7 +121,7 @@
     let displayName = $state('');
     let currency = $state('USD');
     let assetType = $state('STOCK');
-    let iconUrl = $state<string | null>(null);
+    let iconUrl: string | null = $state(null);
     let quoteBaseQuantity = $state(1);
     let active = $state(true);
 
@@ -132,31 +132,31 @@
         value: string;
         autoFilled?: boolean;
     }
-    let identifierRows = $state<IdentifierRow[]>([]);
+    let identifierRows: IdentifierRow[] = $state([]);
 
     // Classification
     let shortDescription = $state('');
-    let sectorDistribution = $state<Record<string, number>>({});
-    let geographicDistribution = $state<Record<string, number>>({});
+    let sectorDistribution: Record<string, number> = $state({});
+    let geographicDistribution: Record<string, number> = $state({});
 
     // Provider
     let providerCode = $state('');
     let providerIdentifier = $state('');
     let providerIdentifierType = $state('TICKER');
-    let providerParams = $state<Record<string, any> | null>(null);
+    let providerParams: Record<string, any> | null = $state(null);
     let providerUserUrl = $state('');
-    let providerUrl = $state<string | null>(null);
+    let providerUrl: string | null = $state(null);
     let providerNoProvider = $state(false);
-    let providerTestStatus = $state<'not_tested' | 'testing' | 'passed' | 'failed'>('not_tested');
+    let providerTestStatus: 'not_tested' | 'testing' | 'passed' | 'failed' = $state('not_tested');
 
     // UI state
     let moreInfoExpanded = $state(false);
     let providerExpanded = $state(false);
     let saving = $state(false);
-    let formError = $state<string | null>(null);
+    let formError: string | null = $state(null);
     let askingProvider = $state(false);
-    let autoFilledFields = $state<Set<string>>(new Set());
-    let conflictFields = $state<Map<string, string>>(new Map());
+    let autoFilledFields: Set<string> = $state(new Set());
+    let conflictFields: Map<string, string> = $state(new Map());
 
     // Confirmation modals
     let showSaveWithoutTestConfirm = $state(false);
@@ -172,17 +172,17 @@
     // maturation_frequency / …). Confirming wipes the old prices server-side and
     // triggers an immediate re-sync so the chart reflects the new schedule.
     let showScheduledRegenConfirm = $state(false);
-    let pendingSaveAssetId = $state<number | null>(null);
-    let initialProviderParamsJson = $state<string>('');
+    let pendingSaveAssetId: number | null = $state(null);
+    let initialProviderParamsJson: string = $state('');
 
     // I-bis #2 — snapshot of the provider config as loaded from the DB.
     // Used by the ``providerDirty`` derived below to gate the
     // "Save Without Testing?" modal: it must fire **only** when one of
     // these four fields changed vs what was loaded. Non-provider edits
     // (name, description, classification, etc.) skip the modal entirely.
-    let initialProviderCode = $state<string>('');
-    let initialProviderIdentifier = $state<string>('');
-    let initialProviderIdentifierType = $state<string>('TICKER');
+    let initialProviderCode: string = $state('');
+    let initialProviderIdentifier: string = $state('');
+    let initialProviderIdentifierType: string = $state('TICKER');
 
     // I.6 — destructive currency-change modal state.
     let currencyChangeModalOpen = $state(false);
@@ -197,21 +197,21 @@
         from: string;
         to: string;
     } | null>(null);
-    let currencyChangePatchPayload = $state<Record<string, unknown> | null>(null);
+    let currencyChangePatchPayload: Record<string, unknown> | null = $state(null);
     let currencyChangeProviderAssigned = $state(false);
-    let pendingSearchResult = $state<any>(null);
+    let pendingSearchResult: any = $state(null);
 
     // Provider comparison modal
     let showComparisonModal = $state(false);
-    let comparisonDifferences = $state<DiffItem[]>([]);
+    let comparisonDifferences: DiffItem[] = $state([]);
 
     // Image picker
     let showImagePicker = $state(false);
 
     // Identifier selection + bulk delete
-    let identifierSelectedIds = $state<string[]>([]);
+    let identifierSelectedIds: string[] = $state([]);
     let showIdentifierDeleteConfirm = $state(false);
-    let pendingIdentifierDeleteIds = $state<string[]>([]);
+    let pendingIdentifierDeleteIds: string[] = $state([]);
 
     // Track if search result was selected (for auto-assign banner)
     let searchResultSelected = $state(false);
@@ -220,7 +220,7 @@
     let initialSnapshot = $state('');
 
     // Duplicate name detection
-    let duplicateAssetName = $state<string | null>(null);
+    let duplicateAssetName: string | null = $state(null);
 
     // =========================================================================
     // Derived
@@ -374,7 +374,7 @@
         },
     ]);
 
-    let identifierRowActions = $derived<DTRowAction<IdentifierRow>[]>([
+    let identifierRowActions: DTRowAction<IdentifierRow>[] = $derived([
         {
             id: 'delete',
             icon: X,
@@ -1165,12 +1165,7 @@
                     </span>
                     {#each initialSearchBadges as badge, i}
                         {@const color = getIndexColor(i, 200)}
-                        <button
-                            type="button"
-                            style="background-color:{color.bg};color:{color.text}"
-                            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-opacity hover:opacity-80"
-                            onclick={() => (activeSearchQuery = badge.value)}
-                        >
+                        <button type="button" style="background-color:{color.bg};color:{color.text}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-opacity hover:opacity-80" onclick={() => (activeSearchQuery = badge.value)}>
                             {badge.label}
                         </button>
                     {/each}

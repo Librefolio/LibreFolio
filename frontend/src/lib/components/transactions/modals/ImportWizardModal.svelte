@@ -795,11 +795,7 @@ ${arrow}<span>${label}</span></span>`,
     let hasUnsavedWork = $derived(pendingFiles.length > 0 || selectedFiles.length > 0 || parseResults.length > 0 || mergedTransactions.length > 0);
     let selectedBrokerCount = $derived(new Set(selectedFiles.map((f) => f.brokerId)).size);
     let step3Warnings = $derived(parseResults.flatMap((r) => r.response?.warnings ?? []));
-    let step3WarningsByFile = $derived(
-        parseResults
-            .filter((r) => r.status === 'done' && (r.response?.warnings?.length ?? 0) > 0)
-            .map((r) => ({fileName: r.fileName, fileId: r.fileId, warnings: r.response!.warnings as string[]})),
-    );
+    let step3WarningsByFile = $derived(parseResults.filter((r) => r.status === 'done' && (r.response?.warnings?.length ?? 0) > 0).map((r) => ({fileName: r.fileName, fileId: r.fileId, warnings: r.response!.warnings as string[]})));
 
     // =========================================================================
     // Lifecycle
@@ -1077,7 +1073,10 @@ ${arrow}<span>${label}</span></span>`,
                               onchange: (v: number | null) => onFileBrokerChange(row.id, v),
                               placeholder: $t('importWizard.assignBroker'),
                               createLabel: $t('common.createNew'),
-                              onCreateNew: () => { createBrokerContext = row.id; createBrokerOpen = true; },
+                              onCreateNew: () => {
+                                  createBrokerContext = row.id;
+                                  createBrokerOpen = true;
+                              },
                           },
                       } as const),
             type: 'custom',
@@ -1749,7 +1748,17 @@ ${arrow}<span>${label}</span></span>`,
                         <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                             <span class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">{$t('importWizard.globalBroker')}:</span>
                             <div class="flex-1 max-w-xs" data-testid="import-wizard-step1-broker-select">
-                                <BrokerSearchSelect {brokers} value={globalBrokerId} onchange={onGlobalBrokerChange} placeholder={$t('importWizard.assignBroker')} createLabel={$t('common.createNew')} onCreateNew={() => { createBrokerContext = 'global'; createBrokerOpen = true; }} />
+                                <BrokerSearchSelect
+                                    {brokers}
+                                    value={globalBrokerId}
+                                    onchange={onGlobalBrokerChange}
+                                    placeholder={$t('importWizard.assignBroker')}
+                                    createLabel={$t('common.createNew')}
+                                    onCreateNew={() => {
+                                        createBrokerContext = 'global';
+                                        createBrokerOpen = true;
+                                    }}
+                                />
                             </div>
                         </div>
 
@@ -2018,7 +2027,12 @@ ${arrow}<span>${label}</span></span>`,
                 {#if assetResolutions.length > 0}
                     <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden" data-testid="import-wizard-resolve-section">
                         <!-- Section header -->
-                        <button type="button" class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors" onclick={() => (step4ShowResolveSection = !step4ShowResolveSection)} data-testid="import-wizard-resolve-toggle">
+                        <button
+                            type="button"
+                            class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors"
+                            onclick={() => (step4ShowResolveSection = !step4ShowResolveSection)}
+                            data-testid="import-wizard-resolve-toggle"
+                        >
                             <div class="flex items-center gap-2">
                                 {#if step4ShowResolveSection}<ChevronDown size={16} />{:else}<ChevronRight size={16} />{/if}
                                 <span class="font-semibold text-sm">{$t('importWizard.resolveAssets')}</span>
@@ -2291,7 +2305,10 @@ ${arrow}<span>${label}</span></span>`,
                     <button
                         type="button"
                         class="flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors shrink-0"
-                        onclick={(e) => { e.stopPropagation(); openPreview(group.fileId, 85); }}
+                        onclick={(e) => {
+                            e.stopPropagation();
+                            openPreview(group.fileId, 85);
+                        }}
                     >
                         <FileText size={11} />{$t('importWizard.previewFile')}
                     </button>
@@ -2451,5 +2468,8 @@ ${arrow}<span>${label}</span></span>`,
         createBrokerOpen = false;
         createBrokerContext = null;
     }}
-    onclose={() => { createBrokerOpen = false; createBrokerContext = null; }}
+    onclose={() => {
+        createBrokerOpen = false;
+        createBrokerContext = null;
+    }}
 />

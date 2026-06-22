@@ -814,10 +814,13 @@ def cmd_mkdocs_gallery(args):
 
     # --- Headless by default (screenshots are pixel-perfect in headless mode) ---
     use_headed = getattr(args, 'headed', False)
-    if use_headed:
+    use_ui = getattr(args, 'ui', False)
+    if use_ui:
+        print(f"{Colors.YELLOW}🖥️  Running in Playwright UI mode (--ui){Colors.NC}")
+    elif use_headed:
         print(f"{Colors.YELLOW}🖥️  Running in headed mode (--headed){Colors.NC}")
     else:
-        print(f"{Colors.BLUE}🔇 Running in headless mode (use --headed for visible browser){Colors.NC}")
+        print(f"{Colors.BLUE}🔇 Running in headless mode (use --headed for visible browser, --ui for interactive){Colors.NC}")
 
     # Build a single Playwright command with all requested projects.
     # This shares one webServer process across desktop+mobile, avoiding port conflicts.
@@ -826,7 +829,9 @@ def cmd_mkdocs_gallery(args):
         "gallery.spec.ts",
         "--workers", str(worker_count),
         ]
-    if use_headed:
+    if use_ui:
+        cmd.append("--ui")
+    elif use_headed:
         cmd.append("--headed")
     for viewport, _label in viewports:
         cmd.extend(["--project", viewport])
@@ -866,8 +871,8 @@ def cmd_mkdocs_gallery(args):
 
     # Parse failed test names from Playwright output
     # Playwright prints lines like:
-    #   [desktop] › e2e/gallery.spec.ts:330:9 › Gallery Screenshots › Files › static resources grid view - all languages and themes
-    failed_tests = []
+    #   [desktop] › e2e/gallery.spec.ts:330:9 › Gallery Screenshots › Files › test name ───────
+    failed_tests = []  # list of (viewport, test_name) tuples
     if returncode != 0:
         failures = [v[0] for v in viewports]
         in_failures_block = False
@@ -878,10 +883,12 @@ def cmd_mkdocs_gallery(args):
                 in_failures_block = True
                 continue
             if in_failures_block:
-                # Lines like: [desktop] › e2e/gallery.spec.ts:330:9 › Gallery Screenshots › Files › test name
-                m = re.match(r'\[[\w]+\]\s+›\s+\S+\s+›\s+Gallery Screenshots\s+›\s+(.+)', stripped)
+                # Lines like: [desktop] › e2e/gallery.spec.ts:330:9 › Gallery Screenshots › Files › test name ───
+                m = re.match(r'\[([\w]+)\]\s+›\s+\S+\s+›\s+Gallery Screenshots\s+›\s+(.+)', stripped)
                 if m:
-                    failed_tests.append(m.group(1).strip())
+                    viewport = m.group(1).strip()   # 'desktop' or 'mobile'
+                    test_name = m.group(2).strip()   # 'FX › Chart settings modal ───────'
+                    failed_tests.append((viewport, test_name))
                 elif stripped and not stripped.startswith('['):
                     # End of failures block (e.g. "X passed", empty line, etc.)
                     in_failures_block = False
@@ -891,14 +898,27 @@ def cmd_mkdocs_gallery(args):
         print(f"\n{Colors.YELLOW}⚠️  Gallery generation completed with failures in: {', '.join(failures)}{Colors.NC}")
         if failed_tests:
             print(f"\n{Colors.YELLOW}Failed tests:{Colors.NC}")
-            for t in failed_tests:
+            for _vp, t in failed_tests:
                 print(f"  ✗ {t}")
             print(f"\n{Colors.CYAN}💡 Retry failed tests with:{Colors.NC}")
-            for t in failed_tests:
-                # Extract the last part (test name) for --filter
-                parts = t.split(' › ')
-                test_name = parts[-1] if parts else t
-                print(f"   ./dev.py mkdocs gallery --no-populate -f \"{test_name}\"")
+
+            # Group by test name to detect which viewports failed
+            from collections import defaultdict
+            by_test: dict[str, list[str]] = defaultdict(list)
+            for vp, t in failed_tests:
+                # Strip trailing ─── decoration for the filter text
+                clean_name = re.sub(r'\s*─+\s*$', '', t).strip()
+                by_test[clean_name].append(vp)
+
+            for test_name, vps in by_test.items():
+                has_desktop = 'desktop' in vps
+                has_mobile = 'mobile' in vps
+                if has_desktop:
+                    print(f"   ./dev.py mkdocs gallery --no-populate --desktop-only -f \"{test_name}\"")
+                if has_mobile:
+                    print(f"   ./dev.py mkdocs gallery --no-populate --mobile-only -f \"{test_name}\"")
+                if has_desktop and has_mobile:
+                    print(f"   ./dev.py mkdocs gallery --no-populate -f \"{test_name}\"  # both viewports")
             print()
         else:
             print(f"{Colors.YELLOW}Some screenshots may be missing or outdated. Run with --filter to retry specific tests.{Colors.NC}")
@@ -1883,6 +1903,8 @@ Examples:
                       help="Port for the test server (default: TEST_PORT env or 6041)")
     mk_p.add_argument("--headed", action="store_true",
                       help="Run browser in headed mode (visible window) instead of headless")
+    mk_p.add_argument("--ui", action="store_true",
+                      help="Open Playwright UI mode (interactive test runner with time-travel debugger)")
     mk_p.add_argument("--force", action="store_true",
                       help="Kill zombie processes blocking the test port instead of failing")
     mk_p.set_defaults(func=cmd_mkdocs_gallery)

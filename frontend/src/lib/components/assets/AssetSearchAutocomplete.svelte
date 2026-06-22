@@ -60,11 +60,11 @@
     // =========================================================================
 
     let query = $state(untrack(() => initialQuery));
-    let results = $state<SearchResult[]>([]);
+    let results: SearchResult[] = $state([]);
     let loading = $state(false);
-    let error = $state<string | null>(null);
-    let providers = $state<ProviderInfo[]>([]);
-    let selectedProviders = $state<Set<string>>(new Set());
+    let error: string | null = $state(null);
+    let providers: ProviderInfo[] = $state([]);
+    let selectedProviders: Set<string> = $state(new Set());
     let providersLoaded = $state(false);
     let showResults = $state(false);
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;

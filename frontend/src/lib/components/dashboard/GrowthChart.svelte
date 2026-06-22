@@ -234,19 +234,17 @@
             }));
         }
 
-        const yAxisFormatter = viewMode === 'eur'
-            ? (v: number) => {
-                  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-                  if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)}k`;
-                  return String(v);
-              }
-            : (v: number) => `${v.toFixed(1)}%`;
+        const yAxisFormatter =
+            viewMode === 'eur'
+                ? (v: number) => {
+                      if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+                      if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)}k`;
+                      return String(v);
+                  }
+                : (v: number) => `${v.toFixed(1)}%`;
 
         /** Format a number as currency — same pattern as the dashboard formatMoney helper. */
-        const fmtCurrency = (v: number | null | undefined) =>
-            v != null
-                ? `${baseCurrency} ${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
-                : '—';
+        const fmtCurrency = (v: number | null | undefined) => (v != null ? `${baseCurrency} ${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '—');
 
         const option: echarts.EChartsOption = {
             animation: false,
@@ -275,14 +273,13 @@
                         const ugl = navVal != null ? navVal - bv : null;
 
                         const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
-                        const dot = (key: keyof typeof COLORS) =>
-                            `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${cc(key)};margin-right:6px;flex-shrink:0"></span>`;
+                        const dot = (key: keyof typeof COLORS) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${cc(key)};margin-right:6px;flex-shrink:0"></span>`;
 
                         let html = `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>`;
                         html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('nav')}<b>${$_('dashboard.navValue')}</b></span><b>${fmtCurrency(navVal)}</b></div>`;
                         html += `<div style="display:flex;justify-content:space-between;gap:16px"><span><b>${$_('dashboard.bookValue')}</b></span><b>${fmtCurrency(bv || null)}</b></div>`;
                         if (ugl != null) {
-                            const uglColor = ugl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : (isDark ? '#f87171' : '#dc2626');
+                            const uglColor = ugl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
                             html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${uglColor}"><span>± P/L</span><b>${ugl >= 0 ? '+' : ''}${fmtCurrency(Math.abs(ugl))}</b></div>`;
                         }
                         html += `<hr style="border:none;border-top:1px solid ${tooltipBorder};margin:4px 0"/>`;
@@ -324,8 +321,7 @@
                 type: 'value',
                 // Use a min function so the y-axis auto-scales rather than forcing 0.
                 // This gives detail visibility when portfolio values are large.
-                min: (value: {min: number; max: number}) =>
-                    Math.floor(value.min - (value.max - value.min) * 0.08),
+                min: (value: {min: number; max: number}) => Math.floor(value.min - (value.max - value.min) * 0.08),
                 axisLabel: {color: textColor, fontSize: 11, formatter: yAxisFormatter},
                 axisLine: {show: false},
                 splitLine: {lineStyle: {color: gridColor, type: 'dashed'}},

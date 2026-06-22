@@ -51,9 +51,9 @@
     let isOpen = $state(false);
     let searchQuery = $state('');
     let highlightedIndex = $state(0);
-    let inputRef = $state<HTMLInputElement | null>(null);
-    let containerRef = $state<HTMLDivElement | null>(null);
-    let computedPosition = $state<'top' | 'bottom'>('bottom');
+    let inputRef: HTMLInputElement | null = $state(null);
+    let containerRef: HTMLDivElement | null = $state(null);
+    let computedPosition: 'top' | 'bottom' = $state('bottom');
     let dynamicMaxHeight = $state(0);
     /** Timestamp when trigger received focus — used to debounce Enter after advanceFocus */
     let triggerFocusedAt = $state(0);

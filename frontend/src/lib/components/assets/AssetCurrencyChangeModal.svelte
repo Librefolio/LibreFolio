@@ -68,7 +68,7 @@
 
     let inProgress = $state(false);
     /** Inline progress step (replaces the old 3-toast progress chain, I-bis #12). */
-    let progressStep = $state<null | 'wipe' | 'patch' | 'sync'>(null);
+    let progressStep: null | 'wipe' | 'patch' | 'sync' = $state(null);
 
     /** Total events count (manual + provider) — convenient for the copy in the body. */
     const totalEvents = $derived(blocker ? blocker.eventsManual + blocker.eventsProvider : 0);

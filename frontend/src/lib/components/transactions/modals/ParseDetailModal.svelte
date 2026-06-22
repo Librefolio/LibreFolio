@@ -333,11 +333,7 @@
         <div class="flex items-center justify-between p-4 border-t border-gray-200 dark:border-gray-700">
             <div>
                 {#if parseResult && onPreview}
-                    <button
-                        type="button"
-                        class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                        onclick={onPreview}
-                    >
+                    <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" onclick={onPreview}>
                         <FileText size={14} />{$t('importWizard.previewFile')}
                     </button>
                 {/if}

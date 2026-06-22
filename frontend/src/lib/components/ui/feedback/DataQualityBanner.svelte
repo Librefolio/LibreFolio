@@ -54,9 +54,7 @@
 
     const severityOrder: Record<string, number> = {error: 0, warning: 1, info: 2};
 
-    let sortedIssues = $derived(
-        [...issues].sort((a, b) => (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9))
-    );
+    let sortedIssues = $derived([...issues].sort((a, b) => (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9)));
 
     let errorCount = $derived(issues.filter((i) => i.severity === 'error').length);
     let warningCount = $derived(issues.filter((i) => i.severity === 'warning').length);
@@ -141,11 +139,7 @@
     <!-- Grouped mode (dashboard): single container, issues sorted by severity -->
     {@const groupSeverity = getGroupedSeverity()}
     {@const styles = getSeverityStyles(groupSeverity)}
-    <div
-        class="border rounded-xl p-4 text-sm {styles.container} flex flex-col gap-2"
-        data-testid="data-quality-banner"
-        role="status"
-    >
+    <div class="border rounded-xl p-4 text-sm {styles.container} flex flex-col gap-2" data-testid="data-quality-banner" role="status">
         <!-- Header -->
         <div class="flex items-center gap-2 font-medium">
             {#if errorCount > 0 || warningCount > 0}
@@ -161,10 +155,7 @@
             {#each visibleIssues as issue (issue.code + (issue.group_key ?? ''))}
                 {@const Icon = getIcon(issue.severity)}
                 {@const CtaIcon = getCtaIcon(issue.cta_action)}
-                <div
-                    class="flex items-start sm:items-center gap-2 text-xs flex-col sm:flex-row"
-                    data-testid="data-quality-issue-{issue.code}"
-                >
+                <div class="flex items-start sm:items-center gap-2 text-xs flex-col sm:flex-row" data-testid="data-quality-issue-{issue.code}">
                     <div class="flex items-center gap-2 flex-wrap min-w-0 flex-1">
                         <Icon size={13} class="shrink-0 mt-0.5 sm:mt-0" />
                         <span>{$_(issue.message_i18n_key, {values: issue.message_params ?? {}})}</span>
@@ -191,11 +182,7 @@
                     </div>
                     <!-- CTA -->
                     {#if issue.cta_action}
-                        <button
-                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.button} transition-colors font-medium text-[11px] shrink-0"
-                            onclick={() => handleCta(issue)}
-                            data-testid="data-quality-cta-{issue.code}"
-                        >
+                        <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.button} transition-colors font-medium text-[11px] shrink-0" onclick={() => handleCta(issue)} data-testid="data-quality-cta-{issue.code}">
                             <CtaIcon size={11} />
                             {getCtaLabel(issue.cta_action)}
                         </button>
@@ -206,11 +193,7 @@
 
         <!-- Show more / less toggle (only when >3 issues) -->
         {#if hasMore}
-            <button
-                class="flex items-center gap-1 text-xs opacity-70 hover:opacity-100 transition-opacity ml-6 mt-1"
-                onclick={() => (expanded = !expanded)}
-                data-testid="data-quality-toggle"
-            >
+            <button class="flex items-center gap-1 text-xs opacity-70 hover:opacity-100 transition-opacity ml-6 mt-1" onclick={() => (expanded = !expanded)} data-testid="data-quality-toggle">
                 {#if expanded}
                     <ChevronUp size={12} />
                     {$_('dataQuality.hideDetails')}
@@ -227,11 +210,7 @@
         {@const styles = getSeverityStyles(issue.severity)}
         {@const Icon = getIcon(issue.severity)}
         {@const CtaIcon = getCtaIcon(issue.cta_action)}
-        <div
-            class="border rounded-xl px-4 py-2.5 text-xs flex flex-col sm:flex-row items-start sm:items-center gap-2 {styles.container}"
-            data-testid="data-quality-issue-{issue.code}"
-            role="status"
-        >
+        <div class="border rounded-xl px-4 py-2.5 text-xs flex flex-col sm:flex-row items-start sm:items-center gap-2 {styles.container}" data-testid="data-quality-issue-{issue.code}" role="status">
             <!-- Left: icon + message + FX pairs + asset context -->
             <div class="flex items-center gap-2 flex-wrap min-w-0 flex-1">
                 <Icon size={14} class="shrink-0" />
@@ -259,11 +238,7 @@
             <!-- Right: CTA -->
             {#if issue.cta_action}
                 <div class="flex items-center gap-1 self-end sm:self-auto sm:ml-auto">
-                    <button
-                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.button} transition-colors font-medium"
-                        onclick={() => handleCta(issue)}
-                        data-testid="data-quality-cta-{issue.code}"
-                    >
+                    <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.button} transition-colors font-medium" onclick={() => handleCta(issue)} data-testid="data-quality-cta-{issue.code}">
                         <CtaIcon size={13} />
                         {getCtaLabel(issue.cta_action)}
                     </button>

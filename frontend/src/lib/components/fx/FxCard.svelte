@@ -64,7 +64,7 @@
     }
 
     let inverted = $state(getInitialInversion());
-    let localViewModeOverride = $state<'absolute' | 'percentage' | null>(null);
+    let localViewModeOverride: 'absolute' | 'percentage' | null = $state(null);
 
     // Card view mode: local override takes precedence, otherwise follows global
     let cardViewMode = $derived(localViewModeOverride ?? globalViewMode);

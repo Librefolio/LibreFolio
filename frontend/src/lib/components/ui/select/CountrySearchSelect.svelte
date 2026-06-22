@@ -39,7 +39,7 @@
 
     let {value = $bindable(''), excludedCountries, placeholder = '', disabled = false, maxVisibleItems = 6, dropdownPosition = 'auto', onchange, compact = false}: Props = $props();
 
-    let allCountriesLocal = $state<CountryInfo[]>([]);
+    let allCountriesLocal: CountryInfo[] = $state([]);
     let internalLoading = $state(true);
 
     // Filter out excluded countries
