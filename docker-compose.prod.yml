@@ -12,7 +12,7 @@ services:
     ports:
       - "${PORT:-6040}:6040"
     volumes:
-      - ./librefolio-data:/app/backend/data/prod-docker
+      - ./LibreFolio-data:/app/backend/data/prod-docker
     env_file: .env
     environment:
       - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
