@@ -162,3 +162,8 @@ Plotted series use **Cumulative MWRR**, **Cumulative TWRR**, and **Simple ROI**.
 * **Cumulative TWRR** (Strategy/allocation performance indicator).
 * **Cumulative MWRR** (Primary personal timing indicator).
 * **Annualized MWRR** (Shown as a secondary/comparative metric to understand the compound yearly rate).
+
+!!! tip "Analyzing the Performance Difference"
+
+    To interpret the difference between Cumulative MWRR and Cumulative TWRR, refer to the [Timing Effect](timing-effect.md) page.
+

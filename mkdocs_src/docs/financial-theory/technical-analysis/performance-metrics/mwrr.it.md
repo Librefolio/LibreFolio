@@ -162,3 +162,8 @@ Le serie tracciate utilizzano il **MWRR Cumulativo**, il **TWRR Cumulativo** e i
 * **TWRR Cumulativo** (Indicatore della performance di strategia/allocazione).
 * **MWRR Cumulativo** (Indicatore principale del timing personale).
 * **MWRR Annualizzato** (Mostrato come metrica secondaria/comparativa per comprendere il tasso composto annuo).
+
+!!! tip "Analizzare la Differenza di Performance"
+
+    Per interpretare la differenza tra MWRR cumulativo e TWRR cumulativo, vedi la pagina dell'[Effetto Timing](timing-effect.md).
+

@@ -102,3 +102,10 @@ $$
 ## 🎯 Cuándo utilizarlo
 * Para evaluar la calidad de los **activos y la estrategia que ha elegido**, independientemente de su ritmo de ahorro o de la temporalidad de sus depósitos.
 * Para comparar directamente el rendimiento de su cartera con índices de referencia externos (como el S&P 500 o un ETF de índice).
+
+---
+
+!!! tip "Analizar la Diferencia de Rendimiento"
+
+    Para comprender cómo sus flujos de efectivo personales hicieron que sus rendimientos reales se desviaran del rendimiento de la estrategia pura (TWRR), consulte la página del [Efecto Timing](timing-effect.md).
+

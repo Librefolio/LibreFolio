@@ -102,3 +102,10 @@ $$
 ## 🎯 When to use it
 * To judge the quality of the **assets and strategy you chose**, independent of your personal savings rate or timing.
 * To compare your portfolio performance directly against external benchmarks (like the S&P 500 or an index ETF).
+
+---
+
+!!! tip "Analyzing the Performance Difference"
+
+    To understand how your personal cash flows caused your actual returns to deviate from the pure strategy return (TWRR), refer to the [Timing Effect](timing-effect.md) page.
+
