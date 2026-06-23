@@ -31,26 +31,24 @@ LibreFolio uses a [Registry & Plugin System](../developer/architecture/patterns/
 | 💱 **FX** | [FX Plugin Guide](../developer/architecture/patterns/fx_plugin_guide.md) | Add a new exchange rate provider |
 | 📊 **Chart Signals** | *Guide coming soon* | New technical indicators and chart overlays (EMA, MACD, RSI, Bollinger…) |
 
+* **If you are not a developer**: You can request a new plugin using our [Plugin Request Form](https://github.com/Librefolio/LibreFolio/issues/new?template=plugin_request.yml). In addition to the request details, you must provide anonymized examples of the broker report file (e.g. CSV or Excel) so we can understand the format.
+* **If you are a developer**: You can implement the plugin directly on your own. Please refer to the [Registry & Plugin System Guide](../developer/architecture/patterns/registry_pattern.md) and the specific guides linked in the table above to learn how to build them.
+
 ### :art: UI/UX Ideas
 
-Aesthetic improvements, layout suggestions, accessibility enhancements — if you see something that could look or work better, tell us!
+Aesthetic improvements, layout suggestions, accessibility enhancements — if you see something that could look or work better, tell us by opening a ticket using our [UX Idea & Suggestions Form](https://github.com/Librefolio/LibreFolio/issues/new?template=idea.yml) on GitHub.
 
 ### :bug: Bug Reports
 
-Finding and clearly reporting issues is incredibly helpful. Open a new [GitHub Issue](https://github.com/Librefolio/LibreFolio/issues) with keyword **`[BUG]`** at the beginning of the title.
+Finding and clearly reporting issues is incredibly helpful. Open a new report using our [Bug Report Form](https://github.com/Librefolio/LibreFolio/issues/new?template=bug_report.yml) on GitHub.
 
-Include screenshots, browser info, and steps to reproduce — even aesthetic inconsistencies count.
+The form will guide you in providing browser information, deployment method, and error logs.
 
 ---
 
-## :bulb: Share Ideas & Request Features
+## :rocket: Feature Requests
 
-Have an idea or want a new feature? Open a [GitHub Issue](https://github.com/Librefolio/LibreFolio/issues) using the appropriate keyword at the beginning of the title:
-
-| Keyword | When to use |
-|---------|------------|
-| **`[IDEA]`** | General suggestions, UX improvements, workflow ideas |
-| **`[FEATURE]`** | Specific feature requests with a clear use case |
+Propose specific features with clear use cases by filling out our [Feature Request Form](https://github.com/Librefolio/LibreFolio/issues/new?template=feature_request.yml) on GitHub.
 
 Every request will be evaluated and taken on as soon as there's capacity to develop it. Well-described requests with concrete examples get prioritised faster.
 

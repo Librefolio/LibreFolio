@@ -1,0 +1,24 @@
+name: "💡 UX Idea & General Suggestion"
+description: "Suggest general user experience (UX) improvements or workflow ideas"
+title: "[IDEA] "
+labels: ["discussion", "ux"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a general design, UX, or usability suggestion? We'd love to hear it!
+  - type: textarea
+    id: idea
+    attributes:
+      label: "Your Suggestion"
+      description: "Describe your general suggestion or layout idea."
+      placeholder: "The color contrast on X could be improved..."
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: "Why is this improvement important?"
+      description: "Explain how this suggestion would make LibreFolio better to use."
+    validations:
+      required: true

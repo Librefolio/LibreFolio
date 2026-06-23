@@ -1,0 +1,48 @@
+name: "🔌 Plugin Request"
+description: "Suggest a new plugin for a broker (BRIM), price source (Asset), or FX provider"
+title: "[PLUGIN] "
+labels: ["plugin-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for proposing a new plugin!
+        
+        * **If you are a developer**: You can proceed directly on your own to implement it. Check out our [Registry & Plugin System documentation](https://librefolio.github.io/LibreFolio/developer/architecture/patterns/registry_pattern.md) to get started.
+        * **If you are not a developer**: Please fill out this request template. Note that for broker reports (BRIM), **you must provide anonymized examples of the report file** (CSV, Excel, or PDF text) in the fields below. Make sure to remove any personal information such as names, account numbers, or balances.
+  - type: dropdown
+    id: plugin-type
+    attributes:
+      label: "Plugin Type"
+      description: "What type of plugin is this?"
+      options:
+        - "BRIM (Broker Report Import - CSV/Excel)"
+        - "Asset Source (Price/Market Data provider)"
+        - "FX Provider (Exchange rates source)"
+        - "Other / Chart Signal"
+    validations:
+      required: true
+  - type: input
+    id: source-name
+    attributes:
+      label: "Broker or Source Name"
+      description: "The name of the broker, bank, or data provider."
+      placeholder: "e.g. Fineco Bank, Interactive Brokers, Yahoo Finance..."
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: "Request Details"
+      description: "Describe what this plugin should do and why it is useful."
+      placeholder: "I need to import transactions from X..."
+    validations:
+      required: true
+  - type: textarea
+    id: file-format
+    attributes:
+      label: "File Format & Anonymized Samples (For BRIM only)"
+      description: "Describe the format and paste or drag-and-drop anonymized sample files here. Remove any personal info like account numbers, names, or balances!"
+      placeholder: "Paste CSV header and a few rows of sample data..."
+    validations:
+      required: false
