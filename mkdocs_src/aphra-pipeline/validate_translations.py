@@ -906,14 +906,47 @@ def check_latex(
     source: str, translated: str, cache_key: str, lang: str,
 ) -> list[Issue]:
     """
-    Verify LaTeX math expressions are preserved.
+    Verify LaTeX math expressions are preserved and syntactically valid.
     Inline $...$ and display $$...$$ should be identical.
     """
     issues = []
 
+    def _validate_syntax(math_str: str, is_translation: bool) -> list[Issue]:
+        syntax_issues = []
+        # Check 1: Raw euro symbol € outside \text{}
+        stripped = re.sub(r'\\text\{[^}]*\}', '', math_str)
+        if '€' in stripped:
+            loc_str = f"translated ({lang})" if is_translation else "source (en)"
+            syntax_issues.append(Issue(
+                severity=Severity.ERROR,
+                file=cache_key,
+                lang=lang if is_translation else "en",
+                check="latex-syntax-euro",
+                message=f"Raw Euro symbol '€' found outside \\text{{}} in {loc_str} math block: $${math_str.strip()}$$. Wrap it in \\text{{€}} or use EUR.",
+            ))
+            
+        # Check 2: Ampersand & or \& inside \text{}
+        text_blocks = re.findall(r'\\text\{([^}]*)\}', math_str)
+        for tb in text_blocks:
+            if '&' in tb or '\\&' in tb:
+                loc_str = f"translated ({lang})" if is_translation else "source (en)"
+                syntax_issues.append(Issue(
+                    severity=Severity.ERROR,
+                    file=cache_key,
+                    lang=lang if is_translation else "en",
+                    check="latex-syntax-ampersand",
+                    message=f"Ampersand '&' or '\\&' found inside \\text{{}} in {loc_str} math block: $${math_str.strip()}$$. Use \\text{{P}}\\&\\text{{L}} or place \\& outside \\text{{}}.",
+                ))
+        return syntax_issues
+
     # Display math ($$...$$)
     src_display = re.findall(r'\$\$(.+?)\$\$', source, re.DOTALL)
     tr_display = re.findall(r'\$\$(.+?)\$\$', translated, re.DOTALL)
+
+    for m in src_display:
+        issues.extend(_validate_syntax(m, is_translation=False))
+    for m in tr_display:
+        issues.extend(_validate_syntax(m, is_translation=True))
 
     if len(src_display) != len(tr_display):
         issues.append(Issue(
@@ -967,6 +1000,11 @@ def check_latex(
     src_inline = _extract_inline(source)
     tr_inline = _extract_inline(translated)
 
+    for m in src_inline:
+        issues.extend(_validate_syntax(m, is_translation=False))
+    for m in tr_inline:
+        issues.extend(_validate_syntax(m, is_translation=True))
+
     if len(src_inline) != len(tr_inline):
         issues.append(Issue(
             severity=Severity.WARN,
@@ -990,6 +1028,7 @@ def check_latex(
             ))
 
     return issues
+
 
 
 # ---------------------------------------------------------------------------

@@ -102,3 +102,10 @@ $$
 ## 🎯 Quando usarlo
 * Per valutare la qualità degli **asset e della strategia che hai scelto**, indipendentemente dal tuo risparmio personale o dal tempismo dei versamenti.
 * Per confrontare la performance del tuo portafoglio direttamente con benchmark esterni (come l'S&P 500 o un ETF su indice).
+
+---
+
+!!! tip "Analizzare la Differenza di Performance"
+
+    Per comprendere in che modo i tuoi flussi di cassa personali hanno fatto deviare i tuoi rendimenti effettivi da quelli della strategia pura (TWRR), vedi la pagina dell'[Effetto Timing](timing-effect.md).
+

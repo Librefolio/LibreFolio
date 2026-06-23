@@ -162,3 +162,8 @@ Las series trazadas utilizan el **MWRR Acumulado**, el **TWRR Acumulado** y el *
 * **TWRR Acumulado** (Indicador de rendimiento de la estrategia o distribución de activos).
 * **MWRR Acumulado** (Indicador principal de la sincronización personal).
 * **MWRR Anualizado** (Se muestra como métrica secundaria/comparativa para comprender la tasa compuesta anual).
+
+!!! tip "Analizar la Diferencia de Rendimiento"
+
+    Para interpretar la diferencia entre el MWRR acumulado y el TWRR acumulado, consulte la página del [Efecto Timing](timing-effect.md).
+
