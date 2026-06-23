@@ -182,8 +182,11 @@
     const roiSubLabel = $derived.by(() => {
         if (!summary) return '';
         const twrr = safeStr(summary.twrr_percent);
-        const mwrr = safeStr(summary.mwrr_percent);
-        return `${$_('dashboard.twrr')}: ${twrr != null ? (parseFloat(twrr) * 100).toFixed(2) + '%' : '—'} | ${$_('dashboard.mwrr')}: ${mwrr != null ? (parseFloat(mwrr) * 100).toFixed(2) + '%' : '—'}`;
+        const mwrrCum = safeStr(summary.mwrr_cumulative_percent);
+        const mwrrAnn = safeStr(summary.mwrr_annualized_percent);
+        let line = `${$_('dashboard.twrr')}: ${twrr != null ? (parseFloat(twrr) * 100).toFixed(2) + '%' : '—'} | ${$_('dashboard.mwrr')}: ${mwrrCum != null ? (parseFloat(mwrrCum) * 100).toFixed(2) + '%' : '—'}`;
+        if (mwrrAnn != null) line += ` (${$_('dashboard.mwrrAnnualized')}: ${(parseFloat(mwrrAnn) * 100).toFixed(2)}%)`;
+        return line;
     });
     const roiIsPositive = $derived(summary ? parseFloat(summary.simple_roi_percent) >= 0 : undefined);
 
@@ -467,7 +470,7 @@
                 <div class="flex-1 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
             {:else if allocationView === 'history'}
                 <div class="flex-1 min-h-0">
-                    <AllocationHistoryChart data={allocationHistoryData} height="100%" loading={allocationHistoryLoading} />
+                    <AllocationHistoryChart data={allocationHistoryData} dimension={allocationTab} height="100%" loading={allocationHistoryLoading} />
                 </div>
             {:else if !summary}
                 <div class="flex-1 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">

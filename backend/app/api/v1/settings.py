@@ -4,7 +4,7 @@ Settings API endpoints.
 Endpoints for managing user and global settings.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 
 import structlog
@@ -23,6 +23,7 @@ from backend.app.schemas.settings import (
 )
 from backend.app.services.scheduler import read_job_log
 from backend.app.services.scheduler.state import load_state
+from backend.app.services.global_settings_service import get_setting_value
 from backend.app.services.settings_service import (
     get_all_global_settings,
     get_global_setting,
@@ -164,11 +165,16 @@ async def get_scheduler_state(
     """
     state = load_state()
 
-    # Determine server timezone name
-    try:
-        server_tz = datetime.now().astimezone().strftime("%Z")
-    except Exception:
-        server_tz = "UTC"
+    # Read scheduler timezone from GlobalSettings
+    from backend.app.db.session import get_async_engine
+    engine = get_async_engine()
+    async with AsyncSession(engine) as db_session:
+        tz_value = await get_setting_value(db_session, "scheduler_timezone")
+    scheduler_tz = str(tz_value) if tz_value else "UTC"
+
+    # UTC wall clock (HH:MM)
+    now_utc = datetime.now(timezone.utc)
+    server_now_utc = now_utc.strftime("%H:%M")
 
     return {
         "current_price": {
@@ -185,7 +191,9 @@ async def get_scheduler_state(
             "last_items_ok": state.history_sync.last_items_ok,
             "last_items_err": state.history_sync.last_items_err,
         },
-        "server_tz": server_tz,
+        "server_tz": "UTC",
+        "server_now_utc": server_now_utc,
+        "scheduler_timezone": scheduler_tz,
     }
 
 

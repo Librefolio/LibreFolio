@@ -74,6 +74,30 @@ _PREC_PCT = Decimal("0.000001")  # 6 decimals for percentages
 _PREC_AMT = Decimal("0.01")  # 2 decimals for monetary values
 
 
+def annualized_to_cumulative(rate: Decimal | None, days: int) -> Decimal | None:
+    """Convert annualized MWRR/XIRR to cumulative return for a given period.
+
+    Formula: r_cum = (1 + r_ann)^(days / 365) - 1
+
+    Returns None if rate is None, <= -1, or computation is invalid.
+    """
+    if rate is None:
+        return None
+    if rate <= Decimal("-1"):
+        return None
+    if days <= 0:
+        return Decimal("0")
+    try:
+        base = float(Decimal("1") + rate)
+        exponent = days / 365.0
+        cumulative = base**exponent - 1.0
+        if not math.isfinite(cumulative):
+            return None
+        return Decimal(str(cumulative)).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
+    except (OverflowError, InvalidOperation, ValueError):
+        return None
+
+
 def calculate_simple_roi(current_nav: Decimal, total_invested: Decimal) -> Decimal:
     """ROI = (NAV - Invested) / Invested. Returns 0 if total_invested == 0."""
     if total_invested == Decimal("0"):

@@ -27,7 +27,7 @@
     // Types
     // =========================================================================
 
-    export type QuickPreset = '1W' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '2Y';
+    export type QuickPreset = '1W' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '2Y' | 'MAX';
     export type Granularity = 'days' | 'weeks' | 'months' | 'years';
 
     interface Props {
@@ -112,9 +112,10 @@
         {key: '1M', label: '1M', months: 1},
         {key: '3M', label: '3M', months: 3},
         {key: '6M', label: '6M', months: 6},
-        {key: 'YTD', label: $_('datePicker.presets.ytd')},
         {key: '1Y', label: '1Y', years: 1},
         {key: '2Y', label: '2Y', years: 2},
+        {key: 'YTD', label: $_('datePicker.presets.ytd')},
+        {key: 'MAX', label: 'MAX'},
     ];
 
     const granularityOptions: {value: Granularity; labelKey: string; shortKey: string}[] = [
@@ -180,6 +181,8 @@
             case '2Y':
                 d.setFullYear(d.getFullYear() - 2);
                 break;
+            case 'MAX':
+                return 'min';
         }
         return d.toISOString().slice(0, 10);
     }
@@ -436,11 +439,17 @@
     function handlePresetClick(preset: QuickPreset) {
         activePreset = preset;
         customEditing = false;
-        const newStart = computeStartDate(preset);
-        const newEnd = todayISO();
-        start = newStart;
-        end = newEnd;
-        onchange?.(newStart, newEnd);
+        if (preset === 'MAX') {
+            start = 'min';
+            end = 'max';
+            onchange?.('min', 'max');
+        } else {
+            const newStart = computeStartDate(preset);
+            const newEnd = todayISO();
+            start = newStart;
+            end = newEnd;
+            onchange?.(newStart, newEnd);
+        }
     }
 
     function handleCustomApply() {
@@ -511,7 +520,7 @@
 <div class="flex flex-col gap-1.5 items-center">
     {#if showPresets}
         <div class="flex items-center gap-1 flex-wrap justify-center">
-            {#each presets.slice(0, 4) as preset}
+            {#each presets.slice(0, 6) as preset}
                 <button
                     type="button"
                     class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
@@ -519,9 +528,9 @@
                     onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
                 >
             {/each}
-            <!-- Group: 1Y, 2Y, Custom, Info — wraps as a single unit -->
+            <!-- Group: YTD, MAX, Custom, Info — wraps as a single unit on the right -->
             <span class="inline-flex items-center gap-1">
-                {#each presets.slice(4) as preset}
+                {#each presets.slice(6) as preset}
                     <button
                         type="button"
                         class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150

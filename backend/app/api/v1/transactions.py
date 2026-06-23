@@ -198,7 +198,7 @@ async def query_transactions(
     tags: Optional[List[str]] = Query(None, description="Filter by tags"),
     currency: Optional[str] = Query(None, max_length=3, description="Filter by currency"),
     ids: Optional[List[int]] = Query(None, description="Specific IDs to fetch, returned in input order (mutex with other filters)"),
-    limit: int = Query(100, ge=1, le=1000, description="Max results"),
+    limit: Optional[int] = Query(None, ge=1, le=10000, description="Max results (omit for no limit)"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     amount_abs_min: Optional[Decimal] = Query(None, description="ABS(amount) >= N (H.3 transfer-match)"),
     amount_abs_max: Optional[Decimal] = Query(None, description="ABS(amount) <= N (H.3 transfer-match)"),

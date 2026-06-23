@@ -8,7 +8,7 @@ Le ROI Simple mesure le rendement en pourcentage absolu généré par un investi
 ## 🧮 Formule
 
 $$
-ROI = \frac{\text{Valeur Actuelle}}{\text{Coût Moyen Pondéré (CMP)}} - 1
+ROI = \frac{\text{Valeur Actuelle}}{\text{Prix de Revient Moyen (PRM)}} - 1
 $$
 
 ## 🎯 Quand l'utiliser

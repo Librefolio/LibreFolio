@@ -172,6 +172,13 @@ async def get_portfolio_history(
     current_user: User = Depends(get_current_user),
 ) -> list[PortfolioHistoryPoint]:
     """Return daily portfolio value series (cash, invested, NAV)."""
+    from backend.app.services.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
+
+    if body.date_range and body.date_range.has_sentinels():
+        body.date_range = await resolve_date_sentinels(
+            body.date_range, current_user.id, session, broker_ids=body.broker_ids
+        )
+
     service = PortfolioService(session)
     return await service.get_history(
         user_id=current_user.id,
@@ -194,10 +201,16 @@ async def get_allocation_history(
     current_user: User = Depends(get_current_user),
 ) -> AllocationHistoryResponse:
     """Return allocation history series for the given dimension."""
+    from backend.app.services.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
     from backend.app.services.portfolio_engine import (  # noqa: PLC0415
         DerivedViewsBuilder,
         PortfolioCalculationEngine,
     )
+
+    if body.date_range and body.date_range.has_sentinels():
+        body.date_range = await resolve_date_sentinels(
+            body.date_range, current_user.id, session, broker_ids=body.broker_ids
+        )
 
     engine = PortfolioCalculationEngine(session)
     result = await engine.calculate(
@@ -284,5 +297,13 @@ async def get_portfolio_report(
     current_user: User = Depends(get_current_user),
 ) -> PortfolioReportResponse:
     """Return a complete portfolio report from a single engine run."""
+    from backend.app.services.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
+
+    # Resolve min/max sentinels before passing to service
+    if body.date_range and body.date_range.has_sentinels():
+        body.date_range = await resolve_date_sentinels(
+            body.date_range, current_user.id, session, broker_ids=body.broker_ids
+        )
+
     service = PortfolioService(session)
     return await service.get_report(user_id=current_user.id, query=body)

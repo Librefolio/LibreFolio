@@ -181,6 +181,96 @@ test.describe('Gallery Screenshots', () => {
         });
     });
 
+    function parseLocalDateString(s: string): Date {
+        const [year, month, day] = s.split('-').map(Number);
+        return new Date(year, month - 1, day);
+    }
+
+    function getLocalDateString(d: Date): string {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function shiftDatesToToday(obj: any): any {
+        const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+        let maxDateStr: string | null = null;
+
+        function findMaxDate(val: any) {
+            if (typeof val === 'string' && datePattern.test(val)) {
+                if (!maxDateStr || val > maxDateStr) {
+                    maxDateStr = val;
+                }
+            } else if (Array.isArray(val)) {
+                for (const item of val) findMaxDate(item);
+            } else if (val && typeof val === 'object') {
+                for (const key of Object.keys(val)) findMaxDate(val[key]);
+            }
+        }
+        findMaxDate(obj);
+
+        if (!maxDateStr) return obj;
+
+        const today = new Date();
+        const maxDate = parseLocalDateString(maxDateStr);
+        
+        today.setHours(0, 0, 0, 0);
+        maxDate.setHours(0, 0, 0, 0);
+
+        const diffTime = today.getTime() - maxDate.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays === 0) return obj;
+
+        function shift(val: any): any {
+            if (typeof val === 'string' && datePattern.test(val)) {
+                const d = parseLocalDateString(val);
+                d.setDate(d.getDate() + diffDays);
+                return getLocalDateString(d);
+            } else if (Array.isArray(val)) {
+                return val.map(shift);
+            } else if (val && typeof val === 'object') {
+                const newObj: any = {};
+                for (const key of Object.keys(val)) {
+                    newObj[key] = shift(val[key]);
+                }
+                return newObj;
+            }
+            return val;
+        }
+
+        return shift(obj);
+    }
+
+    async function setupDashboardMockReport(page: Page) {
+        const mockDataPath = path.join(__dirname, 'dashboard-report.js');
+        if (fs.existsSync(mockDataPath)) {
+            try {
+                const rawMockData = JSON.parse(fs.readFileSync(mockDataPath, 'utf8'));
+                const adjustedMockData = shiftDatesToToday(rawMockData);
+                await page.route('**/api/v1/portfolio/report', async route => {
+                    await route.fulfill({
+                        status: 200,
+                        contentType: 'application/json',
+                        body: JSON.stringify(adjustedMockData)
+                    });
+                });
+            } catch (err) {
+                console.error('Failed to setup mock portfolio report:', err);
+            }
+        }
+    }
+
+    async function selectMaxDateRange(page: Page) {
+        const maxBtn = page.getByRole('button', { name: 'MAX' });
+        const y2Btn = page.getByRole('button', { name: '2Y' });
+        if (await maxBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+            await maxBtn.click();
+        } else if (await y2Btn.isVisible({ timeout: 500 }).catch(() => false)) {
+            await y2Btn.click();
+        }
+    }
+
     test.describe('Dashboard', () => {
         test.beforeEach(async ({page}) => {
             // Use TEST_ADMIN since db populate assigns brokers to admin
@@ -189,12 +279,32 @@ test.describe('Gallery Screenshots', () => {
 
         test('main dashboard - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectMaxDateRange(page);
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
+
+                // Scroll to the growth chart so it is visible and positioned nicely
+                const growthChart = page.getByTestId('growth-chart');
+                if (await growthChart.isVisible({timeout: 5000}).catch(() => false)) {
+                    await growthChart.scrollIntoViewIfNeeded();
+                    await page.waitForTimeout(500); // Give e-charts time to redraw/stabilize
+                }
+                
+                // Screenshot absolute mode (default)
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'main');
+
+                // Toggle and screenshot percentage mode
+                const pctToggle = page.getByTestId('growth-toggle-pct');
+                if (await pctToggle.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await pctToggle.click();
+                    await page.waitForTimeout(500); // Give e-charts time to redraw
+                }
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'main-pct');
             });
         });
 
@@ -203,6 +313,7 @@ test.describe('Gallery Screenshots', () => {
                 test.skip();
                 return;
             }
+            await setupDashboardMockReport(page);
 
             const menuToggle = page.getByTestId('mobile-menu-toggle');
 
@@ -211,6 +322,8 @@ test.describe('Gallery Screenshots', () => {
                 for (const theme of THEMES) {
                     // Navigate fresh to dashboard for each combo (ensures clean state)
                     await page.goto('/dashboard');
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
+                    await selectMaxDateRange(page);
                     await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await freezeAnimations(page);
 
@@ -231,19 +344,64 @@ test.describe('Gallery Screenshots', () => {
 
         test('dashboard allocation charts - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectMaxDateRange(page);
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
+                
                 // Scroll to the allocation panel
                 const allocPanel = page.getByTestId('allocation-panel');
                 if (await allocPanel.isVisible({timeout: 5_000}).catch(() => false)) {
                     await allocPanel.scrollIntoViewIfNeeded();
-                    await waitForNetworkSettled(page);
-                    await page.waitForTimeout(800); // Extra time for ECharts render
+                    await page.waitForTimeout(400);
                 }
-                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-charts');
+
+                const viewNowBtn = page.getByTestId('allocation-view-now');
+                const viewHistBtn = page.getByTestId('allocation-view-history');
+                const tabTypeBtn = page.getByTestId('allocation-tab-type');
+                const tabSectorBtn = page.getByTestId('allocation-tab-sector');
+                const tabGeoBtn = page.getByTestId('allocation-tab-geo');
+
+                // 1. TYPE + NOW
+                await tabTypeBtn.click();
+                await viewNowBtn.click();
+                await page.waitForTimeout(500); // Wait for ECharts animation
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-type-now');
+
+                // 2. TYPE + HISTORY
+                await viewHistBtn.click();
+                await page.waitForLoadState('networkidle', {timeout: 10_000});
+                await page.waitForTimeout(500);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-type-history');
+
+                // 3. SECTOR + NOW
+                await tabSectorBtn.click();
+                await viewNowBtn.click();
+                await page.waitForTimeout(500);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-sector-now');
+
+                // 4. SECTOR + HISTORY
+                await viewHistBtn.click();
+                await page.waitForLoadState('networkidle', {timeout: 10_000});
+                await page.waitForTimeout(500);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-sector-history');
+
+                // 5. GEO + NOW
+                await tabGeoBtn.click();
+                await viewNowBtn.click();
+                await page.waitForTimeout(500);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-geo-now');
+
+                // 6. GEO + HISTORY
+                await viewHistBtn.click();
+                await page.waitForLoadState('networkidle', {timeout: 10_000});
+                await page.waitForTimeout(500);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-geo-history');
+
                 // Scroll back to top so next iteration starts clean
                 await page.evaluate(() => window.scrollTo(0, 0));
             });

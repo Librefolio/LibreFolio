@@ -3220,14 +3220,14 @@ async def validate_portfolio_math_async() -> int:
 
         if summary.twrr_percent is not None and abs(summary.twrr_percent) > MAX_RETURN:
             anomalies.append(f"    summary: TWRR = {summary.twrr_percent} (> {MAX_RETURN}× = 1 000 %)")
-        if summary.mwrr_percent is not None and abs(summary.mwrr_percent) > MAX_RETURN:
-            anomalies.append(f"    summary: MWRR = {summary.mwrr_percent} (> {MAX_RETURN}× = 1 000 %)")
+        if summary.mwrr_annualized_percent is not None and abs(summary.mwrr_annualized_percent) > MAX_RETURN:
+            anomalies.append(f"    summary: MWRR = {summary.mwrr_annualized_percent} (> {MAX_RETURN}× = 1 000 %)")
 
         for point in history:
             if point.twrr is not None and abs(point.twrr) > MAX_RETURN:
                 anomalies.append(f"    {point.date}: TWRR = {point.twrr} (> {MAX_RETURN}× = 1 000 %)")
-            if point.mwrr is not None and abs(point.mwrr) > MAX_RETURN:
-                anomalies.append(f"    {point.date}: MWRR = {point.mwrr} (> {MAX_RETURN}× = 1 000 %)")
+            if point.mwrr_annualized is not None and abs(point.mwrr_annualized) > MAX_RETURN:
+                anomalies.append(f"    {point.date}: MWRR = {point.mwrr_annualized} (> {MAX_RETURN}× = 1 000 %)")
 
     await async_eng.dispose()
 
@@ -3243,8 +3243,8 @@ async def validate_portfolio_math_async() -> int:
     realism_violations: list[str] = []
     if summary.twrr_percent is not None and abs(summary.twrr_percent) > REALISM_BOUND:
         realism_violations.append(f"    summary: TWRR = {summary.twrr_percent} (outside ±{REALISM_BOUND} realistic range)")
-    if summary.mwrr_percent is not None and abs(summary.mwrr_percent) > REALISM_BOUND:
-        realism_violations.append(f"    summary: MWRR = {summary.mwrr_percent} (outside ±{REALISM_BOUND} realistic range)")
+    if summary.mwrr_annualized_percent is not None and abs(summary.mwrr_annualized_percent) > REALISM_BOUND:
+        realism_violations.append(f"    summary: MWRR = {summary.mwrr_annualized_percent} (outside ±{REALISM_BOUND} realistic range)")
 
     if realism_violations:
         print(f"\n  ⚠️  {len(realism_violations)} realism violations found (target range: ±{REALISM_BOUND}):")

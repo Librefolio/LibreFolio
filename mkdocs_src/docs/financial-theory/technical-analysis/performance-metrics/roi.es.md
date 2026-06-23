@@ -8,7 +8,7 @@ El ROI Simple mide el porcentaje de retorno absoluto generado por una inversión
 ## 🧮 Fórmula
 
 $$
-ROI = \frac{\text{Valor Actual}}{\text{Coste Medio Ponderado (CMP)}} - 1
+ROI = \frac{\text{Valor Actual}}{\text{Precio de Compra Medio (PCM)}} - 1
 $$
 
 ## 🎯 Cuándo usarlo

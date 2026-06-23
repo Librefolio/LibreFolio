@@ -440,3 +440,131 @@ class TestSimpleROISeries:
                 "CF without matching NAVSnapshot is silently dropped. "
                 "Callers must provide a snapshot for every CF date."
             )
+
+
+# ---------------------------------------------------------------------------
+# TestAnnualizedToCumulative
+# ---------------------------------------------------------------------------
+
+
+class TestAnnualizedToCumulative:
+    """Tests for annualized_to_cumulative helper."""
+
+    def test_none_returns_none(self):
+        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+        assert annualized_to_cumulative(None, 365) is None
+
+    def test_rate_minus_one_returns_none(self):
+        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+        assert annualized_to_cumulative(Decimal("-1"), 365) is None
+        assert annualized_to_cumulative(Decimal("-1.5"), 365) is None
+
+    def test_zero_days_returns_zero(self):
+        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+        result = annualized_to_cumulative(Decimal("0.10"), 0)
+        assert result == Decimal("0")
+
+    def test_one_year_identity(self):
+        """For exactly 365 days, cumulative == annualized."""
+        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+        result = annualized_to_cumulative(Decimal("0.10"), 365)
+        assert result is not None
+        assert float(result) == pytest.approx(0.10, abs=0.001)
+
+    def test_two_years_compounding(self):
+        """For 730 days (2 years), cumulative = (1+0.10)^2 - 1 = 0.21."""
+        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+        result = annualized_to_cumulative(Decimal("0.10"), 730)
+        assert result is not None
+        assert float(result) == pytest.approx(0.21, abs=0.001)
+
+    def test_half_year(self):
+        """For 182 days (~half year), cumulative = (1+0.10)^(182/365) - 1 ≈ 0.0488."""
+        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+        result = annualized_to_cumulative(Decimal("0.10"), 182)
+        assert result is not None
+        assert float(result) == pytest.approx(0.0488, abs=0.002)
+
+    def test_negative_rate(self):
+        """Negative annualized rate (but > -1) gives negative cumulative."""
+        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+        result = annualized_to_cumulative(Decimal("-0.20"), 365)
+        assert result is not None
+        assert float(result) == pytest.approx(-0.20, abs=0.001)
+
+
+# ---------------------------------------------------------------------------
+# TestMWRRSummaryFix — verifies no double-counting of deposits
+# ---------------------------------------------------------------------------
+
+
+class TestMWRRSummaryFix:
+    """Verifies that MWRR with initial_nav=0 and deposits in cash_flows works correctly.
+
+    This mirrors the fix: get_summary now passes nav_snapshots[0].nav (≈0 for
+    new portfolios) instead of total_invested.
+    """
+
+    def test_mwrr_no_double_counting(self):
+        """Deposit 1000 at t=0, deposit 500 at t=180, NAV at t=365 = 1800.
+
+        With correct approach (initial_nav=0):
+          flows = [(-0, t=0), (-1000, t=0), (-500, t=180), (+1800, t=365)]
+          The solver should find a positive rate.
+        """
+        cfs = [
+            CashFlowInput(date(2025, 1, 1), Decimal("-1000")),  # deposit
+            CashFlowInput(date(2025, 7, 1), Decimal("-500")),   # deposit
+        ]
+        result = calculate_mwrr(
+            cash_flows=cfs,
+            initial_nav=Decimal("0"),  # portfolio starts empty — correct approach
+            final_nav=Decimal("1800"),
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 12, 31),
+        )
+        assert result.mwrr is not None
+        assert float(result.mwrr) > 0, "MWRR should be positive when portfolio gained value"
+
+    def test_mwrr_double_counting_gives_wrong_result(self):
+        """Demonstrates the bug: using total_invested as initial_nav double-counts.
+
+        This test documents the bug behavior that was fixed.
+        """
+        cfs = [
+            CashFlowInput(date(2025, 1, 1), Decimal("-1000")),
+            CashFlowInput(date(2025, 7, 1), Decimal("-500")),
+        ]
+        # BUG approach: initial_nav = total_invested = 1500
+        result = calculate_mwrr(
+            cash_flows=cfs,
+            initial_nav=Decimal("1500"),  # WRONG — double-counts deposits
+            final_nav=Decimal("1800"),
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 12, 31),
+        )
+        # With double-counting, outflows = 1500+1000+500=3000, inflow = 1800
+        # Solver needs strongly negative rate to make NPV=0
+        assert result.mwrr is not None
+        assert float(result.mwrr) < 0, "Bug approach gives negative MWRR for a profitable portfolio"
+
+    def test_mwrr_cumulative_zero_at_t0(self):
+        """First day: annualized_to_cumulative with 0 days returns 0."""
+        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+        result = annualized_to_cumulative(Decimal("0.26"), 0)
+        assert result == Decimal("0")
+
+    def test_mwrr_cumulative_matches_annualized(self):
+        """Verify cumulative = (1 + annualized)^(days/365) - 1."""
+        from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+
+        # For 1 year period, annualized = 0.26 → cumulative ≈ 0.26
+        ann = Decimal("0.26")
+        cum = annualized_to_cumulative(ann, 365)
+        assert cum is not None
+        assert float(cum) == pytest.approx(0.26, abs=0.001)
+
+        # For 2 year period, annualized = 0.26 → cumulative = 1.26^2 - 1 ≈ 0.5876
+        cum2 = annualized_to_cumulative(ann, 730)
+        assert cum2 is not None
+        assert float(cum2) == pytest.approx(0.5876, abs=0.002)

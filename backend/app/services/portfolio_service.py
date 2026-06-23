@@ -59,6 +59,7 @@ from backend.app.services.settings_service import get_global_setting
 from backend.app.utils.financial.fifo_utils import FIFOTransactionInput, calculate_fifo_lots
 from backend.app.utils.financial.roi_utils import (
     CashFlowInput,
+    annualized_to_cumulative,
     calculate_mwrr,
     calculate_mwrr_series,
     calculate_simple_roi,
@@ -779,11 +780,21 @@ class PortfolioService:
             except (ValueError, ZeroDivisionError):
                 twrr_result = None
             if total_invested > 0:
+                # Use actual portfolio NAV at t=0 (not total_invested) to avoid
+                # double-counting deposits that are already in cash_flows_perf.
+                initial_nav_for_mwrr = nav_snapshots[0].nav
                 mwrr_point = await asyncio.to_thread(
-                    calculate_mwrr, cash_flows_perf, total_invested,
+                    calculate_mwrr, cash_flows_perf, initial_nav_for_mwrr,
                     engine_nav, nav_snapshots[0].date, today,
                 )
                 mwrr_result = mwrr_point.mwrr
+
+        # ── MWRR cumulative derivation ──
+        mwrr_period_days: int | None = None
+        mwrr_cumulative: Decimal | None = None
+        if nav_snapshots:
+            mwrr_period_days = (today - nav_snapshots[0].date).days
+            mwrr_cumulative = annualized_to_cumulative(mwrr_result, mwrr_period_days) if mwrr_result is not None else None
 
         total_gl = engine_nav - total_invested
         total_gl_pct = (total_gl / total_invested) if total_invested > 0 else Decimal("0")
@@ -827,7 +838,9 @@ class PortfolioService:
             book_value=Currency(code=base_currency, amount=last_state.book_value) if last_state else None,
             unrealized_gain_loss=Currency(code=base_currency, amount=last_state.unrealized_gain_loss) if last_state else None,
             twrr_percent=twrr_result,
-            mwrr_percent=mwrr_result,
+            mwrr_annualized_percent=mwrr_result,
+            mwrr_cumulative_percent=mwrr_cumulative,
+            mwrr_period_days=mwrr_period_days,
             simple_roi_percent=simple_roi,
             allocation_by_type=_alloc_from_engine(alloc_type),
             allocation_by_sector=_alloc_from_engine(alloc_sector),
@@ -896,7 +909,7 @@ class PortfolioService:
 
         twrr_map: dict[date_type, Decimal] = {}
         roi_map: dict[date_type, Decimal] = {}
-        mwrr_map: dict[date_type, Decimal] = {}
+        mwrr_map: dict[date_type, Decimal | None] = {}
 
         if period_nav_snapshots and period_cash_flows:
             twrr_series = calculate_twrr_series(period_nav_snapshots, period_cash_flows)
@@ -908,6 +921,9 @@ class PortfolioService:
             roi_map = {pt.date: pt.roi for pt in roi_series}
             mwrr_map = {pt.date: pt.mwrr for pt in mwrr_series}
 
+        # Period start date for cumulative MWRR calculation
+        period_start = period_nav_snapshots[0].date if period_nav_snapshots else None
+
         # ── Slice to [date_from, date_to] and merge performance ──
         history_points: list[PortfolioHistoryPoint] = []
         for h in history_dicts:
@@ -917,7 +933,11 @@ class PortfolioService:
 
             twrr = twrr_map.get(d)
             roi = roi_map.get(d)
-            mwrr = mwrr_map.get(d)
+            mwrr_ann = mwrr_map.get(d)
+
+            # Compute cumulative MWRR from annualized
+            days_from_start = (d - period_start).days if period_start else 0
+            mwrr_cum = annualized_to_cumulative(mwrr_ann, days_from_start)
 
             history_points.append(
                 PortfolioHistoryPoint(
@@ -935,7 +955,8 @@ class PortfolioService:
                     book_value=h.get("book_value"),
                     unrealized_gain_loss=h.get("unrealized_gain_loss"),
                     twrr=twrr,
-                    mwrr=mwrr,
+                    mwrr_annualized=mwrr_ann,
+                    mwrr_cumulative=mwrr_cum,
                     roi=roi,
                 )
             )
@@ -944,8 +965,10 @@ class PortfolioService:
         if history_points:
             if history_points[0].twrr is None:
                 history_points[0].twrr = Decimal("0")
-            if history_points[0].mwrr is None:
-                history_points[0].mwrr = Decimal("0")
+            if history_points[0].mwrr_annualized is None:
+                history_points[0].mwrr_annualized = Decimal("0")
+            if history_points[0].mwrr_cumulative is None:
+                history_points[0].mwrr_cumulative = Decimal("0")
             if history_points[0].roi is None:
                 history_points[0].roi = Decimal("0")
 

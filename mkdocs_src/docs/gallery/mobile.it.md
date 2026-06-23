@@ -38,9 +38,15 @@ Creazione semplice dell'account con feedback sulla robustezza della password.
 Il tuo portafoglio a colpo d'occhio — statistiche chiave, grafici di allocazione e uno stato vuoto pulito per i nuovi utenti.
 
 <div class="lf-screenshot-carousel lf-mobile-carousel" data-carousel="carousel-mobile-0" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Vista principale" alt="Dashboard Principale">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-charts" data-title="📊 Allocazione e Composizione" alt="Grafici di Allocazione Dashboard">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="empty-state" data-title="🌱 Nuovo portafoglio (stato vuoto)" alt="Stato Vuoto Dashboard">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Vista principale (Assoluta)" alt="📈 Vista principale (Assoluta)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📈 Vista principale (Percentuale)" alt="📈 Vista principale (Percentuale)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Allocazione per Tipo (Attuale)" alt="📊 Allocazione per Tipo (Attuale)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-history" data-title="📊 Allocazione per Tipo (Storico)" alt="📊 Allocazione per Tipo (Storico)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-now" data-title="📊 Allocazione per Settore (Attuale)" alt="📊 Allocazione per Settore (Attuale)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-history" data-title="📊 Allocazione per Settore (Storico)" alt="📊 Allocazione per Settore (Storico)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-now" data-title="📊 Allocazione Geografica (Attuale)" alt="📊 Allocazione Geografica (Attuale)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-history" data-title="📊 Allocazione Geografica (Storico)" alt="📊 Allocazione Geografica (Storico)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="empty-state" data-title="🌱 Nuovo portafoglio (stato vuoto)" alt="🌱 Nuovo portafoglio (stato vuoto)">
 </div>
 
 ### ☰ Menu di Navigazione

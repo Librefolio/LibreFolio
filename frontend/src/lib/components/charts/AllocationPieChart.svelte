@@ -131,7 +131,7 @@
         const richStyles: Record<string, any> = {};
         if (mode === 'type') {
             for (const {name} of chartData) {
-                const safeKey = `img_${name.replace(/[^A-Z_]/g, '')}`;
+                const safeKey = `img_${name.toUpperCase().replace(/[^A-Z_]/g, '')}`;
                 richStyles[safeKey] = {
                     backgroundColor: {image: getAssetTypeIconUrl(name)},
                     width: 16,
@@ -154,7 +154,7 @@
             mode === 'type'
                 ? {
                       formatter: (name: string) => {
-                          const safeKey = `img_${name.replace(/[^A-Z_]/g, '')}`;
+                          const safeKey = `img_${name.toUpperCase().replace(/[^A-Z_]/g, '')}`;
                           return `{${safeKey}|} ${tr(`assets.types.${name}`) || name}`;
                       },
                   }
@@ -203,7 +203,7 @@
                 : {
                       show: true,
                       position: 'inner',
-                      formatter: (params: any) => `{img_${(params.name as string).replace(/[^A-Z_]/g, '')}|}`,
+                      formatter: (params: any) => `{img_${(params.name as string).toUpperCase().replace(/[^A-Z_]/g, '')}|}`,
                       rich: richStyles,
                       backgroundColor: 'rgba(255, 255, 255, 0.75)',
                       borderRadius: 20,
