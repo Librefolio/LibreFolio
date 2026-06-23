@@ -134,7 +134,10 @@ async def list_sectors(include_other: bool = Query(True, description="Include 'O
 
 
 @router.get("/countries", response_model=CountryListResponse)
-async def list_countries(language: str = Query("en", description="Language for country names (default: en)")):
+async def list_countries(
+    language: str = Query("en", description="Language for country names (default: en)"),
+    include_other: bool = Query(True, description="Append 'Other' catch-all entry at the end"),
+):
     """
     Get list of all countries with ISO codes and flag emoji.
 
@@ -143,6 +146,9 @@ async def list_countries(language: str = Query("en", description="Language for c
     - ISO-3166-A2 code (e.g., US)
     - Country name in requested language (via Babel)
     - Flag emoji (e.g., 🇺🇸)
+
+    When `include_other` is True (default), an additional "Other" entry
+    is appended at the end for catch-all geographic allocation.
 
     **Supported Languages**:
     - en (English) - default
@@ -173,6 +179,11 @@ async def list_countries(language: str = Query("en", description="Language for c
     """
     countries_data = list_countries_util(language)
     countries = [CountryListItem(**c) for c in countries_data]
+
+    if include_other:
+        OTHER_NAMES = {"en": "Other", "it": "Altro", "fr": "Autre", "es": "Otro"}
+        other_name = OTHER_NAMES.get(language, "Other")
+        countries.append(CountryListItem(iso3="Other", iso2="XX", name=other_name, flag_emoji="🏳️"))
 
     return CountryListResponse(items=countries, language=language)
 

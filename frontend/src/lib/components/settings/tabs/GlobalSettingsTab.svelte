@@ -47,6 +47,15 @@
         {id: 'defaults', icon: Users, keys: ['default_currency', 'default_language']},
     ];
 
+    // Keys managed exclusively via SchedulerConfigModal — never shown as raw fields
+    const SCHEDULER_HIDDEN_KEYS = new Set([
+        'scheduler_current_price_frequency_minutes',
+        'scheduler_history_sync_times',
+        'scheduler_history_sync_days',
+        'scheduler_history_sync_horizon_days',
+        'scheduler_timezone',
+    ]);
+
     let settings: GlobalSetting[] = [];
     let editedValues: Record<string, string> = {};
     let isLocked = true;
@@ -316,8 +325,9 @@
     // Reactive: filter settings based on selected category
     $: filteredSettings =
         selectedCategory === 'all'
-            ? settings
+            ? settings.filter((s) => !SCHEDULER_HIDDEN_KEYS.has(s.key))
             : settings.filter((s) => {
+                  if (SCHEDULER_HIDDEN_KEYS.has(s.key)) return false;
                   const category = categories.find((c) => c.id === selectedCategory);
                   return category ? category.keys.includes(s.key) : true;
               });
@@ -739,7 +749,7 @@
                                     </p>
                                 </div>
                             </div>
-                            <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0" type="button" data-testid="scheduler-config-btn" on:click={() => (showConfigModal = true)}>
+                            <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" type="button" data-testid="scheduler-config-btn" disabled={isLocked} on:click={() => (showConfigModal = true)}>
                                 {$_('settings.global.scheduler.status.configure')}
                             </button>
                         </div>
@@ -754,6 +764,8 @@
 <SchedulerConfigModal
     bind:open={showConfigModal}
     {serverTz}
+    serverNowUtc={schedulerState?.server_now_utc || ''}
+    schedulerTimezone={schedulerState?.scheduler_timezone || ''}
     currentValues={{
         frequency: parseInt(editedValues['scheduler_current_price_frequency_minutes'] || '10', 10),
         times: editedValues['scheduler_history_sync_times'] || '06:00,23:00',

@@ -304,7 +304,9 @@ class PortfolioSummary(BaseModel):
     book_value: Optional[Currency] = Field(None, description="open_cost_basis + cash + in_transit_book_value")
     unrealized_gain_loss: Optional[Currency] = Field(None, description="nav_value - book_value")
     twrr_percent: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return (None if not calculable)")
-    mwrr_percent: Optional[SafeDecimal] = Field(None, description="Money-Weighted Return / XIRR (None if not converged)")
+    mwrr_annualized_percent: Optional[SafeDecimal] = Field(None, description="Annualized MWRR / XIRR (None if not converged)")
+    mwrr_cumulative_percent: Optional[SafeDecimal] = Field(None, description="Cumulative MWRR for the period: (1+r_ann)^(days/365)-1")
+    mwrr_period_days: Optional[int] = Field(None, description="Number of days in the MWRR calculation period")
     simple_roi_percent: SafeDecimal
     allocation_by_type: List[AllocationItem] = Field(default_factory=list)
     allocation_by_sector: List[AllocationItem] = Field(default_factory=list)
@@ -339,7 +341,8 @@ class PortfolioHistoryPoint(BaseModel):
     book_value: Optional[Currency] = Field(None, description="open_cost_basis + cash + in_transit_book_value")
     unrealized_gain_loss: Optional[Currency] = Field(None, description="nav_value - book_value")
     twrr: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return series point")
-    mwrr: Optional[SafeDecimal] = Field(None, description="Money-Weighted Return series point")
+    mwrr_annualized: Optional[SafeDecimal] = Field(None, description="Annualized MWRR at this point")
+    mwrr_cumulative: Optional[SafeDecimal] = Field(None, description="Cumulative MWRR at this point: (1+r_ann)^(days/365)-1")
     roi: Optional[SafeDecimal] = Field(None, description="Simple ROI series point")
 
 
@@ -350,7 +353,8 @@ class AssetHistoryPoint(BaseModel):
     wac: SafeDecimal
     market_price: SafeDecimal
     twrr: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return series point")
-    mwrr: Optional[SafeDecimal] = Field(None, description="Money-Weighted Return series point")
+    mwrr_annualized: Optional[SafeDecimal] = Field(None, description="Annualized MWRR at this point")
+    mwrr_cumulative: Optional[SafeDecimal] = Field(None, description="Cumulative MWRR at this point")
     roi: Optional[SafeDecimal] = Field(None, description="Simple ROI series point")
 
 

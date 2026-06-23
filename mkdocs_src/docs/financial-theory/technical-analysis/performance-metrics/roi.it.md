@@ -8,7 +8,7 @@ Il ROI Semplice misura il rendimento percentuale assoluto generato da un investi
 ## 🧮 Formula
 
 $$
-ROI = \frac{\text{Valore Attuale}}{\text{Costo Medio Ponderato (WAC)}} - 1
+ROI = \frac{\text{Valore Attuale}}{\text{Prezzo di Carico Medio (PCM)}} - 1
 $$
 
 ## 🎯 Quando usarlo

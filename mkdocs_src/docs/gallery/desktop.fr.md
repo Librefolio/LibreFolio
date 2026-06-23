@@ -42,9 +42,15 @@ Un retour en temps réel sur la force du mot de passe aide les utilisateurs à c
 Votre portefeuille en un coup d'œil — statistiques clés, graphiques d'allocation et un état vide épuré pour les nouveaux utilisateurs.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-0" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Vue principale" alt="Tableau de Bord Principal">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-charts" data-title="📊 Allocation & Composition" alt="Graphiques d'Allocation du Tableau de Bord">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="empty-state" data-title="🌱 Nouveau portefeuille (état vide)" alt="État Vide du Tableau de Bord">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Vue principale (Absolue)" alt="📈 Vue principale (Absolue)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📈 Vue principale (Pourcentage)" alt="📈 Vue principale (Pourcentage)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Allocation par Type (Actuelle)" alt="📊 Allocation par Type (Actuelle)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-history" data-title="📊 Allocation par Type (Historique)" alt="📊 Allocation par Type (Historique)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-now" data-title="📊 Allocation par Secteur (Actuelle)" alt="📊 Allocation par Secteur (Actuelle)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-history" data-title="📊 Allocation par Secteur (Historique)" alt="📊 Allocation par Secteur (Historique)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-now" data-title="📊 Allocation Géographique (Actuelle)" alt="📊 Allocation Géographique (Actuelle)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-history" data-title="📊 Allocation Géographique (Historique)" alt="📊 Allocation Géographique (Historique)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="empty-state" data-title="🌱 Nouveau portefeuille (état vide)" alt="🌱 Nouveau portefeuille (état vide)">
 </div>
 
 ---

@@ -120,7 +120,8 @@
       "HOLD": "Liquidità",
       "CROWDFUND_LOAN": "Crowdfunding",
       "OTHER": "Altro",
-      "INDEX": "Indice"
+      "INDEX": "Indice",
+      "Liquidity": "Liquidità"
     },
     "type": "Tipo",
     "modal": {
@@ -843,6 +844,8 @@
     "inTransit": "In Transito",
     "navValue": "Valore Netto (NAV)",
     "mwrr": "MWRR",
+    "mwrrAnnualized": "ann.",
+    "mwrrCumulative": "MWRR cum.",
     "twrr": "TWRR",
     "simpleRoi": "ROI Semplice",
     "twrrMwrr": "TWRR: {twrr} | MWRR: {mwrr}",

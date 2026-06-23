@@ -21,6 +21,7 @@
     import * as echarts from 'echarts';
     import {_} from '$lib/i18n';
     import type {PortfolioHistoryPoint} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {buildTooltipTheme, buildDot, buildTooltipHeader, buildTooltipRow, buildTooltipDivider} from '$lib/components/charts/echartsTooltipHelpers';
 
     // =========================================================================
     // Props
@@ -79,7 +80,7 @@
     const pctSeries = $derived([
         {
             name: $_('dashboard.mwrr'),
-            data: history.map((pt) => (pt.mwrr != null ? Number(pt.mwrr) * 100 : null)),
+            data: history.map((pt) => (pt.mwrr_cumulative != null ? Number(pt.mwrr_cumulative) * 100 : null)),
             lineStyle: 'solid' as const,
             colorKey: 'nav' as const,
         },
@@ -97,8 +98,8 @@
         },
     ]);
 
-    const hasPctData = $derived(history.some((pt) => pt.mwrr != null || pt.twrr != null || pt.roi != null));
-    const hasNonZeroPctData = $derived(history.some((pt) => Number(pt.mwrr ?? 0) !== 0 || Number(pt.twrr ?? 0) !== 0 || Number(pt.roi ?? 0) !== 0));
+    const hasPctData = $derived(history.some((pt) => pt.mwrr_cumulative != null || pt.twrr != null || pt.roi != null));
+    const hasNonZeroPctData = $derived(history.some((pt) => Number(pt.mwrr_cumulative ?? 0) !== 0 || Number(pt.twrr ?? 0) !== 0 || Number(pt.roi ?? 0) !== 0));
 
     // =========================================================================
     // Lifecycle
@@ -252,7 +253,8 @@
             grid: {left: '3%', right: '4%', bottom: '30px', top: '10px', containLabel: true},
             tooltip: {
                 trigger: 'axis',
-                axisPointer: {type: 'cross', label: {backgroundColor: '#6a7985'}},
+                appendToBody: true,
+                axisPointer: {type: 'line'},
                 backgroundColor: tooltipBg,
                 borderColor: tooltipBorder,
                 borderWidth: 1,

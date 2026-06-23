@@ -22,7 +22,7 @@ from __future__ import annotations
 from datetime import date as date_type
 from decimal import Decimal
 from functools import lru_cache
-from typing import Annotated, Any, List, Optional
+from typing import Annotated, Any, List, Literal, Optional, Union
 
 import pycountry
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -437,6 +437,10 @@ class DateRangeModel(BaseModel):
         return self
 
 
+# Sentinel type: allows literal "min"/"max" alongside real dates.
+DateOrSentinel = Union[date_type, Literal["min", "max"]]
+
+
 class OpenDateRangeModel(BaseModel):
     """
     Open-ended date range — both start and end are optional.
@@ -446,23 +450,47 @@ class OpenDateRangeModel(BaseModel):
     - start=None → from the beginning of time
     - end=None → up to today / unbounded future
     - Both None → entire history
+    - start="min" → resolved server-side to earliest accessible date
+    - end="max" → resolved server-side to latest accessible date / today
 
-    The validator still enforces end >= start when both are provided.
+    The validator still enforces end >= start when both are concrete dates.
 
     Use cases: /portfolio/wac date_range, flexible query filters.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    start: Optional[date_type] = Field(None, description="Start date (inclusive, None = from beginning)")
-    end: Optional[date_type] = Field(None, description="End date (inclusive, None = unbounded / today)")
+    start: Optional[DateOrSentinel] = Field(None, description="Start date (inclusive), None = from beginning, 'min' = earliest accessible")
+    end: Optional[DateOrSentinel] = Field(None, description="End date (inclusive), None = unbounded / today, 'max' = latest accessible")
 
     @model_validator(mode="after")
     def validate_end_after_start(self) -> OpenDateRangeModel:
-        """Ensure end >= start when both are provided."""
-        if self.start is not None and self.end is not None and self.end < self.start:
+        """Ensure end >= start when both are concrete dates (skip if sentinels)."""
+        if (
+            self.start is not None
+            and self.end is not None
+            and isinstance(self.start, date_type)
+            and isinstance(self.end, date_type)
+            and self.end < self.start
+        ):
             raise ValueError(f"end date ({self.end}) must be >= start date ({self.start})")
         return self
+
+    def has_sentinels(self) -> bool:
+        """Return True if either bound is a sentinel string."""
+        return self.start in ("min", "max") or self.end in ("min", "max")
+
+    def resolved_start(self) -> Optional[date_type]:
+        """Return start as a concrete date, or None if sentinel/None."""
+        if self.start is None or isinstance(self.start, str):
+            return None
+        return self.start
+
+    def resolved_end(self) -> Optional[date_type]:
+        """Return end as a concrete date, or None if sentinel/None."""
+        if self.end is None or isinstance(self.end, str):
+            return None
+        return self.end
 
 
 class BaseDeleteResult(BaseModel):

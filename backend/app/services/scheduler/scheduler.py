@@ -2,7 +2,7 @@
 
 import asyncio
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import structlog
 
@@ -95,7 +95,7 @@ async def scheduler_loop(shutdown_event: asyncio.Event) -> None:
 
                 if settings.scheduler_enabled:
                     state = load_state()
-                    now = datetime.now().astimezone()
+                    now = datetime.now(timezone.utc)
 
                     if due_current_price(now, settings, state):
                         await run_current_price_refresh(state)

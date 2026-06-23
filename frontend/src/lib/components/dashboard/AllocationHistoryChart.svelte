@@ -14,7 +14,10 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
-    import {_} from '$lib/i18n';
+    import {_, t} from '$lib/i18n';
+    import {buildTooltipTheme, buildTooltipHeader, buildTooltipTopN} from '$lib/components/charts/echartsTooltipHelpers';
+    import {getCountryInfo} from '$lib/stores/reference/countryStore';
+    import {sectorI18nKey} from '$lib/utils/assetTypes';
 
     interface AllocationComponent {
         name: string;
@@ -31,9 +34,11 @@
         data: AllocationHistoryPoint[];
         height?: string;
         loading?: boolean;
+        /** Which allocation dimension is being displayed — affects label localization. */
+        dimension?: 'type' | 'sector' | 'geo';
     }
 
-    let {data = [], height = '100%', loading = false}: Props = $props();
+    let {data = [], height = '100%', loading = false, dimension = 'type'}: Props = $props();
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
@@ -43,6 +48,33 @@
     // Distinct colors for allocation categories (up to 12)
     const PALETTE_LIGHT = ['#1a4031', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16', '#ec4899', '#f97316', '#14b8a6', '#6366f1', '#a3a3a3'];
     const PALETTE_DARK = ['#4ade80', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa', '#22d3ee', '#a3e635', '#f472b6', '#fb923c', '#2dd4bf', '#818cf8', '#d4d4d4'];
+
+    // Sector emoji map
+    const SECTOR_EMOJI: Record<string, string> = {
+        Industrials: '🏭',
+        Technology: '💻',
+        Financials: '🏦',
+        'Consumer Discretionary': '🛍️',
+        'Health Care': '🏥',
+        'Real Estate': '🏠',
+        'Basic Materials': '⛏️',
+        Energy: '⚡',
+        'Consumer Staples': '🛒',
+        Telecommunication: '📡',
+        Utilities: '💡',
+        Other: '📦',
+        Liquidity: '💰',
+    };
+
+    /** Get an emoji for a category (sector → map, geo → flag, type → icon fallback). */
+    function getCategoryEmoji(rawName: string): string {
+        if (dimension === 'sector') return SECTOR_EMOJI[rawName] ?? '📊';
+        if (dimension === 'geo') {
+            if (rawName === 'Other' || rawName === 'Unknown') return '🏳️';
+            return getCountryInfo(rawName).flag_emoji || '🌍';
+        }
+        return '';
+    }
 
     // ── Derived: extract unique category names + build per-category series ──
     const categoryNames = $derived.by(() => {
@@ -67,6 +99,7 @@
 
     $effect(() => {
         void data;
+        void dimension;
         if (chartContainer) {
             tick().then(() => {
                 if (!resizeObserver && chartContainer) {
@@ -77,6 +110,24 @@
             });
         }
     });
+
+    /** Localize a category name based on current dimension. */
+    function localizeName(rawName: string): string {
+        if (dimension === 'geo') {
+            if (rawName === 'Other' || rawName === 'Unknown') return `🏳️ ${$_('common.other') || 'Other'}`;
+            const info = getCountryInfo(rawName);
+            return `${info.flag_emoji} ${info.name}`;
+        }
+        if (dimension === 'sector') {
+            const key = `sectors.${sectorI18nKey(rawName)}`;
+            const localized = $t(key);
+            return localized !== key ? localized : rawName;
+        }
+        if (dimension === 'type') {
+            return $t(`assets.types.${rawName}`) || rawName;
+        }
+        return rawName;
+    }
 
     function renderChart() {
         if (!chartContainer || loading || data.length === 0) return;
@@ -97,22 +148,46 @@
         const tooltipBorder = isDark ? '#334155' : '#e2e8f0';
 
         // Build one series per category, stacked to 100%
-        const series: echarts.SeriesOption[] = categoryNames.map((name, i) => ({
-            name,
-            type: 'line',
-            stack: 'allocation',
-            data: data.map((pt) => {
+        // Compute average weight per category for label visibility threshold
+        const avgWeights: Record<string, number> = {};
+        for (const name of categoryNames) {
+            const values = data.map((pt) => {
                 const comp = pt.components.find((c) => c.name === name);
                 return comp ? Number(comp.value) : 0;
-            }),
-            smooth: false,
-            symbol: 'none',
-            // Visible boundary line matching area color (same style as GrowthChart stacked)
-            lineStyle: {color: palette[i % palette.length], width: 1, opacity: 0.7},
-            areaStyle: {color: palette[i % palette.length] + '88'},
-            itemStyle: {color: palette[i % palette.length]},
-            emphasis: {focus: 'series'},
-        }));
+            });
+            avgWeights[name] = values.length > 0 ? values.reduce((s, v) => s + v, 0) / values.length : 0;
+        }
+
+        const series: echarts.SeriesOption[] = categoryNames.map((name, i) => {
+            const emoji = getCategoryEmoji(name);
+            const showLabel = (dimension === 'sector' || dimension === 'geo') && avgWeights[name] > 8 && emoji;
+            return {
+                name: localizeName(name),
+                type: 'line',
+                stack: 'allocation',
+                data: data.map((pt) => {
+                    const comp = pt.components.find((c) => c.name === name);
+                    return comp ? Number(comp.value) : 0;
+                }),
+                smooth: false,
+                symbol: 'none',
+                lineStyle: {color: palette[i % palette.length], width: 1, opacity: 0.7},
+                areaStyle: {color: palette[i % palette.length] + '88'},
+                itemStyle: {color: palette[i % palette.length]},
+                emphasis: {focus: 'series'},
+                label: showLabel
+                    ? {
+                          show: true,
+                          position: 'inside' as const,
+                          formatter: () => emoji,
+                          fontSize: 14,
+                          color: isDark ? '#ffffff' : '#000000',
+                          textShadowColor: isDark ? '#000' : '#fff',
+                          textShadowBlur: 2,
+                      }
+                    : {show: false},
+            };
+        });
 
         // Pre-build per-category data index for accurate tooltip values
         const seriesDataByName: Record<string, number[]> = {};
@@ -129,7 +204,8 @@
             grid: {left: '3%', right: '4%', bottom: '40px', top: '10px', containLabel: true},
             tooltip: {
                 trigger: 'axis',
-                axisPointer: {type: 'cross', label: {backgroundColor: '#6a7985'}},
+                appendToBody: true,
+                axisPointer: {type: 'line'},
                 backgroundColor: tooltipBg,
                 borderColor: tooltipBorder,
                 borderWidth: 1,
@@ -139,17 +215,20 @@
                     const date = items[0]?.axisValue ?? '';
                     const idx = items[0]?.dataIndex ?? 0;
 
+                    const theme = buildTooltipTheme(isDark);
+
                     // Use raw (non-cumulative) data for correct percentages
-                    const lines = categoryNames
+                    const allItems = categoryNames
                         .map((name, i) => ({
-                            name,
+                            name: localizeName(name),
                             value: seriesDataByName[name]?.[idx] ?? 0,
                             color: palette[i % palette.length],
                         }))
-                        .filter((x) => x.value > 0.01)
-                        .sort((a, b) => b.value - a.value)
-                        .map((x) => `<div style="display:flex;justify-content:space-between;gap:16px">` + `<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${x.color};margin-right:6px"></span>${x.name}</span>` + `<b>${x.value.toFixed(1)}%</b></div>`);
-                    return `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>${lines.join('')}`;
+                        .filter((x) => x.value > 0.01);
+
+                    const header = buildTooltipHeader(date, theme.mutedColor);
+                    const rows = buildTooltipTopN(allItems, 5, theme, $_('common.other') || 'Other');
+                    return header + rows;
                 },
             },
             legend: {
@@ -159,6 +238,9 @@
                 itemWidth: 12,
                 itemHeight: 8,
                 type: 'scroll',
+                pageTextStyle: {color: textColor},
+                pageIconColor: textColor,
+                pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1',
             },
             dataZoom: [{type: 'inside', start: 0, end: 100}],
             xAxis: {
