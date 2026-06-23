@@ -1,4 +1,4 @@
-# <img src="../../static/cssscraper.png" alt=""> CSS Scraper
+# <img src="../../../../static/cssscraper.png" alt=""> CSS Scraper
 
 The CSS Scraper provider lets you extract price data from any web page using CSS selectors. This is particularly useful for instruments not covered by other providers, such as Italian government bonds (BTP) on Borsa Italiana.
 

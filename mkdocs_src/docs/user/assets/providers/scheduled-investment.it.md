@@ -1,4 +1,4 @@
-# <img src="../../static/scheduled_investment.png" alt=""> Scheduled Investment Provider
+# <img src="../../../../../static/scheduled_investment.png" alt=""> Scheduled Investment Provider
 
 Il provider Scheduled Investment è progettato per strumenti a reddito fisso in cui il valore è calcolato in base a un piano di tassi di interesse piuttosto che ai prezzi di mercato. Esempi includono conti di risparmio, depositi vincolati e titoli di stato con tassi di cedola noti.
 

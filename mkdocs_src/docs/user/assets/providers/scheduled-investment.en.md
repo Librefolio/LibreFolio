@@ -1,4 +1,4 @@
-# <img src="../../static/scheduled_investment.png" alt=""> Scheduled Investment
+# <img src="../../../../static/scheduled_investment.png" alt=""> Scheduled Investment
 
 The Scheduled Investment provider is designed for fixed-income instruments where the value is calculated from an interest rate schedule rather than market prices. Examples include savings accounts, fixed deposits, and government bonds with known coupon rates.
 
