@@ -16,4 +16,4 @@ $$
 - When you want a quick, intuitive snapshot of total unadjusted profit.
 
 ## ⚠️ The Flaw: Cash Flow Dilution
-Simple ROI breaks down when you make subsequent investments in the same asset. If you buy a stock and it goes up +50%, your ROI is +50%. If you then invest 10x more capital into the same stock and the price doesn't move, your absolute gain remains the same, but your new massive capital base will instantly dilute your ROI down to maybe +5%. It looks like your performance collapsed, even though the market hasn't moved.
+Simple ROI breaks down when you make subsequent investments in the same asset. If you buy a stock and it goes up +50%, your ROI is +50%. If you then invest 10x more capital into the same stock and the price doesn't move, your absolute gain remains the same, but your new massive capital base will instantly dilute your ROI down to maybe +5%. It looks like your performance collapsed, even though the market hasn't moved. To address this dilution and evaluate the absolute cash returns adjusted for these capital movements, refer to the [Period P&L](period-pnl.md) metric.

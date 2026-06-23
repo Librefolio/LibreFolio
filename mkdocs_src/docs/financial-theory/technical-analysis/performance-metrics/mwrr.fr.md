@@ -162,3 +162,8 @@ Les courbes tracées utilisent le **MWRR Cumulatif**, le **TWRR Cumulatif** et l
 * **TWRR Cumulatif** (Indicateur de performance de la stratégie ou de l'allocation d'actifs).
 * **MWRR Cumulatif** (Indicateur principal du timing personnel).
 * **MWRR Annualisé** (Affiché comme indicateur secondaire pour comprendre le taux annuel composé).
+
+!!! tip "Analyser la Différence de Performance"
+
+    Pour interpréter la différence entre le MWRR cumulé et le TWRR cumulé, reportez-vous à la page de l'[Effet de timing](timing-effect.md).
+
