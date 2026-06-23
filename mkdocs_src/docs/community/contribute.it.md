@@ -31,26 +31,24 @@ LibreFolio utilizza un [Registry & Plugin System](../developer/architecture/patt
 | 💱 **FX** | [Guida Plugin FX](../developer/architecture/patterns/fx_plugin_guide.md) | Aggiunge un nuovo provider di tassi di cambio |
 | 📊 **Chart Signals** | *Guida in arrivo* | Nuovi indicatori tecnici e overlay per i grafici (EMA, MACD, RSI, Bollinger…) |
 
+* **Se non sei uno sviluppatore**: puoi richiederne l'implementazione compilando il nostro [Modulo di Richiesta Plugin](https://github.com/Librefolio/LibreFolio/issues/new?template=plugin_request.yml). Oltre ai dettagli della richiesta, è necessario fornire degli esempi reali e anonimizzati (es. file CSV o Excel) del report del tuo broker.
+* **Se sei uno sviluppatore**: puoi procedere direttamente per conto tuo alla loro implementazione. Consulta la [Guida al Registry & Plugin System](../developer/architecture/patterns/registry_pattern.md) e le guide specifiche collegate nella tabella sopra per scoprire come creare i plugin.
+
 ### :art: Idee UI/UX
 
-Miglioramenti estetici, suggerimenti per il layout, potenziamenti dell'accessibilità — se vedi qualcosa che potrebbe apparire o funzionare meglio, diccelo!
+Miglioramenti estetici, suggerimenti per il layout, potenziamenti dell'accessibilità — se vedi qualcosa che potrebbe apparire o funzionare meglio, diccelo inviando una segnalazione tramite il nostro [Modulo di Suggerimenti UX/Idee](https://github.com/Librefolio/LibreFolio/issues/new?template=idea.yml) su GitHub.
 
 ### :bug: Segnalazione Bug
 
-Trovare e segnalare chiaramente i problemi è incredibilmente utile. Apri una nuova [GitHub Issue](https://github.com/Librefolio/LibreFolio/issues) con la parola chiave **`[BUG]`** all'inizio del titolo.
+Trovare e segnalare chiaramente i problemi è incredibilmente utile. Apri una nuova segnalazione utilizzando il nostro [Modulo di Report Bug](https://github.com/Librefolio/LibreFolio/issues/new?template=bug_report.yml) su GitHub.
 
-Includi screenshot, informazioni sul browser e i passaggi per riprodurre l'errore — contano anche le incongruenze estetiche.
+Il modulo ti guiderà nell'inserimento delle informazioni sul browser, del metodo di deploy e dei log di errore.
 
 ---
 
-## :bulb: Condividi Idee e Richiedi Funzionalità
+## :rocket: Richieste di Funzionalità
 
-Hai un'idea o desideri una nuova funzionalità? Apri una [GitHub Issue](https://github.com/Librefolio/LibreFolio/issues) utilizzando la parola chiave appropriata all'inizio del titolo:
-
-| Parola chiave | Quando usarla |
-|---------|------------|
-| **`[IDEA]`** | Suggerimenti generali, miglioramenti UX, idee per il workflow |
-| **`[FEATURE]`** | Richieste di funzionalità specifiche con un caso d'uso chiaro |
+Proponi funzionalità specifiche con casi d'uso chiari compilando il nostro [Modulo di Richiesta Feature](https://github.com/Librefolio/LibreFolio/issues/new?template=feature_request.yml) su GitHub.
 
 Ogni richiesta sarà valutata e presa in considerazione non appena ci sarà la capacità di svilupparla. Le richieste ben descritte con esempi concreti vengono prioritizzate più velocemente.
 

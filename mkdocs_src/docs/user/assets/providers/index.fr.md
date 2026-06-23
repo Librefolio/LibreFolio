@@ -26,19 +26,26 @@ LibreFolio prend en charge plusieurs fournisseurs de prix pour récupérer autom
  </a>
  <a href="css-scraper/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
  <div style="display: flex; align-items: center; gap: 0.75rem;">
- <img src="../../static/cssscraper.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="CSS Scraper icon">
+ <img src="../../../../static/cssscraper.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="CSS Scraper icon">
  <span class="card-title" style="margin: 0;">CSS Scraper</span>
  </div>
  <span class="card-desc">Scraper via sélecteur de page web pour des prix d'obligations personnalisés ou des actifs exotiques.</span>
  </a>
  <a href="scheduled-investment/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
  <div style="display: flex; align-items: center; gap: 0.75rem;">
- <img src="../../static/scheduled_investment.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Scheduled Investment icon">
+ <img src="../../../../static/scheduled_investment.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Scheduled Investment icon">
  <span class="card-title" style="margin: 0;">Investissement Programmé</span>
  </div>
  <span class="card-desc">Actifs à revenu fixe calculant la valeur via des échéanciers d'intérêts.</span>
  </a>
-</div>
+ <a href="../../../community/contribute/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+  <div style="display: flex; align-items: center; gap: 0.75rem;">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--md-accent-fg-color);"><path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"/></svg>
+  <span class="card-title" style="margin: 0;">Demander un Nouveau Plugin</span>
+  </div>
+  <span class="card-desc">Votre fournisseur manque ? Demandez un nouveau plugin ou contribuez !</span>
+ </a>
+ </div>
 
 ## 📊 Comparaison des fournisseurs
 
@@ -47,8 +54,8 @@ LibreFolio prend en charge plusieurs fournisseurs de prix pour récupérer autom
 | <img src="https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Yahoo Finance** | ✅ | ✅ | ✅ | Ticker (ex: `AAPL`, `VWCE.DE`) | Idéal pour les actions, ETF, fonds communs |
 | <img src="https://www.justetf.com/android-chrome-144x144.png?v2" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **justETF** | ✅ (EUR) | ✅ | ✅ | ISIN (ex: `IE00BK5BQT80`) | ETF européens, multi-devises |
 | <img src="https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Borsa Italiana** | ✅ | ✅ | ✅ | ISIN ou code alpha | Actions, obligations et ETF italiens |
-| <img src="../../static/cssscraper.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CSS Scraper** | ✅ | ❌ | ❌ | URL | Scrape les données de prix de n'importe quelle page web |
-| <img src="../../static/scheduled_investment.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Investissement Programmé** | ✅ | ✅ | ❌ | Auto-généré | Instruments à revenu fixe avec échéanciers d'intérêts |
+| <img src="../../../../static/cssscraper.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CSS Scraper** | ✅ | ❌ | ❌ | URL | Scrape les données de prix de n'importe quelle page web |
+| <img src="../../../../static/scheduled_investment.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Investissement Programmé** | ✅ | ✅ | ❌ | Auto-généré | Instruments à revenu fixe avec échéanciers d'intérêts |
 
 ## 🎯 Choisir un fournisseur
 
