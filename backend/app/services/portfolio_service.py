@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
-from typing import NamedTuple, Optional
+from typing import Any, NamedTuple, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,7 +43,11 @@ from backend.app.schemas.portfolio import (
     AssetHistoryPoint,
     BrokerBreakdown,
     ClosedLotSchema,
+    DataQualityIssue,
     FIFOLotsResponse,
+    IssueCode,
+    IssueDomain,
+    IssueSeverity,
     MissingPriceAsset,
     OpenLotSchema,
     PortfolioHistoryPoint,
@@ -59,6 +63,7 @@ from backend.app.services.settings_service import get_global_setting
 from backend.app.utils.financial.fifo_utils import FIFOTransactionInput, calculate_fifo_lots
 from backend.app.utils.financial.roi_utils import (
     CashFlowInput,
+    NAVSnapshot,
     annualized_to_cumulative,
     calculate_mwrr,
     calculate_mwrr_series,
@@ -564,6 +569,7 @@ class PortfolioService:
         include_breakdown: bool = False,
         target_currency_override: str | None = None,
         date_from: date_type | None = None,
+        date_to: date_type | None = None,
         _precomputed_engine_result=None,
     ) -> PortfolioSummary:
         """Return aggregated portfolio summary via PortfolioCalculationEngine.
@@ -607,6 +613,8 @@ class PortfolioService:
         accesses = await self._get_user_broker_access(user_id, broker_ids)
 
         total_invested = Decimal("0")
+        _total_deposited = Decimal("0")
+        _total_withdrawn = Decimal("0")
         total_cost_basis = Decimal("0")
         all_cash_balances: dict[str, Decimal] = defaultdict(Decimal)
         all_holdings: list[PortfolioHolding] = []
@@ -615,6 +623,8 @@ class PortfolioService:
         missing_price_assets: list[MissingPriceAsset] = []
         _income_accum = Decimal("0")
         _fees_taxes_accum = Decimal("0")
+        _fees_accum = Decimal("0")
+        _taxes_accum = Decimal("0")
         _realized_accum = Decimal("0")
         _INCOME_TYPES = {TransactionType.DIVIDEND, TransactionType.INTEREST}
         _FEE_TAX_TYPES = {TransactionType.FEE, TransactionType.TAX}
@@ -647,15 +657,27 @@ class PortfolioService:
                     all_missing_pairs.append(WACMissingPairInfo(pair=pair_key, dates=[tx.date]))
                     continue
 
+                # Accumulate income, fees, and net deposited capital for period breakdown
+                after_start = (date_from is None or tx.date > date_from)
+                before_end = (date_to is None or tx.date <= date_to)
+                in_period = after_start and before_end
+
                 if tx.type in _CASH_FLOW_TYPES:
                     total_invested += amount_base_signed * share
+                    if in_period:
+                        if tx.type in _DEPOSIT_TYPES:
+                            _total_deposited += abs(amount_base_signed) * share
+                        else:
+                            _total_withdrawn += abs(amount_base_signed) * share
 
-                # Accumulate income and fees for period breakdown
-                in_period = (date_from is None or tx.date > date_from)
                 if in_period and tx.type in _INCOME_TYPES:
                     _income_accum += abs(amount_base_signed) * share
                 if in_period and tx.type in _FEE_TAX_TYPES:
                     _fees_taxes_accum += abs(amount_base_signed) * share
+                    if tx.type == TransactionType.FEE:
+                        _fees_accum += abs(amount_base_signed) * share
+                    else:
+                        _taxes_accum += abs(amount_base_signed) * share
 
             # Holding transactions — group by asset
             txns_by_asset: dict[int, list[Transaction]] = defaultdict(list)
@@ -676,8 +698,9 @@ class PortfolioService:
                 for tx in asset_txns:
                     if tx.type != TransactionType.SELL:
                         continue
-                    in_period = (date_from is None or tx.date > date_from)
-                    if not in_period:
+                    after_start = (date_from is None or tx.date > date_from)
+                    before_end = (date_to is None or tx.date <= date_to)
+                    if not (after_start and before_end):
                         continue
                     sell_qty = abs(tx.quantity or Decimal("0"))
                     if sell_qty == 0 or tx.id is None:
@@ -831,7 +854,10 @@ class PortfolioService:
                 period_start_date_perf = nav_snapshots[0].date
 
             synthetic_cf = CashFlowInput(date=period_start_date_perf, amount=-period_start_nav_perf)
-            period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date > period_start_date_perf]
+            if period_start_nav_perf > 0:
+                period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date > period_start_date_perf]
+            else:
+                period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date >= period_start_date_perf]
             period_navs = [s for s in nav_snapshots if s.date >= period_start_date_perf]
         else:
             period_cfs = cash_flows_perf
@@ -852,10 +878,12 @@ class PortfolioService:
             except (ValueError, ZeroDivisionError):
                 twrr_result = None
             if period_net_invested > 0:
-                initial_nav_for_mwrr = period_start_nav_perf
+                # Use first actual NAV when period_start is 0 (portfolio starts from nothing)
+                # This matches calculate_mwrr_series which uses sorted_navs[0].nav
+                initial_nav_for_mwrr = period_start_nav_perf if period_start_nav_perf > 0 else (period_navs[0].nav if period_navs else Decimal("0"))
                 mwrr_point = await asyncio.to_thread(
                     calculate_mwrr, period_cfs, initial_nav_for_mwrr,
-                    engine_nav, period_start_date_perf, today,
+                    engine_nav, period_start_date_perf, date_to or today,
                 )
                 mwrr_result = mwrr_point.mwrr
 
@@ -863,7 +891,7 @@ class PortfolioService:
         mwrr_period_days: int | None = None
         mwrr_cumulative: Decimal | None = None
         if period_navs:
-            mwrr_period_days = (today - period_start_date_perf).days
+            mwrr_period_days = ((date_to or today) - period_start_date_perf).days
             mwrr_cumulative = annualized_to_cumulative(mwrr_result, mwrr_period_days) if mwrr_result is not None else None
 
         total_gl = engine_nav - total_invested
@@ -881,15 +909,19 @@ class PortfolioService:
                 pre_period = [s for s in nav_snapshots if s.date <= date_from]
                 # If date_from is before any portfolio data, NAV was 0
                 period_nav_start_val = pre_period[-1].nav if pre_period else Decimal("0")
-                # Sum external CFs within the period
+                # Sum external CFs within the period (respecting both boundaries)
                 period_net_flows_val = sum(
-                    (-cf.amount) for cf in cash_flows_perf if cf.date > date_from
+                    (-cf.amount) for cf in cash_flows_perf
+                    if cf.date > date_from and (date_to is None or cf.date <= date_to)
                 )
             else:
                 # Full history: NAV at t=0 is effectively 0 (portfolio starts empty)
                 period_nav_start_val = Decimal("0")
-                # All CFs (sign convention: deposit = negative in CashFlowInput → negate for net inflow)
-                period_net_flows_val = sum((-cf.amount) for cf in cash_flows_perf)
+                # All CFs up to date_to
+                period_net_flows_val = sum(
+                    (-cf.amount) for cf in cash_flows_perf
+                    if (date_to is None or cf.date <= date_to)
+                )
 
             period_pnl_val = engine_nav - period_nav_start_val - (period_net_flows_val or Decimal("0"))
 
@@ -898,6 +930,7 @@ class PortfolioService:
         period_ugl_end: Decimal | None = None
         period_ugl_delta: Decimal | None = None
         period_book_value_start_val: Decimal | None = None
+        period_market_value_start_val: Decimal | None = None
         period_realized_val: Decimal | None = None
         period_income_val: Decimal | None = None
         period_fees_taxes_val: Decimal | None = None
@@ -915,12 +948,15 @@ class PortfolioService:
                     start_ds = pre_states[-1]
                     period_ugl_start = start_ds.market_value - start_ds.open_cost_basis
                     period_book_value_start_val = start_ds.book_value
+                    period_market_value_start_val = start_ds.market_value
                 else:
                     period_ugl_start = Decimal("0")
                     period_book_value_start_val = Decimal("0")
+                    period_market_value_start_val = Decimal("0")
             else:
                 period_ugl_start = Decimal("0")
                 period_book_value_start_val = Decimal("0")
+                period_market_value_start_val = Decimal("0")
 
             period_ugl_delta = period_ugl_end - period_ugl_start
 
@@ -951,6 +987,25 @@ class PortfolioService:
                     currency=base_currency,
                 ))
 
+        # For manual assets (no provider, valued at cost): suppress MISSING_PRICE
+        # They're already represented by TRANSACTION_IMPLIED which is expected behavior
+        from backend.app.db.models import AssetProviderAssignment  # noqa: PLC0415
+        provider_result = await self.db.execute(
+            select(AssetProviderAssignment.asset_id)
+        )
+        assets_with_provider = {row[0] for row in provider_result.fetchall()}
+        # Remove from missing_price_assets if the asset is manual (no provider) AND implied (valued at cost)
+        missing_price_assets = [
+            a for a in missing_price_assets
+            if a.asset_id in assets_with_provider or a.asset_id not in implied_asset_ids
+        ]
+        # For truly manual assets (implied, no provider): suppress TRANSACTION_IMPLIED too
+        # since cost valuation is their intended/permanent behavior
+        manual_implied_ids = implied_asset_ids - assets_with_provider
+        transaction_implied_assets = [
+            a for a in transaction_implied_assets if a.asset_id not in manual_implied_ids
+        ]
+
         data_quality = views.build_data_quality_report(
             missing_price_assets_dto=missing_price_assets,
             missing_fx_pairs_dto=self._merge_missing_pairs(all_missing_pairs),
@@ -972,7 +1027,11 @@ class PortfolioService:
             in_transit_book_value=Currency(code=base_currency, amount=last_state.in_transit_book_value) if last_state and last_state.in_transit_book_value else None,
             book_value=Currency(code=base_currency, amount=last_state.book_value) if last_state else None,
             unrealized_gain_loss=Currency(code=base_currency, amount=last_state.unrealized_gain_loss) if last_state else None,
+            total_deposited=Currency(code=base_currency, amount=_total_deposited) if _total_deposited else None,
+            total_withdrawn=Currency(code=base_currency, amount=_total_withdrawn) if _total_withdrawn else None,
+            net_deposited_capital=Currency(code=base_currency, amount=_total_deposited - _total_withdrawn),
             period_nav_start=Currency(code=base_currency, amount=period_nav_start_val) if period_nav_start_val is not None else None,
+            period_market_value_start=Currency(code=base_currency, amount=period_market_value_start_val) if period_market_value_start_val is not None else None,
             period_book_value_start=Currency(code=base_currency, amount=period_book_value_start_val) if period_book_value_start_val is not None else None,
             period_net_flows=Currency(code=base_currency, amount=period_net_flows_val) if period_net_flows_val is not None else None,
             period_pnl=Currency(code=base_currency, amount=period_pnl_val) if period_pnl_val is not None else None,
@@ -982,6 +1041,8 @@ class PortfolioService:
             period_realized_gain_loss=Currency(code=base_currency, amount=period_realized_val) if period_realized_val is not None else None,
             period_income=Currency(code=base_currency, amount=period_income_val) if period_income_val is not None else None,
             period_fees_taxes=Currency(code=base_currency, amount=period_fees_taxes_val) if period_fees_taxes_val is not None else None,
+            period_fees=Currency(code=base_currency, amount=_fees_accum) if _fees_accum else None,
+            period_taxes=Currency(code=base_currency, amount=_taxes_accum) if _taxes_accum else None,
             period_other_result=Currency(code=base_currency, amount=period_other_result_val) if period_other_result_val is not None else None,
             twrr_percent=twrr_result,
             mwrr_annualized_percent=mwrr_result,
@@ -1006,10 +1067,12 @@ class PortfolioService:
         date_to: date_type | None = None,
         target_currency_override: str | None = None,
         _precomputed_engine_result=None,
+        _mwrr_use_warm_start: bool = True,
     ) -> list[PortfolioHistoryPoint]:
         """Return daily portfolio value series via PortfolioCalculationEngine.
 
         _precomputed_engine_result: if provided by get_report(), skip engine re-run.
+        _mwrr_use_warm_start: if False, use cold-start for MWRR series (no warm-start).
         """
         from backend.app.services.portfolio_engine import (  # noqa: PLC0415
             DerivedViewsBuilder,
@@ -1052,8 +1115,16 @@ class PortfolioService:
                 period_start_date = nav_snapshots[0].date
 
             synthetic_cf = CashFlowInput(date=period_start_date, amount=-period_start_nav)
-            period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date > period_start_date]
+            # When period_start_nav > 0, CFs on start date are already embedded in starting NAV (exclude with >)
+            # When period_start_nav == 0, CFs on start date must be included (use >=)
+            if period_start_nav > 0:
+                period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date > period_start_date]
+            else:
+                period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date >= period_start_date]
             period_nav_snapshots = [s for s in nav_snapshots if s.date >= period_start_date]
+            # When period_start_nav > 0, ensure first snapshot matches so MWRR series is consistent
+            if period_start_nav > 0 and period_nav_snapshots and period_nav_snapshots[0].nav != period_start_nav:
+                period_nav_snapshots = [NAVSnapshot(date=period_start_date, nav=period_start_nav)] + period_nav_snapshots
         else:
             period_cash_flows = cash_flows
             period_nav_snapshots = nav_snapshots
@@ -1066,7 +1137,8 @@ class PortfolioService:
             twrr_series = calculate_twrr_series(period_nav_snapshots, period_cash_flows)
             roi_series = calculate_simple_roi_series(period_nav_snapshots, period_cash_flows)
             mwrr_series = await asyncio.to_thread(
-                calculate_mwrr_series, period_nav_snapshots, period_cash_flows
+                calculate_mwrr_series, period_nav_snapshots, period_cash_flows,
+                use_warm_start=_mwrr_use_warm_start,
             )
             twrr_map = {pt.date: pt.twrr for pt in twrr_series}
             roi_map = {pt.date: pt.roi for pt in roi_series}
@@ -1104,6 +1176,7 @@ class PortfolioService:
                     in_transit_asset_cost_basis=h.get("in_transit_asset_cost_basis"),
                     in_transit_book_value=h.get("in_transit_book_value"),
                     book_value=h.get("book_value"),
+                    net_invested=h.get("net_invested"),
                     unrealized_gain_loss=h.get("unrealized_gain_loss"),
                     twrr=twrr,
                     mwrr_annualized=mwrr_ann,
@@ -1165,6 +1238,7 @@ class PortfolioService:
                 target_currency_override=base_currency,
                 include_breakdown=query.include_breakdown,
                 date_from=date_from,
+                date_to=date_to,
                 _precomputed_engine_result=engine_result,
             )
 
@@ -1181,6 +1255,54 @@ class PortfolioService:
                 _precomputed_engine_result=engine_result,
             )
 
+        # ── 3b. MWRR series reliability check ──
+        mwrr_series_unreliable = False
+        _mwrr_divergence_info: dict[str, Any] = {}
+        if summary and history and len(history) >= 2:
+            summary_mwrr_cum = summary.mwrr_cumulative_percent
+            history_last_mwrr_cum = history[-1].mwrr_cumulative
+            if summary_mwrr_cum is not None and history_last_mwrr_cum is not None:
+                divergence = abs(summary_mwrr_cum - history_last_mwrr_cum)
+                # Relative tolerance: 5% of summary value or 50bp absolute, whichever is larger
+                tolerance = max(Decimal("0.005"), abs(summary_mwrr_cum) * Decimal("0.05"))
+                if divergence > tolerance:
+                    # Retry with cold-start
+                    history = await self.get_history(
+                        user_id=user_id,
+                        broker_ids=query.broker_ids,
+                        date_from=date_from,
+                        date_to=date_to,
+                        target_currency_override=base_currency,
+                        _precomputed_engine_result=engine_result,
+                        _mwrr_use_warm_start=False,
+                    )
+                    # Re-check invariant
+                    history_last_mwrr_cum = history[-1].mwrr_cumulative if history else None
+                    if history_last_mwrr_cum is not None:
+                        divergence = abs(summary_mwrr_cum - history_last_mwrr_cum)
+                    if history_last_mwrr_cum is None or divergence > tolerance:
+                        # Find first date where cumulative diverges significantly
+                        first_bad_date: str | None = None
+                        for pt in history:
+                            if pt.mwrr_cumulative is not None and summary.mwrr_annualized_percent is not None:
+                                days_from_start = (pt.date - history[0].date).days
+                                expected_cum = annualized_to_cumulative(summary.mwrr_annualized_percent, days_from_start)
+                                if expected_cum is not None and abs(pt.mwrr_cumulative - expected_cum) > tolerance:
+                                    first_bad_date = str(pt.date)
+                                    break
+                        # Store info for issue
+                        _mwrr_divergence_info = {
+                            "summary_cum": str(round(float(summary_mwrr_cum) * 100, 2)),
+                            "series_cum": str(round(float(history_last_mwrr_cum or 0) * 100, 2)),
+                            "divergence_pp": str(round(float(divergence) * 100, 2)),
+                            "first_bad_date": first_bad_date or "unknown",
+                        }
+                        # Null out MWRR in history
+                        mwrr_series_unreliable = True
+                        for pt in history:
+                            object.__setattr__(pt, "mwrr_annualized", None)
+                            object.__setattr__(pt, "mwrr_cumulative", None)
+
         # ── 4. Allocation history (all 3 dimensions from same engine result) ──
         alloc_history: AllocationHistoryDimensions | None = None
         if query.include_allocation_history:
@@ -1195,6 +1317,17 @@ class PortfolioService:
         data_quality = summary.data_quality if summary else views.build_data_quality_report(
             mwrr_available=False,
         )
+
+        # Append MWRR series unreliable issue if needed
+        if mwrr_series_unreliable and data_quality:
+            mwrr_issue = DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.MWRR_SERIES_UNRELIABLE,
+                severity=IssueSeverity.WARNING,
+                message_i18n_key="dataQuality.mwrrSeriesUnreliable",
+                message_params=_mwrr_divergence_info,
+            )
+            data_quality.issues.append(mwrr_issue)
 
         # ── 6. Metadata ──
         computed_from = engine_result.daily_states[0].date if engine_result.daily_states else None

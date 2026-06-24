@@ -468,3 +468,97 @@ class TestPortfolioServiceGetSummary:
         assert summary is not None
         assert summary.holdings == []
         assert summary.net_worth.amount == Decimal("0")
+
+
+# =============================================================================
+# TestNetDepositedCapital
+# =============================================================================
+
+
+class TestNetDepositedCapital:
+    """Tests for total_deposited, total_withdrawn, net_deposited_capital fields."""
+
+    @pytest.mark.asyncio
+    async def test_deposits_only(self, session, test_user, broker_with_access):
+        """Only deposits → total_deposited = sum, total_withdrawn = None, net = deposited."""
+        broker, _ = broker_with_access
+        session.add(Transaction(
+            broker_id=broker.id, type=TransactionType.DEPOSIT,
+            date=date(2025, 1, 1), amount=Decimal("5000"), currency="EUR",
+        ))
+        session.add(Transaction(
+            broker_id=broker.id, type=TransactionType.DEPOSIT,
+            date=date(2025, 2, 1), amount=Decimal("3000"), currency="EUR",
+        ))
+        await session.flush()
+
+        service = PortfolioService(session)
+        summary = await service.get_summary(user_id=test_user.id)
+
+        assert summary.total_deposited is not None
+        assert summary.total_deposited.amount == Decimal("8000")
+        assert summary.total_withdrawn is None  # 0 → None
+        assert summary.net_deposited_capital is not None
+        assert summary.net_deposited_capital.amount == Decimal("8000")
+
+    @pytest.mark.asyncio
+    async def test_deposits_and_withdrawals(self, session, test_user, broker_with_access):
+        """Deposits + withdrawals → net = deposited - withdrawn."""
+        broker, _ = broker_with_access
+        session.add(Transaction(
+            broker_id=broker.id, type=TransactionType.DEPOSIT,
+            date=date(2025, 1, 1), amount=Decimal("10000"), currency="EUR",
+        ))
+        session.add(Transaction(
+            broker_id=broker.id, type=TransactionType.WITHDRAWAL,
+            date=date(2025, 3, 1), amount=Decimal("-2000"), currency="EUR",
+        ))
+        await session.flush()
+
+        service = PortfolioService(session)
+        summary = await service.get_summary(user_id=test_user.id)
+
+        assert summary.total_deposited.amount == Decimal("10000")
+        assert summary.total_withdrawn.amount == Decimal("2000")
+        assert summary.net_deposited_capital.amount == Decimal("8000")
+
+    @pytest.mark.asyncio
+    async def test_buy_sell_fee_tax_excluded(self, session, test_user, broker_with_access, test_asset):
+        """BUY, SELL, FEE, TAX, DIVIDEND, INTEREST do not affect net_deposited_capital."""
+        broker, _ = broker_with_access
+        session.add(Transaction(
+            broker_id=broker.id, type=TransactionType.DEPOSIT,
+            date=date(2025, 1, 1), amount=Decimal("10000"), currency="EUR",
+        ))
+        session.add(Transaction(
+            broker_id=broker.id, type=TransactionType.BUY,
+            date=date(2025, 1, 2), amount=Decimal("-5000"), currency="EUR",
+            asset_id=test_asset.id, quantity=Decimal("100"),
+        ))
+        session.add(Transaction(
+            broker_id=broker.id, type=TransactionType.SELL,
+            date=date(2025, 2, 1), amount=Decimal("3000"), currency="EUR",
+            asset_id=test_asset.id, quantity=Decimal("-50"),
+        ))
+        session.add(Transaction(
+            broker_id=broker.id, type=TransactionType.FEE,
+            date=date(2025, 1, 2), amount=Decimal("-10"), currency="EUR",
+        ))
+        session.add(Transaction(
+            broker_id=broker.id, type=TransactionType.TAX,
+            date=date(2025, 2, 1), amount=Decimal("-15"), currency="EUR",
+        ))
+        session.add(Transaction(
+            broker_id=broker.id, type=TransactionType.DIVIDEND,
+            date=date(2025, 3, 1), amount=Decimal("50"), currency="EUR",
+            asset_id=test_asset.id,
+        ))
+        await session.flush()
+
+        service = PortfolioService(session)
+        summary = await service.get_summary(user_id=test_user.id)
+
+        # Only the DEPOSIT of 10000 counts
+        assert summary.total_deposited.amount == Decimal("10000")
+        assert summary.total_withdrawn is None
+        assert summary.net_deposited_capital.amount == Decimal("10000")
