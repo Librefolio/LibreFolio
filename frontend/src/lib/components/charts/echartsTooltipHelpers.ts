@@ -97,6 +97,45 @@ export function buildTooltipTopN(
     return html;
 }
 
+/**
+ * Build tooltip rows by threshold: show items > threshold%, group rest as "Remaining".
+ * The actual "Other" category (if present in data) is always shown individually.
+ * The grouped "Remaining" row is always last.
+ *
+ * @param items - All items (unsorted).
+ * @param threshold - Minimum % to show individually (e.g. 5).
+ * @param theme - Tooltip theme.
+ * @param remainingLabel - Label for the grouped row (e.g. "Remaining", "Resto").
+ * @param formatValue - Value formatter.
+ */
+export function buildTooltipByThreshold(
+    items: {name: string; value: number; color: string}[],
+    threshold: number,
+    theme: TooltipTheme,
+    remainingLabel: string,
+    formatValue: (v: number) => string = (v) => `${v.toFixed(1)}%`,
+): string {
+    if (items.length === 0) return '';
+
+    const sorted = [...items].sort((a, b) => b.value - a.value);
+    const visible = sorted.filter((i) => i.value >= threshold);
+    const grouped = sorted.filter((i) => i.value < threshold);
+
+    let html = '';
+    for (const item of visible) {
+        html += buildTooltipRow(item.name, formatValue(item.value), item.color);
+    }
+
+    // Grouped small items — always at the very bottom
+    if (grouped.length > 0) {
+        const sumValue = grouped.reduce((s, r) => s + r.value, 0);
+        const label = `${remainingLabel} (${grouped.length})`;
+        html += buildTooltipRow(label, formatValue(sumValue), theme.mutedColor);
+    }
+
+    return html;
+}
+
 // =============================================================================
 // Chart grid colors (non-tooltip but commonly needed)
 // =============================================================================
@@ -113,5 +152,133 @@ export function buildGridColors(isDark: boolean): ChartGridColors {
     return {
         textColor: isDark ? '#94a3b8' : '#64748b',
         gridColor: isDark ? '#1e293b' : '#f1f5f9',
+    };
+}
+
+// =============================================================================
+// Mobile Tooltip Positioning & Auto-Hide
+// =============================================================================
+
+/**
+ * ECharts tooltip `position` function that centers horizontally on the cursor
+ * and places the tooltip ABOVE the finger on touch devices (with a larger gap).
+ *
+ * Use as: `tooltip: { position: tooltipPositionAboveFinger, ... }`
+ */
+export function tooltipPositionAboveFinger(
+    point: [number, number],
+    _params: unknown,
+    _dom: unknown,
+    _rect: unknown,
+    size: {contentSize: [number, number]; viewSize: [number, number]},
+): [number, number] {
+    const tooltipW = size.contentSize[0];
+    const tooltipH = size.contentSize[1];
+    const viewW = size.viewSize[0];
+
+    // Center horizontally on cursor
+    let x = point[0] - tooltipW / 2;
+
+    // On touch: larger gap above finger; on desktop: smaller gap
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const gap = isTouch ? 80 : 30;
+    let y = point[1] - tooltipH - gap;
+    if (y < 0) y = 0;
+
+    // Clamp horizontal to viewport
+    if (x < 8) x = 8;
+    if (x + tooltipW > viewW - 8) x = viewW - tooltipW - 8;
+
+    return [x, y];
+}
+
+/**
+ * ECharts tooltip `position` function that places the tooltip to the LEFT or RIGHT
+ * of the cursor (whichever side has more space), pinned near the top.
+ * This avoids covering area chart labels/emoji directly under the cursor.
+ *
+ * Use as: `tooltip: { position: tooltipPositionSide, ... }`
+ */
+export function tooltipPositionSide(
+    point: [number, number],
+    _params: unknown,
+    _dom: unknown,
+    _rect: unknown,
+    size: {contentSize: [number, number]; viewSize: [number, number]},
+): [number, number] {
+    const tooltipW = size.contentSize[0];
+    const tooltipH = size.contentSize[1];
+    const viewW = size.viewSize[0];
+    const viewH = size.viewSize[1];
+
+    const gapX = 24;
+
+    // Place on the side with more space
+    let x: number;
+    if (point[0] > viewW / 2) {
+        // Cursor on right half → tooltip on left
+        x = point[0] - tooltipW - gapX;
+    } else {
+        // Cursor on left half → tooltip on right
+        x = point[0] + gapX;
+    }
+
+    // Clamp horizontal
+    if (x < 8) x = 8;
+    if (x + tooltipW > viewW - 8) x = viewW - tooltipW - 8;
+
+    // Vertically: pin near top of chart, but not above it
+    let y = 8;
+    if (y + tooltipH > viewH - 8) y = viewH - tooltipH - 8;
+    if (y < 0) y = 0;
+
+    return [x, y];
+}
+
+/**
+ * Set up touch event handlers on a chart container for mobile tooltip behavior:
+ * - Auto-hide tooltip 3s after finger lift
+ *
+ * Returns a cleanup function to remove listeners.
+ *
+ * @param container - The chart container element
+ * @param getInstance - Function to get the current ECharts instance
+ */
+export function setupTooltipAutoHide(
+    container: HTMLElement,
+    getInstance: () => any | undefined,
+): () => void {
+    let hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function clearHideTimer() {
+        if (hideTimer) {
+            clearTimeout(hideTimer);
+            hideTimer = null;
+        }
+    }
+
+    function onTouchStart() {
+        clearHideTimer();
+    }
+
+    function onTouchEnd() {
+        clearHideTimer();
+        const instance = getInstance();
+        if (instance) {
+            hideTimer = setTimeout(() => {
+                instance.dispatchAction({type: 'hideTip'});
+            }, 3000);
+        }
+    }
+
+    container.addEventListener('touchstart', onTouchStart, {passive: true});
+    container.addEventListener('touchend', onTouchEnd);
+    container.addEventListener('touchcancel', onTouchEnd);
+
+    return () => {
+        clearHideTimer();
+        container.removeEventListener('touchstart', onTouchStart);
+        container.removeEventListener('touchend', onTouchEnd);
+        container.removeEventListener('touchcancel', onTouchEnd);
     };
 }
