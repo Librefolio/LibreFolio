@@ -25,6 +25,7 @@
     import * as echarts from 'echarts';
     import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
     import {_ as t} from '$lib/i18n';
+    import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
     // =========================================================================
     // Props
@@ -33,13 +34,17 @@
     interface Props {
         /** Geographic distribution: key = ISO A3 code, value = weight (0-1) */
         data: Record<string, number>;
+        /** Absolute amounts per ISO A3 code in base currency (optional) */
+        amounts?: Record<string, number>;
         /** CSS height of the chart container */
         height?: string;
         /** Language code for localized country names (e.g. 'it', 'en') */
         language?: string;
+        /** Currency code for absolute amount formatting */
+        currency?: string;
     }
 
-    let {data = {}, height = '320px', language = 'en'}: Props = $props();
+    let {data = {}, amounts = {}, height = '320px', language = 'en', currency = 'EUR'}: Props = $props();
 
     // =========================================================================
     // State
@@ -165,14 +170,21 @@
         // Restore full roam on desktop; pinch-zoom only on touch to avoid blocking page scroll
         const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
-        // Fixed label — show flag + translated country name on countries that have data.
+        // Fixed label — show flag + translated country name + % + absolute amount on hover
         const labelFormatter = (params: any) => {
             const iso3 = geoNameToIso3[params.name] ?? '';
             const info = iso3 ? getCountryInfo(iso3) : null;
             const flag = info?.flag_emoji ?? '';
             const displayName = info?.name ?? params.name;
             const prefix = flag ? `${flag} ` : '';
-            return params.value != null && !isNaN(params.value) && params.value > 0 ? `${prefix}${displayName}: ${params.value}%` : `${prefix}${displayName}`;
+            if (params.value != null && !isNaN(params.value) && params.value > 0) {
+                const absAmt = iso3 ? amounts[iso3] : undefined;
+                const amtLine = absAmt != null && absAmt > 0
+                    ? `\n${formatCurrencyAmountPlain(absAmt, currency, {showSign: false})}`
+                    : '';
+                return `${prefix}${displayName}: ${params.value}%${amtLine}`;
+            }
+            return `${prefix}${displayName}`;
         };
 
         const fixedLabelStyle = {

@@ -2,15 +2,15 @@
   AllocationPieChart — Pie chart for allocation distribution (sector or asset type).
 
   Supports two modes:
-  - 'sector' (default): translates sector keys via sectors.* i18n; shows only
-    the leading emoji inside each slice, full label in legend and tooltip.
+  - 'sector' (default): uses emoji from backend AllocationItem; shows emoji inside each slice
   - 'type': translates asset-type keys via assets.types.*; shows the PNG icon
     inside each slice (ECharts rich text), icon + label in legend and tooltip.
 
   Props:
-  - data: Record<string, number> — key → weight (0–1)
+  - data: AllocationEntry[] — name, value (0-100%), amount (abs), optional emoji
   - height: CSS height (default "280px")
   - mode: 'sector' | 'type' (default 'sector')
+  - currency: currency code for absolute value formatting (default 'EUR')
 
   Used by:
   - Dashboard page (allocation panel, both type and sector tabs)
@@ -21,17 +21,28 @@
     import * as echarts from 'echarts';
     import {_ as t} from '$lib/i18n';
     import {sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
     // =========================================================================
-    // Props
+    // Types & Props
     // =========================================================================
+
+    export interface AllocationEntry {
+        name: string;
+        /** Percentage share 0-100 */
+        value: number;
+        /** Absolute amount in base currency */
+        amount: number;
+        /** Emoji from backend (sectors) */
+        emoji?: string | null;
+    }
 
     interface Props {
-        /** Allocation data: key → weight (0-1) */
-        data: Record<string, number>;
+        /** Allocation data array from backend AllocationItem[] */
+        data: AllocationEntry[];
         /** CSS height of the chart container */
         height?: string;
-        /** Display mode: 'sector' uses i18n sector labels with emojis; 'type' uses asset type PNG icons */
+        /** Display mode: 'sector' uses backend emoji + i18n labels; 'type' uses asset type PNG icons */
         mode?: 'sector' | 'type';
         /**
          * Legend placement strategy.
@@ -39,9 +50,11 @@
          * - 'bottom': legend always below the pie (better for constrained-height panels)
          */
         legendPosition?: 'auto' | 'bottom';
+        /** Currency code for absolute amount formatting */
+        currency?: string;
     }
 
-    let {data = {}, height = '280px', mode = 'sector', legendPosition = 'auto'}: Props = $props();
+    let {data = [], height = '280px', mode = 'sector', legendPosition = 'auto', currency = 'EUR'}: Props = $props();
 
     // =========================================================================
     // State
@@ -105,35 +118,35 @@
         const tr = $t;
         const palette = isDark ? PALETTE_DARK : PALETTE_LIGHT;
 
-        const entries = Object.entries(data).filter(([, v]) => v > 0);
+        const entries = data.filter((e) => e.value > 0);
         if (entries.length === 0) {
             chartInstance.setOption({series: []}, true);
             return;
         }
 
-        // Build chart data.
-        // sector: name = full translated label (e.g. "💻 Technology")
-        // type:   name = raw key (e.g. "STOCK") — translated in formatters
+        // Build chart data — use emoji+translated name as display label for sector mode
         const chartData = entries
-            .map(([key, value]) => {
-                let name: string;
+            .map((entry) => {
+                let displayName: string;
                 if (mode === 'sector') {
-                    const i18nKey = `sectors.${sectorI18nKey(key)}`;
-                    name = tr(i18nKey) !== i18nKey ? tr(i18nKey) : key.replace(/_/g, ' ');
+                    const i18nKey = `sectors.${sectorI18nKey(entry.name)}`;
+                    const translated = tr(i18nKey) !== i18nKey ? tr(i18nKey) : entry.name.replace(/_/g, ' ');
+                    const emoji = entry.emoji ?? '';
+                    displayName = emoji ? `${emoji} ${translated}` : translated;
                 } else {
-                    name = key;
+                    displayName = entry.name;
                 }
-                return {name, value: +(value * 100).toFixed(2)};
+                return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name, emoji: entry.emoji ?? ''};
             })
             .sort((a, b) => b.value - a.value);
 
         // Build ECharts rich-text image styles for type mode (one key per asset type)
         const richStyles: Record<string, any> = {};
         if (mode === 'type') {
-            for (const {name} of chartData) {
-                const safeKey = `img_${name.toUpperCase().replace(/[^A-Z_]/g, '')}`;
+            for (const {rawName} of chartData) {
+                const safeKey = `img_${rawName.toUpperCase().replace(/[^A-Z_]/g, '')}`;
                 richStyles[safeKey] = {
-                    backgroundColor: {image: getAssetTypeIconUrl(name)},
+                    backgroundColor: {image: getAssetTypeIconUrl(rawName)},
                     width: 16,
                     height: 16,
                     align: 'center',
@@ -146,7 +159,7 @@
         const isNarrow = containerWidth < 400;
         const legendBelow = legendPosition === 'bottom' || isNarrow;
 
-        // Legend — type mode adds rich-text icon in front of each label
+        // Legend — always scrollable to avoid 4+ unwrapped rows
         const legendBaseTextStyle: any = {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11};
         const legendTextStyle = mode === 'type' ? {...legendBaseTextStyle, rich: richStyles} : legendBaseTextStyle;
 
@@ -154,8 +167,10 @@
             mode === 'type'
                 ? {
                       formatter: (name: string) => {
-                          const safeKey = `img_${name.toUpperCase().replace(/[^A-Z_]/g, '')}`;
-                          return `{${safeKey}|} ${tr(`assets.types.${name}`) || name}`;
+                          const rawKey = name.toUpperCase().replace(/[^A-Z_]/g, '');
+                          const safeKey = `img_${rawKey}`;
+                          const translated = tr(`assets.types.${rawKey}`) || name;
+                          return `{${safeKey}|} ${translated}`;
                       },
                   }
                 : {};
@@ -163,12 +178,16 @@
         const legendConfig: any = legendBelow
             ? {
                   ...legendTypeExtras,
-                  type: 'plain',
+                  type: 'scroll',
                   orient: 'horizontal',
                   bottom: 0,
                   left: 'center',
                   width: '95%',
                   textStyle: legendTextStyle,
+                  pageTextStyle: {color: isDark ? '#94a3b8' : '#64748b', fontSize: 10},
+                  pageIconColor: isDark ? '#94a3b8' : '#64748b',
+                  pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1',
+                  pageButtonGap: 4,
               }
             : {
                   ...legendTypeExtras,
@@ -186,15 +205,18 @@
         const pieCenter = legendBelow ? ['50%', '40%'] : ['35%', '50%'];
         const pieRadius = legendBelow ? ['25%', '55%'] : ['35%', '70%'];
 
-        // Inner label — sector: emoji only; type: PNG icon via rich text.
-        // Both modes wrap in semi-transparent white circle badge for contrast.
+        // Inner label — sector: emoji only (from data.emoji); type: PNG icon via rich text.
         const labelConfig: any =
             mode === 'sector'
                 ? {
                       show: true,
                       position: 'inner',
-                      // Extract only the leading emoji (first token before the space)
-                      formatter: (params: any) => (params.name as string).split(' ')[0],
+                      // Show only the emoji (first token before the space in display name)
+                      formatter: (params: any) => {
+                          const first = (params.name as string).split(' ')[0];
+                          // If it looks like an emoji (non-ASCII), use it; otherwise skip
+                          return first && first.codePointAt(0)! > 127 ? first : '';
+                      },
                       fontSize: 14,
                       backgroundColor: 'rgba(255, 255, 255, 0.75)',
                       borderRadius: 20,
@@ -203,22 +225,36 @@
                 : {
                       show: true,
                       position: 'inner',
-                      formatter: (params: any) => `{img_${(params.name as string).toUpperCase().replace(/[^A-Z_]/g, '')}|}`,
+                      formatter: (params: any) => {
+                          const rawKey = (params.name as string).toUpperCase().replace(/[^A-Z_]/g, '');
+                          return `{img_${rawKey}|}`;
+                      },
                       rich: richStyles,
                       backgroundColor: 'rgba(255, 255, 255, 0.75)',
                       borderRadius: 20,
                       padding: [4, 4],
                   };
 
-        // Tooltip — icon/emoji + full translated name + percentage
+        // Build amount lookup by display name for tooltip
+        const amountByName: Record<string, number> = {};
+        for (const item of chartData) {
+            amountByName[item.name] = item.amount;
+        }
+
+        // Tooltip — emoji + translated label + percentage + absolute amount (on new line)
         const tooltipFormatter = (params: any) => {
+            const absAmount = amountByName[params.name];
+            const amountLine = absAmount != null && absAmount > 0
+                ? `<br/><span style="font-size:11px;opacity:0.8">${formatCurrencyAmountPlain(absAmount, currency, {showSign: false})}</span>`
+                : '';
             if (mode === 'type') {
-                const translated = tr(`assets.types.${params.name}`) || params.name;
-                const iconUrl = getAssetTypeIconUrl(params.name);
-                return `<img src="${iconUrl}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">${translated}: ${params.value}%`;
+                const rawKey = (params.name as string).toUpperCase().replace(/[^A-Z_]/g, '');
+                const translated = tr(`assets.types.${rawKey}`) || params.name;
+                const iconUrl = getAssetTypeIconUrl(rawKey);
+                return `<img src="${iconUrl}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">${translated}: ${params.value}%${amountLine}`;
             }
-            // Sector: name already contains the leading emoji
-            return `${params.name}: ${params.value}%`;
+            // Sector: display name already contains the emoji prefix
+            return `${params.name}: ${params.value}%${amountLine}`;
         };
 
         const option: echarts.EChartsOption = {

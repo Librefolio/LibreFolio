@@ -42,6 +42,24 @@ from backend.app.utils.financial.valuation_utils import compute_holding_value
 # Transaction types that are always external cash flows when unlinked
 _EXTERNAL_CASH_TYPES = {TransactionType.DEPOSIT, TransactionType.WITHDRAWAL}
 
+# Emoji mapping for sector allocation keys (backend-canonical, language-independent)
+SECTOR_EMOJIS: dict[str, str] = {
+    "Technology": "💻",
+    "Financials": "🏦",
+    "Consumer Discretionary": "🛍️",
+    "Health Care": "💊",
+    "Industrials": "🏭",
+    "Basic Materials": "⛏️",
+    "Energy": "⚡",
+    "Consumer Staples": "🛒",
+    "Telecommunication": "📡",
+    "Real Estate": "🏢",
+    "Utilities": "🔌",
+    "Other": "📦",
+    "Unknown": "❓",
+    "Liquidity": "💵",
+}
+
 # Linked transaction types (require or support related_transaction_id)
 _LINKED_TYPES = {
     TransactionType.TRANSFER,
@@ -840,18 +858,19 @@ class DerivedViewsBuilder:
 
         last = self.daily_states[-1]
 
-        def _alloc(d: dict[str, Decimal]) -> list[dict]:
+        def _alloc(d: dict[str, Decimal], use_sector_emoji: bool = False) -> list[dict]:
             total = sum(d.values()) or Decimal("1")
             return [
                 {
                     "name": name,
                     "value": (amt / total * 100).quantize(Decimal("0.01")),
                     "amount": amt,
+                    "emoji": SECTOR_EMOJIS.get(name) if use_sector_emoji else None,
                 }
                 for name, amt in sorted(d.items(), key=lambda x: -x[1])
             ]
 
-        return _alloc(last.by_type), _alloc(last.by_sector), _alloc(last.by_geography)
+        return _alloc(last.by_type), _alloc(last.by_sector, use_sector_emoji=True), _alloc(last.by_geography)
 
     def build_allocation_history(
         self, dimension: str, date_from: date_type | None = None
