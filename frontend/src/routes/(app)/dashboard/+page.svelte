@@ -161,13 +161,25 @@
         return html;
     }
 
-    /** Allocation data for charts (Record<string, number> where value = 0-1). */
-    const allocationByType = $derived(summary ? Object.fromEntries((summary.allocation_by_type ?? []).map((i) => [i.name, parseFloat(i.value) / 100])) : {});
-    const allocationBySector = $derived(summary ? Object.fromEntries((summary.allocation_by_sector ?? []).map((i) => [i.name, parseFloat(i.value) / 100])) : {});
-    const allocationByGeo = $derived(summary ? Object.fromEntries((summary.allocation_by_geography ?? []).map((i) => [i.name, parseFloat(i.value) / 100])) : {});
+    /** Allocation data for charts — full AllocationEntry[] with amount and emoji. */
+    type AllocEntry = {name: string; value: number; amount: number; emoji?: string | null};
+    function toAllocEntries(items: any[] | null | undefined): AllocEntry[] {
+        if (!items) return [];
+        return (items as any[]).flatMap((i) => {
+            const v = parseFloat(i?.value ?? '0');
+            if (v <= 0) return [];
+            return [{name: i.name ?? '', value: v, amount: parseFloat(i?.amount ?? '0'), emoji: i?.emoji ?? null}];
+        });
+    }
+    const allocationByType = $derived(toAllocEntries(summary?.allocation_by_type as any));
+    const allocationBySector = $derived(toAllocEntries(summary?.allocation_by_sector as any));
+    const allocationByGeo = $derived(toAllocEntries(summary?.allocation_by_geography as any));
+    // GeographyMap needs Record<string, number> (weight 0-1) and amounts by ISO A3
+    const allocationByGeoMap = $derived(Object.fromEntries(allocationByGeo.map((e) => [e.name, e.value / 100])));
+    const allocationByGeoAmounts = $derived(Object.fromEntries(allocationByGeo.filter((e) => e.amount > 0).map((e) => [e.name, e.amount])));
     const geoUnknownPercent = $derived.by(() => {
-        const unknown = (summary?.allocation_by_geography ?? []).find((i) => i.name === 'Unknown');
-        return unknown ? parseFloat(unknown.value) : 0;
+        const unknown = allocationByGeo.find((e) => e.name === 'Unknown');
+        return unknown ? unknown.value : 0;
     });
     const dataQualityIssues = $derived<DataQualityIssue[]>((summary?.data_quality as {issues?: DataQualityIssue[]} | undefined)?.issues ?? []);
 
@@ -672,15 +684,15 @@
                 </div>
             {:else if allocationTab === 'type'}
                 <div class="flex-1 min-h-0">
-                    <AllocationPieChart data={allocationByType} height="100%" mode="type" legendPosition="bottom" />
+                    <AllocationPieChart data={allocationByType} height="100%" mode="type" legendPosition="bottom" currency={displayCurrency} />
                 </div>
             {:else if allocationTab === 'sector'}
                 <div class="flex-1 min-h-0">
-                    <AllocationPieChart data={allocationBySector} height="100%" legendPosition="bottom" />
+                    <AllocationPieChart data={allocationBySector} height="100%" legendPosition="bottom" currency={displayCurrency} />
                 </div>
             {:else}
                 <div class="flex-1 min-h-0">
-                    <GeographyMap data={allocationByGeo} height="100%" language={$currentLanguage} />
+                    <GeographyMap data={allocationByGeoMap} amounts={allocationByGeoAmounts} currency={displayCurrency} height="100%" language={$currentLanguage} />
                 </div>
                 {#if geoUnknownPercent > 0}
                     <p class="text-xs text-gray-400 dark:text-gray-500 text-center mt-1">

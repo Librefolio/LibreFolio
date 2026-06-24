@@ -105,6 +105,7 @@ class AllocationItem(BaseModel):
     name: str = Field(..., description="Category name, e.g. 'ETF', 'Technology', 'US', 'Unknown'")
     value: SafeDecimal = Field(..., description="Percentage share (0-100)")
     amount: SafeDecimal = Field(..., description="Absolute value in base currency")
+    emoji: Optional[str] = Field(None, description="Display emoji for the category (sector/type/geo)")
 
 
 # =============================================================================
