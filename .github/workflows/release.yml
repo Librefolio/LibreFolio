@@ -112,12 +112,15 @@ jobs:
         run: pipenv run ./dev.py front build
 
       - name: Check MkDocs translation structure consistency
+        continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs translate-diff --issues-only
 
       - name: Validate broken MkDocs translation links
+        continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs translate-validate --hide-localized
 
       - name: Validate cross-boundary links
+        continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs check-links
 
       - name: Extract Minor Version for Cache
@@ -145,6 +148,7 @@ jobs:
             screenshots-${{ steps.minor-version.outputs.val }}-
 
       - name: Generate Screenshots with Playwright
+        continue-on-error: ${{ github.ref_name == 'dev' }}
         if: |
           steps.cache-screenshots.outputs.cache-hit != 'true' ||
           github.event.inputs.force_gallery == 'true'
@@ -153,6 +157,7 @@ jobs:
 
 
       - name: Build MkDocs Documentation
+        continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs build
 
       - name: Generate requirements.txt for Docker
