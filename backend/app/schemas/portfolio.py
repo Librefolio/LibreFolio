@@ -174,6 +174,7 @@ class IssueCode(StrEnum):
     MISSING_FX_MARKET = "MISSING_FX_MARKET"
     NAV_INCOMPLETE = "NAV_INCOMPLETE"
     MWRR_NOT_CALCULABLE = "MWRR_NOT_CALCULABLE"
+    MWRR_SERIES_UNRELIABLE = "MWRR_SERIES_UNRELIABLE"
 
     # Asset detail (constructed client-side in assets/[id]/+page.svelte)
     ASSET_ARCHIVED = "ASSET_ARCHIVED"
@@ -303,7 +304,11 @@ class PortfolioSummary(BaseModel):
     in_transit_book_value: Optional[Currency] = Field(None, description="Cost basis of assets/cash in transit")
     book_value: Optional[Currency] = Field(None, description="open_cost_basis + cash + in_transit_book_value")
     unrealized_gain_loss: Optional[Currency] = Field(None, description="nav_value - book_value")
+    total_deposited: Optional[Currency] = Field(None, description="Sum of all DEPOSIT amounts (positive) in target currency")
+    total_withdrawn: Optional[Currency] = Field(None, description="Sum of all WITHDRAWAL amounts (positive) in target currency")
+    net_deposited_capital: Optional[Currency] = Field(None, description="total_deposited - total_withdrawn")
     period_nav_start: Optional[Currency] = Field(None, description="NAV at start of selected period")
+    period_market_value_start: Optional[Currency] = Field(None, description="Market value of held assets at start of selected period")
     period_book_value_start: Optional[Currency] = Field(None, description="Book value at start of selected period")
     period_net_flows: Optional[Currency] = Field(None, description="Sum of external cash flows in selected period")
     period_pnl: Optional[Currency] = Field(None, description="Period P&L = nav_end - nav_start - net_flows")
@@ -313,6 +318,8 @@ class PortfolioSummary(BaseModel):
     period_realized_gain_loss: Optional[Currency] = Field(None, description="Realized G/L from sales in period (WAC-based)")
     period_income: Optional[Currency] = Field(None, description="DIVIDEND + INTEREST in period (positive)")
     period_fees_taxes: Optional[Currency] = Field(None, description="FEE + TAX in period (positive value, shown negative in UI)")
+    period_fees: Optional[Currency] = Field(None, description="FEE only in period (commissions)")
+    period_taxes: Optional[Currency] = Field(None, description="TAX only in period")
     period_other_result: Optional[Currency] = Field(None, description="pnl - unrealized_delta - realized - income + fees_taxes")
     twrr_percent: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return (None if not calculable)")
     mwrr_annualized_percent: Optional[SafeDecimal] = Field(None, description="Annualized MWRR / XIRR (None if not converged)")
@@ -350,6 +357,7 @@ class PortfolioHistoryPoint(BaseModel):
     in_transit_asset_cost_basis: Optional[Currency] = Field(None, description="Cost basis of assets in transit")
     in_transit_book_value: Optional[Currency] = Field(None, description="Cost basis of all in-transit items")
     book_value: Optional[Currency] = Field(None, description="open_cost_basis + cash + in_transit_book_value")
+    net_invested: Optional[Currency] = Field(None, description="Cumulative deposits - withdrawals (external capital only)")
     unrealized_gain_loss: Optional[Currency] = Field(None, description="nav_value - book_value")
     twrr: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return series point")
     mwrr_annualized: Optional[SafeDecimal] = Field(None, description="Annualized MWRR at this point")

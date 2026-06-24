@@ -275,7 +275,7 @@
         {#if math || html}
             {@html renderedContent}
         {:else}
-            {text}
+            <span style="white-space: pre-line">{text}</span>
         {/if}
     </div>
 {/if}

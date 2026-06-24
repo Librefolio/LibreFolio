@@ -349,6 +349,7 @@ class DailyPortfolioState:
     unrealized_gain_loss: Decimal
     # Performance inputs
     external_cash_flow: Decimal
+    cumulative_external_cash_flow: Decimal  # Running total of deposits - withdrawals (net invested capital)
     # Allocation
     by_type: dict[str, Decimal] = field(default_factory=dict)
     by_sector: dict[str, Decimal] = field(default_factory=dict)
@@ -434,6 +435,7 @@ class DailyStateBuilder:
         # ── 4. Dense daily loop ──
         states: list[DailyPortfolioState] = []
         cumulative_cash = zero
+        cumulative_ecf = zero  # cumulative external cash flow (net invested capital)
         cumulative_qty: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
 
         current = self.date_from
@@ -493,6 +495,7 @@ class DailyStateBuilder:
 
             # 4g. External cash flow for this day
             ecf_today = ecf_by_date.get(current, zero)
+            cumulative_ecf += ecf_today
 
             # 4h. Allocation: cash as Liquidity (type + sector, not geography)
             by_type["Liquidity"] = by_type.get("Liquidity", zero) + cumulative_cash + it_cash
@@ -516,6 +519,7 @@ class DailyStateBuilder:
                     book_value=book,
                     unrealized_gain_loss=ug,
                     external_cash_flow=ecf_today,
+                    cumulative_external_cash_flow=cumulative_ecf,
                     by_type=dict(by_type),
                     by_sector=dict(by_sector),
                     by_geography=dict(by_geo),
@@ -798,6 +802,7 @@ class DerivedViewsBuilder:
                 "in_transit_asset_cost_basis": CurrencySchema(code=self.target_currency, amount=s.in_transit_asset_cost_basis) if s.in_transit_asset_cost_basis else None,
                 "in_transit_book_value": CurrencySchema(code=self.target_currency, amount=s.in_transit_book_value) if s.in_transit_book_value else None,
                 "book_value": CurrencySchema(code=self.target_currency, amount=s.book_value) if s.book_value else None,
+                "net_invested": CurrencySchema(code=self.target_currency, amount=s.cumulative_external_cash_flow) if s.cumulative_external_cash_flow else None,
                 "unrealized_gain_loss": CurrencySchema(code=self.target_currency, amount=s.unrealized_gain_loss) if s.unrealized_gain_loss else None,
             }
             for s in self.daily_states

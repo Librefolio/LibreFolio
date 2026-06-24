@@ -13,6 +13,7 @@
         label: string;
         value: string;
         tooltip?: string;
+        tooltipHtml?: string;
         barPct: number;
         barColor?: string;
         valueColor?: string;
@@ -24,6 +25,7 @@
         label,
         value,
         tooltip = '',
+        tooltipHtml = '',
         barPct,
         barColor = 'bg-slate-400 dark:bg-slate-500',
         valueColor = 'text-gray-700 dark:text-gray-300',
@@ -37,7 +39,11 @@
 
 <div class="flex flex-col gap-0.5">
     <div class="flex items-center justify-between text-xs">
-        {#if tooltip}
+        {#if tooltipHtml}
+            <Tooltip html={tooltipHtml} position="top">
+                <span class="cursor-help border-b border-dotted border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400">{label}</span>
+            </Tooltip>
+        {:else if tooltip}
             <Tooltip text={tooltip} position="top">
                 <span class="cursor-help border-b border-dotted border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400">{label}</span>
             </Tooltip>
