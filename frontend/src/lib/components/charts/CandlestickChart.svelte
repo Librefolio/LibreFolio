@@ -25,6 +25,7 @@
     import {COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
     import {signalLabelToHtml} from '$lib/charts/signalLabel';
     import {buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
+    import {tooltipPositionSide} from './echartsTooltipHelpers';
 
     // =========================================================================
     // Props
@@ -453,6 +454,9 @@
             tooltip: {
                 trigger: 'axis' as const,
                 axisPointer: {type: 'cross' as const, crossStyle: {color: dark ? '#475569' : '#9ca3af'}},
+                appendToBody: true,
+                confine: true,
+                position: tooltipPositionSide,
                 backgroundColor: dark ? '#1e293b' : '#ffffff',
                 borderColor: dark ? '#334155' : '#e5e7eb',
                 textStyle: {color: dark ? '#e2e8f0' : '#111827', fontSize: 12},

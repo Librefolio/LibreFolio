@@ -115,7 +115,7 @@
         {key: '1Y', label: '1Y', years: 1},
         {key: '2Y', label: '2Y', years: 2},
         {key: 'YTD', label: $_('datePicker.presets.ytd')},
-        {key: 'MAX', label: 'MAX'},
+        {key: 'MAX', label: $_('datePicker.presets.max')},
     ];
 
     const granularityOptions: {value: Granularity; labelKey: string; shortKey: string}[] = [

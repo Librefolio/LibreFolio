@@ -77,1458 +77,679 @@ Per renderizzare questa schermata, il frontend necessita delle seguenti funziona
 
 
 ---
+## 1. Riassunto high-level / ASCII art per documentazione piano
 
-nuova sezione card:
-Sì, concordo: le card attuali sono **troppo piatte**. Il grafico sotto è molto più ricco e professionale; le KPI sembrano ancora “placeholder”.
+````markdown
+# Dashboard KPI Cards — High-Level UI Plan
 
-Problemi che vedo dallo screen:
+## Obiettivo
 
-```text
-1. Le 3 card hanno gerarchia quasi identica.
-2. La terza card schiaccia troppe metriche in una riga.
-3. MWRR ora è ambiguo: cumulativo o annualizzato?
-4. Mancano help icon/wiki link.
-5. Non è chiaro quali metriche sono snapshot e quali sono di periodo.
-6. Su mobile la sublabel lunga diventerà illeggibile.
-```
+Ripensare la riga delle 3 KPI card della dashboard portfolio per renderla più chiara, d’impatto e leggibile sia desktop sia mobile.
 
-Io ripenserei la sezione come **“Portfolio overview”**, non semplici card.
+La struttura target resta a 3 blocchi principali:
 
-***
+1. `Net Worth`
+2. `Period P&L`
+3. `Returns`
 
-# Proposta A — 3 card evolute, compatta e solida
+Le card devono distinguere chiaramente:
 
-È la più semplice da implementare e resta vicina alla UI attuale.
-
-```text
-┌────────────────────────────┬────────────────────────────┬────────────────────────────┐
-│ PATRIMONIO NETTO       [?] │ RISULTATO PERIODO      [?] │ RENDIMENTI PERIODO     [?] │
-│                            │                            │                            │
-│ EUR 33.391,52              │ +EUR 6.011,23              │ ROI                         │
-│                            │ +21,95%                    │ 21,95%                      │
-│ ┌──────────┬─────────────┐ │                            │                            │
-│ │ Cash     │ EUR 631,85  │ │ vs inizio periodo          │ ┌──────────┬─────────────┐ │
-│ │ Market   │ EUR 32.759  │ │ NAV iniziale: EUR 27.380   │ │ TWRR     │ 27,11%      │ │
-│ │ Book     │ EUR 27.380  │ │                            │ │ MWRR cum │ 35,13%      │ │
-│ └──────────┴─────────────┘ │                            │ │ MWRR ann │ 24,74%      │ │
-│ Snapshot a fine periodo    │ Period based               │ └──────────┴─────────────┘ │
-└────────────────────────────┴────────────────────────────┴────────────────────────────┘
-```
-
-## Perché funziona
-
-* La prima card è chiaramente **snapshot**.
-* La seconda è chiaramente **risultato del periodo**.
-* La terza separa bene:
-  * ROI
-  * TWRR
-  * MWRR cumulativo
-  * MWRR annualizzato
-* Le help icon `[?]` possono rimandare alle wiki.
-
-## Mobile
-
-```text
-┌────────────────────────────┐
-│ PATRIMONIO NETTO       [?] │
-│ EUR 33.391,52              │
-│ Cash  EUR 631,85           │
-│ Market EUR 32.759          │
-│ Book EUR 27.380            │
-└────────────────────────────┘
-
-┌────────────────────────────┐
-│ RISULTATO PERIODO      [?] │
-│ +EUR 6.011,23              │
-│ +21,95%                    │
-│ vs inizio periodo          │
-└────────────────────────────┘
-
-┌────────────────────────────┐
-│ RENDIMENTI PERIODO     [?] │
-│ ROI        21,95%          │
-│ TWRR       27,11%          │
-│ MWRR cum   35,13%          │
-│ MWRR ann   24,74%          │
-└────────────────────────────┘
-```
-
-Questa è la proposta più pragmatica.
-
-***
-
-# Proposta B — Hero card + metric matrix
-
-Più impattante. Io la preferisco se vuoi dare alla dashboard un look più “pro”.
-
-```text
-┌──────────────────────────────────────────────┬──────────────────────────────────────────────┐
-│ PATRIMONIO NETTO                         [?] │ PERFORMANCE PERIODO                      [?] │
-│                                              │                                              │
-│ EUR 33.391,52                                │ +EUR 6.011,23                              │
-│                                              │ +21,95%                                    │
-│ ┌──────────────┬──────────────┬────────────┐ │                                              │
-│ │ Cash         │ Market       │ Book       │ │ ┌────────────┬────────────┬───────────────┐ │
-│ │ EUR 631,85   │ EUR 32.759   │ EUR 27.380 │ │ │ ROI        │ TWRR       │ MWRR cum      │ │
-│ └──────────────┴──────────────┴────────────┘ │ │ 21,95%     │ 27,11%     │ 35,13%        │ │
-│ Snapshot a 21/06/2026                        │ └────────────┴────────────┴───────────────┘ │
-│                                              │ MWRR annualizzato: 24,74%              [?] │
-└──────────────────────────────────────────────┴──────────────────────────────────────────────┘
-```
-
-## Variante con piccola barra visuale
-
-```text
-┌──────────────────────────────────────────────┐
-│ PATRIMONIO NETTO                         [?] │
-│ EUR 33.391,52                                │
-│                                              │
-│ Book Value    ████████████████████░░░        │
-│ Market Value  ████████████████████████       │
-│ Cash          ▏ EUR 631,85                   │
-└──────────────────────────────────────────────┘
-```
-
-## Perché funziona
-
-* `Net Worth` diventa davvero protagonista.
-* La performance non è nascosta in una sublabel.
-* MWRR annualizzato è visibile ma secondario.
-* Molto leggibile desktop.
-* Mobile diventa due blocchi larghi, non tre card piccole.
-
-***
-
-# Proposta C — Scoreboard finanziaria
-
-Più “trading/investment dashboard”, molto d’impatto.
-
-```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ PORTFOLIO OVERVIEW                                                           │
-│                                                                              │
-│  NAV                      PERIOD GAIN                 RETURN METRICS          │
-│  EUR 33.391,52             +EUR 6.011,23               ROI       21,95%       │
-│  Cash EUR 631,85           +21,95%                     TWRR      27,11%       │
-│                                                        MWRR cum  35,13%       │
-│  Book EUR 27.380           From 2025-02-11             MWRR ann  24,74%       │
-│  Market EUR 32.759         To   2026-06-21                                      │
-│                                                                              │
-│  [ ? NAV ]                [ ? Gain/Loss ]              [ ? ROI/TWRR/MWRR ]    │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
-## Perché funziona
-
-* Una sola “super card”.
-* Meno bordi, meno frammentazione.
-* Ottima per desktop.
-* Sembra una dashboard vera.
-
-## Contro
-
-* Su mobile va ripensata bene.
-* Più lavoro CSS/responsive.
-
-Mobile:
-
-```text
-┌────────────────────────────┐
-│ PORTFOLIO OVERVIEW         │
-│                            │
-│ NAV                        │
-│ EUR 33.391,52              │
-│ Cash EUR 631,85            │
-│ Book EUR 27.380            │
-│ Market EUR 32.759          │
-│                            │
-│ PERIOD GAIN                │
-│ +EUR 6.011,23              │
-│ +21,95%                    │
-│                            │
-│ RETURN METRICS             │
-│ ROI       21,95%           │
-│ TWRR      27,11%           │
-│ MWRR cum  35,13%           │
-│ MWRR ann  24,74%           │
-└────────────────────────────┘
-```
-
-***
-
-# Proposta D — Card con “primary metric + metric chips”
-
-È un buon compromesso estetico.
-
-```text
-┌────────────────────────────┬────────────────────────────┬────────────────────────────┐
-│ NET WORTH              [?] │ PERIOD RESULT          [?] │ RETURNS                [?] │
-│                            │                            │                            │
-│ EUR 33.391,52              │ +EUR 6.011,23              │ 21,95%                     │
-│                            │ +21,95%                    │ ROI                        │
-│                            │                            │                            │
-│ [ Cash 631,85 ]            │ [ From 2025-02-11 ]        │ [ TWRR 27,11% ]            │
-│ [ Market 32.759 ]          │ [ To 2026-06-21 ]          │ [ MWRR cum 35,13% ]        │
-│ [ Book 27.380 ]            │                            │ [ MWRR ann 24,74% ]        │
-└────────────────────────────┴────────────────────────────┴────────────────────────────┘
-```
-
-## Visualmente
-
-Chips con colore leggero:
-
-```text
-Cash        gray/blue
-Market      green/emerald
-Book        slate
-TWRR        blue
-MWRR cum    emerald
-MWRR ann    amber/gray
-```
-
-## Perché funziona
-
-* Mantiene 3 card.
-* Più leggibile.
-* Molto mobile-friendly.
-* La terza card non ha più una sublabel infinita.
-
-***
-
-# Proposta E — Performance card separata in 4 mini-metriche
-
-Qui la terza card cambia completamente.
-
-```text
-┌────────────────────────────┬────────────────────────────┬────────────────────────────┐
-│ NET WORTH                  │ GAIN / LOSS                │ PERFORMANCE                │
-│ EUR 33.391,52              │ +EUR 6.011,23              │                            │
-│ Cash EUR 631,85            │ +21,95%                    │ ┌───────┬───────┐          │
-│                            │                            │ │ ROI   │ TWRR  │          │
-│                            │                            │ │21.95% │27.11% │          │
-│                            │                            │ ├───────┼───────┤          │
-│                            │                            │ │MWRR C │MWRR A │          │
-│                            │                            │ │35.13% │24.74% │          │
-│                            │                            │ └───────┴───────┘          │
-└────────────────────────────┴────────────────────────────┴────────────────────────────┘
-```
-
-## Mobile
-
-```text
-┌────────────────────────────┐
-│ PERFORMANCE            [?] │
-│                            │
-│ ┌──────────┬─────────────┐ │
-│ │ ROI      │ 21,95%      │ │
-│ │ TWRR     │ 27,11%      │ │
-│ │ MWRR cum │ 35,13%      │ │
-│ │ MWRR ann │ 24,74%      │ │
-│ └──────────┴─────────────┘ │
-└────────────────────────────┘
-```
-
-Questa è molto chiara per la parte metriche.
-
-***
-
-# Help icon / wiki link
-
-Metterei icone piccole accanto alle label, non ai valori.
-
-Esempio:
-
-```text
-RETURNS [?]
-ROI [?]   TWRR [?]   MWRR cum [?]   MWRR ann [?]
-```
-
-Oppure più pulito:
-
-```text
-PERFORMANCE [?]
-```
-
-Clic sul `?` apre pagina generale performance metrics.
-
-Dentro ogni chip puoi avere tooltip:
-
-```text
-ROI         [?]
-TWRR        [?]
-MWRR cum    [?]
-MWRR ann    [?]
-```
-
-Io farei:
-
-## Desktop
-
-```text
-PERFORMANCE [?]
-```
-
-e nei tooltip interni:
-
-```text
-ROI       ⓘ
-TWRR      ⓘ
-MWRR cum  ⓘ
-MWRR ann  ⓘ
-```
-
-## Mobile
-
-Solo una help icon principale, per non affollare.
-
-***
-
-# Link wiki suggeriti
-
-```text
-NAV / Net Worth
-→ /financial-theory/.../net-asset-value/
-
-Gain/Loss / ROI
-→ /financial-theory/.../roi/
-
-TWRR
-→ /financial-theory/.../twrr/
-
-MWRR cumulativo / annualizzato
-→ /financial-theory/.../mwrr/
-```
-
-Nota: se manca la pagina NAV, puoi far puntare Net Worth alla pagina glossary/portfolio valuation.
-
-***
-
-# Naming UI che proporrei
-
-Evita:
-
-```text
-Weighted ROI
-```
-
-È ambiguo.
-
-Meglio:
-
-```text
-Performance
-```
-
-o:
-
-```text
-Period Returns
-```
-
-Se vuoi restare italiano:
-
-```text
-Rendimenti periodo
-```
-
-La card dovrebbe essere:
-
-```text
-RETURNS
-ROI
-TWRR
-MWRR cumulative
-MWRR annualized
-```
-
-Non:
-
-```text
-Weighted ROI
-```
-
-Perché ROI, TWRR e MWRR sono tre metriche diverse; chiamare la card “Weighted ROI” e poi metterci TWRR/MWRR sotto confonde.
-
-***
-
-# La mia scelta consigliata
-
-Io sceglierei **Proposta D** ora.
-
-È la più equilibrata:
-
-```text
-- non stravolge layout
-- migliora tanto la leggibilità
-- funziona bene mobile
-- mette MWRR cumulativo/annualizzato in modo chiaro
-- facile da implementare su KpiCard esistente
-```
-
-Target finale:
-
-```text
-┌────────────────────────────┬────────────────────────────┬────────────────────────────┐
-│ NET WORTH              [?] │ PERIOD RESULT          [?] │ RETURNS                [?] │
-│ EUR 33.391,52              │ +EUR 6.011,23              │ ROI 21,95%                 │
-│                            │ +21,95%                    │                            │
-│ [ Cash 631,85 ]            │ [ From 2025-02-11 ]        │ [ TWRR 27,11% ]            │
-│ [ Market 32.759 ]          │ [ To 2026-06-21 ]          │ [ MWRR cum 35,13% ]        │
-│ [ Book 27.380 ]            │                            │ [ MWRR ann 24,74% ]        │
-└────────────────────────────┴────────────────────────────┴────────────────────────────┘
-```
-
-Poi, se vuoi una dashboard più premium, più avanti si può passare alla **Proposta B** con hero card.
+- valori snapshot a fine periodo;
+- risultato monetario del periodo;
+- metriche percentuali di rendimento.
 
 ---
 
-Sì, mix **A + D** è la strada giusta: manteniamo le 3 card, ma le rendiamo più dense, leggibili e “dashboard-grade”.
+## Decisioni principali
 
-Io farei questa struttura:
+### 1. Net Worth
 
-```text
-1. Net Worth / Snapshot
-2. P&L / Period Result
-3. Returns / Performance Metrics
-```
+La card `Net Worth` rappresenta uno snapshot alla fine della finestra selezionata.
 
-***
+Deve mostrare:
 
-# Metriche risk: si applicano al portafoglio?
+- NAV / Net Worth come valore principale;
+- Book Value con numero e barra;
+- NAV con numero e barra;
+- Cash;
+- Unrealized Gain/Loss.
 
-Sì, **si possono applicare al portafoglio intero**, usando la serie dei rendimenti giornalieri del NAV.
+Il confronto visuale Book Value vs NAV deve aiutare l’utente a capire rapidamente se il portafoglio è sopra o sotto il costo contabile.
 
-Esempio:
-
-```text
-portfolio_daily_return(d) = NAV(d) / NAV(d-1) - 1
-```
-
-Da lì puoi calcolare:
-
-```text
-Volatilità
-Sharpe
-Sortino
-Max Drawdown
-```
-
-Però io **non le metterei ora nelle 3 card principali**, perché:
-
-* richiedono NAV giornaliero affidabile;
-* hanno bisogno di policy su dati mancanti/stale;
-* Sharpe richiede risk-free rate;
-* Sortino richiede definire downside threshold;
-* possono confondere se l’utente non le conosce.
-
-Le metterei dopo in una sezione:
-
-```text
-Risk Metrics
-```
-
-oppure come seconda riga compatta sotto le KPI.
-
-***
-
-# Proposta finale card — mix A + D
-
-## Desktop
-
-```text
-┌──────────────────────────────┬──────────────────────────────┬──────────────────────────────┐
-│ NET WORTH                [?] │ PERIOD P&L               [?] │ RETURNS                  [?] │
-│                              │                              │                              │
-│ EUR 33.391,52                │ +EUR 6.011,23                │ ROI                          │
-│                              │ +21,95%                      │ 21,95%                       │
-│                              │                              │                              │
-│ [ Cash      EUR 631,85  ]    │ [ Unreal.  +EUR 5.852 ]      │ [ TWRR cum   27,11% ]        │
-│ [ Market    EUR 32.759 ]     │ [ Realized  —         ]      │ [ MWRR cum   35,13% ]        │
-│ [ Book      EUR 27.380 ]     │ [ Income    +EUR xxx  ]      │ [ MWRR ann   24,74% ]        │
-│                              │                              │                              │
-│ Snapshot at period end       │ From start to end            │ Period-based returns         │
-└──────────────────────────────┴──────────────────────────────┴──────────────────────────────┘
-```
-
-***
-
-# Se alcune metriche P\&L non esistono ancora
-
-All’inizio puoi fare una versione compatta:
-
-```text
-┌──────────────────────────────┬──────────────────────────────┬──────────────────────────────┐
-│ NET WORTH                [?] │ PERIOD P&L               [?] │ RETURNS                  [?] │
-│ EUR 33.391,52                │ +EUR 6.011,23                │ ROI 21,95%                   │
-│                              │ +21,95%                      │                              │
-│ [ Cash   EUR 631,85 ]        │ [ NAV start EUR 27.380 ]     │ [ TWRR cum 27,11% ]          │
-│ [ Market EUR 32.759 ]        │ [ NAV end   EUR 33.391 ]     │ [ MWRR cum 35,13% ]          │
-│ [ Book   EUR 27.380 ]        │ [ Net flows EUR xxx ]        │ [ MWRR ann 24,74% ]          │
-└──────────────────────────────┴──────────────────────────────┴──────────────────────────────┘
-```
-
-Poi più avanti, quando hai realised P\&L, income, fees/taxes ben calcolati, sostituisci.
-
-***
-
-# Mobile
-
-Su mobile le card devono diventare leggibili, non semplicemente impilate con testo troncato.
+Desktop layout:
 
 ```text
 ┌──────────────────────────────┐
-│ NET WORTH                [?] │
+│ NET WORTH                (?) │
 │ EUR 33.391,52                │
 │                              │
-│ Cash        EUR 631,85       │
-│ Market      EUR 32.759       │
-│ Book Value  EUR 27.380       │
-│ Snapshot at period end       │
-└──────────────────────────────┘
-
-┌──────────────────────────────┐
-│ PERIOD P&L               [?] │
-│ +EUR 6.011,23                │
-│ +21,95%                      │
+│ Book Value      EUR 27.380   │
+│ ███████████████░░░           │
 │                              │
-│ NAV start   EUR 27.380       │
-│ NAV end     EUR 33.391       │
-│ Net flows   EUR xxx          │
+│ Net Asset Value EUR 33.391   │
+│ ██████████████████           │
+│                              │
+│ Cash            EUR 631,85   │
+│ UGL             +EUR 6.011   │
 └──────────────────────────────┘
+````
 
+Mobile layout:
+
+```text
 ┌──────────────────────────────┐
-│ RETURNS                  [?] │
-│ ROI        21,95%            │
-│ TWRR cum   27,11%            │
-│ MWRR cum   35,13%            │
-│ MWRR ann   24,74%            │
+│ NET WORTH                (?) │
+│ EUR 33.391,52                │
+│                              │
+│ Book Value      EUR 27.380   │
+│ ███████████████░░░           │
+│                              │
+│ Net Asset Value EUR 33.391   │
+│ ██████████████████           │
+│                              │
+│ Cash            EUR 631,85   │
+│ UGL             +EUR 6.011   │
 └──────────────────────────────┘
 ```
 
-***
+Note:
 
-# Cosa metterei davvero nelle 3 card ora
-
-## Card 1 — Net Worth
-
-Snapshot alla fine del periodo.
-
-```text
-Main:
-NAV / Net Worth
-
-Chips:
-Cash
-Market Value
-Book Value
-```
-
-Possibile anche:
-
-```text
-Unrealized P&L
-```
-
-se vuoi evidenziare subito la distanza tra NAV e book value.
-
-```text
-[ Unrealized +EUR 5.852 ]
-```
+* I valori monetari devono usare il formatter/helper currency già presente nel frontend, incluse emoji/bandiere valuta dove previsto dallo standard del progetto.
+* La `(?)` deve linkare alla futura pagina wiki `Net Worth / NAV`.
 
 ***
 
-## Card 2 — Period P\&L
+### 2. Period P\&L
 
-Questa card deve raccontare i soldi reali guadagnati nel periodo.
+La card `Period P&L` rappresenta il risultato monetario della finestra selezionata.
+
+Deve mostrare:
+
+* P\&L monetario come valore principale;
+* NAV start;
+* NAV end;
+* Net flows.
+
+Non deve mostrare una percentuale P\&L separata, perché rischia di sovrapporsi semanticamente al ROI.
 
 Formula concettuale:
 
 ```text
-period_pnl = NAV_end - NAV_start - net_external_flows
+period_pnl = nav_end - nav_start - net_external_flows
 ```
 
-Dove:
-
-```text
-net_external_flows = depositi - prelievi nello scope selezionato
-```
-
-Questa è diversa dal semplice:
-
-```text
-NAV_end - NAV_start
-```
-
-perché depura depositi/prelievi.
-
-Chips iniziali:
-
-```text
-NAV start
-NAV end
-Net flows
-```
-
-Future chips:
-
-```text
-Realized P&L
-Unrealized P&L
-Income
-Fees/Taxes
-```
-
-***
-
-## Card 3 — Returns
-
-Questa diventa una mini tabella metriche.
-
-```text
-ROI
-TWRR cumulative
-MWRR cumulative
-MWRR annualized
-```
-
-Non chiamerei più la card:
-
-```text
-Weighted ROI
-```
-
-La chiamerei:
-
-```text
-Returns
-```
-
-oppure in italiano:
-
-```text
-Rendimenti
-```
-
-***
-
-# ASCII più rifinito
-
-```text
-┌────────────────────────────────────────────────────────────────────────────────────┐
-│ KPI ROW                                                                            │
-├──────────────────────────────┬──────────────────────────────┬──────────────────────┤
-│ NET WORTH                (?) │ PERIOD P&L               (?) │ RETURNS          (?) │
-│                              │                              │                      │
-│ EUR 33.391,52                │ +EUR 6.011,23                │ ROI                  │
-│                              │ +21,95%                      │ 21,95%               │
-│                              │                              │                      │
-│  Cash        EUR 631,85      │  NAV start   EUR 27.380      │  TWRR cum   27,11%   │
-│  Market      EUR 32.759      │  NAV end     EUR 33.391      │  MWRR cum   35,13%   │
-│  Book value  EUR 27.380      │  Net flows   EUR 0,00        │  MWRR ann   24,74%   │
-│                              │                              │                      │
-│ Snapshot at end date         │ Cash-flow adjusted           │ Period metrics       │
-└──────────────────────────────┴──────────────────────────────┴──────────────────────┘
-```
-
-***
-
-# Variante con P\&L breakdown futuro
-
-Quando avremo più dati:
+Desktop/mobile layout:
 
 ```text
 ┌──────────────────────────────┐
 │ PERIOD P&L               (?) │
 │ +EUR 6.011,23                │
-│ +21,95%                      │
 │                              │
-│  Unrealized   +EUR 5.852     │
-│  Realized     +EUR 120       │
-│  Income       +EUR 58        │
-│  Fees/Taxes   -EUR 19        │
-│                              │
-│ Cash-flow adjusted           │
-└──────────────────────────────┘
-```
-
-Questa è molto bella, ma la farei solo quando i dati sono solidi.
-
-***
-
-# Dove mettere Sharpe / Sortino / Drawdown / Volatility
-
-Non nelle 3 card principali ora.
-
-Proposta futura: una riga sotto, più piccola.
-
-```text
-┌────────────────────────────────────────────────────────────────────────────────────┐
-│ RISK METRICS                                                                       │
-│                                                                                    │
-│ [ Max Drawdown  -8,4% (?) ] [ Volatility  12,1% (?) ] [ Sharpe  0,84 (?) ]         │
-│ [ Sortino       1,12 (?) ]                                                         │
-└────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-Oppure dentro la card Returns, come sezione collapsible:
-
-```text
-RETURNS
-ROI        21,95%
-TWRR cum   27,11%
-MWRR cum   35,13%
-MWRR ann   24,74%
-
-Risk metrics
-Max DD     — 
-Volatility —
-Sharpe     —
-Sortino    —
-```
-
-Per ora metterei placeholder? No. Meglio no.
-
-***
-
-# Help icon / libro
-
-Io userei una piccola icona help vicino ai titoli e alle metriche specifiche.
-
-```text
-NET WORTH        [?]
-PERIOD P&L       [?]
-RETURNS          [?]
-
-ROI              [?]
-TWRR cum         [?]
-MWRR cum         [?]
-MWRR ann         [?]
-```
-
-Se troppe icone disturbano:
-
-* una icona nel titolo card;
-* tooltip interno con righe cliccabili.
-
-Esempio:
-
-```text
-RETURNS [?]
-
-click [?] apre menu:
-┌──────────────────────────────┐
-│ ROI                📖        │
-│ TWRR cumulativo    📖        │
-│ MWRR cumulativo    📖        │
-│ MWRR annualizzato  📖        │
-└──────────────────────────────┘
-```
-
-Per mobile, farei solo help card-level.
-
-***
-
-# Link wiki
-
-Suggerimento:
-
-```text
-Net Worth / NAV
-→ /financial-theory/.../nav/
-
-Period P&L / ROI
-→ /financial-theory/.../roi/
-
-TWRR
-→ /financial-theory/.../twrr/
-
-MWRR cumulative / annualized
-→ /financial-theory/.../mwrr/
-```
-
-Se non esiste NAV, linka alla pagina valuation/portfolio value.
-
-***
-
-# Metriche che aggiungerei ora o presto
-
-## Ora
-
-```text
-Cash
-Market Value
-Book Value
-Unrealized P&L
-Period P&L
-Net flows
-ROI
-TWRR cumulative
-MWRR cumulative
-MWRR annualized
-```
-
-## Dopo
-
-```text
-Realized P&L
-Income
-Fees/Taxes
-Max Drawdown
-Volatility
-Sharpe
-Sortino
-Benchmark excess return
-Cash ratio
-```
-
-***
-
-# Nota su P\&L e Gain/Loss
-
-Io cambierei label:
-
-```text
-Gain / Loss
-```
-
-in:
-
-```text
-Period P&L
-```
-
-Perché “Gain/Loss” può sembrare lifetime o posizione aperta.
-
-`Period P&L` invece dice chiaramente:
-
-```text
-risultato della finestra selezionata
-```
-
-***
-
-# Decisione consigliata
-
-Implementerei questo adesso:
-
-```text
-Card 1: Net Worth
-- NAV
-- Cash
-- Market Value
-- Book Value
-
-Card 2: Period P&L
-- P&L assoluto
-- P&L %
-- NAV start
-- NAV end
-- Net flows
-
-Card 3: Returns
-- ROI
-- TWRR cumulative
-- MWRR cumulative
-- MWRR annualized
-```
-
-E rimanderei:
-
-```text
-Sharpe
-Sortino
-Max Drawdown
-Volatility
-```
-
-a una riga successiva o a uno step futuro dedicato.
-
-
----
-
-Sintesi con metriche:
-
-Sì, **P\&L e ROI sono diverse**.
-
-## 1. P\&L vs ROI
-
-### P\&L
-
-Il **P\&L** è un valore monetario.
-
-Risponde a:
-
-```text
-Quanti euro ho guadagnato o perso nel periodo?
-```
-
-Formula concettuale:
-
-```text
-period_pnl = NAV_end - NAV_start - net_external_flows
-```
-
-Dove:
-
-```text
-net_external_flows = depositi - prelievi nel periodo
-```
-
-Esempio:
-
-```text
-NAV inizio: 27.000 €
-Depositi nel periodo: +1.000 €
-NAV fine: 33.000 €
-
-P&L = 33.000 - 27.000 - 1.000 = +5.000 €
-```
-
-Quindi il P\&L è:
-
-```text
-+5.000 €
-```
-
-***
-
-### ROI
-
-Il **ROI** è una percentuale.
-
-Risponde a:
-
-```text
-Quanto ho reso rispetto al capitale investito?
-```
-
-Esempio semplificato:
-
-```text
-P&L = +5.000 €
-capitale di riferimento = 27.000 €
-
-ROI ≈ 5.000 / 27.000 = 18,5%
-```
-
-Quindi:
-
-```text
-P&L = soldi guadagnati
-ROI = rendimento percentuale
-```
-
-Sono collegati, ma non sono la stessa cosa.
-
-***
-
-# 2. Cosa intendevo con `Book`
-
-`Book` = **Book Value** = valore contabile.
-
-Formula:
-
-```text
-book_value = open_cost_basis + cash + in_transit_book_value
-```
-
-Nel tuo caso, semplificando:
-
-```text
-Book Value = costo di carico delle posizioni aperte + liquidità
-```
-
-Serve a confrontare:
-
-```text
-NAV = valore di mercato
-Book Value = valore contabile/costo
-```
-
-La differenza è:
-
-```text
-unrealized_gain_loss = NAV - Book Value
-```
-
-Esempio:
-
-```text
-Book Value: 27.380 €
-NAV:        33.391 €
-Differenza: +6.011 €
-```
-
-Quindi `Book` è utile nella prima card perché spiega da dove arriva il NAV.
-
-***
-
-# 3. Cosa intendevo con `Income`
-
-`Income` sarebbero:
-
-```text
-dividendi
-interessi
-cedole
-```
-
-Quindi una parte del P\&L non dovuta alla rivalutazione degli asset, ma a flussi interni positivi.
-
-Esempio:
-
-```text
-P&L periodo: +6.000 €
-
-di cui:
-- rivalutazione asset: +5.700 €
-- dividendi/interessi/cedole: +350 €
-- fee/tasse: -50 €
-```
-
-Però qui hai ragione: **se oggi non abbiamo già il breakdown pulito, meglio non metterlo**.
-
-Quindi per ora eviterei:
-
-```text
-Income
-Realized P&L
-Fees/Taxes
-```
-
-Finché non siamo sicuri dei calcoli.
-
-***
-
-# 4. Card P\&L: versione più chiara
-
-Per ora la seconda card la farei così:
-
-```text
-┌──────────────────────────────┐
-│ PERIOD P&L               (?) │
-│                              │
-│ +EUR 6.011,23                │
-│ +21,95%                      │
-│                              │
-│  NAV start   EUR 27.380      │
-│  NAV end     EUR 33.391      │
-│  Net flows   EUR 0,00        │
+│ NAV start       EUR 27.380   │
+│ NAV end         EUR 33.391   │
+│ Net flows       EUR 0,00     │
 │                              │
 │ Cash-flow adjusted result    │
 └──────────────────────────────┘
 ```
 
-Così racconta chiaramente:
+Note:
 
-```text
-quanto valevo all’inizio
-quanto valgo alla fine
-quanti soldi ho aggiunto/tolto
-quanto ho guadagnato davvero
-```
+* Il P\&L è monetario.
+* Il ROI resta nella card `Returns`.
+* La `(?)` deve linkare alla futura pagina wiki `Period P&L`.
 
 ***
 
-# 5. Barra orizzontale: sì, la userei nella Net Worth card
+### 3. Returns
 
-La barra è utile soprattutto nella prima card, per visualizzare:
+La card `Returns` rappresenta le metriche percentuali del periodo selezionato.
 
-```text
-Book Value vs NAV
-```
+Deve mostrare:
 
-ASCII:
+* ROI;
+* TWRR cumulativo;
+* MWRR cumulativo;
+* MWRR annualizzato.
 
-```text
-┌──────────────────────────────┐
-│ NET WORTH                (?) │
-│                              │
-│ EUR 33.391,52                │
-│                              │
-│ Book Value                   │
-│ ████████████████████░░░░░    │
-│ EUR 27.380                   │
-│                              │
-│ NAV                          │
-│ ████████████████████████     │
-│ EUR 33.391                   │
-│                              │
-│ Cash        EUR 631,85       │
-│ Market      EUR 32.759       │
-└──────────────────────────────┘
-```
-
-Oppure più compatta:
+Il grafico `%` usa metriche cumulative:
 
 ```text
-┌──────────────────────────────┐
-│ NET WORTH                (?) │
-│ EUR 33.391,52                │
-│                              │
-│ Book  ███████████████░░░     │
-│ NAV   ██████████████████     │
-│                              │
-│ Cash EUR 631,85              │
-│ Unrealized +EUR 6.011        │
-└──────────────────────────────┘
-```
-
-Questa è bella perché fa capire subito:
-
-```text
-quanto del NAV è sopra il costo contabile
-```
-
-***
-
-# 6. Proposta aggiornata delle 3 card
-
-## Desktop
-
-```text
-┌──────────────────────────────┬──────────────────────────────┬──────────────────────────────┐
-│ NET WORTH                (?) │ PERIOD P&L               (?) │ RETURNS                  (?) │
-│                              │                              │                              │
-│ EUR 33.391,52                │ +EUR 6.011,23                │ ROI                          │
-│                              │ +21,95%                      │ 21,95%                       │
-│ Book  ███████████████░░░     │                              │                              │
-│ NAV   ██████████████████     │  NAV start   EUR 27.380      │  TWRR cum   27,11%           │
-│                              │  NAV end     EUR 33.391      │  MWRR cum   35,13%           │
-│ Cash        EUR 631,85       │  Net flows   EUR 0,00        │  MWRR ann   24,74%           │
-│ Unrealized +EUR 6.011        │                              │                              │
-└──────────────────────────────┴──────────────────────────────┴──────────────────────────────┘
-```
-
-***
-
-## Mobile
-
-```text
-┌──────────────────────────────┐
-│ NET WORTH                (?) │
-│ EUR 33.391,52                │
-│                              │
-│ Book  ███████████████░░░     │
-│ NAV   ██████████████████     │
-│                              │
-│ Cash        EUR 631,85       │
-│ Unrealized +EUR 6.011        │
-└──────────────────────────────┘
-
-┌──────────────────────────────┐
-│ PERIOD P&L               (?) │
-│ +EUR 6.011,23                │
-│ +21,95%                      │
-│                              │
-│ NAV start   EUR 27.380       │
-│ NAV end     EUR 33.391       │
-│ Net flows   EUR 0,00         │
-└──────────────────────────────┘
-
-┌──────────────────────────────┐
-│ RETURNS                  (?) │
-│ ROI        21,95%            │
-│ TWRR cum   27,11%            │
-│ MWRR cum   35,13%            │
-│ MWRR ann   24,74%            │
-└──────────────────────────────┘
-```
-
-***
-
-# 7. Metriche che metterei ora
-
-## Net Worth
-
-```text
-NAV
-Cash
-Market Value
-Book Value
-Unrealized P&L
-```
-
-Ma nella UI mostrerei magari solo:
-
-```text
-NAV
-Cash
-Unrealized P&L
-bar Book vs NAV
-```
-
-`Market Value` può stare nel tooltip.
-
-***
-
-## Period P\&L
-
-```text
-P&L assoluto
-P&L %
-NAV start
-NAV end
-Net external flows
-```
-
-Questa è chiara e calcolabile.
-
-***
-
-## Returns
-
-```text
-ROI
 TWRR cumulative
 MWRR cumulative
-MWRR annualized
-```
-
-***
-
-# 8. Eviterei per ora
-
-Per ora non metterei:
-
-```text
-Income
-Realized P&L
-Fees/Taxes
-Sharpe
-Sortino
-Volatility
-Max Drawdown
-```
-
-Motivo:
-
-```text
-o non sono ancora implementati,
-o richiedono spiegazioni/policy dedicate.
-```
-
-***
-
-# 9. Etichette consigliate
-
-In inglese:
-
-```text
-Net Worth
-Period P&L
-Returns
-```
-
-In italiano:
-
-```text
-Patrimonio Netto
-P&L Periodo
-Rendimenti
-```
-
-Oppure più user-friendly:
-
-```text
-Risultato periodo
-```
-
-al posto di `P&L Periodo`.
-
-Io userei:
-
-```text
-Period P&L
-```
-
-in inglese, perché è standard.
-
-***
-
-# 10. Sintesi decisionale
-
-Per ora disegnerei le card così:
-
-```text
-Card 1: Net Worth
-- NAV grande
-- barra Book vs NAV
-- Cash
-- Unrealized P&L
-
-Card 2: Period P&L
-- P&L assoluto
-- P&L %
-- NAV start
-- NAV end
-- Net flows
-
-Card 3: Returns
-- ROI
-- TWRR cum
-- MWRR cum
-- MWRR ann
-```
-
-Questa versione è solida, bella, mobile-friendly e non introduce metriche non ancora mature.
-
-
-
-Sì, corretto.
-
-## P\&L % vs ROI
-
-Se il **P\&L %** lo calcoliamo come:
-
-```text
-P&L % = period_pnl / capitale di riferimento
-```
-
-allora rischia di sovrapporsi molto al ROI.
-
-Per evitare confusione, nella card **Period P\&L** io toglierei il P\&L %.  
-Lasciamo lì solo il valore monetario e i driver:
-
-```text
-P&L €
-NAV start
-NAV end
-Net flows
-```
-
-La percentuale la lasciamo nella card **Returns**, dove ha senso confrontare:
-
-```text
 ROI
-TWRR cumulativo
-MWRR cumulativo
-MWRR annualizzato
 ```
+
+La card può mostrare anche `MWRR annualized`, ma deve essere chiaramente etichettato.
+
+Desktop/mobile layout:
+
+```text
+┌──────────────────────────────┐
+│ RETURNS                  (?) │
+│ ROI              21,95%      │
+│ TWRR cum         27,11%      │
+│ MWRR cum         35,13%      │
+│ MWRR ann         24,74%      │
+│                              │
+│ Period-based returns         │
+└──────────────────────────────┘
+```
+
+Note:
+
+* `MWRR` senza specifica non è abbastanza chiaro.
+* Usare label esplicite:
+  * `MWRR cum`
+  * `MWRR ann`
+* La `(?)` deve linkare alla pagina wiki MWRR/TWRR/ROI o performance metrics.
 
 ***
 
-# ASCII aggiornata
-
-## Desktop
+## Layout complessivo desktop
 
 ```text
 ┌──────────────────────────────┬──────────────────────────────┬──────────────────────────────┐
 │ NET WORTH                (?) │ PERIOD P&L               (?) │ RETURNS                  (?) │
+│ EUR 33.391,52                │ +EUR 6.011,23                │ ROI              21,95%      │
 │                              │                              │                              │
-│ EUR 33.391,52                │ +EUR 6.011,23                │ ROI                          │
-│                              │                              │ 21,95%                       │
-│ Book Value                   │ NAV start                    │                              │
-│ EUR 27.380                   │ EUR 27.380                   │ TWRR cum        27,11%        │
-│ ███████████████░░░░░         │                              │ MWRR cum        35,13%        │
-│                              │ NAV end                      │ MWRR ann        24,74%        │
-│ Net Asset Value              │ EUR 33.391                   │                              │
-│ EUR 33.391                   │                              │                              │
-│ ████████████████████         │ Net flows                    │                              │
-│                              │ EUR 0,00                     │                              │
-│ Cash          EUR 631,85     │                              │                              │
-│ Unrealized    +EUR 6.011     │ Cash-flow adjusted result    │ Period-based returns         │
+│ Book Value      EUR 27.380   │ NAV start       EUR 27.380   │ TWRR cum         27,11%      │
+│ ███████████████░░░           │ NAV end         EUR 33.391   │ MWRR cum         35,13%      │
+│                              │ Net flows       EUR 0,00     │ MWRR ann         24,74%      │
+│ Net Asset Value EUR 33.391   │                              │                              │
+│ ██████████████████           │ Cash-flow adjusted result    │ Period-based returns         │
+│                              │                              │                              │
+│ Cash            EUR 631,85   │                              │                              │
+│ UGL             +EUR 6.011   │                              │                              │
 └──────────────────────────────┴──────────────────────────────┴──────────────────────────────┘
 ```
 
 ***
 
-## Variante più compatta desktop
+## Layout complessivo mobile
+
+```text
+┌──────────────────────────────┐
+│ NET WORTH                (?) │
+│ EUR 33.391,52                │
+│ Book Value      EUR 27.380   │
+│ ███████████████░░░           │
+│ Net Asset Value EUR 33.391   │
+│ ██████████████████           │
+│ Cash            EUR 631,85   │
+│ UGL             +EUR 6.011   │
+└──────────────────────────────┘
+
+┌──────────────────────────────┐
+│ PERIOD P&L               (?) │
+│ +EUR 6.011,23                │
+│ NAV start       EUR 27.380   │
+│ NAV end         EUR 33.391   │
+│ Net flows       EUR 0,00     │
+│ Cash-flow adjusted result    │
+└──────────────────────────────┘
+
+┌──────────────────────────────┐
+│ RETURNS                  (?) │
+│ ROI              21,95%      │
+│ TWRR cum         27,11%      │
+│ MWRR cum         35,13%      │
+│ MWRR ann         24,74%      │
+│ Period-based returns         │
+└──────────────────────────────┘
+```
+
+***
+
+## Metriche escluse per ora
+
+Non implementare ora nella riga KPI:
+
+* Sharpe;
+* Sortino;
+* Max Drawdown;
+* Volatilità;
+* Realized P\&L;
+* Income;
+* Fees/Taxes.
+
+Sono metriche utili, ma richiedono un progetto dedicato e policy di calcolo/documentazione.
+
+
+---
+
+Sì. Alla luce dell’analisi, per ora farei **Step A solido**:
+
+* fix `period_nav_start = 0` se `date_from` è prima del primo evento;
+* card `Period P&L` semplice ma corretta;
+* niente breakdown avanzato finché non aggiungiamo `income`, `fees_taxes`, `unrealized_delta`, `realized_gain_loss`;
+* UI già pronta visivamente per evolvere dopo.
+
+***
+
+# ASCII art aggiornata — KPI cards high-level
 
 ```text
 ┌──────────────────────────────┬──────────────────────────────┬──────────────────────────────┐
 │ NET WORTH                (?) │ PERIOD P&L               (?) │ RETURNS                  (?) │
-│ EUR 33.391,52                │ +EUR 6.011,23                │ ROI  21,95%                  │
 │                              │                              │                              │
-│ Book  EUR 27.380             │ NAV start  EUR 27.380        │ TWRR cum   27,11%            │
-│       ███████████████░░░     │ NAV end    EUR 33.391        │ MWRR cum   35,13%            │
-│ NAV   EUR 33.391             │ Net flows  EUR 0,00          │ MWRR ann   24,74%            │
-│       ██████████████████     │                              │                              │
-│ Cash  EUR 631,85             │ Adjusted for cash flows      │ Period metrics              │
-│ UGL   +EUR 6.011             │                              │                              │
+│ EUR 32.596,13                │ +EUR 5.215,84                │ ROI              19,05%      │
+│                              │                              │                              │
+│ Net Asset Value EUR 32.596   │ Start NAV       EUR 0,00     │ TWRR cumulative  24,08%      │
+│ ██████████████████           │ Net flows       +EUR 27.380  │ MWRR cumulative  30,38%      │
+│                              │                              │ MWRR annualized  21,51%      │
+│ Book Value      EUR 27.781   │ Cash-flow adjusted result    │                              │
+│ ███████████████░░░           │                              │ Period-based returns         │
+│                              │                              │                              │
+│ Cash            EUR 631,85   │                              │                              │
+│ Unrealized G/L  +EUR 4.814   │                              │                              │
 └──────────────────────────────┴──────────────────────────────┴──────────────────────────────┘
 ```
-
-Questa è quella che preferisco.
-
-***
 
 ## Mobile
 
 ```text
 ┌──────────────────────────────┐
 │ NET WORTH                (?) │
-│ EUR 33.391,52                │
+│ EUR 32.596,13                │
 │                              │
-│ Book  EUR 27.380             │
-│       ███████████████░░░     │
-│ NAV   EUR 33.391             │
-│       ██████████████████     │
+│ Net Asset Value EUR 32.596   │
+│ ██████████████████           │
+│ Book Value      EUR 27.781   │
+│ ███████████████░░░           │
 │                              │
-│ Cash  EUR 631,85             │
-│ UGL   +EUR 6.011             │
+│ Cash            EUR 631,85   │
+│ Unrealized G/L  +EUR 4.814   │
 └──────────────────────────────┘
 
 ┌──────────────────────────────┐
 │ PERIOD P&L               (?) │
-│ +EUR 6.011,23                │
+│ +EUR 5.215,84                │
 │                              │
-│ NAV start  EUR 27.380        │
-│ NAV end    EUR 33.391        │
-│ Net flows  EUR 0,00          │
+│ Start NAV       EUR 0,00     │
+│ Net flows       +EUR 27.380  │
 │                              │
-│ Adjusted for cash flows      │
+│ Cash-flow adjusted result    │
 └──────────────────────────────┘
 
 ┌──────────────────────────────┐
 │ RETURNS                  (?) │
-│ ROI        21,95%            │
-│ TWRR cum   27,11%            │
-│ MWRR cum   35,13%            │
-│ MWRR ann   24,74%            │
+│ ROI              19,05%      │
+│ TWRR cumulative  24,08%      │
+│ MWRR cumulative  30,38%      │
+│ MWRR annualized  21,51%      │
+│                              │
+│ Period-based returns         │
+└──────────────────────────────┘
+```
+
+
+Sì, sono d’accordo: **barre anche nella card Period P\&L**. A quel punto le card 2 e 3 hanno una grammatica visiva coerente:
+
+* **Period P\&L**: barre per contributori monetari al risultato.
+* **Returns**: barre per confronto tra metriche percentuali.
+* **Fees & Taxes**: valore negativo, barra rossa.
+
+L’unica attenzione: nella card P\&L le barre devono rappresentare la **contribuzione al P\&L**, non una progress bar rispetto al NAV.
+
+***
+
+## ASCII art aggiornato — con barre P\&L
+
+```text
+┌──────────────────────────────┬──────────────────────────────┬──────────────────────────────┐
+│ NET WORTH                (?) │ PERIOD P&L               (?) │ RETURNS                  (?) │
+│ EUR 33.395,52                │ +EUR 5.064,30                │                              │
+│                              │                              │ ROI              21,97%      │
+│ Net Asset Value EUR 33.395   │ Unrealized Δ    +EUR 4.620   │ ███████████░░░               │
+│ ██████████████████           │ ██████████████████           │                              │
+│                              │                              │ TWRR cumulative  27,13%      │
+│ Book Value      EUR 27.781   │ Income          +EUR 580     │ █████████████░               │
+│ ███████████████░░░           │ ██░░░░░░░░░░░░░░░             │                              │
+│                              │                              │ MWRR cumulative  35,15%      │
+│ Cash            EUR 631,85   │ Fees & Taxes    -EUR 136     │ ██████████████████           │
+│ Unrealized G/L  +EUR 5.614   │ ███                          │                              │
+│                              │                              │ MWRR annualized  24,76%      │
+│                              │ Other result    +EUR 0       │ ████████████░░               │
+│                              │ ░░░                          │                              │
+│                              │                              │ Period-based returns         │
+│                              │ Start NAV       EUR 0,00     │                              │
+│                              │ Net flows       +EUR 28.331  │                              │
+│                              │ Cash-flow adjusted result    │                              │
+└──────────────────────────────┴──────────────────────────────┴──────────────────────────────┘
+```
+
+***
+
+## Variante mobile
+
+```text
+┌──────────────────────────────┐
+│ PERIOD P&L               (?) │
+│ +EUR 5.064,30                │
+│                              │
+│ Unrealized Δ    +EUR 4.620   │
+│ ██████████████████           │
+│                              │
+│ Income          +EUR 580     │
+│ ██░░░░░░░░░░░░░░░             │
+│                              │
+│ Fees & Taxes    -EUR 136     │
+│ ███                          │
+│                              │
+│ Other result    +EUR 0       │
+│ ░░░                          │
+│                              │
+│ Start NAV       EUR 0,00     │
+│ Net flows       +EUR 28.331  │
+│ Cash-flow adjusted result    │
 └──────────────────────────────┘
 ```
 
 ***
 
-# Help icon / docs
+## Regole barre Period P\&L
 
-Dato che le pagine `NAV`, `Book Value`, `P&L` non esistono ancora, per ora farei così:
+Le barre della card P\&L devono essere normalizzate sul massimo contributore assoluto:
 
 ```text
-(?) su Net Worth → tooltip locale, niente link wiki per ora
-(?) su Period P&L → tooltip locale, niente link wiki per ora
-(?) su Returns → link alla pagina performance metrics / ROI-TWRR-MWRR se già esiste
+max_abs_pnl_component =
+    max(
+        abs(period_unrealized_gain_loss_delta),
+        abs(period_income),
+        abs(period_fees_taxes),
+        abs(period_other_result)
+    )
 ```
 
-Poi quando scriviamo le pagine dedicate, aggiorniamo i link.
+Poi:
+
+```text
+bar_width = abs(component_value) / max_abs_pnl_component
+```
+
+Colori:
+
+```text
+valori positivi  → green
+valori negativi  → red / rose
+zero / null      → slate / gray
+```
+
+Per `Fees & Taxes`:
+
+```text
+DTO: period_fees_taxes = valore positivo del costo
+UI: mostra -period_fees_taxes
+Barra: rossa
+```
+
+Quindi se il backend dà:
+
+```text
+period_fees_taxes = EUR 136
+```
+
+la UI mostra:
+
+```text
+Fees & Taxes    -EUR 136
+```
+
+## 1. High level plan / ASCII art
+
+````markdown
+# Dashboard KPI Cards — Final Target
+
+## Obiettivo
+
+Rifinire le 3 KPI card della dashboard portfolio:
+
+1. `Patrimonio Netto`
+2. `P&L Periodo`
+3. `Rendimenti`
+
+La sezione deve essere leggibile, non ansiogena, e coerente con la nuova architettura portfolio.
+
+---
+
+## Card 1 — Patrimonio Netto
+
+La card `Patrimonio Netto` mostra lo snapshot a fine periodo.
+
+Deve contenere:
+
+- NAV / Patrimonio netto come valore principale;
+- barra NAV;
+- marker/tooltip sul NAV iniziale, senza mostrare NAV iniziale come riga principale;
+- Valore Contabile;
+- Liquidità;
+- G/L non realizzato.
+
+```text
+┌──────────────────────────────┐
+│ PATRIMONIO NETTO         (?) │
+│          33.400,52 € 🇪🇺 EUR │
+│                              │
+│ Valore Netto (NAV)           │
+│ 33.400,52 € 🇪🇺 EUR          │
+│ ██████████████████           │
+│        ▲                     │
+│ tooltip: NAV iniziale        │
+│ 19.811,22 € 🇪🇺 EUR          │
+│                              │
+│ Valore Contabile             │
+│ 27.781,31 € 🇪🇺 EUR          │
+│ ███████████████░░░           │
+│                              │
+│ Liquidità                    │
+│ 631,85 € 🇪🇺 EUR             │
+│                              │
+│ G/L non realizzato           │
+│ +5.619,21 € 🇪🇺 EUR          │
+│                              │
+│ Snapshot a fine periodo      │
+└──────────────────────────────┘
+````
 
 ***
 
-# Decisione proposta
+## Card 2 — P\&L Periodo
 
-Per ora implementerei:
+La card `P&L Periodo` mostra il risultato monetario della finestra selezionata.
+
+Il valore principale è:
 
 ```text
-Card 1: Net Worth
-- NAV
-- Book Value con barra e numero
-- NAV con barra e numero
-- Cash
-- Unrealized Gain/Loss
-
-Card 2: Period P&L
-- P&L monetario
-- NAV start
-- NAV end
-- Net flows
-- niente percentuale
-
-Card 3: Returns
-- ROI
-- TWRR cumulative
-- MWRR cumulative
-- MWRR annualized
+period_pnl = nav_end - nav_start - net_external_flows
 ```
 
-Così evitiamo duplicazioni tra `P&L %` e `ROI`.
+La card deve mostrare una scomposizione del risultato, non NAV end.
+
+Componenti:
+
+* Variazione non realizzata;
+* Dividendi e interessi;
+* Costi e tasse;
+* Altro risultato;
+* Movimenti capitale separati dai contributori P\&L.
+
+`Movimenti capitale` rappresenta depositi meno prelievi nel periodo. Non è P\&L.
+
+```text
+┌──────────────────────────────┐
+│ P&L PERIODO              (?) │
+│          +5.069,30 € 🇪🇺 EUR │
+│                              │
+│ Variazione non realizzata    │
+│ +4.908,76 € 🇪🇺 EUR          │
+│ ██████████████████           │
+│                              │
+│ Dividendi e interessi        │
+│ +160,32 € 🇪🇺 EUR            │
+│ ██░░░░░░░░░░░░░░             │
+│                              │
+│ Costi e tasse                │
+│ -50,48 € 🇪🇺 EUR             │
+│ ██░░░░░░░░░░░░░░             │
+│                              │
+│ Altro risultato              │
+│ +50,70 € 🇪🇺 EUR             │
+│ ░░░░░░░░░░░░░░               │
+│                              │
+│ ───────────────────────────  │
+│ Movimenti capitale           │
+│ +8.520,00 € 🇪🇺 EUR          │
+│                              │
+│ Risultato corretto per flussi│
+└──────────────────────────────┘
+```
+
+### Regole negative
+
+Se il P\&L o una componente è negativa:
+
+```text
+valore negativo → rosso
+barra negativa → rossa
+larghezza barra = abs(value) / max_abs_component
+```
+
+Esempio:
+
+```text
+│ P&L PERIODO              (?) │
+│          -7.000,00 € 🇪🇺 EUR │
+│                              │
+│ Variazione non realizzata    │
+│ -6.500,00 € 🇪🇺 EUR          │
+│ ██████████████████           │  ← rossa
+```
+
+***
+
+## Card 3 — Rendimenti
+
+La card `Rendimenti` mostra le metriche percentuali del periodo.
+
+La metrica headline sarà:
+
+```text
+Effetto timing = MWRR cumulativo - TWRR cumulativo
+```
+
+Unità:
+
+```text
+pp = punti percentuali
+```
+
+Interpretazione:
+
+* positivo: timing/importo dei flussi ha migliorato il rendimento rispetto alla strategia pura;
+* negativo: timing/importo dei flussi lo ha peggiorato.
+
+Sotto la headline, mostrare:
+
+* ROI;
+* TWRR cumulativo;
+* MWRR cumulativo;
+* MWRR annualizzato.
+
+```text
+┌──────────────────────────────┐
+│ RENDIMENTI               (?) │
+│                              │
+│ Effetto timing               │
+│ +8,04 pp                     │
+│ ████████████░░░              │
+│                              │
+│ ROI                          │
+│ 21,99%                       │
+│ █████████░░░░░░              │
+│                              │
+│ TWRR cumulativo              │
+│ 27,14%                       │
+│ ███████████░░░               │
+│                              │
+│ MWRR cumulativo              │
+│ 35,18%                       │
+│ ████████████████             │
+│                              │
+│ MWRR annualizzato            │
+│ 24,78%                       │
+│ ██████████░░░░               │
+│                              │
+│ Rendimenti del periodo       │
+└──────────────────────────────┘
+```
+
+Se `Effetto timing` è negativo:
+
+```text
+│ Effetto timing               │
+│ -4,20 pp                     │
+│ ███████░░░░░░░               │  ← rossa
+```
+
+***
+
+## Tooltip richiesti
+
+Usare il tooltip custom del progetto sulle label tecniche.
+
+### P\&L Periodo
+
+```text
+Variazione non realizzata:
+Variazione del guadagno/perdita latente sulle posizioni ancora aperte.
+
+Dividendi e interessi:
+Proventi incassati nel periodo da dividendi, interessi o cedole.
+
+Costi e tasse:
+Commissioni e imposte registrate come transazioni separate.
+
+Altro risultato:
+Residuo del P&L: vendite, costi incorporati, arrotondamenti o aggiustamenti.
+
+Movimenti capitale:
+Depositi meno prelievi nel periodo. Non sono P&L.
+```
+
+### Rendimenti
+
+```text
+Effetto timing:
+Differenza tra MWRR cumulativo e TWRR cumulativo. Mostra quanto timing e importo dei flussi hanno inciso sul rendimento.
+
+ROI:
+Rendimento semplice del periodo.
+
+TWRR cumulativo:
+Rendimento della strategia, neutralizzando depositi e prelievi.
+
+MWRR cumulativo:
+Rendimento money-weighted del periodo, considerando importi e timing dei flussi.
+
+MWRR annualizzato:
+Tasso annuo equivalente del rendimento money-weighted.
+```
+
+***
+
+## Metriche escluse per ora
+
+Non implementare in questa fase:
+
+* realized gain/loss esplicito;
+* risk metrics;
+* Sharpe;
+* Sortino;
+* Max Drawdown;
+* Volatilità;
+* cache frontend/backend.
+
+````
+
+

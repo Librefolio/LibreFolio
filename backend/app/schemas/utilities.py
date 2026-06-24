@@ -67,7 +67,14 @@ class CurrencyNormalizationResponse(BaseModel):
     error: Optional[str] = Field(None, description="Error message if normalization failed")
 
 
-class SectorListResponse(BaseListResponse[str]):
+class SectorItem(BaseModel):
+    """A sector with its key and emoji icon."""
+
+    key: str = Field(..., description="Sector key (e.g. 'Industrials')")
+    emoji: str = Field(..., description="Sector emoji icon")
+
+
+class SectorListResponse(BaseListResponse[SectorItem]):
     """Response for sectors list endpoint."""
 
     pass

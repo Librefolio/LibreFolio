@@ -21,7 +21,7 @@
     import * as echarts from 'echarts';
     import {_} from '$lib/i18n';
     import type {PortfolioHistoryPoint} from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {buildTooltipTheme, buildDot, buildTooltipHeader, buildTooltipRow, buildTooltipDivider} from '$lib/components/charts/echartsTooltipHelpers';
+    import {buildTooltipTheme, buildDot, buildTooltipHeader, buildTooltipRow, buildTooltipDivider, tooltipPositionSide, setupTooltipAutoHide} from '$lib/components/charts/echartsTooltipHelpers';
 
     // =========================================================================
     // Props
@@ -77,9 +77,18 @@
         nav: history.map((pt) => (pt.nav_value != null ? Number(pt.nav_value.amount) : null)),
     });
 
+    // Translated labels for EUR mode (tracked for reactivity on locale change)
+    const eurLabels = $derived({
+        costBasis: $_('dashboard.bookValue'),
+        cash: $_('dashboard.cashValue'),
+        inTransit: $_('dashboard.inTransit'),
+        nav: $_('dashboard.navValue'),
+        bookValue: $_('dashboard.bookValue'),
+    });
+
     const pctSeries = $derived([
         {
-            name: $_('dashboard.mwrr'),
+            name: $_('dashboard.mwrrCum'),
             data: history.map((pt) => (pt.mwrr_cumulative != null ? Number(pt.mwrr_cumulative) * 100 : null)),
             lineStyle: 'solid' as const,
             colorKey: 'nav' as const,
@@ -91,7 +100,7 @@
             colorKey: 'invested' as const,
         },
         {
-            name: $_('dashboard.simpleRoi'),
+            name: $_('dashboard.roi'),
             data: history.map((pt) => (pt.roi != null ? Number(pt.roi) * 100 : null)),
             lineStyle: 'dotted' as const,
             colorKey: 'pctCash' as const,
@@ -105,11 +114,14 @@
     // Lifecycle
     // =========================================================================
 
+    let tooltipCleanup: (() => void) | null = null;
+
     onMount(() => {
         darkModeObserver = new MutationObserver(() => renderChart());
         darkModeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
 
         return () => {
+            tooltipCleanup?.();
             darkModeObserver?.disconnect();
             resizeObserver?.disconnect();
             chartInstance?.dispose();
@@ -117,9 +129,11 @@
     });
 
     $effect(() => {
-        // Re-render when data or viewMode changes
+        // Re-render when data, viewMode, or locale changes
         void history;
         void viewMode;
+        void pctSeries;
+        void eurLabels;
         if (chartContainer) {
             tick().then(() => {
                 setupResizeObserver();
@@ -152,6 +166,9 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            // Setup mobile tooltip auto-hide
+            tooltipCleanup?.();
+            tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
         }
 
         const isDark = document.documentElement.classList.contains('dark');
@@ -169,7 +186,7 @@
             series = [
                 // Stacked area: open_cost_basis (bottom) — visible boundary line
                 {
-                    name: $_('dashboard.openCostBasis'),
+                    name: eurLabels.costBasis,
                     type: 'line',
                     stack: 'bookValue',
                     data: eurStackedData.costBasis,
@@ -182,7 +199,7 @@
                 },
                 // Stacked area: cash (middle) — visible boundary line
                 {
-                    name: $_('dashboard.cashValue'),
+                    name: eurLabels.cash,
                     type: 'line',
                     stack: 'bookValue',
                     data: eurStackedData.cash,
@@ -195,7 +212,7 @@
                 },
                 // Stacked area: in-transit book value (top) — visible boundary line
                 {
-                    name: $_('dashboard.inTransit'),
+                    name: eurLabels.inTransit,
                     type: 'line',
                     stack: 'bookValue',
                     data: eurStackedData.inTransit,
@@ -208,7 +225,7 @@
                 },
                 // Overlay line: NAV (not stacked) — prominent
                 {
-                    name: $_('dashboard.navValue'),
+                    name: eurLabels.nav,
                     type: 'line',
                     data: eurStackedData.nav,
                     smooth: false,
@@ -254,6 +271,8 @@
             tooltip: {
                 trigger: 'axis',
                 appendToBody: true,
+                confine: true,
+                position: tooltipPositionSide,
                 axisPointer: {type: 'line'},
                 backgroundColor: tooltipBg,
                 borderColor: tooltipBorder,
@@ -278,17 +297,17 @@
                         const dot = (key: keyof typeof COLORS) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${cc(key)};margin-right:6px;flex-shrink:0"></span>`;
 
                         let html = `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>`;
-                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('nav')}<b>${$_('dashboard.navValue')}</b></span><b>${fmtCurrency(navVal)}</b></div>`;
-                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span><b>${$_('dashboard.bookValue')}</b></span><b>${fmtCurrency(bv || null)}</b></div>`;
+                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('nav')}<b>${eurLabels.nav}</b></span><b>${fmtCurrency(navVal)}</b></div>`;
+                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span><b>${eurLabels.bookValue}</b></span><b>${fmtCurrency(bv || null)}</b></div>`;
                         if (ugl != null) {
                             const uglColor = ugl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
                             html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${uglColor}"><span>± P/L</span><b>${ugl >= 0 ? '+' : ''}${fmtCurrency(Math.abs(ugl))}</b></div>`;
                         }
                         html += `<hr style="border:none;border-top:1px solid ${tooltipBorder};margin:4px 0"/>`;
-                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('costBasis')}${$_('dashboard.openCostBasis')}</span>${fmtCurrency(costVal)}</div>`;
-                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('cash')}${$_('dashboard.cashValue')}</span>${fmtCurrency(cashVal)}</div>`;
+                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('costBasis')}${eurLabels.costBasis}</span>${fmtCurrency(costVal)}</div>`;
+                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('cash')}${eurLabels.cash}</span>${fmtCurrency(cashVal)}</div>`;
                         if (itVal && itVal > 0) {
-                            html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('inTransit')}${$_('dashboard.inTransit')}</span>${fmtCurrency(itVal)}</div>`;
+                            html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('inTransit')}${eurLabels.inTransit}</span>${fmtCurrency(itVal)}</div>`;
                         }
                         return html;
                     }

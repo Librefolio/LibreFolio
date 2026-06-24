@@ -568,3 +568,65 @@ class TestMWRRSummaryFix:
         cum2 = annualized_to_cumulative(ann, 730)
         assert cum2 is not None
         assert float(cum2) == pytest.approx(0.5876, abs=0.002)
+
+
+# ---------------------------------------------------------------------------
+# TestPeriodNavStart — verifies nav_start = 0 before first event
+# ---------------------------------------------------------------------------
+
+
+class TestPeriodNavStart:
+    """Verifies the period P&L nav_start logic.
+
+    When date_from is before any portfolio data, nav_start must be 0.
+    This documents the fix in portfolio_service.get_summary().
+    """
+
+    def test_period_nav_start_before_first_event_is_zero(self):
+        """If date_from is before any NAV snapshot, period_nav_start should be 0.
+
+        Simulates the logic: pre_period = [s for s in nav_snapshots if s.date <= date_from]
+        When pre_period is empty → result = 0.
+        """
+        nav_snapshots = [
+            NAVSnapshot(date(2025, 2, 11), Decimal("600")),   # first deposit day
+            NAVSnapshot(date(2025, 2, 12), Decimal("605")),
+            NAVSnapshot(date(2025, 12, 31), Decimal("1200")),
+        ]
+        date_from = date(2024, 1, 1)  # well before any data
+
+        # Simulate the fixed logic
+        pre_period = [s for s in nav_snapshots if s.date <= date_from]
+        period_nav_start = pre_period[-1].nav if pre_period else Decimal("0")
+
+        assert period_nav_start == Decimal("0"), \
+            "When date_from is before first event, nav_start must be 0 (portfolio didn't exist)"
+
+    def test_period_nav_start_within_history(self):
+        """If date_from falls within history, use the NAV at that date."""
+        nav_snapshots = [
+            NAVSnapshot(date(2025, 1, 1), Decimal("0")),
+            NAVSnapshot(date(2025, 2, 1), Decimal("1000")),
+            NAVSnapshot(date(2025, 3, 1), Decimal("1100")),
+            NAVSnapshot(date(2025, 4, 1), Decimal("1200")),
+        ]
+        date_from = date(2025, 2, 15)
+
+        pre_period = [s for s in nav_snapshots if s.date <= date_from]
+        period_nav_start = pre_period[-1].nav if pre_period else Decimal("0")
+
+        # Should use NAV at 2025-02-01 (last snapshot <= date_from)
+        assert period_nav_start == Decimal("1000")
+
+    def test_period_pnl_formula_with_zero_start(self):
+        """period_pnl = nav_end - nav_start - net_flows.
+
+        When starting from 0 with a deposit of 1000, and NAV grows to 1200:
+        pnl = 1200 - 0 - 1000 = 200
+        """
+        nav_end = Decimal("1200")
+        period_nav_start = Decimal("0")
+        net_flows = Decimal("1000")  # deposit of 1000
+
+        period_pnl = nav_end - period_nav_start - net_flows
+        assert period_pnl == Decimal("200")

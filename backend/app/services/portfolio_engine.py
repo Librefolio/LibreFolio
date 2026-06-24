@@ -849,17 +849,21 @@ class DerivedViewsBuilder:
         return _alloc(last.by_type), _alloc(last.by_sector), _alloc(last.by_geography)
 
     def build_allocation_history(
-        self, dimension: str
+        self, dimension: str, date_from: date_type | None = None
     ) -> list[dict]:
         """Build allocation history series for a given dimension.
 
         Returns list of {date, components: [{name, value, amount}]} dicts.
         """
+        from datetime import date as date_type  # noqa: PLC0415
+
         attr_map = {"type": "by_type", "sector": "by_sector", "geography": "by_geography"}
         attr = attr_map.get(dimension, "by_type")
 
         result = []
         for s in self.daily_states:
+            if date_from and s.date < date_from:
+                continue
             d = getattr(s, attr, {})
             total = sum(d.values()) or Decimal("1")
             components = [

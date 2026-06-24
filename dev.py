@@ -47,6 +47,7 @@ os.chdir(PROJECT_ROOT)
 from scripts.cli_base import (
     Colors,
     check_server_running,
+    get_data_dir,
     get_database_path,
     get_server_host,
     get_server_port,
@@ -303,7 +304,9 @@ def cmd_server(args):
         os.execvpe(uvicorn_cmd[0], uvicorn_cmd, full_env)
     else:
         uvicorn_cmd = [
-            *pipenv_prefix(), "uvicorn",
+            *pipenv_prefix(), "python", "-c",
+            "import logging; logging.getLogger('watchfiles').setLevel(logging.WARNING); "
+            "import uvicorn.main; uvicorn.main.main()",
             "backend.app.main:app",
             "--host", host,
             "--port", str(port),
@@ -312,6 +315,25 @@ def cmd_server(args):
             uvicorn_cmd.extend(["--workers", str(workers)])
         else:
             uvicorn_cmd.append("--reload")
+            # Exclude the git directory and the configured data directory
+            uvicorn_cmd.extend([
+                "--reload-exclude", "**/.git/**",
+            ])
+            try:
+                data_dir_path = get_data_dir(test_mode=test_mode).resolve()
+                try:
+                    rel_data_dir = data_dir_path.relative_to(PROJECT_ROOT)
+                except ValueError:
+                    rel_data_dir = data_dir_path
+                uvicorn_cmd.extend([
+                    "--reload-exclude", f"**/{rel_data_dir}/**",
+                ])
+            except Exception:
+                pass
+            # Always exclude the default backend/data folder recursively as well
+            uvicorn_cmd.extend([
+                "--reload-exclude", "**/backend/data/**",
+            ])
 
         return run_command_live(uvicorn_cmd, env=env)
 

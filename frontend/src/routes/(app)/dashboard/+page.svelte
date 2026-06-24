@@ -15,7 +15,7 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {RefreshCw} from 'lucide-svelte';
+    import {RefreshCw, PieChart, AreaChart} from 'lucide-svelte';
 
     import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
@@ -23,18 +23,21 @@
     import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {getBrokerIconUrlById, ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
     import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import AllocationPieChart from '$lib/components/charts/AllocationPieChart.svelte';
     import AllocationHistoryChart from '$lib/components/dashboard/AllocationHistoryChart.svelte';
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
-    import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import RecentTransactionsPanel from '$lib/components/dashboard/RecentTransactionsPanel.svelte';
     import HoldingsPanel from '$lib/components/dashboard/HoldingsPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import KpiMetricBar from '$lib/components/dashboard/KpiMetricBar.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
     import {goto} from '$app/navigation';
@@ -129,14 +132,21 @@
         return v;
     }
 
+    /** Safely extract a Currency object from Zodios Optional union type. */
+    function safeCurrency(v: any): {code: string; amount: string} | null {
+        if (v == null) return null;
+        if (Array.isArray(v)) return v[0] ?? null;
+        if (typeof v === 'object' && 'amount' in v) return v as {code: string; amount: string};
+        return null;
+    }
+
     function formatMoney(code: string | undefined, amount: string | null | undefined, opts?: {signed?: boolean; absolute?: boolean}): string {
         if (amount == null) return '—';
         const num = parseFloat(amount);
-        const signed = opts?.signed ?? false;
         const absolute = opts?.absolute ?? false;
         const rendered = absolute ? Math.abs(num) : num;
-        const sign = signed ? (num >= 0 ? '+' : '-') : '';
-        return `${sign}${code ?? displayCurrency} ${rendered.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        const showSign = opts?.signed ?? false;
+        return formatCurrencyAmountPlain(rendered, code ?? displayCurrency, {showSign});
     }
 
     /** Allocation data for charts (Record<string, number> where value = 0-1). */
@@ -174,21 +184,84 @@
         }
     }
 
-    // KPI formatted values
+    // KPI derived values — Net Worth card
     const netWorthValue = $derived(summary ? formatMoney(summary.net_worth.code, summary.net_worth.amount) : '—');
-    const gainLossValue = $derived(summary ? formatMoney(summary.total_gain_loss.code, summary.total_gain_loss.amount, {signed: true, absolute: true}) : '—');
-    const gainLossPercent = $derived(summary ? parseFloat(summary.total_gain_loss_percent) : undefined);
-    const roiValue = $derived(summary ? `${(parseFloat(summary.simple_roi_percent) * 100).toFixed(2)}%` : '—');
-    const roiSubLabel = $derived.by(() => {
-        if (!summary) return '';
-        const twrr = safeStr(summary.twrr_percent);
-        const mwrrCum = safeStr(summary.mwrr_cumulative_percent);
-        const mwrrAnn = safeStr(summary.mwrr_annualized_percent);
-        let line = `${$_('dashboard.twrr')}: ${twrr != null ? (parseFloat(twrr) * 100).toFixed(2) + '%' : '—'} | ${$_('dashboard.mwrr')}: ${mwrrCum != null ? (parseFloat(mwrrCum) * 100).toFixed(2) + '%' : '—'}`;
-        if (mwrrAnn != null) line += ` (${$_('dashboard.mwrrAnnualized')}: ${(parseFloat(mwrrAnn) * 100).toFixed(2)}%)`;
-        return line;
+    const bookValueCur = $derived(summary ? safeCurrency(summary.book_value) : null);
+    const bookValueAmt = $derived(bookValueCur ? parseFloat(bookValueCur.amount) : 0);
+    const navValueAmt = $derived(summary ? parseFloat(summary.net_worth.amount) : 0);
+    const navStartCur = $derived(summary ? safeCurrency(summary.period_nav_start) : null);
+    const navStartAmt = $derived(navStartCur ? parseFloat(navStartCur.amount) : 0);
+    const navStartStr = $derived(navStartCur ? formatMoney(navStartCur.code, navStartCur.amount) : '');
+    const bookStartCur = $derived(summary ? safeCurrency(summary.period_book_value_start) : null);
+    const bookStartAmt = $derived(bookStartCur ? parseFloat(bookStartCur.amount) : 0);
+    const bookStartStr = $derived(bookStartCur ? formatMoney(bookStartCur.code, bookStartCur.amount) : '');
+    const cashAmt = $derived(summary ? parseFloat(summary.cash_total.amount) : 0);
+    const cashTotalStr = $derived(summary ? formatMoney(summary.cash_total.code, summary.cash_total.amount) : '—');
+    const uglCur = $derived(summary ? safeCurrency(summary.unrealized_gain_loss) : null);
+    const uglStr = $derived(uglCur ? formatMoney(uglCur.code, uglCur.amount, {signed: true}) : '—');
+    const uglPositive = $derived(uglCur ? parseFloat(uglCur.amount) >= 0 : undefined);
+    const bookValueStr = $derived(bookValueCur ? formatMoney(bookValueCur.code, bookValueCur.amount) : '—');
+
+    // Net Worth bars — normalized on max(nav_start, nav_end, book_start, book_end, cash)
+    const nwBarMax = $derived(Math.max(navStartAmt, navValueAmt, bookValueAmt, bookStartAmt, cashAmt) || 1);
+    const navBarPct = $derived((navValueAmt / nwBarMax) * 100);
+    const bookBarPct = $derived((bookValueAmt / nwBarMax) * 100);
+    const cashBarPct = $derived((cashAmt / nwBarMax) * 100);
+    const navStartMarkerPct = $derived(navStartAmt > 0 ? (navStartAmt / nwBarMax) * 100 : 0);
+    const bookStartMarkerPct = $derived(bookStartAmt > 0 ? (bookStartAmt / nwBarMax) * 100 : 0);
+    const navBarColor = $derived(navValueAmt >= navStartAmt ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500');
+
+    // KPI derived values — Period P&L card
+    const periodPnlCur = $derived(summary ? safeCurrency(summary.period_pnl) : null);
+    const periodPnlStr = $derived(periodPnlCur ? formatMoney(periodPnlCur.code, periodPnlCur.amount, {signed: true}) : '—');
+    const periodPnlPositive = $derived(periodPnlCur ? parseFloat(periodPnlCur.amount) >= 0 : undefined);
+
+    // P&L breakdown values
+    const uglDeltaCur = $derived(summary ? safeCurrency(summary.period_unrealized_gain_loss_delta) : null);
+    const uglDeltaAmt = $derived(uglDeltaCur ? parseFloat(uglDeltaCur.amount) : 0);
+    const uglDeltaStr = $derived(uglDeltaCur ? formatMoney(uglDeltaCur.code, uglDeltaCur.amount, {signed: true}) : '—');
+    const realizedCur = $derived(summary ? safeCurrency(summary.period_realized_gain_loss) : null);
+    const realizedAmt = $derived(realizedCur ? parseFloat(realizedCur.amount) : 0);
+    const realizedStr = $derived(realizedCur ? formatMoney(realizedCur.code, realizedCur.amount, {signed: true}) : '—');
+    const incomeCur = $derived(summary ? safeCurrency(summary.period_income) : null);
+    const incomeAmt = $derived(incomeCur ? parseFloat(incomeCur.amount) : 0);
+    const incomeStr = $derived(incomeCur ? formatMoney(incomeCur.code, incomeCur.amount, {signed: true}) : '—');
+    const feesCur = $derived(summary ? safeCurrency(summary.period_fees_taxes) : null);
+    const feesAmt = $derived(feesCur ? parseFloat(feesCur.amount) : 0);
+    const feesStr = $derived(feesCur ? formatMoney(feesCur.code, `-${feesCur.amount}`) : '—');
+
+    // P&L bar normalization
+    const pnlBarMax = $derived(Math.max(Math.abs(uglDeltaAmt), Math.abs(realizedAmt), Math.abs(incomeAmt), feesAmt) || 1);
+    function pnlBarPct(val: number) { return (Math.abs(val) / pnlBarMax) * 100; }
+    function pnlBarColor(val: number) { return val >= 0 ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500'; }
+    function pnlValueColor(val: number) { return val >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'; }
+
+    // KPI derived values — Returns card
+    const roiVal = $derived(summary ? parseFloat(summary.simple_roi_percent) * 100 : 0);
+    const twrrCumVal = $derived.by(() => { const v = summary ? safeStr(summary.twrr_percent) : null; return v != null ? parseFloat(v) * 100 : 0; });
+    const mwrrCumVal = $derived.by(() => { const v = summary ? safeStr(summary.mwrr_cumulative_percent) : null; return v != null ? parseFloat(v) * 100 : 0; });
+    const mwrrAnnVal = $derived.by(() => { const v = summary ? safeStr(summary.mwrr_annualized_percent) : null; return v != null ? parseFloat(v) * 100 : 0; });
+    const timingEffectVal = $derived(mwrrCumVal - twrrCumVal);
+    const timingEffectStr = $derived.by(() => {
+        if (!summary) return '—';
+        const formatted = Math.abs(timingEffectVal).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        return `${timingEffectVal >= 0 ? '+' : '-'}${formatted} ${$_('dashboard.pp')}`;
     });
+    const timingIntensity = $derived(Math.min(Math.abs(timingEffectVal) / 3, 1));
+    const timingLabel = $derived.by(() => {
+        if (Math.abs(timingEffectVal) < 0.05) return $_('dashboard.timingNeutral');
+        return timingEffectVal > 0 ? $_('dashboard.timingFavorable') : $_('dashboard.timingUnfavorable');
+    });
+    const roiPct = $derived(summary ? `${roiVal.toFixed(2)}%` : '—');
+    const twrrCumPct = $derived(summary ? `${twrrCumVal.toFixed(2)}%` : '—');
+    const mwrrCumPct = $derived(summary ? `${mwrrCumVal.toFixed(2)}%` : '—');
+    const mwrrAnnPct = $derived(summary ? `${mwrrAnnVal.toFixed(2)}%` : '—');
     const roiIsPositive = $derived(summary ? parseFloat(summary.simple_roi_percent) >= 0 : undefined);
+
+    // Returns bar normalization
+    const retBarMax = $derived(Math.max(Math.abs(roiVal), Math.abs(twrrCumVal), Math.abs(mwrrCumVal), Math.abs(mwrrAnnVal)) || 1);
+    function retBarPct(val: number) { return (Math.abs(val) / retBarMax) * 100; }
+    function retBarColor(val: number) { return val >= 0 ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500'; }
 
     /** URL for "See all" assets link — preserves current date range. */
     const assetsHref = $derived(`/assets?start=${dateFrom}&end=${dateTo}`);
@@ -421,9 +494,85 @@
 
     <!-- ── KPI Row ── -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="kpi-row">
-        <KpiCard label={$_('dashboard.netWorth')} value={netWorthValue} subLabel={summary ? `${$_('common.cash')}: ${formatMoney(summary.cash_total.code, summary.cash_total.amount)}` : ''} loading={summaryLoading} />
-        <KpiCard label={$_('dashboard.gainLoss')} value={gainLossValue} changePercent={gainLossPercent} positive={gainLossPercent !== undefined ? gainLossPercent >= 0 : undefined} loading={summaryLoading} />
-        <KpiCard label={$_('dashboard.roiWeighted')} value={roiValue} subLabel={roiSubLabel} positive={roiIsPositive} loading={summaryLoading} />
+        <!-- Card 1 — Net Worth -->
+        <div class="relative bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-net-worth">
+            <div class="flex items-center justify-between">
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.netWorth')}</p>
+                <DocsLink path="financial-theory/technical-analysis/performance-metrics/nav/" label={$_('dashboard.netWorth')} size={14} />
+            </div>
+            {#if summaryLoading}
+                <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
+                <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse mt-2"></div>
+            {:else}
+                <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 text-right" data-testid="kpi-value">{netWorthValue}</p>
+                <div class="flex flex-col gap-2 mt-1">
+                    <KpiMetricBar label={$_('dashboard.navValue')} value={netWorthValue} barPct={navBarPct} barColor={navBarColor} marker={navStartMarkerPct > 0 ? navStartMarkerPct : undefined} markerTooltip="{$_('dashboard.startNav')}: {navStartStr}" />
+                    <KpiMetricBar label={$_('dashboard.bookValue')} value={bookValueStr} barPct={bookBarPct} barColor="bg-slate-400 dark:bg-slate-500" marker={bookStartMarkerPct > 0 ? bookStartMarkerPct : undefined} markerTooltip="{$_('dashboard.bookValue')} start: {bookStartStr}" />
+                    <KpiMetricBar label={$_('dashboard.cashValue')} value={cashTotalStr} barPct={cashBarPct} barColor="bg-sky-400 dark:bg-sky-500" />
+                </div>
+                <div class="flex items-center justify-between text-xs mt-0.5">
+                    <span class="text-gray-500 dark:text-gray-400">{$_('dashboard.unrealizedGainLoss')}</span>
+                    <span class="font-medium {uglPositive === true ? 'text-green-600 dark:text-green-400' : uglPositive === false ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}">{uglStr}</span>
+                </div>
+            {/if}
+        </div>
+
+        <!-- Card 2 — Period P&L -->
+        <div class="relative bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-period-pnl">
+            {#if periodPnlPositive !== undefined}
+                <div class="absolute top-0 left-0 right-0 h-0.5 {periodPnlPositive ? 'bg-green-500 dark:bg-green-400' : 'bg-red-500 dark:bg-red-400'}"></div>
+            {/if}
+            <div class="flex items-center justify-between">
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.periodPnl')}</p>
+                <DocsLink path="financial-theory/technical-analysis/performance-metrics/period-pnl/" label={$_('dashboard.periodPnl')} size={14} />
+            </div>
+            {#if summaryLoading}
+                <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
+                <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse mt-2"></div>
+            {:else}
+                <p class="text-2xl font-bold text-right {periodPnlPositive === true ? 'text-green-700 dark:text-green-400' : periodPnlPositive === false ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}" data-testid="kpi-value">{periodPnlStr}</p>
+                <div class="flex flex-col gap-2 mt-1">
+                    <KpiMetricBar label={$_('dashboard.unrealizedDelta')} tooltip={$_('dashboard.unrealizedDeltaTooltip')} value={uglDeltaStr} barPct={pnlBarPct(uglDeltaAmt)} barColor={pnlBarColor(uglDeltaAmt)} valueColor={pnlValueColor(uglDeltaAmt)} />
+                    <KpiMetricBar label={$_('dashboard.realizedSales')} tooltip={$_('dashboard.realizedSalesTooltip')} value={realizedStr} barPct={pnlBarPct(realizedAmt)} barColor={pnlBarColor(realizedAmt)} valueColor={pnlValueColor(realizedAmt)} />
+                    <KpiMetricBar label={$_('dashboard.income')} tooltip={$_('dashboard.incomeTooltip')} value={incomeStr} barPct={pnlBarPct(incomeAmt)} barColor="bg-green-500 dark:bg-green-400" valueColor="text-green-600 dark:text-green-400" />
+                    <KpiMetricBar label={$_('dashboard.feesAndTaxes')} tooltip={$_('dashboard.feesAndTaxesTooltip')} value={feesStr} barPct={pnlBarPct(feesAmt)} barColor="bg-red-400 dark:bg-red-500" valueColor="text-red-600 dark:text-red-400" />
+                </div>
+                <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.cashFlowAdjustedResult')}</p>
+            {/if}
+        </div>
+
+        <!-- Card 3 — Returns -->
+        <div class="relative bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-returns">
+            {#if roiIsPositive !== undefined}
+                <div class="absolute top-0 left-0 right-0 h-0.5 {roiIsPositive ? 'bg-green-500 dark:bg-green-400' : 'bg-red-500 dark:bg-red-400'}"></div>
+            {/if}
+            <div class="flex items-center justify-between">
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.returns')}</p>
+                <DocsLink path="financial-theory/technical-analysis/performance-metrics/" label={$_('dashboard.returns')} size={14} />
+            </div>
+            {#if summaryLoading}
+                <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
+                <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse mt-2"></div>
+            {:else}
+                <!-- Timing effect hero (no bar) -->
+                <div class="flex items-center justify-between">
+                    <Tooltip text={$_('dashboard.timingEffectTooltip')} position="top">
+                        <div class="flex flex-col cursor-help">
+                            <span class="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide border-b border-dotted border-gray-300 dark:border-gray-600 inline-block">{$_('dashboard.timingEffect')}</span>
+                            <span class="text-[10px] italic" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.4 + timingIntensity * 0.6})` : `rgba(220, 38, 38, ${0.4 + timingIntensity * 0.6})`}">{timingLabel}</span>
+                        </div>
+                    </Tooltip>
+                    <span class="text-2xl font-bold tabular-nums transition-colors" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.3 + timingIntensity * 0.7})` : `rgba(220, 38, 38, ${0.3 + timingIntensity * 0.7})`}">{timingEffectStr}</span>
+                </div>
+                <div class="flex flex-col gap-2 mt-1">
+                    <KpiMetricBar label={$_('dashboard.roi')} tooltip={$_('dashboard.roiTooltip')} value={roiPct} barPct={retBarPct(roiVal)} barColor={retBarColor(roiVal)} valueColor="font-bold text-gray-800 dark:text-gray-100" />
+                    <KpiMetricBar label={$_('dashboard.twrrCum')} tooltip={$_('dashboard.twrrTooltip')} value={twrrCumPct} barPct={retBarPct(twrrCumVal)} barColor={retBarColor(twrrCumVal)} />
+                    <KpiMetricBar label={$_('dashboard.mwrrCum')} tooltip={$_('dashboard.mwrrCumTooltip')} value={mwrrCumPct} barPct={retBarPct(mwrrCumVal)} barColor={retBarColor(mwrrCumVal)} />
+                    <KpiMetricBar label={$_('dashboard.mwrrAnn')} tooltip={$_('dashboard.mwrrAnnTooltip')} value={mwrrAnnPct} barPct={retBarPct(mwrrAnnVal)} barColor={retBarColor(mwrrAnnVal)} />
+                </div>
+                <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.periodBasedReturns')}</p>
+            {/if}
+        </div>
     </div>
 
     <!-- ── Charts Row ── -->
@@ -440,15 +589,17 @@
                 <!-- Now / History toggle -->
                 <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
                     <button
-                        class="px-3 py-1 transition-colors {allocationView === 'now' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="px-2.5 py-1.5 transition-colors {allocationView === 'now' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                         onclick={() => (allocationView = 'now')}
                         data-testid="allocation-view-now"
-                    >{$_('dashboard.now')}</button>
+                        title={$_('dashboard.now')}
+                    ><PieChart size={14} /></button>
                     <button
-                        class="px-3 py-1 transition-colors border-l border-gray-200 dark:border-slate-600 {allocationView === 'history' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="px-2.5 py-1.5 transition-colors border-l border-gray-200 dark:border-slate-600 {allocationView === 'history' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                         onclick={() => { allocationView = 'history'; loadAllocationHistory(allocationTab); }}
                         data-testid="allocation-view-history"
-                    >{$_('dashboard.history')}</button>
+                        title={$_('dashboard.history')}
+                    ><AreaChart size={14} /></button>
                 </div>
             </div>
 
