@@ -147,6 +147,8 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     logging.getLogger("yfinance").setLevel(logging.WARNING)
     # peewee (used internally by yfinance) logs DB operations
     logging.getLogger("peewee").setLevel(logging.WARNING)
+    # watchfiles (used by uvicorn reload) logs every change detection at DEBUG level
+    logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
     # Configure handlers
     handlers = []

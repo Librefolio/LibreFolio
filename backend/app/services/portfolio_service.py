@@ -563,6 +563,7 @@ class PortfolioService:
         broker_ids: list[int] | None = None,
         include_breakdown: bool = False,
         target_currency_override: str | None = None,
+        date_from: date_type | None = None,
         _precomputed_engine_result=None,
     ) -> PortfolioSummary:
         """Return aggregated portfolio summary via PortfolioCalculationEngine.
@@ -612,6 +613,11 @@ class PortfolioService:
         by_broker_list: list[BrokerBreakdown] = []
         all_missing_pairs: list[WACMissingPairInfo] = []
         missing_price_assets: list[MissingPriceAsset] = []
+        _income_accum = Decimal("0")
+        _fees_taxes_accum = Decimal("0")
+        _realized_accum = Decimal("0")
+        _INCOME_TYPES = {TransactionType.DIVIDEND, TransactionType.INTEREST}
+        _FEE_TAX_TYPES = {TransactionType.FEE, TransactionType.TAX}
 
         for access in accesses:
             broker_id = access.broker_id
@@ -644,6 +650,13 @@ class PortfolioService:
                 if tx.type in _CASH_FLOW_TYPES:
                     total_invested += amount_base_signed * share
 
+                # Accumulate income and fees for period breakdown
+                in_period = (date_from is None or tx.date > date_from)
+                if in_period and tx.type in _INCOME_TYPES:
+                    _income_accum += abs(amount_base_signed) * share
+                if in_period and tx.type in _FEE_TAX_TYPES:
+                    _fees_taxes_accum += abs(amount_base_signed) * share
+
             # Holding transactions — group by asset
             txns_by_asset: dict[int, list[Transaction]] = defaultdict(list)
             for tx in broker_txns:
@@ -658,6 +671,43 @@ class PortfolioService:
                 asset = await self._get_asset(asset_id)
                 if not asset:
                     continue
+
+                # Compute realized G/L for SELLs in the period (WAC at sell date)
+                for tx in asset_txns:
+                    if tx.type != TransactionType.SELL:
+                        continue
+                    in_period = (date_from is None or tx.date > date_from)
+                    if not in_period:
+                        continue
+                    sell_qty = abs(tx.quantity or Decimal("0"))
+                    if sell_qty == 0 or tx.id is None:
+                        continue
+                    # Get WAC just before the sell (exclude this SELL from computation)
+                    sell_wac_result = await compute_wac_iterative(
+                        session=self.db, broker_id=broker_id, asset_id=asset_id,
+                        as_of_date=tx.date, asset_currency=asset.currency or base_currency,
+                        excluded_tx_ids=[tx.id],
+                    )
+                    if sell_wac_result.wac is None:
+                        continue
+                    wac_at_sell = sell_wac_result.wac.amount
+                    wac_at_sell_ccy = sell_wac_result.wac.code
+                    # Convert WAC to base currency
+                    if wac_at_sell_ccy != base_currency:
+                        wac_at_sell_base, _ = await self._convert_to_base(wac_at_sell, wac_at_sell_ccy, base_currency, tx.date)
+                        if wac_at_sell_base is None:
+                            continue
+                    else:
+                        wac_at_sell_base = wac_at_sell
+                    # Proceeds in base currency
+                    sell_amount = abs(tx.amount or Decimal("0"))
+                    if tx.currency and tx.currency != base_currency:
+                        sell_converted, _ = await self._convert_to_base(sell_amount, tx.currency, base_currency, tx.date)
+                        sell_proceeds = sell_converted if sell_converted else sell_amount
+                    else:
+                        sell_proceeds = sell_amount
+                    cost_sold = sell_qty * wac_at_sell_base
+                    _realized_accum += (sell_proceeds - cost_sold) * share
 
                 wac_result = await compute_wac_iterative(
                     session=self.db, broker_id=broker_id, asset_id=asset_id,
@@ -769,36 +819,121 @@ class PortfolioService:
 
         # ── 5. Performance from engine (correct daily NAV) ──
         nav_snapshots, cash_flows_perf = views.build_performance_inputs()
-        simple_roi = calculate_simple_roi(engine_nav, total_invested)
+
+        # Period re-basing: when date_from is set, compute metrics for that period only
+        if date_from and nav_snapshots:
+            pre_period = [s for s in nav_snapshots if s.date <= date_from]
+            if pre_period:
+                period_start_nav_perf = pre_period[-1].nav
+                period_start_date_perf = pre_period[-1].date
+            else:
+                period_start_nav_perf = Decimal("0")
+                period_start_date_perf = nav_snapshots[0].date
+
+            synthetic_cf = CashFlowInput(date=period_start_date_perf, amount=-period_start_nav_perf)
+            period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date > period_start_date_perf]
+            period_navs = [s for s in nav_snapshots if s.date >= period_start_date_perf]
+        else:
+            period_cfs = cash_flows_perf
+            period_navs = nav_snapshots
+            period_start_nav_perf = Decimal("0") if nav_snapshots else Decimal("0")
+            period_start_date_perf = nav_snapshots[0].date if nav_snapshots else today
+
+        # Net invested for the period (sum of deposits minus withdrawals)
+        period_net_invested = sum(-cf.amount for cf in period_cfs)
+        simple_roi = calculate_simple_roi(engine_nav, period_net_invested) if period_net_invested > 0 else Decimal("0")
         twrr_result: Decimal | None = None
         mwrr_result: Decimal | None = None
 
-        if nav_snapshots and cash_flows_perf and engine_nav > 0:
+        if period_navs and period_cfs and engine_nav > 0:
             try:
-                twrr_point = calculate_twrr(nav_snapshots, cash_flows_perf)
+                twrr_point = calculate_twrr(period_navs, period_cfs)
                 twrr_result = twrr_point.twrr
             except (ValueError, ZeroDivisionError):
                 twrr_result = None
-            if total_invested > 0:
-                # Use actual portfolio NAV at t=0 (not total_invested) to avoid
-                # double-counting deposits that are already in cash_flows_perf.
-                initial_nav_for_mwrr = nav_snapshots[0].nav
+            if period_net_invested > 0:
+                initial_nav_for_mwrr = period_start_nav_perf
                 mwrr_point = await asyncio.to_thread(
-                    calculate_mwrr, cash_flows_perf, initial_nav_for_mwrr,
-                    engine_nav, nav_snapshots[0].date, today,
+                    calculate_mwrr, period_cfs, initial_nav_for_mwrr,
+                    engine_nav, period_start_date_perf, today,
                 )
                 mwrr_result = mwrr_point.mwrr
 
         # ── MWRR cumulative derivation ──
         mwrr_period_days: int | None = None
         mwrr_cumulative: Decimal | None = None
-        if nav_snapshots:
-            mwrr_period_days = (today - nav_snapshots[0].date).days
+        if period_navs:
+            mwrr_period_days = (today - period_start_date_perf).days
             mwrr_cumulative = annualized_to_cumulative(mwrr_result, mwrr_period_days) if mwrr_result is not None else None
 
         total_gl = engine_nav - total_invested
         total_gl_pct = (total_gl / total_invested) if total_invested > 0 else Decimal("0")
         cash_balances_list = [Currency(code=ccy, amount=amt) for ccy, amt in all_cash_balances.items()]
+
+        # ── Period P&L computation ──
+        period_nav_start_val: Decimal | None = None
+        period_net_flows_val: Decimal | None = None
+        period_pnl_val: Decimal | None = None
+
+        if nav_snapshots and len(nav_snapshots) >= 2:
+            # Find nav at period start
+            if date_from:
+                pre_period = [s for s in nav_snapshots if s.date <= date_from]
+                # If date_from is before any portfolio data, NAV was 0
+                period_nav_start_val = pre_period[-1].nav if pre_period else Decimal("0")
+                # Sum external CFs within the period
+                period_net_flows_val = sum(
+                    (-cf.amount) for cf in cash_flows_perf if cf.date > date_from
+                )
+            else:
+                # Full history: NAV at t=0 is effectively 0 (portfolio starts empty)
+                period_nav_start_val = Decimal("0")
+                # All CFs (sign convention: deposit = negative in CashFlowInput → negate for net inflow)
+                period_net_flows_val = sum((-cf.amount) for cf in cash_flows_perf)
+
+            period_pnl_val = engine_nav - period_nav_start_val - (period_net_flows_val or Decimal("0"))
+
+        # ── Period P&L breakdown: unrealized delta, income, fees ──
+        period_ugl_start: Decimal | None = None
+        period_ugl_end: Decimal | None = None
+        period_ugl_delta: Decimal | None = None
+        period_book_value_start_val: Decimal | None = None
+        period_realized_val: Decimal | None = None
+        period_income_val: Decimal | None = None
+        period_fees_taxes_val: Decimal | None = None
+        period_other_result_val: Decimal | None = None
+
+        if engine_result.daily_states and period_pnl_val is not None:
+            # Unrealized G/L from daily states (market_value - open_cost_basis)
+            last_ds = engine_result.daily_states[-1]
+            period_ugl_end = last_ds.market_value - last_ds.open_cost_basis
+
+            if date_from:
+                # Find daily state at or before date_from
+                pre_states = [s for s in engine_result.daily_states if s.date <= date_from]
+                if pre_states:
+                    start_ds = pre_states[-1]
+                    period_ugl_start = start_ds.market_value - start_ds.open_cost_basis
+                    period_book_value_start_val = start_ds.book_value
+                else:
+                    period_ugl_start = Decimal("0")
+                    period_book_value_start_val = Decimal("0")
+            else:
+                period_ugl_start = Decimal("0")
+                period_book_value_start_val = Decimal("0")
+
+            period_ugl_delta = period_ugl_end - period_ugl_start
+
+            # Realized, income, fees from accumulated values
+            period_realized_val = _realized_accum
+            period_income_val = _income_accum if _income_accum else Decimal("0")
+            period_fees_taxes_val = _fees_taxes_accum if _fees_taxes_accum else Decimal("0")
+
+            # Other result: residual that closes the identity
+            # pnl = ugl_delta + realized + income - fees_taxes + other_result
+            period_other_result_val = (
+                period_pnl_val - period_ugl_delta - period_realized_val - period_income_val + period_fees_taxes_val
+            )
 
         # ── 6. Data quality report ──
         # Collect transaction-implied assets (valued at WAC cost, no market price yet)
@@ -837,6 +972,17 @@ class PortfolioService:
             in_transit_book_value=Currency(code=base_currency, amount=last_state.in_transit_book_value) if last_state and last_state.in_transit_book_value else None,
             book_value=Currency(code=base_currency, amount=last_state.book_value) if last_state else None,
             unrealized_gain_loss=Currency(code=base_currency, amount=last_state.unrealized_gain_loss) if last_state else None,
+            period_nav_start=Currency(code=base_currency, amount=period_nav_start_val) if period_nav_start_val is not None else None,
+            period_book_value_start=Currency(code=base_currency, amount=period_book_value_start_val) if period_book_value_start_val is not None else None,
+            period_net_flows=Currency(code=base_currency, amount=period_net_flows_val) if period_net_flows_val is not None else None,
+            period_pnl=Currency(code=base_currency, amount=period_pnl_val) if period_pnl_val is not None else None,
+            period_unrealized_gain_loss_start=Currency(code=base_currency, amount=period_ugl_start) if period_ugl_start is not None else None,
+            period_unrealized_gain_loss_end=Currency(code=base_currency, amount=period_ugl_end) if period_ugl_end is not None else None,
+            period_unrealized_gain_loss_delta=Currency(code=base_currency, amount=period_ugl_delta) if period_ugl_delta is not None else None,
+            period_realized_gain_loss=Currency(code=base_currency, amount=period_realized_val) if period_realized_val is not None else None,
+            period_income=Currency(code=base_currency, amount=period_income_val) if period_income_val is not None else None,
+            period_fees_taxes=Currency(code=base_currency, amount=period_fees_taxes_val) if period_fees_taxes_val is not None else None,
+            period_other_result=Currency(code=base_currency, amount=period_other_result_val) if period_other_result_val is not None else None,
             twrr_percent=twrr_result,
             mwrr_annualized_percent=mwrr_result,
             mwrr_cumulative_percent=mwrr_cumulative,
@@ -897,8 +1043,13 @@ class PortfolioService:
         # Period re-basing for ROI metrics
         if date_from and nav_snapshots:
             pre_period = [s for s in nav_snapshots if s.date <= date_from]
-            period_start_nav = pre_period[-1].nav if pre_period else nav_snapshots[0].nav
-            period_start_date = pre_period[-1].date if pre_period else nav_snapshots[0].date
+            if pre_period:
+                period_start_nav = pre_period[-1].nav
+                period_start_date = pre_period[-1].date
+            else:
+                # date_from is before any portfolio data — NAV was 0
+                period_start_nav = Decimal("0")
+                period_start_date = nav_snapshots[0].date
 
             synthetic_cf = CashFlowInput(date=period_start_date, amount=-period_start_nav)
             period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date > period_start_date]
@@ -961,16 +1112,12 @@ class PortfolioService:
                 )
             )
 
-        # First point gets 0% for chart continuity
+        # First point always 0% for chart continuity (period starts here)
         if history_points:
-            if history_points[0].twrr is None:
-                history_points[0].twrr = Decimal("0")
-            if history_points[0].mwrr_annualized is None:
-                history_points[0].mwrr_annualized = Decimal("0")
-            if history_points[0].mwrr_cumulative is None:
-                history_points[0].mwrr_cumulative = Decimal("0")
-            if history_points[0].roi is None:
-                history_points[0].roi = Decimal("0")
+            history_points[0].twrr = Decimal("0")
+            history_points[0].mwrr_annualized = Decimal("0")
+            history_points[0].mwrr_cumulative = Decimal("0")
+            history_points[0].roi = Decimal("0")
 
         return history_points
 
@@ -991,8 +1138,8 @@ class PortfolioService:
 
         today = date_type.today()
         base_currency = query.target_currency or await self._get_base_currency()
-        date_from = query.date_range.start if query.date_range else None
-        date_to = query.date_range.end if query.date_range else None
+        date_from = query.date_range.resolved_start() if query.date_range else None
+        date_to = query.date_range.resolved_end() if query.date_range else None
 
         # ── 1. Single engine run ──
         engine = PortfolioCalculationEngine(self.db)
@@ -1017,6 +1164,7 @@ class PortfolioService:
                 broker_ids=query.broker_ids,
                 target_currency_override=base_currency,
                 include_breakdown=query.include_breakdown,
+                date_from=date_from,
                 _precomputed_engine_result=engine_result,
             )
 
@@ -1038,9 +1186,9 @@ class PortfolioService:
         if query.include_allocation_history:
             included.append("allocation_history")
             alloc_history = AllocationHistoryDimensions(
-                type=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("type")],
-                sector=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("sector")],
-                geography=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("geography")],
+                type=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("type", date_from=date_from)],
+                sector=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("sector", date_from=date_from)],
+                geography=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("geography", date_from=date_from)],
             )
 
         # ── 5. Data quality from engine (already computed if summary was built) ──

@@ -55,7 +55,7 @@
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
-    import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
+    import {getStart, getEnd, setDateRange, resolveDateSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {fetchCurrentPrices} from '$lib/services/livePriceService';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
@@ -92,9 +92,9 @@
         return error.startsWith('_i18n:') ? $t(error.slice(6)) : error;
     });
 
-    // Date range — global store is source of truth
-    let dateEnd = $state(getEnd());
-    let dateStart = $state(getStart());
+    // Date range — global store is source of truth (resolve min/max sentinels for API)
+    let dateEnd = $state(resolveDateSentinel(getEnd()));
+    let dateStart = $state(resolveDateSentinel(getStart()));
     let activePreset: any = $state(null);
 
     let viewMode: ViewMode = $state('percentage');
@@ -1172,8 +1172,8 @@
     }
 
     async function handleDateRangeChange(newStart: string, newEnd: string) {
-        dateStart = newStart;
-        dateEnd = newEnd;
+        dateStart = resolveDateSentinel(newStart);
+        dateEnd = resolveDateSentinel(newEnd);
         setDateRange(newStart, newEnd);
         // Sync URL for shareability
         replaceHistoryDateRange(dateStart, dateEnd);

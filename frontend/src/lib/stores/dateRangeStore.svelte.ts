@@ -112,3 +112,28 @@ export function seedFromUrl(searchParams: URLSearchParams): void {
         setDateRange(_start, urlEnd);
     }
 }
+
+/**
+ * Resolve sentinel values ("min"/"max") to concrete ISO dates for endpoints
+ * that don't support the sentinel protocol (DateRangeModel-based APIs).
+ *
+ * - "min" → "2000-01-01" (earliest reasonable date)
+ * - "max" → today's date
+ * - Any other value → pass through unchanged
+ */
+export function resolveDateSentinel(value: string): string {
+    if (value === 'min') return '2000-01-01';
+    if (value === 'max') return new Date().toISOString().slice(0, 10);
+    return value;
+}
+
+/**
+ * Get start/end with sentinels resolved for non-sentinel APIs.
+ */
+export function getResolvedStart(): string {
+    return resolveDateSentinel(_start);
+}
+
+export function getResolvedEnd(): string {
+    return resolveDateSentinel(_end);
+}

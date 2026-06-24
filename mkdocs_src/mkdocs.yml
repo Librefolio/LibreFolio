@@ -197,6 +197,10 @@ plugins:
             Max Drawdown: Massimo Drawdown
             Volatility: Volatilità
             Weighted Average Cost: Costo Medio Ponderato
+            NAV / Net Worth: NAV / Net Worth
+            Book Value: Valore Contabile
+            Period P&L: P&L del Periodo
+            Timing Effect: Effetto Timing
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             "🖼️ Gallery": "🖼️ Galleria"
             Desktop: Desktop
@@ -335,6 +339,10 @@ plugins:
             Max Drawdown: Drawdown Maximum
             Volatility: Volatilité
             Weighted Average Cost: Coût Moyen Pondéré
+            NAV / Net Worth: NAV / Net Worth
+            Book Value: Valeur Comptable
+            Period P&L: P&L de la Période
+            Timing Effect: Effet de timing
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             "🖼️ Gallery": "🖼️ Galerie"
             Desktop: Bureau
@@ -473,6 +481,10 @@ plugins:
             Max Drawdown: Drawdown Máximo
             Volatility: Volatilidad
             Weighted Average Cost: Coste Medio Ponderado
+            NAV / Net Worth: NAV / Net Worth
+            Book Value: Valor Contable
+            Period P&L: P&L del Periodo
+            Timing Effect: Efecto timing
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             "🖼️ Gallery": "🖼️ Galería"
             Desktop: Escritorio
@@ -633,6 +645,10 @@ nav:
               - Sine Wave: financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md
           - 🏆 Performance Metrics:
               - Overview: financial-theory/technical-analysis/performance-metrics/index.md
+              - NAV / Net Worth: financial-theory/technical-analysis/performance-metrics/nav.md
+              - Book Value: financial-theory/technical-analysis/performance-metrics/book-value.md
+              - Period P&L: financial-theory/technical-analysis/performance-metrics/period-pnl.md
+              - Timing Effect: financial-theory/technical-analysis/performance-metrics/timing-effect.md
               - ROI: financial-theory/technical-analysis/performance-metrics/roi.md
               - TWRR: financial-theory/technical-analysis/performance-metrics/twrr.md
               - MWRR: financial-theory/technical-analysis/performance-metrics/mwrr.md

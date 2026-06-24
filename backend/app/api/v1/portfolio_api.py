@@ -221,7 +221,8 @@ async def get_allocation_history(
         target_currency=body.target_currency,
     )
     views = DerivedViewsBuilder(result.daily_states, result.target_currency)
-    series_dicts = views.build_allocation_history(body.dimension)
+    date_from = body.date_range.start if body.date_range else None
+    series_dicts = views.build_allocation_history(body.dimension, date_from=date_from)
 
     from backend.app.schemas.portfolio import AllocationHistoryPoint  # noqa: PLC0415
 
