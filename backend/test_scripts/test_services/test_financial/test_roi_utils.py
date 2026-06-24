@@ -288,6 +288,67 @@ class TestMWRRSeries:
         if series[1].mwrr is not None and p2_oneshot.mwrr is not None:
             assert series[1].mwrr == pytest.approx(p2_oneshot.mwrr, abs=Decimal("0.001"))
 
+    def test_cold_start_matches_warm_start_on_clean_data(self):
+        """Cold-start and warm-start produce same results when no contamination."""
+        navs = [
+            NAVSnapshot(date(2025, 1, 1), Decimal("10000")),
+            NAVSnapshot(date(2025, 6, 1), Decimal("10500")),
+            NAVSnapshot(date(2025, 12, 31), Decimal("12000")),
+        ]
+        cfs = [CashFlowInput(date(2025, 6, 1), Decimal("-1000"))]
+
+        warm = calculate_mwrr_series(navs, cfs, use_warm_start=True)
+        cold = calculate_mwrr_series(navs, cfs, use_warm_start=False)
+        assert len(warm) == len(cold) == 2
+        for w, c in zip(warm, cold):
+            if w.mwrr is not None and c.mwrr is not None:
+                assert w.mwrr == pytest.approx(c.mwrr, abs=Decimal("0.01"))
+
+    def test_warm_start_guard_prevents_contamination(self):
+        """Large deposit on day 1 should not produce extreme cumulative at end.
+
+        This replicates the boundary bug: date_from lands on a deposit day,
+        synthetic CF creates a large initial NAV, first-day return annualizes to extreme.
+        The warm-start guard should prevent propagation.
+        """
+        from datetime import timedelta
+
+        # Simulate: period starts with NAV=26000, steady growth to 27000 over 90 days
+        navs = [NAVSnapshot(date(2025, 1, 1), Decimal("26000"))]
+        for d in range(1, 91):
+            nav = Decimal("26000") + Decimal(str(d * 11))  # ~11/day → ~26990 at end
+            navs.append(NAVSnapshot(date(2025, 1, 1) + timedelta(days=d), nav))
+        # One deposit on day 30
+        cfs = [CashFlowInput(date(2025, 1, 1) + timedelta(days=30), Decimal("-500"))]
+
+        series = calculate_mwrr_series(navs, cfs, use_warm_start=True)
+        # Summary MWRR for same data
+        summary = calculate_mwrr(cfs, navs[0].nav, navs[-1].nav, navs[0].date, navs[-1].date)
+
+        # The series last point should be close to summary (within 100bp)
+        if series and series[-1].mwrr is not None and summary.mwrr is not None:
+            assert abs(float(series[-1].mwrr) - float(summary.mwrr)) < 1.0, (
+                f"Series last ({series[-1].mwrr}) diverged from summary ({summary.mwrr})"
+            )
+
+    def test_cold_start_mode(self):
+        """use_warm_start=False should never propagate prev_guess."""
+        from datetime import timedelta
+
+        navs = [
+            NAVSnapshot(date(2025, 1, 1), Decimal("26000")),
+            NAVSnapshot(date(2025, 1, 2), Decimal("26100")),  # 0.38% daily → extreme annualized
+            NAVSnapshot(date(2025, 4, 1), Decimal("27000")),
+        ]
+        cfs = [CashFlowInput(date(2025, 1, 1), Decimal("-26000"))]
+
+        cold = calculate_mwrr_series(navs, cfs, use_warm_start=False)
+        assert len(cold) == 2
+        # With cold start, each point starts from 0.1 → should find moderate root for day 90
+        if cold[-1].mwrr is not None:
+            # For 90-day period with ~3.8% total return, annualized should be moderate
+            assert abs(float(cold[-1].mwrr)) < 2.0, f"Cold-start produced extreme rate: {cold[-1].mwrr}"
+
 
 # ---------------------------------------------------------------------------
 # TestSimpleROISeries

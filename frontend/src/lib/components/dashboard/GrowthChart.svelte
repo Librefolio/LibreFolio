@@ -69,24 +69,27 @@
         return null;
     }
 
-    // EUR mode: stacked area (open_cost_basis + cash + in_transit_book_value) + NAV overlay
+    // EUR mode: stacked area (cash + cost_basis) + NAV line overlay
+    // Gap between top of stack (book_value) and NAV = unrealized G/L on assets
+    // Gap between NAV and net_invested (in tooltip) = total P&L
     const eurStackedData = $derived({
-        costBasis: history.map((pt) => amt(pt.open_cost_basis)),
         cash: history.map((pt) => (pt.cash_value != null ? Number(pt.cash_value.amount) : null)),
+        costBasis: history.map((pt) => amt(pt.open_cost_basis)),
         inTransit: history.map((pt) => amt(pt.in_transit_book_value)),
         nav: history.map((pt) => (pt.nav_value != null ? Number(pt.nav_value.amount) : null)),
+        netInvested: history.map((pt) => amt(pt.net_invested)),
     });
 
     // Translated labels for EUR mode (tracked for reactivity on locale change)
     const eurLabels = $derived({
-        costBasis: $_('dashboard.bookValue'),
         cash: $_('dashboard.cashValue'),
+        costBasis: $_('dashboard.bookValue'),
         inTransit: $_('dashboard.inTransit'),
         nav: $_('dashboard.navValue'),
-        bookValue: $_('dashboard.bookValue'),
+        netInvested: $_('dashboard.netDepositedCapital'),
     });
 
-    const pctSeries = $derived([
+    const pctSeriesRaw = $derived([
         {
             name: $_('dashboard.mwrrCum'),
             data: history.map((pt) => (pt.mwrr_cumulative != null ? Number(pt.mwrr_cumulative) * 100 : null)),
@@ -106,6 +109,8 @@
             colorKey: 'pctCash' as const,
         },
     ]);
+    // Filter out series with all-null data (e.g. MWRR when marked unreliable)
+    const pctSeries = $derived(pctSeriesRaw.filter((s) => s.data.some((v) => v != null)));
 
     const hasPctData = $derived(history.some((pt) => pt.mwrr_cumulative != null || pt.twrr != null || pt.roi != null));
     const hasNonZeroPctData = $derived(history.some((pt) => Number(pt.mwrr_cumulative ?? 0) !== 0 || Number(pt.twrr ?? 0) !== 0 || Number(pt.roi ?? 0) !== 0));
@@ -184,7 +189,7 @@
         if (viewMode === 'eur') {
             const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
             series = [
-                // Stacked area: open_cost_basis (bottom) — visible boundary line
+                // Stacked area: cost basis (invested in assets, bottom)
                 {
                     name: eurLabels.costBasis,
                     type: 'line',
@@ -197,7 +202,7 @@
                     itemStyle: {color: cc('costBasis')},
                     emphasis: {focus: 'series'},
                 },
-                // Stacked area: cash (middle) — visible boundary line
+                // Stacked area: cash (middle)
                 {
                     name: eurLabels.cash,
                     type: 'line',
@@ -210,7 +215,7 @@
                     itemStyle: {color: cc('cash')},
                     emphasis: {focus: 'series'},
                 },
-                // Stacked area: in-transit book value (top) — visible boundary line
+                // Stacked area: in-transit (top of stack)
                 {
                     name: eurLabels.inTransit,
                     type: 'line',
@@ -223,7 +228,7 @@
                     itemStyle: {color: cc('inTransit')},
                     emphasis: {focus: 'series'},
                 },
-                // Overlay line: NAV (not stacked) — prominent
+                // Overlay line: NAV
                 {
                     name: eurLabels.nav,
                     type: 'line',
@@ -283,31 +288,31 @@
                     const date = items[0]?.axisValue ?? '';
 
                     if (viewMode === 'eur') {
-                        // ECharts stacks values cumulatively in params[i].value — use raw data index instead
                         const idx = items[0]?.dataIndex ?? 0;
-                        const costVal = eurStackedData.costBasis[idx];
                         const cashVal = eurStackedData.cash[idx];
+                        const costVal = eurStackedData.costBasis[idx];
                         const itVal = eurStackedData.inTransit[idx];
                         const navVal = eurStackedData.nav[idx];
+                        const netInvVal = eurStackedData.netInvested[idx];
 
-                        const bv = (costVal ?? 0) + (cashVal ?? 0) + (itVal ?? 0);
-                        const ugl = navVal != null ? navVal - bv : null;
+                        const bv = (cashVal ?? 0) + (costVal ?? 0) + (itVal ?? 0);
+                        const pnl = navVal != null && netInvVal != null ? navVal - netInvVal : null;
 
                         const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
                         const dot = (key: keyof typeof COLORS) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${cc(key)};margin-right:6px;flex-shrink:0"></span>`;
 
                         let html = `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>`;
                         html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('nav')}<b>${eurLabels.nav}</b></span><b>${fmtCurrency(navVal)}</b></div>`;
-                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span><b>${eurLabels.bookValue}</b></span><b>${fmtCurrency(bv || null)}</b></div>`;
-                        if (ugl != null) {
-                            const uglColor = ugl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
-                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${uglColor}"><span>± P/L</span><b>${ugl >= 0 ? '+' : ''}${fmtCurrency(Math.abs(ugl))}</b></div>`;
-                        }
                         html += `<hr style="border:none;border-top:1px solid ${tooltipBorder};margin:4px 0"/>`;
-                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('costBasis')}${eurLabels.costBasis}</span>${fmtCurrency(costVal)}</div>`;
                         html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('cash')}${eurLabels.cash}</span>${fmtCurrency(cashVal)}</div>`;
+                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('costBasis')}${eurLabels.costBasis}</span>${fmtCurrency(costVal)}</div>`;
                         if (itVal && itVal > 0) {
                             html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('inTransit')}${eurLabels.inTransit}</span>${fmtCurrency(itVal)}</div>`;
+                        }
+                        if (pnl != null) {
+                            html += `<hr style="border:none;border-top:1px solid ${tooltipBorder};margin:4px 0"/>`;
+                            const pnlColor = pnl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
+                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${pnlColor}"><span>P/L</span><b>${pnl >= 0 ? '+' : ''}${fmtCurrency(Math.abs(pnl))}</b></div>`;
                         }
                         return html;
                     }

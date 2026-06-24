@@ -38,6 +38,7 @@
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import KpiMetricBar from '$lib/components/dashboard/KpiMetricBar.svelte';
+    import KpiDivergingFlowBar from '$lib/components/dashboard/KpiDivergingFlowBar.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
     import {goto} from '$app/navigation';
@@ -149,6 +150,17 @@
         return formatCurrencyAmountPlain(rendered, code ?? displayCurrency, {showSign});
     }
 
+    /** Build tooltip HTML with right-aligned values for breakdown rows. */
+    function tooltipRows(description: string, rows: {emoji: string; label: string; value: string}[]): string {
+        let html = `<div style="font-size:12px;max-width:300px">${description}`;
+        html += `<table style="width:100%;margin-top:6px;border-collapse:collapse">`;
+        for (const r of rows) {
+            html += `<tr><td style="white-space:nowrap">${r.emoji} ${r.label}</td><td style="text-align:right;padding-left:12px;white-space:nowrap;font-weight:500">${r.value}</td></tr>`;
+        }
+        html += `</table></div>`;
+        return html;
+    }
+
     /** Allocation data for charts (Record<string, number> where value = 0-1). */
     const allocationByType = $derived(summary ? Object.fromEntries((summary.allocation_by_type ?? []).map((i) => [i.name, parseFloat(i.value) / 100])) : {});
     const allocationBySector = $derived(summary ? Object.fromEntries((summary.allocation_by_sector ?? []).map((i) => [i.name, parseFloat(i.value) / 100])) : {});
@@ -186,30 +198,44 @@
 
     // KPI derived values — Net Worth card
     const netWorthValue = $derived(summary ? formatMoney(summary.net_worth.code, summary.net_worth.amount) : '—');
+    const marketValueCur = $derived(summary ? safeCurrency(summary.market_value) : null);
+    const marketValueAmt = $derived(marketValueCur ? parseFloat(marketValueCur.amount) : 0);
+    const marketValueStr = $derived(marketValueCur ? formatMoney(marketValueCur.code, marketValueCur.amount) : '—');
+    const marketValueStartCur = $derived(summary ? safeCurrency(summary.period_market_value_start) : null);
+    const marketValueStartAmt = $derived(marketValueStartCur ? parseFloat(marketValueStartCur.amount) : 0);
+    const marketValueStartStr = $derived(marketValueStartCur ? formatMoney(marketValueStartCur.code, marketValueStartCur.amount) : '');
     const bookValueCur = $derived(summary ? safeCurrency(summary.book_value) : null);
     const bookValueAmt = $derived(bookValueCur ? parseFloat(bookValueCur.amount) : 0);
-    const navValueAmt = $derived(summary ? parseFloat(summary.net_worth.amount) : 0);
-    const navStartCur = $derived(summary ? safeCurrency(summary.period_nav_start) : null);
-    const navStartAmt = $derived(navStartCur ? parseFloat(navStartCur.amount) : 0);
-    const navStartStr = $derived(navStartCur ? formatMoney(navStartCur.code, navStartCur.amount) : '');
+    const bookValueStr = $derived(bookValueCur ? formatMoney(bookValueCur.code, bookValueCur.amount) : '—');
     const bookStartCur = $derived(summary ? safeCurrency(summary.period_book_value_start) : null);
     const bookStartAmt = $derived(bookStartCur ? parseFloat(bookStartCur.amount) : 0);
     const bookStartStr = $derived(bookStartCur ? formatMoney(bookStartCur.code, bookStartCur.amount) : '');
     const cashAmt = $derived(summary ? parseFloat(summary.cash_total.amount) : 0);
     const cashTotalStr = $derived(summary ? formatMoney(summary.cash_total.code, summary.cash_total.amount) : '—');
-    const uglCur = $derived(summary ? safeCurrency(summary.unrealized_gain_loss) : null);
-    const uglStr = $derived(uglCur ? formatMoney(uglCur.code, uglCur.amount, {signed: true}) : '—');
-    const uglPositive = $derived(uglCur ? parseFloat(uglCur.amount) >= 0 : undefined);
-    const bookValueStr = $derived(bookValueCur ? formatMoney(bookValueCur.code, bookValueCur.amount) : '—');
 
-    // Net Worth bars — normalized on max(nav_start, nav_end, book_start, book_end, cash)
-    const nwBarMax = $derived(Math.max(navStartAmt, navValueAmt, bookValueAmt, bookStartAmt, cashAmt) || 1);
-    const navBarPct = $derived((navValueAmt / nwBarMax) * 100);
+    // Net Deposited Capital
+    const netDepositedCur = $derived(summary ? safeCurrency(summary.net_deposited_capital) : null);
+    const netDepositedAmt = $derived(netDepositedCur ? parseFloat(netDepositedCur.amount) : 0);
+    const netDepositedStr = $derived(netDepositedCur ? formatMoney(netDepositedCur.code, netDepositedCur.amount, {signed: true}) : '—');
+    const totalDepositedCur = $derived(summary ? safeCurrency(summary.total_deposited) : null);
+    const totalDepositedStr = $derived(totalDepositedCur ? formatMoney(totalDepositedCur.code, totalDepositedCur.amount, {signed: true}) : '—');
+    const totalWithdrawnCur = $derived(summary ? safeCurrency(summary.total_withdrawn) : null);
+    const totalWithdrawnStr = $derived(totalWithdrawnCur ? formatMoney(totalWithdrawnCur.code, `-${totalWithdrawnCur.amount}`) : '—');
+    const totalDepositedAmt = $derived(totalDepositedCur ? parseFloat(totalDepositedCur.amount) : 0);
+    const totalWithdrawnAmt = $derived(totalWithdrawnCur ? parseFloat(totalWithdrawnCur.amount) : 0);
+    const netDepositedPositive = $derived(netDepositedAmt >= 0);
+
+    // Net Worth bars — all bars share same scale including NAV hero
+    const navHeroAmt = $derived(summary ? parseFloat(summary.net_worth.amount) : 0);
+    const nwBarMax = $derived(Math.max(navHeroAmt, marketValueStartAmt, marketValueAmt, bookValueAmt, bookStartAmt, cashAmt, totalDepositedAmt, totalWithdrawnAmt) || 1);
+    const marketBarPct = $derived((marketValueAmt / nwBarMax) * 100);
     const bookBarPct = $derived((bookValueAmt / nwBarMax) * 100);
     const cashBarPct = $derived((cashAmt / nwBarMax) * 100);
-    const navStartMarkerPct = $derived(navStartAmt > 0 ? (navStartAmt / nwBarMax) * 100 : 0);
+    const depositBarPct = $derived((totalDepositedAmt / nwBarMax) * 100);
+    const withdrawBarPct = $derived((totalWithdrawnAmt / nwBarMax) * 100);
+    const marketStartMarkerPct = $derived(marketValueStartAmt > 0 ? (marketValueStartAmt / nwBarMax) * 100 : 0);
     const bookStartMarkerPct = $derived(bookStartAmt > 0 ? (bookStartAmt / nwBarMax) * 100 : 0);
-    const navBarColor = $derived(navValueAmt >= navStartAmt ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500');
+    const marketBarColor = $derived(marketValueAmt >= marketValueStartAmt ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500');
 
     // KPI derived values — Period P&L card
     const periodPnlCur = $derived(summary ? safeCurrency(summary.period_pnl) : null);
@@ -229,6 +255,20 @@
     const feesCur = $derived(summary ? safeCurrency(summary.period_fees_taxes) : null);
     const feesAmt = $derived(feesCur ? parseFloat(feesCur.amount) : 0);
     const feesStr = $derived(feesCur ? formatMoney(feesCur.code, `-${feesCur.amount}`) : '—');
+    const feesOnlyCur = $derived(summary ? safeCurrency(summary.period_fees) : null);
+    const feesOnlyStr = $derived(feesOnlyCur ? formatMoney(feesOnlyCur.code, `-${feesOnlyCur.amount}`) : '—');
+    const taxesOnlyCur = $derived(summary ? safeCurrency(summary.period_taxes) : null);
+    const taxesOnlyStr = $derived(taxesOnlyCur ? formatMoney(taxesOnlyCur.code, `-${taxesOnlyCur.amount}`) : '—');
+
+    // HTML tooltips with right-aligned numbers
+    const netDepositedTooltipHtml = $derived(tooltipRows(
+        $_('dashboard.netDepositedCapitalTooltip', {values: {deposited: '', withdrawn: ''}}).split('\n')[0],
+        [{emoji: '🟢', label: $_('dashboard.totalDeposited'), value: totalDepositedStr}, {emoji: '🔴', label: $_('dashboard.totalWithdrawn'), value: totalWithdrawnStr}]
+    ));
+    const feesTooltipHtml = $derived(tooltipRows(
+        $_('dashboard.feesAndTaxesTooltip', {values: {fees: '', taxes: ''}}).split('\n')[0],
+        [{emoji: '🏦', label: $_('dashboard.feesLabel') || 'Commissions', value: feesOnlyStr}, {emoji: '🏛️', label: $_('dashboard.taxesLabel') || 'Taxes', value: taxesOnlyStr}]
+    ));
 
     // P&L bar normalization
     const pnlBarMax = $derived(Math.max(Math.abs(uglDeltaAmt), Math.abs(realizedAmt), Math.abs(incomeAmt), feesAmt) || 1);
@@ -506,18 +546,21 @@
             {:else}
                 <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 text-right" data-testid="kpi-value">{netWorthValue}</p>
                 <div class="flex flex-col gap-2 mt-1">
-                    <KpiMetricBar label={$_('dashboard.navValue')} value={netWorthValue} barPct={navBarPct} barColor={navBarColor} marker={navStartMarkerPct > 0 ? navStartMarkerPct : undefined} markerTooltip="{$_('dashboard.startNav')}: {navStartStr}" />
-                    <KpiMetricBar label={$_('dashboard.bookValue')} value={bookValueStr} barPct={bookBarPct} barColor="bg-slate-400 dark:bg-slate-500" marker={bookStartMarkerPct > 0 ? bookStartMarkerPct : undefined} markerTooltip="{$_('dashboard.bookValue')} start: {bookStartStr}" />
+                    <KpiMetricBar label={$_('dashboard.marketValue')} value={marketValueStr} barPct={marketBarPct} barColor={marketBarColor} marker={marketStartMarkerPct > 0 ? marketStartMarkerPct : undefined} markerTooltip="{$_('dashboard.marketValueStart')}: {marketValueStartStr}" />
+                    <KpiMetricBar label={$_('dashboard.bookValue')} value={bookValueStr} barPct={bookBarPct} barColor="bg-slate-400 dark:bg-slate-500" marker={bookStartMarkerPct > 0 ? bookStartMarkerPct : undefined} markerTooltip="{$_('dashboard.bookValueStart')}: {bookStartStr}" />
                     <KpiMetricBar label={$_('dashboard.cashValue')} value={cashTotalStr} barPct={cashBarPct} barColor="bg-sky-400 dark:bg-sky-500" />
+                    <KpiDivergingFlowBar
+                        label={$_('dashboard.netDepositedCapital')}
+                        tooltipHtml={netDepositedTooltipHtml}
+                        value={netDepositedStr}
+                        depositPct={depositBarPct}
+                        withdrawPct={withdrawBarPct}
+                        valueColor={netDepositedPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}
+                    />
                 </div>
-                <div class="flex items-center justify-between text-xs mt-0.5">
-                    <span class="text-gray-500 dark:text-gray-400">{$_('dashboard.unrealizedGainLoss')}</span>
-                    <span class="font-medium {uglPositive === true ? 'text-green-600 dark:text-green-400' : uglPositive === false ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}">{uglStr}</span>
-                </div>
+                <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.periodScopeNote')}</p>
             {/if}
         </div>
-
-        <!-- Card 2 — Period P&L -->
         <div class="relative bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-period-pnl">
             {#if periodPnlPositive !== undefined}
                 <div class="absolute top-0 left-0 right-0 h-0.5 {periodPnlPositive ? 'bg-green-500 dark:bg-green-400' : 'bg-red-500 dark:bg-red-400'}"></div>
@@ -535,7 +578,7 @@
                     <KpiMetricBar label={$_('dashboard.unrealizedDelta')} tooltip={$_('dashboard.unrealizedDeltaTooltip')} value={uglDeltaStr} barPct={pnlBarPct(uglDeltaAmt)} barColor={pnlBarColor(uglDeltaAmt)} valueColor={pnlValueColor(uglDeltaAmt)} />
                     <KpiMetricBar label={$_('dashboard.realizedSales')} tooltip={$_('dashboard.realizedSalesTooltip')} value={realizedStr} barPct={pnlBarPct(realizedAmt)} barColor={pnlBarColor(realizedAmt)} valueColor={pnlValueColor(realizedAmt)} />
                     <KpiMetricBar label={$_('dashboard.income')} tooltip={$_('dashboard.incomeTooltip')} value={incomeStr} barPct={pnlBarPct(incomeAmt)} barColor="bg-green-500 dark:bg-green-400" valueColor="text-green-600 dark:text-green-400" />
-                    <KpiMetricBar label={$_('dashboard.feesAndTaxes')} tooltip={$_('dashboard.feesAndTaxesTooltip')} value={feesStr} barPct={pnlBarPct(feesAmt)} barColor="bg-red-400 dark:bg-red-500" valueColor="text-red-600 dark:text-red-400" />
+                    <KpiMetricBar label={$_('dashboard.feesAndTaxes')} tooltipHtml={feesTooltipHtml} value={feesStr} barPct={pnlBarPct(feesAmt)} barColor="bg-red-400 dark:bg-red-500" valueColor="text-red-600 dark:text-red-400" />
                 </div>
                 <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.cashFlowAdjustedResult')}</p>
             {/if}
