@@ -368,6 +368,12 @@ class DailyPortfolioState:
     # Performance inputs
     external_cash_flow: Decimal
     cumulative_external_cash_flow: Decimal  # Running total of deposits - withdrawals (net invested capital)
+    # Cash decomposition (Capital Baseline narrative: P&L = NAV - capital_baseline)
+    # capital_baseline = cumulative_external_cash_flow (alias, same value)
+    book_asset_like: Decimal  # open_cost_basis + in_transit_asset_cost_basis
+    cash_from_contributed_capital: Decimal  # min(cash_like, max(capital_baseline - book_asset_like, 0))
+    cash_from_generated_returns: Decimal  # cash_like - cash_from_contributed_capital
+    total_pnl: Decimal  # nav_value - capital_baseline
     # Allocation
     by_type: dict[str, Decimal] = field(default_factory=dict)
     by_sector: dict[str, Decimal] = field(default_factory=dict)
@@ -455,6 +461,13 @@ class DailyStateBuilder:
         cumulative_cash = zero
         cumulative_ecf = zero  # cumulative external cash flow (net invested capital)
         cumulative_qty: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
+        # Two-pool cash decomposition (stateful "returns consumed first" convention):
+        # - capital_cash_pool: liquidity attributable to external capital not yet deployed
+        # - returns_cash_pool: liquidity from returns (interest, dividends, realized gains)
+        # Convention: BUY consumes returns first; SELL returns principal to capital.
+        capital_cash_pool = zero
+        returns_cash_pool = zero
+        prev_book_asset_like = zero  # previous day's book_asset_like for delta tracking
 
         current = self.date_from
         while current <= self.date_to:
@@ -511,9 +524,77 @@ class DailyStateBuilder:
             book = open_cost_basis + cumulative_cash + in_transit_bv
             ug = nav - book
 
-            # 4g. External cash flow for this day
+            # 4g. Two-pool cash decomposition (stateful, "returns consumed first")
+            #
+            # Model: two virtual pools track cash provenance at cost-basis level.
+            #   capital_cash_pool: cash attributable to external deposits not yet invested
+            #   returns_cash_pool: cash from portfolio returns (interest, dividends, realized gains)
+            #
+            # Daily update rules (using delta in book_asset_like to track capital deployment):
+            #   1. ECF (DEPOSIT/WITHDRAWAL/linked-external) → capital_pool
+            #   2. Change in book_asset_like tells us capital flow between cash ↔ assets:
+            #      - If assets grew: capital was deployed (BUY consumed capital first, then returns)
+            #      - If assets shrank: capital was returned (SELL returns principal to capital_pool)
+            #   3. Net non-ECF residual after accounting for asset changes → returns_pool
+            #
+            # This ensures:
+            #   - After deposit + partial buy: residual = capital cash ✓
+            #   - Interest/dividend: shows as returns cash ✓
+            #   - Sell in gain: principal returns to capital, gain to returns ✓
+            #   - Sell in loss: principal (partial) returns to capital ✓
             ecf_today = ecf_by_date.get(current, zero)
             cumulative_ecf += ecf_today
+            capital_baseline = cumulative_ecf
+
+            book_asset_like = open_cost_basis + it_asset_cb
+            cash_like = cumulative_cash + it_cash
+
+            # Delta in asset cost basis since yesterday = capital flow direction
+            delta_assets = book_asset_like - prev_book_asset_like
+
+            # Step 1: ECF → capital pool (deposits add, withdrawals remove)
+            capital_cash_pool += ecf_today
+
+            # Step 2: Asset cost basis change drives capital/returns flow
+            if delta_assets > zero:
+                # Assets grew (BUY): consumes cash. Priority: returns consumed first.
+                from_returns = min(delta_assets, max(returns_cash_pool, zero))
+                returns_cash_pool -= from_returns
+                from_capital = delta_assets - from_returns
+                capital_cash_pool -= from_capital
+            elif delta_assets < zero:
+                # Assets shrank (SELL): returns cost basis to capital_pool
+                capital_cash_pool += abs(delta_assets)
+
+            # Step 3: Non-asset cash changes = returns (interest, dividends, fees, taxes)
+            # = total cash delta - ECF - (-delta_assets, which is the cash from asset movement)
+            # Simplification: net_returns_delta = (total cash delta today) - ecf_today - (-delta_assets)
+            total_cash_delta = cash_deltas.get(current, zero)
+            returns_delta = total_cash_delta - ecf_today + delta_assets
+            # This captures: INTEREST(+), DIVIDEND(+), FEE(-), TAX(-), realized gain/loss on SELL
+            returns_cash_pool += returns_delta
+
+            # Clamp pools to non-negative (rounding safety)
+            capital_cash_pool = max(capital_cash_pool, zero)
+            returns_cash_pool = max(returns_cash_pool, zero)
+
+            # Derive final values, reconciled to actual cash_like
+            cash_like = cumulative_cash + it_cash
+            pool_sum = capital_cash_pool + returns_cash_pool
+            # Reconcile: pools may drift from cash_like due to FX/rounding/in-transit;
+            # proportionally scale to match actual cash_like
+            if pool_sum > zero and abs(pool_sum - cash_like) > Decimal("0.01"):
+                scale = cash_like / pool_sum
+                cash_from_contributed = max(capital_cash_pool * scale, zero)
+                cash_from_generated = max(cash_like - cash_from_contributed, zero)
+            else:
+                cash_from_contributed = min(capital_cash_pool, cash_like)
+                cash_from_generated = max(cash_like - cash_from_contributed, zero)
+
+            total_pnl = nav - capital_baseline
+
+            # Update prev for next iteration
+            prev_book_asset_like = book_asset_like
 
             # 4h. Allocation: cash as Liquidity (type + sector, not geography)
             by_type["Liquidity"] = by_type.get("Liquidity", zero) + cumulative_cash + it_cash
@@ -538,6 +619,10 @@ class DailyStateBuilder:
                     unrealized_gain_loss=ug,
                     external_cash_flow=ecf_today,
                     cumulative_external_cash_flow=cumulative_ecf,
+                    book_asset_like=book_asset_like,
+                    cash_from_contributed_capital=cash_from_contributed,
+                    cash_from_generated_returns=cash_from_generated,
+                    total_pnl=total_pnl,
                     by_type=dict(by_type),
                     by_sector=dict(by_sector),
                     by_geography=dict(by_geo),
@@ -821,6 +906,11 @@ class DerivedViewsBuilder:
                 "in_transit_book_value": CurrencySchema(code=self.target_currency, amount=s.in_transit_book_value) if s.in_transit_book_value else None,
                 "book_value": CurrencySchema(code=self.target_currency, amount=s.book_value) if s.book_value else None,
                 "net_invested": CurrencySchema(code=self.target_currency, amount=s.cumulative_external_cash_flow) if s.cumulative_external_cash_flow else None,
+                "capital_baseline": CurrencySchema(code=self.target_currency, amount=s.cumulative_external_cash_flow),
+                "book_asset_like": CurrencySchema(code=self.target_currency, amount=s.book_asset_like),
+                "cash_from_contributed_capital": CurrencySchema(code=self.target_currency, amount=s.cash_from_contributed_capital),
+                "cash_from_generated_returns": CurrencySchema(code=self.target_currency, amount=s.cash_from_generated_returns),
+                "total_pnl": CurrencySchema(code=self.target_currency, amount=s.total_pnl),
                 "unrealized_gain_loss": CurrencySchema(code=self.target_currency, amount=s.unrealized_gain_loss) if s.unrealized_gain_loss else None,
             }
             for s in self.daily_states

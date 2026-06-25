@@ -50,9 +50,10 @@
     // Color palettes
     const COLORS = {
         nav: {light: '#1a4031', dark: '#4ade80'}, // NAV — prominent line
-        costBasis: {light: '#3b82f6', dark: '#60a5fa'}, // Open cost basis — blue area
-        cash: {light: '#9caf9c', dark: '#6b8e6b'}, // Cash — subdued green area
-        inTransit: {light: '#f59e0b', dark: '#fbbf24'}, // In-transit — amber area
+        bookAssetLike: {light: '#3b82f6', dark: '#60a5fa'}, // Assets at cost — blue area
+        cashContributed: {light: '#9caf9c', dark: '#6b8e6b'}, // Capital cash — subdued green area
+        cashGenerated: {light: '#10b981', dark: '#34d399'}, // Returns cash — bright emerald area
+        capitalBaseline: {light: '#6b7280', dark: '#9ca3af'}, // Capital baseline — grey dashed
         invested: {light: '#2563eb', dark: '#60a5fa'}, // TWRR (% mode)
         pctCash: {light: '#9caf9c', dark: '#94a3b8'}, // ROI (% mode)
     };
@@ -69,24 +70,43 @@
         return null;
     }
 
-    // EUR mode: stacked area (cash + cost_basis) + NAV line overlay
-    // Gap between top of stack (book_value) and NAV = unrealized G/L on assets
-    // Gap between NAV and net_invested (in tooltip) = total P&L
+    // EUR mode: Capital Baseline narrative
+    // Stacked areas: book_asset_like + cash_from_contributed + cash_from_generated = book_value
+    // Overlay: NAV line (solid) + Capital Baseline line (dashed)
+    // P&L = NAV - Capital Baseline (visible as gap between NAV line and baseline line)
+    //
+    // Convention "returns consumed first":
+    //   - Cash from contributed capital = undeployed external capital sitting in cash
+    //   - Cash from generated returns = income/gains not yet reinvested
+    //   - When buying, returns are consumed first → deposit residuals stay as capital cash
     const eurStackedData = $derived({
-        cash: history.map((pt) => (pt.cash_value != null ? Number(pt.cash_value.amount) : null)),
-        costBasis: history.map((pt) => amt(pt.open_cost_basis)),
-        inTransit: history.map((pt) => amt(pt.in_transit_book_value)),
+        bookAssetLike: history.map((pt) => amt(pt.book_asset_like)),
+        cashContributed: history.map((pt) => amt(pt.cash_from_contributed_capital)),
+        cashGenerated: history.map((pt) => amt(pt.cash_from_generated_returns)),
         nav: history.map((pt) => (pt.nav_value != null ? Number(pt.nav_value.amount) : null)),
-        netInvested: history.map((pt) => amt(pt.net_invested)),
+        capitalBaseline: history.map((pt) => amt(pt.capital_baseline)),
+        totalPnl: history.map((pt) => amt(pt.total_pnl)),
     });
+
+    /**
+     * Period-relative P&L baseline: Total P&L already accumulated at the start of the shown period.
+     * Subtracting this gives "how much was gained IN this period", starting at 0.
+     */
+    const periodBasePnl = $derived((() => {
+        const idx = eurStackedData.totalPnl.findIndex((v) => v != null);
+        if (idx < 0) return 0;
+        return eurStackedData.totalPnl[idx] ?? 0;
+    })());
 
     // Translated labels for EUR mode (tracked for reactivity on locale change)
     const eurLabels = $derived({
-        cash: $_('dashboard.cashValue'),
-        costBasis: $_('dashboard.bookValue'),
-        inTransit: $_('dashboard.inTransit'),
+        bookAssetLike: $_('dashboard.assetsAtCost'),
+        bookAssetLikeTooltip: $_('dashboard.assetsAtCostTooltip'),
+        cashContributed: $_('dashboard.cashFromContributedCapital'),
+        cashGenerated: $_('dashboard.cashFromGeneratedReturns'),
         nav: $_('dashboard.navValue'),
-        netInvested: $_('dashboard.netDepositedCapital'),
+        capitalBaseline: $_('dashboard.capitalBaseline'),
+        capitalBaselineTooltip: $_('dashboard.capitalBaselineTooltip'),
     });
 
     const pctSeriesRaw = $derived([
@@ -189,46 +209,46 @@
         if (viewMode === 'eur') {
             const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
             series = [
-                // Stacked area: cost basis (invested in assets, bottom)
+                // Stacked area: assets at cost (bottom)
                 {
-                    name: eurLabels.costBasis,
+                    name: eurLabels.bookAssetLike,
                     type: 'line',
                     stack: 'bookValue',
-                    data: eurStackedData.costBasis,
+                    data: eurStackedData.bookAssetLike,
                     smooth: false,
                     symbol: 'none',
-                    lineStyle: {color: cc('costBasis'), width: 1, opacity: 0.7},
-                    areaStyle: {color: cc('costBasis') + '55'},
-                    itemStyle: {color: cc('costBasis')},
+                    lineStyle: {color: cc('bookAssetLike'), width: 1, opacity: 0.7},
+                    areaStyle: {color: cc('bookAssetLike') + '44'},
+                    itemStyle: {color: cc('bookAssetLike')},
                     emphasis: {focus: 'series'},
                 },
-                // Stacked area: cash (middle)
+                // Stacked area: capital cash (top of stack)
                 {
-                    name: eurLabels.cash,
+                    name: eurLabels.cashContributed,
                     type: 'line',
                     stack: 'bookValue',
-                    data: eurStackedData.cash,
+                    data: eurStackedData.cashContributed,
                     smooth: false,
                     symbol: 'none',
-                    lineStyle: {color: cc('cash'), width: 1, opacity: 0.7},
-                    areaStyle: {color: cc('cash') + '55'},
-                    itemStyle: {color: cc('cash')},
+                    lineStyle: {color: cc('cashContributed'), width: 1, opacity: 0.7},
+                    areaStyle: {color: cc('cashContributed') + '44'},
+                    itemStyle: {color: cc('cashContributed')},
                     emphasis: {focus: 'series'},
                 },
-                // Stacked area: in-transit (top of stack)
+                // Stacked area: returns cash (middle — returns visible above asset cost)
                 {
-                    name: eurLabels.inTransit,
+                    name: eurLabels.cashGenerated,
                     type: 'line',
                     stack: 'bookValue',
-                    data: eurStackedData.inTransit,
+                    data: eurStackedData.cashGenerated,
                     smooth: false,
                     symbol: 'none',
-                    lineStyle: {color: cc('inTransit'), width: 1, opacity: 0.7},
-                    areaStyle: {color: cc('inTransit') + '55'},
-                    itemStyle: {color: cc('inTransit')},
+                    lineStyle: {color: cc('cashGenerated'), width: 1, opacity: 0.7},
+                    areaStyle: {color: cc('cashGenerated') + '44'},
+                    itemStyle: {color: cc('cashGenerated')},
                     emphasis: {focus: 'series'},
                 },
-                // Overlay line: NAV
+                // Overlay line: NAV (solid)
                 {
                     name: eurLabels.nav,
                     type: 'line',
@@ -237,6 +257,17 @@
                     symbol: 'none',
                     lineStyle: {color: cc('nav'), width: 2, type: 'solid'},
                     itemStyle: {color: cc('nav')},
+                    emphasis: {focus: 'series'},
+                },
+                // Overlay line: Capital Baseline (dashed, secondary)
+                {
+                    name: eurLabels.capitalBaseline,
+                    type: 'line',
+                    data: eurStackedData.capitalBaseline,
+                    smooth: false,
+                    symbol: 'none',
+                    lineStyle: {color: cc('capitalBaseline'), width: 1.5, type: 'dashed'},
+                    itemStyle: {color: cc('capitalBaseline')},
                     emphasis: {focus: 'series'},
                 },
             ];
@@ -289,31 +320,33 @@
 
                     if (viewMode === 'eur') {
                         const idx = items[0]?.dataIndex ?? 0;
-                        const cashVal = eurStackedData.cash[idx];
-                        const costVal = eurStackedData.costBasis[idx];
-                        const itVal = eurStackedData.inTransit[idx];
+                        const assetCostVal = eurStackedData.bookAssetLike[idx];
+                        const cashGenVal = eurStackedData.cashGenerated[idx];
+                        const cashContribVal = eurStackedData.cashContributed[idx];
                         const navVal = eurStackedData.nav[idx];
-                        const netInvVal = eurStackedData.netInvested[idx];
-
-                        const bv = (cashVal ?? 0) + (costVal ?? 0) + (itVal ?? 0);
-                        const pnl = navVal != null && netInvVal != null ? navVal - netInvVal : null;
+                        const baselineVal = eurStackedData.capitalBaseline[idx];
+                        const totalPnlVal = eurStackedData.totalPnl[idx];
 
                         const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
                         const dot = (key: keyof typeof COLORS) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${cc(key)};margin-right:6px;flex-shrink:0"></span>`;
+                        const fmtOrDash = (v: number | null | undefined) => (v != null && v !== 0 ? fmtCurrency(v) : '—');
 
                         let html = `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>`;
+                        // NAV
                         html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('nav')}<b>${eurLabels.nav}</b></span><b>${fmtCurrency(navVal)}</b></div>`;
+                        // Capital Baseline (full label in tooltip)
+                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('capitalBaseline')}${eurLabels.capitalBaselineTooltip}</span>${fmtCurrency(baselineVal)}</div>`;
+                        // Total P&L + formula hint immediately below
+                        if (totalPnlVal != null) {
+                            const pnlColor = totalPnlVal >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
+                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${pnlColor}"><span><b>${$_('dashboard.totalPnl')}</b></span><b>${totalPnlVal >= 0 ? '+' : '−'}${fmtCurrency(Math.abs(totalPnlVal))}</b></div>`;
+                        }
+                        html += `<div style="font-size:10px;color:${textColor};opacity:0.7">${$_('dashboard.pnlFormulaHint')}</div>`;
                         html += `<hr style="border:none;border-top:1px solid ${tooltipBorder};margin:4px 0"/>`;
-                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('cash')}${eurLabels.cash}</span>${fmtCurrency(cashVal)}</div>`;
-                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('costBasis')}${eurLabels.costBasis}</span>${fmtCurrency(costVal)}</div>`;
-                        if (itVal && itVal > 0) {
-                            html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('inTransit')}${eurLabels.inTransit}</span>${fmtCurrency(itVal)}</div>`;
-                        }
-                        if (pnl != null) {
-                            html += `<hr style="border:none;border-top:1px solid ${tooltipBorder};margin:4px 0"/>`;
-                            const pnlColor = pnl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
-                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${pnlColor}"><span>P/L</span><b>${pnl >= 0 ? '+' : ''}${fmtCurrency(Math.abs(pnl))}</b></div>`;
-                        }
+                        // Stacked breakdown — always show (use — for zero)
+                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('bookAssetLike')}${eurLabels.bookAssetLikeTooltip}</span>${fmtOrDash(assetCostVal)}</div>`;
+                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('cashGenerated')}${eurLabels.cashGenerated}</span>${fmtOrDash(cashGenVal)}</div>`;
+                        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span>${dot('cashContributed')}${eurLabels.cashContributed}</span>${fmtOrDash(cashContribVal)}</div>`;
                         return html;
                     }
 
@@ -328,6 +361,7 @@
                 },
             },
             legend: {
+                type: 'scroll',
                 bottom: 0,
                 left: 'center',
                 textStyle: {color: textColor, fontSize: 11},
