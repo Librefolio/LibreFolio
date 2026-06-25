@@ -390,6 +390,14 @@
      */
     async function resolveAssetManual(fakeAssetId: number, realAssetId: number, res: AssetResolution) {
         resolveAsset(fakeAssetId, realAssetId);
+        await checkAndPromptIdentifier(fakeAssetId, realAssetId, res);
+    }
+
+    /**
+     * Check if a resolved asset is missing the extracted identifier and, if so, open the prompt.
+     * Shared by resolveAssetManual and the oncreated callback (new asset from AssetModal).
+     */
+    async function checkAndPromptIdentifier(fakeAssetId: number, realAssetId: number, res: AssetResolution) {
         let info = getAssetInfo(realAssetId);
         if (!info) {
             await refreshAllAssets();
@@ -2374,9 +2382,16 @@ ${arrow}<span>${label}</span></span>`,
             : []}
         initialSearchQuery=""
         zIndex={90}
+        initialNoProvider={true}
         oncreated={(assetId) => {
-            resolveAsset(createAssetForFakeId!, assetId);
+            const fakeId = createAssetForFakeId!;
+            const res = assetResolutions.find((r) => r.fakeAssetId === fakeId);
+            resolveAsset(fakeId, assetId);
             createAssetForFakeId = null;
+            if (res) {
+                // Trigger identifier prompt if the new asset is missing the extracted identifier.
+                void checkAndPromptIdentifier(fakeId, assetId, res);
+            }
         }}
         onclose={() => (createAssetForFakeId = null)}
     />

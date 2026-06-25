@@ -843,15 +843,21 @@
                                         <Check size={12} />
                                     {/if}
                                 </span>
-                                {#if option.iconUrl}
-                                    <img src={option.iconUrl} alt="" class="enum-option-icon" />
-                                {:else if option.dotColor}
-                                    <span class="enum-option-dot" style="background:{option.dotColor}"></span>
-                                {/if}
-                                <span class="enum-label">{option.label}</span>
-                                {#if option.count != null}
-                                    <span class="enum-count">{option.count}</span>
-                                {/if}
+                               <span class="enum-icon-wrapper">
+                                   {#if option.dotColor}
+                                       <span class="enum-option-dot" style="background:{option.dotColor}"></span>
+                                   {/if}
+                                   {#if option.iconUrl}
+                                       <img src={option.iconUrl} alt="" class="enum-option-icon enum-icon-overlay"
+                                           onerror={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
+                                           referrerpolicy="no-referrer"
+                                       />
+                                   {/if}
+                               </span>
+                               <span class="enum-label">{option.label}</span>
+                               {#if option.count != null}
+                                   <span class="enum-count">{option.count}</span>
+                               {/if}
                             </button>
                         {/each}
                     {/if}
@@ -883,11 +889,17 @@
                                         <Check size={12} />
                                     {/if}
                                 </span>
-                                {#if option.iconUrl}
-                                    <img src={option.iconUrl} alt="" class="enum-option-icon" />
-                                {:else if option.dotColor}
-                                    <span class="enum-option-dot" style="background:{option.dotColor}"></span>
-                                {/if}
+                                <span class="enum-icon-wrapper">
+                                    {#if option.dotColor}
+                                        <span class="enum-option-dot" style="background:{option.dotColor}"></span>
+                                    {/if}
+                                    {#if option.iconUrl}
+                                        <img src={option.iconUrl} alt="" class="enum-option-icon enum-icon-overlay"
+                                            onerror={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
+                                            referrerpolicy="no-referrer"
+                                        />
+                                    {/if}
+                                </span>
                                 <span class="enum-label">{option.label}</span>
                                 {#if option.count != null}
                                     <span class="enum-count">{option.count}</span>
@@ -1489,6 +1501,27 @@
         object-fit: contain;
         flex-shrink: 0;
         border-radius: 2px;
+    }
+
+    /* Overlay wrapper: dot as background, img absolutely positioned on top */
+    .enum-icon-wrapper {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1rem;
+        height: 1rem;
+        flex-shrink: 0;
+    }
+
+    .enum-icon-wrapper .enum-option-dot {
+        position: absolute;
+    }
+
+    .enum-icon-wrapper .enum-option-icon {
+        position: absolute;
+        width: 1rem;
+        height: 1rem;
     }
 
     .enum-option-dot {

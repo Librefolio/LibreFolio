@@ -33,7 +33,7 @@
     import type {CountryInfo} from '$lib/stores/reference/countryStore';
     import {ensureCountriesLoaded, getAllCountries} from '$lib/stores/reference/countryStore';
     import {getSectorKeysList, sectorI18nKey} from '$lib/utils/assetTypes';
-    import {ensureSectorsLoaded} from '$lib/stores/reference/sectorStore';
+    import {ensureSectorsLoaded, getSectorEmoji} from '$lib/stores/reference/sectorStore';
     import {CountrySearchSelect, SectorSearchSelect} from '$lib/components/ui/select';
     import {generateUUID} from '$lib/utils/core/uuid';
 
@@ -132,7 +132,7 @@
     let validBarClass = $derived(isValid ? 'bg-libre-green' : isExcess ? 'bg-red-400' : 'bg-amber-400');
 
     /** Sector select options (all keys, with i18n labels) */
-    let allSectorOptions = $derived(getSectorKeysList().map((k) => ({value: k, label: $t(`sectors.${sectorI18nKey(k)}`) || k})));
+    let allSectorOptions = $derived(getSectorKeysList().map((k) => ({value: k, label: `${getSectorEmoji(k)} ${$t(`sectors.${sectorI18nKey(k)}`) || k}`.trim()})));
 
     /** Country select options (all countries, including 'Other' from backend) */
     let allCountryOptions = $derived(countries.map((c) => ({value: c.iso3, label: `${c.flag_emoji || ''} ${c.iso3} — ${c.name}`.trim()})));

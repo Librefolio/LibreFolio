@@ -126,7 +126,7 @@
 <div class="broker-icon {sizes[size].container} rounded-full bg-libre-green/10 dark:bg-libre-green/20 flex items-center justify-center shrink-0 overflow-hidden">
     {#if currentDisplayUrl}
         {#key currentDisplayUrl}
-            <img src={currentDisplayUrl} alt={altText} class="w-full h-full object-cover {imageLoaded ? '' : 'opacity-0'}" onload={handleLoad} onerror={handleError} />
+            <img src={currentDisplayUrl} alt={altText} class="w-full h-full object-cover {imageLoaded ? '' : 'opacity-0'}" onload={handleLoad} onerror={handleError} referrerpolicy="no-referrer" />
         {/key}
     {/if}
 

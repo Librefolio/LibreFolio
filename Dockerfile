@@ -9,8 +9,6 @@
 
 FROM python:3.13-slim
 
-LABEL org.opencontainers.image.description="LibreFolio: Open Source Personal Finance & Portfolio Tracker"
-
 # System dependencies
 #   - gcc, libffi-dev: build native Python extensions
 #   - git: needed for justetf-scraping pip dependency

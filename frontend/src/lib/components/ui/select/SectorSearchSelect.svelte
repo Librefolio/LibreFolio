@@ -13,7 +13,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {ensureSectorsLoaded} from '$lib/stores/reference/sectorStore';
+    import {ensureSectorsLoaded, getSectorEmoji} from '$lib/stores/reference/sectorStore';
     import {getSectorKeysList, sectorI18nKey} from '$lib/utils/assetTypes';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
 
@@ -65,16 +65,18 @@
         return allSectorKeys;
     });
 
-    // Build SelectOption array — sector name localized, searchable by key + name
+    // Build SelectOption array — emoji + sector name localized, searchable by key + name
     let sectorOptions = $derived.by<SelectOption[]>(() => {
         return filteredKeys.map((k) => {
             const i18nKey = `sectors.${sectorI18nKey(k)}`;
             const localized = $t(i18nKey);
-            const label = localized !== i18nKey ? localized : k;
+            const name = localized !== i18nKey ? localized : k;
+            const emoji = getSectorEmoji(k);
+            const label = emoji ? `${emoji} ${name}` : name;
             return {
                 value: k,
                 label,
-                searchText: `${k} ${label}`.trim(),
+                searchText: `${k} ${name}`.trim(),
             };
         });
     });

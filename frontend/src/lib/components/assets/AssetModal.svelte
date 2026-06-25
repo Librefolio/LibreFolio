@@ -33,6 +33,8 @@
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {userSettings} from '$lib/stores/app/settings';
+    import {get} from 'svelte/store';
     import {trySave} from '$lib/utils/trySave';
     import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';
     import {generateUUID} from '$lib/utils/core/uuid';
@@ -101,12 +103,18 @@
          * Replaces concatenated initialSearchQuery for BRIM wizard.
          */
         initialSearchBadges?: Array<{label: string; value: string}>;
+        /**
+         * When true, open the provider section with "No provider" pre-selected.
+         * Used by the BRIM import wizard: assets created manually don't come
+         * from an online search, so the UI should default to no-provider mode.
+         */
+        initialNoProvider?: boolean;
         oncreated?: (assetId: number) => void;
         onupdated?: () => void;
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, initialSearchQuery = '', initialSearchBadges = [], oncreated, onupdated, onclose}: Props = $props();
+    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, initialSearchQuery = '', initialSearchBadges = [], initialNoProvider = false, oncreated, onupdated, onclose}: Props = $props();
 
     // =========================================================================
     // Constants
@@ -401,6 +409,9 @@
                 } else {
                     resetForm();
                 }
+                if (!editMode && initialNoProvider) {
+                    providerNoProvider = true;
+                }
             });
         }
     });
@@ -451,7 +462,7 @@
 
     function resetForm() {
         displayName = '';
-        currency = 'USD';
+        currency = get(userSettings)?.base_currency ?? 'EUR';
         assetType = 'STOCK';
         iconUrl = null;
         quoteBaseQuantity = 1;
@@ -941,6 +952,18 @@
                 open = false;
                 oncreated?.(assetId);
                 return;
+            }
+        }
+
+        // Trigger a full-history sync for new assets with a real data provider.
+        // Parametric providers (e.g. scheduled_investment) generate their own
+        // data and don't need a historical fetch.
+        if (hasProvider && !skipProviderAssignment && !isParametricProvider(providerCode)) {
+            try {
+                const end = new Date().toISOString().slice(0, 10);
+                await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: '1975-01-01', end}} as any]);
+            } catch (syncErr) {
+                console.warn('Post-create full-history sync failed (non-blocking):', syncErr);
             }
         }
 
