@@ -189,6 +189,9 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
             type=raw,value=nightly,enable=${{ github.ref_name == 'dev' }}
+          labels: |
+            org.opencontainers.image.title=LibreFolio
+            org.opencontainers.image.description=LibreFolio: Open Source Personal Finance & Portfolio Tracker
 
 
       - name: Build and Push Docker Image

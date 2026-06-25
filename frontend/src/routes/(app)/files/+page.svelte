@@ -24,13 +24,14 @@
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
+    import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal, ImageEditModal} from '$lib/components/ui/media';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
-    import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, Trash2, X} from 'lucide-svelte';
+    import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, RefreshCw, Trash2, X} from 'lucide-svelte';
     import FilesTable from '$lib/components/files/FilesTable.svelte';
     import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
@@ -194,6 +195,7 @@
 
         selectedBrokerIds = loadBrokerFilter();
         await loadGlobalSettings();
+        await ensurePluginIconsLoaded();
         await loadBrokers();
         await loadFiles();
 
@@ -268,7 +270,7 @@
     const _brokerStoreUnsub = brokerStoreVersion.subscribe(() => {
         const list = getAllBrokers();
         brokers = list as unknown as Broker[];
-        brokerMap = new Map(list.map((b) => [b.id, {id: b.id, name: b.name, icon_url: b.icon_url ?? null, portal_url: b.portal_url ?? null}]));
+        brokerMap = new Map(list.map((b) => [b.id, {id: b.id, name: b.name, icon_url: b.icon_url ?? null, portal_url: b.portal_url ?? null, default_import_plugin: (b as any).default_import_plugin ?? null}]));
     });
     onDestroy(() => _brokerStoreUnsub());
 
@@ -708,6 +710,15 @@
                     {showBrimUploader ? $t('common.close') : $t('uploads.upload')}
                 </button>
             {/if}
+            <button
+                class="btn btn-secondary"
+                data-testid="files-refresh-button"
+                title={$t('common.refresh')}
+                disabled={loading}
+                on:click={() => loadFiles()}
+            >
+                <RefreshCw size={16} class={loading ? 'animate-spin' : ''} />
+            </button>
         </div>
     </header>
 

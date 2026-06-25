@@ -2322,6 +2322,23 @@
         };
     }
 
+    /**
+     * Return true only when the two ops have cash amounts that are exactly
+     * opposite (sum = 0). Required for CASH_TRANSFER promote suggestions —
+     * prevents false positives between unrelated transactions that only share
+     * type and date proximity but have different amounts.
+     * Uses decimal-level precision: amounts are stored as decimal strings.
+     */
+    function cashAmountsCancel(a: PendingOp, b: PendingOp): boolean {
+        if (!a.fields.cash || !b.fields.cash) return false;
+        const numA = Number(a.fields.cash.amount);
+        const numB = Number(b.fields.cash.amount);
+        const maxAbs = Math.max(Math.abs(numA), Math.abs(numB));
+        if (maxAbs === 0) return false;
+        // Exact cancellation: sum must be 0 within floating-point epsilon
+        return Math.abs(numA + numB) / maxAbs < 1e-9;
+    }
+
     /** Selection-based promote detection — 2 standalone rows with matching promote rule. */
     let selectedForPromote = $derived.by(() => {
         if (bulkTableSelectedRows.length !== 2) return null;
@@ -2332,6 +2349,8 @@
         if ((a.op === 'edit' && a.markedDelete) || (b.op === 'edit' && b.markedDelete)) return null;
         const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
         if (!match) return null;
+        // Require cash amounts to be exactly opposite (sum = 0)
+        if (!cashAmountsCancel(a, b)) return null;
         return {...match, opA: a, opB: b};
     });
 
@@ -2483,7 +2502,7 @@
                 const delta = daysDiff(dA, dB);
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(newStandalone[i].fields.type, newStandalone[j].fields.type, $t, buildPromoteCtx(newStandalone[i], newStandalone[j]));
-                if (match) {
+                if (match && cashAmountsCancel(newStandalone[i], newStandalone[j])) {
                     results.push({
                         tempIdA: newStandalone[i].tempId,
                         tempIdB: newStandalone[j].tempId,
@@ -2517,7 +2536,7 @@
                 const delta = daysDiff(dA, dB);
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
-                if (!match) continue;
+                if (!match || !cashAmountsCancel(a, b)) continue;
                 const pairKey = `${(a as any).txId}-${(b as any).txId}`;
                 if (seenPairs.has(pairKey)) continue;
                 seenPairs.add(pairKey);
@@ -3020,7 +3039,10 @@
                 storageKey="tx-bulk-modal"
                 enableSelection={true}
                 enableColumnFilters={false}
-                enablePagination={false}
+                enablePagination={true}
+                alwaysShowPagination={true}
+                defaultPageSize={25}
+                pageSizeOptions={[5, 10, 25, 50, 0]}
                 enableSorting={false}
                 enableColumnVisibility={true}
                 enableActions={true}

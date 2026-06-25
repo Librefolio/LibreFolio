@@ -44,11 +44,16 @@
 
     let mainRows = $state<TXReadItem[]>([]);
     let partnerRows = $state<TXReadItem[]>([]);
+    /** Becomes true after ensurePluginIconsLoaded() resolves — used as a reactive
+     *  dependency in the brokers $derived so that icon-only brokers (step 3 of
+     *  the fallback chain) appear correctly without a manual reload. */
+    let pluginIconsReady = $state(false);
     /** Brokers are sourced from the global `brokerStore` cache; this derived
      *  re-evaluates whenever the store version bumps (load/merge/invalidate),
      *  so icon/name edits propagate without a manual reload. */
     let brokers = $derived.by<BrokerLike[]>(() => {
         void $brokerStoreVersion;
+        void pluginIconsReady; // Re-run after plugin icon cache is populated
         return getAllBrokers() as BrokerLike[];
     });
     let eventTooltipMap = $state<Map<number, AssetEvent>>(new Map());
@@ -143,6 +148,7 @@
         // Pre-load plugin icon cache so getBrokerIconUrl can resolve
         // brokers that only have default_import_plugin (no icon_url/portal_url).
         await ensurePluginIconsLoaded();
+        pluginIconsReady = true;
     }
 
     async function loadEventTooltipMap(rows: TXReadItem[]): Promise<void> {

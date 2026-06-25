@@ -243,7 +243,7 @@ test.describe('Gallery Screenshots', () => {
     }
 
     async function setupDashboardMockReport(page: Page) {
-        const mockDataPath = path.join(__dirname, 'dashboard-report.js');
+        const mockDataPath = path.join(__dirname, 'dashboard-report.json');
         if (fs.existsSync(mockDataPath)) {
             try {
                 const rawMockData = JSON.parse(fs.readFileSync(mockDataPath, 'utf8'));

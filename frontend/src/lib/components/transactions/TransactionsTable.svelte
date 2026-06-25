@@ -757,7 +757,7 @@
             enumOptions: brokers.map((b) => {
                 const iconUrl = getBrokerIconUrl(b);
                 const color = getBrokerColor(b.id, brokers);
-                return {value: String(b.id), label: b.name ?? `#${b.id}`, iconUrl: iconUrl ?? undefined, dotColor: iconUrl ? undefined : color.bg};
+                return {value: String(b.id), label: b.name ?? `#${b.id}`, iconUrl: iconUrl ?? undefined, dotColor: color.bg};
             }),
             getValue: (d) => String(d.tx.broker_id),
             cell: (d) => {
