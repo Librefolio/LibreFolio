@@ -258,7 +258,8 @@
                     type: 'enum',
                     enumOptions: Array.from(brokers.values()).map((b) => {
                         const iconUrl = getBrokerIconUrl(b);
-                        return {value: String(b.id), label: b.name, iconUrl: iconUrl ?? undefined};
+                        const dotColor = getBrokerColor(b.id).bg;
+                        return {value: String(b.id), label: b.name, iconUrl: iconUrl ?? undefined, dotColor};
                     }),
                     width: 160,
                     getValue: (row) => String((row as BrimFile).target_broker_id || ''),

@@ -63,6 +63,8 @@ export interface BrokerInfo {
     icon_url?: string | null;
     /** Optional portal URL for favicon fallback */
     portal_url?: string | null;
+    /** Plugin code for resolving the plugin icon (step 3 of fallback chain) */
+    default_import_plugin?: string | null;
 }
 
 /**

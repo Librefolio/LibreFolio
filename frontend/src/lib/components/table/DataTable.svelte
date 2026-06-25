@@ -95,6 +95,16 @@
         fullData?: T[];
         /** Called when a column is resized (for syncing across tables) */
         onColumnResize?: (columnId: string, width: number) => void;
+        /**
+         * Optional: if provided, middle-clicking (aux button) a row opens
+         * the returned URL in a new tab. Use for rows that represent navigable
+         * entities (e.g. assets, transactions).
+         */
+        getRowHref?: (row: T) => string | undefined;
+        /** When true, show the pagination bar whenever there is at least 1 item,
+         *  even if all items fit on the current page. Default: false (hide when
+         *  all items fit on the smallest non-zero page size). */
+        alwaysShowPagination?: boolean;
     }
 
     let {
@@ -138,6 +148,8 @@
         onShowSelectedOnlyChange,
         fullData,
         onColumnResize,
+        getRowHref,
+        alwaysShowPagination = false,
     }: Props = $props();
 
     /** Dataset used for computing filter boundaries (min/max, currency ranges). */
@@ -1221,6 +1233,12 @@
                                 if (isRowSelectable && !isRowSelectable(row)) return;
                                 handleRowDoubleClick(row);
                             }}
+                            onauxclick={(e) => {
+                                if (e.button === 1 && getRowHref) {
+                                    const href = getRowHref(row);
+                                    if (href) window.open(href, '_blank');
+                                }
+                            }}
                             oncontextmenu={(e) => {
                                 if (!enableContextMenu || rowActions.length === 0) return;
                                 e.preventDefault();
@@ -1445,8 +1463,8 @@
         </table>
     </div>
 
-    <!-- Pagination - show only when enabled and items exceed smallest page size -->
-    {#if enablePagination && filteredData.length > 0 && filteredData.length > Math.min(...pageSizeOptions.filter((x) => x > 0))}
+    <!-- Pagination - show only when enabled and items exceed smallest page size (or alwaysShowPagination) -->
+    {#if enablePagination && filteredData.length > 0 && (alwaysShowPagination || filteredData.length > Math.min(...pageSizeOptions.filter((x) => x > 0)))}
         <DataTablePagination pageIndex={pagination.pageIndex} pageSize={pagination.pageSize} totalItems={filteredData.length} {pageSizeOptions} onPageChange={handlePageChange} onPageSizeChange={handlePageSizeChange} />
     {/if}
 </div>

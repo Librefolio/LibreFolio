@@ -134,7 +134,10 @@
                     const emoji = entry.emoji ?? '';
                     displayName = emoji ? `${emoji} ${translated}` : translated;
                 } else {
-                    displayName = entry.name;
+                    // For type mode: try to translate via asset.types.* (uppercase key for robustness)
+                    const typeKey = `asset.types.${entry.name.toUpperCase()}`;
+                    const translated = tr(typeKey);
+                    displayName = translated !== typeKey ? translated : entry.name;
                 }
                 return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name, emoji: entry.emoji ?? ''};
             })
