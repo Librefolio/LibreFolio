@@ -1176,7 +1176,6 @@ class PortfolioService:
                     in_transit_asset_cost_basis=h.get("in_transit_asset_cost_basis"),
                     in_transit_book_value=h.get("in_transit_book_value"),
                     book_value=h.get("book_value"),
-                    net_invested=h.get("net_invested"),
                     capital_baseline=h["capital_baseline"],
                     book_asset_like=h["book_asset_like"],
                     cash_from_contributed_capital=h["cash_from_contributed_capital"],

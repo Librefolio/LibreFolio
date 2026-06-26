@@ -1,9 +1,5 @@
 # <img src="https://www.directa.it/favicon.ico" alt=""> Directa SIM
 
-!!! info "Bêta"
-
-    Ce plugin est en version **Bêta** — testé avec des fichiers d'exemple, mais des cas particuliers peuvent exister.
-
 ## 📥 Comment exporter
 
 Pour exporter vos transactions depuis Directa SIM :
