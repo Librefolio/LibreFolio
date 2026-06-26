@@ -840,7 +840,9 @@ class DailyStateBuilder:
                 dist = geo_area.get("distribution", {})
                 if dist:
                     for country, weight in dist.items():
-                        by_geo[country] = by_geo.get(country, Decimal("0")) + mv * Decimal(str(weight))
+                        # "Other" is a provider placeholder for "rest of world" — merge into Unknown
+                        bucket = "Unknown" if country == "Other" else country
+                        by_geo[bucket] = by_geo.get(bucket, Decimal("0")) + mv * Decimal(str(weight))
                 else:
                     by_geo["Unknown"] = by_geo.get("Unknown", Decimal("0")) + mv
             else:

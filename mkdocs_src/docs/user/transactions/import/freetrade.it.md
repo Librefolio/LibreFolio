@@ -29,7 +29,3 @@ Per esportare l'estratto conto delle transazioni da Freetrade:
 - Broker con sede nel Regno Unito.
 - Supporta operazioni su azioni ed ETF, dividendi, depositi di liquidità e prelievi.
 - Pieno supporto multi-valuta per asset in GBP, EUR e USD.
-
-## 🔗 Riferimenti per Sviluppatori
-
-→ [Freetrade Provider — Dettagli di Implementazione](../../../developer/backend/brim/providers_list.md)

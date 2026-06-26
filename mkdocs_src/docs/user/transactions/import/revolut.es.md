@@ -28,7 +28,3 @@ Para exportar su historial de transacciones de acciones y criptomonedas desde Re
 
 - Soporta operaciones con acciones, compras de criptomonedas, dividendos pagados, comisiones de custodia y transferencias de efectivo.
 - Gestiona automáticamente montos en múltiples divisas dentro del mismo archivo.
-
-## 🔗 Referencia para Desarrolladores
-
-→ [Proveedor de Revolut — Detalles de Implementación](../../../developer/backend/brim/providers_list.md)

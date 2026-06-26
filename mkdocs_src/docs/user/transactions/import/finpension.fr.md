@@ -29,7 +29,3 @@ Pour exporter vos transactions depuis Finpension :
 - Plateforme de prévoyance suisse.
 - Prend en charge les dépôts d'espèces, les achats, les ventes, les retenues d'impôts et les frais de gestion.
 - Dénommé en CHF.
-
-## 🔗 Référence développeur
-
-→ [Fournisseur Finpension — Détails d'implémentation](../../../developer/backend/brim/providers_list.md)

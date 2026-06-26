@@ -56,8 +56,9 @@
     let mapRegistered = $state(false);
     let mapError = $state<string | null>(null);
 
-    /** Percentage of value with no geographic classification (key "Unknown" in data) */
-    const unknownPct = $derived(+((data['Unknown'] ?? 0) * 100).toFixed(1));
+    /** Percentage of value with no geographic classification (key "Unknown" or "Other" in data).
+     *  "Other" is a provider placeholder for "rest of world" — treated as unclassified. */
+    const unknownPct = $derived(+((((data['Unknown'] ?? 0) + (data['Other'] ?? 0)) * 100).toFixed(1)));
 
     /** ISO A3 → GeoJSON feature name (built dynamically from loaded world.json) */
     let iso3ToGeoName: Record<string, string> = {};
@@ -160,7 +161,7 @@
         // Convert ISO A3 → GeoJSON country name + percentage (skip unclassified)
         const chartData: Array<{name: string; value: number}> = [];
         for (const [code, weight] of Object.entries(data)) {
-            if (weight <= 0 || code === 'Unknown') continue;
+            if (weight <= 0 || code === 'Unknown' || code === 'Other') continue;
             const countryName = iso3ToGeoName[code] ?? code;
             chartData.push({name: countryName, value: +(weight * 100).toFixed(2)});
         }

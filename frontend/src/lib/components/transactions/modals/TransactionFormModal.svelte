@@ -36,6 +36,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {X, ArrowRight, ArrowDown, Check, Pencil, Save, Info} from 'lucide-svelte';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
+    import {getBrokerIconUrl as resolveBrokerIconUrl} from '$lib/utils/broker/brokerHelpers';
 
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
@@ -932,16 +933,7 @@
         assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
         getBrokerIconUrl: (brokerId: number) => {
             const b = brokers.find((br) => br.id === brokerId);
-            if (!b) return null;
-            if (b.icon_url?.trim()) return b.icon_url;
-            if (b.portal_url?.trim()) {
-                try {
-                    return new URL(b.portal_url).origin + '/favicon.ico';
-                } catch {
-                    /* skip */
-                }
-            }
-            return null;
+            return resolveBrokerIconUrl(b as any);
         },
     });
     $effect(() => {

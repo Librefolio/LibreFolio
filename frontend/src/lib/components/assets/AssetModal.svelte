@@ -1640,7 +1640,7 @@
     onCancel={() => {
         showSaveWithoutTestConfirm = false;
     }}
-    zIndex={70}
+    zIndex={zIndex + 20}
 />
 
 <!-- Confirmation: Identifier change in edit mode -->
@@ -1659,7 +1659,7 @@
         showIdentifierChangeConfirm = false;
         pendingSearchResult = null;
     }}
-    zIndex={70}
+    zIndex={zIndex + 20}
 />
 
 <!-- Confirmation: Discard unsaved changes -->
@@ -1674,7 +1674,7 @@
     onCancel={() => {
         showDiscardConfirm = false;
     }}
-    zIndex={70}
+    zIndex={zIndex + 20}
 />
 
 <!-- #R3-4 — Confirmation: regenerate scheduled_investment prices on params change -->
@@ -1702,7 +1702,7 @@
         showScheduledRegenConfirm = false;
         pendingSaveAssetId = null;
     }}
-    zIndex={70}
+    zIndex={zIndex + 20}
 />
 
 <!-- Provider Comparison Modal -->
@@ -1749,5 +1749,5 @@
         showIdentifierDeleteConfirm = false;
         pendingIdentifierDeleteIds = [];
     }}
-    zIndex={80}
+    zIndex={zIndex + 20}
 />

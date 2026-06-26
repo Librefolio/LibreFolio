@@ -29,7 +29,3 @@ To export your transaction statement from Freetrade:
 - UK-based broker.
 - Supports equity and ETF trades, dividends, cash deposits, and withdrawals.
 - Full multi-currency support for GBP, EUR, and USD assets.
-
-## 🔗 Developer Reference
-
-→ [Freetrade Provider — Implementation Details](../../../developer/backend/brim/providers_list.md)

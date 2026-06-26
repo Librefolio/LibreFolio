@@ -29,7 +29,3 @@ Pour exporter votre relevé de transactions depuis Freetrade :
 - Courtier basé au Royaume-Uni.
 - Prend en charge les transactions sur actions et d'ETF, les dividendes, les dépôts d'espèces et les retraits.
 - Prise en charge complète multi-devises pour les actifs en GBP, EUR et USD.
-
-## 🔗 Référence développeur
-
-→ [Fournisseur Freetrade — Détails d'implémentation](../../../developer/backend/brim/providers_list.md)

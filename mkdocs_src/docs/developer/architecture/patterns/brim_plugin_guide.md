@@ -8,6 +8,27 @@ How to create a new **Broker Report Import Manager** plugin to support a new bro
 
 ---
 
+## 🤖 Tip: Let an LLM write the plugin for you
+
+Paste this entire page plus the [Generic CSV Provider](../../backend/brim/generic_csv.md) page into an LLM and use this prompt:
+
+!!! tip "Suggested prompt"
+
+    ```
+    Here is the LibreFolio BRIM plugin specification: [paste this page]
+    Here is the Generic CSV reference implementation: [paste generic_csv page]
+
+    I have a broker called [BROKER_NAME]. Here is a sample of their CSV export: [paste header + 3–5 rows]
+
+    Write a complete Python BRIMProvider plugin for this broker. Follow the conventions
+    exactly (BRIMParseOutput, BRIMExtractedAssetInfo, sign conventions, @register_provider).
+    ```
+
+    The LLM will produce a complete, working plugin skeleton. Test it with the probe endpoint,
+    then add it to `brim_providers/` and restart — it will be auto-discovered.
+
+---
+
 ## 🔄 Flow
 
 The system calls plugin methods in two distinct phases:

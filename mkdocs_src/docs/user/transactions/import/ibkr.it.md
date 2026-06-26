@@ -42,7 +42,3 @@ Per portafogli più avanzati, puoi configurare una **Flex Query** per esportare 
 - Supporta i report di attività standard di IBKR (transazioni, dividendi, ritenute fiscali, commissioni, depositi, prelievi).
 - Sono supportati i conti multi-valuta.
 - Le azioni societarie (frazionamenti, fusioni) potrebbero richiedere regolazioni manuali all'interno della griglia di staging.
-
-## 🔗 Riferimenti per Sviluppatori
-
-→ [IBKR Provider — Dettagli di Implementazione](../../../developer/backend/brim/providers_list.md)

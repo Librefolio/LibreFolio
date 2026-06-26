@@ -32,7 +32,3 @@ To export your transactions from Degiro:
 
 - Supports buy/sell trades, dividends, transaction fees, deposits, and withdrawals.
 - Currency conversions performed by Degiro are automatically processed.
-
-## 🔗 Developer Reference
-
-→ [Degiro Provider — Implementation Details](../../../developer/backend/brim/providers_list.md)

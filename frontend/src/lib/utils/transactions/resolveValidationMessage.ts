@@ -13,6 +13,7 @@
  */
 
 import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '../currency/currencyFormat';
+import {getAssetTypeIconUrl} from '../assetTypes';
 
 /**
  * Mapping of Pydantic built-in error types to i18n keys.
@@ -166,7 +167,7 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
     if (rawParams.assetId != null && ctx?.assets) {
         const asset = ctx.assets.find((a) => a.id === rawParams.assetId);
         if (asset) {
-            const iconSrc = asset.icon_url ?? (asset.asset_type ? `/icons/asset-types/${asset.asset_type.toLowerCase()}.png` : '/icons/asset-types/other.png');
+            const iconSrc = asset.icon_url ?? getAssetTypeIconUrl(asset.asset_type);
             const assetIcon = `<img src="${iconSrc}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`;
             enriched.assetName = `${assetIcon}${asset.display_name}`;
         } else {
