@@ -733,9 +733,14 @@
 }
 
 .card-link {
-    display: flex;
-    flex-direction: row; /* Horizontal layout */
-    align-items: flex-start; /* Align top */
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+        "icon title"
+        "desc desc";
+    column-gap: 1rem;
+    row-gap: 0.4rem;
+    align-items: start;
     padding: 1.5rem;
     border: 1px solid var(--md-default-fg-color--lightest);
     border-radius: 0.8rem;
@@ -746,7 +751,6 @@
     height: 100%;
     position: relative;
     overflow: hidden;
-    gap: 1.5rem; /* Space between icon and text */
 }
 
 /* Hover Effect */
@@ -792,27 +796,31 @@
 
 /* Icon styling */
 .card-icon {
-    flex-shrink: 0;
+    grid-area: icon;
+    align-self: center;
     color: var(--md-primary-fg-color);
     transition: transform 0.2s;
-    padding-top: 0.2rem; /* Align with title */
 }
 
 .card-link:hover .card-icon {
     transform: scale(1.1);
 }
 
+/* display:contents dissolves wrapper — children go directly into grid areas */
 .card-content {
-    display: flex;
-    flex-direction: column;
+    display: contents;
 }
 
 .card-title {
-    font-size: 1.2rem;
+    grid-area: title;
+    align-self: center;
+    flex: unset;
+    min-width: 0;
+    font-size: clamp(0.95rem, 3.5vw, 1.2rem);
     font-weight: 700;
-    margin-bottom: 0.5rem;
     color: var(--md-primary-fg-color);
     display: block;
+}
 }
 
 /* Dark mode card titles and icons - use green accent for visibility */
@@ -825,7 +833,8 @@
 }
 
 .card-desc {
-    font-size: 0.95rem;
+    grid-area: desc;         /* always row 2, spans full width */
+    font-size: clamp(0.8rem, 2.5vw, 0.95rem);
     line-height: 1.5;
     color: var(--md-default-fg-color--light);
     display: block;

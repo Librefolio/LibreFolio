@@ -15,7 +15,8 @@
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
     import {formatBytes} from '$lib/utils/files/upload';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
-    import {ensureBrokersLoaded, getEditableBrokers, refreshAllBrokers, type BrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getEditableBrokers, refreshAllBrokers, getBrokerInfo, type BrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {getBrokerIconUrl as resolveBrokerIconUrl} from '$lib/utils/broker/brokerHelpers';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getAssetInfo, refreshAllAssets, type AssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
@@ -1419,16 +1420,7 @@ ${arrow}<span>${label}</span></span>`,
             header: () => 'Broker',
             cell: (row) => {
                 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-                const faviconUrl = row.brokerPortalUrl
-                    ? (() => {
-                          try {
-                              return new URL(row.brokerPortalUrl!).origin + '/favicon.ico';
-                          } catch {
-                              return null;
-                          }
-                      })()
-                    : null;
-                const imgSrc = row.brokerIconUrl || faviconUrl;
+                const imgSrc = resolveBrokerIconUrl(getBrokerInfo(row.brokerId));
                 const icon = imgSrc
                     ? `<img src="${esc(imgSrc)}" class="w-5 h-5 rounded-full object-cover shrink-0" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">${`<span class="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0" style="display:none">${esc(row.brokerName.charAt(0).toUpperCase())}</span>`}`
                     : `<span class="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">${esc(row.brokerName.charAt(0).toUpperCase())}</span>`;

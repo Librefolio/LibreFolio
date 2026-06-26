@@ -32,7 +32,3 @@ To export your transaction history from eToro:
 
 - Supports stock, ETF, crypto, and CFD trades, dividends paid, deposits, withdrawals, and fee adjustments.
 - All values in the exported eToro files are denominated in USD.
-
-## 🔗 Developer Reference
-
-→ [eToro Provider — Implementation Details](../../../developer/backend/brim/providers_list.md)

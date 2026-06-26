@@ -29,7 +29,3 @@ Para exportar su estado de transacciones desde Freetrade:
 - Bróker con sede en el Reino Unido.
 - Admite operaciones con acciones y ETF, dividendos, depósitos de efectivo y retiradas.
 - Soporte multidivisa completo para activos en GBP, EUR y USD.
-
-## 🔗 Referencia para Desarrolladores
-
-→ [Proveedor de Freetrade — Detalles de Implementación](../../../developer/backend/brim/providers_list.md)

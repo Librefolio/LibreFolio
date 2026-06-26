@@ -1,15 +1,15 @@
 /**
  * Unit tests for getBrokerIconUrl — pure fallback chain logic.
  *
- * Covers the three-step chain:
- *   1. icon_url  (direct custom upload)
- *   2. portal_url → origin/favicon.ico
- *   3. default_import_plugin → plugin icon cache (tested via E2E, not here)
+ * The priority chain is:
+ *   1. icon_url  (custom upload — most reliable)
+ *   2. default_import_plugin → plugin icon cache (app-hosted — reliable)
+ *   3. portal_url → origin/favicon.ico  (external heuristic — least reliable)
  *   4. null fallback
  *
- * Note: step 3 relies on the async plugin cache (_pluginIconCache), which
- * cannot be injected from outside. Cache-dependent behaviour is covered by
- * E2E tests in files.spec.ts / transactions-table.spec.ts.
+ * Step 2 (plugin cache) relies on async loading; when the cache is empty
+ * getBrokerIconUrl() skips straight to step 3. Cache-populated behaviour
+ * is covered by E2E tests.
  */
 import {describe, expect, it} from 'vitest';
 import {getBrokerIconUrl, type BrokerIconSource} from '../broker/brokerHelpers';

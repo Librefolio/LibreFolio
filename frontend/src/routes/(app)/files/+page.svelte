@@ -283,11 +283,8 @@
                 const data = await zodiosApi.list_files_api_v1_uploads_get();
                 staticFiles = (data.items || []) as UploadedFile[];
             } else {
-                // For BRIM, filter by selected broker IDs
-                const brokerIds = Array.from(selectedBrokerIds);
-                brimFiles = (await zodiosApi.list_files_api_v1_brokers_import_files_get({
-                    queries: brokerIds.length > 0 ? {broker_ids: brokerIds} : undefined,
-                })) as BrimFile[];
+                // Fetch ALL accessible files — broker filter is applied client-side
+                brimFiles = (await zodiosApi.list_files_api_v1_brokers_import_files_get()) as BrimFile[];
             }
         } catch (e) {
             error = e instanceof Error ? e.message : 'Failed to load files';
@@ -304,19 +301,19 @@
         }
         selectedBrokerIds = new Set(selectedBrokerIds); // Trigger reactivity
         saveBrokerFilter(selectedBrokerIds);
-        loadFiles(); // Reload with new filter
+        // No loadFiles() — filter is applied client-side on already-loaded data
     }
 
     function selectAllBrokers() {
         selectedBrokerIds = new Set(brokers.map((b) => b.id));
         saveBrokerFilter(selectedBrokerIds);
-        loadFiles();
+        // No loadFiles() — filter is applied client-side
     }
 
     function clearBrokerFilter() {
         selectedBrokerIds = new Set();
         saveBrokerFilter(selectedBrokerIds);
-        loadFiles();
+        // No loadFiles() — filter is applied client-side
     }
 
     async function handleUpload(event: CustomEvent<{files: globalThis.File[]}>) {
@@ -804,7 +801,7 @@
                     <p>{$t('uploads.noFiles')}</p>
                 </div>
             {:else}
-                <!-- BRIM Table with New DataTable -->
+                <!-- BRIM Table with New DataTable — broker filter applied client-side -->
                 <FilesTable
                     bind:this={brimTableRef}
                     files={brimFiles}

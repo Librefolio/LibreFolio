@@ -21,6 +21,7 @@
     import type {SelectOption} from '$lib/components/ui/select/types';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {createSignal, getRegisteredSignalTypes, type SignalConfig, type SignalStyle, type SignalTypeInfo} from '$lib/charts/signals';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     // =========================================================================
     // Types
@@ -254,19 +255,6 @@
 
     /** Set of pair slugs already used by other FxPair signals */
     let usedPairSlugs = $derived(new Set(signals.filter((s) => s.signalType === 'fx-pair' && s.params.pairSlug).map((s) => String(s.params.pairSlug))));
-
-    /** Asset type → icon filename mapping (same as AssetCard) */
-    const ASSET_TYPE_ICON_MAP: Record<string, string> = {
-        STOCK: 'stock',
-        ETF: 'etf',
-        BOND: 'bond',
-        CRYPTO: 'crypto',
-        FUND: 'fund',
-        HOLD: 'hold',
-        CROWDFUND_LOAN: 'crowdfunding',
-        INDEX: 'index',
-        OTHER: 'other',
-    };
 
     /** Find asset info by id for icon rendering */
     function findAssetInfo(assetId: string) {
@@ -567,8 +555,8 @@
                                                                 <span class="flex items-center gap-1.5 truncate">
                                                                     {#if info?.icon_url}
                                                                         <img src={info.icon_url} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
-                                                                    {:else if info?.asset_type && ASSET_TYPE_ICON_MAP[info.asset_type]}
-                                                                        <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[info.asset_type]}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
+                                                                    {:else if info?.asset_type}
+                                                                        <img src={getAssetTypeIconUrl(info.asset_type)} alt="" class="w-4 h-4 object-contain shrink-0" />
                                                                     {:else}
                                                                         <BarChart3 size={14} class="text-gray-400 shrink-0" />
                                                                     {/if}
@@ -580,8 +568,8 @@
                                                                 <span class="flex items-center gap-1.5 truncate">
                                                                     {#if info?.icon_url}
                                                                         <img src={info.icon_url} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
-                                                                    {:else if info?.asset_type && ASSET_TYPE_ICON_MAP[info.asset_type]}
-                                                                        <img src="/icons/asset-types/{ASSET_TYPE_ICON_MAP[info.asset_type]}.png" alt="" class="w-4 h-4 object-contain shrink-0" />
+                                                                    {:else if info?.asset_type}
+                                                                        <img src={getAssetTypeIconUrl(info.asset_type)} alt="" class="w-4 h-4 object-contain shrink-0" />
                                                                     {:else}
                                                                         <BarChart3 size={14} class="text-gray-400 shrink-0" />
                                                                     {/if}

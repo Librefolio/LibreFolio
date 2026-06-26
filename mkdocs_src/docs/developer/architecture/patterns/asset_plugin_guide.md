@@ -8,6 +8,28 @@ How to create a new **Asset Source Provider** to fetch prices from a new data so
 
 ---
 
+## 🤖 Tip: Let an LLM scaffold the provider
+
+Paste this entire page into an LLM with the data source's API documentation and use this prompt:
+
+!!! tip "Suggested prompt"
+
+    ```
+    Here is the LibreFolio Asset Source Provider specification: [paste this page]
+
+    I want to add a provider for [DATA_SOURCE_NAME]. Their API works like this:
+    [brief description, or paste their API docs]
+
+    Write a complete Python AssetSourceProvider implementation. Follow all conventions:
+    @register_provider, FACurrentValue, FAHistoricalData, FAPricePoint, asyncio.to_thread
+    for sync HTTP calls, test_cases, test_search_query if applicable.
+    ```
+
+    After scaffolding, implement `get_current_value()` and `get_history_value()`, add test
+    cases, then place the file in `asset_source_providers/` and restart.
+
+---
+
 ## 🔄 Flow
 
 The system calls provider methods in three distinct phases:

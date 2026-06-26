@@ -1,9 +1,13 @@
 /**
  * Broker Helpers — Shared utility functions for broker icon resolution.
  *
- * Centralizes the icon_url → portal_url/favicon.ico → plugin_icon → null
- * fallback chain previously duplicated across FilesTable, TransactionsTable,
- * BrokerBadge, etc.
+ * Priority for all icon lookups (matches `brokerIconChain.svelte.ts`):
+ *  1. icon_url — explicitly uploaded by the user (most reliable)
+ *  2. portal_url → origin + `/favicon.ico` (external heuristic)
+ *  3. default_import_plugin → cached plugin icon (app-hosted, async)
+ *
+ * For reactive multi-URL fallback with load-error retry, use
+ * `createBrokerIconChain` from `brokerIconChain.svelte.ts`.
  *
  * @module utils/brokerHelpers
  */
@@ -46,33 +50,53 @@ export async function ensurePluginIconsLoaded(): Promise<void> {
     return _pluginIconLoading;
 }
 
-/** Sync lookup — returns the cached plugin icon URL or null. */
-function getPluginIconUrl(pluginCode: string | null | undefined): string | null {
+/**
+ * Sync lookup — returns the cached plugin icon URL or null.
+ * Returns null if the plugin icon cache has not been loaded yet;
+ * call `ensurePluginIconsLoaded()` first to populate it.
+ */
+export function getPluginIconUrl(pluginCode: string | null | undefined): string | null {
     if (!pluginCode || !_pluginIconCache) return null;
     return _pluginIconCache.get(pluginCode) ?? null;
 }
 
 /**
- * Resolve the best icon URL for a broker using the fallback chain:
- *  1. `icon_url` (custom uploaded icon)
- *  2. `portal_url` → origin + `/favicon.ico`
- *  3. `default_import_plugin` → cached plugin icon
- *  4. `null` (caller should render a colored dot or other fallback)
+ * Build the ordered list of candidate icon URLs for a broker.
+ * Priority matches the reactive chain in `brokerIconChain.svelte.ts`:
+ *   1. icon_url (custom, most reliable)
+ *   2. portal_url/favicon.ico (external heuristic)
+ *   3. default_import_plugin → cached plugin icon (app-hosted, async-loaded)
+ *
+ * For non-reactive contexts (inline HTML renderers). For full fallback
+ * chain with load-error retry use `createBrokerIconChain` in components.
  */
-export function getBrokerIconUrl(broker: BrokerIconSource | null | undefined): string | null {
-    if (!broker) return null;
-    if (broker.icon_url?.trim()) return broker.icon_url;
+export function getBrokerIconCandidates(broker: BrokerIconSource | null | undefined): string[] {
+    if (!broker) return [];
+    const urls: string[] = [];
+    if (broker.icon_url?.trim()) urls.push(broker.icon_url);
     if (broker.portal_url?.trim()) {
         try {
-            return new URL(broker.portal_url).origin + '/favicon.ico';
+            urls.push(new URL(broker.portal_url).origin + '/favicon.ico');
         } catch {
             /* invalid URL — skip */
         }
     }
-    // Fallback 3: plugin icon from cache
     const pluginIcon = getPluginIconUrl(broker.default_import_plugin);
-    if (pluginIcon) return pluginIcon;
-    return null;
+    if (pluginIcon) urls.push(pluginIcon);
+    return urls;
+}
+
+/**
+ * Resolve the best icon URL for a broker using the fallback chain.
+ * Returns the first available URL from the candidate list (sync, cache-dependent).
+ *
+ * NOTE: The returned URL may still fail to load (e.g. favicon 404).
+ * Components that support multi-URL fallback should use `getBrokerIconCandidates()`
+ * and `BrokerIcon.svelte` instead, which handle load errors reactively.
+ */
+export function getBrokerIconUrl(broker: BrokerIconSource | null | undefined): string | null {
+    const candidates = getBrokerIconCandidates(broker);
+    return candidates[0] ?? null;
 }
 
 /**

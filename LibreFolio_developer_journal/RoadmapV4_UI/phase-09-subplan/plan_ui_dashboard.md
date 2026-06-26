@@ -753,3 +753,782 @@ Non implementare in questa fase:
 ````
 
 
+---
+
+Ottimizzazione vista di asset e transazioni nella dashboard:
+
+# Obiettivo parte bassa dashboard
+
+La parte bassa deve essere una **zona di drill-down rapido**, non una replica delle pagine dedicate.
+
+Domande a cui deve rispondere:
+
+```text
+1. Quali posizioni pesano di più?
+2. Quali asset hanno contribuito al risultato del periodo?
+3. Cosa è successo di recente?
+4. Dove clicco per approfondire?
+```
+
+***
+
+# Layout generale desktop
+
+```text
++--------------------------------------------------------------+  +--------------------------------------+
+| LE TUE POSIZIONI                                             |  | ULTIME TRANSAZIONI                   |
+| [ Esposizione | Contributo ]                    [Tabella|Mappa] |  |                                      |
++--------------------------------------------------------------+  +--------------------------------------+
+|                                                              |  | Data   Tipo   Asset   Broker   Qty   |
+|  Vista asset variabile                                       |  | Importo                              |
+|                                                              |  |                                      |
+|                                                              |  | Righe recenti, compatte, no azioni   |
+|                                                              |  |                                      |
+| Vedi tutte →                                                 |  | Vedi tutte →                         |
++--------------------------------------------------------------+  +--------------------------------------+
+```
+
+Regola altezza:
+
+```text
+altezza Recent Transactions ≈ altezza Le tue posizioni
+numero righe transazioni = quanto entra bene
+```
+
+***
+
+# Componente 1 — Le tue posizioni
+
+## Scelta architetturale
+
+Non riusiamo la tabella Asset completa.
+
+Motivo:
+
+```text
+Asset page table = anagrafica asset + prezzi + provider
+Dashboard asset widget = posizioni portfolio-aware
+```
+
+Però centralizziamo e riusiamo le celle comuni:
+
+```text
+AssetIdentityCell
+AssetTypeBadge
+BrokerBadge
+MoneyCell
+PercentCell
+PnlCell
+```
+
+Obiettivo:
+
+```text
+coerenza stilistica
+no duplicazione inutile
+dashboard semanticamente corretta
+```
+
+***
+
+# Toggle previsti
+
+Due toggle indipendenti:
+
+```text
+[ Esposizione | Contributo ]
+[ Tabella | Mappa ]
+```
+
+Quindi 4 viste:
+
+```text
+1. Esposizione / Tabella
+2. Esposizione / Mappa
+3. Contributo / Tabella
+4. Contributo / Mappa
+```
+
+***
+
+# 1. Esposizione / Tabella
+
+Domanda:
+
+```text
+Dove è allocato il mio patrimonio?
+```
+
+ASCII:
+
+```text
++------------------------------------------------------------------------------------------------+
+| LE TUE POSIZIONI                                      [ Esposizione | Contributo ] [Tabella|Mappa]|
++------------------------------------------------------------------------------------------------+
+| Asset                                      Tipo        Broker        Valore       Peso    P&L tot.|
+|------------------------------------------------------------------------------------------------|
+| 🇪🇺👑 VWCE                                  ETF         Directa      €12.450     18,2%   +€840   |
+| 🇪🇺 iShares Commodity Swap                  ETF         Directa       €4.820      7,1%   -€180   |
+| 🏠 EX ALBERGO VELA                          Crowdfund   Recrowd       €3.000      4,4%   +€126   |
+| 🇺🇸 Apple Inc.                              Stock       Directa       €2.650      3,9%   +€310   |
+| 💶 Cash EUR                                 Cash        Directa       €1.920      2,8%      —    |
+|                                                                                                |
+|                                                                            Vedi tutte →        |
++------------------------------------------------------------------------------------------------+
+```
+
+Colonne:
+
+```text
+Asset
+Tipo
+Broker
+Valore
+Peso
+P&L totale
+```
+
+Matematica:
+
+```text
+Valore = market_value_asset + cash_like se asset cash
+Peso = Valore / NAV
+P&L totale = valore corrente attribuito all’asset - costo attribuito all’asset
+```
+
+Nota:
+
+```text
+P&L totale = prospettiva assoluta/as-of-date
+non è necessariamente il delta del periodo
+```
+
+***
+
+# 2. Esposizione / Mappa
+
+Domanda:
+
+```text
+Quali posizioni pesano di più?
+```
+
+ASCII:
+
+```text
++------------------------------------------------------------------------------------------------+
+| LE TUE POSIZIONI                                      [ Esposizione | Contributo ] [Tabella|Mappa]|
++------------------------------------------------------------------------------------------------+
+|                                                                                                |
+| Area = valore posizione / NAV                          Colore = P&L totale o rendimento %       |
+|                                                                                                |
+| +-------------------------------- Directa --------------------------------+ +---- Recrowd ----+ |
+| | +---------------- ETF ----------------+ +--------- Stock -----------+   | | +-- Crowdfund -+| |
+| | |                                    | |                           |   | | | EX ALBERGO   || |
+| | |              VWCE                  | |        Apple Inc.         |   | | | €3.000      || |
+| | |            €12.450                 | |         €2.650            |   | | | +€126       || |
+| | |             18,2% NAV              | |          3,9% NAV         |   | | +-------------+| |
+| | +------------------------------------+ +---------------------------+   | | +-- Crowdfund -+| |
+| | +------------- ETF ------------------+ +---------- Cash -----------+   | | | VELA 2      || |
+| | | iShares Commodity                  | | Cash EUR                  |   | | | €1.500      || |
+| | | €4.820                             | | €1.920                    |   | | +-------------+| |
+| | | -€180                              | | —                         |   | +---------------+ |
+| | +------------------------------------+ +---------------------------+   |                   |
+| +------------------------------------------------------------------------------+-------------+ |
+|                                                                                                |
+|                                                                            Vedi tutte →        |
++------------------------------------------------------------------------------------------------+
+```
+
+Gerarchia:
+
+```text
+Broker → Asset Type → Asset
+```
+
+Scelte:
+
+```text
+Area = valore posizione
+Colore = P&L % oppure rendimento totale
+```
+
+Formula:
+
+```text
+area_asset = market_value_asset
+weight_asset = market_value_asset / NAV
+```
+
+Tooltip asset:
+
+```text
+VWCE
+Broker: Directa
+Tipo: ETF
+Valore: €12.450
+Peso NAV: 18,2%
+P&L totale: +€840
+```
+
+Osservazione:
+
+```text
+Settore/geografia fuori scope qui.
+Motivo: ETF non univoci; già esiste grafico partizioni più sofisticato.
+```
+
+***
+
+# 3. Contributo / Tabella
+
+Domanda:
+
+```text
+Chi ha mosso il risultato nel periodo selezionato?
+```
+
+ASCII:
+
+```text
++------------------------------------------------------------------------------------------------+
+| LE TUE POSIZIONI                                      [ Esposizione | Contributo ] [Tabella|Mappa]|
++------------------------------------------------------------------------------------------------+
+| Asset                                      Tipo        Broker      P&L periodo   Var. %   Impatto|
+|------------------------------------------------------------------------------------------------|
+| 🇪🇺👑 VWCE                                  ETF         Directa        +€840      +3,8%   Gain #1|
+| 🇺🇸 Apple Inc.                              Stock       Directa        +€310     +13,2%   Gain #2|
+| 🏠 EX ALBERGO VELA                          Crowdfund   Recrowd        +€126      +1,1%   Gain #3|
+| 🇪🇺 iShares Commodity Swap                  ETF         Directa        -€180      -3,6%   Loss #1|
+| ₿ Bitcoin                                  Crypto      Binance         -€90      -5,1%   Loss #2|
+|                                                                                                |
+|                                                                            Vedi tutte →        |
++------------------------------------------------------------------------------------------------+
+```
+
+Colonne:
+
+```text
+Asset
+Tipo
+Broker
+P&L periodo
+Var. %
+Impatto
+```
+
+Formula consigliata:
+
+```text
+asset_period_pnl =
+    asset_unrealized_delta
+  + asset_realized_gain_loss
+  + asset_income
+  - asset_fees_taxes
+```
+
+Dove:
+
+```text
+asset_unrealized_delta = variazione non realizzata nel periodo
+asset_realized_gain_loss = gain/loss da vendite nel periodo
+asset_income = dividendi/interessi attribuiti all’asset
+asset_fees_taxes = commissioni/tasse attribuite all’asset
+```
+
+Se una fee/tax non è attribuibile:
+
+```text
+bucket = Non allocato / Portfolio
+```
+
+`Var. %`:
+
+```text
+preferibile = rendimento posizione nel periodo
+non semplice variazione prezzo asset
+```
+
+Motivo:
+
+```text
+se compro/vendo durante il periodo,
+la variazione prezzo non racconta il contributo reale al portfolio
+```
+
+***
+
+# 4. Contributo / Mappa doppia
+
+Domanda:
+
+```text
+I gain e le loss del periodo da chi arrivano?
+```
+
+Scelta finale proposta:
+
+```text
+due treemap:
+- Guadagni
+- Perdite
+```
+
+Motivo:
+
+```text
+una treemap unica con valori positivi/negativi è ambigua
+area non può essere negativa
+doppia vista = leggibilità maggiore
+```
+
+ASCII:
+
+```text
++------------------------------------------------------------------------------------------------+
+| LE TUE POSIZIONI                                      [ Esposizione | Contributo ] [Tabella|Mappa]|
++------------------------------------------------------------------------------------------------+
+|                                                                                                |
+| P&L DEL PERIODO PER ASSET                                                                       |
+| Area = |P&L periodo|        Scala condivisa: 100% = max(gain totali, loss totali)               |
+|                                                                                                |
+| +------------------------------------- GUADAGNI ----------------------------------------------+ |
+| | Totale gain: +€1.260                                                                          | |
+| |                                                                                                | |
+| | +--------------------------- Directa / ETF ---------------------------+ +--- IBKR / Stock --+ | |
+| | |                                                                   | |                   | | |
+| | |                              VWCE                                 | | Apple Inc.        | | |
+| | |                            +€840                                  | | +€310             | | |
+| | |                            +3,8%                                  | | +13,2%            | | |
+| | |                                                                   | |                   | | |
+| | +-------------------------------------------------------------------+ +-------------------+ | |
+| | +------------------------- Recrowd / Crowdfund ---------------------+                       | |
+| | | EX ALBERGO VELA +€126             VELA 2 +€84                     |                       | |
+| | +-------------------------------------------------------------------+                       | |
+| +------------------------------------------------------------------------------------------------+
+|                                                                                                |
+| +-------------------------------------- PERDITE ----------------------------------------------+ |
+| | Totale loss: -€320                                                                            | |
+| |                                                                                                | |
+| | +--------------------------- Directa / ETF ---------------------------+ +-- Binance/Crypto-+ | |
+| | |                                                                   | |                  | | |
+| | |                    iShares Commodity Swap                          | | Bitcoin          | | |
+| | |                          -€180                                    | | -€90             | | |
+| | |                          -3,6%                                    | | -5,1%            | | |
+| | |                                                                   | |                  | | |
+| | +-------------------------------------------------------------------+ +------------------+ | |
+| | +----------------------------- Directa / Stock ----------------------+                       | |
+| | | Tesla -€50                                                        |                       | |
+| | +-------------------------------------------------------------------+                       | |
+| +------------------------------------------------------------------------------------------------+
+|                                                                                                |
+|                                                                            Vedi tutte →        |
++------------------------------------------------------------------------------------------------+
+```
+
+Matematica scaling:
+
+```text
+gross_gains = sum(max(asset_period_pnl, 0))
+gross_losses = sum(abs(min(asset_period_pnl, 0)))
+
+scale_max = max(gross_gains, gross_losses)
+```
+
+Per ogni asset:
+
+```text
+gain_area_asset = asset_period_pnl / scale_max
+  se asset_period_pnl > 0
+
+loss_area_asset = abs(asset_period_pnl) / scale_max
+  se asset_period_pnl < 0
+```
+
+Esempio:
+
+```text
+gross_gains = +1.260
+gross_losses = 320
+scale_max = 1.260
+
+area totale gain = 100%
+area totale loss = 320 / 1260 = 25,4%
+```
+
+Quindi visivamente:
+
+```text
+la zona perdite appare circa 1/4 della zona guadagni
+```
+
+Questo è voluto.
+
+Osservazione importante UI:
+
+```text
+Mostrare sempre label:
+"Scala condivisa: 100% = max(gain, loss)"
+```
+
+Altrimenti utente può pensare che le due treemap siano autoscalate separatamente.
+
+***
+
+# Mobile asset widget
+
+## Mobile / Tabella
+
+La tabella può restare tabellare/scrollabile se già esiste pattern coerente.
+
+ASCII concettuale:
+
+```text
++--------------------------------------+
+| LE TUE POSIZIONI                     |
+| [Esposizione | Contributo]           |
+| [Tabella | Mappa]                    |
++--------------------------------------+
+| Asset              Tipo      Broker  |
+| Valore             Peso      P&L     |
+|--------------------------------------|
+| VWCE               ETF       Directa |
+| €12.450            18,2%     +€840   |
+|--------------------------------------|
+| Apple Inc.         Stock     Directa |
+| €2.650             3,9%      +€310   |
+|--------------------------------------|
+| EX ALBERGO VELA    Crowd     Recrowd |
+| €3.000             4,4%      +€126   |
+|                                      |
+| Vedi tutte →                         |
++--------------------------------------+
+```
+
+Se si usa tabella scrollabile:
+
+```text
+no layout forzato a card
+mantieni comportamento tabellare coerente
+```
+
+## Mobile / Mappa contributo
+
+```text
++--------------------------------------+
+| LE TUE POSIZIONI                     |
+| [Esposizione | Contributo]           |
+| [Tabella | Mappa]                    |
++--------------------------------------+
+| P&L periodo                          |
+| Scala condivisa gain/loss            |
+|                                      |
+| GUADAGNI +€1.260                     |
+| +----------------------------------+ |
+| | VWCE                             | |
+| | +€840                            | |
+| +----------------------------------+ |
+| | Apple +€310 | Recrowd +€126      | |
+| +----------------------------------+ |
+|                                      |
+| PERDITE -€320                       |
+| +----------------------------------+ |
+| | iShares Commodity                | |
+| | -€180                            | |
+| +----------------------------------+ |
+| | BTC -€90    | Tesla -€50         | |
+| +----------------------------------+ |
+|                                      |
+| Vedi tutte →                         |
++--------------------------------------+
+```
+
+***
+
+# Componente 2 — Ultime transazioni
+
+## Scelta architetturale
+
+Qui invece ha senso riusare la tabella transazioni esistente in modalità:
+
+```text
+variant = compact/home
+```
+
+Perché:
+
+```text
+la semantica resta la stessa
+cambiano solo colonne, azioni e comportamento
+```
+
+***
+
+# Colonne home finali
+
+Scelta aggiornata con tua osservazione:
+
+```text
+Data
+Tipo
+Asset
+Broker
+Qty
+Amount
+```
+
+Non visualizzare:
+
+```text
+ID
+Tag
+Descrizione lunga separata
+Azioni
+Link tecnico separato
+```
+
+***
+
+# Desktop recent transactions
+
+```text
++------------------------------------------------------------------------------------------------+
+| ULTIME TRANSAZIONI                                                                              |
++------------------------------------------------------------------------------------------------+
+| Data        Tipo            Asset                         Broker        Qty          Amount     |
+|------------------------------------------------------------------------------------------------|
+| 15 giu      Tassa           —                             directa       —            -13,18 €   |
+| 15 giu      Commissione     —                             directa       —             -1,50 €   |
+| 15 giu      Vendita         iShares Commodity Swap         directa      -12 EXXY     +384,84 €  |
+| 08 giu      Prelievo        —                             Recrowd       —           -360,87 €  |
+| 08 giu      Acquisto        Amundi MSCI Semiconductors     directa      +6 CHIP      -673,56 €  |
+| 08 giu      Acquisto        Amundi MSCI World              directa      +12 AASI     -687,24 €  |
+| 07 giu      Deposito        —                             directa       —          +1.445,00 € |
+|                                                                                                |
+|                                                                            Vedi tutte →        |
++------------------------------------------------------------------------------------------------+
+```
+
+***
+
+# Scelta sui “numeretti” verdi/rossi
+
+Nello screenshot mock:
+
+```text
+Amount:
+384,84 EUR
+-12.00 EXXY
+```
+
+Interpretazione:
+
+```text
+riga principale = cash leg
+numeretto sotto = asset leg / quantità asset collegata
+```
+
+Esempi:
+
+```text
+SELL:
+cash leg  = +384,84 EUR
+asset leg = -12 EXXY
+
+BUY:
+cash leg  = -673,56 EUR
+asset leg = +6 CHIP
+```
+
+Scelta finale:
+
+```text
+usare soluzione B:
+Qty in colonna separata
+senza colori
+```
+
+Motivo:
+
+```text
+rosso/verde sulla qty può sembrare P&L/performance
+ma in realtà indica solo aumento/riduzione quantità
+```
+
+Quindi:
+
+```text
+Qty = neutra
+Amount = cash amount
+```
+
+***
+
+# Mobile transactions
+
+Dato che la tabella mobile è già scrollabile:
+
+```text
+non creare layout a 2 righe custom
+riusare comportamento mobile esistente
+```
+
+ASCII concettuale:
+
+```text
++--------------------------------------+
+| ULTIME TRANSAZIONI                   |
++--------------------------------------+
+| Data | Tipo | Asset | Broker | Qty | Amount  -> scroll orizzontale
+|--------------------------------------|
+| 15 giu | Tassa       | —       | directa | —        | -13,18 €   |
+| 15 giu | Commissione | —       | directa | —        |  -1,50 €   |
+| 15 giu | Vendita     | iShares | directa | -12 EXXY | +384,84 €  |
+| 08 giu | Prelievo    | —       | Recrowd | —        | -360,87 €  |
+| 08 giu | Acquisto    | Amundi  | directa | +6 CHIP  | -673,56 €  |
+|                                      |
+| Vedi tutte →                         |
++--------------------------------------+
+```
+
+Interazione:
+
+```text
+desktop:
+  double click riga → view transaction
+
+mobile:
+  long press riga → open view diretto
+  no context menu in home
+```
+
+Motivo:
+
+```text
+home = consultazione rapida
+pagina transazioni = gestione completa
+```
+
+***
+
+# Empty states
+
+## Asset vuoti
+
+```text
++--------------------------------------------------------------+
+| LE TUE POSIZIONI                                             |
++--------------------------------------------------------------+
+|                                                              |
+|                    Nessuna posizione disponibile             |
+|                                                              |
+|        Importa transazioni o aggiungi asset per iniziare      |
+|                                                              |
++--------------------------------------------------------------+
+```
+
+## Contributo periodo nullo
+
+```text
++--------------------------------------------------------------+
+| LE TUE POSIZIONI                     [Esposizione|Contributo] |
++--------------------------------------------------------------+
+|                                                              |
+|              Nessun P&L nel periodo selezionato              |
+|                                                              |
+|        Cambia range o verifica prezzi/transazioni             |
+|                                                              |
++--------------------------------------------------------------+
+```
+
+## Transazioni vuote
+
+```text
++--------------------------------------+
+| ULTIME TRANSAZIONI                   |
++--------------------------------------+
+|                                      |
+|       Nessuna transazione recente    |
+|                                      |
+|       Importa o aggiungi una         |
+|       transazione per iniziare.      |
+|                                      |
++--------------------------------------+
+```
+
+***
+
+# Sintesi finale scelte
+
+```text
+Asset widget:
+  nuova vista dashboard-specific
+  non riuso tabella Asset full
+  riuso celle/formatter comuni
+  toggle Esposizione / Contributo
+  toggle Tabella / Mappa
+  treemap esposizione = una mappa
+  treemap contributo = due mappe gain/loss con scala condivisa
+```
+
+```text
+Transactions widget:
+  riuso tabella transazioni esistente
+  modalità compact/home
+  colonne: Data, Tipo, Asset, Broker, Qty, Amount
+  Qty separata da Amount
+  Qty senza colori
+  no azioni inline
+  mobile mantiene tabella scrollabile
+  long press mobile → view diretto
+```
+
+***
+
+# Formula recap
+
+## Esposizione
+
+```text
+NAV = somma valore corrente portfolio
+asset_weight = asset_market_value / NAV
+```
+
+```text
+asset_total_pnl =
+    asset_current_value
+  - asset_cost_basis
+  + realized_result_if_included_by_engine
+```
+
+Da verificare su engine esistente se il P\&L totale asset è:
+
+```text
+solo unrealized
+oppure total return asset-level
+```
+
+Nome UI deve seguire la semantica reale.
+
+***
+
+## Contributo periodo
+
+```text
+asset_period_pnl =
+    asset_unrealized_delta
+  + asset_realized_gain_loss
+  + asset_income
+  - asset_fees_taxes
+```
+
+```text
+gross_gains = Σ max(asset_period_pnl, 0)
+gross_losses = Σ abs(min(asset_period_pnl, 0))
+scale_max = max(gross_gains, gross_losses)
+```
+
+```text
+gain_area_asset = asset_period_pnl / scale_max
+loss_area_asset = abs(asset_period_pnl) / scale_max
+```

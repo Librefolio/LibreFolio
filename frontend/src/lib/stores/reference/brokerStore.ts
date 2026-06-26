@@ -22,6 +22,7 @@ import {zodiosApi} from '$lib/api';
 import {createEntityStore} from '../core/entityStore';
 import {derived} from 'svelte/store';
 import {canEditWithRole, getRoleRank, type PairedAccessLevel} from '$lib/utils/broker/brokerRoleHelpers';
+import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
 
 // ============================================================================
 // TYPES
@@ -101,11 +102,22 @@ export const brokerStoreVersion = derived(store.version, (v) => v);
  * Ensure the full broker list is loaded once.
  * Concurrent calls share the same in-flight promise. After `invalidateBroker()`
  * removes entries, `loaded` is reset and the next call re-fetches.
+ *
+ * Also kicks off plugin icon cache loading (fire-and-forget) so that
+ * `getBrokerIconUrl()` can resolve plugin-based icons without requiring
+ * explicit `ensurePluginIconsLoaded()` calls in every consumer page.
  */
-export const ensureBrokersLoaded = store.ensureLoaded;
+export const ensureBrokersLoaded = async (): Promise<void> => {
+    await store.ensureLoaded();
+    ensurePluginIconsLoaded(); // fire-and-forget — populates _pluginIconCache for getBrokerIconUrl
+};
 
-/** Force reload — discards the cache and re-fetches. */
-export const refreshAllBrokers = store.refreshAll;
+/** Force reload — discards the cache and re-fetches.
+ *  Also kicks off plugin icon cache loading (fire-and-forget). */
+export const refreshAllBrokers = async (): Promise<void> => {
+    await store.refreshAll();
+    ensurePluginIconsLoaded(); // fire-and-forget — keeps plugin icon cache fresh
+};
 
 /** Sync lookup. Returns null if id is null/undefined or not cached. */
 export const getBrokerInfo = store.get;

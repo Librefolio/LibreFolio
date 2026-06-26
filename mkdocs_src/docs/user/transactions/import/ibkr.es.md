@@ -42,7 +42,3 @@ Para carteras más avanzadas, puede configurar una **Flex Query** para exportar 
 - Compatible con los informes de actividad estándar de IBKR (operaciones, dividendos, retenciones fiscales, comisiones, depósitos, retiradas).
 - Se admiten cuentas multi-divisa.
 - Las acciones corporativas (divisiones, fusiones) pueden requerir ajustes manuales dentro de la cuadrícula de preparación (staging grid).
-
-## 🔗 Referencia para Desarrolladores
-
-→ [Proveedor IBKR — Detalles de Implementación](../../../developer/backend/brim/providers_list.md)

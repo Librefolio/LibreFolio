@@ -8,6 +8,30 @@ How to create a new **FX Rate Provider** to fetch exchange rates from a new cent
 
 ---
 
+## 🤖 Tip: Let an LLM scaffold the provider
+
+Paste this entire page into an LLM with the central bank or API documentation and use this prompt:
+
+!!! tip "Suggested prompt"
+
+    ```
+    Here is the LibreFolio FX Rate Provider specification: [paste this page]
+
+    I want to add an FX provider for [SOURCE_NAME] (e.g., a central bank or FX data API).
+    Their API works like this: [brief description or paste API docs / sample response]
+    Base currency: [e.g., EUR]
+    Supported currencies: [e.g., USD, GBP, JPY, CHF]
+
+    Write a complete Python FXRateProvider implementation. Follow all conventions:
+    @register_provider, correct fetch_rates return type, multi_unit_currencies if needed,
+    description_i18n, warning_i18n if applicable. Use asyncio.to_thread for sync HTTP calls.
+    ```
+
+    After scaffolding, test with a manual sync from the FX settings page. Place the file in
+    `fx_providers/` and restart — it will appear automatically as a selectable provider.
+
+---
+
 ## 🔄 Flow
 
 The system calls provider methods in two distinct phases:

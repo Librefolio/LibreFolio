@@ -32,7 +32,3 @@ Para exportar sus transacciones desde Degiro:
 
 - Admite operaciones de compra/venta, dividendos, comisiones de transacción, depósitos y retiros.
 - Las conversiones de divisa realizadas por Degiro se procesan automáticamente.
-
-## 🔗 Referencia para Desarrolladores
-
-→ [Proveedor de Degiro — Detalles de Implementación](../../../developer/backend/brim/providers_list.md)

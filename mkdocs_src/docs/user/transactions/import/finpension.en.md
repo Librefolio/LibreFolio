@@ -29,7 +29,3 @@ To export your transactions from Finpension:
 - Swiss pension platform.
 - Supports cash deposits, buys, sells, tax withholdings, and management fees.
 - Denominated in CHF.
-
-## 🔗 Developer Reference
-
-→ [Finpension Provider — Implementation Details](../../../developer/backend/brim/providers_list.md)
