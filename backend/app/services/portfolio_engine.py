@@ -905,7 +905,6 @@ class DerivedViewsBuilder:
                 "in_transit_asset_cost_basis": CurrencySchema(code=self.target_currency, amount=s.in_transit_asset_cost_basis) if s.in_transit_asset_cost_basis else None,
                 "in_transit_book_value": CurrencySchema(code=self.target_currency, amount=s.in_transit_book_value) if s.in_transit_book_value else None,
                 "book_value": CurrencySchema(code=self.target_currency, amount=s.book_value) if s.book_value else None,
-                "net_invested": CurrencySchema(code=self.target_currency, amount=s.cumulative_external_cash_flow) if s.cumulative_external_cash_flow else None,
                 "capital_baseline": CurrencySchema(code=self.target_currency, amount=s.cumulative_external_cash_flow),
                 "book_asset_like": CurrencySchema(code=self.target_currency, amount=s.book_asset_like),
                 "cash_from_contributed_capital": CurrencySchema(code=self.target_currency, amount=s.cash_from_contributed_capital),

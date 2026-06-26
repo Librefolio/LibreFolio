@@ -323,4 +323,36 @@ test.describe('TransactionsTable (main read-view)', () => {
         // Close by clicking outside
         await page.keyboard.press('Escape');
     });
+
+    // === NR-A — Broker filter dropdown has icon or dot fallback per option ===
+    // Non-regression for bug A (broker icon fallback chain fix, 2026-06-25)
+    test('NR-A: broker filter dropdown has icon or colored dot for every option', async ({page}) => {
+        // Open the broker column filter
+        const filterTrigger = page.getByTestId('col-filter-trigger-broker');
+        await expect(filterTrigger).toBeVisible({timeout: 3_000});
+        await filterTrigger.click();
+        await page.waitForTimeout(400);
+
+        // All broker filter options must be visible
+        const options = page.locator('[data-testid^="filter-enum-option-"]');
+        const count = await options.count();
+        expect(count, 'Broker filter must have at least one option').toBeGreaterThan(0);
+
+        // Each option must contain EITHER an <img> element OR a span with background-color (dot fallback)
+        for (let i = 0; i < count; i++) {
+            const opt = options.nth(i);
+            const hasImg = await opt.locator('img').count().then((c) => c > 0);
+            const hasDotSpan = await opt
+                .locator('.enum-dot, [style*="background"], span.dot, span[style*="background-color"]')
+                .count()
+                .then((c) => c > 0);
+            expect(
+                hasImg || hasDotSpan,
+                `Broker filter option ${i} has neither an img nor a dot span`,
+            ).toBeTruthy();
+        }
+
+        // Close
+        await page.keyboard.press('Escape');
+    });
 });

@@ -7,9 +7,12 @@ from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ens
 
 
 def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run Transaction unit tests (Vitest) — txPayloadHelpers + txCommitApi."""
+    """Run Transaction unit tests (Vitest) — txPayloadHelpers + txCommitApi + promoteHelpers."""
     print_section("Frontend TX Unit Tests (Vitest)")
-    cmd = ["npx", "vitest", "run", "src/lib/utils/__tests__/txPayloadHelpers.test.ts", "src/lib/utils/__tests__/txCommitApi.test.ts"]
+    cmd = ["npx", "vitest", "run",
+           "src/lib/utils/__tests__/txPayloadHelpers.test.ts",
+           "src/lib/utils/__tests__/txCommitApi.test.ts",
+           "src/lib/utils/__tests__/promoteHelpers.test.ts"]
     print(f"\n{Colors.BLUE}Running: TX Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
     try:
@@ -356,6 +359,6 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-event-picker", front_tx_event_picker, name="TX Event Picker Tests", desc="Event picker card-style dropdown, delta, slider range, type visibility", tests="transactions/tx-event-picker.spec.ts")
     add_test(cat, "tx-brim-import", front_tx_brim_import, name="TX BRIM Import Wizard Tests", desc="Import Wizard flow: open, select file, parse, resolve assets, import to BulkModal", tests="transactions/tx-brim-import.spec.ts")
     add_test(cat, "tx-import-resolution", front_tx_import_resolution, name="TX Import Resolution Tests", desc="Advanced resolve flow: resolve section, AssetSelect, identifier prompt, create asset, full E2E", tests="transactions/tx-import-resolution.spec.ts")
-    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi", tests="vitest")
+    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers", tests="vitest")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

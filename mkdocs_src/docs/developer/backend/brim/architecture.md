@@ -1,73 +1,112 @@
 # 📥 BRIM Architecture
 
-**BRIM (Broker Report Import Manager)** is the system responsible for importing transaction data from CSV files exported by various brokers. It is designed to be robust,
-user-friendly, and extensible.
+**BRIM (Broker Report Import Manager)** is the system responsible for importing transaction data from CSV files exported by various brokers. It is designed to be robust, user-friendly, and extensible.
 
 ## 🔄 The BRIM Workflow
 
-The import process follows a clear, multi-step workflow designed to give the user full control and visibility.
+The import process follows a clear, multi-step wizard designed to give the user full control and visibility.
 
 ```mermaid
 graph TD
-    A[1. Upload] --> B{2. Storage & Analysis}
-    B --> C[3. Parse & Preview]
-    C --> D{4. User Review & Mapping}
-    D --> E[5. Final Import]
-    E --> F[(Database)]
+    A[1. Upload CSV] --> B{2. Plugin Detection}
+    B -->|Supported broker| C[3. Auto-parse & Preview]
+    B -->|Unknown format| D[3b. Generic CSV / Manual mapping]
+    C --> E[4. Asset Resolution]
+    D --> E
+    E --> F{5. Duplicate Check}
+    F --> G[6. Staging & Confirm]
+    G --> H[(Database)]
 
-    subgraph User Action
+    subgraph User Actions
         A
-        D
+        E
+        F
+        G
     end
 ```
 
-1. **Upload**: The user uploads a CSV file through the frontend.
+### Step-by-step
 
-2. **Storage & Analysis**:
-    - The backend saves the file with a unique **UUID** to prevent filename conflicts and path traversal attacks. The original filename is stored in a `.json` metadata sidecar
-      file.
-    - The file is placed in the `backend/data/broker_reports/uploaded/` directory.
-    - BRIM automatically analyzes the file to detect which plugins (`BRIMProvider`) can parse it.
+1. **Upload** — The user uploads a CSV file. It can be dragged into the broker page or accessed from the Files tab.
 
-3. **Parse & Preview**:
-    - The user selects a compatible plugin from the list.
-    - The backend calls the plugin's `parse()` method, which reads the file and converts it into a standardized list of `TXCreateItem` objects.
-    - **Crucially, nothing is saved to the database at this stage.**
+2. **Plugin Detection** — BRIM scans all installed `BRIMProvider` plugins in priority order. The plugin with the highest confidence match is selected, and alternatives are shown in a dropdown. If no specific plugin matches, the Generic CSV provider is used as fallback.
 
-4. **User Review & Mapping**:
-    - The frontend displays the parsed transactions to the user for review.
-    - **Asset Mapping**: If the CSV contains new or unrecognized assets, the user is prompted to map them to existing assets in the database or create new ones.
-    - **Duplicate Detection**: The system flags potential duplicate transactions, allowing the user to choose whether to skip or import them.
+3. **Parse & Preview** — The selected plugin's `parse()` method converts the file into standardized `TXCreateItem` objects. **Nothing is saved yet.** The user sees a table of parsed transactions before proceeding.
 
-5. **Final Import**:
-    - Once the user confirms, the frontend sends the final, validated list of transactions to the backend.
-    - The backend uses the standard `TransactionService` to save the transactions to the database.
-    - The imported file is moved from the `uploaded/` directory to `parsed/` or `failed/` depending on the outcome.
+4. **Asset Resolution** — New or unrecognized assets are shown with a resolution dialog. The user can:
+   - Map to an existing asset in the database
+   - Create a new asset (choosing type: Stock, ETF, Bond, **OTHER**, Crypto, etc.)
+   - Skip rows with unresolved assets
+
+5. **Duplicate Detection** — Each parsed transaction is compared against existing rows by `(broker_id, date, type, amount, quantity)`. Matches are flagged with a confidence level so the user can skip or force-import them.
+
+6. **Staging & Confirm** — The user reviews a final staging list. On confirm, the standard `TransactionService` saves the transactions.
+
+---
 
 ## 📂 File Lifecycle
 
-BRIM manages imported files by moving them between three directories, ensuring a clear record of the import status.
+```
+backend/data/{prod|test}/broker_reports/
+├── uploaded/    ← new files awaiting processing
+├── parsed/      ← successfully imported files
+└── failed/      ← files that failed parsing or were rejected
+```
 
-- `backend/data/broker_reports/`
-    - `uploaded/`: New files awaiting processing.
-    - `parsed/`: Files that have been successfully imported.
-    - `failed/`: Files that failed to parse or were rejected by the user.
+Each file is stored with a companion `.json` metadata sidecar recording status, original filename, and any errors encountered.
 
-Each file is stored with a corresponding `.json` metadata file that tracks its status, original filename, and any errors.
+---
 
 ## 🔍 Deduplication Logic
 
-Before final import, BRIM checks for potential duplicates by comparing each parsed transaction against existing transactions in the database based on:
+Before final import, BRIM compares each parsed transaction against the database on:
 
-- `broker_id`
-- `date`
-- `type`
-- `quantity`
-- `amount`
+| Field | Used in match |
+|-------|--------------|
+| `broker_id` | ✅ |
+| `date` | ✅ |
+| `type` | ✅ |
+| `quantity` | ✅ |
+| `amount` | ✅ |
+| `description` | Used for confidence upgrade |
+| `asset_id` | Used for confidence upgrade |
 
-The system assigns a **match confidence level** to help the user make an informed decision:
+Confidence levels:
 
-- `POSSIBLE`: Key fields match.
-- `LIKELY`: Key fields and the description match.
-- `POSSIBLE_WITH_ASSET`: Key fields match, and the asset was automatically resolved.
-- `LIKELY_WITH_ASSET`: Key fields, description, and the resolved asset all match.
+| Level | Meaning |
+|-------|---------|
+| `POSSIBLE` | Key fields match |
+| `LIKELY` | Key fields + description match |
+| `POSSIBLE_WITH_ASSET` | Key fields + asset resolved |
+| `LIKELY_WITH_ASSET` | Key fields + description + asset all match |
+
+---
+
+## 🧩 Plugin System
+
+Every BRIM plugin is a `BRIMProvider` subclass registered via the provider registry. Key contract:
+
+```python
+class MyBrokerProvider(BRIMProvider):
+    name = "broker_mybroker"
+    detection_priority = 100          # Higher = tried first
+
+    def can_parse(self, file_path) -> float:
+        """Return 0.0–1.0 confidence that this file belongs to this broker."""
+        ...
+
+    def parse(self, file_path, broker_id) -> list[TXCreateItem]:
+        """Convert broker CSV rows into standard TXCreateItem objects."""
+        ...
+```
+
+Plugins are auto-discovered at startup. See the [BRIM Plugin Guide](../../architecture/patterns/brim_plugin_guide.md) for a complete walkthrough of creating a new plugin.
+
+---
+
+## 🔗 Related
+
+- **[Generic CSV Provider](generic_csv.md)** — Format reference + sign conventions + LLM tip
+- **[Providers List](providers_list.md)** — All currently supported brokers
+- **[BRIM Plugin Guide](../../architecture/patterns/brim_plugin_guide.md)** — How to write a new broker plugin
+

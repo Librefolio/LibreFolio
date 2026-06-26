@@ -48,6 +48,7 @@
     import {createValidateScheduler} from '$lib/utils/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
     import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, upgradeAutoToDetail, type TxFields, type TxOriginal, type ResolvedOp, type ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
+    import {cashAmountsCancel} from '$lib/utils/transactions/promoteHelpers';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {formatCurrencyAmountHtml, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
@@ -2322,22 +2323,8 @@
         };
     }
 
-    /**
-     * Return true only when the two ops have cash amounts that are exactly
-     * opposite (sum = 0). Required for CASH_TRANSFER promote suggestions —
-     * prevents false positives between unrelated transactions that only share
-     * type and date proximity but have different amounts.
-     * Uses decimal-level precision: amounts are stored as decimal strings.
-     */
-    function cashAmountsCancel(a: PendingOp, b: PendingOp): boolean {
-        if (!a.fields.cash || !b.fields.cash) return false;
-        const numA = Number(a.fields.cash.amount);
-        const numB = Number(b.fields.cash.amount);
-        const maxAbs = Math.max(Math.abs(numA), Math.abs(numB));
-        if (maxAbs === 0) return false;
-        // Exact cancellation: sum must be 0 within floating-point epsilon
-        return Math.abs(numA + numB) / maxAbs < 1e-9;
-    }
+    // cashAmountsCancel is imported from '$lib/utils/transactions/promoteHelpers'
+    // (extracted for unit-testability — see promoteHelpers.ts)
 
     /** Selection-based promote detection — 2 standalone rows with matching promote rule. */
     let selectedForPromote = $derived.by(() => {
@@ -2349,8 +2336,9 @@
         if ((a.op === 'edit' && a.markedDelete) || (b.op === 'edit' && b.markedDelete)) return null;
         const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
         if (!match) return null;
-        // Require cash amounts to be exactly opposite (sum = 0)
-        if (!cashAmountsCancel(a, b)) return null;
+        // For CASH_TRANSFER: require exact cash cancel (same currency, opposite sign).
+        // For FX_CONVERSION: amounts are in different currencies — no cancel check.
+        if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b)) return null;
         return {...match, opA: a, opB: b};
     });
 
@@ -2502,7 +2490,7 @@
                 const delta = daysDiff(dA, dB);
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(newStandalone[i].fields.type, newStandalone[j].fields.type, $t, buildPromoteCtx(newStandalone[i], newStandalone[j]));
-                if (match && cashAmountsCancel(newStandalone[i], newStandalone[j])) {
+                if (match && (match.targetType !== 'CASH_TRANSFER' || cashAmountsCancel(newStandalone[i], newStandalone[j]))) {
                     results.push({
                         tempIdA: newStandalone[i].tempId,
                         tempIdB: newStandalone[j].tempId,
@@ -2536,7 +2524,9 @@
                 const delta = daysDiff(dA, dB);
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
-                if (!match || !cashAmountsCancel(a, b)) continue;
+                if (!match) continue;
+                // CASH_TRANSFER: amounts must cancel. FX_CONVERSION: different currencies, no cancel check.
+                if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b)) continue;
                 const pairKey = `${(a as any).txId}-${(b as any).txId}`;
                 if (seenPairs.has(pairKey)) continue;
                 seenPairs.add(pairKey);

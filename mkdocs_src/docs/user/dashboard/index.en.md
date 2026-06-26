@@ -1,38 +1,54 @@
 # 📊 Dashboard
 
-!!! info "This feature is under development"
+The Dashboard is your **portfolio's command center** — a single screen that tells you what your portfolio is worth, how it's performing, and where your money is allocated.
 
-    The Dashboard is currently a **work in progress**. This page will be updated as new panels become available.
-
-<div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="dashboard" data-name="main" alt="Dashboard">
+<div class="lf-screenshot-carousel" data-carousel="carousel-dashboard-main" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Main View (Absolute)" alt="Dashboard — Absolute Mode">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📈 Main View (Percentage)" alt="Dashboard — Percentage Mode">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Allocation" alt="Dashboard — Allocation">
 </div>
 
 ---
 
-## Overview
+## 🗂️ Layout
 
-The Dashboard is the **main landing page** after login. It provides a consolidated view of your entire portfolio across all brokers — net worth, allocation, recent performance, and quick-access widgets.
-
-Planned widgets include:
-
-- **Net Worth** — Total portfolio value in your base currency
-- **Allocation Breakdown** — Asset type and sector distribution charts
-- **Performance Overview** — Returns over selectable time ranges (1W, 1M, 3M, YTD, 1Y, All)
-- **Recent Transactions** — Last 5–10 transactions across all brokers
-- **Market Movers** — Your holdings sorted by daily % change
-- **FX Exposure** — Currency exposure summary
+| Section | Location | Contents |
+|---------|----------|---------|
+| **[KPI Cards](kpi-cards.md)** | Top row | [Net Worth](kpi-cards.md#card-1--net-worth) · [Period P&L](kpi-cards.md#card-2--period-pl) · [Returns](kpi-cards.md#card-3--returns) |
+| **[Growth Chart](charts.md#portfolio-growth-chart)** | Middle left | Absolute stacked area + percentage return series |
+| **[Allocation Panel](charts.md#allocation-panel)** | Middle right + bottom | Type / Sector / Geography — current and historical |
 
 ---
 
-## Connectivity Check
+## 🎛️ Date Range & Broker Filter
 
-LibreFolio automatically checks **backend connectivity** when you open the Dashboard. If the backend is unreachable, a banner is shown with a reconnect button — no stale data is displayed.
+At the top of the dashboard you can select:
+
+- **Time range** — presets from 1 week to All-Time, or a custom range via the date picker
+- **Broker filter** — show all brokers or focus on one or more
+- **Target currency** — converts all values into a single currency
+
+!!! tip "Scope matters"
+
+    When you filter to a single broker, cash transfers *to other brokers* become external flows for that scope. This affects [Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md) and [P&L](../../financial-theory/technical-analysis/performance-metrics/period-pnl.md) calculations.
 
 ---
 
-## 🔗 Related
+## 🌡️ Data Quality Banner
 
-- 🏦 **[Brokers](../brokers/index.md)** — Detailed view per broker
-- 📊 **[Assets](../assets/index.md)** — Full asset list and charts
-- 💸 **[Transactions](../transactions/index.md)** — All transaction history
+If any prices or FX rates are missing on the end date, a banner appears at the top explaining which assets could not be valued. Assets without a price provider (entered manually, such as real-estate crowdfunding projects) are permanently valued at purchase cost — this is intentional and does not generate a warning.
+
+---
+
+## 🔗 In this section
+
+- 💰 **[KPI Cards](kpi-cards.md)** — Net Worth, Period P&L, and Returns explained
+- 📊 **[Charts](charts.md)** — Growth Chart and Allocation Panel explained
+
+## 🔗 Related theory
+
+- **[NAV / Net Worth](../../financial-theory/technical-analysis/performance-metrics/nav.md)**
+- **[Book Value](../../financial-theory/technical-analysis/performance-metrics/book-value.md)**
+- **[Period P&L](../../financial-theory/technical-analysis/performance-metrics/period-pnl.md)**
+- **[Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md)**
+- **[Performance Metrics overview](../../financial-theory/technical-analysis/performance-metrics/index.md)**

@@ -22,6 +22,7 @@
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {getBrokerIconUrlById, ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
+    import {getBrokerColor} from '$lib/utils/broker/brokerColors';
     import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
@@ -100,7 +101,13 @@
     // Derived
     // =========================================================================
 
-    const allBrokers = $derived(getAllBrokers());
+    /** Becomes true after ensurePluginIconsLoaded() resolves — forces broker
+     *  filter icons to re-render once the plugin icon cache is ready. */
+    let pluginIconsReady = $state(false);
+    const allBrokers = $derived.by(() => {
+        void pluginIconsReady; // Re-run after plugin icon cache is populated
+        return getAllBrokers();
+    });
     const baseCurrency = $derived($globalSettings.default_currency || 'EUR');
     const displayCurrency = $derived(targetCurrency || baseCurrency);
 
@@ -416,6 +423,7 @@
         void (async () => {
             await ensureBrokersLoaded();
             await ensurePluginIconsLoaded();
+            pluginIconsReady = true;
             await loadAll();
         })();
         return () => document.removeEventListener('click', handleDocumentClick);
@@ -492,6 +500,7 @@
                     <div class="max-h-52 overflow-y-auto mx-2.5 my-2 space-y-0.5">
                         {#each allBrokers as broker (broker.id)}
                             {@const iconUrl = getBrokerIconUrlById(broker.id, allBrokers)}
+                            {@const dotColor = getBrokerColor(broker.id, allBrokers).bg}
                             {@const isSelected = selectedBrokerIds.includes(broker.id)}
                             <button
                                 type="button"
@@ -499,18 +508,21 @@
                                 onclick={() => toggleBroker(broker.id)}
                                 data-testid="broker-filter-item-{broker.id}"
                             >
-                                {#if iconUrl}
-                                    <img
-                                        src={iconUrl}
-                                        alt=""
-                                        class="w-4 h-4 rounded-sm object-contain flex-shrink-0"
-                                        onerror={(e) => {
-                                            (e.target as HTMLElement).style.display = 'none';
-                                        }}
-                                    />
-                                {:else}
-                                    <div class="w-4 h-4 rounded-sm bg-gray-100 dark:bg-slate-700 flex-shrink-0"></div>
-                                {/if}
+                                <!-- Overlay: colored dot underneath, img on top (hidden on error) -->
+                                <span class="relative w-4 h-4 flex-shrink-0 flex items-center justify-center">
+                                    <span class="absolute inset-0 rounded-sm" style="background: {dotColor}"></span>
+                                    {#if iconUrl}
+                                        <img
+                                            src={iconUrl}
+                                            alt=""
+                                            class="absolute inset-0 w-4 h-4 rounded-sm object-contain"
+                                            referrerpolicy="no-referrer"
+                                            onerror={(e) => {
+                                                (e.target as HTMLImageElement).style.visibility = 'hidden';
+                                            }}
+                                        />
+                                    {/if}
+                                </span>
                                 <span class="flex-1 truncate">{broker.name}</span>
                                 {#if isSelected}
                                     <svg class="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -558,9 +570,9 @@
             {:else}
                 <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 text-right" data-testid="kpi-value">{netWorthValue}</p>
                 <div class="flex flex-col gap-2 mt-1">
-                    <KpiMetricBar label={$_('dashboard.marketValue')} value={marketValueStr} barPct={marketBarPct} barColor={marketBarColor} marker={marketStartMarkerPct > 0 ? marketStartMarkerPct : undefined} markerTooltip="{$_('dashboard.marketValueStart')}: {marketValueStartStr}" />
-                    <KpiMetricBar label={$_('dashboard.bookValue')} value={bookValueStr} barPct={bookBarPct} barColor="bg-slate-400 dark:bg-slate-500" marker={bookStartMarkerPct > 0 ? bookStartMarkerPct : undefined} markerTooltip="{$_('dashboard.bookValueStart')}: {bookStartStr}" />
-                    <KpiMetricBar label={$_('dashboard.cashValue')} value={cashTotalStr} barPct={cashBarPct} barColor="bg-sky-400 dark:bg-sky-500" />
+                    <KpiMetricBar label={$_('dashboard.marketValue')} tooltip={$_('dashboard.marketValueTooltip')} value={marketValueStr} barPct={marketBarPct} barColor={marketBarColor} marker={marketStartMarkerPct > 0 ? marketStartMarkerPct : undefined} markerTooltip="{$_('dashboard.marketValueStart')}: {marketValueStartStr}" />
+                    <KpiMetricBar label={$_('dashboard.bookValue')} tooltip={$_('dashboard.bookValueTooltip')} value={bookValueStr} barPct={bookBarPct} barColor="bg-slate-400 dark:bg-slate-500" marker={bookStartMarkerPct > 0 ? bookStartMarkerPct : undefined} markerTooltip="{$_('dashboard.bookValueStart')}: {bookStartStr}" />
+                    <KpiMetricBar label={$_('dashboard.cashValue')} tooltip={$_('dashboard.cashValueTooltip')} value={cashTotalStr} barPct={cashBarPct} barColor="bg-sky-400 dark:bg-sky-500" />
                     <KpiDivergingFlowBar
                         label={$_('dashboard.netDepositedCapital')}
                         tooltipHtml={netDepositedTooltipHtml}

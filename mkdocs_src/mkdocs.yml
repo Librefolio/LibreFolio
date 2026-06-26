@@ -521,6 +521,8 @@ nav:
       - Install as App (PWA): user/pwa.md
       - 📊 Dashboard:
           - Overview: user/dashboard/index.md
+          - KPI Cards: user/dashboard/kpi-cards.md
+          - Charts: user/dashboard/charts.md
       - 🏦 Brokers:
           - Overview: user/brokers/index.md
           - Broker Sharing: user/brokers/sharing.md
@@ -648,6 +650,7 @@ nav:
               - NAV / Net Worth: financial-theory/technical-analysis/performance-metrics/nav.md
               - Book Value: financial-theory/technical-analysis/performance-metrics/book-value.md
               - Period P&L: financial-theory/technical-analysis/performance-metrics/period-pnl.md
+              - Deposited Capital & Total P&L: financial-theory/technical-analysis/performance-metrics/deposited-capital.md
               - Timing Effect: financial-theory/technical-analysis/performance-metrics/timing-effect.md
               - ROI: financial-theory/technical-analysis/performance-metrics/roi.md
               - TWRR: financial-theory/technical-analysis/performance-metrics/twrr.md
