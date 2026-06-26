@@ -1319,7 +1319,7 @@
                         </div>
 
                         <!-- Currency -->
-                        <div>
+                        <div data-testid="asset-modal-currency-group">
                             <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                                 {$t('common.currency')} *
                             </span>

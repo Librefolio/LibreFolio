@@ -2,8 +2,9 @@
   GrowthChart — Multi-series portfolio growth chart for the Dashboard Home.
 
   Shows the portfolio's historical performance with a toggle between:
-  - EUR mode: 3 absolute series (NAV, Invested Capital, Cash)
-  - % mode:   3 relative series (MWRR, TWRR, Simple ROI)
+  - ABS mode: Stacked areas (Asset Cost + Returns + Capital) with NAV and
+              Deposited Capital overlay lines. P&L = NAV − Deposited Capital.
+  - % mode:   3 relative series (MWRR cumulative, TWRR, Simple ROI)
 
   Uses ECharts directly (LineChart wrapper is single-series only).
 
@@ -11,7 +12,7 @@
   - history: PortfolioHistoryPoint[]
   - height: CSS height (default "360px")
   - loading: Show skeleton
-  - baseCurrency: Label for Y-axis in EUR mode (default "EUR")
+  - baseCurrency: Label for Y-axis in ABS mode (default "EUR")
 
   Pattern: Svelte 5 Runes, ECharts, MutationObserver for dark mode,
            ResizeObserver for responsive sizing.

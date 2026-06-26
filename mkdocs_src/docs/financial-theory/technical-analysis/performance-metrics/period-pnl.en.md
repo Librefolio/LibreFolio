@@ -67,3 +67,32 @@ If the formula did not adjust for external flows, it would incorrectly show a pr
 
 - **vs. ROI / TWRR / MWRR**: These are percentage-based metrics showing the rate of return. Period P&L shows the absolute monetary amount of profit/loss.
 - **vs. Unrealized Gain/Loss**: Unrealized Gain/Loss is a snapshot of current open positions compared to their original purchase cost. Period P&L measures the performance of both open and closed positions (realized gains, dividends, interest) specifically within the bounds of the chosen time window.
+
+---
+
+## 📊 Relationship with Total P&L
+
+Period P&L is the **windowed version** of a more fundamental concept: **Total P&L**.
+
+$$
+\text{Total P}\&\text{L}(t) = \text{NAV}(t) - \text{Deposited Capital}(t)
+$$
+
+Where **Deposited Capital** is the cumulative net external capital contributed since inception — not just in the selected period. The Period P&L equals the change in Total P&L over the selected window:
+
+$$
+\text{Period P}\&\text{L} = \text{Total P}\&\text{L}(t_{\text{end}}) - \text{Total P}\&\text{L}(t_{\text{start}})
+$$
+
+Total P&L is visible in the **Growth Chart tooltip** (ABS mode) as the gap between the NAV line and the Deposited Capital dashed line. This makes it easy to read — if NAV is above the baseline, the portfolio is profitable; if it is below, the portfolio is in loss.
+
+🔗 See **[Deposited Capital & Total P&L](deposited-capital.md)** for the full theory, cash decomposition algorithm, and worked examples.
+
+---
+
+## 🔗 Related
+
+- 💼 **[NAV / Net Worth](nav.md)** — the endpoint of every P&L formula
+- 📚 **[Book Value](book-value.md)** — used in the P&L breakdown (unrealized change, cost basis)
+- 💸 **[Deposited Capital & Total P&L](deposited-capital.md)** — inception-to-date version with cash decomposition
+- ⏱️ **[Timing Effect](timing-effect.md)** — the impact of your deposit timing on returns
