@@ -35,9 +35,13 @@
         /** Optional tooltip text/html-free. */
         tooltip?: string | null;
         tooltipPosition?: 'top' | 'bottom' | 'left' | 'right';
+        /** Optional extra CSS class on the root span. */
+        rootClass?: string;
+        /** Optional extra CSS class on the name span. */
+        nameClass?: string;
     }
 
-    let {broker, brokers: _brokers = [], size = 16, showName = true, showRole = false, role = null, tooltip = null, tooltipPosition = 'top'}: Props = $props();
+    let {broker, brokers: _brokers = [], size = 16, showName = true, showRole = false, role = null, tooltip = null, tooltipPosition = 'top', rootClass = '', nameClass = ''}: Props = $props();
 
     let resolvedBroker = $derived.by<BrokerLike>(() => {
         void $brokerStoreVersion;
@@ -55,10 +59,10 @@
 </script>
 
 {#snippet badgeContent()}
-    <span class="broker-badge" data-testid="broker-badge-{broker.id}" title={name}>
+    <span class="broker-badge {rootClass}" data-testid="broker-badge-{broker.id}" title={name}>
         <BrokerIcon brokerId={resolvedBroker.id} iconUrl={resolvedBroker.icon_url ?? null} portalUrl={resolvedBroker.portal_url ?? null} pluginCode={resolvedBroker.default_import_plugin ?? null} altText={name} {size} />
         {#if showName}
-            <span class="broker-badge-name">{name}</span>
+            <span class="broker-badge-name {nameClass}">{name}</span>
         {/if}
         {#if showRole && role}
             {@const RoleIcon = getRoleIcon(role)}

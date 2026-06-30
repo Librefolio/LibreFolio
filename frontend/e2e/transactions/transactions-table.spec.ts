@@ -341,16 +341,21 @@ test.describe('TransactionsTable (main read-view)', () => {
         // Each option must contain EITHER an <img> element OR a span with background-color (dot fallback)
         for (let i = 0; i < count; i++) {
             const opt = options.nth(i);
-            const hasImg = await opt.locator('img').count().then((c) => c > 0);
+            const hasImg = await opt
+                .locator('img')
+                .count()
+                .then((c) => c > 0);
             const hasDotSpan = await opt
                 .locator('.enum-dot, [style*="background"], span.dot, span[style*="background-color"]')
                 .count()
                 .then((c) => c > 0);
-            expect(
-                hasImg || hasDotSpan,
-                `Broker filter option ${i} has neither an img nor a dot span`,
-            ).toBeTruthy();
+            expect(hasImg || hasDotSpan, `Broker filter option ${i} has neither an img nor a dot span`).toBeTruthy();
         }
+
+        // Regression: Recrowd option must render an <img> candidate, not dot-only fallback.
+        const recrowdOption = options.filter({has: page.locator('.enum-label', {hasText: 'Recrowd'})}).first();
+        await expect(recrowdOption).toBeVisible({timeout: 3_000});
+        await expect(recrowdOption.locator('img')).toHaveCount(1);
 
         // Close
         await page.keyboard.press('Escape');
