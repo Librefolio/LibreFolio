@@ -90,7 +90,7 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "rit.": TransactionType.TAX,
     "ritenuta": TransactionType.TAX,
     "tobin": TransactionType.TAX,
-    "bollo": TransactionType.TAX,    # Bollo portafoglio titoli (stamp duty)
+    "bollo": TransactionType.TAX,  # Bollo portafoglio titoli (stamp duty)
     "imposta": TransactionType.TAX,  # generic tax keyword
     # INTEREST (bond coupons)
     "cedola": TransactionType.INTEREST,

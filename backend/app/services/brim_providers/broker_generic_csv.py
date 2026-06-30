@@ -430,9 +430,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
                         added_tx = transactions[-1]
                         if added_tx.type == TransactionType.ADJUSTMENT:
                             cbo = added_tx.cost_basis_override
-                            has_cbo = cbo is not None and not (
-                                hasattr(cbo, "amount") and float(str(cbo.amount)) == 0
-                            )
+                            has_cbo = cbo is not None and not (hasattr(cbo, "amount") and float(str(cbo.amount)) == 0)
                             if not has_cbo:
                                 field_todos.append(
                                     BRIMFieldTodo(

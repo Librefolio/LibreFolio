@@ -46,13 +46,9 @@ async def resolve_date_sentinels(
         return date_range
 
     # Get user's accessible broker IDs
-    accessible_brokers_stmt = select(BrokerUserAccess.broker_id).where(
-        BrokerUserAccess.user_id == user_id
-    )
+    accessible_brokers_stmt = select(BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id)
     if broker_ids:
-        accessible_brokers_stmt = accessible_brokers_stmt.where(
-            BrokerUserAccess.broker_id.in_(broker_ids)
-        )
+        accessible_brokers_stmt = accessible_brokers_stmt.where(BrokerUserAccess.broker_id.in_(broker_ids))
 
     # Query min/max transaction dates for accessible brokers
     stmt = select(

@@ -466,13 +466,7 @@ class OpenDateRangeModel(BaseModel):
     @model_validator(mode="after")
     def validate_end_after_start(self) -> OpenDateRangeModel:
         """Ensure end >= start when both are concrete dates (skip if sentinels)."""
-        if (
-            self.start is not None
-            and self.end is not None
-            and isinstance(self.start, date_type)
-            and isinstance(self.end, date_type)
-            and self.end < self.start
-        ):
+        if self.start is not None and self.end is not None and isinstance(self.start, date_type) and isinstance(self.end, date_type) and self.end < self.start:
             raise ValueError(f"end date ({self.end}) must be >= start date ({self.start})")
         return self
 

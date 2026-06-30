@@ -15,6 +15,7 @@ Architecture:
 from __future__ import annotations
 
 import bisect
+import hashlib
 import json
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -23,7 +24,8 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Literal, Optional
 
-from sqlalchemy import select
+import structlog
+from sqlalchemy import func, select
 
 from backend.app.db.models import Asset, BrokerUserAccess, PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency as CurrencySchema
@@ -36,8 +38,15 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.services.fx import convert_bulk
 from backend.app.services.settings_service import get_global_setting
+from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.financial.roi_utils import CashFlowInput, NAVSnapshot
 from backend.app.utils.financial.valuation_utils import compute_holding_value
+
+logger = structlog.get_logger(__name__)
+
+# Portfolio engine blob cache: stores PortfolioCalculationResult keyed by
+# (user, brokers, currency, fingerprints). Range-aware: can be sliced or extended.
+_portfolio_blob_cache = get_ttl_cache("portfolio_blob", maxsize=30, ttl=86400)  # 24h
 
 # Transaction types that are always external cash flows when unlinked
 _EXTERNAL_CASH_TYPES = {TransactionType.DEPOSIT, TransactionType.WITHDRAWAL}
@@ -219,10 +228,7 @@ class ScopeAwareTransactionClassifier:
                 # Paired tx not found → treat as normal with warning
                 ctxn = ClassifiedTransaction(tx=tx, classification="normal", share=share)
                 classified.append(ctxn)
-                warnings.append(
-                    f"Transaction {tx.id} ({tx.type}) has related_transaction_id={tx.related_transaction_id} "
-                    f"but paired transaction not found — treating as normal"
-                )
+                warnings.append(f"Transaction {tx.id} ({tx.type}) has related_transaction_id={tx.related_transaction_id} " f"but paired transaction not found — treating as normal")
                 # If it looks like a deposit/withdrawal, count as external
                 if tx.amount and tx.amount != 0 and tx.currency:
                     external_cash_flows.append((tx.date, tx.amount * share, tx.currency))
@@ -233,9 +239,7 @@ class ScopeAwareTransactionClassifier:
 
             if is_paired_in_scope:
                 # ── LINKED INTERNAL — both legs in scope ──
-                ctxn = ClassifiedTransaction(
-                    tx=tx, classification="linked_internal", paired_tx=paired, share=share
-                )
+                ctxn = ClassifiedTransaction(tx=tx, classification="linked_internal", paired_tx=paired, share=share)
                 classified.append(ctxn)
 
                 # In-transit: only create once per pair, only if dates differ
@@ -247,17 +251,12 @@ class ScopeAwareTransactionClassifier:
                     # Warn if share percentages differ between source/dest brokers
                     paired_share = self.broker_shares.get(paired.broker_id, Decimal("1"))
                     if share != paired_share:
-                        warnings.append(
-                            f"Linked internal pair ({tx.id}, {paired.id}): share mismatch "
-                            f"broker {tx.broker_id}={share} vs broker {paired.broker_id}={paired_share}"
-                        )
+                        warnings.append(f"Linked internal pair ({tx.id}, {paired.id}): share mismatch " f"broker {tx.broker_id}={share} vs broker {paired.broker_id}={paired_share}")
             else:
                 # ── LINKED EXTERNAL — only this leg in scope ──
                 # Determine if this leg is inflow or outflow based on amount/quantity sign
                 classification = self._classify_external_leg(tx)
-                ctxn = ClassifiedTransaction(
-                    tx=tx, classification=classification, paired_tx=paired, share=share
-                )
+                ctxn = ClassifiedTransaction(tx=tx, classification=classification, paired_tx=paired, share=share)
                 classified.append(ctxn)
 
                 # External linked → generates external cash flow
@@ -290,9 +289,7 @@ class ScopeAwareTransactionClassifier:
         return "linked_external_inflow"  # fallback
 
     @staticmethod
-    def _build_in_transit_interval(
-        tx_a: Transaction, tx_b: Transaction
-    ) -> InTransitInterval | None:
+    def _build_in_transit_interval(tx_a: Transaction, tx_b: Transaction) -> InTransitInterval | None:
         """Build an InTransitInterval for a linked internal pair with different dates.
 
         Departure = earlier date leg, arrival = later date leg.
@@ -347,6 +344,28 @@ STALE_PRICE_THRESHOLD_DAYS = 7
 
 
 @dataclass
+class DailyPositionState:
+    """Per-position daily state — the atomic building block of portfolio computation.
+
+    One instance per (broker_id, asset_id) per day with qty > 0.
+    Portfolio-level DailyPortfolioState is aggregated from these.
+    """
+
+    date: date_type
+    broker_id: int
+    asset_id: int
+    quantity: Decimal
+    valuation_price: Decimal | None
+    valuation_price_ccy: str | None
+    valuation_source: str  # "MARKET_PRICE", "LAST_BUY_PRICE", "MISSING"
+    market_value: Decimal | None  # in target_currency
+    wac: Decimal  # in asset_currency
+    wac_currency: str
+    cost_basis: Decimal  # in target_currency (wac * qty * fx)
+    unrealized_pnl: Decimal | None  # market_value - cost_basis (None if MV missing)
+
+
+@dataclass
 class DailyPortfolioState:
     """Complete daily portfolio state — the heart of the calculation engine."""
 
@@ -395,6 +414,10 @@ class DailyStateBuilder:
     """Builds a dense DailyPortfolioState[] vector for every calendar day.
 
     Pure function — no I/O, no DB, no async. All data is pre-loaded.
+
+    WAC is computed inline during the daily loop (no external wac_series needed).
+    Each position's (asset_id, broker_id) WAC pool is maintained in its native
+    asset_currency, then converted to target_currency at evaluation time.
     """
 
     def __init__(
@@ -405,29 +428,42 @@ class DailyStateBuilder:
         external_cash_flows: list[tuple[date_type, Decimal, str]],
         price_map: dict[int, list[tuple[date_type, Decimal, str]]],
         quote_base_map: dict[int, int | None],
-        wac_series: dict[tuple[int, int], list[tuple[date_type, Decimal, str]]],
         fx_rate_map: dict[tuple[str, str, date_type], Decimal],
         asset_classifications: dict[int, dict | None],
         asset_types: dict[int, str],
+        asset_currencies: dict[int, str],
         target_currency: str,
         date_from: date_type,
         date_to: date_type,
+        frame_start: date_type | None = None,
+        last_buy_prices: dict[int, tuple[date_type, Decimal, str]] | None = None,
     ) -> None:
         self.classified_txs = classified_txs
         self.in_transit_intervals = in_transit_intervals
         self.external_cash_flows = external_cash_flows
         self.price_map = price_map
         self.quote_base_map = quote_base_map
-        self.wac_series = wac_series
         self.fx_rate_map = fx_rate_map
         self.asset_classifications = asset_classifications
         self.asset_types = asset_types
+        self.asset_currencies = asset_currencies
         self.target_currency = target_currency
         self.date_from = date_from
         self.date_to = date_to
+        # frame_start: first day to emit DailyPortfolioState. Before this = pre-frame (accounting only).
+        # None → same as date_from (no pre-frame, full evaluation from start).
+        self.frame_start = frame_start if frame_start is not None else date_from
+        # last_buy_prices: asset_id → (date, unit_price, currency) from V(u) BUY txs
+        self.last_buy_prices: dict[int, tuple[date_type, Decimal, str]] = last_buy_prices or {}
 
-    def build(self) -> list[DailyPortfolioState]:
-        """Build one DailyPortfolioState per calendar day in [date_from, date_to]."""
+    def build(self) -> PortfolioCalculationResult:
+        """Build daily states for [frame_start, date_to] + position snapshots + period accumulators.
+
+        Architecture (pre-frame / frame split):
+        - Pre-frame [date_from, frame_start): update accumulators only (cash, qty, WAC, pools).
+          No market evaluation, no FX lookups for prices, no state emission.
+        - Frame [frame_start, date_to]: full daily evaluation + DailyPortfolioState emission.
+        """
         zero = Decimal("0")
 
         # ── 1. Cash ledger: sum amount deltas per day ──
@@ -439,15 +475,17 @@ class DailyStateBuilder:
                 if converted is not None:
                     cash_deltas[tx.date] += converted * ctxn.share
 
-        # ── 2. Quantity ledger: sum qty deltas per (asset_id, broker_id) per day ──
-        qty_deltas: dict[date_type, dict[tuple[int, int], Decimal]] = defaultdict(
-            lambda: defaultdict(lambda: zero)
-        )
+        # ── 2. Position transactions by date (for inline WAC computation) ──
+        position_txs_by_date: dict[date_type, list[ClassifiedTransaction]] = defaultdict(list)
         for ctxn in self.classified_txs:
             tx = ctxn.tx
             if tx.quantity and tx.quantity != 0 and tx.asset_id is not None:
-                key = (tx.asset_id, tx.broker_id)
-                qty_deltas[tx.date][key] += tx.quantity * ctxn.share
+                position_txs_by_date[tx.date].append(ctxn)
+
+        # ── 2b. All transactions by date (for 3-pool event processing) ──
+        all_txs_by_date: dict[date_type, list[ClassifiedTransaction]] = defaultdict(list)
+        for ctxn in self.classified_txs:
+            all_txs_by_date[ctxn.tx.date].append(ctxn)
 
         # ── 3. External cash flow index ──
         ecf_by_date: dict[date_type, Decimal] = defaultdict(lambda: zero)
@@ -456,31 +494,278 @@ class DailyStateBuilder:
             if converted is not None:
                 ecf_by_date[dt] += converted
 
-        # ── 4. Dense daily loop ──
+        # ── 4. Accumulators (shared across pre-frame and frame) ──
         states: list[DailyPortfolioState] = []
         cumulative_cash = zero
-        cumulative_ecf = zero  # cumulative external cash flow (net invested capital)
+        cumulative_ecf = zero
         cumulative_qty: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
-        # Two-pool cash decomposition (stateful "returns consumed first" convention):
-        # - capital_cash_pool: liquidity attributable to external capital not yet deployed
-        # - returns_cash_pool: liquidity from returns (interest, dividends, realized gains)
-        # Convention: BUY consumes returns first; SELL returns principal to capital.
+        wac_pool_qty: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
+        wac_pool_cost: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
         capital_cash_pool = zero
         returns_cash_pool = zero
-        prev_book_asset_like = zero  # previous day's book_asset_like for delta tracking
+        # Period accumulators for contribution (only frame txs counted)
+        per_realized: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
+        per_income: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
+        per_fees_taxes: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
+        unalloc_income: dict[int, Decimal] = defaultdict(lambda: zero)
+        unalloc_fees: dict[int, Decimal] = defaultdict(lambda: zero)
+        # Position state snapshots
+        position_states_start: list[DailyPositionState] = []
+        position_states_end: list[DailyPositionState] = []
+        is_first_frame_day = True
 
-        current = self.date_from
+        # ── 5. PRE-FRAME: [date_from, frame_start) — accounting only ──
+        # Process all transaction days before frame_start: update cash, qty, WAC, ECF.
+        # No market evaluation, no DailyPortfolioState emission.
+        preframe_tx_dates = sorted(
+            d for d in (set(cash_deltas.keys()) | set(position_txs_by_date.keys()) | set(ecf_by_date.keys()))
+            if d < self.frame_start
+        )
+        for day in preframe_tx_dates:
+            cumulative_cash += cash_deltas.get(day, zero)
+            cumulative_ecf += ecf_by_date.get(day, zero)
+            capital_cash_pool += ecf_by_date.get(day, zero)
+            # Update WAC pools for position txs
+            day_pos_txs = position_txs_by_date.get(day)
+            if day_pos_txs:
+                additions = [c for c in day_pos_txs if c.tx.quantity and c.tx.quantity > 0]
+                reductions = [c for c in day_pos_txs if c.tx.quantity and c.tx.quantity < 0]
+                for ctxn in additions + reductions:
+                    tx = ctxn.tx
+                    key = (tx.asset_id, tx.broker_id)
+                    tx_qty = tx.quantity * ctxn.share
+                    if tx.quantity > 0:
+                        unit_cost_asset_ccy = self._buy_unit_cost(tx)
+                        if unit_cost_asset_ccy is not None:
+                            old_qty = wac_pool_qty[key]
+                            old_cost = wac_pool_cost[key]
+                            new_qty = old_qty + tx_qty
+                            if new_qty > zero:
+                                wac_pool_cost[key] = old_cost + unit_cost_asset_ccy * tx_qty
+                                wac_pool_qty[key] = new_qty
+                            else:
+                                wac_pool_qty[key] = zero
+                                wac_pool_cost[key] = zero
+                        else:
+                            old_qty = wac_pool_qty[key]
+                            new_qty = old_qty + tx_qty
+                            if old_qty > zero:
+                                current_wac = wac_pool_cost[key] / old_qty
+                                wac_pool_cost[key] += current_wac * tx_qty
+                            wac_pool_qty[key] = max(new_qty, zero)
+                    else:
+                        old_qty = wac_pool_qty[key]
+                        if old_qty > zero:
+                            current_wac = wac_pool_cost[key] / old_qty
+                            wac_pool_qty[key] = max(old_qty + tx_qty, zero)
+                            wac_pool_cost[key] = wac_pool_qty[key] * current_wac
+                        else:
+                            wac_pool_qty[key] = zero
+                            wac_pool_cost[key] = zero
+                    cumulative_qty[key] += tx_qty
+
+        # ── 6. FRAME: [frame_start, date_to] — full daily evaluation ──
+        # Build dirty_days for frame range only
+        dirty_days: set[date_type] = set()
+        for d in cash_deltas.keys():
+            if d >= self.frame_start:
+                dirty_days.add(d)
+        for d in position_txs_by_date.keys():
+            if d >= self.frame_start:
+                dirty_days.add(d)
+        for d in ecf_by_date.keys():
+            if d >= self.frame_start:
+                dirty_days.add(d)
+        for interval in self.in_transit_intervals:
+            if interval.start_date >= self.frame_start:
+                dirty_days.add(interval.start_date)
+            if interval.end_date >= self.frame_start:
+                dirty_days.add(interval.end_date)
+            if interval.end_date < self.date_to and interval.end_date + timedelta(days=1) >= self.frame_start:
+                dirty_days.add(interval.end_date + timedelta(days=1))
+        for prices in self.price_map.values():
+            prev_price = None
+            for dt, close, _ in prices:
+                if dt < self.frame_start:
+                    prev_price = close
+                    continue
+                if prev_price is not None and close != prev_price:
+                    dirty_days.add(dt)
+                elif prev_price is None:
+                    dirty_days.add(dt)
+                prev_price = close
+        dirty_days.add(self.frame_start)
+
+        current = self.frame_start
         while current <= self.date_to:
+            # Day skipping: if this day is stationary (no tx, ecf, price change, or
+            # in-transit boundary), reuse the previous state with updated date.
+            if current not in dirty_days and states:
+                prev = states[-1]
+                states.append(
+                    DailyPortfolioState(
+                        date=current,
+                        cash_value=prev.cash_value,
+                        market_value=prev.market_value,
+                        broker_nav_value=prev.broker_nav_value,
+                        in_transit_cash_value=prev.in_transit_cash_value,
+                        in_transit_asset_market_value=prev.in_transit_asset_market_value,
+                        in_transit_market_value=prev.in_transit_market_value,
+                        nav_value=prev.nav_value,
+                        open_cost_basis=prev.open_cost_basis,
+                        in_transit_asset_cost_basis=prev.in_transit_asset_cost_basis,
+                        in_transit_book_value=prev.in_transit_book_value,
+                        book_value=prev.book_value,
+                        unrealized_gain_loss=prev.unrealized_gain_loss,
+                        external_cash_flow=zero,
+                        cumulative_external_cash_flow=prev.cumulative_external_cash_flow,
+                        book_asset_like=prev.book_asset_like,
+                        cash_from_contributed_capital=prev.cash_from_contributed_capital,
+                        cash_from_generated_returns=prev.cash_from_generated_returns,
+                        total_pnl=prev.total_pnl,
+                        by_type=dict(prev.by_type),
+                        by_sector=dict(prev.by_sector),
+                        by_geography=dict(prev.by_geography),
+                        missing_price_asset_ids=set(prev.missing_price_asset_ids),
+                        missing_fx_pairs=set(prev.missing_fx_pairs),
+                        stale_price_asset_ids=set(prev.stale_price_asset_ids),
+                        transaction_implied_asset_ids=set(prev.transaction_implied_asset_ids),
+                        nav_complete=prev.nav_complete,
+                    )
+                )
+                current += timedelta(days=1)
+                continue
+
             # 4a. Update cash
             cumulative_cash += cash_deltas.get(current, zero)
 
-            # 4b. Update quantities
-            day_qty = qty_deltas.get(current)
-            if day_qty:
-                for key, delta in day_qty.items():
-                    cumulative_qty[key] += delta
+            # 4b. Unified per-transaction loop: WAC + 3-pool + period accumulators
+            # Single pass: for each tx, in additions-first order:
+            #   1. Read current WAC (before mutation)
+            #   2. Update WAC pool (BUY adds, SELL reduces)
+            #   3. Update 3-pool (K, R) using the captured WAC
+            #   4. Update period accumulators (realized, income, fees)
+            ecf_today = ecf_by_date.get(current, zero)
+            cumulative_ecf += ecf_today
+            capital_baseline = cumulative_ecf
 
-            # 4c. Market value per asset
+            day_all_txs = all_txs_by_date.get(current, [])
+            # Sort: additions (qty > 0) first, then reductions (qty < 0), then non-position txs
+            day_additions = [c for c in day_all_txs if c.tx.quantity and c.tx.quantity > 0 and c.tx.asset_id]
+            day_reductions = [c for c in day_all_txs if c.tx.quantity and c.tx.quantity < 0 and c.tx.asset_id]
+            day_non_position = [c for c in day_all_txs if not (c.tx.quantity and c.tx.quantity != 0 and c.tx.asset_id)]
+
+            for ctxn in day_additions + day_reductions + day_non_position:
+                tx = ctxn.tx
+                key = (tx.asset_id, tx.broker_id) if tx.asset_id else None
+                tx_qty = (tx.quantity * ctxn.share) if tx.quantity else zero
+
+                # ── Convert amount to target currency ──
+                amount_target: Decimal | None = None
+                if tx.amount and tx.amount != 0 and tx.currency:
+                    amount_target = self._convert(abs(tx.amount), tx.currency, tx.date)
+                    if amount_target is not None:
+                        amount_target = amount_target * ctxn.share
+
+                # ── Position tx: WAC pool update ──
+                if tx.quantity and tx.quantity != 0 and tx.asset_id and key:
+                    if tx.quantity > 0:
+                        # Acquisition: update WAC pool
+                        unit_cost_asset_ccy = self._buy_unit_cost(tx)
+                        if unit_cost_asset_ccy is not None:
+                            old_qty = wac_pool_qty[key]
+                            old_cost = wac_pool_cost[key]
+                            new_qty = old_qty + tx_qty
+                            if new_qty > zero:
+                                wac_pool_cost[key] = old_cost + unit_cost_asset_ccy * tx_qty
+                                wac_pool_qty[key] = new_qty
+                            else:
+                                wac_pool_qty[key] = zero
+                                wac_pool_cost[key] = zero
+                        else:
+                            old_qty = wac_pool_qty[key]
+                            new_qty = old_qty + tx_qty
+                            if old_qty > zero:
+                                cur_wac = wac_pool_cost[key] / old_qty
+                                wac_pool_cost[key] += cur_wac * tx_qty
+                            wac_pool_qty[key] = max(new_qty, zero)
+                        cumulative_qty[key] += tx_qty
+                    else:
+                        # Reduction: READ WAC before reducing, then reduce
+                        old_qty = wac_pool_qty[key]
+                        sell_qty_abs = abs(tx_qty)
+                        if old_qty > zero:
+                            cur_wac = wac_pool_cost[key] / old_qty
+                            # Cost basis in target currency (captured before reduction)
+                            cb_local = cur_wac * sell_qty_abs
+                            wac_ccy = self.asset_currencies.get(tx.asset_id, self.target_currency)
+                            if wac_ccy == self.target_currency:
+                                sell_cb_target = cb_local
+                            else:
+                                rate = self.fx_rate_map.get((wac_ccy, self.target_currency, current))
+                                sell_cb_target = cb_local * rate if rate else cb_local
+                            # Now reduce pool
+                            wac_pool_qty[key] = max(old_qty + tx_qty, zero)
+                            wac_pool_cost[key] = wac_pool_qty[key] * cur_wac
+                        else:
+                            sell_cb_target = zero
+                            wac_pool_qty[key] = zero
+                            wac_pool_cost[key] = zero
+                        cumulative_qty[key] += tx_qty
+
+                        # 3-pool: SELL → K += cost_basis, R += gain
+                        if amount_target is not None:
+                            gain = amount_target - sell_cb_target
+                            capital_cash_pool += sell_cb_target
+                            returns_cash_pool += gain
+                            if returns_cash_pool < zero:
+                                capital_cash_pool += returns_cash_pool
+                                returns_cash_pool = zero
+
+                        # Period accumulator: realized gain/loss
+                        if amount_target is not None:
+                            per_realized[key] += amount_target - sell_cb_target
+                        continue  # skip generic 3-pool/accumulator below
+
+                # ── 3-pool + period accumulators for non-SELL txs ──
+                if amount_target is None:
+                    continue
+
+                if tx.type == TransactionType.DEPOSIT:
+                    capital_cash_pool += amount_target
+
+                elif tx.type == TransactionType.WITHDRAWAL:
+                    from_k = min(amount_target, max(capital_cash_pool, zero))
+                    capital_cash_pool -= from_k
+                    remaining = amount_target - from_k
+                    from_r = min(remaining, max(returns_cash_pool, zero))
+                    returns_cash_pool -= from_r
+
+                elif tx.type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
+                    returns_cash_pool += amount_target
+                    # Period accumulator
+                    if tx.asset_id:
+                        per_income[(tx.asset_id, tx.broker_id)] += amount_target
+                    else:
+                        unalloc_income[tx.broker_id] += amount_target
+
+                elif tx.type in (TransactionType.FEE, TransactionType.TAX):
+                    returns_cash_pool -= amount_target
+                    if returns_cash_pool < zero:
+                        capital_cash_pool += returns_cash_pool
+                        returns_cash_pool = zero
+                    # Period accumulator
+                    if tx.asset_id:
+                        per_fees_taxes[(tx.asset_id, tx.broker_id)] += amount_target
+                    else:
+                        unalloc_fees[tx.broker_id] += amount_target
+
+                elif tx.type == TransactionType.BUY and tx.asset_id:
+                    from_r = min(amount_target, max(returns_cash_pool, zero))
+                    returns_cash_pool -= from_r
+                    capital_cash_pool -= (amount_target - from_r)
+
+            # 4c. Market value per asset (after all txs for the day are processed)
             market_value = zero
             by_type: dict[str, Decimal] = defaultdict(lambda: zero)
             by_sector: dict[str, Decimal] = defaultdict(lambda: zero)
@@ -494,7 +779,7 @@ class DailyStateBuilder:
                 if qty <= 0:
                     continue
                 mv, price_found, is_stale, fx_missing, is_implied = self._market_value_for(
-                    asset_id, qty, current
+                    asset_id, qty, current, wac_pool_qty, wac_pool_cost, _broker_id
                 )
                 if mv is not None:
                     market_value += mv
@@ -511,9 +796,9 @@ class DailyStateBuilder:
             # 4d. In-transit values
             it_cash, it_asset_mv, it_asset_cb = self._compute_in_transit(current, missing_fx)
 
-            # 4e. WAC / open_cost_basis
-            open_cost_basis = self._compute_open_cost_basis(
-                cumulative_qty, current, missing_fx
+            # 4e. Open cost basis from inline WAC pool
+            open_cost_basis = self._compute_open_cost_basis_inline(
+                cumulative_qty, wac_pool_qty, wac_pool_cost, current, missing_fx
             )
 
             # 4f. Compose
@@ -524,65 +809,14 @@ class DailyStateBuilder:
             book = open_cost_basis + cumulative_cash + in_transit_bv
             ug = nav - book
 
-            # 4g. Two-pool cash decomposition (stateful, "returns consumed first")
-            #
-            # Model: two virtual pools track cash provenance at cost-basis level.
-            #   capital_cash_pool: cash attributable to external deposits not yet invested
-            #   returns_cash_pool: cash from portfolio returns (interest, dividends, realized gains)
-            #
-            # Daily update rules (using delta in book_asset_like to track capital deployment):
-            #   1. ECF (DEPOSIT/WITHDRAWAL/linked-external) → capital_pool
-            #   2. Change in book_asset_like tells us capital flow between cash ↔ assets:
-            #      - If assets grew: capital was deployed (BUY consumed capital first, then returns)
-            #      - If assets shrank: capital was returned (SELL returns principal to capital_pool)
-            #   3. Net non-ECF residual after accounting for asset changes → returns_pool
-            #
-            # This ensures:
-            #   - After deposit + partial buy: residual = capital cash ✓
-            #   - Interest/dividend: shows as returns cash ✓
-            #   - Sell in gain: principal returns to capital, gain to returns ✓
-            #   - Sell in loss: principal (partial) returns to capital ✓
-            ecf_today = ecf_by_date.get(current, zero)
-            cumulative_ecf += ecf_today
-            capital_baseline = cumulative_ecf
-
-            book_asset_like = open_cost_basis + it_asset_cb
-            cash_like = cumulative_cash + it_cash
-
-            # Delta in asset cost basis since yesterday = capital flow direction
-            delta_assets = book_asset_like - prev_book_asset_like
-
-            # Step 1: ECF → capital pool (deposits add, withdrawals remove)
-            capital_cash_pool += ecf_today
-
-            # Step 2: Asset cost basis change drives capital/returns flow
-            if delta_assets > zero:
-                # Assets grew (BUY): consumes cash. Priority: returns consumed first.
-                from_returns = min(delta_assets, max(returns_cash_pool, zero))
-                returns_cash_pool -= from_returns
-                from_capital = delta_assets - from_returns
-                capital_cash_pool -= from_capital
-            elif delta_assets < zero:
-                # Assets shrank (SELL): returns cost basis to capital_pool
-                capital_cash_pool += abs(delta_assets)
-
-            # Step 3: Non-asset cash changes = returns (interest, dividends, fees, taxes)
-            # = total cash delta - ECF - (-delta_assets, which is the cash from asset movement)
-            # Simplification: net_returns_delta = (total cash delta today) - ecf_today - (-delta_assets)
-            total_cash_delta = cash_deltas.get(current, zero)
-            returns_delta = total_cash_delta - ecf_today + delta_assets
-            # This captures: INTEREST(+), DIVIDEND(+), FEE(-), TAX(-), realized gain/loss on SELL
-            returns_cash_pool += returns_delta
-
-            # Clamp pools to non-negative (rounding safety)
+            # 4g. Clamp pools (rounding safety)
             capital_cash_pool = max(capital_cash_pool, zero)
             returns_cash_pool = max(returns_cash_pool, zero)
 
-            # Derive final values, reconciled to actual cash_like
+            # Derive final display values reconciled to actual cash
+            book_asset_like = open_cost_basis + it_asset_cb
             cash_like = cumulative_cash + it_cash
             pool_sum = capital_cash_pool + returns_cash_pool
-            # Reconcile: pools may drift from cash_like due to FX/rounding/in-transit;
-            # proportionally scale to match actual cash_like
             if pool_sum > zero and abs(pool_sum - cash_like) > Decimal("0.01"):
                 scale = cash_like / pool_sum
                 cash_from_contributed = max(capital_cash_pool * scale, zero)
@@ -593,14 +827,18 @@ class DailyStateBuilder:
 
             total_pnl = nav - capital_baseline
 
-            # Update prev for next iteration
-            prev_book_asset_like = book_asset_like
+            # 4b2. Position state snapshots (start of frame + every day end)
+            if is_first_frame_day:
+                for (aid, bid), qty in cumulative_qty.items():
+                    if qty <= 0:
+                        continue
+                    ps = self._build_position_state(aid, bid, qty, current, wac_pool_qty, wac_pool_cost)
+                    position_states_start.append(ps)
+                is_first_frame_day = False
 
             # 4h. Allocation: cash as Liquidity (type + sector, not geography)
             by_type["Liquidity"] = by_type.get("Liquidity", zero) + cumulative_cash + it_cash
-            by_sector["Liquidity"] = (
-                by_sector.get("Liquidity", zero) + cumulative_cash + it_cash
-            )
+            by_sector["Liquidity"] = by_sector.get("Liquidity", zero) + cumulative_cash + it_cash
 
             states.append(
                 DailyPortfolioState(
@@ -635,13 +873,93 @@ class DailyStateBuilder:
             )
             current += timedelta(days=1)
 
-        return states
+        # End-of-frame position snapshot (t1)
+        for (aid, bid), qty in cumulative_qty.items():
+            if qty <= 0:
+                continue
+            ps = self._build_position_state(aid, bid, qty, self.date_to, wac_pool_qty, wac_pool_cost)
+            position_states_end.append(ps)
+
+        return PortfolioCalculationResult(
+            daily_states=states,
+            position_states_start=position_states_start,
+            position_states_end=position_states_end,
+            per_realized=dict(per_realized),
+            per_income=dict(per_income),
+            per_fees_taxes=dict(per_fees_taxes),
+            unalloc_income=dict(unalloc_income),
+            unalloc_fees=dict(unalloc_fees),
+            scope_broker_ids=list(set(ctxn.tx.broker_id for ctxn in self.classified_txs)),
+            target_currency=self.target_currency,
+            date_from=self.date_from,
+            date_to=self.date_to,
+        )
 
     # ── Helper methods ──
 
-    def _convert(
-        self, amount: Decimal, from_ccy: str, dt: date_type
-    ) -> Decimal | None:
+    def _build_position_state(
+        self,
+        asset_id: int,
+        broker_id: int,
+        qty: Decimal,
+        dt: date_type,
+        wac_pool_qty: dict[tuple[int, int], Decimal],
+        wac_pool_cost: dict[tuple[int, int], Decimal],
+    ) -> DailyPositionState:
+        """Build a DailyPositionState for one position at a given date."""
+        zero = Decimal("0")
+        key = (asset_id, broker_id)
+        pool_q = wac_pool_qty.get(key, zero)
+        wac_val = (wac_pool_cost.get(key, zero) / pool_q) if pool_q > 0 else zero
+        wac_ccy = self.asset_currencies.get(asset_id, self.target_currency)
+
+        # Cost basis in target currency
+        ocb_local = wac_val * qty
+        if wac_ccy == self.target_currency:
+            cost_basis = ocb_local
+        else:
+            rate = self.fx_rate_map.get((wac_ccy, self.target_currency, dt))
+            cost_basis = ocb_local * rate if rate else ocb_local
+
+        # Market value + valuation source
+        mv, price_found, _, _, is_lbp = self._market_value_for(
+            asset_id, qty, dt, wac_pool_qty, wac_pool_cost, broker_id
+        )
+        if price_found:
+            source = "MARKET_PRICE"
+        elif is_lbp:
+            source = "LAST_BUY_PRICE"
+        else:
+            source = "MISSING"
+
+        unrealized = (mv - cost_basis) if mv is not None else None
+
+        # Get valuation price/ccy
+        prices = self.price_map.get(asset_id)
+        price_result = self._price_on_date(prices, dt) if prices else None
+        if price_result:
+            val_price, val_ccy, _ = price_result
+        elif is_lbp and asset_id in self.last_buy_prices:
+            _, val_price, val_ccy = self.last_buy_prices[asset_id]
+        else:
+            val_price, val_ccy = None, None
+
+        return DailyPositionState(
+            date=dt,
+            broker_id=broker_id,
+            asset_id=asset_id,
+            quantity=qty,
+            valuation_price=val_price,
+            valuation_price_ccy=val_ccy,
+            valuation_source=source,
+            market_value=mv,
+            wac=wac_val,
+            wac_currency=wac_ccy,
+            cost_basis=cost_basis,
+            unrealized_pnl=unrealized,
+        )
+
+    def _convert(self, amount: Decimal, from_ccy: str, dt: date_type) -> Decimal | None:
         """Convert amount from from_ccy to target_currency using pre-loaded FX map."""
         if from_ccy == self.target_currency:
             return amount
@@ -665,33 +983,25 @@ class DailyStateBuilder:
         actual_date, close, ccy = sorted_prices[idx]
         return close, ccy, actual_date
 
-    def _wac_on_date(
-        self,
-        sorted_wac: list[tuple[date_type, Decimal, str]],
-        query_date: date_type,
-    ) -> tuple[Decimal | None, str | None]:
-        """Forward-fill: latest WAC at or before query_date."""
-        if not sorted_wac:
-            return None, None
-        dates = [p[0] for p in sorted_wac]
-        idx = bisect.bisect_right(dates, query_date) - 1
-        if idx < 0:
-            return None, None
-        _, wac_val, wac_ccy = sorted_wac[idx]
-        return wac_val, wac_ccy
-
     def _market_value_for(
-        self, asset_id: int, qty: Decimal, dt: date_type
+        self,
+        asset_id: int,
+        qty: Decimal,
+        dt: date_type,
+        wac_pool_qty: dict[tuple[int, int], Decimal] | None = None,
+        wac_pool_cost: dict[tuple[int, int], Decimal] | None = None,
+        broker_id: int | None = None,
     ) -> tuple[Decimal | None, bool, bool, str | None, bool]:
         """Compute market_value for one asset holding.
 
-        Returns: (value_in_target_ccy, price_found, is_stale, missing_fx_pair, is_implied)
+        Returns: (value_in_target_ccy, price_found, is_stale, missing_fx_pair, is_last_buy)
 
         Valuation sources (in priority order):
         1. MARKET_PRICE: PriceHistory exists on or before dt → use market price
-        2. TRANSACTION_IMPLIED: No PriceHistory but WAC/cost_basis available →
-           use open_cost_basis as a temporary proxy (warning issued at report level)
-        3. MISSING: Neither price nor cost_basis → excluded from NAV (error)
+        2. LAST_BUY_PRICE: No PriceHistory but last BUY price from V(u) available
+        3. MISSING: Neither → excluded from NAV (error)
+
+        NO WAC→price fallback. WAC is only for cost basis, never for valuation.
         """
         prices = self.price_map.get(asset_id)
         result = self._price_on_date(prices, dt) if prices else None
@@ -712,32 +1022,25 @@ class DailyStateBuilder:
 
             return holding_value * rate, True, is_stale, None, False
 
-        # No market price — try TRANSACTION_IMPLIED via WAC/open_cost_basis
-        # Check all (asset_id, broker_id) WAC series for this asset
-        implied_value: Decimal | None = None
-        for (aid, _bid), wac_data in self.wac_series.items():
-            if aid != asset_id:
-                continue
-            wac_val, wac_ccy = self._wac_on_date(wac_data, dt)
-            if wac_val is None or wac_ccy is None:
-                continue
-            ocb = wac_val * qty
-            if wac_ccy == self.target_currency:
-                implied_value = (implied_value or Decimal("0")) + ocb
-            else:
-                rate = self.fx_rate_map.get((wac_ccy, self.target_currency, dt))
+        # --- LAST_BUY_PRICE path (from V(u) visible brokers) ---
+        lbp = self.last_buy_prices.get(asset_id)
+        if lbp is not None:
+            buy_date, unit_price, buy_ccy = lbp
+            if buy_date <= dt:
+                # Use last buy price as valuation
+                holding_value = unit_price * qty
+                if buy_ccy == self.target_currency:
+                    return holding_value, False, False, None, True
+                rate = self.fx_rate_map.get((buy_ccy, self.target_currency, dt))
                 if rate is not None:
-                    implied_value = (implied_value or Decimal("0")) + ocb * rate
+                    return holding_value * rate, False, False, None, True
+                # FX missing for last_buy_price conversion
+                return None, False, False, f"{buy_ccy}/{self.target_currency}", True
 
-        if implied_value is not None and implied_value > 0:
-            return implied_value, False, False, None, True
-
-        # Neither market price nor WAC — fully missing
+        # --- MISSING: no valuation source available ---
         return None, False, False, None, False
 
-    def _compute_in_transit(
-        self, dt: date_type, missing_fx: set[str]
-    ) -> tuple[Decimal, Decimal, Decimal]:
+    def _compute_in_transit(self, dt: date_type, missing_fx: set[str]) -> tuple[Decimal, Decimal, Decimal]:
         """Compute in_transit_cash, in_transit_asset_mv, in_transit_asset_cb."""
         zero = Decimal("0")
         it_cash = zero
@@ -763,42 +1066,44 @@ class DailyStateBuilder:
                     dep = interval.departure_leg
                     qty = abs(dep.quantity) if dep.quantity else zero
                     if qty > 0:
-                        mv, _, _, fx_miss, _ = self._market_value_for(
-                            interval.asset_id, qty, dt
-                        )
+                        mv, _, _, fx_miss, _ = self._market_value_for(interval.asset_id, qty, dt)
                         if mv is not None:
                             it_asset_mv += mv * interval.share
                         if fx_miss:
                             missing_fx.add(fx_miss)
 
                 # Cost basis from cost_basis_override or fallback
-                if (
-                    interval.cost_basis_amount is not None
-                    and interval.cost_basis_currency
-                ):
-                    cb = self._convert(
-                        interval.cost_basis_amount, interval.cost_basis_currency, dt
-                    )
+                if interval.cost_basis_amount is not None and interval.cost_basis_currency:
+                    cb = self._convert(interval.cost_basis_amount, interval.cost_basis_currency, dt)
                     if cb is not None:
                         it_asset_cb += cb * interval.share
 
         return it_cash, it_asset_mv, it_asset_cb
 
-    def _compute_open_cost_basis(
+    def _compute_open_cost_basis_inline(
         self,
         cumulative_qty: dict[tuple[int, int], Decimal],
+        wac_pool_qty: dict[tuple[int, int], Decimal],
+        wac_pool_cost: dict[tuple[int, int], Decimal],
         dt: date_type,
         missing_fx: set[str],
     ) -> Decimal:
-        """WAC forward-fill × quantity for each asset/broker with qty > 0."""
+        """Compute open cost basis from inline WAC pool.
+
+        For each position with qty > 0: cost_basis = wac * qty, converted to target_currency.
+        WAC is in asset_currency; conversion uses daily FX rate.
+        """
         total = Decimal("0")
         for (asset_id, broker_id), qty in cumulative_qty.items():
             if qty <= 0:
                 continue
-            wac_data = self.wac_series.get((asset_id, broker_id), [])
-            wac_val, wac_ccy = self._wac_on_date(wac_data, dt)
-            if wac_val is None or wac_ccy is None:
+            key = (asset_id, broker_id)
+            pool_q = wac_pool_qty.get(key, Decimal("0"))
+            pool_c = wac_pool_cost.get(key, Decimal("0"))
+            if pool_q <= 0:
                 continue
+            wac_val = pool_c / pool_q
+            wac_ccy = self.asset_currencies.get(asset_id, self.target_currency)
             ocb_in_wac_ccy = wac_val * qty
             if wac_ccy == self.target_currency:
                 total += ocb_in_wac_ccy
@@ -809,6 +1114,58 @@ class DailyStateBuilder:
                 else:
                     missing_fx.add(f"{wac_ccy}/{self.target_currency}")
         return total
+
+    def _buy_unit_cost(self, tx: Transaction) -> Decimal | None:
+        """Compute unit cost for a BUY/acquisition transaction in the asset's native currency.
+
+        Returns unit_cost in asset_currency, or None if cost cannot be determined.
+        Handles FX conversion from tx.currency to asset_currency via fx_rate_map.
+        """
+        asset_id = tx.asset_id
+        if asset_id is None:
+            return None
+
+        qty = abs(tx.quantity) if tx.quantity else Decimal("0")
+        if qty == 0:
+            return None
+
+        asset_ccy = self.asset_currencies.get(asset_id, self.target_currency)
+
+        # For BUY: cost = |amount| in tx.currency
+        # For TRANSFER-in: cost = cost_basis_override in cost_basis_currency
+        if tx.type == TransactionType.BUY:
+            if tx.amount is None or tx.amount == 0:
+                return Decimal("0")
+            total_cost = abs(tx.amount)
+            cost_ccy = tx.currency or asset_ccy
+        elif tx.cost_basis_override is not None:
+            # TRANSFER with cost_basis_override
+            total_cost = tx.cost_basis_override * qty
+            cost_ccy = tx.cost_basis_currency or asset_ccy
+        else:
+            # No cost info (e.g., TRANSFER without CBO) → None (add at current WAC)
+            return None
+
+        # Convert total_cost from cost_ccy to asset_ccy
+        if cost_ccy == asset_ccy:
+            return total_cost / qty
+
+        # Need FX: cost_ccy → asset_ccy
+        # Strategy: use fx(cost_ccy → target) / fx(asset_ccy → target) if asset_ccy != target
+        #           or fx(cost_ccy → target) directly if asset_ccy == target
+        if asset_ccy == self.target_currency:
+            rate = self.fx_rate_map.get((cost_ccy, self.target_currency, tx.date))
+            if rate is not None:
+                return (total_cost * rate) / qty
+        else:
+            rate_cost_to_target = self.fx_rate_map.get((cost_ccy, self.target_currency, tx.date))
+            rate_asset_to_target = self.fx_rate_map.get((asset_ccy, self.target_currency, tx.date))
+            if rate_cost_to_target is not None and rate_asset_to_target is not None and rate_asset_to_target != 0:
+                cross_rate = rate_cost_to_target / rate_asset_to_target
+                return (total_cost * cross_rate) / qty
+
+        # Cannot convert — return None (will be treated as add-at-current-WAC)
+        return None
 
     def _distribute_allocation(
         self,
@@ -862,10 +1219,20 @@ class PortfolioCalculationResult:
     """Complete result from the portfolio calculation engine."""
 
     daily_states: list[DailyPortfolioState]
-    scope_broker_ids: list[int]
-    target_currency: str
-    date_from: date_type
-    date_to: date_type
+    # Position snapshots for exposure + contribution views
+    position_states_start: list[DailyPositionState] = field(default_factory=list)
+    position_states_end: list[DailyPositionState] = field(default_factory=list)
+    # Period accumulators for contribution (populated during frame loop)
+    per_realized: dict[tuple[int, int], Decimal] = field(default_factory=dict)
+    per_income: dict[tuple[int, int], Decimal] = field(default_factory=dict)
+    per_fees_taxes: dict[tuple[int, int], Decimal] = field(default_factory=dict)
+    unalloc_income: dict[int, Decimal] = field(default_factory=dict)
+    unalloc_fees: dict[int, Decimal] = field(default_factory=dict)
+    # Metadata
+    scope_broker_ids: list[int] = field(default_factory=list)
+    target_currency: str = "EUR"
+    date_from: date_type = field(default_factory=date_type.today)
+    date_to: date_type = field(default_factory=date_type.today)
 
 
 # =============================================================================
@@ -927,14 +1294,8 @@ class DerivedViewsBuilder:
         DailyPortfolioState uses portfolio perspective (deposit = positive).
         So we negate external_cash_flow when passing to performance functions.
         """
-        nav_snapshots = [
-            NAVSnapshot(date=s.date, nav=s.nav_value) for s in self.daily_states
-        ]
-        cash_flows = [
-            CashFlowInput(date=s.date, amount=-s.external_cash_flow)
-            for s in self.daily_states
-            if s.external_cash_flow != 0
-        ]
+        nav_snapshots = [NAVSnapshot(date=s.date, nav=s.nav_value) for s in self.daily_states]
+        cash_flows = [CashFlowInput(date=s.date, amount=-s.external_cash_flow) for s in self.daily_states if s.external_cash_flow != 0]
         return nav_snapshots, cash_flows
 
     def build_allocation_current(
@@ -963,9 +1324,7 @@ class DerivedViewsBuilder:
 
         return _alloc(last.by_type), _alloc(last.by_sector, use_sector_emoji=True), _alloc(last.by_geography)
 
-    def build_allocation_history(
-        self, dimension: str, date_from: date_type | None = None
-    ) -> list[dict]:
+    def build_allocation_history(self, dimension: str, date_from: date_type | None = None) -> list[dict]:
         """Build allocation history series for a given dimension.
 
         Returns list of {date, components: [{name, value, amount}]} dicts.
@@ -1046,184 +1405,102 @@ class DerivedViewsBuilder:
 
         # MISSING_PRICE — error: assets excluded from NAV
         if missing_price_assets_dto:
-            issues.append(DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.MISSING_PRICE,
-                severity=IssueSeverity.ERROR,
-                message_i18n_key="dataQuality.missingPrice",
-                message_params={"count": len(missing_price_assets_dto)},
-                count=len(missing_price_assets_dto),
-                affected_asset_ids=[a.asset_id for a in missing_price_assets_dto],
-                affected_asset_names=[a.name for a in missing_price_assets_dto],
-                cta_action="navigate_asset",
-                group_key="missing_price",
-            ))
+            issues.append(
+                DataQualityIssue(
+                    domain=IssueDomain.PORTFOLIO,
+                    code=IssueCode.MISSING_PRICE,
+                    severity=IssueSeverity.ERROR,
+                    message_i18n_key="dataQuality.missingPrice",
+                    message_params={"count": len(missing_price_assets_dto)},
+                    count=len(missing_price_assets_dto),
+                    affected_asset_ids=[a.asset_id for a in missing_price_assets_dto],
+                    affected_asset_names=[a.name for a in missing_price_assets_dto],
+                    cta_action="navigate_asset",
+                    group_key="missing_price",
+                )
+            )
 
         # TRANSACTION_IMPLIED — warning: assets at cost (pre-market, e.g. BTP collocamento)
         if transaction_implied_assets_dto:
-            issues.append(DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.TRANSACTION_IMPLIED,
-                severity=IssueSeverity.WARNING,
-                message_i18n_key="dataQuality.transactionImplied",
-                message_params={"count": len(transaction_implied_assets_dto)},
-                count=len(transaction_implied_assets_dto),
-                affected_asset_ids=[a.asset_id for a in transaction_implied_assets_dto],
-                affected_asset_names=[a.name for a in transaction_implied_assets_dto],
-                cta_action="navigate_asset",
-                group_key="transaction_implied",
-            ))
+            issues.append(
+                DataQualityIssue(
+                    domain=IssueDomain.PORTFOLIO,
+                    code=IssueCode.TRANSACTION_IMPLIED,
+                    severity=IssueSeverity.WARNING,
+                    message_i18n_key="dataQuality.transactionImplied",
+                    message_params={"count": len(transaction_implied_assets_dto)},
+                    count=len(transaction_implied_assets_dto),
+                    affected_asset_ids=[a.asset_id for a in transaction_implied_assets_dto],
+                    affected_asset_names=[a.name for a in transaction_implied_assets_dto],
+                    cta_action="navigate_asset",
+                    group_key="transaction_implied",
+                )
+            )
 
         # STALE_PRICE — warning: prices older than threshold
         if stale_prices_dto:
-            issues.append(DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.STALE_PRICE,
-                severity=IssueSeverity.WARNING,
-                message_i18n_key="dataQuality.stalePrice",
-                message_params={"count": len(stale_prices_dto)},
-                count=len(stale_prices_dto),
-                affected_asset_ids=[a.asset_id for a in stale_prices_dto],
-                affected_asset_names=[a.name for a in stale_prices_dto],
-                cta_action="navigate_asset",
-                group_key="stale_price",
-            ))
+            issues.append(
+                DataQualityIssue(
+                    domain=IssueDomain.PORTFOLIO,
+                    code=IssueCode.STALE_PRICE,
+                    severity=IssueSeverity.WARNING,
+                    message_i18n_key="dataQuality.stalePrice",
+                    message_params={"count": len(stale_prices_dto)},
+                    count=len(stale_prices_dto),
+                    affected_asset_ids=[a.asset_id for a in stale_prices_dto],
+                    affected_asset_names=[a.name for a in stale_prices_dto],
+                    cta_action="navigate_asset",
+                    group_key="stale_price",
+                )
+            )
 
         # MISSING_FX_MARKET — warning: FX pairs needed but missing
         if missing_fx_pairs_dto:
             pairs = list({p.pair for p in missing_fx_pairs_dto})
-            issues.append(DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.MISSING_FX_MARKET,
-                severity=IssueSeverity.WARNING,
-                message_i18n_key="dataQuality.missingFx",
-                message_params={"count": len(pairs)},
-                count=len(pairs),
-                affected_fx_pairs=pairs,
-                cta_action="add_fx_pair",
-                group_key="missing_fx",
-            ))
+            issues.append(
+                DataQualityIssue(
+                    domain=IssueDomain.PORTFOLIO,
+                    code=IssueCode.MISSING_FX_MARKET,
+                    severity=IssueSeverity.WARNING,
+                    message_i18n_key="dataQuality.missingFx",
+                    message_params={"count": len(pairs)},
+                    count=len(pairs),
+                    affected_fx_pairs=pairs,
+                    cta_action="add_fx_pair",
+                    group_key="missing_fx",
+                )
+            )
 
         # NAV_INCOMPLETE — info: some days had incomplete NAV
         if incomplete_nav:
             incomplete_nav_sorted = sorted(incomplete_nav)
-            issues.append(DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.NAV_INCOMPLETE,
-                severity=IssueSeverity.INFO,
-                message_i18n_key="dataQuality.navIncomplete",
-                message_params={
-                    "count": len(incomplete_nav_sorted),
-                    "date_from": incomplete_nav_sorted[0].isoformat(),
-                    "date_to": incomplete_nav_sorted[-1].isoformat(),
-                },
-                count=len(incomplete_nav_sorted),
-                group_key="nav_incomplete",
-            ))
+            issues.append(
+                DataQualityIssue(
+                    domain=IssueDomain.PORTFOLIO,
+                    code=IssueCode.NAV_INCOMPLETE,
+                    severity=IssueSeverity.INFO,
+                    message_i18n_key="dataQuality.navIncomplete",
+                    message_params={
+                        "count": len(incomplete_nav_sorted),
+                        "date_from": incomplete_nav_sorted[0].isoformat(),
+                        "date_to": incomplete_nav_sorted[-1].isoformat(),
+                    },
+                    count=len(incomplete_nav_sorted),
+                    group_key="nav_incomplete",
+                )
+            )
 
         # MWRR_NOT_CALCULABLE — info
         if not mwrr_available:
-            issues.append(DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.MWRR_NOT_CALCULABLE,
-                severity=IssueSeverity.INFO,
-                message_i18n_key="dataQuality.mwrrNotAvailable",
-                group_key="mwrr",
-            ))
-
-        return DataQualityReport(
-            issues=issues,
-            missing_price_assets=missing_price_assets_dto or [],
-            missing_fx_pairs=missing_fx_pairs_dto or [],
-            stale_prices=stale_prices_dto or [],
-            incomplete_nav_dates=incomplete_nav,
-            warnings=classifier_warnings or [],
-        )
-        """Aggregate per-day data quality into a DataQualityReport DTO.
-
-        missing_price_assets_dto / stale_prices_dto / missing_fx_pairs_dto are
-        pre-built DTO lists (caller constructs them with full asset/broker info).
-        If None, the report still populates date-level fields.
-        """
-        incomplete_nav: list[date_type] = []
-        for s in self.daily_states:
-            if not s.nav_complete:
-                incomplete_nav.append(s.date)
-
-        # Build structured issues list
-        issues: list[DataQualityIssue] = []
-
-        # MISSING_PRICE — error: assets excluded from NAV
-        if missing_price_assets_dto:
-            issues.append(DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.MISSING_PRICE,
-                severity=IssueSeverity.ERROR,
-                message_i18n_key="dataQuality.missingPrice",
-                message_params={"count": len(missing_price_assets_dto)},
-                count=len(missing_price_assets_dto),
-                affected_asset_ids=[a.asset_id for a in missing_price_assets_dto],
-                affected_asset_names=[a.name for a in missing_price_assets_dto],
-                cta_action="navigate_asset",
-                group_key="missing_price",
-            ))
-
-        # STALE_PRICE — warning: prices older than threshold
-        if stale_prices_dto:
-            issues.append(DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.STALE_PRICE,
-                severity=IssueSeverity.WARNING,
-                message_i18n_key="dataQuality.stalePrice",
-                message_params={"count": len(stale_prices_dto)},
-                count=len(stale_prices_dto),
-                affected_asset_ids=[a.asset_id for a in stale_prices_dto],
-                affected_asset_names=[a.name for a in stale_prices_dto],
-                cta_action="navigate_asset",
-                group_key="stale_price",
-            ))
-
-        # MISSING_FX_MARKET — warning: FX pairs needed but missing
-        if missing_fx_pairs_dto:
-            pairs = list({p.pair for p in missing_fx_pairs_dto})
-            issues.append(DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.MISSING_FX_MARKET,
-                severity=IssueSeverity.WARNING,
-                message_i18n_key="dataQuality.missingFx",
-                message_params={"count": len(pairs)},
-                count=len(pairs),
-                affected_fx_pairs=pairs,
-                cta_action="add_fx_pair",
-                group_key="missing_fx",
-            ))
-
-        # NAV_INCOMPLETE — info: some days had incomplete NAV
-        if incomplete_nav:
-            incomplete_nav_sorted = sorted(incomplete_nav)
-            issues.append(DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.NAV_INCOMPLETE,
-                severity=IssueSeverity.INFO,
-                message_i18n_key="dataQuality.navIncomplete",
-                message_params={
-                    "count": len(incomplete_nav_sorted),
-                    "date_from": incomplete_nav_sorted[0].isoformat(),
-                    "date_to": incomplete_nav_sorted[-1].isoformat(),
-                },
-                count=len(incomplete_nav_sorted),
-                group_key="nav_incomplete",
-            ))
-
-        # MWRR_NOT_CALCULABLE — info
-        if not mwrr_available:
-            issues.append(DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.MWRR_NOT_CALCULABLE,
-                severity=IssueSeverity.INFO,
-                message_i18n_key="dataQuality.mwrrNotAvailable",
-                group_key="mwrr",
-            ))
+            issues.append(
+                DataQualityIssue(
+                    domain=IssueDomain.PORTFOLIO,
+                    code=IssueCode.MWRR_NOT_CALCULABLE,
+                    severity=IssueSeverity.INFO,
+                    message_i18n_key="dataQuality.mwrrNotAvailable",
+                    group_key="mwrr",
+                )
+            )
 
         return DataQualityReport(
             issues=issues,
@@ -1238,6 +1515,18 @@ class DerivedViewsBuilder:
 # =============================================================================
 # PORTFOLIO CALCULATION ENGINE — Async orchestrator
 # =============================================================================
+
+
+def _compute_tx_fingerprint(transactions: list[Transaction]) -> str:
+    """Compute a hash fingerprint over transaction IDs and updated_at timestamps.
+
+    Any transaction insert, update, or delete changes this fingerprint,
+    automatically invalidating cached portfolio results.
+    """
+    h = hashlib.md5(usedforsecurity=False)
+    for tx in transactions:
+        h.update(f"{tx.id}:{tx.updated_at.isoformat()}".encode())
+    return h.hexdigest()
 
 
 class PortfolioCalculationEngine:
@@ -1261,18 +1550,27 @@ class PortfolioCalculationEngine:
         date_to: date_type | None = None,
         target_currency: str | None = None,
     ) -> PortfolioCalculationResult:
-        """Run the full portfolio calculation pipeline."""
-        from backend.app.services.portfolio_service import compute_wac_iterative  # noqa: PLC0415 (deferred to avoid circular)
+        """Run the full portfolio calculation pipeline.
+
+        WAC is computed inline during the daily state build — no separate
+        compute_wac_iterative calls needed (eliminates N×M DB round-trips).
+        """
         # ── 1. Resolve target currency ──
         if target_currency is None:
             target_currency = await get_global_setting(self.db, "base_currency", "EUR")
 
-        # ── 2. Resolve scope ──
-        stmt = select(BrokerUserAccess).where(BrokerUserAccess.user_id == user_id)
+        # ── 2. Resolve scope + visible brokers ──
+        # V(u) = all visible brokers (for last_buy_price fallback)
+        all_access_stmt = select(BrokerUserAccess).where(BrokerUserAccess.user_id == user_id)
+        all_access_result = await self.db.execute(all_access_stmt)
+        all_accesses = list(all_access_result.scalars().all())
+        visible_broker_ids = {a.broker_id for a in all_accesses}
+
+        # S = scope (filtered subset for portfolio aggregation)
         if broker_ids:
-            stmt = stmt.where(BrokerUserAccess.broker_id.in_(broker_ids))
-        result = await self.db.execute(stmt)
-        accesses = list(result.scalars().all())
+            accesses = [a for a in all_accesses if a.broker_id in set(broker_ids)]
+        else:
+            accesses = all_accesses
 
         if not accesses:
             return PortfolioCalculationResult(
@@ -1284,16 +1582,10 @@ class PortfolioCalculationEngine:
             )
 
         scope_broker_ids = {a.broker_id for a in accesses}
-        broker_shares = {
-            a.broker_id: a.share_percentage or Decimal("1") for a in accesses
-        }
+        broker_shares = {a.broker_id: a.share_percentage or Decimal("1") for a in accesses}
 
         # ── 3. Load ALL transactions for scope brokers ──
-        tx_stmt = (
-            select(Transaction)
-            .where(Transaction.broker_id.in_(scope_broker_ids))
-            .order_by(Transaction.date, Transaction.id)
-        )
+        tx_stmt = select(Transaction).where(Transaction.broker_id.in_(scope_broker_ids)).order_by(Transaction.date, Transaction.id)
         tx_result = await self.db.execute(tx_stmt)
         all_txs = list(tx_result.scalars().all())
 
@@ -1307,9 +1599,7 @@ class PortfolioCalculationEngine:
             )
 
         # ── 4. Classify transactions ──
-        classifier = ScopeAwareTransactionClassifier(
-            scope_broker_ids, all_txs, broker_shares
-        )
+        classifier = ScopeAwareTransactionClassifier(scope_broker_ids, all_txs, broker_shares)
         needed_ids = classifier.get_needed_paired_ids()
 
         external_paired: dict[int, Transaction] = {}
@@ -1320,31 +1610,75 @@ class PortfolioCalculationEngine:
 
         classification = classifier.classify(external_paired)
 
+        # ── 4b. Precompute last_buy_prices from V(u) BUY transactions ──
+        # For valuation fallback: MARKET_PRICE → LAST_BUY_PRICE(V(u)) → MISSING
+        # Load BUY txs from non-scope visible brokers (scope BUYs already in all_txs)
+        extra_visible_ids = visible_broker_ids - scope_broker_ids
+        all_buy_txs: list[Transaction] = [
+            tx for tx in all_txs
+            if tx.type == TransactionType.BUY and tx.asset_id and tx.quantity and tx.quantity > 0
+        ]
+        if extra_visible_ids:
+            extra_buy_stmt = (
+                select(Transaction)
+                .where(Transaction.broker_id.in_(extra_visible_ids))
+                .where(Transaction.type == TransactionType.BUY)
+                .where(Transaction.quantity > 0)
+                .where(Transaction.asset_id.is_not(None))
+                .order_by(Transaction.date)
+            )
+            extra_buy_result = await self.db.execute(extra_buy_stmt)
+            all_buy_txs.extend(extra_buy_result.scalars().all())
+
+        # Build last_buy_prices: asset_id → (date, unit_price, currency)
+        # Sorted chronologically, last one wins
+        last_buy_prices: dict[int, tuple[date_type, Decimal, str]] = {}
+        for tx in sorted(all_buy_txs, key=lambda t: (t.date, t.id or 0)):
+            if tx.asset_id and tx.quantity and tx.quantity > 0 and tx.amount:
+                unit_price = abs(tx.amount) / tx.quantity
+                ccy = tx.currency or "EUR"
+                last_buy_prices[tx.asset_id] = (tx.date, unit_price, ccy)
+
         # ── 5. Determine date range ──
         first_tx_date = min(tx.date for tx in all_txs)
         actual_from = date_from or first_tx_date
         actual_to = date_to or date_type.today()
 
-        # ── 6. Preload prices (bulk) ──
-        held_asset_ids = {
-            tx.asset_id
-            for tx in all_txs
-            if tx.asset_id and tx.quantity and tx.quantity != 0
-        }
+        # ── 5b. Blob cache check (range-aware) ──
+        tx_fingerprint = _compute_tx_fingerprint(all_txs)
+        held_asset_ids = {tx.asset_id for tx in all_txs if tx.asset_id and tx.quantity and tx.quantity != 0}
+        price_fingerprint = await self._compute_price_fingerprint(held_asset_ids, actual_to)
 
+        # Blob key: independent of date range (blob stores its own range)
+        blob_key = (
+            user_id,
+            tuple(sorted(scope_broker_ids)),
+            target_currency,
+            tx_fingerprint,
+            price_fingerprint,
+        )
+
+        cached_blob, blob_hit = _portfolio_blob_cache.get(blob_key)
+        if blob_hit and cached_blob is not None:
+            blob_from = cached_blob.date_from
+            blob_to = cached_blob.date_to
+            # Check if requested range is fully contained in blob
+            if blob_from <= actual_from and blob_to >= actual_to:
+                logger.debug("Portfolio blob cache hit (contained)", user_id=user_id)
+                return cached_blob
+            # Forward extension: blob covers from start but not to end
+            # For now, invalidate and recompute (extension requires end-state serialization)
+            # TODO: implement incremental forward extension in future iteration
+            logger.debug("Portfolio blob cache miss (range mismatch)", user_id=user_id,
+                        blob_range=f"{blob_from}..{blob_to}", requested=f"{actual_from}..{actual_to}")
+
+        # ── 6. Preload prices (bulk) ──
         price_map: dict[int, list[tuple[date_type, Decimal, str]]] = {}
         if held_asset_ids:
-            price_stmt = (
-                select(PriceHistory)
-                .where(PriceHistory.asset_id.in_(held_asset_ids))
-                .where(PriceHistory.date <= actual_to)
-                .order_by(PriceHistory.asset_id, PriceHistory.date)
-            )
+            price_stmt = select(PriceHistory).where(PriceHistory.asset_id.in_(held_asset_ids)).where(PriceHistory.date <= actual_to).order_by(PriceHistory.asset_id, PriceHistory.date)
             price_result = await self.db.execute(price_stmt)
             for ph in price_result.scalars().all():
-                price_map.setdefault(ph.asset_id, []).append(
-                    (ph.date, ph.close, ph.currency)
-                )
+                price_map.setdefault(ph.asset_id, []).append((ph.date, ph.close, ph.currency))
 
         # ── 7. Preload quote_base_quantity ──
         quote_base_map: dict[int, int | None] = {}
@@ -1356,26 +1690,10 @@ class PortfolioCalculationEngine:
             for a in assets_list:
                 quote_base_map[a.id] = a.quote_base_quantity
 
-        # ── 8. Preload WAC series ──
-        wac_series: dict[tuple[int, int], list[tuple[date_type, Decimal, str]]] = {}
-        for asset_id in held_asset_ids:
-            for broker_id in scope_broker_ids:
-                asset_obj = next((a for a in assets_list if a.id == asset_id), None)
-                asset_ccy = (asset_obj.currency if asset_obj else None) or target_currency
-                wac_result = await compute_wac_iterative(
-                    session=self.db,
-                    broker_id=broker_id,
-                    asset_id=asset_id,
-                    as_of_date=actual_to,
-                    asset_currency=asset_ccy,
-                )
-                if wac_result.wac and wac_result.wac_qualifying_txs:
-                    series: list[tuple[date_type, Decimal, str]] = []
-                    for qtx in wac_result.wac_qualifying_txs:
-                        if qtx.running_wac is not None:
-                            series.append((qtx.date, qtx.running_wac, wac_result.wac.code))
-                    if series:
-                        wac_series[(asset_id, broker_id)] = sorted(series, key=lambda x: x[0])
+        # ── 8. Build asset_currencies map (replaces N×M WAC pre-load) ──
+        asset_currencies: dict[int, str] = {}
+        for a in assets_list:
+            asset_currencies[a.id] = a.currency or target_currency
 
         # ── 9. Preload asset classification + types ──
         asset_classifications: dict[int, dict | None] = {}
@@ -1396,7 +1714,7 @@ class PortfolioCalculationEngine:
             classification.in_transit_intervals,
             classification.external_cash_flows,
             price_map,
-            wac_series,
+            asset_currencies,
             target_currency,
             actual_from,
             actual_to,
@@ -1409,23 +1727,48 @@ class PortfolioCalculationEngine:
             external_cash_flows=classification.external_cash_flows,
             price_map=price_map,
             quote_base_map=quote_base_map,
-            wac_series=wac_series,
             fx_rate_map=fx_rate_map,
             asset_classifications=asset_classifications,
             asset_types=asset_types,
+            asset_currencies=asset_currencies,
             target_currency=target_currency,
             date_from=actual_from,
             date_to=actual_to,
+            last_buy_prices=last_buy_prices,
         )
-        daily_states = builder.build()
+        result = builder.build()
 
-        return PortfolioCalculationResult(
-            daily_states=daily_states,
-            scope_broker_ids=list(scope_broker_ids),
-            target_currency=target_currency,
-            date_from=actual_from,
-            date_to=actual_to,
+        # ── 12. Store in blob cache ──
+        _portfolio_blob_cache.set(blob_key, result)
+        logger.debug("Portfolio blob cache stored", user_id=user_id, n_states=len(result.daily_states),
+                    range=f"{actual_from}..{actual_to}")
+
+        return result
+
+    async def _compute_price_fingerprint(
+        self,
+        held_asset_ids: set[int],
+        date_to: date_type,
+    ) -> str:
+        """Compute a lightweight fingerprint of price data for cache invalidation.
+
+        Uses COUNT + MAX(fetched_at) as a proxy — any price insert/update
+        changes at least one of these, invalidating the cache key.
+        """
+        if not held_asset_ids:
+            return "no_assets"
+        stmt = (
+            select(
+                func.count(PriceHistory.id),
+                func.max(PriceHistory.fetched_at),
+            )
+            .where(PriceHistory.asset_id.in_(held_asset_ids))
+            .where(PriceHistory.date <= date_to)
         )
+        row = (await self.db.execute(stmt)).one()
+        count = row[0] or 0
+        max_fetched = row[1].isoformat() if row[1] else "none"
+        return f"{count}:{max_fetched}"
 
     async def _preload_fx_rates(
         self,
@@ -1433,12 +1776,20 @@ class PortfolioCalculationEngine:
         in_transit_intervals: list[InTransitInterval],
         external_cash_flows: list[tuple[date_type, Decimal, str]],
         price_map: dict[int, list[tuple[date_type, Decimal, str]]],
-        wac_series: dict[tuple[int, int], list[tuple[date_type, Decimal, str]]],
+        asset_currencies: dict[int, str],
         target_currency: str,
         date_from: date_type,
         date_to: date_type,
     ) -> dict[tuple[str, str, date_type], Decimal]:
-        """Pre-load all FX rates needed for the calculation in one bulk call."""
+        """Pre-load all FX rates needed for the calculation in one bulk call.
+
+        Includes rates for:
+        - Transaction amounts → target_currency (all tx dates)
+        - External cash flows → target_currency
+        - Price currencies → target_currency (every day in range)
+        - Asset currencies (for inline WAC) → target_currency (every day in range + BUY dates)
+        - In-transit currencies → target_currency
+        """
         # Collect all (from_ccy, date) pairs needed
         fx_needs: set[tuple[str, date_type]] = set()
 
@@ -1460,21 +1811,29 @@ class PortfolioCalculationEngine:
                 if ccy != target_currency:
                     price_currencies.add(ccy)
 
-        # From WAC currencies
-        wac_currencies: set[str] = set()
-        for series in wac_series.values():
-            for _, _, ccy in series:
-                if ccy != target_currency:
-                    wac_currencies.add(ccy)
+        # From asset currencies (for inline WAC cost_basis evaluation daily)
+        asset_ccys_non_target: set[str] = set()
+        for ccy in asset_currencies.values():
+            if ccy != target_currency:
+                asset_ccys_non_target.add(ccy)
 
-        # For price/WAC currencies we need rates for every day in range
-        all_non_target_ccys = price_currencies | wac_currencies
+        # For price/asset currencies we need rates for every day in range
+        all_non_target_ccys = price_currencies | asset_ccys_non_target
         if all_non_target_ccys:
             current = date_from
             while current <= date_to:
                 for ccy in all_non_target_ccys:
                     fx_needs.add((ccy, current))
                 current += timedelta(days=1)
+
+        # For inline WAC: also need asset currency rates at BUY dates (pre-frame)
+        # so that cross-rate fx(tx_ccy → asset_ccy) can be computed
+        for ctxn in classified_txs:
+            tx = ctxn.tx
+            if tx.quantity and tx.quantity > 0 and tx.asset_id:
+                asset_ccy = asset_currencies.get(tx.asset_id, target_currency)
+                if asset_ccy != target_currency:
+                    fx_needs.add((asset_ccy, tx.date))
 
         # From in-transit intervals
         for interval in in_transit_intervals:
@@ -1494,15 +1853,13 @@ class PortfolioCalculationEngine:
             return {}
 
         # Batch convert
-        bulk_items = [
-            (CurrencySchema(code=ccy, amount=Decimal("1")), target_currency, dt)
-            for ccy, dt in fx_needs
-        ]
+        fx_needs_list = list(fx_needs)
+        bulk_items = [(CurrencySchema(code=ccy, amount=Decimal("1")), target_currency, dt) for ccy, dt in fx_needs_list]
 
         results, _ = await convert_bulk(self.db, bulk_items, raise_on_error=False)
 
         fx_rate_map: dict[tuple[str, str, date_type], Decimal] = {}
-        for i, (ccy, dt) in enumerate(fx_needs):
+        for i, (ccy, dt) in enumerate(fx_needs_list):
             if i < len(results) and results[i] is not None:
                 converted_amount = results[i][0].amount if results[i] else None
                 if converted_amount is not None:

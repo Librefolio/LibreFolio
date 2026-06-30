@@ -58,9 +58,7 @@ class TestUnlinkedTransactions:
     def test_unlinked_deposit(self):
         """DEPOSIT without related_id → normal + external cash flow."""
         txs = [_tx(id=1, broker_id=10, type="DEPOSIT", dt="2025-01-01", amount="1000")]
-        c = ScopeAwareTransactionClassifier(
-            scope_broker_ids={10}, all_transactions=txs, broker_shares={10: Decimal("1")}
-        )
+        c = ScopeAwareTransactionClassifier(scope_broker_ids={10}, all_transactions=txs, broker_shares={10: Decimal("1")})
         result = c.classify()
 
         assert len(result.classified) == 1
@@ -71,9 +69,7 @@ class TestUnlinkedTransactions:
     def test_unlinked_withdrawal(self):
         """WITHDRAWAL → normal + external cash flow (negative)."""
         txs = [_tx(id=2, broker_id=10, type="WITHDRAWAL", dt="2025-02-01", amount="-500")]
-        c = ScopeAwareTransactionClassifier(
-            scope_broker_ids={10}, all_transactions=txs, broker_shares={10: Decimal("1")}
-        )
+        c = ScopeAwareTransactionClassifier(scope_broker_ids={10}, all_transactions=txs, broker_shares={10: Decimal("1")})
         result = c.classify()
 
         assert result.classified[0].classification == "normal"
@@ -84,9 +80,7 @@ class TestUnlinkedTransactions:
         txs = [
             _tx(id=3, broker_id=10, type="BUY", dt="2025-01-15", amount="-400", quantity="10", asset_id=100),
         ]
-        c = ScopeAwareTransactionClassifier(
-            scope_broker_ids={10}, all_transactions=txs, broker_shares={10: Decimal("1")}
-        )
+        c = ScopeAwareTransactionClassifier(scope_broker_ids={10}, all_transactions=txs, broker_shares={10: Decimal("1")})
         result = c.classify()
 
         assert result.classified[0].classification == "normal"
@@ -95,9 +89,7 @@ class TestUnlinkedTransactions:
     def test_unlinked_fee(self):
         """FEE → normal, no external cash flow."""
         txs = [_tx(id=4, broker_id=10, type="FEE", dt="2025-01-20", amount="-10")]
-        c = ScopeAwareTransactionClassifier(
-            scope_broker_ids={10}, all_transactions=txs, broker_shares={10: Decimal("1")}
-        )
+        c = ScopeAwareTransactionClassifier(scope_broker_ids={10}, all_transactions=txs, broker_shares={10: Decimal("1")})
         result = c.classify()
 
         assert result.classified[0].classification == "normal"
@@ -167,13 +159,24 @@ class TestLinkedInternalDifferentDates:
     def test_asset_transfer_different_dates(self):
         """TRANSFER: asset moves between brokers with different dates."""
         tx_out = _tx(
-            id=40, broker_id=10, type="TRANSFER", dt="2025-05-01",
-            quantity="-100", asset_id=200, related_id=41,
-            cost_basis_override="50.00", cost_basis_currency="EUR",
+            id=40,
+            broker_id=10,
+            type="TRANSFER",
+            dt="2025-05-01",
+            quantity="-100",
+            asset_id=200,
+            related_id=41,
+            cost_basis_override="50.00",
+            cost_basis_currency="EUR",
         )
         tx_in = _tx(
-            id=41, broker_id=20, type="TRANSFER", dt="2025-05-05",
-            quantity="100", asset_id=200, related_id=40,
+            id=41,
+            broker_id=20,
+            type="TRANSFER",
+            dt="2025-05-05",
+            quantity="100",
+            asset_id=200,
+            related_id=40,
         )
         c = ScopeAwareTransactionClassifier(
             scope_broker_ids={10, 20},
@@ -245,12 +248,22 @@ class TestLinkedExternal:
     def test_asset_transfer_external_inflow(self):
         """TRANSFER: asset arrives from outside scope → linked_external_inflow."""
         tx_in = _tx(
-            id=81, broker_id=10, type="TRANSFER", dt="2025-08-01",
-            quantity="50", asset_id=300, related_id=80,
+            id=81,
+            broker_id=10,
+            type="TRANSFER",
+            dt="2025-08-01",
+            quantity="50",
+            asset_id=300,
+            related_id=80,
         )
         tx_out = _tx(
-            id=80, broker_id=99, type="TRANSFER", dt="2025-07-30",
-            quantity="-50", asset_id=300, related_id=81,
+            id=80,
+            broker_id=99,
+            type="TRANSFER",
+            dt="2025-07-30",
+            quantity="-50",
+            asset_id=300,
+            related_id=81,
         )
 
         c = ScopeAwareTransactionClassifier(

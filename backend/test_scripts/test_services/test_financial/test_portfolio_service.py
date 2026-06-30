@@ -11,7 +11,7 @@ Reference: backend/app/services/portfolio_service.py
 """
 
 import sys
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -27,7 +27,7 @@ setup_test_database()
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, User
+from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
 from backend.app.services.portfolio_service import PortfolioService, _build_history_series, _HistoryTxRow
 from backend.app.utils.datetime_utils import utcnow
@@ -142,7 +142,7 @@ class TestBuildHistorySeries:
         """
         rows = [
             _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-03-01", "BUY",     "-5000"),   # BUY: negative amount (cash out)
+            _row("2025-03-01", "BUY", "-5000"),  # BUY: negative amount (cash out)
         ]
         result = _build_history_series(rows)
 
@@ -159,20 +159,17 @@ class TestBuildHistorySeries:
     def test_nav_invariant(self):
         """For every point: nav_value == cash_value + market_value (market_value=0 always)."""
         rows = [
-            _row("2025-01-01", "DEPOSIT",    "10000"),
-            _row("2025-02-01", "BUY",        "-3000"),
-            _row("2025-04-01", "SELL",        "1000"),
-            _row("2025-06-01", "WITHDRAWAL",  "-2000"),
-            _row("2025-09-01", "DEPOSIT",     "5000"),
+            _row("2025-01-01", "DEPOSIT", "10000"),
+            _row("2025-02-01", "BUY", "-3000"),
+            _row("2025-04-01", "SELL", "1000"),
+            _row("2025-06-01", "WITHDRAWAL", "-2000"),
+            _row("2025-09-01", "DEPOSIT", "5000"),
         ]
         result = _build_history_series(rows)
         # Dense: many more than 5 points
         assert len(result) > 5
         for point in result:
-            assert point.nav_value == point.cash_value + point.market_value, (
-                f"NAV invariant violated at {point.date}: "
-                f"nav={point.nav_value} != cash={point.cash_value} + market_value={point.market_value}"
-            )
+            assert point.nav_value == point.cash_value + point.market_value, f"NAV invariant violated at {point.date}: " f"nav={point.nav_value} != cash={point.cash_value} + market_value={point.market_value}"
 
     def test_chronological_order(self):
         """Output must be sorted by date ascending regardless of input order."""
@@ -197,7 +194,7 @@ class TestBuildHistorySeries:
     def test_withdrawal_reduces_cash(self):
         """DEPOSIT 10000 -> WITHDRAWAL -3000 -> cash = 7000 on withdrawal date."""
         rows = [
-            _row("2025-01-01", "DEPOSIT",    "10000"),
+            _row("2025-01-01", "DEPOSIT", "10000"),
             _row("2025-06-01", "WITHDRAWAL", "-3000"),
         ]
         result = _build_history_series(rows)
@@ -215,22 +212,22 @@ class TestBuildHistorySeries:
         """
         rows = [
             _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-02-01", "BUY",     "-8000"),
-            _row("2025-03-01", "SELL",     "3000"),
+            _row("2025-02-01", "BUY", "-8000"),
+            _row("2025-03-01", "SELL", "3000"),
         ]
         result = _build_history_series(rows)
 
         final = result[-1]
         assert final.cash_value == Decimal("5000")
-        assert final.nav_value == Decimal("5000")   # market_value=0 at this stage
+        assert final.nav_value == Decimal("5000")  # market_value=0 at this stage
 
     def test_all_types_contribute_to_cash(self):
         """All transaction types (including DIVIDEND) contribute to cash_value.
         There is no type-based filtering in _build_history_series.
         """
         rows = [
-            _row("2025-01-01", "DEPOSIT",  "10000"),
-            _row("2025-02-01", "DIVIDEND",   "500"),
+            _row("2025-01-01", "DEPOSIT", "10000"),
+            _row("2025-02-01", "DIVIDEND", "500"),
         ]
         result = _build_history_series(rows)
         final = result[-1]
@@ -260,7 +257,9 @@ class TestPortfolioServiceGetLots:
         """User without broker access -> empty lots response."""
         service = PortfolioService(session)
         result = await service.get_lots(
-            user_id=test_user.id, broker_id=999999, asset_id=999999,
+            user_id=test_user.id,
+            broker_id=999999,
+            asset_id=999999,
         )
         assert result.open_lots == []
         assert result.closed_lots == []
@@ -272,7 +271,9 @@ class TestPortfolioServiceGetLots:
         broker, _ = broker_with_access
         service = PortfolioService(session)
         result = await service.get_lots(
-            user_id=test_user.id, broker_id=broker.id, asset_id=test_asset.id,
+            user_id=test_user.id,
+            broker_id=broker.id,
+            asset_id=test_asset.id,
         )
         assert result.open_lots == []
         assert result.closed_lots == []
@@ -282,16 +283,22 @@ class TestPortfolioServiceGetLots:
         """Single BUY -> 1 open lot, 0 closed lots."""
         broker, _ = broker_with_access
         tx = Transaction(
-            broker_id=broker.id, asset_id=test_asset.id,
-            type=TransactionType.BUY, date=date(2025, 1, 10),
-            quantity=Decimal("100"), amount=Decimal("5000"), currency="EUR",
+            broker_id=broker.id,
+            asset_id=test_asset.id,
+            type=TransactionType.BUY,
+            date=date(2025, 1, 10),
+            quantity=Decimal("100"),
+            amount=Decimal("5000"),
+            currency="EUR",
         )
         session.add(tx)
         await session.flush()
 
         service = PortfolioService(session)
         result = await service.get_lots(
-            user_id=test_user.id, broker_id=broker.id, asset_id=test_asset.id,
+            user_id=test_user.id,
+            broker_id=broker.id,
+            asset_id=test_asset.id,
         )
         assert len(result.open_lots) >= 1
         assert result.total_unrealized_quantity >= Decimal("100")
@@ -300,19 +307,19 @@ class TestPortfolioServiceGetLots:
     async def test_get_lots_buy_and_partial_sell(self, session, test_user, broker_with_access, test_asset):
         """BUY 100, SELL 30 -> open lot with 70 remaining, closed lot with 30."""
         broker, _ = broker_with_access
-        session.add_all([
-            Transaction(broker_id=broker.id, asset_id=test_asset.id,
-                        type=TransactionType.BUY, date=date(2025, 2, 1),
-                        quantity=Decimal("100"), amount=Decimal("5000"), currency="EUR"),
-            Transaction(broker_id=broker.id, asset_id=test_asset.id,
-                        type=TransactionType.SELL, date=date(2025, 6, 1),
-                        quantity=Decimal("-30"), amount=Decimal("1800"), currency="EUR"),
-        ])
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 2, 1), quantity=Decimal("100"), amount=Decimal("5000"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.SELL, date=date(2025, 6, 1), quantity=Decimal("-30"), amount=Decimal("1800"), currency="EUR"),
+            ]
+        )
         await session.flush()
 
         service = PortfolioService(session)
         result = await service.get_lots(
-            user_id=test_user.id, broker_id=broker.id, asset_id=test_asset.id,
+            user_id=test_user.id,
+            broker_id=broker.id,
+            asset_id=test_asset.id,
         )
         open_by_qty = [lot for lot in result.open_lots if lot.remaining_quantity == Decimal("70")]
         assert len(open_by_qty) >= 1, f"Expected open lot qty=70, got: {result.open_lots}"
@@ -341,10 +348,15 @@ class TestPortfolioServiceGetHistory:
         NOTE: PortfolioHistoryPoint.cash_value/market_value/nav_value are Currency objects.
         """
         broker, _ = broker_with_access
-        session.add(Transaction(
-            broker_id=broker.id, type=TransactionType.DEPOSIT,
-            date=date(2025, 3, 1), amount=Decimal("10000"), currency="EUR",
-        ))
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 3, 1),
+                amount=Decimal("10000"),
+                currency="EUR",
+            )
+        )
         await session.flush()
 
         service = PortfolioService(session)
@@ -361,31 +373,33 @@ class TestPortfolioServiceGetHistory:
     async def test_nav_invariant_on_deposit(self, session, test_user, broker_with_access):
         """For every returned point: nav_value == cash_value + market_value."""
         broker, _ = broker_with_access
-        session.add(Transaction(
-            broker_id=broker.id, type=TransactionType.DEPOSIT,
-            date=date(2025, 4, 1), amount=Decimal("7500"), currency="EUR",
-        ))
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 4, 1),
+                amount=Decimal("7500"),
+                currency="EUR",
+            )
+        )
         await session.flush()
 
         service = PortfolioService(session)
         result = await service.get_history(user_id=test_user.id)
 
         for point in result:
-            assert point.nav_value == point.cash_value + point.market_value, (
-                f"NAV invariant violated at {point.date}: "
-                f"nav={point.nav_value} != cash+market_value"
-            )
+            assert point.nav_value == point.cash_value + point.market_value, f"NAV invariant violated at {point.date}: " f"nav={point.nav_value} != cash+market_value"
 
     @pytest.mark.asyncio
     async def test_history_date_range_filter(self, session, test_user, broker_with_access):
         """date_from/date_to filter excludes out-of-range transactions."""
         broker, _ = broker_with_access
-        session.add_all([
-            Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT,
-                        date=date(2025, 5, 15), amount=Decimal("5000"), currency="EUR"),
-            Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT,
-                        date=date(2024, 1, 1), amount=Decimal("3000"), currency="EUR"),
-        ])
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2025, 5, 15), amount=Decimal("5000"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2024, 1, 1), amount=Decimal("3000"), currency="EUR"),
+            ]
+        )
         await session.flush()
 
         service = PortfolioService(session)
@@ -428,10 +442,15 @@ class TestPortfolioServiceGetSummary:
         NOTE: monetary fields are Currency objects; compare via .amount.
         """
         broker, _ = broker_with_access
-        session.add(Transaction(
-            broker_id=broker.id, type=TransactionType.DEPOSIT,
-            date=date(2025, 1, 1), amount=Decimal("10000"), currency="EUR",
-        ))
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 1, 1),
+                amount=Decimal("10000"),
+                currency="EUR",
+            )
+        )
         await session.flush()
 
         service = PortfolioService(session)
@@ -482,14 +501,24 @@ class TestNetDepositedCapital:
     async def test_deposits_only(self, session, test_user, broker_with_access):
         """Only deposits → total_deposited = sum, total_withdrawn = None, net = deposited."""
         broker, _ = broker_with_access
-        session.add(Transaction(
-            broker_id=broker.id, type=TransactionType.DEPOSIT,
-            date=date(2025, 1, 1), amount=Decimal("5000"), currency="EUR",
-        ))
-        session.add(Transaction(
-            broker_id=broker.id, type=TransactionType.DEPOSIT,
-            date=date(2025, 2, 1), amount=Decimal("3000"), currency="EUR",
-        ))
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 1, 1),
+                amount=Decimal("5000"),
+                currency="EUR",
+            )
+        )
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 2, 1),
+                amount=Decimal("3000"),
+                currency="EUR",
+            )
+        )
         await session.flush()
 
         service = PortfolioService(session)
@@ -505,14 +534,24 @@ class TestNetDepositedCapital:
     async def test_deposits_and_withdrawals(self, session, test_user, broker_with_access):
         """Deposits + withdrawals → net = deposited - withdrawn."""
         broker, _ = broker_with_access
-        session.add(Transaction(
-            broker_id=broker.id, type=TransactionType.DEPOSIT,
-            date=date(2025, 1, 1), amount=Decimal("10000"), currency="EUR",
-        ))
-        session.add(Transaction(
-            broker_id=broker.id, type=TransactionType.WITHDRAWAL,
-            date=date(2025, 3, 1), amount=Decimal("-2000"), currency="EUR",
-        ))
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 1, 1),
+                amount=Decimal("10000"),
+                currency="EUR",
+            )
+        )
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.WITHDRAWAL,
+                date=date(2025, 3, 1),
+                amount=Decimal("-2000"),
+                currency="EUR",
+            )
+        )
         await session.flush()
 
         service = PortfolioService(session)
@@ -526,33 +565,65 @@ class TestNetDepositedCapital:
     async def test_buy_sell_fee_tax_excluded(self, session, test_user, broker_with_access, test_asset):
         """BUY, SELL, FEE, TAX, DIVIDEND, INTEREST do not affect net_deposited_capital."""
         broker, _ = broker_with_access
-        session.add(Transaction(
-            broker_id=broker.id, type=TransactionType.DEPOSIT,
-            date=date(2025, 1, 1), amount=Decimal("10000"), currency="EUR",
-        ))
-        session.add(Transaction(
-            broker_id=broker.id, type=TransactionType.BUY,
-            date=date(2025, 1, 2), amount=Decimal("-5000"), currency="EUR",
-            asset_id=test_asset.id, quantity=Decimal("100"),
-        ))
-        session.add(Transaction(
-            broker_id=broker.id, type=TransactionType.SELL,
-            date=date(2025, 2, 1), amount=Decimal("3000"), currency="EUR",
-            asset_id=test_asset.id, quantity=Decimal("-50"),
-        ))
-        session.add(Transaction(
-            broker_id=broker.id, type=TransactionType.FEE,
-            date=date(2025, 1, 2), amount=Decimal("-10"), currency="EUR",
-        ))
-        session.add(Transaction(
-            broker_id=broker.id, type=TransactionType.TAX,
-            date=date(2025, 2, 1), amount=Decimal("-15"), currency="EUR",
-        ))
-        session.add(Transaction(
-            broker_id=broker.id, type=TransactionType.DIVIDEND,
-            date=date(2025, 3, 1), amount=Decimal("50"), currency="EUR",
-            asset_id=test_asset.id,
-        ))
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 1, 1),
+                amount=Decimal("10000"),
+                currency="EUR",
+            )
+        )
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 2),
+                amount=Decimal("-5000"),
+                currency="EUR",
+                asset_id=test_asset.id,
+                quantity=Decimal("100"),
+            )
+        )
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.SELL,
+                date=date(2025, 2, 1),
+                amount=Decimal("3000"),
+                currency="EUR",
+                asset_id=test_asset.id,
+                quantity=Decimal("-50"),
+            )
+        )
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.FEE,
+                date=date(2025, 1, 2),
+                amount=Decimal("-10"),
+                currency="EUR",
+            )
+        )
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.TAX,
+                date=date(2025, 2, 1),
+                amount=Decimal("-15"),
+                currency="EUR",
+            )
+        )
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DIVIDEND,
+                date=date(2025, 3, 1),
+                amount=Decimal("50"),
+                currency="EUR",
+                asset_id=test_asset.id,
+            )
+        )
         await session.flush()
 
         service = PortfolioService(session)
@@ -562,3 +633,64 @@ class TestNetDepositedCapital:
         assert summary.total_deposited.amount == Decimal("10000")
         assert summary.total_withdrawn is None
         assert summary.net_deposited_capital.amount == Decimal("10000")
+
+    @pytest.mark.asyncio
+    async def test_holding_price_change_1d(self, session, test_user, broker_with_access, test_asset):
+        """Holdings expose daily market price change when current and previous prices exist."""
+        broker, _ = broker_with_access
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=yesterday,
+                amount=Decimal("1000"),
+                currency="EUR",
+            )
+        )
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.BUY,
+                date=yesterday,
+                amount=Decimal("-500"),
+                currency="EUR",
+                asset_id=test_asset.id,
+                quantity=Decimal("5"),
+            )
+        )
+        session.add_all(
+            [
+                PriceHistory(
+                    asset_id=test_asset.id,
+                    date=yesterday,
+                    open=Decimal("100"),
+                    high=Decimal("100"),
+                    low=Decimal("100"),
+                    close=Decimal("100"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+                PriceHistory(
+                    asset_id=test_asset.id,
+                    date=today,
+                    open=Decimal("110"),
+                    high=Decimal("110"),
+                    low=Decimal("110"),
+                    close=Decimal("110"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        summary = await service.get_summary(user_id=test_user.id)
+
+        assert len(summary.holdings) == 1
+        assert summary.holdings[0].price_change_1d == Decimal("0.1000")

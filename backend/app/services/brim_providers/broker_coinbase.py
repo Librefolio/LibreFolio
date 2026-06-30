@@ -252,10 +252,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
 
                     # For ADJUSTMENT (like crypto staking rewards), quantity is kept, but cash must be zero.
                     # We store the valuation details in the description.
-                    is_reward_adjustment = (
-                        tx_type == TransactionType.ADJUSTMENT
-                        and tx_type_raw in ("staking income", "rewards income", "learning reward")
-                    )
+                    is_reward_adjustment = tx_type == TransactionType.ADJUSTMENT and tx_type_raw in ("staking income", "rewards income", "learning reward")
 
                     desc_extra = ""
                     if is_reward_adjustment:
@@ -267,10 +264,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
                     orig_quantity = quantity
                     if tx_type in (TransactionType.INTEREST, TransactionType.DIVIDEND):
                         if quantity != Decimal("0"):
-                            warnings.append(
-                                f"Row {row_num}: {tx_type_raw} had quantity={quantity} {asset}"
-                                f" — recorded as cash-only INTEREST (token qty discarded, cash preserved)"
-                            )
+                            warnings.append(f"Row {row_num}: {tx_type_raw} had quantity={quantity} {asset}" f" — recorded as cash-only INTEREST (token qty discarded, cash preserved)")
                         quantity = Decimal("0")
 
                     if tx_type in (TransactionType.INTEREST, TransactionType.DIVIDEND) and orig_quantity and orig_quantity != Decimal("0"):

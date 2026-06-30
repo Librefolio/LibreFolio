@@ -34,7 +34,6 @@ class WACConversionInfo(BaseModel):
     stale_days: int = Field(0, ge=0, description="Days between TX date and rate date (0 = fresh)")
 
 
-
 class WACQualifyingTX(BaseModel):
     """A TX that participated in WAC calculation."""
 
