@@ -20,6 +20,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {_} from '$lib/i18n';
     import type {PortfolioHistoryPoint} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {buildTooltipTheme, buildDot, buildTooltipHeader, buildTooltipRow, buildTooltipDivider, tooltipPositionSide, setupTooltipAutoHide} from '$lib/components/charts/echartsTooltipHelpers';
@@ -44,6 +45,9 @@
     let viewMode: 'eur' | 'pct' = $state('eur');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
+    /** Tracks last viewMode used for full init — dark mode or viewMode switch requires full re-init */
+    let lastRenderedMode: 'eur' | 'pct' | null = null;
+    let lastRenderedDark: boolean | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let observedContainer: HTMLDivElement | undefined = undefined;
     let darkModeObserver: MutationObserver | null = null;
@@ -183,11 +187,13 @@
     }
 
     function renderChart() {
-        if (!chartContainer || loading) return;
+        if (!chartContainer || loading || history.length === 0) return;
 
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
             chartInstance.dispose();
             chartInstance = undefined;
+            lastRenderedMode = null;
+            lastRenderedDark = null;
         }
 
         if (!chartInstance) {
@@ -200,94 +206,69 @@
         const isDark = document.documentElement.classList.contains('dark');
         const activeDates = dates;
 
+        // Determine if this is a data-only update (same mode, same dark) or full re-init
+        const needsFullInit = lastRenderedMode !== viewMode || lastRenderedDark !== isDark;
+
+        // Build series data using named points for ECharts diff matching
+        let seriesData: Array<{name: string; data: any[]}>;
+
+        if (viewMode === 'eur') {
+            const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
+            seriesData = [
+                {name: eurLabels.bookAssetLike, data: activeDates.map((d, i) => namedPoint(d, eurStackedData.bookAssetLike[i]))},
+                {name: eurLabels.cashContributed, data: activeDates.map((d, i) => namedPoint(d, eurStackedData.cashContributed[i]))},
+                {name: eurLabels.cashGenerated, data: activeDates.map((d, i) => namedPoint(d, eurStackedData.cashGenerated[i]))},
+                {name: eurLabels.nav, data: activeDates.map((d, i) => namedPoint(d, eurStackedData.nav[i]))},
+                {name: eurLabels.capitalBaseline, data: activeDates.map((d, i) => namedPoint(d, eurStackedData.capitalBaseline[i]))},
+            ];
+
+            if (needsFullInit) {
+                // Full init with all visual config
+                const series: echarts.SeriesOption[] = [
+                    {name: eurLabels.bookAssetLike, type: 'line', stack: 'bookValue', data: seriesData[0].data, smooth: false, symbol: 'none', lineStyle: {color: cc('bookAssetLike'), width: 1, opacity: 0.7}, areaStyle: {color: cc('bookAssetLike') + '44'}, itemStyle: {color: cc('bookAssetLike')}, emphasis: {focus: 'series'}},
+                    {name: eurLabels.cashContributed, type: 'line', stack: 'bookValue', data: seriesData[1].data, smooth: false, symbol: 'none', lineStyle: {color: cc('cashContributed'), width: 1, opacity: 0.7}, areaStyle: {color: cc('cashContributed') + '44'}, itemStyle: {color: cc('cashContributed')}, emphasis: {focus: 'series'}},
+                    {name: eurLabels.cashGenerated, type: 'line', stack: 'bookValue', data: seriesData[2].data, smooth: false, symbol: 'none', lineStyle: {color: cc('cashGenerated'), width: 1, opacity: 0.7}, areaStyle: {color: cc('cashGenerated') + '44'}, itemStyle: {color: cc('cashGenerated')}, emphasis: {focus: 'series'}},
+                    {name: eurLabels.nav, type: 'line', data: seriesData[3].data, smooth: false, symbol: 'none', lineStyle: {color: cc('nav'), width: 2, type: 'solid'}, itemStyle: {color: cc('nav')}, emphasis: {focus: 'series'}},
+                    {name: eurLabels.capitalBaseline, type: 'line', data: seriesData[4].data, smooth: false, symbol: 'none', lineStyle: {color: cc('capitalBaseline'), width: 1.5, type: 'dashed'}, itemStyle: {color: cc('capitalBaseline')}, emphasis: {focus: 'series'}},
+                ];
+                applyFullOption(isDark, series);
+            } else {
+                // Data-only update — partial setOption for smooth transition
+                chartInstance.setOption({
+                    series: seriesData.map((s) => ({name: s.name, data: s.data})),
+                });
+            }
+        } else {
+            seriesData = pctSeries.map((s) => ({
+                name: s.name,
+                data: activeDates.map((d, i) => namedPoint(d, s.data[i])),
+            }));
+
+            if (needsFullInit) {
+                const series: echarts.SeriesOption[] = pctSeries.map((s, idx) => ({
+                    name: s.name, type: 'line' as const, data: seriesData[idx].data,
+                    smooth: false, connectNulls: false, symbol: 'none',
+                    lineStyle: {color: COLORS[s.colorKey][isDark ? 'dark' : 'light'], width: 2, type: s.lineStyle},
+                    itemStyle: {color: COLORS[s.colorKey][isDark ? 'dark' : 'light']},
+                }));
+                applyFullOption(isDark, series);
+            } else {
+                chartInstance.setOption({
+                    series: seriesData.map((s) => ({name: s.name, data: s.data})),
+                });
+            }
+        }
+
+        lastRenderedMode = viewMode;
+        lastRenderedDark = isDark;
+    }
+
+    function applyFullOption(isDark: boolean, series: echarts.SeriesOption[]) {
+        if (!chartInstance) return;
         const textColor = isDark ? '#94a3b8' : '#64748b';
         const gridColor = isDark ? '#1e293b' : '#f1f5f9';
         const tooltipBg = isDark ? '#1e293b' : '#ffffff';
         const tooltipBorder = isDark ? '#334155' : '#e2e8f0';
-
-        let series: echarts.SeriesOption[];
-
-        if (viewMode === 'eur') {
-            const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
-            series = [
-                // Stacked area: assets at cost (bottom)
-                {
-                    name: eurLabels.bookAssetLike,
-                    type: 'line',
-                    stack: 'bookValue',
-                    data: eurStackedData.bookAssetLike,
-                    smooth: false,
-                    symbol: 'none',
-                    lineStyle: {color: cc('bookAssetLike'), width: 1, opacity: 0.7},
-                    areaStyle: {color: cc('bookAssetLike') + '44'},
-                    itemStyle: {color: cc('bookAssetLike')},
-                    emphasis: {focus: 'series'},
-                },
-                // Stacked area: capital cash (top of stack)
-                {
-                    name: eurLabels.cashContributed,
-                    type: 'line',
-                    stack: 'bookValue',
-                    data: eurStackedData.cashContributed,
-                    smooth: false,
-                    symbol: 'none',
-                    lineStyle: {color: cc('cashContributed'), width: 1, opacity: 0.7},
-                    areaStyle: {color: cc('cashContributed') + '44'},
-                    itemStyle: {color: cc('cashContributed')},
-                    emphasis: {focus: 'series'},
-                },
-                // Stacked area: returns cash (middle — returns visible above asset cost)
-                {
-                    name: eurLabels.cashGenerated,
-                    type: 'line',
-                    stack: 'bookValue',
-                    data: eurStackedData.cashGenerated,
-                    smooth: false,
-                    symbol: 'none',
-                    lineStyle: {color: cc('cashGenerated'), width: 1, opacity: 0.7},
-                    areaStyle: {color: cc('cashGenerated') + '44'},
-                    itemStyle: {color: cc('cashGenerated')},
-                    emphasis: {focus: 'series'},
-                },
-                // Overlay line: NAV (solid)
-                {
-                    name: eurLabels.nav,
-                    type: 'line',
-                    data: eurStackedData.nav,
-                    smooth: false,
-                    symbol: 'none',
-                    lineStyle: {color: cc('nav'), width: 2, type: 'solid'},
-                    itemStyle: {color: cc('nav')},
-                    emphasis: {focus: 'series'},
-                },
-                // Overlay line: Capital Baseline (dashed, secondary)
-                {
-                    name: eurLabels.capitalBaseline,
-                    type: 'line',
-                    data: eurStackedData.capitalBaseline,
-                    smooth: false,
-                    symbol: 'none',
-                    lineStyle: {color: cc('capitalBaseline'), width: 1.5, type: 'dashed'},
-                    itemStyle: {color: cc('capitalBaseline')},
-                    emphasis: {focus: 'series'},
-                },
-            ];
-        } else {
-            series = pctSeries.map((s) => ({
-                name: s.name,
-                type: 'line' as const,
-                data: s.data,
-                smooth: false,
-                connectNulls: false,
-                symbol: 'none',
-                lineStyle: {
-                    color: COLORS[s.colorKey][isDark ? 'dark' : 'light'],
-                    width: 2,
-                    type: s.lineStyle,
-                },
-                itemStyle: {color: COLORS[s.colorKey][isDark ? 'dark' : 'light']},
-            }));
-        }
 
         const yAxisFormatter =
             viewMode === 'eur'
@@ -302,7 +283,7 @@
         const fmtCurrency = (v: number | null | undefined) => (v != null ? `${baseCurrency} ${v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '—');
 
         const option: echarts.EChartsOption = {
-            animation: false,
+            ...CHART_ANIMATION_CONFIG,
             backgroundColor: 'transparent',
             grid: {left: '3%', right: '4%', bottom: '30px', top: '10px', containLabel: true},
             tooltip: {
@@ -317,10 +298,12 @@
                 textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
                 formatter: (params: any) => {
                     const items = Array.isArray(params) ? params : [params];
-                    const date = items[0]?.axisValue ?? '';
+                    // With time axis, axisValue is a timestamp — format to date string
+                    const rawDate = items[0]?.axisValue;
+                    const date = rawDate instanceof Date ? rawDate.toISOString().slice(0, 10) : typeof rawDate === 'number' ? new Date(rawDate).toISOString().slice(0, 10) : String(rawDate ?? '');
+                    const idx = items[0]?.dataIndex ?? 0;
 
                     if (viewMode === 'eur') {
-                        const idx = items[0]?.dataIndex ?? 0;
                         const assetCostVal = eurStackedData.bookAssetLike[idx];
                         const cashGenVal = eurStackedData.cashGenerated[idx];
                         const cashContribVal = eurStackedData.cashContributed[idx];
@@ -355,7 +338,9 @@
                     const lines = items
                         .filter((p: any) => p.value != null)
                         .map((p: any) => {
-                            const val = `${Number(p.value).toFixed(2)}%`;
+                            // With namedPoint format, p.value is [date, number] — extract the numeric part
+                            const rawVal = Array.isArray(p.value) ? p.value[1] : p.value;
+                            const val = `${Number(rawVal).toFixed(2)}%`;
                             return `<div style="display:flex;justify-content:space-between;gap:16px"><span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:6px"></span>${p.seriesName}</span><b>${val}</b></div>`;
                         });
                     return `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>${lines.join('')}`;
@@ -371,12 +356,10 @@
             },
             dataZoom: [{type: 'inside', start: 0, end: 100}],
             xAxis: {
-                type: 'category',
-                data: activeDates,
+                type: 'time',
                 axisLabel: {color: textColor, fontSize: 11, rotate: 0},
                 axisLine: {lineStyle: {color: gridColor}},
                 splitLine: {show: false},
-                boundaryGap: false,
             },
             yAxis: {
                 type: 'value',
@@ -390,7 +373,7 @@
             series,
         };
 
-        chartInstance.setOption(option, {notMerge: true});
+        chartInstance.setOption(option, CHART_SET_OPTION_OPTS);
     }
 </script>
 
@@ -418,21 +401,22 @@
         </div>
     </div>
 
-    <!-- Chart area -->
-    {#if loading || history.length === 0}
-        <div class="flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm" style="height: {height}">
-            {#if loading}
-                <div class="w-full h-full bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
-            {:else}
+    <!-- Chart area — container always in DOM for animation persistence -->
+    <div class="relative" style="height: {height}">
+        <!-- Skeleton / empty overlay -->
+        {#if loading}
+            <div class="absolute inset-0 z-10 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
+        {:else if history.length === 0}
+            <div class="absolute inset-0 z-10 flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
                 {$_('dashboard.noData')}
-            {/if}
-        </div>
-    {:else}
-        <div bind:this={chartContainer} style="height: {height}; width: 100%;"></div>
-        {#if viewMode === 'pct' && hasPctData && !hasNonZeroPctData}
-            <p class="text-center text-xs text-gray-400 dark:text-gray-500 italic mt-1">
-                {$_('dashboard.roiAllZero')}
-            </p>
+            </div>
         {/if}
+        <!-- Persistent chart container — never destroyed -->
+        <div bind:this={chartContainer} style="height: 100%; width: 100%;" class:invisible={loading || history.length === 0}></div>
+    </div>
+    {#if !loading && history.length > 0 && viewMode === 'pct' && hasPctData && !hasNonZeroPctData}
+        <p class="text-center text-xs text-gray-400 dark:text-gray-500 italic mt-1">
+            {$_('dashboard.roiAllZero')}
+        </p>
     {/if}
 </div>

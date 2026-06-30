@@ -19,6 +19,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_ANIMATION_CONFIG} from '$lib/components/charts/echartsAnimationConfig';
     import {_ as t} from '$lib/i18n';
     import {sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
@@ -119,10 +120,7 @@
         const palette = isDark ? PALETTE_DARK : PALETTE_LIGHT;
 
         const entries = data.filter((e) => e.value > 0);
-        if (entries.length === 0) {
-            chartInstance.setOption({series: []}, true);
-            return;
-        }
+        if (entries.length === 0) return; // Keep old chart visible, don't clear
 
         // Build chart data — use emoji+translated name as display label for sector mode
         const chartData = entries
@@ -261,6 +259,7 @@
         };
 
         const option: echarts.EChartsOption = {
+            ...CHART_ANIMATION_CONFIG,
             color: palette,
             tooltip: {
                 trigger: 'item',
@@ -295,7 +294,7 @@
             ],
         };
 
-        chartInstance.setOption(option, true);
+        chartInstance.setOption(option, {notMerge: false});
         chartInstance.resize();
     }
 </script>

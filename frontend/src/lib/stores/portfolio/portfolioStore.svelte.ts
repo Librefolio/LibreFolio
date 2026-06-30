@@ -34,6 +34,10 @@ export type AllocationHistoryDimensions = Extract<NonNullable<RawAlloc>, {type?:
 type RawDQ = PortfolioReport['data_quality'];
 export type DataQualityReport = Extract<NonNullable<RawDQ>, {issues?: unknown}>;
 
+// Positions contribution also from report
+type RawContrib = PortfolioReport['positions_contribution'];
+export type PositionsContribution = Extract<NonNullable<RawContrib>, {positions?: unknown}>;
+
 // ============================================================================
 // CACHE INFRASTRUCTURE
 // ============================================================================
@@ -89,8 +93,8 @@ export function portfolioError(): string | null {
  * @param targetCurrency — Override base currency (ISO 4217). Defaults to user setting.
  * @param force          — Bypass cache and re-fetch.
  */
-export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false): Promise<PortfolioReport | null> {
-    const key = makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency);
+export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false, includeContribution = false): Promise<PortfolioReport | null> {
+    const key = makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency) + (includeContribution ? '|contrib' : '');
 
     if (!force) {
         const cached = reportCache.get(key);
@@ -110,6 +114,7 @@ export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateT
                 include_summary: true,
                 include_history: true,
                 include_allocation_history: true,
+                include_positions_contribution: includeContribution,
             };
             if (brokerIds && brokerIds.length > 0) body.broker_ids = brokerIds;
             if (dateFrom || dateTo) {

@@ -1,16 +1,18 @@
 <!--
   RecentTransactionsPanel — Compact read-only list of recent transactions.
 
-  Displays the last N transactions sorted by date (newest first).
-  Used in the Dashboard Home bottom section.
+  Wraps TransactionsTable in compact mode for the Dashboard Home bottom section.
+  Reuses all TransactionsTable rendering (icons, formatters, colors, dark mode)
+  with hidden columns and no CRUD actions.
 
-  Note: TransactionsTable requires raw mainRows/partnerRows from store — not suitable
-  for a lightweight snapshot. This component directly fetches the last N rows and
-  renders a simple table with no CRUD actions, no filters, no pagination.
+  Columns shown: Date, Type, Quantity, Cash, Asset, Broker.
+  Hidden: Links, Tags, ID, Description.
 
   Props:
   - limit: Number of transactions to show (default 10)
   - brokerIds: Optional broker filter
+  - transactionsHref: Pre-built href for "See all" link
+  - onViewRow: Callback when a row is double-clicked
 
   Pattern: Svelte 5 Runes, data-testid, dark mode.
 -->
@@ -18,14 +20,12 @@
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
-    import {ensureBrokersLoaded, getBrokerInfo} from '$lib/stores/reference/brokerStore';
-    import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
-    import {getBrokerIconUrlById, ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
-
-    // Use the type inferred from the Zodios client to avoid mismatch with the
-    // component-side TXReadItem (which is a stricter subset).
-    type ApiTXRow = Awaited<ReturnType<typeof zodiosApi.query_transactions_api_v1_transactions_get>>[number];
+    import {ensureAssetsLoaded} from '$lib/stores/reference/assetStore';
+    import {ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
+    import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
+    import TransactionsTable from '$lib/components/transactions/TransactionsTable.svelte';
+    import type {TXReadItem} from '$lib/components/transactions/types';
+    import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 
     // =========================================================================
     // Props
@@ -38,15 +38,17 @@
         brokerIds?: number[];
         /** Pre-built href for "See all" link (includes date range params). */
         transactionsHref?: string;
+        /** Callback when a row is activated (double-click / long-press). */
+        onViewRow?: (row: TXReadItem) => void;
     }
 
-    let {limit = 10, brokerIds, transactionsHref = '/transactions'}: Props = $props();
+    let {limit = 10, brokerIds, transactionsHref = '/transactions', onViewRow}: Props = $props();
 
     // =========================================================================
     // State
     // =========================================================================
 
-    let rows: ApiTXRow[] = $state([]);
+    let rows: TXReadItem[] = $state([]);
     let loading = $state(true);
     let error: string | null = $state(null);
     let lastLoadKey = $state('');
@@ -56,9 +58,7 @@
     // =========================================================================
 
     onMount(async () => {
-        await ensureAssetsLoaded();
-        await ensureBrokersLoaded();
-        await ensurePluginIconsLoaded();
+        await Promise.all([ensureAssetsLoaded(), ensureBrokersLoaded(), ensurePluginIconsLoaded()]);
     });
 
     $effect(() => {
@@ -73,21 +73,23 @@
         loading = true;
         error = null;
         try {
-            const fetchForBroker = async (brokerId?: number): Promise<ApiTXRow[]> => {
-                const params: Record<string, unknown> = {limit: limit * 3}; // fetch extra to filter partners
+            const fetchForBroker = async (brokerId?: number): Promise<TXReadItem[]> => {
+                const params: Record<string, unknown> = {limit: limit * 3};
                 if (brokerId != null) params.broker_id = brokerId;
-                return await zodiosApi.query_transactions_api_v1_transactions_get(params as never);
+                return (await zodiosApi.query_transactions_api_v1_transactions_get(params as never)) as TXReadItem[];
             };
 
-            const all = brokerIds && brokerIds.length > 1 ? Array.from(new Map((await Promise.all(brokerIds.map((id) => fetchForBroker(id)))).flat().map((tx) => [tx.id, tx])).values()) : await fetchForBroker(brokerIds?.[0]);
+            const all =
+                brokerIds && brokerIds.length > 1
+                    ? Array.from(new Map((await Promise.all(brokerIds.map((id) => fetchForBroker(id)))).flat().map((tx) => [tx.id, tx])).values())
+                    : await fetchForBroker(brokerIds?.[0]);
 
-            // Sort by date descending, then by id descending as tiebreaker
             const sorted = [...all].sort((a, b) => {
                 if (b.date !== a.date) return b.date.localeCompare(a.date);
                 return b.id - a.id;
             });
 
-            // Keep only non-partner rows (skip "ghost" partner halves of transfers)
+            // Keep only non-partner rows (skip ghost partner halves of transfers)
             const partnerIds = new Set(sorted.map((tx) => tx.related_transaction_id).filter(Boolean));
             const mainRows = sorted.filter((tx) => !partnerIds.has(tx.id));
 
@@ -100,45 +102,15 @@
     }
 
     // =========================================================================
-    // Helpers
+    // Derived
     // =========================================================================
 
-    function assetId(tx: ApiTXRow): number | null | undefined {
-        const id = tx.asset_id;
-        return Array.isArray(id) ? (id[0] as number | null) : id;
-    }
+    let brokers = $derived(getAllBrokers() as BrokerLike[]);
 
-    function brokerId(tx: ApiTXRow): number | null {
-        const id = tx.broker_id;
-        return Array.isArray(id) ? (id[0] as number | null) : (id ?? null);
-    }
+    const HIDDEN_COLUMNS = ['links', 'tags', 'id', 'description'];
 
-    function formatAmount(tx: ApiTXRow): string {
-        const cash = Array.isArray(tx.cash) ? tx.cash[0] : tx.cash;
-        if (!cash) return '—';
-        const amt = Number(cash.amount);
-        return `${amt.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${cash.code}`;
-    }
-
-    /** Quantity sub-label for BUY/SELL: "+X TICKER" or "-X TICKER". */
-    function quantityLabel(tx: ApiTXRow): string | null {
-        const qty = Array.isArray(tx.quantity) ? (tx.quantity[0] ?? null) : tx.quantity;
-        if (qty == null) return null;
-        const n = parseFloat(String(qty));
-        if (isNaN(n) || n === 0) return null;
-
-        const aId = assetId(tx);
-        const info = aId ? getAssetInfo(aId) : null;
-        const ticker = info?.identifier_ticker ?? null;
-        const sign = n > 0 ? '+' : '';
-        return ticker ? `${sign}${n.toFixed(Math.abs(n) < 1 ? 4 : 2)} ${ticker}` : null;
-    }
-
-    function quantityClass(tx: ApiTXRow): string {
-        const qty = Array.isArray(tx.quantity) ? (tx.quantity[0] ?? null) : tx.quantity;
-        if (qty == null) return '';
-        const n = parseFloat(String(qty));
-        return n > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
+    function handleRowDoubleClick(row: TXReadItem) {
+        onViewRow?.(row);
     }
 </script>
 
@@ -154,7 +126,6 @@
     </div>
 
     {#if loading}
-        <!-- Skeleton rows -->
         <div class="space-y-2 flex-1">
             {#each {length: 4} as _}
                 <div class="h-10 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
@@ -168,66 +139,17 @@
         </p>
     {:else}
         <div class="overflow-x-auto flex-1">
-            <table class="w-full text-xs">
-                <thead>
-                    <tr class="text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-slate-700">
-                        <th class="text-left pb-2 pr-3 font-medium">{$_('common.date')}</th>
-                        <th class="text-left pb-2 pr-3 font-medium">{$_('common.type')}</th>
-                        <th class="text-left pb-2 pr-3 font-medium">{$_('common.asset')}</th>
-                        <th class="text-left pb-2 pr-3 font-medium">{$_('brokers.title')}</th>
-                        <th class="text-right pb-2 font-medium">{$_('common.amount')}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {#each rows as tx (tx.id)}
-                        {@const aId = assetId(tx)}
-                        {@const bId = brokerId(tx)}
-                        {@const asset = aId ? getAssetInfo(aId) : null}
-                        {@const broker = bId ? getBrokerInfo(bId) : null}
-                        {@const typeIconUrl = getTransactionTypeIconUrl(typeof tx.type === 'string' ? tx.type : '')}
-                        {@const brokerIconUrl = bId ? getBrokerIconUrlById(bId, [broker].filter(Boolean) as any[]) : null}
-                        {@const qtyLabel = quantityLabel(tx)}
-                        <tr class="border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors" data-testid="recent-tx-row">
-                            <td class="py-2 pr-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                {tx.date}
-                            </td>
-                            <td class="py-2 pr-3">
-                                <div class="flex items-center gap-1.5">
-                                    {#if typeIconUrl}
-                                        <img src={typeIconUrl} alt={typeof tx.type === 'string' ? tx.type : ''} class="w-4 h-4 object-contain" />
-                                    {/if}
-                                </div>
-                            </td>
-                            <td class="py-2 pr-3 text-gray-600 dark:text-gray-300 truncate max-w-[100px]">
-                                {asset?.display_name ?? (aId ? String(aId) : '—')}
-                            </td>
-                            <!-- Broker: icon + name -->
-                            <td class="py-2 pr-3 max-w-[90px]">
-                                <div class="flex items-center gap-1.5 min-w-0">
-                                    {#if brokerIconUrl}
-                                        <img
-                                            src={brokerIconUrl}
-                                            alt=""
-                                            class="w-4 h-4 rounded-sm object-contain flex-shrink-0"
-                                            onerror={(e) => {
-                                                (e.target as HTMLElement).style.display = 'none';
-                                            }}
-                                        />
-                                    {/if}
-                                    <span class="truncate text-gray-500 dark:text-gray-400">{broker?.name ?? (bId ? String(bId) : '—')}</span>
-                                </div>
-                            </td>
-                            <!-- Amount (neutral color) + optional quantity sub-row -->
-                            <td class="py-2 text-right whitespace-nowrap">
-                                <div class="text-gray-700 dark:text-gray-200 font-medium">{formatAmount(tx)}</div>
-                                {#if qtyLabel}
-                                    <div class="text-[10px] {quantityClass(tx)}">{qtyLabel}</div>
-                                {/if}
-                            </td>
-                        </tr>
-                    {/each}
-                </tbody>
-            </table>
+            <TransactionsTable
+                mainRows={rows}
+                partnerRows={[]}
+                {brokers}
+                eventTooltipMap={new Map()}
+                pageSize={limit}
+                compact={true}
+                hiddenColumns={HIDDEN_COLUMNS}
+                storageKeyOverride="dashboard-recent-tx"
+                onRowDoubleClickOverride={handleRowDoubleClick}
+            />
         </div>
     {/if}
 </div>

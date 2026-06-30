@@ -17,7 +17,7 @@
     import {_} from '$lib/i18n';
     import {RefreshCw, PieChart, AreaChart} from 'lucide-svelte';
 
-    import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
@@ -33,14 +33,18 @@
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import RecentTransactionsPanel from '$lib/components/dashboard/RecentTransactionsPanel.svelte';
-    import HoldingsPanel from '$lib/components/dashboard/HoldingsPanel.svelte';
+    import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
+    import TweenedValue from '$lib/components/ui/TweenedValue.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import KpiMetricBar from '$lib/components/dashboard/KpiMetricBar.svelte';
     import KpiDivergingFlowBar from '$lib/components/dashboard/KpiDivergingFlowBar.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
+    import {TransactionFormModal, resolveFormItemsForView, type FormModalItems} from '$lib/components/transactions';
+    import type {TXReadItem} from '$lib/components/transactions/types';
+    import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {goto} from '$app/navigation';
 
@@ -51,10 +55,12 @@
     let summary = $state<PortfolioSummary | null>(null);
     let history = $state<PortfolioHistoryPoint[]>([]);
     let allocationHistoryFromReport = $state<AllocationHistoryDimensions | null>(null);
+    let positionsContribution = $state<PositionsContribution | null>(null);
+    let contributionLoading = $state(false);
     let reportLoading = $state(true);
-    // Keep separate loading flags for GrowthChart skeleton
-    let summaryLoading = $derived(reportLoading);
-    let historyLoading = $derived(reportLoading);
+    /** True only on first load when no data exists yet. Once data is loaded, subsequent fetches are "refreshing". */
+    let summaryLoading = $derived(reportLoading && !summary);
+    let historyLoading = $derived(reportLoading && history.length === 0);
     let syncLoading = $state(false);
 
     /** Broker IDs selected in the filter (empty = all brokers). */
@@ -85,7 +91,7 @@
     let allocationView = $state<'now' | 'history'>('now');
 
     /** Allocation history data — derived from report (no separate fetch needed). */
-    let allocationHistoryLoading = $derived(reportLoading);
+    let allocationHistoryLoading = $derived(reportLoading && !allocationHistoryFromReport);
 
     /** Responsive layout — same utility as assets/fx pages. */
     const layout = createResponsiveLayout({wide: 900, tablet: 660, tabletS: 480, labelHide: 460});
@@ -203,6 +209,10 @@
     let showFxPairAddModal = $state(false);
     let fxPairCreateSlug = $state('');
 
+    /** Transaction view modal state (opened from RecentTransactionsPanel double-click). */
+    let txViewOpen = $state(false);
+    let txViewItems = $state<FormModalItems | null>(null);
+
     function handleBannerAction(action: string, target: string | null, _issue: DataQualityIssue) {
         if (action === 'navigate_asset' && target) {
             goto(`/assets/${target}`);
@@ -238,6 +248,31 @@
     // Cash breakdown from last history point (Capitale + Rendimento, for cash tooltip)
     const lastHistoryPoint = $derived(history.length > 0 ? history[history.length - 1] : null);
     const firstHistoryPoint = $derived(history.length > 0 ? history[0] : null);
+    const prevHistoryPoint = $derived(history.length > 1 ? history[history.length - 2] : null);
+
+    // Delta vs yesterday (for KPI sub-text)
+    const navDeltaDay = $derived.by(() => {
+        if (!lastHistoryPoint || !prevHistoryPoint) return null;
+        const last = parseFloat(lastHistoryPoint.nav_value.amount);
+        const prev = parseFloat(prevHistoryPoint.nav_value.amount);
+        return last - prev;
+    });
+    const navDeltaDayStr = $derived(navDeltaDay != null ? formatMoney(displayCurrency, String(navDeltaDay), {signed: true}) : null);
+
+    const pnlDeltaDay = $derived.by(() => {
+        if (!lastHistoryPoint || !prevHistoryPoint) return null;
+        const last = parseFloat(lastHistoryPoint.total_pnl.amount);
+        const prev = parseFloat(prevHistoryPoint.total_pnl.amount);
+        return last - prev;
+    });
+    const pnlDeltaDayStr = $derived(pnlDeltaDay != null ? formatMoney(displayCurrency, String(pnlDeltaDay), {signed: true}) : null);
+    const pnlDeltaDayPct = $derived.by(() => {
+        if (!lastHistoryPoint || !prevHistoryPoint) return null;
+        const prevNav = parseFloat(prevHistoryPoint.nav_value.amount);
+        if (prevNav === 0 || pnlDeltaDay == null) return null;
+        return ((pnlDeltaDay / prevNav) * 100).toFixed(2);
+    });
+
     const cashContribAmt = $derived(lastHistoryPoint?.cash_from_contributed_capital != null ? parseFloat(lastHistoryPoint.cash_from_contributed_capital.amount) : null);
     const cashGeneratedAmt = $derived(lastHistoryPoint?.cash_from_generated_returns != null ? parseFloat(lastHistoryPoint.cash_from_generated_returns.amount) : null);
     const cashCurrency = $derived(summary?.cash_total.code ?? 'EUR');
@@ -274,6 +309,7 @@
 
     // KPI derived values — Period P&L card
     const periodPnlCur = $derived(summary ? safeCurrency(summary.period_pnl) : null);
+    const periodPnlAmt = $derived(periodPnlCur ? parseFloat(periodPnlCur.amount) : 0);
     const periodPnlStr = $derived(periodPnlCur ? formatMoney(periodPnlCur.code, periodPnlCur.amount, {signed: true}) : '—');
     const periodPnlPositive = $derived(periodPnlCur ? parseFloat(periodPnlCur.amount) >= 0 : undefined);
 
@@ -346,6 +382,11 @@
     function retBarPct(val: number) { return (Math.abs(val) / retBarMax) * 100; }
     function retBarColor(val: number) { return val >= 0 ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500'; }
 
+    // Format helpers for TweenedValue in KpiMetricBar
+    const fmtMoney = (v: number) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true});
+    const fmtMoneyUnsigned = (v: number) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: false});
+    const fmtPct = (v: number) => `${v.toFixed(2)}%`;
+
     /** URL for "See all" assets link — preserves current date range. */
     const assetsHref = $derived(`/assets?start=${dateFrom}&end=${dateTo}`);
     const transactionsHref = $derived(`/transactions?start=${dateFrom}&end=${dateTo}`);
@@ -374,8 +415,22 @@
             summary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
             history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
             allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
+            // Contribution data comes from the same report when requested
+            positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
         } finally {
             reportLoading = false;
+        }
+    }
+
+    /** Lazy-load contribution data (called when user switches to Contribution view). */
+    async function loadContribution() {
+        if (positionsContribution || contributionLoading) return;
+        contributionLoading = true;
+        try {
+            const report = await fetchReport(activeBrokerIds, dateFrom || undefined, dateTo || undefined, targetCurrency, false, true);
+            positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
+        } finally {
+            contributionLoading = false;
         }
     }
 
@@ -591,19 +646,31 @@
                 <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.periodPnl')}</p>
                 <DocsLink path="financial-theory/technical-analysis/performance-metrics/period-pnl/" label={$_('dashboard.periodPnl')} size={14} />
             </div>
-            {#if summaryLoading}
-                <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
-                <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse mt-2"></div>
-            {:else}
-                <p class="text-2xl font-bold text-right {periodPnlPositive === true ? 'text-green-700 dark:text-green-400' : periodPnlPositive === false ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}" data-testid="kpi-value">{periodPnlStr}</p>
+            <div class="relative">
+                {#if summaryLoading}
+                    <div class="absolute inset-0 z-10 flex flex-col gap-2">
+                        <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
+                        <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
+                    </div>
+                {/if}
+                <div class:invisible={summaryLoading}>
+                <p class="text-2xl font-bold text-right tabular-nums transition-colors duration-300 {periodPnlPositive === true ? 'text-green-700 dark:text-green-400' : periodPnlPositive === false ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}" data-testid="kpi-value">
+                    <TweenedValue value={periodPnlAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true})} />
+                </p>
+                {#if pnlDeltaDay != null}
+                    <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-pnl-delta-day">
+                        <TweenedValue value={pnlDeltaDay} format={fmtMoney} />
+                    </p>
+                {/if}
                 <div class="flex flex-col gap-2 mt-1">
-                    <KpiMetricBar label={$_('dashboard.unrealizedDelta')} tooltip={$_('dashboard.unrealizedDeltaTooltip')} value={uglDeltaStr} barPct={pnlBarPct(uglDeltaAmt)} barColor={pnlBarColor(uglDeltaAmt)} valueColor={pnlValueColor(uglDeltaAmt)} />
-                    <KpiMetricBar label={$_('dashboard.realizedSales')} tooltip={$_('dashboard.realizedSalesTooltip')} value={realizedStr} barPct={pnlBarPct(realizedAmt)} barColor={pnlBarColor(realizedAmt)} valueColor={pnlValueColor(realizedAmt)} />
-                    <KpiMetricBar label={$_('dashboard.income')} tooltip={$_('dashboard.incomeTooltip')} value={incomeStr} barPct={pnlBarPct(incomeAmt)} barColor="bg-green-500 dark:bg-green-400" valueColor="text-green-600 dark:text-green-400" />
-                    <KpiMetricBar label={$_('dashboard.feesAndTaxes')} tooltipHtml={feesTooltipHtml} value={feesStr} barPct={pnlBarPct(feesAmt)} barColor="bg-red-400 dark:bg-red-500" valueColor="text-red-600 dark:text-red-400" />
+                    <KpiMetricBar label={$_('dashboard.unrealizedDelta')} tooltip={$_('dashboard.unrealizedDeltaTooltip')} value={uglDeltaStr} numericValue={uglDeltaAmt} formatValue={fmtMoney} barPct={pnlBarPct(uglDeltaAmt)} barColor={pnlBarColor(uglDeltaAmt)} valueColor={pnlValueColor(uglDeltaAmt)} />
+                    <KpiMetricBar label={$_('dashboard.realizedSales')} tooltip={$_('dashboard.realizedSalesTooltip')} value={realizedStr} numericValue={realizedAmt} formatValue={fmtMoney} barPct={pnlBarPct(realizedAmt)} barColor={pnlBarColor(realizedAmt)} valueColor={pnlValueColor(realizedAmt)} />
+                    <KpiMetricBar label={$_('dashboard.income')} tooltip={$_('dashboard.incomeTooltip')} value={incomeStr} numericValue={incomeAmt} formatValue={fmtMoney} barPct={pnlBarPct(incomeAmt)} barColor="bg-green-500 dark:bg-green-400" valueColor="text-green-600 dark:text-green-400" />
+                    <KpiMetricBar label={$_('dashboard.feesAndTaxes')} tooltipHtml={feesTooltipHtml} value={feesStr} numericValue={feesAmt} formatValue={fmtMoney} barPct={pnlBarPct(feesAmt)} barColor="bg-red-400 dark:bg-red-500" valueColor="text-red-600 dark:text-red-400" />
                 </div>
                 <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.cashFlowAdjustedResult')}</p>
-            {/if}
+                </div>
+            </div>
         </div>
 
         <!-- Card 2 — Returns -->
@@ -627,13 +694,18 @@
                             <span class="text-[10px] italic" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.4 + timingIntensity * 0.6})` : `rgba(220, 38, 38, ${0.4 + timingIntensity * 0.6})`}">{timingLabel}</span>
                         </div>
                     </Tooltip>
-                    <span class="text-2xl font-bold tabular-nums transition-colors" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.3 + timingIntensity * 0.7})` : `rgba(220, 38, 38, ${0.3 + timingIntensity * 0.7})`}">{timingEffectStr}</span>
+                    <span class="text-2xl font-bold tabular-nums transition-colors" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.3 + timingIntensity * 0.7})` : `rgba(220, 38, 38, ${0.3 + timingIntensity * 0.7})`}">
+                        <TweenedValue value={timingEffectVal} format={(v) => `${v >= 0 ? '+' : '-'}${Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${$_('dashboard.pp')}`} />
+                    </span>
                 </div>
+                {#if pnlDeltaDayPct}
+                    <p class="text-xs text-right {pnlDeltaDay != null && pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-returns-delta-pct">{pnlDeltaDay != null && pnlDeltaDay >= 0 ? '+' : ''}{pnlDeltaDayPct}%</p>
+                {/if}
                 <div class="flex flex-col gap-2 mt-1">
-                    <KpiMetricBar label={$_('dashboard.roi')} tooltip={$_('dashboard.roiTooltip')} value={roiPct} barPct={retBarPct(roiVal)} barColor={retBarColor(roiVal)} valueColor="font-bold text-gray-800 dark:text-gray-100" />
-                    <KpiMetricBar label={$_('dashboard.twrrCum')} tooltip={$_('dashboard.twrrTooltip')} value={twrrCumPct} barPct={retBarPct(twrrCumVal)} barColor={retBarColor(twrrCumVal)} />
-                    <KpiMetricBar label={$_('dashboard.mwrrCum')} tooltip={$_('dashboard.mwrrCumTooltip')} value={mwrrCumPct} barPct={retBarPct(mwrrCumVal)} barColor={retBarColor(mwrrCumVal)} />
-                    <KpiMetricBar label={$_('dashboard.mwrrAnn')} tooltip={$_('dashboard.mwrrAnnTooltip')} value={mwrrAnnPct} barPct={retBarPct(mwrrAnnVal)} barColor={retBarColor(mwrrAnnVal)} />
+                    <KpiMetricBar label={$_('dashboard.roi')} tooltip={$_('dashboard.roiTooltip')} value={roiPct} numericValue={roiVal} formatValue={fmtPct} barPct={retBarPct(roiVal)} barColor={retBarColor(roiVal)} valueColor="font-bold text-gray-800 dark:text-gray-100" />
+                    <KpiMetricBar label={$_('dashboard.twrrCum')} tooltip={$_('dashboard.twrrTooltip')} value={twrrCumPct} numericValue={twrrCumVal} formatValue={fmtPct} barPct={retBarPct(twrrCumVal)} barColor={retBarColor(twrrCumVal)} />
+                    <KpiMetricBar label={$_('dashboard.mwrrCum')} tooltip={$_('dashboard.mwrrCumTooltip')} value={mwrrCumPct} numericValue={mwrrCumVal} formatValue={fmtPct} barPct={retBarPct(mwrrCumVal)} barColor={retBarColor(mwrrCumVal)} />
+                    <KpiMetricBar label={$_('dashboard.mwrrAnn')} tooltip={$_('dashboard.mwrrAnnTooltip')} value={mwrrAnnPct} numericValue={mwrrAnnVal} formatValue={fmtPct} barPct={retBarPct(mwrrAnnVal)} barColor={retBarColor(mwrrAnnVal)} />
                 </div>
                 <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.periodBasedReturns')}</p>
             {/if}
@@ -649,11 +721,18 @@
                 <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
                 <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse mt-2"></div>
             {:else}
-                <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 text-right" data-testid="kpi-value">{netWorthValue}</p>
+                <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 text-right tabular-nums" data-testid="kpi-value">
+                    <TweenedValue value={navHeroAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: false})} />
+                </p>
+                {#if navDeltaDay != null}
+                    <p class="text-xs text-right tabular-nums transition-colors duration-300 {navDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-nav-delta-day">
+                        <TweenedValue value={navDeltaDay} format={fmtMoney} />
+                    </p>
+                {/if}
                 <div class="flex flex-col gap-2 mt-1">
-                    <KpiMetricBar label={$_('dashboard.marketValue')} tooltip={$_('dashboard.marketValueTooltip')} value={marketValueStr} barPct={marketBarPct} barColor={marketBarColor} marker={marketStartMarkerPct > 0 ? marketStartMarkerPct : undefined} markerTooltip="{$_('dashboard.marketValueStart')}: {marketValueStartStr}" />
-                    <KpiMetricBar label={$_('dashboard.bookValue')} tooltip={$_('dashboard.bookValueTooltip')} value={purchaseCostStr} barPct={purchaseCostBarPct} barColor="bg-blue-500 dark:bg-blue-400" marker={purchaseCostStartMarkerPct > 0 ? purchaseCostStartMarkerPct : undefined} markerTooltip="{$_('dashboard.bookValueStart')}: {purchaseCostStartStr}" />
-                    <KpiMetricBar label={$_('dashboard.cashValue')} tooltipHtml={cashTooltipHtml} tooltip={cashTooltipHtml ? undefined : $_('dashboard.cashValueTooltip')} value={cashTotalStr} barPct={cashBarPct} barColor="bg-emerald-500 dark:bg-emerald-400" marker={cashStartMarkerPct > 0 ? cashStartMarkerPct : undefined} markerTooltip="{$_('dashboard.cashValueStart')}: {cashStartStr}" />
+                    <KpiMetricBar label={$_('dashboard.marketValue')} tooltip={$_('dashboard.marketValueTooltip')} value={marketValueStr} numericValue={marketValueAmt} formatValue={fmtMoneyUnsigned} barPct={marketBarPct} barColor={marketBarColor} marker={marketStartMarkerPct > 0 ? marketStartMarkerPct : undefined} markerTooltip="{$_('dashboard.marketValueStart')}: {marketValueStartStr}" />
+                    <KpiMetricBar label={$_('dashboard.bookValue')} tooltip={$_('dashboard.bookValueTooltip')} value={purchaseCostStr} numericValue={purchaseCostAmt} formatValue={fmtMoneyUnsigned} barPct={purchaseCostBarPct} barColor="bg-blue-500 dark:bg-blue-400" marker={purchaseCostStartMarkerPct > 0 ? purchaseCostStartMarkerPct : undefined} markerTooltip="{$_('dashboard.bookValueStart')}: {purchaseCostStartStr}" />
+                    <KpiMetricBar label={$_('dashboard.cashValue')} tooltipHtml={cashTooltipHtml} tooltip={cashTooltipHtml ? undefined : $_('dashboard.cashValueTooltip')} value={cashTotalStr} numericValue={cashAmt} formatValue={fmtMoneyUnsigned} barPct={cashBarPct} barColor="bg-emerald-500 dark:bg-emerald-400" marker={cashStartMarkerPct > 0 ? cashStartMarkerPct : undefined} markerTooltip="{$_('dashboard.cashValueStart')}: {cashStartStr}" />
                     <KpiDivergingFlowBar
                         label={$_('dashboard.netDepositedCapital')}
                         tooltipHtml={netDepositedTooltipHtml}
@@ -709,45 +788,56 @@
                 {/each}
             </div>
 
-            <!-- Chart area -->
-            {#if summaryLoading || allocationHistoryLoading}
-                <div class="flex-1 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
-            {:else if allocationView === 'history'}
-                <div class="flex-1 min-h-0">
-                    <AllocationHistoryChart data={allocationHistoryData} dimension={allocationTab} height="100%" loading={allocationHistoryLoading} />
-                </div>
-            {:else if !summary}
-                <div class="flex-1 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
-                    {$_('dashboard.noData')}
-                </div>
-            {:else if allocationTab === 'type'}
-                <div class="flex-1 min-h-0">
-                    <AllocationPieChart data={allocationByType} height="100%" mode="type" legendPosition="bottom" currency={displayCurrency} />
-                </div>
-            {:else if allocationTab === 'sector'}
-                <div class="flex-1 min-h-0">
-                    <AllocationPieChart data={allocationBySector} height="100%" legendPosition="bottom" currency={displayCurrency} />
-                </div>
-            {:else}
-                <div class="flex-1 min-h-0">
-                    <GeographyMap data={allocationByGeoMap} amounts={allocationByGeoAmounts} currency={displayCurrency} height="100%" language={$currentLanguage} />
-                </div>
-                {#if geoUnknownPercent > 0}
-                    <p class="text-xs text-gray-400 dark:text-gray-500 text-center mt-1">
-                        {$_('dashboard.geoUnknownNote', {values: {percent: geoUnknownPercent.toFixed(1)}})}
-                    </p>
+            <!-- Chart area — persistent containers for animation -->
+            <div class="flex-1 min-h-0 relative">
+                {#if summaryLoading || allocationHistoryLoading}
+                    <div class="absolute inset-0 z-10 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
                 {/if}
-            {/if}
+                <div class="w-full h-full" class:invisible={allocationView !== 'history' || summaryLoading || allocationHistoryLoading}>
+                    <AllocationHistoryChart data={allocationHistoryData} dimension={allocationTab} height="100%" loading={false} />
+                </div>
+                {#if allocationView === 'now'}
+                    {#if !summary}
+                        <div class="absolute inset-0 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+                            {$_('dashboard.noData')}
+                        </div>
+                    {:else if allocationTab === 'type'}
+                        <div class="absolute inset-0">
+                            <AllocationPieChart data={allocationByType} height="100%" mode="type" legendPosition="bottom" currency={displayCurrency} />
+                        </div>
+                    {:else if allocationTab === 'sector'}
+                        <div class="absolute inset-0">
+                            <AllocationPieChart data={allocationBySector} height="100%" legendPosition="bottom" currency={displayCurrency} />
+                        </div>
+                    {:else}
+                        <div class="absolute inset-0">
+                            <GeographyMap data={allocationByGeoMap} amounts={allocationByGeoAmounts} currency={displayCurrency} height="100%" language={$currentLanguage} />
+                        </div>
+                        {#if geoUnknownPercent > 0}
+                            <p class="text-xs text-gray-400 dark:text-gray-500 text-center mt-1">
+                                {$_('dashboard.geoUnknownNote', {values: {percent: geoUnknownPercent.toFixed(1)}})}
+                            </p>
+                        {/if}
+                    {/if}
+                {/if}
+            </div>
         </div>
     </div>
 
-    <!-- ── Bottom Grid: Holdings | Transactions ── -->
+    <!-- ── Bottom Grid: Positions | Transactions ── -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <!-- LEFT: Holdings panel -->
-        <HoldingsPanel holdings={summary?.holdings ?? []} loading={summaryLoading} {assetsHref} />
+        <!-- LEFT: Positions panel -->
+        <PositionsPanel
+            {summary}
+            contribution={positionsContribution}
+            loading={summaryLoading}
+            {contributionLoading}
+            {assetsHref}
+            onRequestContribution={loadContribution}
+        />
 
         <!-- RIGHT: Recent Transactions -->
-        <RecentTransactionsPanel limit={10} brokerIds={activeBrokerIds} {transactionsHref} />
+        <RecentTransactionsPanel limit={10} brokerIds={activeBrokerIds} {transactionsHref} onViewRow={(row) => { txViewItems = resolveFormItemsForView(row as TXReadItem, () => undefined, getBrokerRole); txViewOpen = true; }} />
     </div>
 </div>
 
@@ -756,3 +846,11 @@
     {@const fxParts = fxPairCreateSlug.includes('-') ? fxPairCreateSlug.split('-') : fxPairCreateSlug.split('/')}
     <FxPairAddModal bind:open={showFxPairAddModal} initialBase={fxParts[0] ?? ''} initialQuote={fxParts[1] ?? ''} oncreated={() => { invalidate(); loadAll(); }} />
 {/if}
+
+<!-- Transaction view modal — opened from RecentTransactionsPanel double-click -->
+<TransactionFormModal
+    open={txViewOpen}
+    mode="view"
+    items={txViewItems}
+    onClose={() => (txViewOpen = false)}
+/>
