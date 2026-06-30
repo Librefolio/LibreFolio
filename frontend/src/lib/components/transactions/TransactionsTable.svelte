@@ -107,6 +107,13 @@
         enableTouchSelection?: boolean;
         /** B3-fix: hide row actions and context menu (used in Picker mode). */
         hideActions?: boolean;
+        /** Column IDs to exclude from the table (e.g. ['links', 'tags', 'id']). */
+        hiddenColumns?: string[];
+        /** Override localStorage key for column preferences (default: "transactions-list"). */
+        storageKeyOverride?: string;
+        /** Compact/embedded mode: disables selection, pagination, filters, sorting,
+         *  column visibility toggle, and row actions. Used by dashboard home. */
+        compact?: boolean;
     }
 
     let {
@@ -132,6 +139,9 @@
         onRowDoubleClickOverride,
         enableTouchSelection = false,
         hideActions = false,
+        hiddenColumns,
+        storageKeyOverride,
+        compact = false,
     }: Props = $props();
 
     /** Exposed DataTable ref for ColumnVisibilityToggle / external selection control. */
@@ -603,7 +613,7 @@
         return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
-    let columns = $derived<ColumnDef<DisplayRow>[]>([
+    let allColumns = $derived<ColumnDef<DisplayRow>[]>([
         {
             id: 'date',
             header: () => $t('transactions.table.date'),
@@ -840,6 +850,9 @@
         },
     ]);
 
+    /** Columns visible in this instance — filters out hiddenColumns IDs. */
+    let columns = $derived(hiddenColumns?.length ? allColumns.filter((c) => !hiddenColumns.includes(c.id)) : allColumns);
+
     /** Get the partner's broker_id for a given display row (null if standalone/not found). */
     function getPartnerBrokerId(d: DisplayRow): number | null | undefined {
         const partnerId = d.tx.related_transaction_id;
@@ -958,15 +971,16 @@
         fullData={displayRows}
         {columns}
         {getRowId}
-        storageKey="transactions-list"
-        enableSelection={true}
-        selectionMode="multi"
-        enableActions={!hideActions}
-        rowActions={hideActions ? [] : rowActions}
-        enablePagination={!isGrouped}
-        enableColumnVisibility={true}
-        enableColumnFilters={true}
-        enableSorting={true}
+        storageKey={storageKeyOverride ?? 'transactions-list'}
+        enableSelection={!compact}
+        selectionMode={compact ? 'none' : 'multi'}
+        enableActions={!compact && !hideActions}
+        rowActions={compact || hideActions ? [] : rowActions}
+        enablePagination={!compact && !isGrouped}
+        enableColumnVisibility={!compact}
+        enableColumnFilters={!compact}
+        enableSorting={!compact}
+        enableContextMenu={!compact}
         stickyActions={false}
         actionsColumnWidth="160px"
         emptyMessage={$t('transactions.empty') || 'No transactions yet'}

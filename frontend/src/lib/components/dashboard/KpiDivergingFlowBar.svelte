@@ -52,7 +52,7 @@
         <!-- Left half (withdrawals) -->
         <div class="relative w-1/2 h-full bg-gray-100 dark:bg-slate-700 rounded-l-full overflow-hidden">
             <div
-                class="absolute right-0 top-0 h-full bg-red-400 dark:bg-red-500 rounded-l-full transition-all"
+                class="absolute right-0 top-0 h-full bg-red-400 dark:bg-red-500 rounded-l-full transition-all duration-700 ease-out"
                 style="width: {clampedWithdraw}%"
             ></div>
         </div>
@@ -61,7 +61,7 @@
         <!-- Right half (deposits) -->
         <div class="relative w-1/2 h-full bg-gray-100 dark:bg-slate-700 rounded-r-full overflow-hidden">
             <div
-                class="absolute left-0 top-0 h-full bg-green-500 dark:bg-green-400 rounded-r-full transition-all"
+                class="absolute left-0 top-0 h-full bg-green-500 dark:bg-green-400 rounded-r-full transition-all duration-700 ease-out"
                 style="width: {clampedDeposit}%"
             ></div>
         </div>

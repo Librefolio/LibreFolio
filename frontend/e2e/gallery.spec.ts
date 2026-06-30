@@ -1263,6 +1263,9 @@ test.describe('Gallery Screenshots', () => {
                             await parseBtn.click();
                             await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
                             await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
+                            await page.waitForTimeout(500); // Let UI settle
+                            await freezeAnimations(page);
+                            await screenshot(page, viewport, lang, theme, 'brokers', 'import-wizard-step3');
 
                             // Continue to step 4
                             await page.getByTestId('import-wizard-continue').click();

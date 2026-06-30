@@ -8,10 +8,15 @@
 -->
 <script lang="ts">
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import TweenedValue from '$lib/components/ui/TweenedValue.svelte';
 
     interface Props {
         label: string;
         value: string;
+        /** Raw numeric value for tweened animation. When provided, overrides `value` display with TweenedValue. */
+        numericValue?: number;
+        /** Format function for numericValue. Required when numericValue is set. */
+        formatValue?: (v: number) => string;
         tooltip?: string;
         tooltipHtml?: string;
         barPct: number;
@@ -24,6 +29,8 @@
     let {
         label,
         value,
+        numericValue,
+        formatValue,
         tooltip = '',
         tooltipHtml = '',
         barPct,
@@ -50,14 +57,20 @@
         {:else}
             <span class="text-gray-500 dark:text-gray-400">{label}</span>
         {/if}
-        <span class="font-medium {valueColor}">{value}</span>
+        <span class="font-medium tabular-nums transition-colors duration-300 {valueColor}">
+            {#if numericValue !== undefined && formatValue}
+                <TweenedValue value={numericValue} format={formatValue} duration={700} />
+            {:else}
+                {value}
+            {/if}
+        </span>
     </div>
     <div class="relative w-full h-1.5 bg-gray-100 dark:bg-slate-700 rounded-full">
-        <div class="h-full rounded-full transition-all {barColor}" style="width: {clampedBar}%"></div>
+        <div class="h-full rounded-full transition-all duration-700 ease-out {barColor}" style="width: {clampedBar}%"></div>
     </div>
     {#if clampedMarker != null && clampedMarker > 0 && markerTooltip}
         <div class="relative w-full h-0">
-            <div class="absolute" style="left: {clampedMarker}%; transform: translateX(-50%); top: -15px;">
+            <div class="absolute transition-[left] duration-700 ease-out" style="left: {clampedMarker}%; transform: translateX(-50%); top: -15px;">
                 <Tooltip text={markerTooltip} position="top">
                     <div class="w-0 h-0 border-l-[4px] border-r-[4px] border-b-[5px] border-l-transparent border-r-transparent border-b-gray-600 dark:border-b-gray-300 cursor-help"></div>
                 </Tooltip>

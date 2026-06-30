@@ -14,6 +14,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {_, t} from '$lib/i18n';
     import {buildTooltipTheme, buildTooltipHeader, buildTooltipByThreshold, buildTooltipTopN, tooltipPositionSide, setupTooltipAutoHide} from '$lib/components/charts/echartsTooltipHelpers';
     import {getCountryInfo, isCountriesLoaded, ensureCountriesLoaded} from '$lib/stores/reference/countryStore';
@@ -44,6 +45,8 @@
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
+    let lastRenderedDark: boolean | null = null;
+    let lastRenderedDimension: string | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
@@ -145,6 +148,8 @@
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
             chartInstance.dispose();
             chartInstance = undefined;
+            lastRenderedDark = null;
+            lastRenderedDimension = null;
         }
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
@@ -154,13 +159,8 @@
 
         const isDark = document.documentElement.classList.contains('dark');
         const palette = isDark ? PALETTE_DARK : PALETTE_LIGHT;
-        const textColor = isDark ? '#94a3b8' : '#64748b';
-        const gridColor = isDark ? '#1e293b' : '#f1f5f9';
-        const tooltipBg = isDark ? '#1e293b' : '#ffffff';
-        const tooltipBorder = isDark ? '#334155' : '#e2e8f0';
 
-        // Build one series per category, stacked to 100%
-        // Compute average weight per category for label visibility threshold
+        // Compute average weight per category for label visibility + sort
         const avgWeights: Record<string, number> = {};
         for (const name of categoryNames) {
             const values = data.map((pt) => {
@@ -169,142 +169,123 @@
             });
             avgWeights[name] = values.length > 0 ? values.reduce((s, v) => s + v, 0) / values.length : 0;
         }
-
-        // Sort categories by average weight (largest first) for legend and series order
         const sortedNames = [...categoryNames].sort((a, b) => (avgWeights[b] ?? 0) - (avgWeights[a] ?? 0));
 
-        const series: echarts.SeriesOption[] = sortedNames.map((name, i) => {
-            const emoji = getCategoryEmoji(name);
-            const showLabel = avgWeights[name] >= 3 && emoji;
-            const legendName = emoji ? `${emoji} ${localizeName(name)}` : localizeName(name);
-            return {
-                name: legendName,
-                type: 'line',
-                stack: 'allocation',
-                data: data.map((pt) => {
-                    const comp = pt.components.find((c) => c.name === name);
-                    return comp ? Number(comp.value) : 0;
-                }),
-                smooth: false,
-                symbol: 'none',
-                lineStyle: {color: palette[i % palette.length], width: 1, opacity: 0.7},
-                areaStyle: {color: palette[i % palette.length] + '88'},
-                itemStyle: {color: palette[i % palette.length]},
-                emphasis: {focus: 'series'},
-                label: showLabel
-                    ? {
-                          show: true,
-                          position: 'inside' as const,
-                          formatter: () => emoji,
-                          fontSize: 14,
-                          color: isDark ? '#ffffff' : '#000000',
-                          textShadowColor: isDark ? '#000' : '#fff',
-                          textShadowBlur: 2,
-                      }
-                    : {show: false},
-            };
-        });
-
-        // Pre-build per-category data index for accurate tooltip values
-        const seriesDataByName: Record<string, number[]> = {};
+        // Build named data for each series
+        const seriesDataByName: Record<string, any[]> = {};
         for (const name of sortedNames) {
             seriesDataByName[name] = data.map((pt) => {
                 const comp = pt.components.find((c) => c.name === name);
-                return comp ? Number(comp.value) : 0;
+                return namedPoint(pt.date, comp ? Number(comp.value) : 0);
             });
         }
 
-        const option: echarts.EChartsOption = {
-            animation: false,
-            backgroundColor: 'transparent',
-            grid: {left: '3%', right: '4%', bottom: '40px', top: '10px', containLabel: true},
-            tooltip: {
-                trigger: 'axis',
-                appendToBody: true,
-                confine: true,
-                position: tooltipPositionSide,
-                axisPointer: {type: 'line'},
-                backgroundColor: tooltipBg,
-                borderColor: tooltipBorder,
-                borderWidth: 1,
-                textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
-                formatter: (params: any) => {
-                    const items = Array.isArray(params) ? params : [params];
-                    const date = items[0]?.axisValue ?? '';
-                    const idx = items[0]?.dataIndex ?? 0;
+        const needsFullInit = lastRenderedDark !== isDark || lastRenderedDimension !== dimension;
 
-                    const theme = buildTooltipTheme(isDark);
+        if (!needsFullInit && chartInstance) {
+            // Data-only update — partial setOption for smooth shift animation
+            chartInstance.setOption({
+                series: sortedNames.map((name) => {
+                    const legendName = (() => { const emoji = getCategoryEmoji(name); return emoji ? `${emoji} ${localizeName(name)}` : localizeName(name); })();
+                    return {name: legendName, data: seriesDataByName[name]};
+                }),
+            });
+        } else {
+            // Full init — include all visual config
+            const textColor = isDark ? '#94a3b8' : '#64748b';
+            const gridColor = isDark ? '#1e293b' : '#f1f5f9';
+            const tooltipBg = isDark ? '#1e293b' : '#ffffff';
+            const tooltipBorder = isDark ? '#334155' : '#e2e8f0';
 
-                    // Use raw (non-cumulative) data for correct percentages
-                    const allItems = sortedNames
-                        .map((name, i) => {
-                            const emoji = getCategoryEmoji(name);
-                            const displayName = emoji ? `${emoji} ${localizeName(name)}` : localizeName(name);
-                            return {
-                                name: displayName,
-                                value: seriesDataByName[name]?.[idx] ?? 0,
-                                color: palette[i % palette.length],
-                            };
-                        })
-                        .filter((x) => x.value > 0.01);
+            const series: echarts.SeriesOption[] = sortedNames.map((name, i) => {
+                const emoji = getCategoryEmoji(name);
+                const showLabel = avgWeights[name] >= 3 && emoji;
+                const legendName = emoji ? `${emoji} ${localizeName(name)}` : localizeName(name);
+                return {
+                    name: legendName,
+                    type: 'line',
+                    stack: 'allocation',
+                    data: seriesDataByName[name],
+                    smooth: false,
+                    symbol: 'none',
+                    lineStyle: {color: palette[i % palette.length], width: 1, opacity: 0.7},
+                    areaStyle: {color: palette[i % palette.length] + '88'},
+                    itemStyle: {color: palette[i % palette.length]},
+                    emphasis: {focus: 'series'},
+                    label: showLabel
+                        ? {show: true, position: 'inside' as const, formatter: () => emoji, fontSize: 14, color: isDark ? '#ffffff' : '#000000', textShadowColor: isDark ? '#000' : '#fff', textShadowBlur: 2}
+                        : {show: false},
+                };
+            });
 
-                    const header = buildTooltipHeader(date, theme.mutedColor);
-                    let rows: string;
-                    if (dimension === 'type') {
-                        // Type: show up to 5 directly, group 6th+ only if ≥2 items remain
-                        if (allItems.length <= 6) {
-                            rows = buildTooltipTopN(allItems, allItems.length, theme, $_('common.remaining') || 'Remaining');
+            // Raw values for tooltip (non-named)
+            const rawDataByName: Record<string, number[]> = {};
+            for (const name of sortedNames) {
+                rawDataByName[name] = data.map((pt) => {
+                    const comp = pt.components.find((c) => c.name === name);
+                    return comp ? Number(comp.value) : 0;
+                });
+            }
+
+            const option: echarts.EChartsOption = {
+                ...CHART_ANIMATION_CONFIG,
+                backgroundColor: 'transparent',
+                grid: {left: '3%', right: '4%', bottom: '40px', top: '10px', containLabel: true},
+                tooltip: {
+                    trigger: 'axis',
+                    appendToBody: true,
+                    confine: true,
+                    position: tooltipPositionSide,
+                    axisPointer: {type: 'line'},
+                    backgroundColor: tooltipBg,
+                    borderColor: tooltipBorder,
+                    borderWidth: 1,
+                    textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                    formatter: (params: any) => {
+                        const items = Array.isArray(params) ? params : [params];
+                        const rawDate = items[0]?.axisValue;
+                        const date = typeof rawDate === 'number' ? new Date(rawDate).toISOString().slice(0, 10) : String(rawDate ?? '');
+                        const idx = items[0]?.dataIndex ?? 0;
+                        const theme = buildTooltipTheme(isDark);
+                        const allItems = sortedNames
+                            .map((name, si) => {
+                                const emoji = getCategoryEmoji(name);
+                                const displayName = emoji ? `${emoji} ${localizeName(name)}` : localizeName(name);
+                                return {name: displayName, value: rawDataByName[name]?.[idx] ?? 0, color: palette[si % palette.length]};
+                            })
+                            .filter((x) => x.value > 0.01);
+                        const header = buildTooltipHeader(date, theme.mutedColor);
+                        let rows: string;
+                        if (dimension === 'type') {
+                            rows = allItems.length <= 6 ? buildTooltipTopN(allItems, allItems.length, theme, $_('common.remaining') || 'Remaining') : buildTooltipTopN(allItems, 5, theme, $_('common.remaining') || 'Remaining');
                         } else {
-                            rows = buildTooltipTopN(allItems, 5, theme, $_('common.remaining') || 'Remaining');
+                            rows = buildTooltipByThreshold(allItems, 3, theme, $_('common.remaining') || 'Remaining');
                         }
-                    } else {
-                        // Sector/Geo: threshold-based (≥3% shown, rest grouped)
-                        rows = buildTooltipByThreshold(allItems, 3, theme, $_('common.remaining') || 'Remaining');
-                    }
-                    return header + rows;
+                        return header + rows;
+                    },
                 },
-            },
-            legend: {
-                bottom: 0,
-                left: 'center',
-                textStyle: {color: textColor, fontSize: 10},
-                itemWidth: 12,
-                itemHeight: 8,
-                type: 'scroll',
-                width: '90%',
-                pageTextStyle: {color: textColor},
-                pageIconColor: textColor,
-                pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1',
-            },
-            dataZoom: [{type: 'inside', start: 0, end: 100}],
-            xAxis: {
-                type: 'category',
-                data: dates,
-                axisLabel: {color: textColor, fontSize: 10, rotate: 0},
-                axisLine: {lineStyle: {color: gridColor}},
-                splitLine: {show: false},
-                boundaryGap: false,
-            },
-            yAxis: {
-                type: 'value',
-                max: 100,
-                axisLabel: {color: textColor, fontSize: 10, formatter: (v: number) => `${v}%`},
-                axisLine: {show: false},
-                splitLine: {lineStyle: {color: gridColor, type: 'dashed'}},
-            },
-            series,
-        };
+                legend: {bottom: 0, left: 'center', textStyle: {color: textColor, fontSize: 10}, itemWidth: 12, itemHeight: 8, type: 'scroll', width: '90%', pageTextStyle: {color: textColor}, pageIconColor: textColor, pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1'},
+                dataZoom: [{type: 'inside', start: 0, end: 100}],
+                xAxis: {type: 'time', axisLabel: {color: textColor, fontSize: 10, rotate: 0}, axisLine: {lineStyle: {color: gridColor}}, splitLine: {show: false}},
+                yAxis: {type: 'value', max: 100, axisLabel: {color: textColor, fontSize: 10, formatter: (v: number) => `${v}%`}, axisLine: {show: false}, splitLine: {lineStyle: {color: gridColor, type: 'dashed'}}},
+                series,
+            };
 
-        chartInstance.setOption(option, {notMerge: true});
+            chartInstance.setOption(option, CHART_SET_OPTION_OPTS);
+        }
+
+        lastRenderedDark = isDark;
+        lastRenderedDimension = dimension;
     }
 </script>
 
-{#if loading}
-    <div class="w-full h-full bg-gray-100 dark:bg-slate-700 rounded animate-pulse" style="height: {height}"></div>
-{:else if data.length === 0}
-    <div class="flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm" style="height: {height}">
-        {$_('dashboard.noData')}
-    </div>
-{:else}
-    <div bind:this={chartContainer} style="height: {height}; width: 100%;"></div>
-{/if}
+<div class="relative" style="height: {height}">
+    {#if loading}
+        <div class="absolute inset-0 z-10 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
+    {:else if data.length === 0}
+        <div class="absolute inset-0 z-10 flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
+            {$_('dashboard.noData')}
+        </div>
+    {/if}
+    <div bind:this={chartContainer} style="height: 100%; width: 100%;" class:invisible={loading || data.length === 0}></div>
+</div>
