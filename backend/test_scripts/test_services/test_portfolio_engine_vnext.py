@@ -248,6 +248,31 @@ class TestThreePool:
         assert last.cash_from_contributed_capital == Decimal("1000")
         assert last.cash_from_generated_returns == Decimal("5")
 
+    def test_withdrawal_moves_returns_to_w_then_deposit_restores(self):
+        """WITHDRAWAL from R → W. Re-DEPOSIT restores from W to R first."""
+        txs = [
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1,
+                   quantity=Decimal("0"), amount=Decimal("200"), dt=date(2025, 1, 3))),
+            # Withdraw 300: from_K=min(300,1000)=300, K=700, no from_R
+            _c(_tx(tx_id=3, tx_type=TransactionType.WITHDRAWAL, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("-300"), dt=date(2025, 1, 4))),
+            # Withdraw 900: from_K=min(900,700)=700, K=0; from_R=min(200,200)=200, R=0, W=200
+            _c(_tx(tx_id=4, tx_type=TransactionType.WITHDRAWAL, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("-900"), dt=date(2025, 1, 5))),
+            # Re-deposit 150: restore=min(150, W=200)=150 → R+=150, W=50; K += 0
+            _c(_tx(tx_id=5, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("150"), dt=date(2025, 1, 8))),
+        ]
+        result = _build(txs)
+        last = result.daily_states[-1]
+        # cash = 1000 + 200 - 300 - 900 + 150 = 150
+        assert last.cash_value == Decimal("150")
+        # K=0, R=150 (restored from W)
+        assert last.cash_from_contributed_capital == Decimal("0")
+        assert last.cash_from_generated_returns == Decimal("150")
+
 
 # =============================================================================
 # 4. POSITION STATE EMISSION

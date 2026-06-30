@@ -503,6 +503,7 @@ class DailyStateBuilder:
         wac_pool_cost: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
         capital_cash_pool = zero
         returns_cash_pool = zero
+        withdrawn_returns_pool = zero  # W: returns that left system (hidden, trackable)
         # Period accumulators for contribution (only frame txs counted)
         per_realized: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
         per_income: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
@@ -524,7 +525,41 @@ class DailyStateBuilder:
         for day in preframe_tx_dates:
             cumulative_cash += cash_deltas.get(day, zero)
             cumulative_ecf += ecf_by_date.get(day, zero)
-            capital_cash_pool += ecf_by_date.get(day, zero)
+            # Pre-frame 3-pool: process DEPOSIT/WITHDRAWAL for correct K/R/W state
+            for ctxn in all_txs_by_date.get(day, []):
+                tx = ctxn.tx
+                if tx.amount is None or tx.amount == 0 or tx.currency is None:
+                    continue
+                amt = self._convert(abs(tx.amount), tx.currency, tx.date)
+                if amt is None:
+                    continue
+                amt = amt * ctxn.share
+                if tx.type == TransactionType.DEPOSIT:
+                    restore = min(amt, withdrawn_returns_pool)
+                    returns_cash_pool += restore
+                    withdrawn_returns_pool -= restore
+                    capital_cash_pool += (amt - restore)
+                elif tx.type == TransactionType.WITHDRAWAL:
+                    from_k = min(amt, max(capital_cash_pool, zero))
+                    capital_cash_pool -= from_k
+                    remaining = amt - from_k
+                    from_r = min(remaining, max(returns_cash_pool, zero))
+                    returns_cash_pool -= from_r
+                    withdrawn_returns_pool += from_r
+                elif tx.type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
+                    returns_cash_pool += amt
+                elif tx.type in (TransactionType.FEE, TransactionType.TAX):
+                    returns_cash_pool -= amt
+                    if returns_cash_pool < zero:
+                        capital_cash_pool += returns_cash_pool
+                        returns_cash_pool = zero
+                elif tx.type == TransactionType.BUY and tx.asset_id:
+                    from_r = min(amt, max(returns_cash_pool, zero))
+                    returns_cash_pool -= from_r
+                    capital_cash_pool -= (amt - from_r)
+                elif tx.type == TransactionType.SELL and tx.asset_id:
+                    # For pre-frame sells, approximate: all goes to K (no WAC available yet)
+                    capital_cash_pool += amt
             # Update WAC pools for position txs
             day_pos_txs = position_txs_by_date.get(day)
             if day_pos_txs:
@@ -732,14 +767,20 @@ class DailyStateBuilder:
                     continue
 
                 if tx.type == TransactionType.DEPOSIT:
-                    capital_cash_pool += amount_target
+                    # DEPOSIT D>0: restore = min(D, W); R += restore; W -= restore; K += (D - restore)
+                    restore = min(amount_target, withdrawn_returns_pool)
+                    returns_cash_pool += restore
+                    withdrawn_returns_pool -= restore
+                    capital_cash_pool += (amount_target - restore)
 
                 elif tx.type == TransactionType.WITHDRAWAL:
+                    # WITHDRAWAL X>0: from_K first, then from_R → W
                     from_k = min(amount_target, max(capital_cash_pool, zero))
                     capital_cash_pool -= from_k
                     remaining = amount_target - from_k
                     from_r = min(remaining, max(returns_cash_pool, zero))
                     returns_cash_pool -= from_r
+                    withdrawn_returns_pool += from_r
 
                 elif tx.type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
                     returns_cash_pool += amount_target
@@ -889,6 +930,16 @@ class DailyStateBuilder:
             per_fees_taxes=dict(per_fees_taxes),
             unalloc_income=dict(unalloc_income),
             unalloc_fees=dict(unalloc_fees),
+            end_state=EngineEndState(
+                cumulative_cash=cumulative_cash,
+                cumulative_ecf=cumulative_ecf,
+                cumulative_qty=dict(cumulative_qty),
+                wac_pool_qty=dict(wac_pool_qty),
+                wac_pool_cost=dict(wac_pool_cost),
+                capital_cash_pool=capital_cash_pool,
+                returns_cash_pool=returns_cash_pool,
+                withdrawn_returns_pool=withdrawn_returns_pool,
+            ),
             scope_broker_ids=list(set(ctxn.tx.broker_id for ctxn in self.classified_txs)),
             target_currency=self.target_currency,
             date_from=self.date_from,
@@ -1215,6 +1266,24 @@ class DailyStateBuilder:
 
 
 @dataclass
+class EngineEndState:
+    """Serialized accumulator state at end of a computation blob.
+
+    Used for forward cache extension: resume computation from this state
+    instead of recomputing from scratch.
+    """
+
+    cumulative_cash: Decimal
+    cumulative_ecf: Decimal
+    cumulative_qty: dict[tuple[int, int], Decimal]
+    wac_pool_qty: dict[tuple[int, int], Decimal]
+    wac_pool_cost: dict[tuple[int, int], Decimal]
+    capital_cash_pool: Decimal
+    returns_cash_pool: Decimal
+    withdrawn_returns_pool: Decimal
+
+
+@dataclass
 class PortfolioCalculationResult:
     """Complete result from the portfolio calculation engine."""
 
@@ -1228,6 +1297,8 @@ class PortfolioCalculationResult:
     per_fees_taxes: dict[tuple[int, int], Decimal] = field(default_factory=dict)
     unalloc_income: dict[int, Decimal] = field(default_factory=dict)
     unalloc_fees: dict[int, Decimal] = field(default_factory=dict)
+    # End state for cache forward extension
+    end_state: EngineEndState | None = None
     # Metadata
     scope_broker_ids: list[int] = field(default_factory=list)
     target_currency: str = "EUR"
@@ -1666,11 +1737,18 @@ class PortfolioCalculationEngine:
             if blob_from <= actual_from and blob_to >= actual_to:
                 logger.debug("Portfolio blob cache hit (contained)", user_id=user_id)
                 return cached_blob
-            # Forward extension: blob covers from start but not to end
-            # For now, invalidate and recompute (extension requires end-state serialization)
-            # TODO: implement incremental forward extension in future iteration
-            logger.debug("Portfolio blob cache miss (range mismatch)", user_id=user_id,
-                        blob_range=f"{blob_from}..{blob_to}", requested=f"{actual_from}..{actual_to}")
+            # Forward extension: blob covers from start but needs more days at end
+            if (blob_from <= actual_from and blob_to < actual_to
+                    and cached_blob.end_state is not None):
+                logger.debug("Portfolio blob cache forward extension",
+                            user_id=user_id, extending=f"{blob_to}..{actual_to}")
+                # Will proceed to full compute but with frame_start = blob_to + 1
+                # and initial accumulators from end_state
+                # (full extension with state resume deferred — for now recompute)
+                pass
+            else:
+                logger.debug("Portfolio blob cache miss (range mismatch)", user_id=user_id,
+                            blob_range=f"{blob_from}..{blob_to}", requested=f"{actual_from}..{actual_to}")
 
         # ── 6. Preload prices (bulk) ──
         price_map: dict[int, list[tuple[date_type, Decimal, str]]] = {}
