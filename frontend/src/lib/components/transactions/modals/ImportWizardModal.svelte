@@ -16,7 +16,6 @@
     import {formatBytes} from '$lib/utils/files/upload';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
     import {ensureBrokersLoaded, getEditableBrokers, refreshAllBrokers, getBrokerInfo, type BrokerInfo} from '$lib/stores/reference/brokerStore';
-    import {getBrokerIconUrl as resolveBrokerIconUrl} from '$lib/utils/broker/brokerHelpers';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getAssetInfo, refreshAllAssets, type AssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
@@ -31,6 +30,7 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
     import ImportPluginSelect, {getCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
@@ -1418,14 +1418,17 @@ ${arrow}<span>${label}</span></span>`,
         {
             id: 'brokerName',
             header: () => 'Broker',
-            cell: (row) => {
-                const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-                const imgSrc = resolveBrokerIconUrl(getBrokerInfo(row.brokerId));
-                const icon = imgSrc
-                    ? `<img src="${esc(imgSrc)}" class="w-5 h-5 rounded-full object-cover shrink-0" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">${`<span class="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0" style="display:none">${esc(row.brokerName.charAt(0).toUpperCase())}</span>`}`
-                    : `<span class="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">${esc(row.brokerName.charAt(0).toUpperCase())}</span>`;
-                return {type: 'html', html: `<div class="flex items-center gap-1.5 min-w-0">${icon}<span class="truncate text-xs">${esc(row.brokerName)}</span></div>`} as const;
-            },
+            cell: (row) =>
+                ({
+                    type: 'custom',
+                    component: BrokerBadge,
+                    props: {
+                        broker: getBrokerInfo(row.brokerId) ?? {id: row.brokerId, name: row.brokerName},
+                        size: 20,
+                        showName: true,
+                        tooltip: row.brokerName,
+                    },
+                }) as const,
             type: 'text',
             sortable: true,
             width: 130,
@@ -1851,7 +1854,7 @@ ${arrow}<span>${label}</span></span>`,
                                     {:else}
                                         <ChevronRight size={14} class="text-gray-400" />
                                     {/if}
-                                    <BrokerIcon iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
+                                    <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
                                     <span class="font-medium text-sm text-gray-800 dark:text-gray-200">{broker.name}</span>
                                     {#if selectedFiles.filter((f) => f.brokerId === broker.id).length > 0}
                                         <span class="text-xs font-medium text-libre-green ml-1">({selectedFiles.filter((f) => f.brokerId === broker.id).length})</span>

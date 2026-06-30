@@ -9,10 +9,10 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
+    import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {getBrokerIconUrlById} from '$lib/utils/broker/brokerHelpers';
-    import {getBrokerInfo} from '$lib/stores/reference/brokerStore';
+    import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
     interface Position {
@@ -38,9 +38,10 @@
         positions: Position[];
         unallocated: Unallocated[];
         displayCurrency?: string;
+        brokers?: ReadonlyArray<BrokerLike>;
     }
 
-    let {positions = [], unallocated = [], displayCurrency = 'EUR'}: Props = $props();
+    let {positions = [], unallocated = [], displayCurrency = 'EUR', brokers = []}: Props = $props();
 
     function safeNum(v: string | (string | null)[] | null | undefined): number | null {
         const s = Array.isArray(v) ? (v[0] ?? null) : v;
@@ -141,10 +142,6 @@
         const info = getAssetInfo(r.assetId);
         return info?.icon_url || getAssetTypeIconUrl(r.assetType) || null;
     }
-
-    function brokerIconSrc(r: DisplayRow): string | null {
-        return getBrokerIconUrlById(r.brokerId, [getBrokerInfo(r.brokerId)].filter(Boolean) as any[]);
-    }
 </script>
 
 <table class="w-full text-xs" data-testid="contribution-table">
@@ -160,16 +157,20 @@
     <tbody>
         {#each displayRows as row (row.key)}
             {@const iconSrc = assetIconSrc(row)}
-            {@const bIconSrc = brokerIconSrc(row)}
-            <tr
-                class="border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors {row.isUnallocated ? 'opacity-70' : ''} {row.isFullySold ? 'italic' : ''}"
-                data-testid="contribution-row"
-            >
+            {@const brokerInfo = brokers.find((item) => item.id === row.brokerId) ?? null}
+            <tr class="border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors {row.isUnallocated ? 'opacity-70' : ''} {row.isFullySold ? 'italic' : ''}" data-testid="contribution-row">
                 <!-- Asset -->
                 <td class="py-2 pr-2">
                     <div class="flex items-center gap-1.5 min-w-0">
                         {#if iconSrc}
-                            <img src={iconSrc} alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                            <img
+                                src={iconSrc}
+                                alt=""
+                                class="w-5 h-5 rounded-full object-cover shrink-0"
+                                onerror={(e) => {
+                                    (e.target as HTMLElement).style.display = 'none';
+                                }}
+                            />
                         {:else if !row.isUnallocated}
                             <div class="w-5 h-5 rounded-full bg-libre-green/10 flex items-center justify-center shrink-0 text-[10px] text-libre-green font-bold">
                                 {(row.assetName ?? '?')[0].toUpperCase()}
@@ -195,12 +196,7 @@
                 </td>
                 <!-- Broker -->
                 <td class="py-2 pr-2">
-                    <div class="flex items-center gap-1 min-w-0">
-                        {#if bIconSrc}
-                            <img src={bIconSrc} alt="" class="w-4 h-4 rounded-sm object-contain shrink-0" onerror={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
-                        {/if}
-                        <span class="truncate text-gray-500 dark:text-gray-400 max-w-[80px]">{row.brokerName}</span>
-                    </div>
+                    <BrokerBadge broker={brokerInfo ?? {id: row.brokerId, name: row.brokerName}} size={16} showName tooltip={row.brokerName} />
                 </td>
                 <!-- Period P&L -->
                 <td class="py-2 pr-2 text-right font-medium whitespace-nowrap {pnlClass(row.pnl)}">

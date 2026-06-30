@@ -12,10 +12,10 @@
     import {onMount} from 'svelte';
     import type {ColumnDef} from '$lib/components/table/types';
     import DataTable from '$lib/components/table/DataTable.svelte';
+    import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import type {PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
-    import {getBrokerInfo} from '$lib/stores/reference/brokerStore';
-    import {getBrokerIconCandidates, ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
+    import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
@@ -39,6 +39,7 @@
         displayCurrency: string;
         positionFilter?: 'open' | 'closed';
         contribution?: PositionsContribution | null;
+        brokers?: ReadonlyArray<BrokerLike>;
     }
 
     type ContributionPosition = NonNullable<PositionsContribution['positions']>[number];
@@ -50,6 +51,7 @@
         assetType: string;
         brokerId: number | null;
         brokerName: string;
+        broker: BrokerLike | null;
         currentValue: number | null;
         navWeight: number | null;
         unrealizedPnl: number | null;
@@ -59,15 +61,10 @@
         change1d: number | null;
     }
 
-    let {
-        holdings = [],
-        displayCurrency = 'EUR',
-        positionFilter = 'open',
-        contribution = null,
-    }: Props = $props();
+    let {holdings = [], displayCurrency = 'EUR', positionFilter = 'open', contribution = null, brokers = []}: Props = $props();
 
     onMount(async () => {
-        await Promise.all([ensureAssetsLoaded(), ensurePluginIconsLoaded()]);
+        await ensureAssetsLoaded();
     });
 
     function safeNum(v: string | (string | null)[] | null | undefined): number | null {
@@ -105,11 +102,7 @@
 
     function signedAmountCell(value: number | null) {
         if (value == null) return '—';
-        const classes = value > 0
-            ? 'text-green-600 dark:text-green-400'
-            : value < 0
-                ? 'text-red-500 dark:text-red-400'
-                : 'text-gray-500 dark:text-gray-400';
+        const classes = value > 0 ? 'text-green-600 dark:text-green-400' : value < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400';
         return {
             type: 'html' as const,
             html: `<span class="font-medium ${classes}">${formatCurrencyAmountPlain(value, displayCurrency, {showSign: value !== 0})}</span>`,
@@ -145,6 +138,7 @@
     });
 
     let rows = $derived.by<DisplayRow[]>(() => {
+        const brokerMap = new Map(brokers.map((broker) => [broker.id, broker]));
         if (positionFilter === 'closed') {
             return (contribution?.positions ?? [])
                 .filter((position) => position.is_fully_sold)
@@ -155,6 +149,7 @@
                     assetType: position.asset_type,
                     brokerId: position.broker_id,
                     brokerName: position.broker_name,
+                    broker: brokerMap.get(position.broker_id) ?? null,
                     currentValue: null,
                     navWeight: null,
                     unrealizedPnl: null,
@@ -171,13 +166,15 @@
             .map((holding) => {
                 const brokerId = safeInt(holding.broker_id);
                 const position = contributionMap.get(makePositionKey(holding.asset_id, brokerId));
+                const broker = brokerId ? (brokerMap.get(brokerId) ?? null) : null;
                 return {
                     key: makePositionKey(holding.asset_id, brokerId),
                     assetId: holding.asset_id,
                     assetName: holding.asset_name,
                     assetType: holding.asset_type,
                     brokerId,
-                    brokerName: safeStr(holding.broker_name) || (brokerId ? getBrokerInfo(brokerId)?.name : null) || '—',
+                    brokerName: safeStr(holding.broker_name) || broker?.name || '—',
+                    broker,
                     currentValue: safeNum(holding.current_value),
                     navWeight: safeNum(holding.nav_weight_percent),
                     unrealizedPnl: safeNum(holding.gain_loss),
@@ -191,6 +188,7 @@
     });
 
     let columns = $derived.by<ColumnDef<DisplayRow>[]>(() => {
+        const brokerMap = new Map(brokers.map((broker) => [broker.id, broker]));
         const baseColumns: ColumnDef<DisplayRow>[] = [
             {
                 id: 'asset',
@@ -218,18 +216,17 @@
                 sortable: true,
                 getValue: (row) => row.brokerName,
                 cell: (row) => {
-                    const broker = row.brokerId ? getBrokerInfo(row.brokerId) : null;
-                    const candidates = getBrokerIconCandidates(broker);
-                    // Build nested img chain: first tries candidate[0], onerror → tries next
-                    let iconHtml = '';
-                    if (candidates.length > 0) {
-                        // Use first candidate; onerror hides it (remaining candidates handled by CSS)
-                        const src = candidates[candidates.length - 1]; // prefer plugin icon (most reliable)
-                        iconHtml = `<img src="${escapeHtml(src)}" alt="" class="w-4 h-4 rounded-sm object-contain shrink-0" onerror="this.style.display='none'" />`;
-                    }
+                    const broker = row.broker;
+                    if (!broker && row.brokerId == null) return '—';
                     return {
-                        type: 'html',
-                        html: `<div class="flex items-center gap-1 min-w-0">${iconHtml}<span class="truncate text-gray-500 dark:text-gray-400">${escapeHtml(row.brokerName)}</span></div>`,
+                        type: 'custom',
+                        component: BrokerBadge,
+                        props: {
+                            broker: broker ?? {id: row.brokerId ?? 0, name: row.brokerName},
+                            size: 16,
+                            showName: true,
+                            tooltip: row.brokerName,
+                        },
                     };
                 },
             },
@@ -277,7 +274,7 @@
                 width: 120,
                 sortable: true,
                 getValue: (row) => row.currentValue ?? 0,
-                cell: (row) => row.currentValue == null ? '—' : formatCurrencyAmountPlain(row.currentValue, displayCurrency),
+                cell: (row) => (row.currentValue == null ? '—' : formatCurrencyAmountPlain(row.currentValue, displayCurrency)),
             },
             {
                 id: 'weight',
@@ -286,7 +283,7 @@
                 width: 80,
                 sortable: true,
                 getValue: (row) => row.navWeight ?? 0,
-                cell: (row) => row.navWeight == null ? '—' : `${row.navWeight.toFixed(1)}%`,
+                cell: (row) => (row.navWeight == null ? '—' : `${row.navWeight.toFixed(1)}%`),
             },
             {
                 id: 'pnl',

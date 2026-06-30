@@ -41,7 +41,7 @@
     import {zodiosApi} from '$lib/api';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/reference/assetStore';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/reference/brokerStore';
-    import {getBrokerIconUrl as resolveBrokerIconUrl} from '$lib/utils/broker/brokerHelpers';
+    import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getTransactionTypeIconUrl, getCostBasisRule} from '$lib/stores/transactions/transactionTypeStore';
     import {findPromoteMatch, type PromoteContext} from '$lib/stores/transactions/transactionTypeStore';
@@ -1279,10 +1279,12 @@
     let resolverCtx: ResolverContext = $derived({
         brokers: brokers as unknown as Array<{id: number; name: string}>,
         assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
-        getBrokerIconUrl: (brokerId: number) => {
-            const b = brokers.find((br) => br.id === brokerId);
-            return resolveBrokerIconUrl(b as any);
-        },
+        getBrokerIconHtml: (brokerId: number) =>
+            getBrokerIconHtmlById(brokerId, brokers as any[], {
+                width: 16,
+                height: 16,
+                style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
+            }),
     });
 
     $effect(() => {
@@ -1410,10 +1412,12 @@
 
     /** H1-fix: Broker name with favicon icon for readonly cells. */
     function renderBrokerHtml(brokerId: number): string {
-        const b = brokers.find((br) => br.id === brokerId);
-        const name = b?.name ?? '—';
-        const iconSrc = resolveBrokerIconUrl(b as any) ?? '';
-        const iconHtml = iconSrc ? `<img src="${iconSrc}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+        const name = brokers.find((br) => br.id === brokerId)?.name ?? '—';
+        const iconHtml = getBrokerIconHtmlById(brokerId, brokers as any[], {
+            width: 16,
+            height: 16,
+            className: 'w-4 h-4 rounded-full object-contain shrink-0',
+        });
         return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${name}</span>`;
     }
 

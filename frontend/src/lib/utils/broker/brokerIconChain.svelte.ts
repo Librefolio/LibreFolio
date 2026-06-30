@@ -24,7 +24,7 @@
  * @module utils/broker/brokerIconChain
  */
 
-import {ensurePluginIconsLoaded, getPluginIconUrl, type BrokerIconSource} from './brokerHelpers';
+import {ensurePluginIconsLoaded, getPluginIconUrl, normalizeBrokerIconField, type BrokerIconSource} from './brokerHelpers';
 
 export type {BrokerIconSource};
 
@@ -50,7 +50,7 @@ export function createBrokerIconChain(getSource: () => BrokerIconSource): Broker
     let pluginIconUrl = $state<string | null>(null);
 
     $effect(() => {
-        const code = getSource().default_import_plugin;
+        const code = normalizeBrokerIconField(getSource().default_import_plugin);
         if (!code) {
             pluginIconUrl = null;
             return;
@@ -75,12 +75,14 @@ export function createBrokerIconChain(getSource: () => BrokerIconSource): Broker
     let candidateUrls = $derived.by(() => {
         const src = getSource();
         const urls: string[] = [];
+        const iconUrl = normalizeBrokerIconField(src.icon_url);
+        const portalUrl = normalizeBrokerIconField(src.portal_url);
         // 1. Custom uploaded icon (most reliable — user chose it)
-        if (src.icon_url?.trim()) urls.push(src.icon_url);
+        if (iconUrl) urls.push(iconUrl);
         // 2. Portal favicon (external heuristic — may 404 or CORS-block)
-        if (src.portal_url?.trim()) {
+        if (portalUrl) {
             try {
-                urls.push(new URL(src.portal_url).origin + '/favicon.ico');
+                urls.push(new URL(portalUrl).origin + '/favicon.ico');
             } catch {
                 /* invalid URL — skip */
             }

@@ -72,6 +72,8 @@ export interface ResolverContext {
     assets?: AssetLike[];
     /** Optional function to resolve broker icon URL by ID. */
     getBrokerIconUrl?: (brokerId: number) => string | null;
+    /** Optional function to resolve fully chained broker icon HTML by ID. */
+    getBrokerIconHtml?: (brokerId: number) => string;
 }
 
 /** Shape of a validation issue (from TXValidationIssue or extractValidationIssues). */
@@ -156,8 +158,9 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
     // Resolve brokerId → brokerName (with icon)
     if (rawParams.brokerId != null && ctx?.brokers) {
         const broker = ctx.brokers.find((b) => b.id === rawParams.brokerId);
-        const iconUrl = ctx.getBrokerIconUrl?.(rawParams.brokerId);
-        const brokerIcon = iconUrl ? `<img src="${iconUrl}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">` : '';
+        const brokerIconHtml = ctx.getBrokerIconHtml?.(rawParams.brokerId) ?? null;
+        const iconUrl = brokerIconHtml ? null : ctx.getBrokerIconUrl?.(rawParams.brokerId);
+        const brokerIcon = brokerIconHtml ?? (iconUrl ? `<img src="${iconUrl}" alt="" width="16" height="16" style="display:inline;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">` : '');
         enriched.brokerName = broker ? `${brokerIcon}${broker.name}` : `Broker #${rawParams.brokerId}`;
     } else if (rawParams.brokerId != null) {
         enriched.brokerName = `Broker #${rawParams.brokerId}`;

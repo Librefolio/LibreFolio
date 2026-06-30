@@ -653,6 +653,7 @@ nav:
               - Sine Wave: financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md
           - 🏆 Performance Metrics:
               - Overview: financial-theory/technical-analysis/performance-metrics/index.md
+              - Portfolio Engine: financial-theory/technical-analysis/performance-metrics/portfolio-engine.md
               - NAV / Net Worth: financial-theory/technical-analysis/performance-metrics/nav.md
               - Book Value: financial-theory/technical-analysis/performance-metrics/book-value.md
               - Period P&L: financial-theory/technical-analysis/performance-metrics/period-pnl.md
@@ -767,6 +768,7 @@ nav:
                   - Authentication: developer/frontend/components/features/auth.md
                   - Settings: developer/frontend/components/features/settings.md
                   - Live Ticker: developer/frontend/components/features/live-ticker.md
+                  - Charts & Animations: developer/frontend/components/charts.md
                   - 🏦 Brokers:
                       - Overview: developer/frontend/components/features/brokers/index.md
                       - Cards: developer/frontend/components/features/brokers/cards.md

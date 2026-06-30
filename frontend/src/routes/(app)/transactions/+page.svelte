@@ -25,7 +25,7 @@
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {getBrokerIconUrlById} from '$lib/utils/broker/brokerHelpers';
+    import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {getRoleSvgHtml} from '$lib/utils/broker/brokerRoleHelpers';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
@@ -615,7 +615,12 @@
         return {
             brokers: brkrs as unknown as Array<{id: number; name: string}>,
             assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
-            getBrokerIconUrl: (brokerId: number) => getBrokerIconUrlById(brokerId, brkrs as any[]),
+            getBrokerIconHtml: (brokerId: number) =>
+                getBrokerIconHtmlById(brokerId, brkrs as any[], {
+                    width: 16,
+                    height: 16,
+                    style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
+                }),
         };
     }
 
@@ -624,8 +629,11 @@
         const info = getBrokerInfo(brokerId);
         const name = info?.name ?? `#${brokerId}`;
         const brkrs = getAllBrokers();
-        const iconUrl = getBrokerIconUrlById(brokerId, brkrs as any[]);
-        const iconTag = iconUrl ? `<img src="${iconUrl}" alt="" width="14" height="14" style="display:inline;vertical-align:middle;margin-right:2px;border-radius:2px" onerror="this.style.display='none'">` : '';
+        const iconTag = getBrokerIconHtmlById(brokerId, brkrs as any[], {
+            width: 14,
+            height: 14,
+            style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
+        });
         const role = getBrokerRole(brokerId);
         const roleSvg = role ? getRoleSvgHtml(role) : '';
         return `${iconTag}<strong>${name}</strong>${roleSvg ? ' ' + roleSvg : ''}`;

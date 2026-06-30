@@ -64,6 +64,8 @@
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | null = null;
     let resizeObserver: ResizeObserver | null = null;
+    let lastDark: boolean | null = null;
+    let chartFullyInitialized = false;
 
     // Diversified color palette — high chromatic distance
     const PALETTE_LIGHT = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5', '#059669', '#ea580c', '#6366f1', '#0891b2', '#ca8a04', '#9333ea'];
@@ -122,7 +124,7 @@
         const entries = data.filter((e) => e.value > 0);
         if (entries.length === 0) return; // Keep old chart visible, don't clear
 
-        // Build chart data — use emoji+translated name as display label for sector mode
+        // Build chart data with name for ECharts diffing
         const chartData = entries
             .map((entry) => {
                 let displayName: string;
@@ -132,7 +134,6 @@
                     const emoji = entry.emoji ?? '';
                     displayName = emoji ? `${emoji} ${translated}` : translated;
                 } else {
-                    // For type mode: try to translate via asset.types.* (uppercase key for robustness)
                     const typeKey = `asset.types.${entry.name.toUpperCase()}`;
                     const translated = tr(typeKey);
                     displayName = translated !== typeKey ? translated : entry.name;
@@ -140,6 +141,14 @@
                 return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name, emoji: entry.emoji ?? ''};
             })
             .sort((a, b) => b.value - a.value);
+
+        // Data-only update when chart is already initialized and dark mode hasn't changed
+        if (chartFullyInitialized && lastDark === isDark) {
+            chartInstance.setOption({
+                series: [{data: chartData.map((d) => ({name: d.name, value: d.value}))}],
+            });
+            return;
+        }
 
         // Build ECharts rich-text image styles for type mode (one key per asset type)
         const richStyles: Record<string, any> = {};
@@ -295,6 +304,8 @@
         };
 
         chartInstance.setOption(option, {notMerge: false});
+        chartFullyInitialized = true;
+        lastDark = isDark;
         chartInstance.resize();
     }
 </script>

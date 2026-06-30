@@ -146,7 +146,7 @@
 
         {#if broker}
             <!-- Broker Icon -->
-            <BrokerIcon iconUrl={safeString(broker.icon_url)} portalUrl={safeString(broker.portal_url)} pluginCode={safeString(broker.default_import_plugin)} altText={broker.name} size="lg" />
+            <BrokerIcon brokerId={broker.id} iconUrl={safeString(broker.icon_url)} portalUrl={safeString(broker.portal_url)} pluginCode={safeString(broker.default_import_plugin)} altText={broker.name} size="lg" />
 
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">

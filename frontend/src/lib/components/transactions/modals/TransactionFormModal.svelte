@@ -36,7 +36,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {X, ArrowRight, ArrowDown, Check, Pencil, Save, Info} from 'lucide-svelte';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
-    import {getBrokerIconUrl as resolveBrokerIconUrl} from '$lib/utils/broker/brokerHelpers';
+    import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
 
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
@@ -931,10 +931,12 @@
     let resolverCtx: ResolverContext = $derived({
         brokers: brokers as unknown as Array<{id: number; name: string}>,
         assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
-        getBrokerIconUrl: (brokerId: number) => {
-            const b = brokers.find((br) => br.id === brokerId);
-            return resolveBrokerIconUrl(b as any);
-        },
+        getBrokerIconHtml: (brokerId: number) =>
+            getBrokerIconHtmlById(brokerId, brokers as any[], {
+                width: 16,
+                height: 16,
+                style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
+            }),
     });
     $effect(() => {
         if (!open || isReadonly) return;
@@ -1520,7 +1522,7 @@
                             {#if brokerImmutable}
                                 {@const b = brokers.find((br) => br.id === draft.broker_id)}
                                 <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-broker-readonly">
-                                    <BrokerIcon iconUrl={b?.icon_url ?? null} portalUrl={b?.portal_url ?? null} pluginCode={b?.default_import_plugin ?? null} altText={b?.name ?? ''} size="sm" />
+                                    <BrokerIcon brokerId={b?.id ?? null} iconUrl={b?.icon_url ?? null} portalUrl={b?.portal_url ?? null} pluginCode={b?.default_import_plugin ?? null} altText={b?.name ?? ''} size="sm" />
                                     <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
                                 </div>
                             {:else}
@@ -1653,7 +1655,7 @@
                                         <div class="flex flex-col gap-1.5 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400" data-testid="tx-form-partner-locked">
                                             <div class="flex items-center gap-1.5">
                                                 {#if pInfo?.icon_url || pInfo?.portal_url || pInfo?.default_import_plugin}
-                                                    <BrokerIcon iconUrl={pInfo.icon_url} portalUrl={pInfo.portal_url} pluginCode={pInfo.default_import_plugin} altText={pInfo.name ?? ''} size="sm" />
+                                                    <BrokerIcon brokerId={pInfo.id} iconUrl={pInfo.icon_url} portalUrl={pInfo.portal_url} pluginCode={pInfo.default_import_plugin} altText={pInfo.name ?? ''} size="sm" />
                                                 {/if}
                                                 <strong>{pInfo?.name ?? `#${inaccessiblePartnerBrokerId}`}</strong>
                                                 <RoleIconC size={14} class="{getRoleIconColor(null)} shrink-0" />
@@ -1673,7 +1675,7 @@
                                             {#if toInfo && toRole != null}
                                                 <!-- Accessible broker (OWNER/EDITOR/VIEWER) -->
                                                 {@const RoleIcon = getRoleIcon(toRole)}
-                                                <BrokerIcon iconUrl={toInfo.icon_url} portalUrl={toInfo.portal_url} pluginCode={toInfo.default_import_plugin} altText={toInfo.name} size="sm" />
+                                                <BrokerIcon brokerId={toInfo.id} iconUrl={toInfo.icon_url} portalUrl={toInfo.portal_url} pluginCode={toInfo.default_import_plugin} altText={toInfo.name} size="sm" />
                                                 <span class="font-medium">{toInfo.name}</span>
                                                 <RoleIcon size={14} class="{getRoleIconColor(toRole)} shrink-0" />
                                             {:else if toInfo && toRole == null}
@@ -1682,7 +1684,7 @@
                                                 {@const lockColor = getRoleIconColor(null)}
                                                 <div class="flex items-center gap-1.5">
                                                     {#if toInfo.icon_url || toInfo.portal_url || toInfo.default_import_plugin}
-                                                        <BrokerIcon iconUrl={toInfo.icon_url} portalUrl={toInfo.portal_url} pluginCode={toInfo.default_import_plugin} altText={toInfo.name ?? ''} size="sm" />
+                                                        <BrokerIcon brokerId={toInfo.id} iconUrl={toInfo.icon_url} portalUrl={toInfo.portal_url} pluginCode={toInfo.default_import_plugin} altText={toInfo.name ?? ''} size="sm" />
                                                     {/if}
                                                     <strong>{toInfo.name}</strong>
                                                     <LockIcon size={14} class="{lockColor} shrink-0" />
@@ -1921,7 +1923,7 @@
                             <!-- Bugfix-4 §U19: readonly broker also shows the icon
                                  (parity with the editable BrokerSearchSelect). -->
                             <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-broker-readonly">
-                                <BrokerIcon iconUrl={b?.icon_url ?? null} portalUrl={b?.portal_url ?? null} pluginCode={b?.default_import_plugin ?? null} altText={b?.name ?? ''} size="sm" />
+                                <BrokerIcon brokerId={b?.id ?? null} iconUrl={b?.icon_url ?? null} portalUrl={b?.portal_url ?? null} pluginCode={b?.default_import_plugin ?? null} altText={b?.name ?? ''} size="sm" />
                                 <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
                             </div>
                         {:else}

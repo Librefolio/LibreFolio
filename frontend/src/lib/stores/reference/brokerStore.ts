@@ -22,7 +22,7 @@ import {zodiosApi} from '$lib/api';
 import {createEntityStore} from '../core/entityStore';
 import {derived} from 'svelte/store';
 import {canEditWithRole, getRoleRank, type PairedAccessLevel} from '$lib/utils/broker/brokerRoleHelpers';
-import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
+import {ensurePluginIconsLoaded, normalizeBrokerIconField} from '$lib/utils/broker/brokerHelpers';
 
 // ============================================================================
 // TYPES
@@ -91,6 +91,17 @@ const store = createEntityStore<BrokerInfo, number>({
     requiredFields: ['name'],
 });
 
+const iconFieldLoaders = new Map<number, Promise<void>>();
+
+function hasBrokerIconFields(info: BrokerInfo | null | undefined): boolean {
+    if (!info) return false;
+    return Boolean(
+        normalizeBrokerIconField(info.icon_url) ||
+        normalizeBrokerIconField(info.portal_url) ||
+        normalizeBrokerIconField(info.default_import_plugin),
+    );
+}
+
 // ============================================================================
 // PUBLIC API
 // ============================================================================
@@ -127,6 +138,34 @@ export const getAllBrokers = store.getAll;
 
 /** Whether the store has been populated at least once. */
 export const isBrokersLoaded = store.isLoaded;
+
+/**
+ * Hydrate icon-relevant fields for a broker when a consumer only has a partial
+ * `{id, name}` shape. Shared de-duplication prevents N identical requests.
+ */
+export async function ensureBrokerIconFieldsLoaded(brokerId: number | null | undefined): Promise<void> {
+    if (brokerId == null) return;
+    if (hasBrokerIconFields(store.get(brokerId))) return;
+    const inFlight = iconFieldLoaders.get(brokerId);
+    if (inFlight) return inFlight;
+
+    const loader = (async () => {
+        try {
+            const broker = (await zodiosApi.get_broker_api_v1_brokers__broker_id__get({
+                params: {broker_id: brokerId},
+            } as never)) as Record<string, unknown>;
+            store.merge([broker]);
+        } catch (e) {
+            // eslint-disable-next-line no-console
+            console.error('[brokerStore] Failed to hydrate broker icon fields:', e);
+        } finally {
+            iconFieldLoaders.delete(brokerId);
+        }
+    })();
+
+    iconFieldLoaders.set(brokerId, loader);
+    return loader;
+}
 
 /**
  * Opportunistic ingress: upsert fresh broker data into the cache.

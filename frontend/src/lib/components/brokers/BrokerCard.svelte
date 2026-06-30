@@ -75,7 +75,7 @@
         <div class="flex items-start justify-between">
             <div class="flex items-center gap-3 flex-1 min-w-0">
                 <!-- Broker Icon -->
-                <BrokerIcon altText={broker.name} iconUrl={broker.icon_url} pluginCode={broker.default_import_plugin} portalUrl={broker.portal_url} size="md" />
+                <BrokerIcon brokerId={broker.id} altText={broker.name} iconUrl={broker.icon_url} pluginCode={broker.default_import_plugin} portalUrl={broker.portal_url} size="md" />
 
                 <div class="min-w-0">
                     <div class="flex items-center gap-2">
