@@ -11,31 +11,31 @@ In LibreFolio, è possibile creare nuovi asset in due modi diversi:
 
 === "Creazione Manuale (con ricerca intelligente)"
 
- ```mermaid
- flowchart LR
- A[Inizio: Clicca '+ New Asset'] --> B[Digita Nome, ISIN o Ticker nella ricerca intelligente]
- B --> C{Corrispondenza Trovata?}
- C -->|Sì| D[Compilazione automatica dei dettagli da provider esterni]
- C -->|No| E[Inserimento manuale di nome, categoria e valuta]
- D --> F[Regola configurazione / Assegna provider di pricing]
- E --> F
- F --> G[Clicca 'Save']
- G --> H[Asset aggiunto alla libreria]
- ```
+    ```mermaid
+    flowchart LR
+    A[Inizio: Clicca '+ New Asset'] --> B[Digita Nome, ISIN o Ticker nella ricerca intelligente]
+    B --> C{Corrispondenza Trovata?}
+    C -->|Sì| D[Compilazione automatica dei dettagli da provider esterni]
+    C -->|No| E[Inserimento manuale di nome, categoria e valuta]
+    D --> F[Regola configurazione / Assegna provider di pricing]
+    E --> F
+    F --> G[Clicca 'Save']
+    G --> H[Asset aggiunto alla libreria]
+    ```
 
 === "Auto-Creazione tramite Importazione Broker"
 
- ```mermaid
- flowchart LR
- A[Inizio: Carica report CSV nel Wizard di Importazione] --> B[Analisi righe del report]
- B --> C{ID Asset riconosciuto?}
- C -->|Sì| D[Corrispondenza automatica con asset esistente]
- C -->|No| E[Segnala avviso ⚠️ e mostra il pulsante 'Create']
- E --> F[Clicca 'Create' per aprire la finestra modale precompilata]
- F --> G[Salva asset per risolvere il mapping]
- G --> D
- D --> H[Conferma tutte le transazioni]
- ```
+    ```mermaid
+    flowchart LR
+    A[Inizio: Carica report CSV nel Wizard di Importazione] --> B[Analisi righe del report]
+    B --> C{ID Asset riconosciuto?}
+    C -->|Sì| D[Corrispondenza automatica con asset esistente]
+    C -->|No| E[Segnala avviso ⚠️ e mostra il pulsante 'Create']
+    E --> F[Clicca 'Create' per aprire la finestra modale precompilata]
+    F --> G[Salva asset per risolvere il mapping]
+    G --> D
+    D --> H[Conferma tutte le transazioni]
+    ```
 
 ## 🧪 Test della Configurazione del Provider
 

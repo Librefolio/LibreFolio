@@ -62,22 +62,25 @@ To upload a file:
 
 ---
 
-## 📤 Uploading Broker Reports
+## 📤 Managing Broker Reports
 
-If you want to import transactions from your broker:
+If you want to import transactions or manage existing statements:
 
-1. Go to the **Broker Reports** tab
-2. Upload the CSV or Excel file exported from your broker (Degiro, Interactive Brokers, eToro, Directa, etc.)
-3. Choose which **broker to associate** the file with — this is where the imported transactions will be stored
-4. The system will later attempt to **automatically detect** the file format via the BRIM import system and parse the transactions
+1. Go to the **Broker Reports** tab.
+2. Upload the CSV or Excel file exported from your broker (Degiro, Interactive Brokers, eToro, Directa SIM, etc.).
+3. Choose which **broker to associate** the file with — this determines which broker account receives the imported transactions.
+4. The system automatically detects the format and runs the guided **[Import Wizard](../transactions/import/index.md)**.
 
-!!! info "Association ≠ Parsing"
+### ⚙️ Actions on Existing Reports
+
+Right-click any report in the table to open its context menu:
+- 🔄 **Reprocess**: Reruns the import parser on the statement. This is useful after an import plugin update or if you accidentally deleted some transactions and want to restore them.
+- 📥 **Download**: Download the original raw file.
+- 🗑️ **Delete**: Remove the statement and its associated transactions from the ledger.
+
+!!! info "Association vs. Parsing"
 
     The broker you choose when uploading is for **association** only — it determines which broker account receives the imported transactions. The format detection and parsing happen in a separate step and are **independent** of the broker: the same BRIM plugin can work for multiple brokers if they export in the same format.
-
-!!! note "Work in Progress"
-
-    The full broker report import UI (BRIM) is under active development. Currently, you can upload reports and associate them with brokers, but the guided import wizard is not yet available.
 
 ---
 

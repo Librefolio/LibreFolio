@@ -11,31 +11,31 @@ Dans LibreFolio, vous pouvez créer de nouveaux actifs de deux manières différ
 
 === "Création manuelle (avec recherche intelligente)"
 
- ```mermaid
- flowchart LR
- A[Début : Cliquer sur '+ Nouvel actif'] --> B[Saisir le nom, l'ISIN ou le Ticker dans la recherche intelligente]
- B --> C{Correspondance trouvée ?}
- C -->|Oui| D[Remplissage automatique des détails via les fournisseurs externes]
- C -->|Non| E[Saisir manuellement le nom, la catégorie et la devise]
- D --> F[Ajuster la configuration / Assigner un fournisseur de prix]
- E --> F
- F --> G[Cliquer sur Enregistrer]
- G --> H[Actif ajouté à la bibliothèque]
- ```
+    ```mermaid
+    flowchart LR
+    A[Début : Cliquer sur '+ Nouvel actif'] --> B[Saisir le nom, l'ISIN ou le Ticker dans la recherche intelligente]
+    B --> C{Correspondance trouvée ?}
+    C -->|Oui| D[Remplissage automatique des détails via les fournisseurs externes]
+    C -->|Non| E[Saisir manuellement le nom, la catégorie et la devise]
+    D --> F[Ajuster la configuration / Assigner un fournisseur de prix]
+    E --> F
+    F --> G[Cliquer sur Enregistrer]
+    G --> H[Actif ajouté à la bibliothèque]
+    ```
 
 === "Auto-création via l'importation de courtier"
 
- ```mermaid
- flowchart LR
- A[Début : Télécharger le rapport CSV dans l'assistant d'importation] --> B[Analyser les lignes du rapport]
- B --> C{ID de l'actif reconnu ?}
- C -->|Oui| D[Correspondance automatique avec un actif existant]
- C -->|Non| E[Afficher un avertissement ⚠️ et le bouton 'Créer']
- E --> F[Cliquer sur 'Créer' pour ouvrir la modale pré-remplie]
- F --> G[Enregistrer l'actif pour résoudre le mappage]
- G --> D
- D --> H[Valider toutes les transactions]
- ```
+    ```mermaid
+    flowchart LR
+    A[Début : Télécharger le rapport CSV dans l'assistant d'importation] --> B[Analyser les lignes du rapport]
+    B --> C{ID de l'actif reconnu ?}
+    C -->|Oui| D[Correspondance automatique avec un actif existant]
+    C -->|Non| E[Afficher un avertissement ⚠️ et le bouton 'Créer']
+    E --> F[Cliquer sur 'Créer' pour ouvrir la modale pré-remplie]
+    F --> G[Enregistrer l'actif pour résoudre le mappage]
+    G --> D
+    D --> H[Valider toutes les transactions]
+    ```
 
 ## 🧪 Test de la configuration du fournisseur
 
