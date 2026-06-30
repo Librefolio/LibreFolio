@@ -67,3 +67,32 @@ Se la formula non tenesse conto dei flussi esterni, mostrerebbe erroneamente un 
 
 - **vs. ROI / TWRR / MWRR**: Queste sono metriche percentuali che mostrano il tasso di rendimento. Il P&L del Periodo mostra l'importo monetario assoluto del profitto/perdita.
 - **vs. Plusvalenza/Minusvalenza Latente**: La plusvalenza/minusvalenza latente è un'istantanea delle posizioni aperte correnti confrontate con il loro costo di acquisto originale. Il P&L del Periodo misura la performance sia delle posizioni aperte che di quelle chiuse (plusvalenze realizzate, dividendi, interessi) specificamente entro i limiti della finestra temporale scelta.
+
+---
+
+## 📊 Relazione con il P&L Totale
+
+Il P&L del Periodo è la **versione limitata nel tempo** di un concetto più fondamentale: il **P&L Totale**.
+
+$$
+\text{P\&L Totale}(t) = \text{NAV}(t) - \text{Capitale Depositato}(t)
+$$
+
+Dove il **Capitale Depositato** è il capitale esterno netto cumulativo conferito dall'inizio — non solo nel periodo selezionato. Il P&L del Periodo è pari alla variazione del P&L Totale all'interno della finestra temporale scelta:
+
+$$
+\text{P\&L del Periodo} = \text{P\&L Totale}(t_{\text{fine}}) - \text{P\&L Totale}(t_{\text{inizio}})
+$$
+
+Il P&L Totale è visibile nel **tooltip del Grafico di Crescita** (in modalità ASS) come lo scostamento tra la linea del NAV e la linea tratteggiata del Capitale Depositato. Questo lo rende facile da leggere: se il NAV è al di sopra della linea di base, il portafoglio è in attivo; se è al di sotto, è in perdita.
+
+🔗 Consulta **[Capitale Depositato & P&L Totale](deposited-capital.md)** per la teoria completa, l'algoritmo di scomposizione della liquidità ed esempi pratici svolti.
+
+---
+
+## 🔗 Correlati
+
+- 💼 **[NAV / Patrimonio Netto](nav.md)** — il punto di arrivo di ogni formula del P&L
+- 📚 **[Valore Contabile](book-value.md)** — usato nella scomposizione del P&L (variazione latente, base di costo)
+- 💸 **[Capitale Depositato & P&L Totale](deposited-capital.md)** — versione da inizio operatività con scomposizione della liquidità
+- ⏱️ **[Effetto Timing](timing-effect.md)** — l'impatto dei tempi di deposito sui rendimenti

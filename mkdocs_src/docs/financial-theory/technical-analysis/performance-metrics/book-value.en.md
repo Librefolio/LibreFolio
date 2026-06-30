@@ -4,63 +4,56 @@
 
 ## 💡 What is Book Value?
 
-In LibreFolio, the **Book Value** represents the historical accounting cost (cost basis) of your portfolio. It reflects the net amount of capital you have actually committed to your current open positions, plus cash.
-
-It answers the question: _"How much did my current portfolio cost to build?"_
-
-Unlike Net Asset Value (NAV), which fluctuates with daily market prices, Book Value only changes when you buy or sell assets, or when cash is deposited/withdrawn. It does not represent the current liquidated market value.
+**Book Value** represents the historical accounting cost of your portfolio — how much capital you deployed at cost, plus cash reserves. It does not fluctuate with market prices.
 
 ---
 
 ## 🧮 Formula
 
-The Book Value is calculated using the following formula:
-
 $$
-\text{Book Value} = \text{Open Cost Basis} + \text{Cash Value} + \text{In Transit Book Value}
+\boxed{\mathrm{Book}(t) = \mathrm{OCB}(t) + \mathrm{Cash}(t) + \mathrm{InTransitBook}(t)}
 $$
 
-Where:
+Where Open Cost Basis:
 
-- **$\text{Open Cost Basis}$**: The total cost basis of your open positions, calculated by multiplying each asset's pool quantity by its [Weighted Average Cost (WAC)](weighted-average-cost.md).
-- **$\text{Cash Value}$**: The actual cash balance held in the broker accounts included in the scope.
-- **$\text{In Transit Book Value}$**: The cost basis value of cash or assets currently in transit between accounts inside the scope. This concept is introduced to handle transfers (e.g., wire transfers or security transfers) that start on day 1 from the source account and arrive on day 5 at the destination account due to settlement delays.
+$$
+\mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 0}} q(a,b,t) \cdot w(a,b,t) \cdot \mathrm{fx}(\mathrm{ccy}_w, C^*, t)
+$$
+
+🔗 See **[Portfolio Engine — §3 Position State](portfolio-engine.md#3-position-state)** for full derivation.
 
 ---
 
-## 📝 Practical Example
-
-Consider a portfolio with the following figures:
-
-- **Open Cost Basis (Acquisition Cost)**: €27,000
-- **Cash**: €600
-- **In Transit Assets (Book Cost)**: €0
-
-The Book Value is calculated as:
+## ⚖️ Unrealized Gain/Loss
 
 $$
-\text{Book Value} = 27,000 + 600 + 0 = \text{€}27,600
+\mathrm{Unrealized}(t) = \mathrm{NAV}(t) - \mathrm{Book}(t)
 $$
-
-### 📊 Comparison with NAV (Unrealized Performance)
-
-If the current market value ([NAV](nav.md)) of this portfolio is **€33,000**, we can compute the **Unrealized Gain/Loss** (latent performance) by comparing it with the Book Value:
-
-$$
-\text{Unrealized Gain/Loss} = \text{NAV} - \text{Book Value}
-$$
-
-$$
-\text{Unrealized Gain/Loss} = 33,000 - 27,600 = +\text{€}5,400
-$$
-
-This indicates that your portfolio has gained €5,400 in market value above what you paid to acquire it.
 
 ---
 
-## ⚙️ Note on Cost Basis Methods
+## 📝 Example
 
-To determine the cost basis of open positions, LibreFolio utilizes the [Weighted Average Cost (WAC)](weighted-average-cost.md) method as its default inventory-tracking algorithm:
+| Component | Amount |
+|-----------|--------|
+| Open Cost Basis | €27,000 |
+| Cash | €600 |
+| In-Transit Book | €0 |
 
-- Every time you purchase an asset, the average cost per unit is updated.
-- Every time you sell an asset, the cost basis is reduced proportionally based on the WAC at the time of sale, leaving the unit cost of remaining shares unchanged.
+$$
+\mathrm{Book} = 27\,000 + 600 = 27\,600 \text{ EUR}
+$$
+
+With NAV = €33,000:
+
+$$
+\mathrm{Unrealized} = 33\,000 - 27\,600 = +5\,400 \text{ EUR}
+$$
+
+---
+
+## 🔗 Related
+
+- 📊 [WAC](weighted-average-cost.md) — unit cost method for OCB
+- 💼 [NAV](nav.md) — market-value counterpart
+- 📈 [Period PnL](period-pnl.md) — realized + unrealized combined

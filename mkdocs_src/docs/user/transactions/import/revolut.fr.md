@@ -28,3 +28,7 @@ Pour exporter l'historique de vos transactions d'actions/crypto depuis Revolut :
 
 - Prend en charge les transactions d'actions, achats de crypto, dividendes versés, frais de garde et transferts de fonds.
 - Gère automatiquement les montants multi-devises dans un même fichier.
+
+## 🔗 Référence pour les Développeurs
+
+→ [Revolut Provider — Détails d'Implémentation](../../../developer/backend/brim/providers_list.md)
