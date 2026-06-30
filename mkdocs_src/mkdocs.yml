@@ -90,9 +90,11 @@ plugins:
             Signals: Segnali
             Measures: Misure
             Data Editor: Editor Dati
+            Events: Eventi
             Provider Config: Configurazione Provider
             Chart Settings: Impostazioni Grafico
             "📈 Assets": "📈 Asset"
+            "Create & Edit": "Crea & Modifica"
             "🔌 Providers": "🔌 Provider"
             Yahoo Finance: Yahoo Finance
             justETF: justETF
@@ -232,9 +234,11 @@ plugins:
             Signals: Signaux
             Measures: Mesures
             Data Editor: Éditeur de Données
+            Events: Événements
             Provider Config: Configuration du Fournisseur
             Chart Settings: Paramètres du Graphique
             "📈 Assets": "📈 Actifs"
+            "Create & Edit": "Créer & Modifier"
             "🔌 Providers": "🔌 Fournisseurs"
             Yahoo Finance: Yahoo Finance
             justETF: justETF
@@ -374,9 +378,11 @@ plugins:
             Signals: Señales
             Measures: Medidas
             Data Editor: Editor de Datos
+            Events: Eventos
             Provider Config: Configuración del Proveedor
             Chart Settings: Ajustes del Gráfico
             "📈 Assets": "📈 Activos"
+            "Create & Edit": "Crear & Editar"
             "🔌 Providers": "🔌 Proveedores"
             Yahoo Finance: Yahoo Finance
             justETF: justETF

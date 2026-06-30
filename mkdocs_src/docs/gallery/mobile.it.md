@@ -126,6 +126,7 @@ Importa transazioni dai file di esportazione del tuo broker — tramite modale r
  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Modale rapida" alt="Modale Importazione">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step1" data-title="🧙 Passaggio 1: Caricamento" alt="Import Wizard Passaggio 1">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Passaggio 2: Parser" alt="Import Wizard Passaggio 2">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step3" data-title="🧠 Passaggio 3: Analisi" alt="Import Wizard Passaggio 3">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step4-resolution" data-title="🔍 Passaggio 4: Risoluzione Asset" alt="Import Wizard Risoluzione Asset">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-duplicate" data-title="⚠️ Rilevamento Duplicati" alt="Import Wizard Rilevamento Duplicati">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Bulk Staging" alt="Import Bulk Staging">

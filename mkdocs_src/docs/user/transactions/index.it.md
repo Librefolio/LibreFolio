@@ -29,8 +29,7 @@ Gestire le tue transazioni è semplice:
 | **Importazione Broker** | Trascina e rilascia il file dell'estratto conto del tuo broker per importare automaticamente la tua cronologia. | [Importazione da Broker](import/index.md) |
 | **Ordinamento e Filtro** | Clicca su qualsiasi intestazione di colonna per ordinare la lista. Usa la barra di ricerca per filtrare per nome dell'asset, tipo o note. | |
 | **Eliminazione e Azioni in blocco** | Clicca con il tasto destro su qualsiasi riga per aprire il Menu Contestuale per azioni rapide, clicca l'icona del cestino per eliminare, o seleziona più righe per eseguire eliminazioni multiple. | |
-| **Frazionamento e Unione** | **Fraziona** una transazione composta (come un trasferimento o una conversione valutaria) in singoli tronconi di cassa/asset, oppure **unisci** due operazioni separate per collegarle tra loro. | |
-| **Costo Medio Ponderato (WAC)** | LibreFolio calcola la tua base di costo in tempo reale. Le righe interessate sono contrassegnate con un indicatore ⚡, che mostra anteprime inline. | |
+| **Transazioni Composte e Promozione** | Collega due operazioni singole in una **Transazione Composta** tramite la **Promozione** per consentire tracciamenti e analisi più sofisticate, o suddividi (split) una transazione composta in operazioni singole. | [Modulo Transazione](form.md#composite-transactions) |
 
 ---
 
