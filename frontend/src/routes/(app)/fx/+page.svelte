@@ -28,7 +28,7 @@
     import {type ChartSettings, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, ensureFxRangeLoaded, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, ensureFxRangeLoaded, ensureFxRangeLoadedBulk, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, removeFxStore} from '$lib/stores/fxStoreRegistry';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
@@ -280,8 +280,40 @@
     }
 
     async function fetchAllPairData() {
-        const promises = pairs.map((_, idx) => fetchPairData(idx));
-        await Promise.allSettled(promises);
+        if (pairs.length === 0) return;
+
+        // Separate fully cached pairs from those needing fetch
+        const needFetch: Array<{index: number; slug: string}> = [];
+        for (let i = 0; i < pairs.length; i++) {
+            const pair = pairs[i];
+            const store = getFxStore(pair.config.slug);
+            if (store.getMissingIntervals(apiDateStart, apiDateEnd).length === 0) {
+                // Fast path: already cached — update data without loading indicator
+                pairs[i] = {...pair, data: store.getRange(apiDateStart, apiDateEnd).data};
+            } else {
+                needFetch.push({index: i, slug: pair.config.slug});
+                pairs[i] = {...pair, loading: true};
+            }
+        }
+
+        if (needFetch.length === 0) return;
+
+        // Single bulk call for all pairs with gaps
+        try {
+            const bulkResults = await ensureFxRangeLoadedBulk(
+                needFetch.map((nf) => ({slug: nf.slug, start: apiDateStart, end: apiDateEnd})),
+            );
+            for (const nf of needFetch) {
+                const data = bulkResults.get(nf.slug) ?? [];
+                pairs[nf.index] = {...pairs[nf.index], data, loading: false};
+            }
+        } catch {
+            // Fallback: update with whatever is cached
+            for (const nf of needFetch) {
+                const existingData = getFxStore(nf.slug).getRange(apiDateStart, apiDateEnd).data;
+                pairs[nf.index] = {...pairs[nf.index], data: existingData, loading: false};
+            }
+        }
     }
 
     async function fetchPairData(index: number) {

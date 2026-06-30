@@ -23,6 +23,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
     import {_ as t} from '$lib/i18n';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
@@ -243,7 +244,7 @@
             ],
         };
 
-        chartInstance.setOption(option, true);
+        chartInstance.setOption(option, CHART_SET_OPTION_OPTS);
         chartInstance.resize();
     }
 </script>
