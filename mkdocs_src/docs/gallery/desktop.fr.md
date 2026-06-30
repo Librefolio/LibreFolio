@@ -122,6 +122,7 @@ Importez des transactions depuis les fichiers d'export de votre courtier — via
  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Fenêtre d'import rapide" alt="Fenêtre d'Import">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step1" data-title="🧙 Assistant — Étape 1 : Téléchargement" alt="Assistant d'Import Étape 1">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Assistant — Étape 2 : Config du Parser" alt="Assistant d'Import Étape 2">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step3" data-title="🧠 Assistant — Étape 3 : Analyse" alt="Assistant d'Import Étape 3">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step4-resolution" data-title="🔍 Assistant — Étape 4 : Résolution d'Actifs" alt="Résolution d'Actifs de l'Assistant d'Import">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-duplicate" data-title="⚠️ Détection de Doublons" alt="Détection de Doublons de l'Assistant d'Import">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Zone de préparation groupée" alt="Zone de Préparation Groupée d'Import">
