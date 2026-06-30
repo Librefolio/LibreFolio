@@ -17,7 +17,6 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
-    import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_MERGE, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
@@ -124,8 +123,6 @@
     let resizeObserver: ResizeObserver | null = null;
     /** Guard: prevents ResizeObserver from calling resize() before first setOption() */
     let chartOptionSet = false;
-    /** Track last dark mode to detect full re-init vs data-only update */
-    let lastDark: boolean | null = null;
 
     // =========================================================================
     // Lifecycle
@@ -445,7 +442,7 @@
         }
 
         const option: echarts.EChartsOption = {
-            ...CHART_ANIMATION_CONFIG,
+            animation: false,
             grid: gridConfig,
             dataZoom: compact
                 ? []
@@ -683,7 +680,7 @@
             }
         }
 
-        chartInstance.setOption(option, CHART_SET_OPTION_MERGE);
+        chartInstance.setOption(option, true);
         chartOptionSet = true;
 
         // Compute pixel-accurate arrow rotations after layout is established

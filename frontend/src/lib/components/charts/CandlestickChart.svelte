@@ -20,7 +20,6 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
-    import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_MERGE} from '$lib/components/charts/echartsAnimationConfig';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {LineDataPoint} from './LineChart.svelte';
     import {COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
@@ -447,7 +446,7 @@
         };
 
         const option: echarts.EChartsOption = {
-            ...CHART_ANIMATION_CONFIG,
+            animation: false,
             grid: grids,
             dataZoom: buildDataZoom(actualShowVolume ? [0, 1] : [0]),
             xAxis: xAxes,
@@ -466,7 +465,7 @@
             series,
         };
 
-        chartInstance.setOption(option, CHART_SET_OPTION_MERGE);
+        chartInstance.setOption(option, true);
         chartOptionSet = true;
         updateArrowRotations(chartInstance);
     }

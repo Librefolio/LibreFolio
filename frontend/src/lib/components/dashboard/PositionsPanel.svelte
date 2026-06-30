@@ -24,6 +24,7 @@
     import ContributionTreemap from './ContributionTreemap.svelte';
 
     import type {PortfolioSummary, PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 
     // =========================================================================
     // Props
@@ -35,18 +36,12 @@
         loading?: boolean;
         contributionLoading?: boolean;
         assetsHref?: string;
+        brokers?: ReadonlyArray<BrokerLike>;
         /** Callback to request contribution data fetch (lazy load). */
         onRequestContribution?: () => void;
     }
 
-    let {
-        summary = null,
-        contribution = null,
-        loading = false,
-        contributionLoading = false,
-        assetsHref = '/assets',
-        onRequestContribution,
-    }: Props = $props();
+    let {summary = null, contribution = null, loading = false, contributionLoading = false, assetsHref = '/assets', brokers = [], onRequestContribution}: Props = $props();
 
     // =========================================================================
     // Toggle state (persisted in localStorage)
@@ -74,24 +69,32 @@
     let positionFilter = $state<PositionFilter>(loadPref(STORAGE_KEY_POSITION_FILTER, 'open'));
 
     $effect(() => {
-        try { localStorage.setItem(STORAGE_KEY_SEMANTIC, semanticMode); } catch { /* noop */ }
+        try {
+            localStorage.setItem(STORAGE_KEY_SEMANTIC, semanticMode);
+        } catch {
+            /* noop */
+        }
     });
 
     $effect(() => {
-        try { localStorage.setItem(STORAGE_KEY_VISUAL, visualMode); } catch { /* noop */ }
+        try {
+            localStorage.setItem(STORAGE_KEY_VISUAL, visualMode);
+        } catch {
+            /* noop */
+        }
     });
 
     $effect(() => {
-        try { localStorage.setItem(STORAGE_KEY_POSITION_FILTER, positionFilter); } catch { /* noop */ }
+        try {
+            localStorage.setItem(STORAGE_KEY_POSITION_FILTER, positionFilter);
+        } catch {
+            /* noop */
+        }
     });
 
     // Request contribution data when user switches to contribution mode
     $effect(() => {
-        if (
-            (semanticMode === 'contribution' || (semanticMode === 'exposure' && visualMode === 'table' && positionFilter === 'closed')) &&
-            !contribution &&
-            !contributionLoading
-        ) {
+        if ((semanticMode === 'contribution' || (semanticMode === 'exposure' && visualMode === 'table' && positionFilter === 'closed')) && !contribution && !contributionLoading) {
             onRequestContribution?.();
         }
     });
@@ -104,16 +107,9 @@
     let navAmount = $derived(summary ? parseFloat(summary.net_worth.amount) : 0);
     let displayCurrency = $derived(summary?.net_worth.code ?? 'EUR');
 
-    let needsContributionData = $derived(
-        semanticMode === 'contribution' ||
-        (semanticMode === 'exposure' && visualMode === 'table' && positionFilter === 'closed')
-    );
+    let needsContributionData = $derived(semanticMode === 'contribution' || (semanticMode === 'exposure' && visualMode === 'table' && positionFilter === 'closed'));
     let showLoading = $derived(loading || (needsContributionData && contributionLoading));
-    let showExposureEmpty = $derived(
-        semanticMode === 'exposure' &&
-        (visualMode === 'map' || positionFilter === 'open') &&
-        holdings.length === 0
-    );
+    let showExposureEmpty = $derived(semanticMode === 'exposure' && (visualMode === 'map' || positionFilter === 'open') && holdings.length === 0);
 </script>
 
 <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4 flex flex-col" data-testid="positions-panel">
@@ -125,18 +121,10 @@
         <div class="flex items-center gap-2">
             <!-- Semantic toggle: Exposure / Contribution -->
             <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 text-xs overflow-hidden" data-testid="positions-semantic-toggle">
-                <button
-                    class="px-2.5 py-1 transition-colors {semanticMode === 'exposure' ? 'bg-libre-green text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                    onclick={() => (semanticMode = 'exposure')}
-                    data-testid="positions-toggle-exposure"
-                >
+                <button class="px-2.5 py-1 transition-colors {semanticMode === 'exposure' ? 'bg-libre-green text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" onclick={() => (semanticMode = 'exposure')} data-testid="positions-toggle-exposure">
                     {$_('dashboard.exposure')}
                 </button>
-                <button
-                    class="px-2.5 py-1 transition-colors {semanticMode === 'contribution' ? 'bg-libre-green text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                    onclick={() => (semanticMode = 'contribution')}
-                    data-testid="positions-toggle-contribution"
-                >
+                <button class="px-2.5 py-1 transition-colors {semanticMode === 'contribution' ? 'bg-libre-green text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" onclick={() => (semanticMode = 'contribution')} data-testid="positions-toggle-contribution">
                     {$_('dashboard.contribution')}
                 </button>
             </div>
@@ -204,25 +192,15 @@
     {:else}
         <div class="flex-1 overflow-x-auto">
             {#if semanticMode === 'exposure' && visualMode === 'table'}
-                <ExposureTable {holdings} {navAmount} {displayCurrency} {positionFilter} contribution={contribution} />
+                <ExposureTable {holdings} {navAmount} {displayCurrency} {positionFilter} {contribution} {brokers} />
             {:else if semanticMode === 'exposure' && visualMode === 'map' && positionFilter === 'closed' && contribution}
-                <ContributionTreemap
-                    positions={(contribution.positions ?? []).filter((p) => p.is_fully_sold)}
-                    grossGains={parseFloat(String(contribution.gross_gains))}
-                    grossLosses={parseFloat(String(contribution.gross_losses))}
-                    {displayCurrency}
-                />
+                <ContributionTreemap positions={(contribution.positions ?? []).filter((p) => p.is_fully_sold)} grossGains={parseFloat(String(contribution.gross_gains))} grossLosses={parseFloat(String(contribution.gross_losses))} {displayCurrency} />
             {:else if semanticMode === 'exposure' && visualMode === 'map'}
                 <ExposureTreemap {holdings} {displayCurrency} />
             {:else if semanticMode === 'contribution' && visualMode === 'table' && contribution}
-                <ContributionTable positions={contribution.positions ?? []} unallocated={contribution.unallocated ?? []} {displayCurrency} />
+                <ContributionTable positions={contribution.positions ?? []} unallocated={contribution.unallocated ?? []} {displayCurrency} {brokers} />
             {:else if semanticMode === 'contribution' && visualMode === 'map' && contribution}
-                <ContributionTreemap
-                    positions={contribution.positions ?? []}
-                    grossGains={parseFloat(String(contribution.gross_gains))}
-                    grossLosses={parseFloat(String(contribution.gross_losses))}
-                    {displayCurrency}
-                />
+                <ContributionTreemap positions={contribution.positions ?? []} grossGains={parseFloat(String(contribution.gross_gains))} grossLosses={parseFloat(String(contribution.gross_losses))} {displayCurrency} />
             {/if}
         </div>
     {/if}

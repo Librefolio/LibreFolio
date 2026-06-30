@@ -28,11 +28,12 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTablePagination from '$lib/components/table/DataTablePagination.svelte';
     import type {ColumnDef, CellContent, FilterValue, RowAction, SortState} from '$lib/components/table/types';
+    import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
 
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {ensureCurrenciesLoaded, currencyStoreVersion} from '$lib/stores/reference/currencyStore';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
-    import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/broker/brokerHelpers';
+    import {getBrokerIconCandidates, getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {getStringBadgeStyle, getStringColor} from '$lib/utils/colors';
     import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {formatTxQuantity} from './shared/txDisplayHelpers';
@@ -515,9 +516,11 @@
         const name = escapeHtml(info?.name ?? brokerName(brokerId));
         const role = getBrokerRole(brokerId);
         const roleSvg = getRoleSvgHtml(role);
-        // Resolve icon via the full fallback chain (icon_url → portal_url → plugin)
-        const iconUrl = getBrokerIconUrlById(brokerId, brokers);
-        const iconTag = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" width="16" height="16" style="display:inline-block;vertical-align:middle;margin-right:3px;border-radius:2px" onerror="this.style.display='none'" />` : '';
+        const iconTag = getBrokerIconHtmlById(brokerId, brokers, {
+            width: 16,
+            height: 16,
+            style: 'display:inline-block;vertical-align:middle;margin-right:3px;border-radius:2px',
+        });
         return `${iconTag}<strong>${name}</strong> ${roleSvg}`;
     }
 
@@ -765,23 +768,27 @@
             width: 160,
             urlKey: 'broker_id',
             enumOptions: brokers.map((b) => {
-                const iconUrl = getBrokerIconUrl(b);
                 const color = getBrokerColor(b.id, brokers);
-                return {value: String(b.id), label: b.name ?? `#${b.id}`, iconUrl: iconUrl ?? undefined, dotColor: color.bg};
+                return {
+                    value: String(b.id),
+                    label: b.name ?? `#${b.id}`,
+                    iconCandidates: getBrokerIconCandidates(b),
+                    dotColor: color.bg,
+                };
             }),
             getValue: (d) => String(d.tx.broker_id),
             cell: (d) => {
                 const name = brokerName(d.tx.broker_id);
-                const iconSrc = getBrokerIconUrlById(d.tx.broker_id, brokers);
-                const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" class="tx-broker-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'" /><span class="tx-broker-dot" style="display:none"></span>` : `<span class="tx-broker-dot"></span>`;
                 const role = getBrokerRole(d.tx.broker_id);
-                const roleSvg = role ? getRoleSvgHtml(role) : '';
-                // CustomCell — broker name shown via real Tooltip (no native HTML title).
                 return {
                     type: 'custom',
-                    component: TxTooltipCell,
+                    component: BrokerBadge,
                     props: {
-                        html: `<span class="tx-broker-cell" data-testid="tx-broker-cell-${d.tx.broker_id}">${iconHtml}<span class="tx-broker-name">${escapeHtml(name)}</span>${roleSvg}</span>`,
+                        broker: getBrokerInfo(d.tx.broker_id) ?? brokers.find((b) => b.id === d.tx.broker_id) ?? {id: d.tx.broker_id, name},
+                        size: 16,
+                        showName: true,
+                        showRole: true,
+                        role,
                         tooltip: name,
                     },
                 };
@@ -1022,43 +1029,6 @@
         }
         .dark .tx-table-wrap tr.tx-row-tinted:hover > td {
             background: color-mix(in srgb, var(--broker-vivid, transparent) 22%, #0f0f18);
-        }
-        /* Broker cell: icon/dot + name with proper truncation when narrow. */
-        .tx-table-wrap .tx-broker-cell {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            max-width: 100%;
-            min-width: 0;
-        }
-        .tx-table-wrap .tx-broker-icon {
-            width: 1rem;
-            height: 1rem;
-            border-radius: 3px;
-            object-fit: contain;
-            flex-shrink: 0;
-        }
-        .tx-table-wrap .tx-broker-dot {
-            display: inline-block;
-            width: 0.625rem;
-            height: 0.625rem;
-            border-radius: 9999px;
-            background: var(--broker-bg, #94a3b8);
-            flex-shrink: 0;
-            box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06);
-        }
-        .dark .tx-table-wrap .tx-broker-dot {
-            background: var(--broker-dark-bg, #475569);
-            box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08);
-        }
-        .tx-table-wrap .tx-broker-name {
-            font-size: 0.8125rem;
-            color: inherit;
-            min-width: 0;
-            flex: 1 1 auto;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
         }
         /* Type-icon column: clickable button (opens mkdocs doc page). */
         .tx-table-wrap .tx-type-icon-link {

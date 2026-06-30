@@ -48,13 +48,6 @@ export const CHART_ANIMATION_CONFIG: Partial<EChartsOption> = {
 export const CHART_SET_OPTION_OPTS: {notMerge: boolean; replaceMerge: string[]} = {notMerge: false, replaceMerge: ['series']};
 
 /**
- * setOption flags for category-axis charts that rebuild series on each render.
- * Uses notMerge:false without replaceMerge — ECharts merges by series index
- * and animates value changes for the same positional data points.
- */
-export const CHART_SET_OPTION_MERGE: {notMerge: boolean} = {notMerge: false};
-
-/**
  * Convert a date+value pair into an ECharts named data point.
  *
  * ECharts uses the `name` property to diff data between updates.

@@ -71,7 +71,7 @@
         {@const broker = asBroker(option.data)}
         {@const RoleIcon = broker.user_role ? getRoleIcon(broker.user_role) : null}
         <div class="flex items-center gap-2">
-            <BrokerIcon iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
+            <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
             <span class="truncate">{broker.name}</span>
             {#if RoleIcon}
                 <RoleIcon size={14} class={getRoleIconColor(broker.user_role)} />
@@ -82,7 +82,7 @@
         {@const broker = asBroker(option.data)}
         {@const RoleIcon = broker.user_role ? getRoleIcon(broker.user_role) : null}
         <div class="flex items-center gap-2">
-            <BrokerIcon iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
+            <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
             <span class="truncate">{broker.name}</span>
             {#if RoleIcon}
                 <RoleIcon size={14} class={getRoleIconColor(broker.user_role)} />

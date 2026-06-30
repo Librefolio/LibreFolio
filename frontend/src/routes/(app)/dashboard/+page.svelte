@@ -18,11 +18,10 @@
     import {RefreshCw, PieChart, AreaChart} from 'lucide-svelte';
 
     import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
+    import {zodiosApi} from '$lib/api';
+    import {ensureBrokersLoaded} from '$lib/stores/reference/brokerStore';
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
-    import {getBrokerIconUrlById, ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
-    import {getBrokerColor} from '$lib/utils/broker/brokerColors';
     import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
@@ -44,6 +43,8 @@
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {TransactionFormModal, resolveFormItemsForView, type FormModalItems} from '$lib/components/transactions';
     import type {TXReadItem} from '$lib/components/transactions/types';
+    import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {goto} from '$app/navigation';
@@ -65,6 +66,7 @@
 
     /** Broker IDs selected in the filter (empty = all brokers). */
     let selectedBrokerIds = $state<number[]>([]);
+    let allBrokers = $state<BrokerLike[]>([]);
 
     /** Debounce timer for broker filter changes. */
     let reloadTimer = $state<ReturnType<typeof setTimeout> | null>(null);
@@ -107,13 +109,6 @@
     // Derived
     // =========================================================================
 
-    /** Becomes true after ensurePluginIconsLoaded() resolves — forces broker
-     *  filter icons to re-render once the plugin icon cache is ready. */
-    let pluginIconsReady = $state(false);
-    const allBrokers = $derived.by(() => {
-        void pluginIconsReady; // Re-run after plugin icon cache is populated
-        return getAllBrokers();
-    });
     const baseCurrency = $derived($globalSettings.default_currency || 'EUR');
     const displayCurrency = $derived(targetCurrency || baseCurrency);
 
@@ -332,34 +327,55 @@
     const taxesOnlyStr = $derived(taxesOnlyCur ? formatMoney(taxesOnlyCur.code, `-${taxesOnlyCur.amount}`) : '—');
 
     // HTML tooltips with right-aligned numbers
-    const netDepositedTooltipHtml = $derived(tooltipRows(
-        $_('dashboard.netDepositedCapitalTooltip', {values: {deposited: '', withdrawn: ''}}).split('\n')[0],
-        [{emoji: '🟢', label: $_('dashboard.totalDeposited'), value: totalDepositedStr}, {emoji: '🔴', label: $_('dashboard.totalWithdrawn'), value: totalWithdrawnStr}]
-    ));
-    const feesTooltipHtml = $derived(tooltipRows(
-        $_('dashboard.feesAndTaxesTooltip', {values: {fees: '', taxes: ''}}).split('\n')[0],
-        [{emoji: '🏦', label: $_('dashboard.feesLabel') || 'Commissions', value: feesOnlyStr}, {emoji: '🏛️', label: $_('dashboard.taxesLabel') || 'Taxes', value: taxesOnlyStr}]
-    ));
+    const netDepositedTooltipHtml = $derived(
+        tooltipRows($_('dashboard.netDepositedCapitalTooltip', {values: {deposited: '', withdrawn: ''}}).split('\n')[0], [
+            {emoji: '🟢', label: $_('dashboard.totalDeposited'), value: totalDepositedStr},
+            {emoji: '🔴', label: $_('dashboard.totalWithdrawn'), value: totalWithdrawnStr},
+        ]),
+    );
+    const feesTooltipHtml = $derived(
+        tooltipRows($_('dashboard.feesAndTaxesTooltip', {values: {fees: '', taxes: ''}}).split('\n')[0], [
+            {emoji: '🏦', label: $_('dashboard.feesLabel') || 'Commissions', value: feesOnlyStr},
+            {emoji: '🏛️', label: $_('dashboard.taxesLabel') || 'Taxes', value: taxesOnlyStr},
+        ]),
+    );
     // Cash tooltip: breakdown into Capitale (contributed) + Rendimento (generated)
-    const cashTooltipHtml = $derived((() => {
-        if (cashContribAmt == null && cashGeneratedAmt == null) return undefined;
-        return tooltipRows($_('dashboard.cashValueTooltip'), [
-            {emoji: '💼', label: $_('dashboard.cashFromContributedCapital'), value: cashContribStr},
-            {emoji: '🌱', label: $_('dashboard.cashFromGeneratedReturns'), value: cashGeneratedStr},
-        ]);
-    })());
+    const cashTooltipHtml = $derived(
+        (() => {
+            if (cashContribAmt == null && cashGeneratedAmt == null) return undefined;
+            return tooltipRows($_('dashboard.cashValueTooltip'), [
+                {emoji: '💼', label: $_('dashboard.cashFromContributedCapital'), value: cashContribStr},
+                {emoji: '🌱', label: $_('dashboard.cashFromGeneratedReturns'), value: cashGeneratedStr},
+            ]);
+        })(),
+    );
 
     // P&L bar normalization
     const pnlBarMax = $derived(Math.max(Math.abs(uglDeltaAmt), Math.abs(realizedAmt), Math.abs(incomeAmt), feesAmt) || 1);
-    function pnlBarPct(val: number) { return (Math.abs(val) / pnlBarMax) * 100; }
-    function pnlBarColor(val: number) { return val >= 0 ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500'; }
-    function pnlValueColor(val: number) { return val >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'; }
+    function pnlBarPct(val: number) {
+        return (Math.abs(val) / pnlBarMax) * 100;
+    }
+    function pnlBarColor(val: number) {
+        return val >= 0 ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500';
+    }
+    function pnlValueColor(val: number) {
+        return val >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+    }
 
     // KPI derived values — Returns card
     const roiVal = $derived(summary ? parseFloat(summary.simple_roi_percent) * 100 : 0);
-    const twrrCumVal = $derived.by(() => { const v = summary ? safeStr(summary.twrr_percent) : null; return v != null ? parseFloat(v) * 100 : 0; });
-    const mwrrCumVal = $derived.by(() => { const v = summary ? safeStr(summary.mwrr_cumulative_percent) : null; return v != null ? parseFloat(v) * 100 : 0; });
-    const mwrrAnnVal = $derived.by(() => { const v = summary ? safeStr(summary.mwrr_annualized_percent) : null; return v != null ? parseFloat(v) * 100 : 0; });
+    const twrrCumVal = $derived.by(() => {
+        const v = summary ? safeStr(summary.twrr_percent) : null;
+        return v != null ? parseFloat(v) * 100 : 0;
+    });
+    const mwrrCumVal = $derived.by(() => {
+        const v = summary ? safeStr(summary.mwrr_cumulative_percent) : null;
+        return v != null ? parseFloat(v) * 100 : 0;
+    });
+    const mwrrAnnVal = $derived.by(() => {
+        const v = summary ? safeStr(summary.mwrr_annualized_percent) : null;
+        return v != null ? parseFloat(v) * 100 : 0;
+    });
     const timingEffectVal = $derived(mwrrCumVal - twrrCumVal);
     const timingEffectStr = $derived.by(() => {
         if (!summary) return '—';
@@ -379,8 +395,12 @@
 
     // Returns bar normalization
     const retBarMax = $derived(Math.max(Math.abs(roiVal), Math.abs(twrrCumVal), Math.abs(mwrrCumVal), Math.abs(mwrrAnnVal)) || 1);
-    function retBarPct(val: number) { return (Math.abs(val) / retBarMax) * 100; }
-    function retBarColor(val: number) { return val >= 0 ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500'; }
+    function retBarPct(val: number) {
+        return (Math.abs(val) / retBarMax) * 100;
+    }
+    function retBarColor(val: number) {
+        return val >= 0 ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500';
+    }
 
     // Format helpers for TweenedValue in KpiMetricBar
     const fmtMoney = (v: number) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true});
@@ -501,8 +521,7 @@
         document.addEventListener('click', handleDocumentClick);
         void (async () => {
             await ensureBrokersLoaded();
-            await ensurePluginIconsLoaded();
-            pluginIconsReady = true;
+            allBrokers = (await zodiosApi.list_brokers_api_v1_brokers_get()) as BrokerLike[];
             await loadAll();
         })();
         return () => document.removeEventListener('click', handleDocumentClick);
@@ -578,8 +597,6 @@
                     <!-- Broker list -->
                     <div class="max-h-52 overflow-y-auto mx-2.5 my-2 space-y-0.5">
                         {#each allBrokers as broker (broker.id)}
-                            {@const iconUrl = getBrokerIconUrlById(broker.id, allBrokers)}
-                            {@const dotColor = getBrokerColor(broker.id, allBrokers).bg}
                             {@const isSelected = selectedBrokerIds.includes(broker.id)}
                             <button
                                 type="button"
@@ -587,21 +604,7 @@
                                 onclick={() => toggleBroker(broker.id)}
                                 data-testid="broker-filter-item-{broker.id}"
                             >
-                                <!-- Overlay: colored dot underneath, img on top (hidden on error) -->
-                                <span class="relative w-4 h-4 flex-shrink-0 flex items-center justify-center">
-                                    <span class="absolute inset-0 rounded-sm" style="background: {dotColor}"></span>
-                                    {#if iconUrl}
-                                        <img
-                                            src={iconUrl}
-                                            alt=""
-                                            class="absolute inset-0 w-4 h-4 rounded-sm object-contain"
-                                            referrerpolicy="no-referrer"
-                                            onerror={(e) => {
-                                                (e.target as HTMLImageElement).style.visibility = 'hidden';
-                                            }}
-                                        />
-                                    {/if}
-                                </span>
+                                <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size={16} />
                                 <span class="flex-1 truncate">{broker.name}</span>
                                 {#if isSelected}
                                     <svg class="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -654,21 +657,39 @@
                     </div>
                 {/if}
                 <div class:invisible={summaryLoading}>
-                <p class="text-2xl font-bold text-right tabular-nums transition-colors duration-300 {periodPnlPositive === true ? 'text-green-700 dark:text-green-400' : periodPnlPositive === false ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}" data-testid="kpi-value">
-                    <TweenedValue value={periodPnlAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true})} />
-                </p>
-                {#if pnlDeltaDay != null}
-                    <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-pnl-delta-day">
-                        <TweenedValue value={pnlDeltaDay} format={fmtMoney} />
+                    <p class="text-2xl font-bold text-right tabular-nums transition-colors duration-300 {periodPnlPositive === true ? 'text-green-700 dark:text-green-400' : periodPnlPositive === false ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}" data-testid="kpi-value">
+                        <TweenedValue value={periodPnlAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true})} />
                     </p>
-                {/if}
-                <div class="flex flex-col gap-2 mt-1">
-                    <KpiMetricBar label={$_('dashboard.unrealizedDelta')} tooltip={$_('dashboard.unrealizedDeltaTooltip')} value={uglDeltaStr} numericValue={uglDeltaAmt} formatValue={fmtMoney} barPct={pnlBarPct(uglDeltaAmt)} barColor={pnlBarColor(uglDeltaAmt)} valueColor={pnlValueColor(uglDeltaAmt)} />
-                    <KpiMetricBar label={$_('dashboard.realizedSales')} tooltip={$_('dashboard.realizedSalesTooltip')} value={realizedStr} numericValue={realizedAmt} formatValue={fmtMoney} barPct={pnlBarPct(realizedAmt)} barColor={pnlBarColor(realizedAmt)} valueColor={pnlValueColor(realizedAmt)} />
-                    <KpiMetricBar label={$_('dashboard.income')} tooltip={$_('dashboard.incomeTooltip')} value={incomeStr} numericValue={incomeAmt} formatValue={fmtMoney} barPct={pnlBarPct(incomeAmt)} barColor="bg-green-500 dark:bg-green-400" valueColor="text-green-600 dark:text-green-400" />
-                    <KpiMetricBar label={$_('dashboard.feesAndTaxes')} tooltipHtml={feesTooltipHtml} value={feesStr} numericValue={feesAmt} formatValue={fmtMoney} barPct={pnlBarPct(feesAmt)} barColor="bg-red-400 dark:bg-red-500" valueColor="text-red-600 dark:text-red-400" />
-                </div>
-                <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.cashFlowAdjustedResult')}</p>
+                    {#if pnlDeltaDay != null}
+                        <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-pnl-delta-day">
+                            <TweenedValue value={pnlDeltaDay} format={fmtMoney} />
+                        </p>
+                    {/if}
+                    <div class="flex flex-col gap-2 mt-1">
+                        <KpiMetricBar
+                            label={$_('dashboard.unrealizedDelta')}
+                            tooltip={$_('dashboard.unrealizedDeltaTooltip')}
+                            value={uglDeltaStr}
+                            numericValue={uglDeltaAmt}
+                            formatValue={fmtMoney}
+                            barPct={pnlBarPct(uglDeltaAmt)}
+                            barColor={pnlBarColor(uglDeltaAmt)}
+                            valueColor={pnlValueColor(uglDeltaAmt)}
+                        />
+                        <KpiMetricBar
+                            label={$_('dashboard.realizedSales')}
+                            tooltip={$_('dashboard.realizedSalesTooltip')}
+                            value={realizedStr}
+                            numericValue={realizedAmt}
+                            formatValue={fmtMoney}
+                            barPct={pnlBarPct(realizedAmt)}
+                            barColor={pnlBarColor(realizedAmt)}
+                            valueColor={pnlValueColor(realizedAmt)}
+                        />
+                        <KpiMetricBar label={$_('dashboard.income')} tooltip={$_('dashboard.incomeTooltip')} value={incomeStr} numericValue={incomeAmt} formatValue={fmtMoney} barPct={pnlBarPct(incomeAmt)} barColor="bg-green-500 dark:bg-green-400" valueColor="text-green-600 dark:text-green-400" />
+                        <KpiMetricBar label={$_('dashboard.feesAndTaxes')} tooltipHtml={feesTooltipHtml} value={feesStr} numericValue={feesAmt} formatValue={fmtMoney} barPct={pnlBarPct(feesAmt)} barColor="bg-red-400 dark:bg-red-500" valueColor="text-red-600 dark:text-red-400" />
+                    </div>
+                    <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.cashFlowAdjustedResult')}</p>
                 </div>
             </div>
         </div>
@@ -730,9 +751,40 @@
                     </p>
                 {/if}
                 <div class="flex flex-col gap-2 mt-1">
-                    <KpiMetricBar label={$_('dashboard.marketValue')} tooltip={$_('dashboard.marketValueTooltip')} value={marketValueStr} numericValue={marketValueAmt} formatValue={fmtMoneyUnsigned} barPct={marketBarPct} barColor={marketBarColor} marker={marketStartMarkerPct > 0 ? marketStartMarkerPct : undefined} markerTooltip="{$_('dashboard.marketValueStart')}: {marketValueStartStr}" />
-                    <KpiMetricBar label={$_('dashboard.bookValue')} tooltip={$_('dashboard.bookValueTooltip')} value={purchaseCostStr} numericValue={purchaseCostAmt} formatValue={fmtMoneyUnsigned} barPct={purchaseCostBarPct} barColor="bg-blue-500 dark:bg-blue-400" marker={purchaseCostStartMarkerPct > 0 ? purchaseCostStartMarkerPct : undefined} markerTooltip="{$_('dashboard.bookValueStart')}: {purchaseCostStartStr}" />
-                    <KpiMetricBar label={$_('dashboard.cashValue')} tooltipHtml={cashTooltipHtml} tooltip={cashTooltipHtml ? undefined : $_('dashboard.cashValueTooltip')} value={cashTotalStr} numericValue={cashAmt} formatValue={fmtMoneyUnsigned} barPct={cashBarPct} barColor="bg-emerald-500 dark:bg-emerald-400" marker={cashStartMarkerPct > 0 ? cashStartMarkerPct : undefined} markerTooltip="{$_('dashboard.cashValueStart')}: {cashStartStr}" />
+                    <KpiMetricBar
+                        label={$_('dashboard.marketValue')}
+                        tooltip={$_('dashboard.marketValueTooltip')}
+                        value={marketValueStr}
+                        numericValue={marketValueAmt}
+                        formatValue={fmtMoneyUnsigned}
+                        barPct={marketBarPct}
+                        barColor={marketBarColor}
+                        marker={marketStartMarkerPct > 0 ? marketStartMarkerPct : undefined}
+                        markerTooltip="{$_('dashboard.marketValueStart')}: {marketValueStartStr}"
+                    />
+                    <KpiMetricBar
+                        label={$_('dashboard.bookValue')}
+                        tooltip={$_('dashboard.bookValueTooltip')}
+                        value={purchaseCostStr}
+                        numericValue={purchaseCostAmt}
+                        formatValue={fmtMoneyUnsigned}
+                        barPct={purchaseCostBarPct}
+                        barColor="bg-blue-500 dark:bg-blue-400"
+                        marker={purchaseCostStartMarkerPct > 0 ? purchaseCostStartMarkerPct : undefined}
+                        markerTooltip="{$_('dashboard.bookValueStart')}: {purchaseCostStartStr}"
+                    />
+                    <KpiMetricBar
+                        label={$_('dashboard.cashValue')}
+                        tooltipHtml={cashTooltipHtml}
+                        tooltip={cashTooltipHtml ? undefined : $_('dashboard.cashValueTooltip')}
+                        value={cashTotalStr}
+                        numericValue={cashAmt}
+                        formatValue={fmtMoneyUnsigned}
+                        barPct={cashBarPct}
+                        barColor="bg-emerald-500 dark:bg-emerald-400"
+                        marker={cashStartMarkerPct > 0 ? cashStartMarkerPct : undefined}
+                        markerTooltip="{$_('dashboard.cashValueStart')}: {cashStartStr}"
+                    />
                     <KpiDivergingFlowBar
                         label={$_('dashboard.netDepositedCapital')}
                         tooltipHtml={netDepositedTooltipHtml}
@@ -764,14 +816,17 @@
                         class="px-2.5 py-1.5 transition-colors {allocationView === 'now' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
                         onclick={() => (allocationView = 'now')}
                         data-testid="allocation-view-now"
-                        title={$_('dashboard.now')}
-                    ><PieChart size={14} /></button>
+                        title={$_('dashboard.now')}><PieChart size={14} /></button
+                    >
                     <button
                         class="px-2.5 py-1.5 transition-colors border-l border-gray-200 dark:border-slate-600 {allocationView === 'history' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => { allocationView = 'history'; loadAllocationHistory(allocationTab); }}
+                        onclick={() => {
+                            allocationView = 'history';
+                            loadAllocationHistory(allocationTab);
+                        }}
                         data-testid="allocation-view-history"
-                        title={$_('dashboard.history')}
-                    ><AreaChart size={14} /></button>
+                        title={$_('dashboard.history')}><AreaChart size={14} /></button
+                    >
                 </div>
             </div>
 
@@ -780,7 +835,10 @@
                 {#each [['type', 'dashboard.typeAllocation'], ['sector', 'dashboard.sectorAllocation'], ['geo', 'dashboard.geoAllocation']] as const as [tab, labelKey]}
                     <button
                         class="px-3 py-1 transition-colors {allocationTab === tab ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'} {tab !== 'type' ? 'border-l border-gray-200 dark:border-slate-600' : ''}"
-                        onclick={() => { allocationTab = tab; if (allocationView === 'history') loadAllocationHistory(tab); }}
+                        onclick={() => {
+                            allocationTab = tab;
+                            if (allocationView === 'history') loadAllocationHistory(tab);
+                        }}
                         data-testid="allocation-tab-{tab}"
                     >
                         {$_(labelKey)}
@@ -827,30 +885,34 @@
     <!-- ── Bottom Grid: Positions | Transactions ── -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <!-- LEFT: Positions panel -->
-        <PositionsPanel
-            {summary}
-            contribution={positionsContribution}
-            loading={summaryLoading}
-            {contributionLoading}
-            {assetsHref}
-            onRequestContribution={loadContribution}
-        />
+        <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} />
 
         <!-- RIGHT: Recent Transactions -->
-        <RecentTransactionsPanel limit={10} brokerIds={activeBrokerIds} {transactionsHref} onViewRow={(row) => { txViewItems = resolveFormItemsForView(row as TXReadItem, () => undefined, getBrokerRole); txViewOpen = true; }} />
+        <RecentTransactionsPanel
+            limit={10}
+            brokerIds={activeBrokerIds}
+            {transactionsHref}
+            onViewRow={(row) => {
+                txViewItems = resolveFormItemsForView(row as TXReadItem, () => undefined, getBrokerRole);
+                txViewOpen = true;
+            }}
+        />
     </div>
 </div>
 
 <!-- FxPairAddModal — opened from DataQualityBanner CTA -->
 {#if showFxPairAddModal}
     {@const fxParts = fxPairCreateSlug.includes('-') ? fxPairCreateSlug.split('-') : fxPairCreateSlug.split('/')}
-    <FxPairAddModal bind:open={showFxPairAddModal} initialBase={fxParts[0] ?? ''} initialQuote={fxParts[1] ?? ''} oncreated={() => { invalidate(); loadAll(); }} />
+    <FxPairAddModal
+        bind:open={showFxPairAddModal}
+        initialBase={fxParts[0] ?? ''}
+        initialQuote={fxParts[1] ?? ''}
+        oncreated={() => {
+            invalidate();
+            loadAll();
+        }}
+    />
 {/if}
 
 <!-- Transaction view modal — opened from RecentTransactionsPanel double-click -->
-<TransactionFormModal
-    open={txViewOpen}
-    mode="view"
-    items={txViewItems}
-    onClose={() => (txViewOpen = false)}
-/>
+<TransactionFormModal open={txViewOpen} mode="view" items={txViewItems} onClose={() => (txViewOpen = false)} />

@@ -843,21 +843,26 @@
                                         <Check size={12} />
                                     {/if}
                                 </span>
-                               <span class="enum-icon-wrapper">
-                                   {#if option.dotColor}
-                                       <span class="enum-option-dot" style="background:{option.dotColor}"></span>
-                                   {/if}
-                                   {#if option.iconUrl}
-                                       <img src={option.iconUrl} alt="" class="enum-option-icon enum-icon-overlay"
-                                           onerror={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
-                                           referrerpolicy="no-referrer"
-                                       />
-                                   {/if}
-                               </span>
-                               <span class="enum-label">{option.label}</span>
-                               {#if option.count != null}
-                                   <span class="enum-count">{option.count}</span>
-                               {/if}
+                                <span class="enum-icon-wrapper">
+                                    {#if option.dotColor}
+                                        <span class="enum-option-dot" style="background:{option.dotColor}"></span>
+                                    {/if}
+                                    {#if option.iconUrl}
+                                        <img
+                                            src={option.iconUrl}
+                                            alt=""
+                                            class="enum-option-icon enum-icon-overlay"
+                                            onerror={(e) => {
+                                                (e.target as HTMLImageElement).style.visibility = 'hidden';
+                                            }}
+                                            referrerpolicy="no-referrer"
+                                        />
+                                    {/if}
+                                </span>
+                                <span class="enum-label">{option.label}</span>
+                                {#if option.count != null}
+                                    <span class="enum-count">{option.count}</span>
+                                {/if}
                             </button>
                         {/each}
                     {/if}
@@ -894,8 +899,13 @@
                                         <span class="enum-option-dot" style="background:{option.dotColor}"></span>
                                     {/if}
                                     {#if option.iconUrl}
-                                        <img src={option.iconUrl} alt="" class="enum-option-icon enum-icon-overlay"
-                                            onerror={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
+                                        <img
+                                            src={option.iconUrl}
+                                            alt=""
+                                            class="enum-option-icon enum-icon-overlay"
+                                            onerror={(e) => {
+                                                (e.target as HTMLImageElement).style.visibility = 'hidden';
+                                            }}
                                             referrerpolicy="no-referrer"
                                         />
                                     {/if}

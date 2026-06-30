@@ -14,7 +14,6 @@
     import ChartToolbar from './ChartToolbar.svelte';
     import type {LineDataPoint} from './LineChart.svelte';
     import CandlestickChart from './CandlestickChart.svelte';
-    import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_MERGE} from '$lib/components/charts/echartsAnimationConfig';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
     import {buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
@@ -699,7 +698,7 @@
         }
 
         const option: echarts.EChartsOption = {
-            ...CHART_ANIMATION_CONFIG,
+            animation: false,
             grid: [{top: 20, right: computeRightMargin(extraAxesCount), bottom: 20, left: 10, containLabel: true}],
             xAxis: [
                 {
@@ -850,7 +849,7 @@
             series,
         };
 
-        chartInstance.setOption(option, CHART_SET_OPTION_MERGE);
+        chartInstance.setOption(option, true);
         chartOptionSet = true;
 
         // Compute pixel-accurate arrow rotations after layout is established

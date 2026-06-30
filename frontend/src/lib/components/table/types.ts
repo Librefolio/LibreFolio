@@ -199,6 +199,8 @@ export interface EnumOption {
     label: string;
     /** Optional icon URL rendered beside the label in filter dropdowns */
     iconUrl?: string;
+    /** Optional ordered icon fallback chain for filter dropdowns */
+    iconCandidates?: string[];
     /** Fallback colored dot (CSS color) shown when iconUrl is absent */
     dotColor?: string;
     /** Optional count of rows matching this value (computed by DataTable, shown in filter UI) */
