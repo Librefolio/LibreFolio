@@ -67,3 +67,32 @@ Si la fórmula no se ajustara por flujos externos, mostraría erróneamente un b
 
 - **vs. ROI / TWRR / MWRR**: Estas son métricas basadas en porcentajes que muestran la tasa de retorno. El P&L del Periodo muestra la cantidad monetaria absoluta de la ganancia/pérdida.
 - **vs. Ganancia/Pérdida Latente**: La ganancia/pérdida latente es una instantánea de las posiciones abiertas actuales en comparación con su coste de adquisición original. El P&L del Periodo mide el rendimiento tanto de las posiciones abiertas como de las cerradas (ganancias realizadas, dividendos, intereses) específicamente dentro de los límites de la ventana de tiempo elegida.
+
+---
+
+## 📊 Relación con el P&L Total
+
+El P&L del Periodo es la **versión acotada en el tiempo** de un concepto más fundamental: el **P&L Total**.
+
+$$
+\text{P\&L Total}(t) = \text{NAV}(t) - \text{Capital Depositado}(t)
+$$
+
+Donde el **Capital Depositado** es el capital externo neto acumulativo aportado desde el origen — no solo en el periodo seleccionado. El P&L del Periodo es igual a la variación del P&L Total dentro del intervalo de tiempo elegido:
+
+$$
+\text{P\&L del Periodo} = \text{P\&L Total}(t_{\text{fin}}) - \text{P\&L Total}(t_{\text{inicio}})
+$$
+
+El P&L Total es visible en la **descripción emergente del Gráfico de Crecimiento** (modo ABS) como la brecha entre la línea del NAV y la línea discontinua del Capital Depositado. Esto hace que sea fácil de leer: si el NAV está por encima de la línea base, la cartera es rentable; si está por debajo, la cartera está en pérdidas.
+
+🔗 Consulte **[Capital Depositado & P&L Total](deposited-capital.md)** para ver la teoría completa, el algoritmo de descomposición de efectivo y ejemplos prácticos resueltos.
+
+---
+
+## 🔗 Relacionado
+
+- 💼 **[NAV / Valor Neto](nav.md)** — el punto final de cada fórmula de P&L
+- 📚 **[Valor Contable (Book Value)](book-value.md)** — utilizado en el desglose de P&L (cambio latente, base de coste)
+- 💸 **[Capital Depositado & P&L Total](deposited-capital.md)** — versión acumulada desde el origen con descomposición de efectivo
+- ⏱️ **[Efecto Timing](timing-effect.md)** — el impacto del momento de sus depósitos en los rendimientos

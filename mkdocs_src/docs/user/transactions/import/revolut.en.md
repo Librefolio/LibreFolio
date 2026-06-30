@@ -28,3 +28,7 @@ To export your stock/crypto transaction history from Revolut:
 
 - Supports stock trades, crypto purchases, dividends paid, custody fees, and cash transfers.
 - Handles multi-currency amounts in the same file automatically.
+
+## 🔗 Developer Reference
+
+→ [Revolut Provider — Implementation Details](../../../developer/backend/brim/providers_list.md)
