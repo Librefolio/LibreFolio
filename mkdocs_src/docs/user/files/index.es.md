@@ -48,7 +48,7 @@ Los informes de bróker tienen una **visibilidad restringida**: solo puede ver l
 
 Para cargar un archivo:
 
-1. Haga clic en el **área de carga** o arrastre y suelte los archivos directamente en ella.
+1. Haga clic en el **área de carga** o **arrastre y suelte** los archivos directamente en ella.
 2. En el caso de **archivos de imagen**, la [herramienta de recorte de imágenes](../misc/image-crop.md) se abrirá automáticamente para poder cambiar el tamaño y recortarla antes de subirla.
 3. Para **archivos que no son de imagen** (CSV, PDF, etc.), puede cambiar el nombre del archivo antes de confirmar la subida.
 

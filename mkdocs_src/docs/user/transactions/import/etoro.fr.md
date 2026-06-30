@@ -32,3 +32,7 @@ Pour exporter l'historique de vos transactions depuis eToro :
 
 - Prise en charge des transactions sur actions, ETF, crypto et CFD, des dividendes versés, des dépôts, des retraits et des ajustements de frais.
 - Toutes les valeurs dans les fichiers exportés d'eToro sont libellées en USD.
+
+## 🔗 Référence pour les Développeurs
+
+→ [eToro Provider — Détails d'Implémentation](../../../developer/backend/brim/providers_list.md)

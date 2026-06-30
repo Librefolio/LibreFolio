@@ -29,3 +29,7 @@ Pour exporter l'historique de vos transactions depuis Charles Schwab :
 
 - Prise en charge des paramètres CSV au format US (structures de date MM/DD/YYYY et devises en USD).
 - Analyse les transactions d'achat/vente, les paiements de dividendes, les réinvestissements et les frais de transaction.
+
+## 🔗 Référence pour les Développeurs
+
+→ [Charles Schwab Provider — Détails d'Implémentation](../../../developer/backend/brim/providers_list.md)

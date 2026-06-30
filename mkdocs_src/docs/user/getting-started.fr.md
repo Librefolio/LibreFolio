@@ -50,7 +50,7 @@ Dans LibreFolio, le moyen le plus rapide de commencer est d'importer directement
 
 ### 📋 Étapes
 
-1. **Téléchargez votre Relevé** : Accédez à la page des **[Transactions](transactions/index.md)** depuis le menu latéral. Cliquez sur le bouton **"Importer"** (:material-file-upload:) ou glissez-déposez le fichier de relevé de votre courtier (CSV ou PDF) directement sur la page.
+1. **Téléchargez votre Relevé** : Accédez à la page des **[Transactions](transactions/index.md)** depuis le menu latéral. Cliquez sur le bouton **"Importer"** (:material-file-upload:) ou **glissez-déposez** le fichier de relevé de votre courtier (CSV ou PDF) directement sur la page.
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Assistant Étape 1 : Télécharger" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
     </div>

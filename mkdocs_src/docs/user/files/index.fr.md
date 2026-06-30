@@ -48,7 +48,7 @@ Les rapports de courtier ont une **visibilité restreinte** : vous ne pouvez voi
 
 Pour télécharger un fichier :
 
-1. Cliquez sur **l'zone de téléchargement** ou glissez-déposez les fichiers directement.
+1. Cliquez sur **l'zone de téléchargement** ou **glissez-déposez** les fichiers directement.
 2. Pour les **fichiers image**, l'outil de [recadrage d'image](../misc/image-crop.md) s'ouvre automatiquement pour vous permettre de redimensionner et recadrer l'image avant le téléchargement.
 3. Pour les **fichiers non image** (CSV, PDF, etc.), vous pouvez renommer le fichier avant de confirmer le téléchargement.
 

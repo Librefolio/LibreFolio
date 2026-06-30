@@ -22,6 +22,7 @@ Ces deux acteurs peuvent obtenir des performances très différentes. Vous pouve
 | **[Net Asset Value (NAV)](nav.md)** | Net Worth / Net Asset Value. La valorisation boursière totale du portefeuille (actifs + liquidités) à la fin de la fenêtre de temps sélectionnée. |
 | **[Book Value](book-value.md)** | Le coût historique d'acquisition des positions ouvertes plus la liquidité. Utilisé pour comparer le coût d'achat à la valeur de marché. |
 | **[P&L de la Période](period-pnl.md)** | Le profit ou la perte monétaire absolu généré par votre portefeuille au cours de la période sélectionnée, ajusté des flux de trésorerie. |
+| **[Capital Déposé & P&L Total](deposited-capital.md)** | Capital externe net versé depuis l'origine ; l'ancrage pour le calcul du P&L Total et l'algorithme de décomposition des liquidités. |
 | **[Effet de timing](timing-effect.md)** | Différence entre le MWRR cumulé et le TWRR cumulé. Indique à quel point le moment et le montant de vos flux de trésorerie ont influencé votre rendement global. |
 | **[ROI Simple](roi.md)** | Rendement en pourcentage absolu généré par un investissement par rapport à son coût. Idéal pour évaluer des positions individuelles. |
 | **[TWRR](twrr.md)** | Taux de rendement pondéré par le temps (Time-Weighted Rate of Return). Mesure la performance pure des actifs sous-jacents, en ignorant le timing des flux de trésorerie. |

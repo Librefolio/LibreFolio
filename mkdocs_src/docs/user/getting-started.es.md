@@ -50,7 +50,7 @@ En LibreFolio, la forma más rápida de comenzar es importando directamente su h
 
 ### 📋 Pasos
 
-1. **Cargue el Extracto**: Vaya a la página de **[Transacciones](transactions/index.md)** desde el menú lateral. Haga clic en el botón **"Import"** (:material-file-upload:) o simplemente arrastre y suelte el archivo del informe de su bróker (CSV o PDF) directamente en la página.
+1. **Cargue el Extracto**: Vaya a la página de **[Transacciones](transactions/index.md)** desde el menú lateral. Haga clic en el botón **"Import"** (:material-file-upload:) o simplemente **arrastre y suelte** el archivo del informe de su bróker (CSV o PDF) directamente en la página.
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Asistente Paso 1: Cargar" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
     </div>

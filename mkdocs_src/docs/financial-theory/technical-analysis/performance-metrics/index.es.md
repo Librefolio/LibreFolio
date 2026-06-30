@@ -22,6 +22,7 @@ Estos dos actores pueden tener rendimientos muy diferentes. Puede elegir una acc
 | **[Net Asset Value (NAV)](nav.md)** | Net Worth / Net Asset Value. La valoración de mercado total de la cartera (activos + efectivo) al final de la ventana de tiempo. |
 | **[Book Value](book-value.md)** | El coste contable histórico de las posiciones abiertas más el efectivo. Se utiliza para comparar el coste de adquisición con el valor de mercado. |
 | **[P&L del Periodo](period-pnl.md)** | La ganancia o pérdida monetaria absoluta de la cartera en la ventana seleccionada, descontando los flujos de efectivo. |
+| **[Capital Depositado & P&L Total](deposited-capital.md)** | Capital externo neto aportado desde el origen; el ancla para calcular el P&L Total y el algoritmo de descomposición de efectivo. |
 | **[Efecto Timing](timing-effect.md)** | Diferencia entre el MWRR acumulado y el TWRR acumulado. Muestra cuánto afectaron el momento y el importe de sus flujos de efectivo a su rendimiento general. |
 | **[ROI Simple](roi.md)** | Porcentaje de retorno absoluto generado por una inversión en relación con su costo. Ideal para evaluar posiciones individuales. |
 | **[TWRR](twrr.md)** | Tasa de Retorno Ponderada por el Tiempo (Time-Weighted Rate of Return). Mide el rendimiento puro de los activos subyacentes, ignorando la temporalidad de los flujos de caja. |

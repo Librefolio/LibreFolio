@@ -50,7 +50,7 @@ In LibreFolio, the fastest way to get started is by importing your transaction h
 
 ### 📋 Steps
 
-1. **Upload Your Statement**: Navigate to the **[Transactions](transactions/index.md)** page from the sidebar menu. Click the **"Import"** button (:material-file-upload:) or drag & drop your broker statement file (CSV or PDF) directly onto the page.
+1. **Upload Your Statement**: Navigate to the **[Transactions](transactions/index.md)** page from the sidebar menu. Click the **"Import"** button (:material-file-upload:) or **drag & drop** your broker statement file (CSV or PDF) directly onto the page.
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Wizard Step 1: Upload" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
     </div>

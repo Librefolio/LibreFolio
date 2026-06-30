@@ -67,3 +67,32 @@ Si la formule n'ajustait pas les flux externes, elle afficherait à tort un prof
 
 - **vs. ROI / TWRR / MWRR** : Ce sont des mesures en pourcentage indiquant le taux de rendement. Le P&L de la Période indique le montant monétaire absolu du profit/perte.
 - **vs. Plus-value/Moins-value Latente** : La plus-value/moins-value latente est un instantané des positions ouvertes actuelles par rapport à leur coût d'achat initial. Le P&L de la Période mesure la performance des positions ouvertes et fermées (gains réalisés, dividendes, intérêts) spécifiquement dans les limites de la fenêtre temporelle choisie.
+
+---
+
+## 📊 Relation avec le P&L Total
+
+Le P&L de la Période est la **version limitée dans le temps** d'un concept plus fondamental : le **P&L Total**.
+
+$$
+\text{P\&L Total}(t) = \text{NAV}(t) - \text{Capital Déposé}(t)
+$$
+
+Où le **Capital Déposé** est le capital externe net cumulé versé depuis l'origine — pas seulement au cours de la période sélectionnée. Le P&L de la Période est égal à la variation du P&L Total sur l'intervalle choisi :
+
+$$
+\text{P\&L de la Période} = \text{P\&L Total}(t_{\text{fin}}) - \text{P\&L Total}(t_{\text{début}})
+$$
+
+Le P&L Total est visible dans la **bulle d'aide du Graphique de Croissance** (mode ABS) sous forme d'écart entre la courbe de la NAV et la ligne en pointillés du Capital Déposé. C'est donc très simple à lire : si la NAV est au-dessus de la ligne de base, le portefeuille est rentable ; si elle est en dessous, le portefeuille est en perte.
+
+🔗 Voir **[Capital Déposé & P&L Total](deposited-capital.md)** pour la théorie complète, l'algorithme de décomposition des liquidités et des exemples concrets résolus.
+
+---
+
+## 🔗 Liens Utiles
+
+- 💼 **[NAV / Patrimoine Net](nav.md)** — le point final de chaque formule de P&L
+- 📚 **[Valeur Comptable (Book Value)](book-value.md)** — utilisé dans la décomposition du P&L (variation latente, base de coût)
+- 💸 **[Capital Déposé & P&L Total](deposited-capital.md)** — version globale depuis l'origine avec décomposition des liquidités
+- ⏱️ **[Effet Timing](timing-effect.md)** — l'impact du moment de vos dépôts sur vos rendements

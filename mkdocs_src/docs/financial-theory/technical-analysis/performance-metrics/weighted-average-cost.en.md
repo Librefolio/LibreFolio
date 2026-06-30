@@ -146,6 +146,31 @@ When a portfolio contains acquisitions in different currencies, LibreFolio:
 
 ## 🎯 Where WAC is Used in LibreFolio
 
+- **Cost basis**: $\text{CB}(a,b,t) = q(a,b,t) \times \text{WAC}(a,b,t) \times \text{fx}(\cdot)$
+- **Realized P&L on SELL**: $\text{realized} = P_{\text{sell}} - q_{\text{sold}} \times \text{WAC}_{\text{pre-sell}}$
+- **Cash pool decomposition**: SELL returns $C = q_{\text{sold}} \times \text{WAC}$ to Capital Pool
 - **Transfer form**: auto-suggests cost_basis_override for outgoing transfers
-- **P&L computation**: realized gains = sell_price − WAC (FIFO at runtime, WAC for cost basis)
-- **Portfolio view**: average entry price per holding
+
+!!! warning "WAC is never used for asset valuation"
+
+    WAC is an accounting construct for cost basis. The valuation chain for market value uses: `MARKET_PRICE → LAST_BUY_PRICE → MISSING`. See [NAV](nav.md).
+
+## ⚙️ Implementation: Position-Level Scope
+
+WAC is maintained **per position** $(a, b)$ — i.e., per (asset, broker) pair. The same asset held on two brokers has two independent WAC pools.
+
+$$
+\text{WAC}(a, b_1, t) \neq \text{WAC}(a, b_2, t) \quad \text{in general}
+$$
+
+The engine computes WAC inline during the daily transaction loop — no separate database queries needed. This achieves O(1) amortized cost per transaction instead of the O(N) cost of re-querying the full history.
+
+### Same-day transaction ordering
+
+Within the same date, **additions are processed before reductions**:
+
+$$
+\text{BUY}_1, \text{BUY}_2, \ldots \quad \text{then} \quad \text{SELL}_1, \text{SELL}_2, \ldots
+$$
+
+This prevents transient negative quantities and ensures SELL always reads the correct WAC that includes same-day BUYs.

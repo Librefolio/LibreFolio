@@ -2835,6 +2835,142 @@ def _add_inspect_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--diff", action="store_true", help="Show only structural diff artifacts", )
 
 
+
+def _add_stamp_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add translate-stamp-specific arguments to a parser."""
+    target_langs = _detect_target_languages()
+
+    parser.add_argument(
+        "--lang", action="extend", nargs="+",
+        choices=target_langs, metavar="LANG",
+        help=f"Language(s) to stamp as translated. Default: all detected ({', '.join(target_langs)})",
+    )
+    parser.add_argument(
+        "--file", action="extend", nargs="+", metavar="PATH",
+        help="File(s) or glob pattern(s) to stamp (e.g. getting-started.en.md). Default: all nav files.",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Show what would be stamped without modifying the cache.",
+    )
+
+
+def run_stamp(args) -> int:
+    """Mark source file(s) as already translated in the cache (without running LLM translation).
+
+    Use this when you have manually edited or reviewed a translation and want to
+    prevent the pipeline from re-translating it. The cache entry is updated to the
+    current MD5 of the source (.en.md) file and the specified languages are recorded
+    as done.
+
+    This does NOT touch the actual translation files — it only updates the hash cache
+    at: .translate-hashes.json
+    """
+    target_langs: list[str] = args.lang or _detect_target_languages()
+    dry_run: bool = getattr(args, "dry_run", False)
+    file_filter: list[str] | None = getattr(args, "file", None)
+    now_ts = datetime.now(timezone.utc).isoformat()
+
+    # Build source list (same logic as run_translate)
+    if file_filter:
+        import glob as _glob
+        sources: list[tuple[str, Path]] = []
+        seen: set[Path] = set()
+        for f in file_filter:
+            cwd_matches = sorted(_glob.glob(f, recursive=True))
+            docs_matches = sorted(_glob.glob(str(DOCS_DIR / f), recursive=True))
+            resolved: list[Path] = []
+            if cwd_matches:
+                resolved = [Path(m).resolve() for m in cwd_matches]
+            elif docs_matches:
+                resolved = [Path(m).resolve() for m in docs_matches]
+            else:
+                p = Path(f)
+                p = (Path.cwd() / p).resolve() if not p.is_absolute() else p.resolve()
+                if p.exists():
+                    resolved = [p]
+                else:
+                    docs_p = (DOCS_DIR / f).resolve()
+                    if docs_p.exists():
+                        resolved = [docs_p]
+                    else:
+                        print(f"  ⚠️  File not found: {f}", file=sys.stderr)
+                        continue
+            for p in resolved:
+                if p in seen:
+                    continue
+                seen.add(p)
+                if not p.name.endswith(".en.md"):
+                    continue
+                try:
+                    cache_key = str(p.relative_to(DOCS_DIR))
+                except ValueError:
+                    cache_key = p.name
+                sources.append((cache_key, p))
+    else:
+        nav_files = get_translatable_files()
+        sources = [(rel, DOCS_DIR / rel) for rel in nav_files]
+
+    if not sources:
+        print("No files found to stamp.")
+        return 1
+
+    hashes = _load_hashes()
+
+    stamped = 0
+    for cache_key, source_path in sorted(sources, key=lambda x: x[0]):
+        if not source_path.exists():
+            print(f"  ⚠️  Source not found, skipping: {cache_key}")
+            continue
+
+        current_md5 = _file_md5(source_path)
+        cached = hashes.get(cache_key, {})
+        old_md5 = cached.get("md5", "<none>")
+        already_done = set(cached.get("langs_done", []))
+        new_langs = sorted(set(target_langs) | already_done)
+
+        md5_changed = current_md5 != old_md5
+        langs_changed = set(target_langs) - already_done
+
+        if not md5_changed and not langs_changed:
+            print(f"  ✅ Already stamped, skipping: {cache_key}")
+            continue
+
+        tag_parts = []
+        if md5_changed:
+            tag_parts.append(f"MD5 {old_md5[:8]}→{current_md5[:8]}")
+        if langs_changed:
+            tag_parts.append(f"new langs: {', '.join(sorted(langs_changed))}")
+
+        print(f"  {'🔍' if dry_run else '📌'} {cache_key}  ({'; '.join(tag_parts)})")
+
+        if not dry_run:
+            entry = dict(cached)  # preserve existing keys (analysis, critique, etc.)
+            entry["md5"] = current_md5
+            entry["langs_done"] = new_langs
+            entry["last_translated"] = entry.get("last_translated", now_ts)
+            entry.setdefault("langs", {})
+            for lang in target_langs:
+                entry["langs"].setdefault(lang, {})
+                entry["langs"][lang]["stamped_at"] = now_ts
+                entry["langs"][lang]["stamped_by"] = "translate-stamp"
+            hashes[cache_key] = entry
+        stamped += 1
+
+    if dry_run:
+        print(f"\n🔍 Dry run — {stamped} file(s) would be stamped for lang(s): {', '.join(target_langs)}")
+        print(f"   Cache: {HASH_FILE}")
+        return 0
+
+    if stamped:
+        _save_hashes(hashes)
+        print(f"\n✅ Stamped {stamped} file(s) as translated for lang(s): {', '.join(target_langs)}")
+        print(f"   Cache: {HASH_FILE}")
+    else:
+        print("\n✅ Nothing to stamp — all files already up-to-date in cache.")
+    return 0
+
+
 def register_subparser(mk_sub) -> None:
     """Register sub-commands under 'mkdocs' in dev.py."""
     # translate
@@ -2850,6 +2986,20 @@ def register_subparser(mk_sub) -> None:
     diff_p = mk_sub.add_parser("translate-diff", help="Structural diff: compare EN vs translated files")
     _add_diff_arguments(diff_p)
     diff_p.set_defaults(func=run_diff)
+
+    # translate-stamp
+    stmp_p = mk_sub.add_parser(
+        "translate-stamp",
+        help="Mark file(s) as already translated in the cache (no LLM call)",
+        description=(
+            "Update the translation hash cache to mark one or more source files "
+            "as translated at their current MD5, without running the LLM pipeline. "
+            "Use this after manually editing or reviewing translated files to "
+            "prevent the pipeline from re-translating them."
+        ),
+    )
+    _add_stamp_arguments(stmp_p)
+    stmp_p.set_defaults(func=run_stamp)
 
     # translate-inspect
     ins_p = mk_sub.add_parser("translate-inspect", help="Inspect saved translation artifacts (analysis, critique, diff)")
@@ -2875,6 +3025,14 @@ def main():
     diff_p = sub.add_parser("diff", help="Structural diff: compare EN vs translated files")
     _add_diff_arguments(diff_p)
     diff_p.set_defaults(func=run_diff)
+
+    # stamp
+    stmp_p = sub.add_parser(
+        "stamp",
+        help="Mark file(s) as already translated in the cache (no LLM call)",
+    )
+    _add_stamp_arguments(stmp_p)
+    stmp_p.set_defaults(func=run_stamp)
 
     # inspect
     ins_p = sub.add_parser("inspect", help="Inspect saved translation artifacts")

@@ -28,3 +28,7 @@ To export your transaction statement from Trading212:
 
 - Supports stock/ETF buys and sells, dividends, interest on cash, deposits, withdrawals, and FX conversion fees.
 - Multi-currency accounts are supported.
+
+## 🔗 Developer Reference
+
+→ [Trading212 Provider — Implementation Details](../../../developer/backend/brim/providers_list.md)

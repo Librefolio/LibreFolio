@@ -32,3 +32,7 @@ To export your transaction statement from Coinbase:
 
 - Supports buys, sells, conversions, sends, receives, staking rewards, and fee assessments.
 - Supports major fiat base currencies (USD, EUR, GBP).
+
+## 🔗 Developer Reference
+
+→ [Coinbase Provider — Implementation Details](../../../developer/backend/brim/providers_list.md)
