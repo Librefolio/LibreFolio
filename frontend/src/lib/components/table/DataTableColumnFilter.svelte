@@ -110,6 +110,22 @@
         return initialValue?.type === 'size' ? (initialValue.maxBytes ?? numberMax) : numberMax;
     }
 
+    function handleEnumIconError(event: Event) {
+        const img = event.currentTarget as HTMLImageElement;
+        try {
+            const fallbacks = JSON.parse(img.dataset.fallbacks || '[]') as string[];
+            const next = fallbacks.shift();
+            if (next) {
+                img.dataset.fallbacks = JSON.stringify(fallbacks);
+                img.src = next;
+                return;
+            }
+        } catch {
+            // Ignore malformed fallback metadata and fall back to dot-only UI.
+        }
+        img.style.visibility = 'hidden';
+    }
+
     // Text filter state
     let textValue = $state(getInitialTextValue());
     let textMatchMode: TextMatchMode = $state(getInitialTextMatchMode());
@@ -837,6 +853,7 @@
                         <div class="enum-empty">{$t('table.filter.empty') || 'No options'}</div>
                     {:else}
                         {#each filteredEnumOptions as option}
+                            {@const iconCandidates = option.iconCandidates?.length ? option.iconCandidates : option.iconUrl ? [option.iconUrl] : []}
                             <button type="button" class="enum-option" onclick={() => toggleEnum(option.value)} data-testid={`filter-enum-option-${option.value}`}>
                                 <span class="enum-checkbox" class:checked={selectedEnums.has(option.value)}>
                                     {#if selectedEnums.has(option.value)}
@@ -847,16 +864,8 @@
                                     {#if option.dotColor}
                                         <span class="enum-option-dot" style="background:{option.dotColor}"></span>
                                     {/if}
-                                    {#if option.iconUrl}
-                                        <img
-                                            src={option.iconUrl}
-                                            alt=""
-                                            class="enum-option-icon enum-icon-overlay"
-                                            onerror={(e) => {
-                                                (e.target as HTMLImageElement).style.visibility = 'hidden';
-                                            }}
-                                            referrerpolicy="no-referrer"
-                                        />
+                                    {#if iconCandidates.length > 0}
+                                        <img src={iconCandidates[0]} alt="" class="enum-option-icon enum-icon-overlay" data-fallbacks={JSON.stringify(iconCandidates.slice(1))} onerror={handleEnumIconError} referrerpolicy="no-referrer" />
                                     {/if}
                                 </span>
                                 <span class="enum-label">{option.label}</span>
@@ -888,6 +897,7 @@
                         <div class="enum-empty">{$t('table.filter.empty') || 'No options'}</div>
                     {:else}
                         {#each filteredMultiEnumOptions as option}
+                            {@const iconCandidates = option.iconCandidates?.length ? option.iconCandidates : option.iconUrl ? [option.iconUrl] : []}
                             <button type="button" class="enum-option" onclick={() => toggleMultiEnum(option.value)} data-testid={`filter-multi-enum-option-${option.value}`}>
                                 <span class="enum-checkbox" class:checked={multiEnums.has(option.value)}>
                                     {#if multiEnums.has(option.value)}
@@ -898,16 +908,8 @@
                                     {#if option.dotColor}
                                         <span class="enum-option-dot" style="background:{option.dotColor}"></span>
                                     {/if}
-                                    {#if option.iconUrl}
-                                        <img
-                                            src={option.iconUrl}
-                                            alt=""
-                                            class="enum-option-icon enum-icon-overlay"
-                                            onerror={(e) => {
-                                                (e.target as HTMLImageElement).style.visibility = 'hidden';
-                                            }}
-                                            referrerpolicy="no-referrer"
-                                        />
+                                    {#if iconCandidates.length > 0}
+                                        <img src={iconCandidates[0]} alt="" class="enum-option-icon enum-icon-overlay" data-fallbacks={JSON.stringify(iconCandidates.slice(1))} onerror={handleEnumIconError} referrerpolicy="no-referrer" />
                                     {/if}
                                 </span>
                                 <span class="enum-label">{option.label}</span>

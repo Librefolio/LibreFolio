@@ -790,6 +790,8 @@
                         showRole: true,
                         role,
                         tooltip: name,
+                        rootClass: 'tx-broker-cell',
+                        nameClass: 'tx-broker-name',
                     },
                 };
             },
