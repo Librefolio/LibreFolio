@@ -269,13 +269,59 @@ class PortfolioHolding(BaseModel):
     asset_name: str
     asset_ticker: Optional[str] = None
     asset_type: str
+    broker_id: Optional[int] = Field(None, description="Broker that holds this position")
+    broker_name: Optional[str] = Field(None, description="Broker display name")
     quantity: SafeDecimal
     wac_per_unit: Optional[SafeDecimal] = Field(None, description="None if FX rate missing")
     current_price: Optional[SafeDecimal] = Field(None, description="None if FX rate missing")
     current_value: Optional[SafeDecimal] = None
-    gain_loss: Optional[SafeDecimal] = None
+    gain_loss: Optional[SafeDecimal] = Field(None, description="Unrealized P&L: current_value - cost_basis")
     gain_loss_percent: Optional[SafeDecimal] = None
-    allocation_percent: Optional[SafeDecimal] = None
+    price_change_1d: Optional[SafeDecimal] = Field(None, description="Percentage price change vs previous day: (price_today - price_yesterday) / price_yesterday")
+    allocation_percent: Optional[SafeDecimal] = Field(None, description="Weight vs total market value (excludes cash)")
+    nav_weight_percent: Optional[SafeDecimal] = Field(None, description="Weight vs NAV (includes cash): current_value / NAV * 100")
+
+
+class AssetPeriodContribution(BaseModel):
+    """Per-asset period P&L contribution for the Contributo dashboard view."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int
+    asset_name: str
+    asset_ticker: Optional[str] = None
+    asset_type: str
+    broker_id: int
+    broker_name: str
+    period_unrealized_delta: Optional[SafeDecimal] = Field(None, description="Change in unrealized P&L over the period")
+    period_realized_gain_loss: Optional[SafeDecimal] = Field(None, description="Realized gain/loss from SELLs in period")
+    period_income: Optional[SafeDecimal] = Field(None, description="DIVIDEND/INTEREST attributed to this asset in period")
+    period_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX attributed to this asset in period (positive value)")
+    period_pnl: Optional[SafeDecimal] = Field(None, description="Total period P&L: unrealized_delta + realized + income - fees_taxes")
+    period_pnl_percent: Optional[SafeDecimal] = Field(None, description="Period return %: period_pnl / |start_value|. None if start_value=0")
+    is_fully_sold: bool = Field(False, description="True if position quantity is 0 at period end")
+
+
+class UnallocatedContribution(BaseModel):
+    """Broker-level fees/income not attributed to a specific asset."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    broker_id: int
+    broker_name: str
+    unallocated_income: Optional[SafeDecimal] = Field(None, description="DIVIDEND/INTEREST without asset_id in period")
+    unallocated_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX without asset_id in period (positive value)")
+
+
+class PositionsContribution(BaseModel):
+    """Complete per-asset contribution breakdown for a period."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    positions: List[AssetPeriodContribution] = Field(default_factory=list)
+    unallocated: List[UnallocatedContribution] = Field(default_factory=list)
+    gross_gains: SafeDecimal = Field(default=0, description="Sum of max(period_pnl, 0) across all positions")
+    gross_losses: SafeDecimal = Field(default=0, description="Sum of |min(period_pnl, 0)| across all positions")
 
 
 class BrokerBreakdown(BaseModel):
@@ -461,6 +507,7 @@ class PortfolioReportQuery(BaseModel):
     include_history: bool = Field(True, description="Include daily history time series.")
     include_allocation_history: bool = Field(True, description="Include allocation history by all dimensions.")
     include_breakdown: bool = Field(False, description="Include per-broker breakdown in summary.")
+    include_positions_contribution: bool = Field(False, description="Include per-asset period P&L contribution.")
 
 
 class PortfolioReportResponse(BaseModel):
@@ -477,3 +524,4 @@ class PortfolioReportResponse(BaseModel):
     history: Optional[List[PortfolioHistoryPoint]] = None
     allocation_history: Optional[AllocationHistoryDimensions] = None
     data_quality: Optional[DataQualityReport] = None
+    positions_contribution: Optional[PositionsContribution] = Field(None, description="Per-asset period P&L contribution. Only when include_positions_contribution=True.")

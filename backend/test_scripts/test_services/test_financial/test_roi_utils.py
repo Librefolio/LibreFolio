@@ -82,13 +82,14 @@ class TestTWRR:
         """
         navs = [
             NAVSnapshot(date(2025, 1, 1), Decimal("1000")),
-            NAVSnapshot(date(2025, 7, 1), Decimal("2100")),    # post-deposit: 1100+1000
+            NAVSnapshot(date(2025, 7, 1), Decimal("2100")),  # post-deposit: 1100+1000
             NAVSnapshot(date(2025, 12, 31), Decimal("2310")),
         ]
         cfs = [CashFlowInput(date(2025, 7, 1), Decimal("-1000"))]  # deposit = negative
         result = calculate_twrr(navs, cfs)
         assert result.twrr == pytest.approx(Decimal("0.21"), abs=Decimal("0.001"))
         assert result.date == date(2025, 12, 31)
+
     def test_insufficient_snapshots_raises(self):
         """Fewer than 2 snapshots should raise ValueError."""
         navs = [NAVSnapshot(date(2025, 1, 1), Decimal("1000"))]
@@ -115,7 +116,7 @@ class TestTWRR:
         """
         navs = [
             NAVSnapshot(date(2025, 1, 1), Decimal("1000")),
-            NAVSnapshot(date(2025, 7, 1), Decimal("900")),    # post-withdrawal: 1100-200=900
+            NAVSnapshot(date(2025, 7, 1), Decimal("900")),  # post-withdrawal: 1100-200=900
             NAVSnapshot(date(2025, 12, 31), Decimal("990")),  # 900 * 1.10
         ]
         cfs = [CashFlowInput(date(2025, 7, 1), Decimal("200"))]  # withdrawal = positive
@@ -266,7 +267,7 @@ class TestMWRRSeries:
 
         # Point 1: 2025-06-01
         p1_oneshot = calculate_mwrr(
-            cash_flows=cfs[:1], # The CF on 06-01 is included
+            cash_flows=cfs[:1],  # The CF on 06-01 is included
             initial_nav=Decimal("10000"),
             final_nav=Decimal("10500"),
             start_date=date(2025, 1, 1),
@@ -327,9 +328,7 @@ class TestMWRRSeries:
 
         # The series last point should be close to summary (within 100bp)
         if series and series[-1].mwrr is not None and summary.mwrr is not None:
-            assert abs(float(series[-1].mwrr) - float(summary.mwrr)) < 1.0, (
-                f"Series last ({series[-1].mwrr}) diverged from summary ({summary.mwrr})"
-            )
+            assert abs(float(series[-1].mwrr) - float(summary.mwrr)) < 1.0, f"Series last ({series[-1].mwrr}) diverged from summary ({summary.mwrr})"
 
     def test_cold_start_mode(self):
         """use_warm_start=False should never propagate prev_guess."""
@@ -394,7 +393,7 @@ class TestSimpleROISeries:
           Dec 31: net_invested=10000, NAV=11000, roi=0.10
         """
         navs = [
-            NAVSnapshot(date(2025, 1, 1),  Decimal("10000")),
+            NAVSnapshot(date(2025, 1, 1), Decimal("10000")),
             NAVSnapshot(date(2025, 12, 31), Decimal("11000")),
         ]
         cfs = [CashFlowInput(date(2025, 1, 1), Decimal("-10000"))]
@@ -410,7 +409,7 @@ class TestSimpleROISeries:
         ROI at end = (8000 - 10000) / 10000 = -0.20
         """
         navs = [
-            NAVSnapshot(date(2025, 1, 1),  Decimal("10000")),
+            NAVSnapshot(date(2025, 1, 1), Decimal("10000")),
             NAVSnapshot(date(2025, 12, 31), Decimal("8000")),
         ]
         cfs = [CashFlowInput(date(2025, 1, 1), Decimal("-10000"))]
@@ -426,11 +425,11 @@ class TestSimpleROISeries:
         """
         navs = [
             NAVSnapshot(date(2025, 1, 1), Decimal("10000")),
-            NAVSnapshot(date(2025, 7, 1), Decimal("8000")),   # post-withdrawal NAV
+            NAVSnapshot(date(2025, 7, 1), Decimal("8000")),  # post-withdrawal NAV
         ]
         cfs = [
             CashFlowInput(date(2025, 1, 1), Decimal("-10000")),  # deposit
-            CashFlowInput(date(2025, 7, 1), Decimal("3000")),    # withdrawal = positive
+            CashFlowInput(date(2025, 7, 1), Decimal("3000")),  # withdrawal = positive
         ]
         result = calculate_simple_roi_series(navs, cfs)
         assert len(result) == 2
@@ -451,7 +450,7 @@ class TestSimpleROISeries:
         ]
         cfs = [
             CashFlowInput(date(2025, 1, 1), Decimal("-1000")),
-            CashFlowInput(date(2025, 7, 1), Decimal("2000")),   # oversized withdrawal
+            CashFlowInput(date(2025, 7, 1), Decimal("2000")),  # oversized withdrawal
         ]
         result = calculate_simple_roi_series(navs, cfs)
         # After withdrawal: cumulative_cf = -1000 + 2000 = +1000 > 0 → net_invested=0 → roi=0
@@ -489,7 +488,7 @@ class TestSimpleROISeries:
         This constraint is the same as for calculate_twrr().
         """
         navs = [
-            NAVSnapshot(date(2025, 1, 1),  Decimal("0")),
+            NAVSnapshot(date(2025, 1, 1), Decimal("0")),
             NAVSnapshot(date(2025, 12, 31), Decimal("10500")),
         ]
         # CF on Jun 1 — no snapshot on Jun 1 → will be missed
@@ -497,10 +496,7 @@ class TestSimpleROISeries:
         result = calculate_simple_roi_series(navs, cfs)
         # net_invested stays 0 for all snapshots → roi = 0
         for point in result:
-            assert point.roi == Decimal("0"), (
-                "CF without matching NAVSnapshot is silently dropped. "
-                "Callers must provide a snapshot for every CF date."
-            )
+            assert point.roi == Decimal("0"), "CF without matching NAVSnapshot is silently dropped. " "Callers must provide a snapshot for every CF date."
 
 
 # ---------------------------------------------------------------------------
@@ -513,21 +509,25 @@ class TestAnnualizedToCumulative:
 
     def test_none_returns_none(self):
         from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+
         assert annualized_to_cumulative(None, 365) is None
 
     def test_rate_minus_one_returns_none(self):
         from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+
         assert annualized_to_cumulative(Decimal("-1"), 365) is None
         assert annualized_to_cumulative(Decimal("-1.5"), 365) is None
 
     def test_zero_days_returns_zero(self):
         from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+
         result = annualized_to_cumulative(Decimal("0.10"), 0)
         assert result == Decimal("0")
 
     def test_one_year_identity(self):
         """For exactly 365 days, cumulative == annualized."""
         from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+
         result = annualized_to_cumulative(Decimal("0.10"), 365)
         assert result is not None
         assert float(result) == pytest.approx(0.10, abs=0.001)
@@ -535,6 +535,7 @@ class TestAnnualizedToCumulative:
     def test_two_years_compounding(self):
         """For 730 days (2 years), cumulative = (1+0.10)^2 - 1 = 0.21."""
         from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+
         result = annualized_to_cumulative(Decimal("0.10"), 730)
         assert result is not None
         assert float(result) == pytest.approx(0.21, abs=0.001)
@@ -542,6 +543,7 @@ class TestAnnualizedToCumulative:
     def test_half_year(self):
         """For 182 days (~half year), cumulative = (1+0.10)^(182/365) - 1 ≈ 0.0488."""
         from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+
         result = annualized_to_cumulative(Decimal("0.10"), 182)
         assert result is not None
         assert float(result) == pytest.approx(0.0488, abs=0.002)
@@ -549,6 +551,7 @@ class TestAnnualizedToCumulative:
     def test_negative_rate(self):
         """Negative annualized rate (but > -1) gives negative cumulative."""
         from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+
         result = annualized_to_cumulative(Decimal("-0.20"), 365)
         assert result is not None
         assert float(result) == pytest.approx(-0.20, abs=0.001)
@@ -575,7 +578,7 @@ class TestMWRRSummaryFix:
         """
         cfs = [
             CashFlowInput(date(2025, 1, 1), Decimal("-1000")),  # deposit
-            CashFlowInput(date(2025, 7, 1), Decimal("-500")),   # deposit
+            CashFlowInput(date(2025, 7, 1), Decimal("-500")),  # deposit
         ]
         result = calculate_mwrr(
             cash_flows=cfs,
@@ -612,6 +615,7 @@ class TestMWRRSummaryFix:
     def test_mwrr_cumulative_zero_at_t0(self):
         """First day: annualized_to_cumulative with 0 days returns 0."""
         from backend.app.utils.financial.roi_utils import annualized_to_cumulative
+
         result = annualized_to_cumulative(Decimal("0.26"), 0)
         assert result == Decimal("0")
 
@@ -650,7 +654,7 @@ class TestPeriodNavStart:
         When pre_period is empty → result = 0.
         """
         nav_snapshots = [
-            NAVSnapshot(date(2025, 2, 11), Decimal("600")),   # first deposit day
+            NAVSnapshot(date(2025, 2, 11), Decimal("600")),  # first deposit day
             NAVSnapshot(date(2025, 2, 12), Decimal("605")),
             NAVSnapshot(date(2025, 12, 31), Decimal("1200")),
         ]
@@ -660,8 +664,7 @@ class TestPeriodNavStart:
         pre_period = [s for s in nav_snapshots if s.date <= date_from]
         period_nav_start = pre_period[-1].nav if pre_period else Decimal("0")
 
-        assert period_nav_start == Decimal("0"), \
-            "When date_from is before first event, nav_start must be 0 (portfolio didn't exist)"
+        assert period_nav_start == Decimal("0"), "When date_from is before first event, nav_start must be 0 (portfolio didn't exist)"
 
     def test_period_nav_start_within_history(self):
         """If date_from falls within history, use the NAV at that date."""

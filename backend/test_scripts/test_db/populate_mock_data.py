@@ -1357,8 +1357,6 @@ def populate_transactions(session: Session):
 
     session.commit()
 
-
-
     # --- Standalone delete-safe transactions (for E2E delete tests) ---
     # Tagged 'delete-safe' so tests can locate them easily.
 

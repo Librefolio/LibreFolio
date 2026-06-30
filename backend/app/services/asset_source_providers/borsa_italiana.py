@@ -183,8 +183,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
         """Raise AssetSourceError if the library is not installed."""
         if not BORSA_ITALIANA_AVAILABLE:
             raise AssetSourceError(
-                "borsa-italiana-scraping library not available — install with: "
-                "pipenv install 'borsa-italiana-scraping @ git+https://github.com/Librefolio/borsaItaliana-scraping.git'",
+                "borsa-italiana-scraping library not available — install with: " "pipenv install 'borsa-italiana-scraping @ git+https://github.com/Librefolio/borsaItaliana-scraping.git'",
                 "NOT_AVAILABLE",
             )
 
@@ -215,7 +214,6 @@ class BorsaItalianaProvider(AssetSourceProvider):
     def get_icon(self) -> str:
         """Return provider icon URL."""
         return "https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico"
-
 
     @property
     def provider_help_url(self) -> str:
@@ -480,9 +478,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
             country_code = _infer_country_from_issuer(scheda.emittente)
             if country_code:
                 try:
-                    geographic_area = FAGeographicArea(
-                        distribution={country_code: Decimal("1.0")}
-                    )
+                    geographic_area = FAGeographicArea(distribution={country_code: Decimal("1.0")})
                 except Exception as e:
                     logger.debug(f"Could not create FAGeographicArea for {identifier}: {e}")
 
@@ -491,9 +487,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
             sector_name = _infer_sector(scheda)
             if sector_name:
                 try:
-                    sector_area = FASectorArea(
-                        distribution={sector_name: Decimal("1.0")}
-                    )
+                    sector_area = FASectorArea(distribution={sector_name: Decimal("1.0")})
                 except Exception as e:
                     logger.debug(f"Could not create FASectorArea for {identifier}: {e}")
 

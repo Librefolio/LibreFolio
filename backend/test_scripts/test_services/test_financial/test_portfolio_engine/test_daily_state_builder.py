@@ -54,9 +54,7 @@ def _ctxn(
     share: str = "1",
     paired: MagicMock | None = None,
 ) -> ClassifiedTransaction:
-    return ClassifiedTransaction(
-        tx=tx, classification=classification, share=Decimal(share), paired_tx=paired
-    )
+    return ClassifiedTransaction(tx=tx, classification=classification, share=Decimal(share), paired_tx=paired)
 
 
 def _builder(**overrides) -> DailyStateBuilder:

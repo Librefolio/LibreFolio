@@ -118,7 +118,6 @@ async def get_global_setting_endpoint(key: str, session: AsyncSession = Depends(
     return setting
 
 
-
 @router.patch("/global/bulk", response_model=list[GlobalSettingRead])
 async def bulk_update_global_settings(
     update: GlobalSettingBulkUpdate,
@@ -167,6 +166,7 @@ async def get_scheduler_state(
 
     # Read scheduler timezone from GlobalSettings
     from backend.app.db.session import get_async_engine
+
     engine = get_async_engine()
     async with AsyncSession(engine) as db_session:
         tz_value = await get_setting_value(db_session, "scheduler_timezone")

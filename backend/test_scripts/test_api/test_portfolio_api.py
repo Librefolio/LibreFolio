@@ -176,11 +176,15 @@ class TestPortfolioSummaryEndpoint:
         # Cash ledger: 1000 - 400 + 25 - 10 + 150 = 765
         assert data["cash_total"]["amount"].startswith("765")
         assert data["total_invested"]["amount"].startswith("1000")
-        # Holdings show no current_value (no market price)
-        assert data["holdings"][0]["current_value"] is None
-        # Asset without market price still appears in missing_price_assets (no actual price)
-        assert len(data["missing_price_assets"]) == 1
-        print_success("Signed cash ledger and missing-price reporting OK")
+        # Holdings: no market price but LAST_BUY_PRICE fallback provides value
+        # last_buy_price = 400/4 = 100 EUR/share, net qty = 3 → current_value = 300
+        holding = data["holdings"][0]
+        assert holding["current_value"] is not None
+        assert holding["current_value"].startswith("300")
+        # Asset without market price does NOT appear in missing_price_assets
+        # (LAST_BUY_PRICE gives it a value — appears in data_quality as warning instead)
+        assert len(data["missing_price_assets"]) == 0
+        print_success("Signed cash ledger and LAST_BUY_PRICE reporting OK")
 
     async def test_summary_uses_quote_base_quantity(self, test_server):
         """Summary valuation honors quote_base_quantity for raw market quotes."""
@@ -218,7 +222,8 @@ class TestPortfolioSummaryEndpoint:
             resp = await post_portfolio_summary(client)
         assert resp.status_code == 200
         data = resp.json()
-        assert data["holdings"][0]["current_value"]["amount"].startswith("204")
+        # qty=200, quote_base=100, price=102 → value = 200 * 102 / 100 = 204
+        assert data["holdings"][0]["current_value"].startswith("204")
         assert data["net_worth"]["amount"].startswith("504")
         print_success("quote_base_quantity summary valuation OK")
 

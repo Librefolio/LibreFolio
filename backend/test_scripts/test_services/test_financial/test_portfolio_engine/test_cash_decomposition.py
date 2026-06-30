@@ -69,9 +69,7 @@ def _ctxn(
     share: str = "1",
     paired: MagicMock | None = None,
 ) -> ClassifiedTransaction:
-    return ClassifiedTransaction(
-        tx=tx, classification=classification, share=Decimal(share), paired_tx=paired
-    )
+    return ClassifiedTransaction(tx=tx, classification=classification, share=Decimal(share), paired_tx=paired)
 
 
 def _builder(txs, ecfs, **overrides) -> DailyStateBuilder:
@@ -105,24 +103,16 @@ def _assert_invariants(state):
     """Verify cash decomposition invariants hold."""
     zero = Decimal("0")
     # Non-negativity
-    assert state.cash_from_contributed_capital >= zero, (
-        f"cash_from_contributed_capital must be >= 0, got {state.cash_from_contributed_capital}"
-    )
-    assert state.cash_from_generated_returns >= zero, (
-        f"cash_from_generated_returns must be >= 0, got {state.cash_from_generated_returns}"
-    )
+    assert state.cash_from_contributed_capital >= zero, f"cash_from_contributed_capital must be >= 0, got {state.cash_from_contributed_capital}"
+    assert state.cash_from_generated_returns >= zero, f"cash_from_generated_returns must be >= 0, got {state.cash_from_generated_returns}"
     # Sum = cash_like
     cash_like = state.cash_value + state.in_transit_cash_value
     decomp_sum = state.cash_from_contributed_capital + state.cash_from_generated_returns
-    assert abs(decomp_sum - cash_like) < Decimal("0.01"), (
-        f"Decomposition sum {decomp_sum} != cash_like {cash_like}"
-    )
+    assert abs(decomp_sum - cash_like) < Decimal("0.01"), f"Decomposition sum {decomp_sum} != cash_like {cash_like}"
     # total_pnl = nav - capital_baseline
     capital_baseline = state.cumulative_external_cash_flow
     expected_pnl = state.nav_value - capital_baseline
-    assert abs(state.total_pnl - expected_pnl) < Decimal("0.01"), (
-        f"total_pnl {state.total_pnl} != nav {state.nav_value} - baseline {capital_baseline} = {expected_pnl}"
-    )
+    assert abs(state.total_pnl - expected_pnl) < Decimal("0.01"), f"total_pnl {state.total_pnl} != nav {state.nav_value} - baseline {capital_baseline} = {expected_pnl}"
 
 
 # =============================================================================

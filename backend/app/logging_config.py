@@ -9,6 +9,7 @@ Uses structlog for structured logging with:
 
 Log rotation: Weekly with 52 weeks (1 year) retention, gzip compression.
 """
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # LOG LEVEL POLICY — LibreFolio
 # ═══════════════════════════════════════════════════════════════════════════════

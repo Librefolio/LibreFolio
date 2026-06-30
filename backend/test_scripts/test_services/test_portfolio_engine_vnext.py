@@ -1,0 +1,361 @@
+"""
+Portfolio Engine vNext — Integration tests.
+
+Validates the core architectural invariants:
+1. Inline WAC correctness (BUY/SELL/multi-broker)
+2. last_buy_price fallback (no WAC→price)
+3. 3-pool event-driven (K, R, W)
+4. Position states emission (start + end snapshots)
+5. Period accumulators (realized, income, fees)
+6. Pre-frame / frame separation
+"""
+import pytest
+from datetime import date
+from decimal import Decimal
+from collections import defaultdict
+
+from backend.app.services.portfolio_engine import (
+    ClassifiedTransaction,
+    DailyPositionState,
+    DailyStateBuilder,
+    PortfolioCalculationResult,
+    TransactionType,
+)
+from backend.app.db.models import Transaction
+
+
+def _tx(*, tx_id=1, broker_id=1, asset_id=1, tx_type=TransactionType.BUY,
+         dt=date(2025, 1, 2), quantity=Decimal("0"), amount=None,
+         currency="EUR", cbo=None, cbo_ccy=None):
+    tx = Transaction()
+    tx.id = tx_id
+    tx.broker_id = broker_id
+    tx.asset_id = asset_id
+    tx.type = tx_type
+    tx.date = dt
+    tx.quantity = quantity
+    tx.amount = amount
+    tx.currency = currency
+    tx.cost_basis_override = cbo
+    tx.cost_basis_currency = cbo_ccy
+    tx.related_transaction_id = None
+    tx.updated_at = dt
+    return tx
+
+
+def _c(tx, share=Decimal("1")):
+    return ClassifiedTransaction(tx=tx, classification="normal", share=share)
+
+
+def _build(txs, asset_currencies=None, price_map=None, fx_rate_map=None,
+           last_buy_prices=None, frame_start=None,
+           date_from=date(2025, 1, 1), date_to=date(2025, 1, 10)):
+    return DailyStateBuilder(
+        classified_txs=txs,
+        in_transit_intervals=[],
+        external_cash_flows=[],
+        price_map=price_map or {},
+        quote_base_map={},
+        fx_rate_map=fx_rate_map or {},
+        asset_classifications={},
+        asset_types={1: "ETF", 2: "ETF"},
+        asset_currencies=asset_currencies or {1: "EUR", 2: "EUR"},
+        target_currency="EUR",
+        date_from=date_from,
+        date_to=date_to,
+        frame_start=frame_start,
+        last_buy_prices=last_buy_prices or {},
+    ).build()
+
+
+# =============================================================================
+# 1. INLINE WAC
+# =============================================================================
+
+class TestInlineWAC:
+    """Verify WAC is computed correctly inline during daily loop."""
+
+    def test_simple_buy(self):
+        """Single BUY → WAC = unit cost."""
+        txs = [_c(_tx(quantity=Decimal("10"), amount=Decimal("-1000")))]
+        result = _build(txs)
+        ps = result.position_states_end
+        assert len(ps) == 1
+        assert ps[0].wac == Decimal("100")
+        assert ps[0].quantity == Decimal("10")
+
+    def test_weighted_average_multiple_buys(self):
+        """Two BUYs at different prices → weighted average."""
+        txs = [
+            _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, quantity=Decimal("5"), amount=Decimal("-750"), dt=date(2025, 1, 3))),
+        ]
+        result = _build(txs)
+        ps = result.position_states_end
+        assert len(ps) == 1
+        expected_wac = Decimal("1750") / Decimal("15")
+        assert abs(ps[0].wac - expected_wac) < Decimal("0.001")
+        assert ps[0].quantity == Decimal("15")
+
+    def test_sell_preserves_wac(self):
+        """SELL does not change WAC."""
+        txs = [
+            _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.SELL, quantity=Decimal("-3"),
+                   amount=Decimal("450"), dt=date(2025, 1, 5))),
+        ]
+        result = _build(txs)
+        ps = result.position_states_end
+        assert len(ps) == 1
+        assert ps[0].wac == Decimal("100")
+        assert ps[0].quantity == Decimal("7")
+
+    def test_independent_broker_pools(self):
+        """Same asset on 2 brokers → independent WAC pools."""
+        txs = [
+            _c(_tx(tx_id=1, broker_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, broker_id=2, quantity=Decimal("5"), amount=Decimal("-600"), dt=date(2025, 1, 3))),
+        ]
+        result = _build(txs)
+        ps = result.position_states_end
+        assert len(ps) == 2
+        b1 = next(p for p in ps if p.broker_id == 1)
+        b2 = next(p for p in ps if p.broker_id == 2)
+        assert b1.wac == Decimal("100")
+        assert b2.wac == Decimal("120")
+
+
+# =============================================================================
+# 2. LAST_BUY_PRICE FALLBACK
+# =============================================================================
+
+class TestLastBuyPrice:
+    """Verify valuation: MARKET_PRICE → LAST_BUY_PRICE → MISSING."""
+
+    def test_market_price_preferred(self):
+        """When PriceHistory exists, use it (not last_buy)."""
+        txs = [_c(_tx(quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2)))]
+        prices = {1: [(date(2025, 1, 3), Decimal("120"), "EUR")]}
+        lbp = {1: (date(2025, 1, 2), Decimal("100"), "EUR")}
+        result = _build(txs, price_map=prices, last_buy_prices=lbp)
+        ps = result.position_states_end
+        assert ps[0].valuation_source == "MARKET_PRICE"
+        assert ps[0].market_value == Decimal("1200")  # 10 * 120
+
+    def test_last_buy_price_when_no_market(self):
+        """No PriceHistory → use last_buy_price from V(u)."""
+        txs = [_c(_tx(quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2)))]
+        lbp = {1: (date(2025, 1, 2), Decimal("100"), "EUR")}
+        result = _build(txs, last_buy_prices=lbp)
+        ps = result.position_states_end
+        assert ps[0].valuation_source == "LAST_BUY_PRICE"
+        assert ps[0].market_value == Decimal("1000")  # 10 * 100
+
+    def test_missing_when_no_price_no_buy(self):
+        """No PriceHistory, no last_buy_price → MISSING."""
+        txs = [_c(_tx(quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2)))]
+        result = _build(txs)
+        ps = result.position_states_end
+        assert ps[0].valuation_source == "MISSING"
+        assert ps[0].market_value is None
+
+    def test_no_wac_as_price(self):
+        """WAC is NEVER used for valuation (only for cost_basis)."""
+        # Even with WAC available, if no market price and no last_buy → MISSING
+        txs = [_c(_tx(quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2)))]
+        result = _build(txs)  # no price_map, no last_buy_prices
+        ps = result.position_states_end
+        # WAC exists (100) but is NOT used for market_value
+        assert ps[0].wac == Decimal("100")
+        assert ps[0].market_value is None
+        assert ps[0].valuation_source == "MISSING"
+
+
+# =============================================================================
+# 3. THREE-POOL (K, R, W) EVENT-DRIVEN
+# =============================================================================
+
+class TestThreePool:
+    """Verify 3-pool cash decomposition."""
+
+    def test_deposit_goes_to_capital(self):
+        """DEPOSIT → K increases."""
+        txs = [_c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                      quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2)))]
+        result = _build(txs)
+        last = result.daily_states[-1]
+        # After deposit: cash=1000, K=1000, R=0
+        assert last.cash_from_contributed_capital == Decimal("1000")
+        assert last.cash_from_generated_returns == Decimal("0")
+
+    def test_dividend_goes_to_returns(self):
+        """DIVIDEND → R increases."""
+        txs = [
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1,
+                   quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 5))),
+        ]
+        result = _build(txs)
+        last = result.daily_states[-1]
+        # K=1000, R=50, cash=1050
+        assert last.cash_from_contributed_capital == Decimal("1000")
+        assert last.cash_from_generated_returns == Decimal("50")
+
+    def test_buy_consumes_returns_first(self):
+        """BUY → consumes R first, then K."""
+        txs = [
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1,
+                   quantity=Decimal("0"), amount=Decimal("200"), dt=date(2025, 1, 3))),
+            _c(_tx(tx_id=3, tx_type=TransactionType.BUY, asset_id=1,
+                   quantity=Decimal("5"), amount=Decimal("-500"), dt=date(2025, 1, 4))),
+        ]
+        result = _build(txs)
+        last = result.daily_states[-1]
+        # After deposit: K=1000, R=0
+        # After dividend: K=1000, R=200
+        # After BUY 500: from_R=min(500,200)=200, R=0; K -= (500-200) = K=700
+        # cash = 1000 + 200 - 500 = 700, K=700, R=0
+        assert last.cash_value == Decimal("700")
+        assert last.cash_from_contributed_capital == Decimal("700")
+        assert last.cash_from_generated_returns == Decimal("0")
+
+    def test_full_sell_splits_capital_and_gain(self):
+        """Full SELL splits proceeds between K (cost_basis) and R (gain).
+
+        Regression test: previously, full sell (qty→0) caused pool_q=0 at read time,
+        making cost_basis=0 and putting ALL proceeds into R.
+        """
+        txs = [
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.BUY, asset_id=1,
+                   quantity=Decimal("1"), amount=Decimal("-1000"), dt=date(2025, 1, 3))),
+            _c(_tx(tx_id=3, tx_type=TransactionType.SELL, asset_id=1,
+                   quantity=Decimal("-1"), amount=Decimal("1005"), dt=date(2025, 1, 8))),
+        ]
+        result = _build(txs)
+        last = result.daily_states[-1]
+        # Deposit 1000 → K=1000, R=0
+        # BUY 1000: from_R=min(1000,0)=0, K -= 1000 → K=0, R=0
+        # SELL proceeds=1005, cost_basis=1000 (WAC=1000), gain=5
+        #   K += cost_basis(1000) → K=1000
+        #   R += gain(5) → R=5
+        # cash = 1000 - 1000 + 1005 = 1005
+        assert last.cash_value == Decimal("1005")
+        assert last.cash_from_contributed_capital == Decimal("1000")
+        assert last.cash_from_generated_returns == Decimal("5")
+
+
+# =============================================================================
+# 4. POSITION STATE EMISSION
+# =============================================================================
+
+class TestPositionStates:
+    """Verify engine emits position snapshots at start and end of frame."""
+
+    def test_end_positions_emitted(self):
+        """Position states are emitted for positions with qty > 0 at end."""
+        txs = [_c(_tx(quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2)))]
+        result = _build(txs)
+        assert len(result.position_states_end) == 1
+        ps = result.position_states_end[0]
+        assert ps.asset_id == 1
+        assert ps.broker_id == 1
+        assert ps.quantity == Decimal("10")
+
+    def test_closed_position_not_in_end(self):
+        """Fully sold position does not appear in end states."""
+        txs = [
+            _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.SELL, quantity=Decimal("-10"),
+                   amount=Decimal("1500"), dt=date(2025, 1, 5))),
+        ]
+        result = _build(txs)
+        assert len(result.position_states_end) == 0
+
+    def test_start_positions_from_preframe(self):
+        """Positions at frame_start reflect pre-frame accumulation."""
+        txs = [
+            _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, quantity=Decimal("5"), amount=Decimal("-600"), dt=date(2025, 1, 8))),
+        ]
+        # frame_start=Jan 5 → pre-frame includes tx1, frame includes tx2
+        result = _build(txs, frame_start=date(2025, 1, 5))
+        assert len(result.position_states_start) == 1
+        assert result.position_states_start[0].quantity == Decimal("10")
+        # End includes both
+        assert result.position_states_end[0].quantity == Decimal("15")
+
+
+# =============================================================================
+# 5. PERIOD ACCUMULATORS
+# =============================================================================
+
+class TestPeriodAccumulators:
+    """Verify realized, income, fees accumulation during frame."""
+
+    def test_sell_realized(self):
+        """SELL in frame → per_realized accumulated."""
+        txs = [
+            _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.SELL, quantity=Decimal("-5"),
+                   amount=Decimal("750"), dt=date(2025, 1, 5))),
+        ]
+        result = _build(txs)
+        # Realized = proceeds(750) - cost_basis(5 * WAC=100 = 500) = 250
+        key = (1, 1)
+        assert key in result.per_realized
+        assert result.per_realized[key] == Decimal("250")
+
+    def test_income_attributed(self):
+        """DIVIDEND with asset_id → per_income."""
+        txs = [
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1,
+                   quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 5))),
+        ]
+        result = _build(txs)
+        assert result.per_income.get((1, 1)) == Decimal("50")
+
+    def test_unallocated_fees(self):
+        """FEE without asset_id → unalloc_fees."""
+        txs = [
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.FEE, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("-10"), dt=date(2025, 1, 5))),
+        ]
+        result = _build(txs)
+        assert result.unalloc_fees.get(1) == Decimal("10")
+
+
+# =============================================================================
+# 6. PRE-FRAME / FRAME SEPARATION
+# =============================================================================
+
+class TestPreframeFrame:
+    """Verify pre-frame processes txs without market eval."""
+
+    def test_preframe_no_states_emitted(self):
+        """Transactions before frame_start don't produce daily states."""
+        txs = [
+            _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
+        ]
+        result = _build(txs, frame_start=date(2025, 1, 5))
+        # States only from frame_start to date_to
+        assert all(s.date >= date(2025, 1, 5) for s in result.daily_states)
+        assert result.daily_states[0].date == date(2025, 1, 5)
+
+    def test_preframe_accumulates_cash(self):
+        """Pre-frame deposit is reflected in frame's cash value."""
+        txs = [
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+        ]
+        result = _build(txs, frame_start=date(2025, 1, 5))
+        # First frame day should show cash=1000 from pre-frame deposit
+        assert result.daily_states[0].cash_value == Decimal("1000")

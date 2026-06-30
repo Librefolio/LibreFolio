@@ -175,9 +175,7 @@ async def get_portfolio_history(
     from backend.app.services.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
 
     if body.date_range and body.date_range.has_sentinels():
-        body.date_range = await resolve_date_sentinels(
-            body.date_range, current_user.id, session, broker_ids=body.broker_ids
-        )
+        body.date_range = await resolve_date_sentinels(body.date_range, current_user.id, session, broker_ids=body.broker_ids)
 
     service = PortfolioService(session)
     return await service.get_history(
@@ -208,9 +206,7 @@ async def get_allocation_history(
     )
 
     if body.date_range and body.date_range.has_sentinels():
-        body.date_range = await resolve_date_sentinels(
-            body.date_range, current_user.id, session, broker_ids=body.broker_ids
-        )
+        body.date_range = await resolve_date_sentinels(body.date_range, current_user.id, session, broker_ids=body.broker_ids)
 
     engine = PortfolioCalculationEngine(session)
     result = await engine.calculate(
@@ -285,12 +281,7 @@ async def get_fifo_lots(
     "/report",
     response_model=PortfolioReportResponse,
     summary="Unified portfolio report",
-    description=(
-        "Run the PortfolioCalculationEngine once and return all requested views "
-        "(summary, history, allocation history, data quality) in a single response. "
-        "Use this instead of separate summary/history/allocation-history calls to avoid "
-        "multiple engine runs."
-    ),
+    description=("Run the PortfolioCalculationEngine once and return all requested views " "(summary, history, allocation history, data quality) in a single response. " "Use this instead of separate summary/history/allocation-history calls to avoid " "multiple engine runs."),
 )
 async def get_portfolio_report(
     body: PortfolioReportQuery,
@@ -302,9 +293,7 @@ async def get_portfolio_report(
 
     # Resolve min/max sentinels before passing to service
     if body.date_range and body.date_range.has_sentinels():
-        body.date_range = await resolve_date_sentinels(
-            body.date_range, current_user.id, session, broker_ids=body.broker_ids
-        )
+        body.date_range = await resolve_date_sentinels(body.date_range, current_user.id, session, broker_ids=body.broker_ids)
 
     service = PortfolioService(session)
     return await service.get_report(user_id=current_user.id, query=body)
