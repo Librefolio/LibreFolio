@@ -1,62 +1,62 @@
-# 💼 Valor Liquidativo Neto (NAV) / Valor Neto (Net Worth)
+# 💼 Valor Liquidativo (NAV) / Patrimonio Neto
 
-*[⬅️ Volver a la Descripción General de las Métricas de Rendimiento](index.md)*
+*[⬅️ Volver a la descripción general de métricas de rendimiento](index.md)*
 
-## 💡 ¿Qué es el NAV / Net Worth?
+## 💡 ¿Qué es el NAV?
 
-En el panel de control de LibreFolio, el **Net Asset Value (NAV)** (también conocido como **Net Worth** o **Valor Neto**) representa el valor total de mercado de su cartera al final de la ventana de tiempo seleccionada (`date_to`).
-
-Responde a la pregunta fundamental: _"¿Cuánto vale la cartera dentro del alcance seleccionado en este momento preciso?"_
-
-A diferencia de las métricas de rendimiento basadas en periodos (como el ROI o el P&L), el NAV es una **instantánea (snapshot) en un momento dado**. Aunque su tendencia histórica se puede graficar a lo largo del tiempo, el valor final del NAV que se muestra en el panel de control depende únicamente de la fecha de finalización (`date_to`) y es completamente independiente de la fecha de inicio (`date_from`).
+**Net Asset Value (NAV)** es la valoración total de mercado de su cartera en un momento dado $t$. Responde a: *"¿Cuánto vale la cartera en este momento?"*
 
 ---
 
 ## 🧮 Fórmula
 
-LibreFolio calcula el Valor Liquidativo Neto utilizando la siguiente fórmula:
-
 $$
-\text{NAV} = \text{Valor de Mercado} + \text{Efectivo} + \text{Valor en Tránsito}
+\boxed{\mathrm{NAV}(t) = \mathrm{MV}(t) + \mathrm{Cash}(t) + \mathrm{InTransit}(t)}
 $$
 
-Donde:
+Donde $\mathrm{MV}(t) = \sum_{(a,b) \in S} q(a,b,t) \cdot p(a,t) \cdot \mathrm{fx}(\mathrm{ccy}_p, C^*, t)$
 
-- **$\text{Valor de Mercado}$**: La valoración de mercado actual de todos los activos mantenidos (ETF, acciones, bonos, criptomonedas, etc.), calculada utilizando el último precio disponible y convertida a la moneda de destino del portafolio.
-- **$\text{Efectivo}$**: El saldo de efectivo real depositado en las cuentas de los brokers incluidos en el alcance seleccionado.
-- **$\text{Valor en Tránsito}$**: La valoración de mercado de los fondos o activos actualmente en tránsito interno entre cuentas del mismo alcance (ej. transferencias internas iniciadas pero no completadas aún). Al igual que con el [Valor Contable (Book Value)](book-value.md), este concepto gestiona las transaciones (ej. transferencias bancarias o traspasos de valores) que salen de una cuenta el día 1 y llegan a su destino el día 5 debido a los plazos técnicos de ejecución.
+🔗 Consulte **[Portfolio Engine — §5 Agregación de Cartera](portfolio-engine.md#5-agregacion-de-cartera)** para ver la derivación completa.
 
 ---
 
-## 📝 Ejemplo Práctico
+## 🔗 Cadena de Precios de Valoración
 
-Considere una cartera con los siguientes saldos al final del periodo seleccionado:
+El precio $p(a,t)$ sigue una prioridad estricta:
 
-- **Valor de Mercado de los Activos**: €32,759
-- **Efectivo**: €631
-- **Activos en Tránsito**: €0
+1. **Precio de mercado** — Relleno hacia atrás (backward-fill) de PriceHistory (el más reciente $\leq t$)
+2. **Último precio de compra** — precio unitario de la compra (COMPRA) más reciente de $V(u)$ (todos los brókers visibles)
+3. **Ausente** — la posición se excluye del NAV
 
-El Valor Liquidativo Neto se calcula como:
-
-$$
-\text{NAV} = 32,759 + 631 + 0 = \text{€}33,390
-$$
-
+El PMP **nunca** se utiliza para la valoración. Consulte **[Portfolio Engine — §2](portfolio-engine.md#2-precio-de-valoracion)**.
 
 ---
 
-## ⚖️ Diferencias Clave
+## 📝 Ejemplo
 
-Para evitar confusiones, es importante distinguir el NAV de otras métricas del panel de control:
+| Componente | Cantidad |
+|-----------|--------|
+| Valor de Mercado de Activos | €32,759 |
+| Saldo de Efectivo | €631 |
+| En Tránsito | €0 |
 
-- **Frente al Book Value (Valor Contable)**: El NAV representa el **valor de mercado actual** de sus activos. El [Book Value](book-value.md) representa el **coste de adquisición histórico** (lo que pagó originalmente por ellos). La diferencia entre ambos constituye la plusvalía o minusvalía latente (unrealized gain/loss).
-- **Frente al Period P&L (P&L del Periodo)**: El NAV indica el valor absoluto de su patrimonio. El [Period P&L](period-pnl.md) mide la *variación* de este patrimonio en un periodo determinado, corregida por los depósitos y retiros externos de capital.
+$$
+\mathrm{NAV} = 32\,759 + 631 + 0 = 33\,390 \text{ EUR}
+$$
 
 ---
 
-## ⚠️ Calidad de los Datos y Valoración
+## ⚖️ Distinciones Clave
 
-Dado que el NAV se basa en los precios de mercado y los tipos de cambio (FX) para convertir todos los activos a su moneda de referencia:
+- **NAV vs [Book Value](book-value.md)**: NAV = valor de mercado; Book = coste de adquisición. Diferencia = plusvalías no realizadas.
+- **NAV vs [Period PnL](period-pnl.md)**: NAV = instantánea; Period PnL = cambio ajustado por flujos a lo largo del tiempo.
 
-- Si faltan datos de precios o tipos de cambio para cualquier activo en la fecha final (`date_to`), la valoración puede ser incompleta.
-- En tales casos, LibreFolio muestra el **Data Quality Banner** (Banner de Calidad de Datos) en la parte superior del panel de control para alertarle de que algunas valoraciones se basan en precios obsoletos o ausentes.
+---
+
+## ⚠️ Calidad de los Datos
+
+| Fuente de Valoración | Confianza |
+|-----------------|------------|
+| `MARKET_PRICE` | Completa — PriceHistory disponible |
+| `LAST_BUY_PRICE` | Parcial — utilizando precio de transacción |
+| `MISSING` | Nula — excluido del NAV |

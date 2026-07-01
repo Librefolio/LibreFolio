@@ -31,23 +31,25 @@ $$
 
 ## 📊 Three-Pool Cash Model
 
-The Growth Chart decomposes current cash into two visible pools $(K, R)$ plus a hidden tracker $(W)$:
+The Growth Chart decomposes current cash into two visible aggregates plus a hidden global tracker:
 
 $$
-\mathrm{Cash}(t) \approx K(t) + R(t)
+\mathrm{Cash}(t) \approx \sum_b K_b(t) + \sum_b R_b(t)
 $$
 
-| Pool | Meaning |
-|------|---------|
-| $K$ | Capital Pool — external capital still in system |
-| $R$ | Returns Pool — generated returns still in system |
-| $W$ | Withdrawn Returns — returns that left (hidden, for restore on re-deposit) |
+| Pool | Scope | Meaning |
+|------|-------|---------|
+| $K_b$ | Per-broker | External capital still at broker $b$ |
+| $R_b$ | Per-broker | Generated returns still at broker $b$ |
+| $W$ | Global | Returns that left the system (restorable on re-deposit) |
 
-!!! info "DepCap ≠ K"
+!!! info "Key properties"
 
-    $\mathrm{DepCap}$ = historical sum of all flows (monotonic on deposits). $K$ = how much of current cash is external capital. They diverge after BUY/SELL.
+    - $\mathrm{DepCap}$ = historical sum of all flows. $\sum K_b$ = how much current cash is external capital. They diverge after BUY/SELL.
+    - A BUY on broker $b_1$ only consumes $R_{b_1}$, never $R_{b_2}$.
+    - Cash transfers between brokers move $R$ and $K$ from source to destination without touching $W$.
 
-🔗 Full update rules: **[Portfolio Engine — §6 Three-Pool Model](portfolio-engine.md#6-three-pool-cash-model-k-r-w)**
+🔗 Full per-broker update rules: **[Portfolio Engine — §6 Three-Pool Model](portfolio-engine.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)**
 
 ---
 
@@ -94,7 +96,7 @@ The 3-pool model runs in a **single per-transaction loop** (event-driven, not da
 2. Update K/R/W per transaction type rules
 3. Then reduce WAC pool (for SELLs)
 
-🔗 See **[Portfolio Engine — §6](portfolio-engine.md#6-three-pool-cash-model-k-r-w)** for all formal rules.
+🔗 See **[Portfolio Engine — §6](portfolio-engine.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)** for all formal rules.
 
 ---
 

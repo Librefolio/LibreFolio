@@ -21,7 +21,7 @@ El formulario está diseñado para ser intuitivo y dinámico. Cuando selecciona 
 
 - **Detalles Básicos:** Fecha, Tipo, Moneda y Monto.
 - **Especificaciones del Activo:** Si la transacción involucra un activo (como COMPRA o VENTA), aparecerán campos para seleccionar el activo, ingresar la cantidad y establecer el precio unitario.
-- **Panel de Previsualización (WAC):** Para las operaciones que afectan su cartera, aparece una previsualización en tiempo real en la parte inferior. Muestra su base de costo actual, la nueva base de costo proyectada y cualquier ganancia/pérdida realizada.
+- **Panel de Previsualización (PMP):** Para las operaciones que afectan su cartera, aparece una previsualización en tiempo real en la parte inferior. Muestra su base de costo actual, la nueva base de costo proyectada y cualquier ganancia/pérdida realizada.
 
 !!! note "Cálculos Automáticos"
 

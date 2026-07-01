@@ -39,7 +39,7 @@ Los ajustes se utilizan cuando ningún otro tipo de transacción encaja:
 
 Los ajustes con cantidad positiva **incrementan** el recuento de lotes (FIFO). La base de costo para los lotes creados mediante ajustes depende de si se proporciona una **Anulación de la Base de Costo (Cost Basis Override)**:
 
-- **Con anulación**: el valor especificado se utiliza como el **costo de adquisición por unidad** (WAC — Weighted Average Cost)
+- **Con anulación**: el valor especificado se utiliza como el **costo de adquisición por unidad** (PMP — Precio Medio Ponderado)
 - **Sin anulación**: el lote se crea con costo cero (adquisición gratuita — p. ej. regalos, airdrops)
 
 !!! info "Valor por unidad"
@@ -47,16 +47,16 @@ Los ajustes con cantidad positiva **incrementan** el recuento de lotes (FIFO). L
     La Anulación de la Base de Costo es el costo promedio **por una sola unidad** del activo.
     Para obtener el costo total del bloque transferido, multiplique por la cantidad:
 
-    $$\text{Costo total} = \text{WAC} \times \text{cantidad}$$
+    $$\text{Costo total} = \text{PMP} \times \text{cantidad}$$
 
 ### 🏦 Base de Costo Automática en Transferencias
 
-Al transferir activos entre brókeres, LibreFolio **calcula automáticamente** la Anulación de la Base de Costo en el lado receptor utilizando el **Costo Promedio Ponderado (WAC)** de la posición del bróker de origen.
+Al transferir activos entre brókeres, LibreFolio **calcula automáticamente** la Anulación de la Base de Costo en el lado receptor utilizando el **Precio Medio Ponderado (PMP)** de la posición del bróker de origen.
 
 !!! tip "Más información"
 
     Para ver la fórmula completa, ejemplos y casos especiales, consulte la página dedicada:
-    **[📊 Costo Promedio Ponderado (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)**
+    **[📊 Precio Medio Ponderado (PMP)](../../technical-analysis/performance-metrics/weighted-average-cost.md)**
 
 ??? note "✏️ Cuándo Anular Manualmente"
 
@@ -78,7 +78,7 @@ Al transferir activos entre brókeres, LibreFolio **calcula automáticamente** l
 
 ## 🔗 Relacionados
 
-- 📊 **[Costo Promedio Ponderado (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Cómo se calcula la base de costo automática
+- 📊 **[Precio Medio Ponderado (PMP)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Cómo se calcula la base de costo automática
 - 🔄 **[Transferencia de Activos](transfer.md)** — Dos ajustes vinculados pueden promoverse a una transferencia
 - 🛒 **[Compra y Venta](buy-sell.md)** — Transacciones estándar de activos con efectivo
 - 💰 **[Comisión e Impuesto](fee.md)** — Correcciones solo de efectivo (use Comisión/Impuesto en lugar de Ajuste)

@@ -14,9 +14,9 @@ Le Tableau de bord est le **centre de contrôle de votre portefeuille** — un �
 
 | Section | Emplacement | Contenu |
 |---------|-------------|---------|
-| **[Cartes KPI](kpi-cards.md)** | Rangée supérieure | [Patrimoine Net](kpi-cards.md#card-1--net-worth) · [P&L de la Période](kpi-cards.md#card-2--period-pl) · [Rendements](kpi-cards.md#card-3--returns) |
-| **[Graphique de Croissance](charts.md#portfolio-growth-chart)** | Milieu gauche | Zone empilée absolue + série des rendements en pourcentage |
-| **[Panneau d'Allocation](charts.md#allocation-panel)** | Milieu droit + bas | Type / Secteur / Géographie — actuel et historique |
+| **[Cartes KPI](kpi-cards.md)** | Rangée supérieure | [Patrimoine Net](kpi-cards.md#carte-1-valeur-nette) · [P&L de la Période](kpi-cards.md#carte-2-pl-de-la-periode) · [Rendements](kpi-cards.md#carte-3-rendements) |
+| **[Graphique de Croissance](charts.md#graphique-de-croissance-du-portefeuille)** | Milieu gauche | Zone empilée absolue + série des rendements en pourcentage |
+| **[Panneau d'Allocation](charts.md#panneau-dallocation)** | Milieu droit + bas | Type / Secteur / Géographie — actuel et historique |
 
 ---
 
