@@ -273,4 +273,4 @@
 </ModalBase>
 
 <!-- Confirm discard modal (stacked above) -->
-<ConfirmModal confirmText={$t('common.discardAndClose')} message={$t('csvImport.discardMessage')} onCancel={() => (showDiscardConfirm = false)} onConfirm={doClose} open={showDiscardConfirm} title={$t('csvImport.discardTitle')} warning={true} />
+<ConfirmModal confirmText={$t('common.discardAndClose')} message={$t('csvImport.discardMessage')} onCancel={() => (showDiscardConfirm = false)} onConfirm={doClose} open={showDiscardConfirm} title={$t('common.discardImport')} warning={true} />

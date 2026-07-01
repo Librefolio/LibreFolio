@@ -86,7 +86,7 @@
 
     let jobSelectOptions = $derived([
         {value: 'all', label: $_('settings.global.scheduler.log.allJobs')},
-        {value: 'current_price', label: '💰 ' + $_('settings.global.scheduler.log.currentPrice')},
+        {value: 'current_price', label: '💰 ' + $_('common.currentPrice')},
         {value: 'history_sync', label: '📊 ' + $_('settings.global.scheduler.log.historySync')},
     ]);
 
@@ -94,7 +94,7 @@
         {value: 'all', label: $_('settings.global.scheduler.log.allStatuses')},
         {value: 'ok', label: '🟢 ' + $_('settings.global.scheduler.log.ok')},
         {value: 'partial', label: '🟡 ' + $_('settings.global.scheduler.log.partial')},
-        {value: 'error', label: '🔴 ' + $_('settings.global.scheduler.log.error')},
+        {value: 'error', label: '🔴 ' + $_('common.error')},
     ]);
 
     let timeSelectOptions = $derived([
@@ -207,7 +207,7 @@
     function jobLabel(job: string): string {
         switch (job) {
             case 'current_price':
-                return '💰 ' + $_('settings.global.scheduler.log.currentPrice');
+                return '💰 ' + $_('common.currentPrice');
             case 'history_sync':
                 return '📊 ' + $_('settings.global.scheduler.log.historySync');
             default:
@@ -397,14 +397,14 @@
                                 {#if entry.items && entry.items.length > 0}
                                     <div>
                                         <h4 class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                                            💰 {$_('settings.global.scheduler.log.currentPrice')}
+                                            💰 {$_('common.currentPrice')}
                                         </h4>
                                         <table class="w-full text-xs">
                                             <thead>
                                                 <tr class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                                                     <th class="text-left py-1 w-5"></th>
-                                                    <th class="text-left py-1">{$_('settings.global.scheduler.log.colName')}</th>
-                                                    <th class="text-left py-1">{$_('settings.global.scheduler.log.colDetail')}</th>
+                                                    <th class="text-left py-1">{$_('common.name')}</th>
+                                                    <th class="text-left py-1">{$_('common.detail')}</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -443,14 +443,14 @@
                                 {#if entry.assets && entry.assets.length > 0}
                                     <div>
                                         <h4 class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                                            📈 {$_('settings.global.scheduler.log.assetsSection')}
+                                            📈 {$_('common.assets')}
                                         </h4>
                                         <table class="w-full text-xs">
                                             <thead>
                                                 <tr class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                                                     <th class="text-left py-1 w-5"></th>
-                                                    <th class="text-left py-1">{$_('settings.global.scheduler.log.colName')}</th>
-                                                    <th class="text-left py-1">{$_('settings.global.scheduler.log.colProvider')}</th>
+                                                    <th class="text-left py-1">{$_('common.name')}</th>
+                                                    <th class="text-left py-1">{$_('common.provider')}</th>
                                                     <th class="text-left py-1">{$_('settings.global.scheduler.log.colDelta')}</th>
                                                     <th class="text-left py-1"></th>
                                                 </tr>
@@ -521,14 +521,14 @@
                                 {#if entry.fx && entry.fx.length > 0}
                                     <div>
                                         <h4 class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                                            💱 {$_('settings.global.scheduler.log.fxSection')}
+                                            💱 {$_('fx.title')}
                                         </h4>
                                         <table class="w-full text-xs">
                                             <thead>
                                                 <tr class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                                                     <th class="text-left py-1 w-5"></th>
                                                     <th class="text-left py-1">{$_('settings.global.scheduler.log.colPair')}</th>
-                                                    <th class="text-left py-1">{$_('settings.global.scheduler.log.colProvider')}</th>
+                                                    <th class="text-left py-1">{$_('common.provider')}</th>
                                                     <th class="text-left py-1">{$_('settings.global.scheduler.log.colDelta')}</th>
                                                     <th class="text-left py-1"></th>
                                                 </tr>
@@ -607,7 +607,7 @@
     <!-- Footer -->
     <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-slate-700">
         <button type="button" data-testid="scheduler-log-close" class="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" onclick={() => (open = false)}>
-            {$_('settings.global.scheduler.log.close')}
+            {$_('common.close')}
         </button>
     </div>
 </ModalBase>

@@ -1403,12 +1403,12 @@
                  yellow for validate issues. Both error types show categorized lists. -->
             {#if formError}
                 <InfoBanner variant="error" dismissible ondismiss={() => (formError = null)}>
-                    <p class="font-semibold mb-1" data-testid="tx-form-error">⛔ {$t('transactions.form.rolledBackTitle')}</p>
+                    <p class="font-semibold mb-1" data-testid="tx-form-error">⛔ {$t('common.saveCancelled')}</p>
                     <p>{formError}</p>
                 </InfoBanner>
             {:else if commitFailed && issues.length > 0}
                 <InfoBanner variant="error" dismissible ondismiss={() => (commitFailed = false)}>
-                    <p class="font-semibold mb-1" data-testid="tx-form-error">⛔ {$t('transactions.form.rolledBackTitle')}</p>
+                    <p class="font-semibold mb-1" data-testid="tx-form-error">⛔ {$t('common.saveCancelled')}</p>
                     {#if fieldIssues.length > 0}
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.issuesHeader')}</p>
                         <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
@@ -1490,7 +1490,7 @@
                     <div class="text-sm">
                         <!-- Type: editable in create dual mode (W41), readonly in edit/view -->
                         <div class="flex flex-col gap-1{hl('tx-form-type-wrap')}" data-testid="tx-form-type-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.type')}</span>
                             {#if typeImmutable}
                                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
                                      readonly type as a plain inline [icon] [name]
@@ -1534,7 +1534,7 @@
                     <!-- Transfer Asset: shared asset + quantity -->
                     {#if pairLayout === 'transfer_asset'}
                         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')} *</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.asset')} *</span>
                             <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly ? undefined : $t('assets.create') || 'New asset'} onCreateNew={isReadonly ? undefined : () => (createAssetOpen = true)} />
                         </div>
                         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
@@ -1575,10 +1575,10 @@
                     <div class="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-start overflow-hidden" data-testid="tx-form-dual-split">
                         <!-- DA (From) -->
                         <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3 min-w-0" data-testid="tx-form-dual-from">
-                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('transactions.form.from')}</div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('common.from')}</div>
                             <!-- Date (from side) -->
                             <div class="flex flex-col gap-1 mb-2">
-                                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
+                                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.date')}</span>
                                 {#if isReadonly}
                                     <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{draft.date || '—'}</div>
                                 {:else}
@@ -1620,13 +1620,13 @@
 
                         <!-- A (To) -->
                         <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3 min-w-0" data-testid="tx-form-dual-to">
-                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('transactions.form.to')}</div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('common.to')}</div>
                             <!-- Date (to side) — hidden when partner is inaccessible (role=null or not in store) -->
                             {#if inaccessiblePartnerBrokerId != null || (isReadonly && !partnerRow && dualTo.broker_id > 0 && getBrokerRole(dualTo.broker_id) == null)}
                                 <!-- partner inaccessible — hide date -->
                             {:else}
                                 <div class="flex flex-col gap-1 mb-2">
-                                    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.date')}</span>
                                     {#if isReadonly}
                                         <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{dualTo.date || '—'}</div>
                                     {:else}
@@ -1770,7 +1770,7 @@
                     <div class="grid grid-cols-2 gap-3 text-sm">
                         <!-- Date -->
                         <div class="flex flex-col gap-1{hl('tx-form-date-wrap')}" data-testid="tx-form-date-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.date')}</span>
                             {#if isReadonly}
                                 <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-date-readonly">{draft.date || '—'}</div>
                             {:else}
@@ -1780,7 +1780,7 @@
 
                         <!-- Type -->
                         <div class="flex flex-col gap-1{hl('tx-form-type-wrap')}" data-testid="tx-form-type-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.type')}</span>
                             {#if typeImmutable}
                                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
                                      readonly type as a plain inline [icon] [name]
@@ -1908,7 +1908,7 @@
                     {#if rule.assetField !== 'forbidden'}
                         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400"
-                                >{$t('transactions.table.asset')}{rule.assetField === 'required' ? ' *' : ''}{#if rule.assetField === 'optional'}
+                                >{$t('common.asset')}{rule.assetField === 'required' ? ' *' : ''}{#if rule.assetField === 'optional'}
                                     <span class="text-gray-400 italic">({$t('common.optional')})</span>{/if}</span
                             >
                             <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly ? undefined : $t('assets.create') || 'New asset'} onCreateNew={isReadonly ? undefined : () => (createAssetOpen = true)} />
@@ -2010,7 +2010,7 @@
 
                         <!-- 2. Tags -->
                         <div class="flex flex-col gap-1">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.tags')}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.tags')}</span>
                             <TagInput
                                 value={draft.tags}
                                 {availableTags}
@@ -2024,7 +2024,7 @@
 
                         <!-- 3. Description -->
                         <label class="flex flex-col gap-1{hl('tx-form-description')}">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.description')}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.description')}</span>
                             <textarea
                                 autocomplete="off"
                                 class="px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg resize-y min-h-[60px] disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
@@ -2110,12 +2110,12 @@
                         disabled={committing || loadingPartner || !!dualValidationError || hasSignViolation || (!commitOnSave && !isFormComplete)}
                         onclick={commit}
                         data-testid="tx-form-save"
-                        title={committing ? $t('common.saving') : !commitOnSave ? $t('transactions.form.apply') : $t('common.save')}
+                        title={committing ? $t('common.saving') : !commitOnSave ? $t('common.apply') : $t('common.save')}
                     >
                         {#if committing}
                             <span class="hidden sm:inline">{$t('common.saving')}</span>
                         {:else if !commitOnSave}
-                            <Check size={16} /> <span class="hidden sm:inline">{$t('transactions.form.apply')}</span>
+                            <Check size={16} /> <span class="hidden sm:inline">{$t('common.apply')}</span>
                         {:else}
                             <Save size={15} /> <span class="hidden sm:inline">{$t('common.save')}</span>
                         {/if}

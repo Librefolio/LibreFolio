@@ -115,18 +115,18 @@
                             <thead>
                                 <tr class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                                     <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium w-24"></th>
-                                    <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('transactions.deleteModal.from') || 'From'}</th>
-                                    <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('transactions.deleteModal.to') || 'To'}</th>
+                                    <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('common.from') || 'From'}</th>
+                                    <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('common.to') || 'To'}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr class="border-b border-gray-100 dark:border-gray-700">
-                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</td>
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.date')}</td>
                                     <td class="px-3 py-2">{transaction.date}</td>
                                     <td class="px-3 py-2">{partner?.date ?? '—'}</td>
                                 </tr>
                                 <tr class="border-b border-gray-100 dark:border-gray-700">
-                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</td>
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.type')}</td>
                                     <td class="px-3 py-2">
                                         <span class="inline-flex items-center gap-2">
                                             {#if getTransactionTypeIconUrl(transaction.type)}
@@ -203,12 +203,12 @@
                             </thead>
                             <tbody>
                                 <tr class="border-b border-gray-100 dark:border-gray-700">
-                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</td>
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.date')}</td>
                                     <td class="px-3 py-2">{transaction.date}</td>
                                     <td class="px-3 py-2">{partner?.date ?? '—'}</td>
                                 </tr>
                                 <tr class="border-b border-gray-100 dark:border-gray-700">
-                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</td>
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.type')}</td>
                                     <td class="px-3 py-2 flex items-center gap-2">
                                         {#if splitTypes && getTransactionTypeIconUrl(splitTypes.txType)}
                                             <img src={getTransactionTypeIconUrl(splitTypes.txType)} alt="" class="w-4 h-4 object-contain shrink-0" />
@@ -284,12 +284,12 @@
                             </thead>
                             <tbody>
                                 <tr class="border-b border-gray-100 dark:border-gray-700">
-                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</td>
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.date')}</td>
                                     <td class="px-3 py-2">{transaction.date}</td>
                                     <td class="px-3 py-2">{partner?.date ?? '—'}</td>
                                 </tr>
                                 <tr class="border-b border-gray-100 dark:border-gray-700">
-                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</td>
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.type')}</td>
                                     <td class="px-3 py-2 flex items-center gap-2">
                                         {#if getTransactionTypeIconUrl(transaction.type)}
                                             <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5 object-contain shrink-0" />

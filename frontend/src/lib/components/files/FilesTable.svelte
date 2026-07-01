@@ -236,7 +236,7 @@
                 cols.push({
                     id: 'broker',
                     urlKey: 'broker',
-                    header: () => $t('uploads.broker') || 'Broker',
+                    header: () => $t('common.broker') || 'Broker',
                     cell: (row) => {
                         const name = getBrokerName(row);
                         if (name === '-') return '-';
@@ -266,7 +266,7 @@
             cols.push({
                 id: 'status',
                 urlKey: 'status',
-                header: () => $t('uploads.status'),
+                header: () => $t('common.status'),
                 cell: (row) => ({
                     type: 'badge',
                     text: translateStatus((row as BrimFile).status),
@@ -352,7 +352,7 @@
         actions.push({
             id: 'preview',
             icon: Eye,
-            label: () => $t('uploads.preview'),
+            label: () => $t('common.preview'),
             onClick: (file) => onPreview?.(file),
             visible: (file) => Boolean(onPreview) && canPreviewFileData(file, type),
         });

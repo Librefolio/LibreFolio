@@ -738,7 +738,7 @@
                 onclick={() => (showProviderModal = true)}
             >
                 <Wrench size={14} />
-                {#if layout.showActionLabels}<span>{$t('fx.providers')}</span>{/if}
+                {#if layout.showActionLabels}<span>{$t('common.providers')}</span>{/if}
             </button>
             <!-- Row 2, Col 1: Sync -->
             <button

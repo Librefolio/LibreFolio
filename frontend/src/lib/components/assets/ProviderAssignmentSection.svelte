@@ -313,7 +313,7 @@
                 items.push({
                     success: cp.success,
                     status: cp.success ? 'success' : isNotSupportedWarning(cp.error) ? 'warning' : 'error',
-                    label: $t('assets.probe.currentPrice'),
+                    label: $t('common.currentPrice'),
                     detail,
                     summary: cp.success ? detail : summarizeError(cp.error),
                     execution_time_ms: cp.execution_time_ms,
@@ -396,7 +396,7 @@
         if (result.priceValue !== undefined) {
             const ccyLabel = formatCurrencyForTooltip(result.priceCurrency);
             let html = '<table style="font-size:12px;border-collapse:collapse;">';
-            html += `<tr><th style="${thStyle}">📅 ${$t('common.date')}</th><th style="${thStyle}">💰 ${$t('assets.probe.currentPrice')}</th></tr>`;
+            html += `<tr><th style="${thStyle}">📅 ${$t('common.date')}</th><th style="${thStyle}">💰 ${$t('common.currentPrice')}</th></tr>`;
             html += `<tr><td style="${tdStyle}">${result.priceDate ?? '—'}</td>`;
             html += `<td style="${tdRight}">${Number(result.priceValue).toFixed(2)} ${ccyLabel}</td></tr>`;
             html += '</table>';
@@ -426,7 +426,7 @@
             <!-- Provider select -->
             <div>
                 <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    {$t('assets.provider.selectProvider')}
+                    {$t('common.provider')}
                 </span>
                 <div class="flex items-center gap-2">
                     <div class="flex-1 min-w-0">

@@ -771,10 +771,10 @@
                 <DataTableToolbar
                     selectedCount={selectedRows.length}
                     bulkActions={[
-                        {id: 'edit', icon: Pencil, label: () => $_('transactions.actions.edit') || 'Edit', onClick: () => onEditBulk()},
+                        {id: 'edit', icon: Pencil, label: () => $_('common.edit') || 'Edit', onClick: () => onEditBulk()},
                         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone') || 'Clone', onClick: () => onCloneBulk()},
                         ...(promoteMatch ? [{id: 'promote', icon: Link2, label: () => `🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`, onClick: () => onPromotePair()}] : []),
-                        {id: 'delete', icon: Trash2, label: () => $_('transactions.actions.delete') || 'Delete', variant: 'danger', onClick: () => onBulkDelete()},
+                        {id: 'delete', icon: Trash2, label: () => $_('common.delete') || 'Delete', variant: 'danger', onClick: () => onBulkDelete()},
                     ]}
                     onClearSelection={() => {
                         transactionsTableComponent?.getTableRef()?.clearSelection();
@@ -802,7 +802,7 @@
             </button>
             <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all" data-testid="tx-import-button" onclick={onImportFromBroker}>
                 <Upload size={15} />
-                <span class="hidden sm:inline">{$_('transactions.import')}</span>
+                <span class="hidden sm:inline">{$_('common.import')}</span>
             </button>
             <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="tx-add-button" onclick={onAddTransaction}>
                 <Plus size={15} />

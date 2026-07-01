@@ -84,7 +84,7 @@
     {sections}
     {zIndex}
     testId="fx-sync-modal"
-    title={$t('fx.sync.title') ?? 'Sync FX Rates'}
+    title={$t('common.syncFxRates') ?? 'Sync FX Rates'}
 ></SyncModalBase>
 
 {#snippet fxResultRow(pr: SyncResult, syncing: boolean)}

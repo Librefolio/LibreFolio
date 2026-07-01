@@ -572,7 +572,7 @@
 
         <!-- CENTER-LEFT: Currency override selector -->
         <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-            <span class="whitespace-nowrap">{$_('dashboard.displayCurrency')}:</span>
+            <span class="whitespace-nowrap">{$_('common.currency')}:</span>
             <div class="w-28">
                 <CurrencySearchSelect
                     bind:value={targetCurrency}
@@ -927,7 +927,7 @@
                 {#if allocationView === 'now'}
                     {#if !summary}
                         <div class="absolute inset-0 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
-                            {$_('dashboard.noData')}
+                            {$_('common.noData')}
                         </div>
                     {:else if allocationTab === 'type'}
                         <div class="absolute inset-0">

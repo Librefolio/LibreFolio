@@ -315,7 +315,7 @@
             <h2 class="modal-title" id="modal-title">{modalTitle}</h2>
             <div class="header-actions">
                 {#if hasChanges}
-                    <button type="button" class="header-btn reset" on:click={() => cropper?.resetAll?.()} title={$_('uploads.resetAll') || 'Reset All'} data-testid="image-edit-reset">
+                    <button type="button" class="header-btn reset" on:click={() => cropper?.resetAll?.()} title={$_('common.resetAllChanges') || 'Reset All'} data-testid="image-edit-reset">
                         <RefreshCw size={16} />
                     </button>
                 {/if}

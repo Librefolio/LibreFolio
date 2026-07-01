@@ -102,7 +102,7 @@
         {#if errors.length > 0}
             <TransactionResultBanner
                 variant={errorVariant}
-                title={errorVariant === 'error' ? `⛔ ${$t('transactions.deleteModal.deleteAbortedTitle') || 'Deletion cancelled'}` : `⚠️ ${$t('transactions.deleteModal.validateWarningTitle') || 'Validation issues'}`}
+                title={errorVariant === 'error' ? `⛔ ${$t('transactions.deleteModal.deleteAbortedTitle') || 'Deletion cancelled'}` : `⚠️ ${$t('importWizard.validationIssues') || 'Validation issues'}`}
                 subtitle={errorVariant === 'error' ? $t('transactions.deleteModal.deleteAbortedDetail') || '' : ''}
                 messages={errors}
                 testId="tx-delete-modal-errors"
@@ -114,9 +114,9 @@
                 <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden" data-testid="tx-delete-details">
                     <table class="w-full text-sm">
                         <tbody>
-                            <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400 w-28">{$t('transactions.table.date')}</td><td class="px-3 py-2">{transaction.date}</td></tr>
+                            <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400 w-28">{$t('common.date')}</td><td class="px-3 py-2">{transaction.date}</td></tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700">
-                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</td>
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.type')}</td>
                                 <td class="px-3 py-2 flex items-center gap-2">
                                     {#if getTransactionTypeIconUrl(transaction.type)}
                                         <img src={getTransactionTypeIconUrl(transaction.type)} alt="" class="w-5 h-5" />
@@ -127,7 +127,7 @@
                             <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.quantity')}</td><td class="px-3 py-2">{fQ(transaction.quantity)}</td></tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.cash')}</td><td class="px-3 py-2">{fC(transaction.cash)}</td></tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700">
-                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}</td>
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.asset')}</td>
                                 <td class="px-3 py-2 flex items-center gap-2">
                                     {#if aIconUrl(transaction.asset_id)}
                                         <img
@@ -147,7 +147,7 @@
                             >
                             {#if transaction.tags?.length}
                                 <tr class="border-b border-gray-100 dark:border-gray-700">
-                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.tags')}</td>
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.tags')}</td>
                                     <td class="px-3 py-2 flex gap-1 flex-wrap">
                                         {#each transaction.tags as tag}<span class="px-1.5 py-0.5 text-xs rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}
                                     </td>
@@ -155,7 +155,7 @@
                             {/if}
                             {#if transaction.description}
                                 <tr>
-                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.description')}</td>
+                                    <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.description')}</td>
                                     <td class="px-3 py-2">
                                         <Tooltip text={transaction.description} position="top" maxWidth="360px">
                                             <span class="truncate block max-w-[250px]">{transaction.description}</span>
@@ -174,14 +174,14 @@
                             <thead>
                                 <tr class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                                     <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium w-24"></th>
-                                    <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('transactions.deleteModal.from') || 'From'}</th>
-                                    <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('transactions.deleteModal.to') || 'To'}</th>
+                                    <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('common.from') || 'From'}</th>
+                                    <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('common.to') || 'To'}</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</td><td class="px-3 py-2">{giver.date}</td><td class="px-3 py-2">{receiver.date}</td></tr>
+                                <tr class="border-b border-gray-100 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.date')}</td><td class="px-3 py-2">{giver.date}</td><td class="px-3 py-2">{receiver.date}</td></tr>
                                 <tr class="border-b border-gray-100 dark:border-gray-700"
-                                    ><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}</td><td class="px-3 py-2"
+                                    ><td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.asset')}</td><td class="px-3 py-2"
                                         ><span class="inline-flex items-center gap-1.5"
                                             >{#if aIconUrl(giver.asset_id)}<img
                                                     src={aIconUrl(giver.asset_id)}
@@ -227,23 +227,23 @@
                         <thead>
                             <tr class="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                                 <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium w-24"></th>
-                                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('transactions.deleteModal.from') || 'From'}</th>
-                                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('transactions.deleteModal.to') || 'To'}</th>
+                                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('common.from') || 'From'}</th>
+                                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-400 font-medium">{$t('common.to') || 'To'}</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr class="border-b border-gray-100 dark:border-gray-700">
-                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</td>
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.date')}</td>
                                 <td class="px-3 py-2">{transaction.date}</td>
                                 <td class="px-3 py-2 text-gray-400">&mdash;</td>
                             </tr>
                             <tr class="border-b border-gray-100 dark:border-gray-700">
-                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')}</td>
+                                <td class="px-3 py-2 font-medium text-gray-500 dark:text-gray-400">{$t('common.asset')}</td>
                                 <td class="px-3 py-2">{aName(transaction.asset_id)}</td>
                                 <td class="px-3 py-2 text-center" rowspan="3">
                                     <div class="flex flex-col items-center justify-center gap-1 text-gray-400 dark:text-gray-500 py-4">
                                         <Lock size={24} class="text-red-400" />
-                                        <span class="text-xs font-medium">{$t('transactions.deleteModal.brokerLabel') || 'Broker'}</span>
+                                        <span class="text-xs font-medium">{$t('common.broker') || 'Broker'}</span>
                                         <span class="text-xs">&laquo;{partnerBrokerName || '?'}&raquo;</span>
                                         <span class="text-xs">{$t('transactions.deleteModal.notAccessible') || 'not accessible'}</span>
                                     </div>

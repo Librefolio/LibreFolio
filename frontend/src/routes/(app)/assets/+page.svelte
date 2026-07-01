@@ -819,7 +819,7 @@
     <div class="flex items-center justify-between">
         <div>
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                {$t('assets.title')}
+                {$t('common.assets')}
                 {#if assets.length > 0}
                     <span data-testid="assets-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{assets.length}</span>
                 {/if}

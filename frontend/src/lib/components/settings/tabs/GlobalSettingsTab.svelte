@@ -48,13 +48,7 @@
     ];
 
     // Keys managed exclusively via SchedulerConfigModal — never shown as raw fields
-    const SCHEDULER_HIDDEN_KEYS = new Set([
-        'scheduler_current_price_frequency_minutes',
-        'scheduler_history_sync_times',
-        'scheduler_history_sync_days',
-        'scheduler_history_sync_horizon_days',
-        'scheduler_timezone',
-    ]);
+    const SCHEDULER_HIDDEN_KEYS = new Set(['scheduler_current_price_frequency_minutes', 'scheduler_history_sync_times', 'scheduler_history_sync_days', 'scheduler_history_sync_horizon_days', 'scheduler_timezone']);
 
     let settings: GlobalSetting[] = [];
     let editedValues: Record<string, string> = {};
@@ -476,7 +470,7 @@
                                 </button>
                             {/if}
                             {#if hasAnyNonDefault}
-                                <button on:click={resetAllToDefaults} class="p-2 rounded-lg transition-all bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50" title={$_('settings.resetAllToDefault')}>
+                                <button on:click={resetAllToDefaults} class="p-2 rounded-lg transition-all bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50" title={$_('common.resetAll')}>
                                     <RotateCcw size={18} />
                                 </button>
                             {/if}

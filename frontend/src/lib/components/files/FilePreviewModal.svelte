@@ -504,7 +504,7 @@
                     {:else}
                         <FileText size={18} />
                     {/if}
-                    <h3 class="preview-title">{preview?.filename || $t('uploads.preview')}</h3>
+                    <h3 class="preview-title">{preview?.filename || $t('common.preview')}</h3>
                 </div>
 
                 {#if preview}
