@@ -4,6 +4,13 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-07-01] ingest | Phase 09 — Portfolio Engine 3-Pool Refactor (commit 39106380)
+
+Source: `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/` @ HEAD:`d27902b7`.
+Major engine refactor: inline WAC single-pass (eliminates N×M `compute_wac_iterative` DB calls), 3-pool K/R/W event-driven state machine with SELL fix (read WAC before reducing pool → correct K/R split on full exit), LAST_BUY_PRICE(V(u)) as price fallback, pre-frame/frame separation (no market eval before t0), range-aware blob cache with fingerprint keys. Supporting analysis docs: architectural analysis, implementation status, P&L breakdown, asset contribution gap analysis.
+Created: [[sources/phase09-portfolio-engine-3pool-refactor]], [[concepts/inline-wac-computation]], [[concepts/pre-frame-frame-separation]].
+Updated: [[entities/portfolio-engine]] (inline WAC, fallback chain, blob cache, 3-pool, history), [[entities/portfolio-service]] (+612 lines noted, tech debt updated), [[concepts/3-pool-cash-model]] (full K/R/W event-driven semantics, SELL fix, reconciliation invariant).
+
 ## [2026-06-30] ingest | Group 1 — Phase 07 PlanD-D1D2: Split/Promote Full Stack
 
 Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/README.md` @ git:`8f363d79`.
@@ -1029,3 +1036,9 @@ Low:
 - graph.html not regenerated (6399 nodes > 5000 threshold)
 
 Next recommended: ingest Phase 10 / next development cycle when available.
+
+## [2026-07-01] graphify | Incremental update — portfolio engine 3-pool refactor
+
+Graph updated: 6514 nodes (+115 vs pre-update 6399), 17914 edges (+226), 411 communities.
+Changed files: portfolio_engine.py (AST) + 8 mkdocs risk-metrics/WAC docs (semantic) + 6 new wiki pages.
+False-deleted manifest paths (corpus/corpus/ double-prefix) ignored — full rebuild not needed.
