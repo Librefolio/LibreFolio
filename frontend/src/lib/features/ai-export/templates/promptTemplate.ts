@@ -24,10 +24,14 @@ export const PROMPT_ANALYSIS_REQUEST = `Please:
 2. Evaluate current allocation, concentration, and diversification.
 3. Identify underweight and overweight areas relative to typical long-term strategies.
 4. If the monthly PAC amount is not provided, propose allocation percentages or priority buckets instead of exact monetary amounts.
-5. Provide neutral monthly PAC allocation scenarios with rationale.
-6. Use technical context only as supporting evidence, not as primary drivers.
-7. Highlight any data quality limitations that affect your analysis.
-8. Ask clarifying questions before suggesting strong actions.`;
+5. Provide 2-3 neutral monthly PAC allocation scenarios:
+   - Rebalance-oriented (reduce overweight, increase underweight)
+   - Core accumulation-oriented (reinforce strongest positions)
+   - Cautious / risk-control-oriented (favor diversification and lower volatility)
+6. Do not present scenarios as investment advice; present them as options to evaluate.
+7. Use technical context only as supporting evidence, not as primary drivers.
+8. Highlight any data quality limitations that affect your analysis.
+9. Ask clarifying questions before suggesting strong actions.`;
 
 export function buildResponseLanguageLine(language: string): string {
 	return `Please provide your answer in: ${language}.`;

@@ -14,6 +14,8 @@ export interface AiPortfolioExport {
 	current_allocation: AiAllocation;
 	positions: AiPosition[];
 	broker_summary: AiBrokerSummary[];
+	pac_context: AiPacContext;
+	technical_summary: AiTechnicalSummaryItem[];
 	technical_context: AiTechnicalAsset[];
 	technical_context_unavailable: AiTechnicalUnavailable[];
 	data_quality: AiDataQuality;
@@ -57,7 +59,8 @@ export interface AiPortfolioSnapshot {
 	market_value?: number;
 	cash?: number;
 	book_value?: number;
-	deposited_capital?: number;
+	total_invested?: number;
+	period_net_deposits?: number;
 	total_pnl?: number;
 	total_pnl_percent?: number;
 	unrealized_pnl?: number;
@@ -82,7 +85,6 @@ export interface AiPosition {
 	cost_basis?: number;
 	unrealized_pnl?: number;
 	unrealized_pnl_percent?: number;
-	is_open: boolean;
 	/** Only set for assets flagged as missing in data_quality */
 	valuation_source?: string;
 	/** Period contribution fields (from positions_contribution) */
@@ -161,6 +163,26 @@ export interface AiTechnicalAsset {
 export interface AiTechnicalUnavailable {
 	asset: string;
 	reason: string;
+}
+
+export interface AiTechnicalSummaryItem {
+	asset: string;
+	symbol?: string;
+	nav_weight_percent?: number;
+	return_3m_percent: number;
+	latest_rsi14?: number;
+	latest_macd_histogram?: number;
+	price_vs_ema20_percent?: number;
+	price_vs_ema50_percent?: number;
+	price_vs_ema200_percent?: number;
+}
+
+export interface AiPacContext {
+	monthly_pac_amount: string;
+	monthly_pac_currency: string;
+	preferred_action: string;
+	avoid_sale_suggestions: boolean;
+	allow_new_assets: string;
 }
 
 // ─── Data Quality ────────────────────────────────────────────────────────────
