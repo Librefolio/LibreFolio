@@ -34,7 +34,7 @@ Escenarios comunes:
 
     Al transferir activos, se debe preservar el **costo base original**. La transferencia en sí misma no es un evento fiscal en la mayoría de las jurisdicciones (aunque las reglas varían). LibreFolio permite una **anulación del costo base** opcional en el lado receptor.
 
-    Consulte **[📊 Costo Promedio Ponderado (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** para saber cómo se calcula el costo base automático.
+    Consulte **[📊 Precio Medio Ponderado (PMP)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** para saber cómo se calcula el costo base automático.
 
 ---
 

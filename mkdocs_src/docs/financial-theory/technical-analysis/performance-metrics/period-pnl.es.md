@@ -1,98 +1,71 @@
-# 📊 P&L del Periodo (Profit and Loss)
+# 📊 PnL del Periodo (Ganancias y Pérdidas)
 
-*[⬅️ Volver a la descripción general de métricas de rendimiento](index.md)*
+*[⬅️ Volver a la Descripción General de Métricas de Rendimiento](index.md)*
 
-## 💡 ¿Qué es el P&L del Periodo?
+## 💡 ¿Qué es el PnL del Periodo?
 
-El **P&L del Periodo** (Profit and Loss / Ganancias y Pérdidas) representa el resultado monetario absoluto generado por su cartera dentro de la ventana de tiempo seleccionada, ajustado por los flujos de efectivo externos.
-
-Responde a la pregunta directa: _"¿Cuánto dinero he ganado o perdido realmente durante este periodo?"_
-
-A diferencia de las métricas basadas en porcentajes (como el [ROI Simple](roi.md) o el [TWRR](twrr.md)), el P&L del Periodo se expresa como una cantidad monetaria absoluta (ej. EUR, USD). Crucialmente, está **ajustado por flujo de caja**, lo que significa que aísla el rendimiento real de la inversión de sus depósitos y retiros.
+La ganancia o pérdida monetaria absoluta generada por su cartera dentro de $[t_0, t_1]$, ajustada por flujos de efectivo externos.
 
 ---
 
 ## 🧮 Fórmula
 
-LibreFolio calcula el P&L del Periodo mediante la siguiente ecuación:
-
 $$
-\text{P}\&\text{L del Periodo} = \text{NAV}_{\text{fin}} - \text{NAV}_{\text{inicio}} - \text{Flujos Externos Netos}
+\boxed{\mathrm{PnL}_{\text{period}} = \mathrm{NAV}(t_1) - \mathrm{NAV}(t_0) - \mathrm{ECF}_{[t_0, t_1]}}
 $$
 
-Donde:
-
-- **$\text{NAV}_{\text{inicio}}$**: El [Valor Liquidativo Neto (NAV / Net Worth)](nav.md) al inicio de la ventana de tiempo seleccionada.
-- **$\text{NAV}_{\text{fin}}$**: El Valor Liquidativo Neto al final de la ventana de tiempo seleccionada.
-- **$\text{Flujos Externos Netos}$**: El capital neto inyectado o retirado por el inversor durante el periodo, definido como:
-
-$$
-\text{Flujos Externos Netos} = \text{Depósitos} - \text{Retiros}
-$$
-
-Solo los flujos que entran o salen del alcance de la cartera seleccionada cuentan como externos. Las transferencias internas entre brokers o cuentas dentro del alcance no afectan a este cálculo.
+Donde $\mathrm{ECF}$ = Flujos Netos de Efectivo Externos (depósitos − retiradas en el periodo).
 
 ---
 
-## 📝 Ejemplo Práctico
-
-Supongamos que su cartera tiene las siguientes métricas para un año determinado:
-
-- **NAV al inicio**: €27,000
-- **Depósitos Totales**: €1,000
-- **Retiros Totales**: €0
-- **NAV al final**: €33,000
-
-Primero, calculamos los Flujos Externos Netos:
+## 🧮 Descomposición
 
 $$
-\text{Flujos Externos Netos} = 1,000 - 0 = \text{€}1,000
+\mathrm{PnL}_{\text{period}} = \Delta\mathrm{UGL} + \mathrm{Realized} + \mathrm{Income} - \mathrm{Fees} + \mathrm{Other}
 $$
 
-Luego, calculamos el P&L del Periodo:
-
-$$
-\text{P}\&\text{L del Periodo} = 33,000 - 27,000 - 1,000 = \text{€}5,000
-$$
-
-### 🔍 Explicación del Resultado
-
-Aunque la valoración total de su cartera aumentó en **€6,000** (de €27,000 a €33,000), **€1,000** de ese incremento corresponde a su propio dinero aportado. Por lo tanto, sus inversiones generaron una ganancia neta real de **€5,000**.
-
-Si la fórmula no se ajustara por flujos externos, mostraría erróneamente un beneficio de €6,000, confundiéndole al pensar que sus activos tuvieron un rendimiento mejor del que realmente tuvieron.
+| Componente | Definición |
+|-----------|-----------|
+| $\Delta\mathrm{UGL}$ | Cambio en las ganancias/pérdidas no realizadas durante el periodo |
+| Realized | Suma de (producto de la venta − base de costo) para las VENTAS en el periodo |
+| Income | DIVIDENDOS + INTERÉS en el periodo |
+| Fees | COMISIONES + IMPUESTOS en el periodo |
+| Other | Residual (efectos de FX, redondeos) |
 
 ---
 
-## ⚖️ Diferencias Clave
+## 🎯 Contribución por Activo
 
-- **vs. ROI / TWRR / MWRR**: Estas son métricas basadas en porcentajes que muestran la tasa de retorno. El P&L del Periodo muestra la cantidad monetaria absoluta de la ganancia/pérdida.
-- **vs. Ganancia/Pérdida Latente**: La ganancia/pérdida latente es una instantánea de las posiciones abiertas actuales en comparación con su coste de adquisición original. El P&L del Periodo mide el rendimiento tanto de las posiciones abiertas como de las cerradas (ganancias realizadas, dividendos, intereses) específicamente dentro de los límites de la ventana de tiempo elegida.
+Para cada posición $(a,b)$:
+
+$$
+\mathrm{PnL}(a,b) = \Delta\mathrm{UGL}(a,b) + \mathrm{Realized}(a,b) + \mathrm{Income}(a,b) - \mathrm{Fees}(a,b)
+$$
+
+El conjunto de posiciones incluye **toda la actividad** en el periodo:
+
+$$
+\mathcal{P} = \mathcal{P}(t_0) \cup \mathcal{P}(t_1) \cup \text{keys(Realized)} \cup \text{keys(Income)} \cup \text{keys(Fees)}
+$$
+
+🔗 Consulte **[Portfolio Engine — §7 Contribución del Periodo](portfolio-engine.md#7-contribucion-del-periodo)** para más detalles.
 
 ---
 
-## 📊 Relación con el P&L Total
+## 📝 Ejemplo
 
-El P&L del Periodo es la **versión acotada en el tiempo** de un concepto más fundamental: el **P&L Total**.
-
-$$
-\text{P\&L Total}(t) = \text{NAV}(t) - \text{Capital Depositado}(t)
-$$
-
-Donde el **Capital Depositado** es el capital externo neto acumulativo aportado desde el origen — no solo en el periodo seleccionado. El P&L del Periodo es igual a la variación del P&L Total dentro del intervalo de tiempo elegido:
+- NAV en $t_0$: €27,000
+- Depósitos en el periodo: €1,000
+- NAV en $t_1$: €33,000
 
 $$
-\text{P\&L del Periodo} = \text{P\&L Total}(t_{\text{fin}}) - \text{P\&L Total}(t_{\text{inicio}})
+\mathrm{PnL} = 33\,000 - 27\,000 - 1\,000 = +5\,000 \text{ EUR}
 $$
-
-El P&L Total es visible en la **descripción emergente del Gráfico de Crecimiento** (modo ABS) como la brecha entre la línea del NAV y la línea discontinua del Capital Depositado. Esto hace que sea fácil de leer: si el NAV está por encima de la línea base, la cartera es rentable; si está por debajo, la cartera está en pérdidas.
-
-🔗 Consulte **[Capital Depositado & P&L Total](deposited-capital.md)** para ver la teoría completa, el algoritmo de descomposición de efectivo y ejemplos prácticos resueltos.
 
 ---
 
-## 🔗 Relacionado
+## 🔗 Relacionados
 
-- 💼 **[NAV / Valor Neto](nav.md)** — el punto final de cada fórmula de P&L
-- 📚 **[Valor Contable (Book Value)](book-value.md)** — utilizado en el desglose de P&L (cambio latente, base de coste)
-- 💸 **[Capital Depositado & P&L Total](deposited-capital.md)** — versión acumulada desde el origen con descomposición de efectivo
-- ⏱️ **[Efecto Timing](timing-effect.md)** — el impacto del momento de sus depósitos en los rendimientos
+- 💼 [NAV](nav.md) — valor terminal de cada fórmula de PnL
+- 💸 [Capital Depositado](deposited-capital.md) — PnL Total desde el inicio hasta la fecha
+- ⚙️ [Portfolio Engine](portfolio-engine.md) — modelo matemático completo

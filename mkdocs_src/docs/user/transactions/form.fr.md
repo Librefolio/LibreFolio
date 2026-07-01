@@ -21,7 +21,7 @@ Le formulaire est conçu pour être intuitif et dynamique. Lorsque vous sélecti
 
 - **Dettails de base :** Date, Type, Devise et Montant.
 - **Spécificités de l'actif :** Si la transaction implique un actif (comme ACHAT ou VENTE), des champs pour sélectionner l'actif, saisir la quantité et définir le prix unitaire apparaîtront.
-- **Panneau de prévisualisation (WAC) :** Pour les opérations affectant votre portefeuille, une prévisualisation en temps réel apparaît en bas. Elle affiche votre prix de revient actuel, le nouveau prix de revient projeté, ainsi que tout gain ou perte réalisé.
+- **Panneau de prévisualisation (PMP) :** Pour les opérations affectant votre portefeuille, une prévisualisation en temps réel apparaît en bas. Elle affiche votre prix de revient actuel, le nouveau prix de revient projeté, ainsi que tout gain ou perte réalisé.
 
 !!! note "Calculs Automatiques"
 

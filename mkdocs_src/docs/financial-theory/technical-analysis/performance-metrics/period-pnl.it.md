@@ -1,98 +1,71 @@
-# 📊 P&L del Periodo (Profit and Loss)
+# 📊 PnL del Periodo (Profit and Loss)
 
-*[⬅️ Torna alla Panoramica delle Metriche di Performance](index.md)*
+*[⬅️ Torna a Panoramica Metriche di Performance](index.md)*
 
-## 💡 Cos'è il P&L del Periodo?
+## 💡 Cos'è il PnL del Periodo?
 
-Il **P&L del Periodo** (Profit and Loss / Profitto e Perdita) rappresenta il risultato monetario assoluto generato dal tuo portafoglio all'interno della finestra temporale selezionata, rettificato per i flussi di cassa esterni.
-
-Risponde alla domanda diretta: _"Quanti soldi ho effettivamente guadagnato o perso durante questo periodo?"_
-
-A differenza delle metriche percentuali (come il [ROI Semplice](roi.md) o il [TWRR](twrr.md)), il P&L del Periodo è espresso come un importo monetario assoluto (es. EUR, USD). La sua particolarità è che è **rettificato per i flussi di cassa**, il che significa che isola la performance reale degli investimenti dai tuoi versamenti e prelievi.
+Il guadagno o la perdita monetaria assoluta generata dal tuo portafoglio nell'intervallo $[t_0, t_1]$, rettificata per i flussi di cassa esterni.
 
 ---
 
 ## 🧮 Formula
 
-LibreFolio calcola il P&L del Periodo utilizzando la seguente equazione:
-
 $$
-\text{P}\&\text{L del Periodo} = \text{NAV}_{\text{fine}} - \text{NAV}_{\text{inizio}} - \text{Flussi Esterni Netti}
+\boxed{\mathrm{PnL}_{\text{period}} = \mathrm{NAV}(t_1) - \mathrm{NAV}(t_0) - \mathrm{ECF}_{[t_0, t_1]}}
 $$
 
-Dove:
-
-- **$\text{NAV}_{\text{inizio}}$**: Il [Net Asset Value (Net Worth)](nav.md) all'inizio della finestra temporale selezionata.
-- **$\text{NAV}_{\text{fine}}$**: Il Net Asset Value alla fine della finestra temporale selezionata.
-- **$\text{Flussi Esterni Netti}$**: Il capitale netto iniettato o prelevato dall'investitore durante il periodo, definito come:
-
-$$
-\text{Flussi Esterni Netti} = \text{Depositi} - \text{Prelievi}
-$$
-
-Solo i flussi che entrano o escono dallo scope del portafoglio selezionato contano come esterni. I trasferimenti interni tra broker o conti all'interno dello scope non influenzano questo calcolo.
+Dove $\mathrm{ECF}$ = Flussi di Cassa Esterni Netti (depositi − prelievi nel periodo).
 
 ---
 
-## 📝 Esempio Pratico
-
-Supponiamo che il tuo portafoglio abbia le seguenti metriche per un determinato anno:
-
-- **NAV all'inizio**: €27.000
-- **Depositi Totali**: €1.000
-- **Prelievi Totali**: €0
-- **NAV alla fine**: €33.000
-
-Per prima cosa calcoliamo i Flussi Esterni Netti:
+## 🧮 Decomposizione
 
 $$
-\text{Flussi Esterni Netti} = 1.000 - 0 = \text{€}1.000
+\mathrm{PnL}_{\text{period}} = \Delta\mathrm{UGL} + \mathrm{Realized} + \mathrm{Income} - \mathrm{Fees} + \mathrm{Other}
 $$
 
-Successivamente calcoliamo il P&L del Periodo:
-
-$$
-\text{P}\&\text{L del Periodo} = 33.000 - 27.000 - 1.000 = \text{€}5.000
-$$
-
-### 🔍 Spiegazione del Risultato
-
-Sebbene la valutazione totale del tuo portafoglio sia aumentata di **€6.000** (da €27.000 a €33.000), **€1.000** di tale aumento è costituito da denaro aggiunto da te. Pertanto, i tuoi investimenti hanno generato un guadagno netto reale di **€5.000**.
-
-Se la formula non tenesse conto dei flussi esterni, mostrerebbe erroneamente un profitto di €6.000, inducendoti a pensare che i tuoi asset abbiano performato meglio di quanto abbiano fatto in realtà.
+| Componente | Definizione |
+|-----------|-----------|
+| $\Delta\mathrm{UGL}$ | Variazione di guadagni/perdite non realizzati nel periodo |
+| Realized | Somma di (proventi vendita − costo di acquisizione) per le vendite nel periodo |
+| Income | DIVIDENDO + INTERESSE nel periodo |
+| Fees | FEE + TAX nel periodo |
+| Other | Residuo (effetti FX, arrotondamenti) |
 
 ---
 
-## ⚖️ Differenze Chiave
+## 🎯 Contributo per Asset
 
-- **vs. ROI / TWRR / MWRR**: Queste sono metriche percentuali che mostrano il tasso di rendimento. Il P&L del Periodo mostra l'importo monetario assoluto del profitto/perdita.
-- **vs. Plusvalenza/Minusvalenza Latente**: La plusvalenza/minusvalenza latente è un'istantanea delle posizioni aperte correnti confrontate con il loro costo di acquisto originale. Il P&L del Periodo misura la performance sia delle posizioni aperte che di quelle chiuse (plusvalenze realizzate, dividendi, interessi) specificamente entro i limiti della finestra temporale scelta.
+Per ogni posizione $(a,b)$:
+
+$$
+\mathrm{PnL}(a,b) = \Delta\mathrm{UGL}(a,b) + \mathrm{Realized}(a,b) + \mathrm{Income}(a,b) - \mathrm{Fees}(a,b)
+$$
+
+L'insieme delle posizioni include **tutta l'attività** nel periodo:
+
+$$
+\mathcal{P} = \mathcal{P}(t_0) \cup \mathcal{P}(t_1) \cup \text{keys(Realized)} \cup \text{keys(Income)} \cup \text{keys(Fees)}
+$$
+
+🔗 Vedi **[Portfolio Engine — §7 Contributo di Periodo](portfolio-engine.md#7-contributo-di-periodo)** per i dettagli.
 
 ---
 
-## 📊 Relazione con il P&L Totale
+## 📝 Esempio
 
-Il P&L del Periodo è la **versione limitata nel tempo** di un concetto più fondamentale: il **P&L Totale**.
-
-$$
-\text{P\&L Totale}(t) = \text{NAV}(t) - \text{Capitale Depositato}(t)
-$$
-
-Dove il **Capitale Depositato** è il capitale esterno netto cumulativo conferito dall'inizio — non solo nel periodo selezionato. Il P&L del Periodo è pari alla variazione del P&L Totale all'interno della finestra temporale scelta:
+- NAV a $t_0$: €27.000
+- Depositi nel periodo: €1.000
+- NAV a $t_1$: €33.000
 
 $$
-\text{P\&L del Periodo} = \text{P\&L Totale}(t_{\text{fine}}) - \text{P\&L Totale}(t_{\text{inizio}})
+\mathrm{PnL} = 33\,000 - 27\,000 - 1\,000 = +5\,000 \text{ EUR}
 $$
-
-Il P&L Totale è visibile nel **tooltip del Grafico di Crescita** (in modalità ASS) come lo scostamento tra la linea del NAV e la linea tratteggiata del Capitale Depositato. Questo lo rende facile da leggere: se il NAV è al di sopra della linea di base, il portafoglio è in attivo; se è al di sotto, è in perdita.
-
-🔗 Consulta **[Capitale Depositato & P&L Totale](deposited-capital.md)** per la teoria completa, l'algoritmo di scomposizione della liquidità ed esempi pratici svolti.
 
 ---
 
 ## 🔗 Correlati
 
-- 💼 **[NAV / Patrimonio Netto](nav.md)** — il punto di arrivo di ogni formula del P&L
-- 📚 **[Valore Contabile](book-value.md)** — usato nella scomposizione del P&L (variazione latente, base di costo)
-- 💸 **[Capitale Depositato & P&L Totale](deposited-capital.md)** — versione da inizio operatività con scomposizione della liquidità
-- ⏱️ **[Effetto Timing](timing-effect.md)** — l'impatto dei tempi di deposito sui rendimenti
+- 💼 [NAV](nav.md) — risultato finale di ogni formula PnL
+- 💸 [Capitale Depositato](deposited-capital.md) — PnL Totale dall'inizio
+- ⚙️ [Portfolio Engine](portfolio-engine.md) — modello matematico completo

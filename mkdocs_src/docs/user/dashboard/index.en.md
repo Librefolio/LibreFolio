@@ -14,7 +14,7 @@ The Dashboard is your **portfolio's command center** — a single screen that te
 
 | Section | Location | Contents |
 |---------|----------|---------|
-| **[KPI Cards](kpi-cards.md)** | Top row | [Net Worth](kpi-cards.md#card-1--net-worth) · [Period P&L](kpi-cards.md#card-2--period-pl) · [Returns](kpi-cards.md#card-3--returns) |
+| **[KPI Cards](kpi-cards.md)** | Top row | [Net Worth](kpi-cards.md#card-1-net-worth) · [Period P&L](kpi-cards.md#card-2-period-pl) · [Returns](kpi-cards.md#card-3-returns) |
 | **[Growth Chart](charts.md#portfolio-growth-chart)** | Middle left | Absolute stacked area + percentage return series |
 | **[Allocation Panel](charts.md#allocation-panel)** | Middle right + bottom | Type / Sector / Geography — current and historical |
 

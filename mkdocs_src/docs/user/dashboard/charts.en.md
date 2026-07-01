@@ -44,7 +44,7 @@ When you hover over the chart, the tooltip shows:
 
     When you reinvest all returns into new assets, the Returns area stays near zero, and the earned income ends up embedded in the Asset Cost area. This is mathematically correct: your cost basis grew because you reinvested profit.
 
-🔗 **Theory**: [Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md) · [Cash Decomposition](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md#three-pool-cash-decomposition)
+🔗 **Theory**: [Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md) · [Cash Decomposition](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md#three-pool-cash-model)
 
 ### % mode — rate of return
 

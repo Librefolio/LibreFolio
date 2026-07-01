@@ -4935,7 +4935,7 @@
     }
   },
   "user/dashboard/index.en.md": {
-    "md5": "ef76b3affd7e61261094e96a0256bae0",
+    "md5": "4f8edf705dd4cfc0768670a4cc723f95",
     "langs_done": [
       "es",
       "fr",
@@ -4955,7 +4955,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 101.8,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -4968,7 +4968,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 107.2,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -4981,7 +4981,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 80.2,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6145,81 +6145,194 @@
     }
   },
   "financial-theory/technical-analysis/performance-metrics/deposited-capital.en.md": {
-    "md5": "daa6c525e5c891bc93a3eb459c4bbf27",
-    "langs_done": [],
-    "last_translated": "",
-    "analysis": "[{\"name\": \"Deposited Capital\", \"keywords\": [\"financial portfolio deposited capital definition\"]}, {\"name\": \"Capital Baseline\", \"keywords\": [\"accounting baseline value financial tracking\"]}, {\"name\": \"Total P&amp;L\", \"keywords\": [\"Total Profit and Loss financial statement\"]}, {\"name\": \"NAV\", \"keywords\": [\"Net Asset Value financial definition\"]}, {\"name\": \"Unrealized gains\", \"keywords\": [\"unrealized gain vs realized gain accounting\"]}, {\"name\": \"Realized gains\", \"keywords\": [\"realized gain accounting definition\"]}, {\"name\": \"Period P&amp;L\", \"keywords\": [\"periodic profit and loss calculation\"]}, {\"name\": \"Net External Flows\", \"keywords\": [\"net external cash flows portfolio\"]}, {\"name\": \"Period delta\", \"keywords\": [\"mathematical delta change in value\"]}, {\"name\": \"Portfolio scope\", \"keywords\": [\"portfolio scope financial software\"]}, {\"name\": \"Linked-external\", \"keywords\": [\"linked external accounts financial transfer\"]}, {\"name\": \"Paired leg\", \"keywords\": [\"transaction legs accounting transfer\"]}, {\"name\": \"Linked-internal\", \"keywords\": [\"internal transfer accounting same scope\"]}, {\"name\": \"FX_CONVERSION\", \"keywords\": [\"foreign exchange conversion transaction\"]}, {\"name\": \"Inception-to-date\", \"keywords\": [\"since inception financial performance\"]}, {\"name\": \"Cash Decomposition\", \"keywords\": [\"cash decomposition analysis portfolio\"]}, {\"name\": \"Current liquidity\", \"keywords\": [\"current liquidity financial definition\"]}, {\"name\": \"Running accumulators\", \"keywords\": [\"running accumulator programming finance\"]}, {\"name\": \"book_asset_like\", \"keywords\": [\"book value asset-like accounts\"]}, {\"name\": \"Open cost basis\", \"keywords\": [\"open cost basis investment\"]}, {\"name\": \"In-transit asset cost basis\", \"keywords\": [\"assets in transit accounting cost basis\"]}, {\"name\": \"Returns consumed first\", \"keywords\": [\"reinvestment priority returns vs capital\"]}, {\"name\": \"Residual cash delta\", \"keywords\": [\"residual value change finance\"]}, {\"name\": \"Clamped\", \"keywords\": [\"clamp function programming limit value\"]}, {\"name\": \"WAC\", \"keywords\": [\"Weighted Average Cost accounting\"]}, {\"name\": \"Principal\", \"keywords\": [\"principal amount investment vs interest\"]}, {\"name\": \"Undeployed external capital\", \"keywords\": [\"undeployed capital cash balance\"]}, {\"name\": \"Sell in gain / Sell in loss\", \"keywords\": [\"selling asset at gain or loss\"]}, {\"name\": \"P2P Repayment\", \"keywords\": [\"peer to peer loan repayment accounting\"]}, {\"name\": \"Provenance\", \"keywords\": [\"data provenance financial transactions\"]}]",
+    "md5": "140b23a12833bebd8448e830af996d67",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-01T09:44:25.853825+00:00",
+    "analysis": "[{\"name\": \"Deposited Capital\", \"keywords\": [\"finance deposited capital vs invested capital\"]}, {\"name\": \"Total PnL\", \"keywords\": [\"Total Profit and Loss financial metric\"]}, {\"name\": \"NAV\", \"keywords\": [\"Net Asset Value finance\"]}, {\"name\": \"CASH_TRANSFER linked-external\", \"keywords\": [\"financial software transaction types external transfer\"]}, {\"name\": \"CASH_TRANSFER linked-internal\", \"keywords\": [\"financial software transaction types internal transfer\"]}, {\"name\": \"Three-Pool Cash Model\", \"keywords\": [\"cash pool accounting portfolio tracking\"]}, {\"name\": \"Generated returns\", \"keywords\": [\"investment generated returns vs capital gains\"]}, {\"name\": \"Global tracker\", \"keywords\": [\"software global state tracker finance\"]}, {\"name\": \"Sell in Gain\", \"keywords\": [\"trading selling at a profit\"]}, {\"name\": \"Full Sell Regression\", \"keywords\": [\"portfolio accounting return of capital after sale\"]}, {\"name\": \"single per-transaction loop\", \"keywords\": [\"software event-driven processing loop\"]}, {\"name\": \"daily-delta\", \"keywords\": [\"delta accounting daily changes\"]}, {\"name\": \"WAC\", \"keywords\": [\"Weighted Average Cost inventory finance\"]}, {\"name\": \"pool mutation\", \"keywords\": [\"software state mutation data pool\"]}]",
     "analysis_model": "google/gemma-4-31B-it",
-    "langs": {}
+    "langs": {
+      "it": {
+        "translated_at": "2026-07-01T09:44:25.853241+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Structural Issue (LaTeX/Symbols):** The Structural Diff Report indicates a discrepancy in LaTeX usage. In the \"Worked Examples\" section, the translator replaced plain text arrows \"$\\rightarrow$\" with LaTeX arrows in Example A and B. To maintain structural parity with the source, these should remain plain text arrows.\n    - Example A: \"Deposito $\\rightarrow$ Acquisto $\\rightarrow$ Vendita in Gain\" $\\rightarrow$ \"Deposito $\\rightarrow$ Acquisto $\\rightarrow$ Vendita in Gain\" (Ensure these are the same characters as in the English source).\n    - Example B: \"K=900$\\rightarrow$0\" $\\rightarrow$ \"K=900$\\rightarrow$0\" (Remove LaTeX delimiters).\n\n- **Terminology/Accuracy:** In the \"Implementation\" section, the translation \"mutazione della pool\" is a literal translation of \"pool mutation\". In a technical context regarding data/cash pools, \"modifica\" or \"aggiornamento\" is more natural Italian.\n    - Change \"prima della mutazione della pool\" to \"prima della modifica della pool\".\n\n- **Terminology/Accuracy:** In the \"Implementation\" section, the translation \"Riduzione della pool WAC\" for \"reduce WAC pool\" is slightly ambiguous. In the context of the Portfolio Engine, this refers to the reduction of the average cost basis pool.\n    - Change \"Riduzione della pool WAC\" to \"Riduzione del pool WAC\" (Pool is typically masculine in Italian technical contexts when referring to a resource/collection).\n\n- **Consistency:** In the \"Three-Pool Cash Model\" table, the translation uses \"Per broker\" (lowercase). While correct, for consistency with the table headers and the professional tone of the documentation, it should be capitalized.\n    - Change \"Per broker\" to \"Per broker\" (maintain case consistency with the English \"Per-broker\").\n\n- **Semantic Nuance:** In Example C, the phrase \"Regressione Vendita Completa\" is a bit literal for \"Full Sell Regression\". In financial/technical testing, this refers to a scenario where a position is fully closed to test the return of capital. \"Scenario di Vendita Completa\" would be more natural.\n    - Change \"Regressione Vendita Completa\" to \"Scenario di Vendita Completa\".\n</improvements>\n</translation_critique>",
+        "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. LATEX_COUNT: source=26, translated=30 (Δ+4)\n  EN formulas:\n    L  9: $$ \\mathrm{DepCap}(t) = \\sum_{\\tau \\leq t} D(\\tau) - \\sum_{\\…\n    L 15: $$ \\boxed{\\mathrm{TotalPnL}(t) = \\mathrm{NAV}(t) - \\mathrm{D…\n    L 36: $$ \\mathrm{Cash}(t) \\approx \\sum_b K_b(t) + \\sum_b R_b(t) $$\n    L 42: $K_b$\n    L 42: $b$\n    L 43: $R_b$\n    L 43: $b$\n    L 44: $W$\n    L 48: $\\mathrm{DepCap}$\n    L 48: $\\sum K_b$\n    L 49: $b_1$\n    L 49: $R_{b_1}$\n    L 49: $R_{b_2}$\n    L 50: $R$\n    L 50: $K$\n    L 50: $W$\n    L 60: $K$\n    L 60: $R$\n    L 70: $K$\n    L 70: $R$\n    L 70: $W$\n    L 82: $K$\n    L 82: $R$\n    L 87: $K$\n    L 87: $R$\n    L 87: $R$\n  TRN formulas:\n    L 10: $$ \\mathrm{DepCap}(t) = \\sum_{\\tau \\leq t} D(\\tau) - \\sum_{\\…\n    L 16: $$ \\boxed{\\mathrm{TotalPnL}(t) = \\mathrm{NAV}(t) - \\mathrm{D…\n    L 37: $$ \\mathrm{Cash}(t) \\approx \\sum_b K_b(t) + \\sum_b R_b(t) $$\n    L 43: $K_b$\n    L 43: $b$\n    L 44: $R_b$\n    L 44: $b$\n    L 45: $W$\n    L 49: $\\mathrm{DepCap}$\n    L 49: $\\sum K_b$\n    L 50: $b_1$\n    L 50: $R_{b_1}$\n    L 50: $R_{b_2}$\n    L 51: $R$\n    L 51: $K$\n    L 51: $W$\n    L 59: $\\rightarrow$\n    L 59: $\\rightarrow$\n    L 61: $K$\n    L 61: $R$\n    L 71: $K$\n    L 71: $R$\n    L 71: $W$\n    L 76: $\\rightarrow$\n    L 76: $\\rightarrow$\n    L 83: $K$\n    L 83: $R$\n    L 88: $K$\n    L 88: $R$\n    L 88: $R$\n\nSOURCE_OUTLINE (for reference):\n  # 💸 Deposited Capital, Total PnL and Cash Pools\n    ## 💡 Concept Overview\n    ## 🎯 What Counts\n    ## 📊 Three-Pool Cash Model\n    ## 📝 Worked Examples\n      ### A — Deposit → Buy → Sell in Gain\n      ### B — Dividend then Withdrawal\n      ### C — Full Sell Regression\n    ## ⚙️ Implementation\n    ## 🔗 Related",
+        "structural_issues": 1,
+        "elapsed_s": 1249.1,
+        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "translated_at": "2026-07-01T09:44:25.853637+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** In the \"What Counts\" table, the translation uses \"DIVIDEND\" and \"INTEREST\". According to the glossary, these should be translated as \"dividende\" and \"intérêt\". Since these are part of a list of transaction types that are likely internal identifiers/enums in the software, keeping them in English is acceptable ONLY if they refer to code values. However, for the \"Implementation\" section and \"Worked Examples\", ensure consistency. Specifically, in Example B, \"DIVIDEND\" is kept as is, but for better readability in a French context, use \"Dividende\" if it refers to the action.\n- **Semantic Accuracy:** In the \"Three-Pool Cash Model\" section, \"traqueur global caché\" for \"hidden global tracker\" is a bit literal. \"Suivi global masqué\" or \"indicateur global caché\" would be more professional in a technical context.\n- **Semantic Accuracy:** In \"Full Sell Regression\", the translation \"Régression Vente Complète\" is misleading. In this financial context, \"Regression\" refers to the act of returning/reverting values to a previous state (the original capital). A better translation would be \"Retour à la position initiale après vente totale\" or \"Régression après vente totale\".\n- **Terminology/Clarity:** In the \"Implementation\" section, \"piloté par les événements\" is a correct translation of \"event-driven\", but \"basé sur les événements\" is more standard in French technical documentation.\n- **Terminology/Clarity:** In the \"Implementation\" section, \"Réduction ensuite du pool WAC\" for \"Then reduce WAC pool\" is slightly ambiguous. In the context of WAC (Weighted Average Cost), \"réduire\" might be confused with decreasing the value. \"Décrémenter\" or \"Mettre à jour à la baisse\" is more precise for a pool subtraction.\n- **Markdown Consistency:** In the \"Related\" section, \"version fenêtrée\" for \"windowed version\" is technically correct but \"version sur période glissante\" or simply \"version par fenêtre\" is more common in financial data analysis.\n- **Punctuation/Formatting:** In the tables of the \"Worked Examples\", the currency symbol \"€\" is placed after the number (e.g., \"1 000 €\"), which is correct for French. However, ensure that the mathematical expressions (e.g., `TotalPnL = 1 200 − 1 000 = +200 €`) maintain the non-breaking space between the number and the symbol.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 1400.7,
+        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "translated_at": "2026-07-01T09:44:25.853830+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** In the section \"🎯 Qué se contabiliza\", the transaction types \"DIVIDEND\", \"INTEREST\", \"FEE\", and \"TAX\" are left in English. While these look like system tags, \"DIVIDEND\" and \"INTEREST\" have mandatory glossary mappings. They should be translated to \"DIVIDENDO\" and \"INTERÉS\" if they represent the transaction type in the UI, or kept as is only if they are literal code constants. However, for consistency with the \"Worked Examples\" section (where they are translated), they should be translated here too.\n- **Terminology Consistency (Glossary):** In \"📝 Ejemplos Prácticos\", the table entries \"DEPOSIT\", \"BUY\", \"SELL\", \"DIVIDEND\", and \"WITHDRAWAL\" are left in English. For a professional technical document in Spanish, these should be translated to match the descriptive text of the examples (e.g., \"DEPÓSITO\", \"COMPRA\", \"VENTA\", \"DIVIDENDO\", \"RETIRO/RETIRADA\").\n- **Semantic Accuracy:** In \"📊 Modelo de Efectivo de Tres Pools\", the translation \"Retornos que salieron del sistema\" for \"Returns that left the system\" is acceptable, but in a financial context, \"Returns\" refers to \"Rendimientos\". Using \"Retornos\" is a common anglicism; \"Rendimientos\" is the correct technical term in Spanish.\n- **Semantic Accuracy:** In \"📝 Ejemplos Prácticos\" -> \"C — Regresión de Venta Total\", the translation \"Regresión de Venta Total\" for \"Full Sell Regression\" is misleading. In this context, \"Regression\" refers to a test case or a reversal of state (returning capital to $K$). \"Regresión\" in Spanish usually refers to statistical regression or software regression. A better translation would be \"Reversión de Venta Total\" or \"Caso de Venta Total\".\n- **Markdown/Link Consistency:** The link `[Portfolio Engine — §6 Three-Pool Model](portfolio-engine.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)` is partially translated in the text but the anchor/URL must remain untouched. The translation is correct here, but ensure the text \"Three-Pool Model\" is translated to \"Modelo de Tres Pools\" to match the heading of the page for consistency.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 1193.1,
+        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
   },
   "financial-theory/technical-analysis/performance-metrics/book-value.en.md": {
-    "md5": "83755a3471eac585dc1adddd10a044cd",
+    "md5": "aa404df3dad7a5a06d8fd38776a30228",
     "langs_done": [
       "es",
       "fr",
       "it"
     ],
-    "last_translated": "2026-06-30T15:11:29.707567+00:00",
+    "last_translated": "2026-07-01T09:40:23.413573+00:00",
     "langs": {
       "it": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
-        "stamped_by": "translate-stamp"
+        "translated_at": "2026-07-01T09:40:23.412853+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology/Consistency:** The translation uses \"Valore Contabile (Book Value)\" and \"Valore Contabile (Book Value)\". While providing the English term in parentheses is helpful for clarity, technical documentation should ideally be consistent. Since \"Book Value\" is used in the formulas and the table, the Italian text should consistently refer to it. However, the primary issue is the translation of \"Open Cost Basis\", \"Cash\", and \"In-Transit Book\" within the table and the \"Formula\" section. These are technical variables/labels. To maintain consistency with the formulas ($\\mathrm{OCB}, \\mathrm{Cash}, \\mathrm{InTransitBook}$), these should either remain in English or be translated consistently throughout.\n- **Semantic Accuracy:** In the \"Formula\" section, \"Dove Open Cost Basis:\" is grammatically incomplete in Italian. It should be \"Dove Open Cost Basis è:\" or \"Dove l'Open Cost Basis è:\".\n- **Terminology/Consistency:** In the \"Related\" section, \"combinazione di realized + unrealized\" uses English terms that were translated earlier in the document as \"Plusvalenza/Minusvalenza Non Realizzata\". To maintain internal consistency, these should be translated. Change \"realized + unrealized\" to \"realizzato + non realizzato\".\n- **Terminology/Consistency:** In the \"Related\" section, \"controparte basata sul valore di mercato\" is a bit literal for \"market-value counterpart\". A more natural technical translation would be \"corrispettivo basato sul valore di mercato\".\n- **Formatting/Punctuation:** In the \"Example\" table, the Italian translation keeps the English labels \"Open Cost Basis\", \"Cash\", and \"In-Transit Book\". While acceptable for variable mapping, if the goal is a fully localized document, these should be translated to match the definitions provided in the \"Formula\" section (e.g., \"Costo di Acquisto Aperto\", \"Liquidità\", \"Valore in Transito\"). If they must remain in English to match the formula, they should be consistently treated as technical identifiers.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 1309.4
       },
       "fr": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
-        "stamped_by": "translate-stamp"
+        "translated_at": "2026-07-01T09:40:23.413382+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** In the \"Example\" table, \"Cash\" was left in English. While common in finance, for consistency with the provided glossary and general translation standards, it should be translated as \"Trésorerie\" (or \"Liquidités\"), especially since \"cash reserves\" was translated as \"réserves de trésorerie\" in the introduction.\n- **Semantic Accuracy/Terminology:** \"Open Cost Basis\" is translated as \"Coût de Base Ouvert\". In a financial context, \"Basis\" refers to the \"prix de revient\" or \"base fiscale\". A more accurate and professional translation would be \"Prix de revient ouvert\" or \"Base de coût ouverte\".\n- **Terminology Consistency:** \"In-Transit Book\" is translated as \"Valeur Comptable en Transit\" in the table, but the English source uses \"In-Transit Book\". To maintain consistency with the \"Book Value\" $\\rightarrow$ \"Valeur Comptable\" mapping used in the title, \"Valeur comptable en transit\" is acceptable, but ensure it matches the logic of the formulas.\n- **Grammar/Syntax:** In the section \"Gain/Perte Non Réalisé\", the adjectives should agree with the nouns. Since \"Gain\" is masculine and \"Perte\" is feminine, the correct plural form is \"Gains/Pertes non réalisés\".\n- **Terminology Consistency:** In the \"Related\" section, \"market-value counterpart\" is translated as \"contrepartie en valeur de marché\". In this context, \"counterpart\" refers to the opposing metric. A more natural technical translation is \"l'équivalent en valeur de marché\".\n- **Localization (Currency):** In the example table, \"€27,000\" was translated as \"27 000 €\". This is a correct localization for French. However, ensure the consistency of the non-breaking space before the Euro symbol.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 1297.7
       },
       "es": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
-        "stamped_by": "translate-stamp"
+        "translated_at": "2026-07-01T09:40:23.413577+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** The translation uses \"Visión General\" for \"Overview\". The glossary explicitly mandates \"descripción general\".\n  - Change: `[⬅️ Volver a la Visión General de Métricas de Rendimiento]` → `[⬅️ Volver a la descripción general de métricas de rendimiento]`\n\n- **Consistency in Financial Terms:** The translation leaves \"Book Value\", \"Open Cost Basis\", \"Cash\", and \"In-Transit Book\" in English within the headers and tables. While \"Book Value\" is partially translated as \"(Valor Contable)\" in the first paragraph, for professional technical documentation, the labels in tables and headers should be translated to Spanish to maintain a professional UX, while keeping the English term in parentheses if they are used as variable names in the formulas.\n  - Change Header: `# 📖 Book Value` → `# 📖 Valor Contable (Book Value)`\n  - Change Header: `## 💡 ¿Qué es el Book Value?` → `## 💡 ¿Qué es el valor contable?`\n  - Change Table Row: `Open Cost Basis` → `Base de coste abierta (Open Cost Basis)`\n  - Change Table Row: `Cash` → `Efectivo (Cash)`\n  - Change Table Row: `In-Transit Book` → `Valor contable en tránsito (In-Transit Book)`\n\n- **Semantic Accuracy/Terminology:** In the \"Related\" section, \"contraparte de valor de mercado\" is a literal translation of \"market-value counterpart\" but sounds unnatural in Spanish finance. A more accurate technical term is \"equivalente\".\n  - Change: `contraparte de valor de mercado` → `equivalente de valor de mercado`\n\n- **Grammar/Syntax:** In the \"Related\" section, \"combinado de realizado + no realizado\" is grammatically weak.\n  - Change: `combinado de realizado + no realizado` → `combinación de ganancias/pérdidas realizadas y no realizadas`\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 1254.6
       }
-    }
+    },
+    "analysis": "[{\"name\": \"Book Value\", \"keywords\": [\"financial accounting book value portfolio tracker\"]}, {\"name\": \"historical accounting cost\", \"keywords\": [\"historical cost accounting principle finance\"]}, {\"name\": \"capital you deployed at cost\", \"keywords\": [\"deployed capital cost basis investing\"]}, {\"name\": \"cash reserves\", \"keywords\": [\"cash reserves portfolio management\"]}, {\"name\": \"Open Cost Basis\", \"keywords\": [\"open cost basis portfolio tracking OCB\"]}, {\"name\": \"In-Transit Book\", \"keywords\": [\"in-transit funds accounting settlement period\"]}, {\"name\": \"Unrealized Gain/Loss\", \"keywords\": [\"unrealized gain vs realized loss finance\"]}, {\"name\": \"NAV\", \"keywords\": [\"Net Asset Value finance acronym\"]}, {\"name\": \"WAC\", \"keywords\": [\"Weighted Average Cost investment accounting\"]}, {\"name\": \"Period PnL\", \"keywords\": [\"Period Profit and Loss financial statement\"]}]",
+    "analysis_model": "google/gemma-4-31B-it"
   },
   "financial-theory/technical-analysis/performance-metrics/nav.en.md": {
-    "md5": "ec5dd8b997f2d2a2ad0960bcba6f3783",
+    "md5": "af562d4a7e244e6e7620f2ce0f84fdc1",
     "langs_done": [
       "es",
       "fr",
       "it"
     ],
-    "last_translated": "2026-06-30T15:11:29.707567+00:00",
+    "last_translated": "2026-07-01T10:00:28.542884+00:00",
     "langs": {
       "it": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
-        "stamped_by": "translate-stamp"
+        "translated_at": "2026-07-01T10:00:28.542792+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency**: In the \"Key Distinctions\" section, \"guadagni non realizzati\" should be changed to \"plusvalenze non realizzate\". The glossary mandates that \"capital gain\" be translated as \"plusvalenza\".\n- **Terminology Consistency**: In the \"Valuation Price Chain\" section, \"la posizione viene esclusa\" uses the correct glossary term for \"holding\" (posizione), but for consistency with the \"Data Quality\" table at the bottom, the phrase \"escluso dal NAV\" should be \"la posizione è esclusa dal NAV\" or simply maintain consistency in noun gender.\n- **Terminology Consistency**: In the \"Key Distinctions\" section, \"Book Value\" is left in English. While \"Book Value\" is a standard financial term, for maximum clarity and consistency with the glossary's approach to technical terms, it should be paired with its Italian equivalent \"Valore Contabile\" or kept as is if treated as a proper noun/link title; however, the translation of the description \"Book = costo di acquisizione\" is accurate.\n- **Semantic Accuracy / Terminology**: In the \"Valuation Price Chain\" section, \"backward-fill\" is a technical data operation. While the translation keeps the English term, it is common in technical documentation to either keep it or use \"riempimento all'indietro\". Given the context of \"PriceHistory\", keeping it is acceptable, but ensure it aligns with the \"auto-fill\" (compilazione automatica) logic in the glossary.\n- **Grammar/Syntax**: In the \"Key Distinctions\" section, \"NAV = istantanea (snapshot)\" is slightly clunky. A more natural technical translation would be \"NAV = fotografia istantanea\" or simply \"NAV = snapshot\", as \"snapshot\" is widely used in technical Italian.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 871.8
       },
       "fr": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
-        "stamped_by": "translate-stamp"
+        "translated_at": "2026-07-01T10:00:28.542845+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** The term \"holding\" in the English source (\"position excluded from NAV\") is translated as \"la position est exclue\". While correct, the glossary explicitly maps \"holding\" to \"position\". The translation is consistent here, but for \"Book Value\", the translation uses \"Valeur Comptable (Book Value)\". Since the glossary does not provide a mapping for \"Book Value\", but the project aims for technical precision, ensure that terminology like \"Book\" (shorthand) is handled carefully. \"Book = coût d'acquisition\" is accurate.\n- **Terminology Accuracy:** In the \"Valuation Price Chain\" section, \"backward-fill\" is translated as \"Remplissage arrière (backward-fill)\". In technical documentation for data processing, \"backward-fill\" (or bfill) is a specific operation. While \"remplissage arrière\" is a literal translation, it is more common in French technical contexts to keep the term \"backward-fill\" or use \"comblement vers l'arrière\". However, the current translation is acceptable; the main issue is the redundancy. Suggest simplifying to \"Remplissage backward-fill\" or simply \"Backward-fill\".\n- **Terminology Accuracy:** In \"Key Distinctions\", \"unrealized gains\" is translated as \"plus-values latentes\". This is a correct financial translation.\n- **Structural Consistency (Links):** The link `[Portfolio Engine — §5 Aggregation](portfolio-engine.md#5-portfolio-aggregation)` and `[Portfolio Engine — §2](portfolio-engine.md#2-valuation-price)` were left in English. Since these are titles of other documentation pages/sections, they should ideally be translated to match the destination page's French title if those pages are also translated. However, if the anchor IDs or page titles remain in English, this is correct. Based on the provided text, \"Aggregation\" should be \"Agrégation\".\n- **Terminology Accuracy:** \"In-Transit\" in the table is translated as \"En transit\". In a financial context regarding assets/cash, \"En cours de transfert\" or \"En transit\" is acceptable, but \"En cours\" is more natural for financial transactions.\n- **Grammar/Syntax:** \"Le WAC n'est jamais utilisé\" — WAC (Weighted Average Cost) is an acronym not defined in the French text. While it is a standard financial term, ensure it is consistent with other parts of the documentation.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 839.6
       },
       "es": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
-        "stamped_by": "translate-stamp"
+        "translated_at": "2026-07-01T10:00:28.542887+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary)**: The term \"Overview\" is translated as \"Vista General\" in the breadcrumb. According to the glossary, \"overview\" must be translated as \"descripción general\".\n  - Change: `[⬅️ Volver a la Vista General de Métricas de Rendimiento](index.md)` $\\rightarrow$ `[⬅️ Volver a la descripción general de métricas de rendimiento](index.md)`\n\n- **Terminology Consistency (Glossary)**: The term \"broker\" is translated as \"brokers\" (English plural). The glossary specifies \"bróker\".\n  - Change: `(todos los brokers visibles)` $\\rightarrow$ `(todos los brókers visibles)`\n\n- **Terminology Consistency (Glossary)**: The term \"holding\" (implicitly \"position\" in the source \"position excluded from NAV\") is translated as \"posición\", which is correct per the glossary. However, in the \"Key Distinctions\" section, \"Book Value\" and \"Period PnL\" are left in English. While these are links, the surrounding text should be consistent. \"Book Value\" is often \"Valor Contable\" in Spanish, but for the sake of consistency with the link, the description \"coste de adquisición\" is correct.\n\n- **Semantic Accuracy**: In the \"Valuation Price Chain\" section, \"Missing\" is translated as \"Faltante\". In a technical context regarding data availability, \"Ausente\" or \"No disponible\" is more natural. However, \"Faltante\" is acceptable.\n\n- **Consistency/Non-translatable elements**: In the \"Key Distinctions\" section, the translation for \"Book Value\" is \"Book\" and \"Period PnL\" is \"Period PnL\". To maintain the professional tone and clarity of the comparison:\n  - Change: `Book = coste de adquisición` $\\rightarrow$ `Valor contable (Book) = coste de adquisición` (or simply keep the link text but ensure the label is clear). *Correction based on strict source adherence*: Keep the links as is, but ensure the description is precise.\n\n- **Grammar/Natural Phrasing**: In the \"Data Quality\" table, \"Total\" is used for \"Full\". In the context of confidence levels, \"Completa\" is more appropriate for \"Full Confidence\".\n  - Change: `Total — PriceHistory disponible` $\\rightarrow$ `Completa — PriceHistory disponible`\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 224.7
       }
-    }
+    },
+    "analysis": "[{\"name\": \"Net Asset Value (NAV)\", \"keywords\": [\"Net Asset Value finance definition portfolio\"]}, {\"name\": \"Net Worth\", \"keywords\": [\"net worth vs net asset value\"]}, {\"name\": \"Market valuation\", \"keywords\": [\"market valuation financial portfolio\"]}, {\"name\": \"In-Transit\", \"keywords\": [\"funds in transit financial accounting pending transactions\"]}, {\"name\": \"backward-fill\", \"keywords\": [\"backward fill time series data\"]}, {\"name\": \"Last buy price\", \"keywords\": [\"last purchase price investment tracking\"]}, {\"name\": \"WAC\", \"keywords\": [\"WAC weighted average cost accounting\"]}, {\"name\": \"Book Value\", \"keywords\": [\"book value vs market value finance\"]}, {\"name\": \"unrealized gains\", \"keywords\": [\"unrealized gains vs realized gains\"]}, {\"name\": \"Period PnL\", \"keywords\": [\"Profit and Loss statement period PnL\"]}, {\"name\": \"flow-adjusted change\", \"keywords\": [\"flow-adjusted return portfolio performance\"]}, {\"name\": \"Valuation Source\", \"keywords\": [\"asset valuation data source\"]}]",
+    "analysis_model": "google/gemma-4-31B-it"
   },
   "financial-theory/technical-analysis/performance-metrics/period-pnl.en.md": {
-    "md5": "0fffec76363cff9f4b34030d1586eeda",
+    "md5": "845738df6e9b90323981ad81c6abe9bf",
     "langs_done": [
       "es",
       "fr",
       "it"
     ],
-    "last_translated": "2026-06-30T15:11:29.707567+00:00",
+    "last_translated": "2026-07-01T09:58:58.955202+00:00",
     "langs": {
       "it": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
-        "stamped_by": "translate-stamp"
+        "translated_at": "2026-07-01T09:58:58.954923+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Violation**: The glossary explicitly maps \"portfolio\" to \"portafoglio\". The translation uses \"portfolio\" in the section \"Cos'è il PnL del Periodo?\". \n  - Change: \"generata dal tuo portfolio\" $\\rightarrow$ \"generata dal tuo portafoglio\".\n- **Terminology Violation**: The glossary maps \"dividend\" to \"dividendo\" and \"interest\" to \"interesse\". In the decomposition table, these are left in English. Although they appear within a formula-like context, they are listed as components of the formula and should be translated to remain consistent with the glossary.\n  - Change: \"DIVIDEND + INTEREST\" $\\rightarrow$ \"DIVIDENDO + INTERESSE\".\n- **Terminology Violation**: The glossary maps \"interest\" to \"interesse\". In the \"Related\" section, \"inception-to-date\" is kept in English. While not in the glossary, the surrounding phrase \"PnL Totale dall'inizio\" is correct, but the parenthetical English term should be removed or integrated if the goal is a full translation, or kept only if it's a technical term. However, focusing on the glossary: ensure \"interesse\" is used throughout.\n- **Translation Accuracy**: In the \"Related\" section, \"endpoint of every PnL formula\" is translated as \"punto di arrivo\". In a technical/mathematical context, \"endpoint\" refers to the final result or the terminal value. \"Punto di arrivo\" is slightly too colloquial.\n  - Change: \"punto di arrivo di ogni formula PnL\" $\\rightarrow$ \"risultato finale di ogni formula PnL\".\n- **Terminology Consistency**: In the \"Decomposition\" table, \"cost basis\" is translated as \"costo di carico\". While technically correct in Italian accounting, for consistency with general financial documentation, \"costo di acquisizione\" is more standard, though \"costo di carico\" is acceptable. However, \"SELLs\" is left in English.\n  - Change: \"per i SELL nel periodo\" $\\rightarrow$ \"per le vendite nel periodo\".\n- **Markdown/Link Consistency**: The link text `[Portfolio Engine — §7 Period Contribution](portfolio-engine.md#7-period-contribution)` is left partially in English. For a professional translation, the display text should be translated while keeping the URL/anchor intact.\n  - Change: `[Portfolio Engine — §7 Period Contribution]` $\\rightarrow$ `[Portfolio Engine — §7 Contributo del Periodo]`.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 1031.2
       },
       "fr": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
-        "stamped_by": "translate-stamp"
+        "translated_at": "2026-07-01T09:58:58.955059+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology (Consistency):** In the \"Décomposition\" table, \"Realized\" and \"Fees\" are kept in English. While these refer to formula components, the table is a definition list. For consistency and clarity in French, these should be translated or paired with translations. \n    - Change \"Realized\" to \"Réalisé\".\n    - Change \"Fees\" to \"Frais\".\n- **Terminology (Accuracy):** In the \"Décomposition\" table, \"cost basis\" is translated as \"coût d'acquisition\". While technically correct in some contexts, in the context of PnL and \"Realized\" gains, \"prix de revient\" is the standard financial term for cost basis in French. \n    - Change \"coût d'acquisition\" to \"prix de revient\".\n- **Terminology (Accuracy):** In the \"Décomposition\" table, \"FX effects\" is translated as \"effets FX\". To be more professional and clear in French technical documentation, use the full term.\n    - Change \"effets FX\" to \"effets de change\".\n- **Terminology (Consistency):** In the \"Related\" section, \"endpoint\" is translated as \"point final\". In a mathematical or financial context (the end result of a calculation), \"aboutissement\" or \"résultat final\" is more natural. \"Point final\" sounds like a literal translation of a punctuation mark or a network endpoint.\n    - Change \"point final de chaque formule de PnL\" to \"résultat final de chaque formule de PnL\".\n- **Translation Accuracy:** In the \"Related\" section, \"inception-to-date Total PnL\" is translated as \"PnL Total depuis la création\". While \"création\" is acceptable, \"depuis l'origine\" or \"depuis le début\" is the standard financial translation for \"inception-to-date\".\n    - Change \"depuis la création\" to \"depuis l'origine\".\n- **Structural Preservation:** In the \"Contribution par actif\" section, the link text \"Portfolio Engine — §7 Period Contribution\" was left in English. While the file path `portfolio-engine.md#7-period-contribution` must remain unchanged, the visible link text should be translated for the French user.\n    - Change \"[Portfolio Engine — §7 Period Contribution]\" to \"[Moteur de Portefeuille — §7 Contribution de période]\".\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 1035.3
       },
       "es": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
-        "stamped_by": "translate-stamp"
+        "translated_at": "2026-07-01T09:58:58.955204+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** The glossary defines \"overview\" as \"descripción general\". The translation uses \"Visión General\" in the breadcrumb link. \n  - Change: `[⬅️ Volver a la Visión General de Métricas de Rendimiento](index.md)` $\\rightarrow$ `[⬅️ Volver a la Descripción General de Métricas de Rendimiento](index.md)`\n\n- **Semantic Accuracy (Financial Terminology):** In the decomposition table, \"sell proceeds\" is translated as \"procedimientos de venta\". In a financial context, \"proceeds\" refers to the amount of money received from a sale, not a \"procedure\".\n  - Change: `procedimientos de venta` $\\rightarrow$ `producto de la venta` or `fondos obtenidos de la venta`.\n\n- **Terminology Consistency (Glossary):** The glossary defines \"interest\" as \"interés\". The translation uses the plural \"INTERESES\" in the table. While grammatically acceptable in Spanish, consistency with the glossary's singular form is preferred for technical documentation.\n  - Change: `DIVIDENDOS + INTERESES` $\\rightarrow$ `DIVIDENDOS + INTERÉS`\n\n- **Non-translatable Elements (Consistency):** In the \"Per-Asset Contribution\" section, the link text for the Portfolio Engine is left in English: `[Portfolio Engine — §7 Period Contribution]`. While the product name \"Portfolio Engine\" should remain in English, the section title \"Period Contribution\" should be translated for the user's benefit, as it is descriptive text within a link.\n  - Change: `[Portfolio Engine — §7 Period Contribution]` $\\rightarrow$ `[Portfolio Engine — §7 Contribución del Periodo]`\n\n- **Semantic Accuracy:** In the \"Related\" section, \"endpoint of every PnL formula\" is translated as \"punto final de cada fórmula de PnL\". In this mathematical/technical context, \"endpoint\" implies that the NAV is the terminal value or the base component upon which the formula relies. \"Punto final\" sounds like a literal translation of a sentence ending.\n  - Change: `punto final de cada fórmula de PnL` $\\rightarrow$ `valor terminal de cada fórmula de PnL` or `base de cada fórmula de PnL`.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 967.6
       }
-    }
+    },
+    "analysis": "[{\"name\": \"Period PnL (Profit and Loss)\", \"keywords\": [\"financial PnL period definition portfolio tracking\"]}, {\"name\": \"External cash flows\", \"keywords\": [\"external cash flows portfolio accounting deposits withdrawals\"]}, {\"name\": \"NAV (Net Asset Value)\", \"keywords\": [\"Net Asset Value definition finance\"]}, {\"name\": \"Decomposition\", \"keywords\": [\"financial metric decomposition breakdown\"]}, {\"name\": \"unrealized gain/loss\", \"keywords\": [\"unrealized gain vs realized loss accounting\"]}, {\"name\": \"Realized\", \"keywords\": [\"realized gain loss financial portfolio\"]}, {\"name\": \"cost basis\", \"keywords\": [\"cost basis calculation finance\"]}, {\"name\": \"Income\", \"keywords\": [\"investment income dividends interest\"]}, {\"name\": \"Residual\", \"keywords\": [\"residual value accounting rounding FX effects\"]}, {\"name\": \"Per-Asset Contribution\", \"keywords\": [\"asset contribution portfolio performance\"]}, {\"name\": \"Position\", \"keywords\": [\"financial position portfolio holding\"]}, {\"name\": \"Deposited Capital\", \"keywords\": [\"deposited capital vs NAV portfolio\"]}, {\"name\": \"Inception-to-date\", \"keywords\": [\"inception to date ITD financial metric\"]}]",
+    "analysis_model": "google/gemma-4-31B-it"
   },
   "financial-theory/technical-analysis/performance-metrics/timing-effect.en.md": {
     "md5": "80ebe2bb1e16a43ebd58566c01446ee7",
@@ -6240,6 +6353,179 @@
       },
       "es": {
         "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "admin/host_installation.en.md": {
+    "md5": "58c9f4ac05524be7559310cb7bf9175b",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-01T09:03:53.890653+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-01T09:03:53.890653+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-01T09:03:53.890653+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-01T09:03:53.890653+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/dashboard/kpi-cards.en.md": {
+    "md5": "eb344c9997b948cbb191454c32362f2c",
+    "langs_done": [
+      "it",
+      "fr",
+      "es"
+    ],
+    "last_translated": "2026-07-01T09:56:54.838591+00:00",
+    "analysis": "[{\"name\": \"KPI Cards\", \"keywords\": [\"KPI dashboard financial software\"]}, {\"name\": \"broker scope\", \"keywords\": [\"investment portfolio broker filter scope\"]}, {\"name\": \"Net Worth\", \"keywords\": [\"net worth financial definition portfolio\"]}, {\"name\": \"Market Value\", \"keywords\": [\"market value vs book value finance\"]}, {\"name\": \"Book Value\", \"keywords\": [\"book value investment average cost\"]}, {\"name\": \"Deposited Capital\", \"keywords\": [\"deposited capital financial portfolio\"]}, {\"name\": \"hero number\", \"keywords\": [\"UI design hero element dashboard\"]}, {\"name\": \"snapshots\", \"keywords\": [\"financial data snapshot point-in-time\"]}, {\"name\": \"period-scoped\", \"keywords\": [\"period scoped data financial reporting\"]}, {\"name\": \"Period P&amp;L\", \"keywords\": [\"period profit and loss statement portfolio\"]}, {\"name\": \"Net External Flows\", \"keywords\": [\"net external flows portfolio accounting\"]}, {\"name\": \"Unrealized change\", \"keywords\": [\"unrealized gain loss financial terminology\"]}, {\"name\": \"Realized gain or loss\", \"keywords\": [\"realized gain loss investment\"]}, {\"name\": \"bond coupons\", \"keywords\": [\"bond coupon payments finance\"]}, {\"name\": \"FX rounding\", \"keywords\": [\"foreign exchange rounding errors\"]}, {\"name\": \"Timing Effect\", \"keywords\": [\"investment timing effect MWRR TWRR\"]}, {\"name\": \"buy-and-hold strategy\", \"keywords\": [\"buy and hold investment strategy\"]}, {\"name\": \"TWRR\", \"keywords\": [\"Time-Weighted Rate of Return definition\"]}, {\"name\": \"MWRR cumulative\", \"keywords\": [\"cumulative Money-Weighted Rate of Return\"]}, {\"name\": \"MWRR annualized\", \"keywords\": [\"annualized Money-Weighted Rate of Return\"]}, {\"name\": \"ROI\", \"keywords\": [\"Return on Investment financial metric\"]}]",
+    "analysis_model": "google/gemma-4-31B-it",
+    "langs": {
+      "it": {
+        "translated_at": "2026-07-01T09:56:54.838482+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** The term \"holding\" is mapped to \"posizione\" in the glossary. In the \"Book Value\" row definition, the translation uses \"posizioni aperte\" for \"open positions,\" which is correct, but in the \"Unrealized change\" row, it uses \"posizioni aperte\" again. While correct, ensure that the general concept of holdings always aligns with \"posizione\".\n- **Terminology Consistency (Internal Product Terms):** The translation leaves terms like \"Net Worth\", \"Market Value\", \"Book Value\", \"Deposited Capital\", \"Period P&L\", and \"Returns\" in English in the headings and table rows. While often common in financial software, for a professional translation, if these are UI labels, they should be consistent. However, the most critical issue is the inconsistency in the \"Deposited Capital bar\" section: the text says \"La barra del Deposited Capital\" (English) but the list items use \"Total deposited\" and \"Total withdrawn\" (English). These should either be fully translated or fully kept as UI labels.\n- **Semantic Accuracy (Financial Terms):** In the \"Deposited Capital bar\" section, \"The hero number\" is translated as \"Il numero principale\". While understandable, in a technical UI context, \"hero number\" refers to the primary, large-font metric. \"Il valore principale\" or \"La cifra principale\" would be more natural.\n- **Semantic Accuracy (Translation of \"net of\"):** In the Period P&L section, \"net of capital movements\" is translated as \"al netto dei movimenti di capitale\". This is correct. However, \"net external capital contributed\" is translated as \"Capitale esterno netto versato\". This is acceptable, but \"Contributo netto di capitale esterno\" would be more precise.\n- **Grammar/Natural Phrasing:** In the \"Timing Effect\" section, \"you tended to deposit\" is translated as \"hai avuto la tendenza a depositare\". This is a bit wordy. A more natural professional phrasing would be \"hai tendenzialmente depositato\" or \"hai depositato prevalentemente\".\n- **Terminology (Specific Financial Terms):** In the \"Period P&L\" formula, \"Net External Flows in period\" is translated as \"Flussi Esterni Netti nel periodo\". To be consistent with the \"Deposited Capital\" section, \"External\" should be consistently treated.\n- **Accuracy (Returns Section):** \"cumulative money-weighted return\" is translated as \"rendimento cumulativo ponderato per il denaro\". The standard financial term in Italian is \"rendimento ponderato per il capitale\" or simply keeping \"MWRR\" as it is an industry acronym. \"Ponderato per il denaro\" is a literal translation that sounds unnatural in Italian finance. Suggest: \"rendimento cumulativo ponderato per il capitale (MWRR)\".\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 1305.3
+      },
+      "fr": {
+        "translated_at": "2026-07-01T09:56:54.838543+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** In the \"Related\" section, the English source says \"Overview\" (linked via index.md in the first line). While \"vue d'ensemble\" is used in the first sentence, the glossary explicitly maps \"overview\" to \"**aperçu**\". Please update \"[⬅️ Retour à la vue d'ensemble du tableau de bord](index.md)\" to \"[⬅️ Retour à l'aperçu du tableau de bord](index.md)\".\n- **Terminology Consistency (Internal Logic):** The translation oscillates between translating UI labels and keeping them in English. For example, \"Net Worth\" is translated as \"Valeur Nette\" in the heading but remains \"Net Worth\" in the following sentence and in the \"Related\" links. Since these refer to specific UI elements (KPI Cards), they should be consistent. If the UI is in English, keep them English; if the UI is translated, translate them everywhere. Given the context, consistency is key: \"La carte **Net Worth**\" should be \"**Valeur Nette**\" to match the heading.\n- **Semantic Accuracy (Financial Terms):** In the \"Deposited Capital\" section, the phrase \"limité à la période\" for \"period-scoped\" is slightly inaccurate. In financial reporting, \"scoped\" refers to the boundaries of the calculation. A better translation would be \"**est calculé sur la période**\" or \"**est propre à la période**\".\n- **Translation Accuracy (P&L):** For \"Unrealized change\", the translation \"L'évolution du gain/perte non réalisé\" is correct, but for \"Sales\", the translation \"Gain ou perte réalisé\" is slightly imprecise for the term \"Sales\" in a P&L context. \"Sales\" here refers to the actual selling activity. I suggest \"**Ventes**\" to maintain the table's conciseness and match the source's labeling.\n- **Grammar/Syntax:** In the \"Timing Effect\" section, \"augmentant votre rendement personnel au-delà de ce que les actifs seuls ont rapporté\" is grammatically correct but slightly clunky. A more natural technical phrasing would be: \"...propulsant votre rendement personnel au-dessus de la performance intrinsèque des actifs.\"\n- **Terminology Consistency (MWRR):** The translation of \"MWRR cumulative\" as \"rendement cumulé pondéré par les flux monétaires\" is accurate but the table header should remain consistent with the terminology used in the \"TWRR vs MWRR\" note. Ensure the label in the table matches the label in the note exactly.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 1108.1
+      },
+      "es": {
+        "translated_at": "2026-07-01T09:56:54.838593+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** The term \"Dashboard\" is used throughout the translation, but the glossary explicitly mandates \"panel de control\".\n    - Change \"Vista General del Dashboard\" to \"Descripción general del panel de control\".\n    - Change \"parte superior del dashboard\" to \"parte superior del panel de control\".\n\n- **Terminology Consistency (Glossary):** The term \"Overview\" is translated as \"Vista General\", but the glossary mandates \"descripción general\".\n    - Change \"Vista General del Dashboard\" to \"Descripción general del panel de control\".\n\n- **Consistency/Terminology:** The translation mixes Spanish and English for UI elements (labels). For example, it translates \"Net Worth\" in the heading but leaves \"Net Worth\", \"Market Value\", \"Book Value\", and \"Deposited Capital\" in English in the body and tables. In technical documentation for software, UI labels should either be translated consistently or kept in English if the UI is English, but they should not be inconsistently mixed. Given that the headings were translated, the table rows should be as well to ensure the user can find the labels in the interface.\n    - Change \"Net Worth\" to \"Patrimonio Neto\".\n    - Change \"Market Value\" to \"Valor de Mercado\".\n    - Change \"Book Value\" to \"Valor Contable\".\n    - Change \"Cash\" to \"Efectivo\".\n    - Change \"Deposited Capital\" to \"Capital Depositado\".\n    - Change \"Period P&L\" to \"P&L del Periodo\".\n\n- **Translation Accuracy/Terminology:** \"Quantity\" is abbreviated as \"qty\" in the Spanish translation of the Book Value row. This should be fully translated for professional documentation.\n    - Change \"(coste medio × qty)\" to \"(coste medio × cantidad)\".\n\n- **Semantic Accuracy:** In the \"Timing Effect\" section, \"missed dips\" is translated as \"se perdió las caídas\". While understandable, \"perderse las caídas\" is slightly ambiguous in Spanish. A more accurate technical translation would be \"no aprovechar las caídas\".\n    - Change \"se perdió las caídas\" to \"no aprovechó las caídas\".\n\n- **Terminology Consistency:** \"MWRR cumulative\" and \"MWRR annualized\" are left in English in the table, but translated as \"MWRR acumulativo\" and \"tasa anual compuesta\" (indirectly) in the text. These should be consistent.\n    - Change \"MWRR cumulative\" to \"MWRR acumulado\".\n    - Change \"MWRR annualized\" to \"MWRR anualizado\".\n\n- **Grammar/Syntax:** In the \"Identity check\" tip, \"Verificación de identidad\" is a literal translation of \"Identity check\". In this mathematical context, \"Identity\" refers to an algebraic identity (the sum of parts equals the whole), not personal identification.\n    - Change \"Verificación de identidad\" to \"Verificación de coherencia\" or \"Comprobación de suma\".\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 1044.4
+      }
+    }
+  },
+  "user/dashboard/charts.en.md": {
+    "md5": "f3050512f8760994c85ea931581818f3",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-01T10:01:25.583268+00:00",
+    "analysis": "[{\"name\": \"KPI cards\", \"keywords\": [\"KPI financial dashboard meaning\"]}, {\"name\": \"historical and structural view\", \"keywords\": [\"portfolio historical vs structural analysis\"]}, {\"name\": \"Abs / % toggle\", \"keywords\": [\"UI toggle switch software translation\"]}, {\"name\": \"stacked area + overlay lines\", \"keywords\": [\"stacked area chart financial visualization\"]}, {\"name\": \"Asset Cost\", \"keywords\": [\"cost basis financial portfolio\"]}, {\"name\": \"Returns\", \"keywords\": [\"realized gains liquid cash portfolio\"]}, {\"name\": \"Capital\", \"keywords\": [\"undeployed deposits cash portfolio\"]}, {\"name\": \"NAV\", \"keywords\": [\"Net Asset Value finance\"]}, {\"name\": \"Deposited Capital\", \"keywords\": [\"net external capital contributed portfolio\"]}, {\"name\": \"Total P&L\", \"keywords\": [\"Profit and Loss total unrealized realized\"]}, {\"name\": \"Tooltip\", \"keywords\": [\"UI tooltip software translation\"]}, {\"name\": \"cost basis\", \"keywords\": [\"cost basis investment definition\"]}, {\"name\": \"MWRR cumulative\", \"keywords\": [\"Money Weighted Rate of Return cumulative\"]}, {\"name\": \"TWRR\", \"keywords\": [\"Time Weighted Rate of Return\"]}, {\"name\": \"ROI\", \"keywords\": [\"Return on Investment net invested capital\"]}, {\"name\": \"Timing Effect\", \"keywords\": [\"MWRR vs TWRR timing effect\"]}, {\"name\": \"Data Quality banner\", \"keywords\": [\"software data quality alert banner\"]}, {\"name\": \"mathematical solver\", \"keywords\": [\"numerical solver financial calculation unstable\"]}, {\"name\": \"Allocation Panel\", \"keywords\": [\"portfolio asset allocation panel\"]}, {\"name\": \"Donut chart\", \"keywords\": [\"donut chart data visualization\"]}, {\"name\": \"100% stacked area chart\", \"keywords\": [\"100% stacked area chart meaning\"]}, {\"name\": \"rebalancing\", \"keywords\": [\"portfolio rebalancing strategy\"]}, {\"name\": \"Liquidity\", \"keywords\": [\"liquidity financial asset class\"]}, {\"name\": \"Broker scope\", \"keywords\": [\"brokerage account filtering scope\"]}]",
+    "analysis_model": "google/gemma-4-31B-it",
+    "langs": {
+      "it": {
+        "translated_at": "2026-07-01T10:01:25.583135+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Violation**: The glossary explicitly maps \"tooltip\" $\\rightarrow$ \"suggerimento\". The translation uses \"tooltip\" repeatedly (e.g., \"Dettaglio del tooltip\", \"il tooltip mostra\"). Replace all instances of \"tooltip\" with \"suggerimento\".\n- **Terminology Violation**: The glossary maps \"overview\" $\\rightarrow$ \"panoramica\". In the breadcrumb link, \"Panoramica Dashboard\" is used, but the order is flipped compared to the English \"Dashboard Overview\". While \"panoramica\" is used, for consistency with the product's likely naming convention, \"Panoramica della Dashboard\" is preferred.\n- **Semantic Accuracy / Terminology**: In the table under \"Modalità ABS\", \"Asset Cost\" is translated as \"Costo Asset\". While \"asset\" is kept as per glossary, \"Costo dell'asset\" or \"Costo asset\" is acceptable, but \"Base di costo\" (used in the description) is the more accurate financial term for \"Cost basis\". Suggest ensuring consistency between the table cell and the description.\n- **Semantic Accuracy**: In the \"Modalità %\" section, \"money-weighted return\" is translated as \"rendimento ponderato per il denaro\". The correct financial term in Italian is \"rendimento ponderato per il capitale\" or \"rendimento pesato per i flussi di cassa\".\n- **Markdown/HTML Accuracy**: In the \"Now vs. History tabs\" section, the translation uses \"Attuale vs Storico\". The source uses \"Now vs. History\". To maintain a professional technical tone and consistency with the UI elements (which usually follow the English labels in many FinTech apps), ensure these match the actual UI. If translating, \"Attuale\" is correct, but \"Storico\" should be \"Cronologia\" or \"Storico\" depending on the UI; however, the source says \"History tabs\", and \"Storico\" is a bit abrupt. \"Cronologia\" is more natural for a tab name.\n- **Grammar/Syntax**: In the \"P2P lending\" tip, \"il divario tra NAV e Capitale Depositato potrebbe non essere visibile come spazio nel grafico\" is slightly clunky. A more natural technical phrasing would be \"potrebbe non essere visibile come un distacco grafico\".\n- **Terminology Consistency**: In the \"Three dimensions\" table, \"Financials\" is translated as \"Finanza\". In a sectoral context, \"Settore Finanziario\" is the standard term.\n- **Terminology Consistency**: In the \"Three dimensions\" table, \"Health Care\" is translated as \"Sanità\". While correct, \"Assistenza Sanitaria\" or \"Healthcare\" (often left in English in finance) is common, but \"Sanità\" is acceptable.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 270.0,
+        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "translated_at": "2026-07-01T10:01:25.583217+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology (Glossary Violation):** The glossary defines \"toggle\" as \"interrupteur\". The translation uses \"commutateur\" in \"Utilisez le commutateur Abs / %\". \n  - Change \"commutateur\" to \"interrupteur\".\n\n- **Terminology Consistency:** In the table \"Three dimensions\", the translation uses \"Action\" and \"Obligation\" (singular). For consistency with \"ETF\" and \"Crypto\" (which act as categories here) and the English \"Stock, Bond\", these should be plural to represent the asset classes.\n  - Change \"Action, Obligation\" to \"Actions, Obligations\".\n\n- **Semantic Accuracy (Financial Terminology):** The phrase \"Rendement brut sur le capital net investi\" for ROI is slightly misleading. In a technical financial context, \"Raw return\" refers to the unadjusted return. \n  - Change \"Rendement brut\" to \"Rendement brut\" (this is acceptable), but ensure \"Raw\" is not confused with \"Gross\" (before taxes). However, \"Rendement brut\" is the standard translation here.\n\n- **Grammar/Natural Phrasing:** In the \"Now vs. History tabs\" section, \"Graphique en anneau de l'allocation actuelle\" is grammatically clunky. \n  - Change to \"Graphique en anneau de l'allocation actuelle\" $\\rightarrow$ \"Graphique en anneau présentant l'allocation actuelle\".\n\n- **Consistency with Source (NAV):** In the \"Reading income-driven portfolios\" tip, the translation says \"L'écart entre la NAV et le Capital déposé\". In the rest of the document, \"NAV\" is used as a masculine noun (implicitly) or a neutral acronym. \n  - Change \"la NAV\" to \"le NAV\" to maintain consistency with \"le NAV\" implied in \"la ligne NAV\" (where 'ligne' is feminine) and the general usage of the term as \"Net Asset Value\" (Valeur Liquidative - feminine, but usually referred to as \"le NAV\" in professional French finance). If using \"la Valeur Liquidative\", it would be feminine, but since the acronym NAV is kept, \"le NAV\" is preferred for consistency.\n\n- **Terminology (Glossary Alignment):** The glossary mentions \"geographic breakdown\" and \"sector distribution\". While not explicitly used in the source as phrases, the translation uses \"Répartition géographique\" and \"Distribution sectorielle\" in the alt tags. This is correct, but ensure the \"Geography\" and \"Sector\" dimensions in the table remain simple.\n  - The translation of \"Geography\" as \"Géographie\" and \"Sector\" as \"Secteur\" is correct.\n\n- **Accuracy (Financial Logic):** In the \"MWRR unavailable\" note, \"le solveur mathématique instable\" is a literal translation. In French technical documentation, it is more common to say \"le solveur mathématique devient instable\".\n  - Change \"rendant le solveur mathématique instable\" to \"rendant le solveur mathématique instable\" (Current is acceptable, but \"instabilité du solveur\" is more natural). *Low priority.*\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 231.0,
+        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "translated_at": "2026-07-01T10:01:25.583270+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Violation (Dashboard):** The glossary explicitly maps \"dashboard\" to \"panel de control\". The translation uses \"Dashboard\" (English) in the first link and \"dashboard\" in the first paragraph. \n    - Change `[⬅️ Volver a la Vista General del Dashboard](index.md)` to `[⬅️ Volver a la descripción general del panel de control](index.md)` (also correcting \"Overview\" to \"descripción general\").\n    - Change \"La sección de gráficos se encuentra debajo de las tarjetas de KPI...\" (contextually refers to the dashboard) to ensure consistency if the term \"dashboard\" is used as a noun.\n\n- **Terminology Violation (Overview):** The glossary maps \"overview\" to \"descripción general\". The translation uses \"Vista General\".\n    - Change `Vista General del Dashboard` to `descripción general del panel de control`.\n\n- **Terminology Violation (Tooltip):** The glossary maps \"tooltip\" to \"información emergente\". The translation uses \"Tooltip\" (English) throughout the \"Desglose del Tooltip\" section and within the \"Lectura de carteras\" tip.\n    - Change `Desglose del Tooltip` to `Desglose de la información emergente`.\n    - Change `el tooltip muestra` to `la información emergente muestra`.\n    - Change `el tooltip Total P&L` to `la información emergente Total P&L`.\n\n- **Semantic Accuracy / Terminology (Returns):** In a financial context, \"Returns\" (the area in the chart) refers to \"Rentabilidad\" or \"Retornos\" (profits), whereas \"Rendimientos\" often refers to yield or income. To be more precise for a P&L context:\n    - Change `Área — Rendimientos` to `Área — Retornos` or `Rentabilidad`.\n    - Change `Rendimientos de la cartera` to `Retornos de la cartera`.\n\n- **Terminology (Real Estate):** \"Real Estate\" is left in English in the \"Tres dimensiones\" table.\n    - Change `Real Estate` to `Bienes Raíces` or `Inmuebles`.\n\n- **Structural / Non-translatable Elements:** In the \"Now vs. History tabs\" section, the translation leaves the tab names as `Now` and `History`. While these refer to UI elements, the source provides a translation for the descriptive text but keeps the labels. For consistency with the rest of the translated UI references (like \"Modo ABS\"), these should be translated if they represent labels the user sees in Spanish.\n    - Change `Pestañas Now vs. History` to `Pestañas Actual vs. Histórico`.\n    - Change `- Now — Gráfico de dona...` to `- Actual — Gráfico de dona...`.\n    - Change `- History — Gráfico de áreas...` to `- Histórico — Gráfico de áreas...`.\n\n- **Grammar/Natural phrasing:** \"Efecto del Timing\" is a literal translation. In Spanish financial terminology, this is often called \"Efecto de temporalidad\" or \"Efecto del momento de inversión\". However, since it is a specific named metric/link, \"Efecto del Timing\" is acceptable if the target audience uses Anglicisms, but \"Efecto de temporalidad\" is more professional.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 150.8,
+        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "financial-theory/technical-analysis/performance-metrics/portfolio-engine.en.md": {
+    "md5": "e09a31ea98d06b625aeb873e493ed08e",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-01T10:03:39.160988+00:00",
+    "analysis": "[{\"name\": \"NAV\", \"keywords\": [\"Net Asset Value finance definition\"]}, {\"name\": \"Book Value\", \"keywords\": [\"Book Value accounting cost basis\"]}, {\"name\": \"Period P&amp;L\", \"keywords\": [\"Period Profit and Loss statement finance\"]}, {\"name\": \"WAC\", \"keywords\": [\"Weighted Average Cost inventory accounting\"]}, {\"name\": \"Deposited Capital\", \"keywords\": [\"contributed capital investment portfolio\"]}, {\"name\": \"Evaluation frame\", \"keywords\": [\"time frame evaluation window finance\"]}, {\"name\": \"Valuation price\", \"keywords\": [\"valuation price fair market value\"]}, {\"name\": \"backward-fill\", \"keywords\": [\"backward fill data imputation time series\"]}, {\"name\": \"MV\", \"keywords\": [\"Market Value finance formula\"]}, {\"name\": \"CB\", \"keywords\": [\"Cost Basis finance definition\"]}, {\"name\": \"UGL\", \"keywords\": [\"Unrealized Gain Loss finance\"]}, {\"name\": \"Acquisition\", \"keywords\": [\"asset acquisition accounting\"]}, {\"name\": \"Reduction\", \"keywords\": [\"position reduction finance\"]}, {\"name\": \"Three-Pool Cash Model\", \"keywords\": [\"cash accounting pools tracking\"]}, {\"name\": \"Cash provenance\", \"keywords\": [\"provenance of funds financial tracking\"]}, {\"name\": \"In-transit\", \"keywords\": [\"funds in transit accounting\"]}, {\"name\": \"Reconciliation invariant\", \"keywords\": [\"account reconciliation financial invariant\"]}, {\"name\": \"Realized Gain/Loss\", \"keywords\": [\"realized gain vs unrealized gain finance\"]}, {\"name\": \"Pre-frame / Frame Architecture\", \"keywords\": [\"software computation window pre-calculation\"]}, {\"name\": \"TWRR\", \"keywords\": [\"Time-Weighted Rate of Return\"]}, {\"name\": \"MWRR\", \"keywords\": [\"Money-Weighted Rate of Return\"]}, {\"name\": \"XIRR\", \"keywords\": [\"XIRR internal rate of return calculation\"]}, {\"name\": \"Timing Effect\", \"keywords\": [\"timing effect investment performance\"]}]",
+    "analysis_model": "google/gemma-4-31B-it",
+    "langs": {
+      "it": {
+        "translated_at": "2026-07-01T10:03:39.160801+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Violation**: The glossary explicitly maps \"portfolio\" to \"portafoglio\". The translation uses \"portfolio\" throughout (e.g., \"motore di calcolo del portfolio\", \"Aggregazione del Portfolio\"). \n    - *Correction*: Replace all instances of \"portfolio\" with \"portafoglio\".\n- **Terminology Violation**: The glossary explicitly maps \"holding\" to \"posizione\". In Section 1, \"Set of assets with positions\" was translated as \"Insieme degli asset con posizioni aperte\". While \"posizioni aperte\" is technically correct, the addition of \"aperte\" is unnecessary. More importantly, ensure \"posizione\" is used consistently.\n- **Semantic Accuracy**: In Section 2, \"if PriceHistory $\\leq t$ exists\" was translated as \"se PriceHistory $\\leq t$ esiste\". In Italian, this phrasing is unnatural. \n    - *Correction*: \"se esiste un PriceHistory $\\leq t$\".\n- **Semantic Accuracy**: In Section 2, \"backward-fill from PriceHistory\" was translated as \"backward-fill da PriceHistory\". While \"backward-fill\" is a technical term, \"compilazione a ritroso\" or keeping it as is but improving the syntax is better. However, \"backward-fill\" is often kept in technical contexts; the main issue is the phrasing. \n    - *Correction*: \"riempimento a ritroso (backward-fill) da PriceHistory\".\n- **Semantic Accuracy**: In Section 6, \"Returns that left the system (hidden, restorable on re-deposit)\" was translated as \"Rendimenti che hanno lasciato il sistema (nascosti, ripristinabili al ri-deposito)\". \"Ripristinabili\" suggests a system restore; \"recuperabili\" is more appropriate for financial funds.\n    - *Correction*: \"...(nascosti, recuperabili al ri-deposito)\".\n- **Semantic Accuracy**: In Section 6, \"departure leg\" and \"arrival leg\" were translated as \"Fase di uscita\" and \"Fase di arrivo\". While understandable, in a transfer context, \"tratta di partenza\" and \"tratta di arrivo\" or \"operazione di uscita/entrata\" are more precise.\n    - *Correction*: \"Tratta di uscita (broker $s$)\" and \"Tratta di arrivo (broker $d$)\".\n- **Grammar/Syntax**: In Section 9, \"pool K/R/W a 3 vie\" is used for \"3-pool K/R/W\". \"A 3 vie\" usually refers to a 3-way switch or connection.\n    - *Correction*: \"pool K/R/W a tre pool\" or \"modello a 3 pool K/R/W\".\n- **Terminology Consistency**: In Section 10, \"Total PnL\" and \"Period PnL\" are left in English in the table. While PnL is a standard acronym, the surrounding text should be consistent.\n    - *Correction*: Ensure these remain as is if they are treated as technical keys, but \"Total\" and \"Period\" could be \"PnL Totale\" and \"PnL di Periodo\" for consistency with the Italian headers.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 166.8,
+        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "translated_at": "2026-07-01T10:03:39.160910+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** The translation uses \"grand livre de cash\" for \"cash ledger\" in Section 9. While accurate, the glossary defines \"cache\" as \"cache\". However, the phrase \"efficient range-based caching\" is translated as \"mise en cache efficace\", which is correct. No glossary violations found, but ensure \"positions\" (translated as \"positions\") remains consistent with the glossary term \"holding $\\rightarrow$ position\".\n\n- **Semantic Accuracy (Section 2):** The translation of \"backward-fill\" as \"remplissage vers l'arrière\" is technically correct but unnatural in a French financial/technical context. A more professional term is \"comblement vers l'arrière\" or simply keeping \"backward-fill\" in parentheses. However, to improve flow: replace \"remplissage vers l'arrière\" with \"comblement vers l'arrière\".\n\n- **Terminology/Consistency (Section 6):** The translation uses \"Jambe de départ\" and \"Jambe d'arrivée\" for \"Departure leg\" and \"Arrival leg\". In financial transfers, \"jambe\" (leg) is used, but \"Flux de départ\" and \"Flux d'arrivée\" are more standard for technical documentation. Suggest replacing \"Jambe de départ\" with \"Flux de départ\" and \"Jambe d'arrivée\" with \"Flux d'arrivée\".\n\n- **Technical Accuracy (Section 6):** The phrase \"Cash does not teleport between brokers\" is translated as \"Le cash ne se téléporte pas entre les courtiers\". While literal, \"Le cash ne peut pas être transféré instantanément/automatiquement\" would be more professional, though the original uses a metaphorical tone (\"teleport\"). To maintain the tone while improving professionalism, \"Le cash ne se déplace pas par magie\" or keeping the original is acceptable, but \"téléporte\" is slightly too colloquial.\n\n- **Semantic Accuracy (Section 9):** \"Pre-frame transactions update accumulators\" is translated as \"Les transactions Pre-frame mettent à jour les accumulateurs\". This is correct. However, \"without consuming price or FX data\" is translated as \"sans consommer de données de prix ou de FX\". In French, \"consommer\" is used for resources; \"sans solliciter\" or \"sans utiliser\" is more natural for data. Suggest: \"sans utiliser de données de prix ou de FX\".\n\n- **Markdown Preservation (Section 10):** The link `[Timing Effect](timing-effect.md)` is translated as `[Timing Effect](timing-effect.md)`. While the label is kept in English, for consistency with other metrics like \"Total PnL\" $\\rightarrow$ \"PnL Total\", \"Timing Effect\" should be translated. Suggest: `[Effet de Timing](timing-effect.md)`.\n\n- **Consistency (Section 6):** The term \"Cash_like\" is kept as is in the formula and text. This is correct as it refers to a variable/internal identifier.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 163.0,
+        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "translated_at": "2026-07-01T10:03:39.160991+00:00",
+        "models": {
+          "writer": "google/gemma-4-31B-it",
+          "critiquer": "google/gemma-4-31B-it"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** The word \"broker\" appears throughout the text. The glossary explicitly mandates the mapping `broker → bróker` (with an accent). The translation uses \"broker\" (English spelling) consistently. \n  - *Change all instances of \"broker\" to \"bróker\".*\n\n- **Terminology Consistency (Glossary):** In Section 9, \"cache\" is translated as \"almacenamiento en caché\". While technically correct, the glossary explicitly maps `cache → caché`.\n  - *Change \"almacenamiento en caché\" to \"caché\".*\n\n- **Semantic Accuracy (Terminology):** In Section 2, \"PriceHistory\" is a technical identifier/variable name. The translation \"si existe PriceHistory $\\leq t$\" is slightly ambiguous in Spanish. It should be treated as a variable.\n  - *Change \"si existe PriceHistory $\\leq t$\" to \"si existe PriceHistory $\\leq t$\". (Ensure it is clearly treated as the name of the data source, perhaps by keeping it consistent with the English phrasing \"if PriceHistory $\\leq t$ exists\").*\n\n- **Terminology Consistency (Internal Links):** In Section 3, the link `[Weighted Average Cost](weighted-average-cost.md)` was left in English. To maintain consistency with the rest of the document where headers are translated, the link text should be translated while keeping the URL intact.\n  - *Change \"[Weighted Average Cost](weighted-average-cost.md)\" to \"[Costo Promedio Ponderado (WAC)](weighted-average-cost.md)\".*\n\n- **Semantic Accuracy:** In Section 6, \"proceeds $P$\" is translated as \"fondos $P$\". In a financial context, \"proceeds\" specifically refers to the money obtained from a sale. \"Fondos\" is too generic.\n  - *Change \"fondos $P$\" to \"productos de la venta $P$\" or \"ingresos $P$\".*\n\n- **Semantic Accuracy:** In Section 6, under \"Cash Transfer\", \"Departure leg\" and \"Arrival leg\" are translated as \"Tramo de salida\" and \"Tramo de llegada\". While understandable, in financial transfers, these are typically referred to as the \"leg\" of the transaction. However, \"Tramo\" is acceptable; a more precise term would be \"Extremo de salida\" and \"Extremo de llegada\".\n  - *Suggestion: Change \"Tramo\" to \"Extremo\" for better financial precision.*\n\n- **Grammar/Syntax:** In Section 10, \"Period PnL\" is translated as \"PnL del Periodo\". To be consistent with the header in Section 7 (\"Contribución del Periodo\"), this is correct, but \"PnL\" is an acronym.\n  - *Ensure \"PnL\" remains capitalized as in the source.*\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 280.2,
+        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
         "stamped_by": "translate-stamp"
       }
     }

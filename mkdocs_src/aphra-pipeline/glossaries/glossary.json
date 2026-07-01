@@ -248,6 +248,51 @@
       "it": "scraper",
       "fr": "scraper",
       "es": "scraper"
+    },
+    "WAC": {
+      "it": "PMC",
+      "fr": "PMP",
+      "es": "PMP"
+    },
+    "weighted average cost": {
+      "it": "prezzo medio di carico (PMC)",
+      "fr": "prix moyen pondéré (PMP)",
+      "es": "precio medio ponderado (PMP)"
+    },
+    "buy": {
+      "it": "acquisto",
+      "fr": "achat",
+      "es": "compra"
+    },
+    "sell": {
+      "it": "vendita",
+      "fr": "vente",
+      "es": "venta"
+    },
+    "deposit": {
+      "it": "deposito",
+      "fr": "dépôt",
+      "es": "depósito"
+    },
+    "withdrawal": {
+      "it": "prelievo",
+      "fr": "retrait",
+      "es": "retiro"
+    },
+    "fee": {
+      "it": "commissione",
+      "fr": "frais",
+      "es": "comisión"
+    },
+    "tax": {
+      "it": "imposta",
+      "fr": "taxe",
+      "es": "impuesto"
+    },
+    "cash transfer": {
+      "it": "trasferimento di liquidità",
+      "fr": "transfert de liquidités",
+      "es": "transferencia de efectivo"
     }
   }
 }

@@ -42,7 +42,7 @@ Per aiutarti a scegliere la metrica corretta per la tua analisi, consulta questa
 
 ### 2. [Book Value](book-value.md)
 * **Domanda Chiave:** "Quanto è costato costruire il mio portafoglio attuale?"
-* **Concetto della Formula:** $\text{Costo Posizioni Aperte} + \text{Liquidità} + \text{Costo in Transito}$ utilizzando il Costo Medio Ponderato (WAC / PMC).
+* **Concetto della Formula:** $\text{Costo Posizioni Aperte} + \text{Liquidità} + \text{Costo in Transito}$ utilizzando il Prezzo Medio di Carico (PMC).
 * **Miglior Caso d'Uso:** Valutare il capitale impegnato e confrontarlo con il valore attuale di mercato (NAV) per determinare le plusvalenze latenti.
 
 ### 3. [P&L del Periodo](period-pnl.md)

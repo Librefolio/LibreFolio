@@ -39,7 +39,7 @@ Les ajustements sont utilisés lorsqu'aucun autre type de transaction ne convien
 
 Les ajustements avec une quantité positive **augmentent** le nombre de lots (FIFO). Le prix de revient pour les lots créés par ajustement dépend de la présence d'un **Forçage du prix de revient (Cost Basis Override)** :
 
-- **Avec forçage** : la valeur spécifiée est utilisée comme **coût d'acquisition unitaire** (Coût Moyen Pondéré — WAC)
+- **Avec forçage** : la valeur spécifiée est utilisée comme **coût d'acquisition unitaire** (Prix Moyen Pondéré — PMP)
 - **Sans forçage** : le lot est créé avec un coût nul (acquisition gratuite — ex: dons, airdrops)
 
 !!! info "Valeur unitaire"
@@ -47,16 +47,16 @@ Les ajustements avec une quantité positive **augmentent** le nombre de lots (FI
     Le Forçage du prix de revient correspond au coût moyen **par unité** de l'actif.
     Pour obtenir le coût total du bloc transféré, multipliez par la quantité :
 
-    $$\text{Coût total} = \text{WAC} \times \text{quantité}$$
+    $$\text{Coût total} = \text{PMP} \times \text{quantité}$$
 
 ### 🏦 Prix de revient automatique sur les transferts
 
-Lors du transfert d'actifs entre courtiers, LibreFolio **calcule automatiquement** le Forçage du prix de revient du côté destinataire en utilisant le **Coût Moyen Pondéré (WAC)** de la position du courtier source.
+Lors du transfert d'actifs entre courtiers, LibreFolio **calcule automatiquement** le Forçage du prix de revient du côté destinataire en utilisant le **Prix Moyen Pondéré (PMP)** de la position du courtier source.
 
 !!! tip "En savoir plus"
 
     Pour la formule complète, des exemples et les cas particuliers, consultez la page dédiée :
-    **[📊 Coût Moyen Pondéré (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)**
+    **[📊 Prix Moyen Pondéré (PMP)](../../technical-analysis/performance-metrics/weighted-average-cost.md)**
 
 ??? note "✏️ Quand forcer la valeur manuellement"
 
@@ -78,7 +78,7 @@ Lors du transfert d'actifs entre courtiers, LibreFolio **calcule automatiquement
 
 ## 🔗 Liens connexes
 
-- 📊 **[Coût Moyen Pondéré (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Comment le prix de revient automatique est calculé
+- 📊 **[Prix Moyen Pondéré (PMP)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Comment le prix de revient automatique est calculé
 - 🔄 **[Transfert d'actifs](transfer.md)** — Deux ajustements liés peuvent être promus en transfert
 - 🛒 **[Achat & Vente](buy-sell.md)** — Transactions d'actifs standard avec trésorerie
 - 💰 **[Frais & Taxes](fee.md)** — Corrections uniquement de trésorerie (utilisez Frais/Taxes au lieu d'Ajustement)

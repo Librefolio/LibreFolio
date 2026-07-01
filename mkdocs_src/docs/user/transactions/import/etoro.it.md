@@ -26,7 +26,7 @@ Per esportare la cronologia delle transazioni da eToro:
 
 !!! warning "CFD vs Asset Reali"
 
-    eToro supporta sia i CFD (contratti per differenza) che gli asset reali. Il parser importerà le transazioni CFD, ma poiché i CFD non rappresentano azioni sottostanti, la base di costo e la logica WAC potrebbero richiedere una validazione manuale nella griglia delle transazioni.
+    eToro supporta sia i CFD (contratti per differenza) che gli asset reali. Il parser importerà le transazioni CFD, ma poiché i CFD non rappresentano azioni sottostanti, la base di costo e la logica PMC potrebbero richiedere una validazione manuale nella griglia delle transazioni.
 
 ## 📝 Note
 
