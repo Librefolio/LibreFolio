@@ -384,3 +384,79 @@ class TestPreframeFrame:
         result = _build(txs, frame_start=date(2025, 1, 5))
         # First frame day should show cash=1000 from pre-frame deposit
         assert result.daily_states[0].cash_value == Decimal("1000")
+
+
+# =============================================================================
+# 7. PER-BROKER POOLS
+# =============================================================================
+
+
+class TestPerBrokerPools:
+    """Verify 3-pool is per-broker: K[bid], R[bid], W global."""
+
+    def test_buy_only_consumes_own_broker_returns(self):
+        """BUY on broker 1 does NOT consume R from broker 2."""
+        txs = [
+            # Broker 1: deposit 1000
+            _c(_tx(tx_id=1, broker_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            # Broker 2: deposit 500 + dividend 200 (R[2]=200)
+            _c(_tx(tx_id=2, broker_id=2, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("500"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=3, broker_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1,
+                   quantity=Decimal("0"), amount=Decimal("200"), dt=date(2025, 1, 3))),
+            # BUY on broker 1 for 800: should consume from R[1]=0, then K[1]
+            _c(_tx(tx_id=4, broker_id=1, tx_type=TransactionType.BUY, asset_id=1,
+                   quantity=Decimal("8"), amount=Decimal("-800"), dt=date(2025, 1, 5))),
+        ]
+        result = _build(txs)
+        last = result.daily_states[-1]
+        # K[1]=1000, R[1]=0 after deposit
+        # BUY 800 on broker 1: from_R[1]=min(800,0)=0 → K[1] -= 800 → K[1]=200
+        # Broker 2 untouched: K[2]=500, R[2]=200
+        # Total: K_tot=700, R_tot=200, cash=1000+500+200-800=900
+        assert last.cash_value == Decimal("900")
+        assert last.cash_from_contributed_capital == Decimal("700")
+        assert last.cash_from_generated_returns == Decimal("200")
+
+    def test_withdrawal_from_broker_with_returns_goes_to_w(self):
+        """WITHDRAWAL from broker that has R → from_K first, then R → W."""
+        txs = [
+            _c(_tx(tx_id=1, broker_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("100"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, broker_id=1, tx_type=TransactionType.DIVIDEND, asset_id=1,
+                   quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 3))),
+            # Withdraw 120: from_K[1]=min(120,100)=100 → K[1]=0; from_R[1]=min(20,50)=20 → R[1]=30, W=20
+            _c(_tx(tx_id=3, broker_id=1, tx_type=TransactionType.WITHDRAWAL, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("-120"), dt=date(2025, 1, 5))),
+        ]
+        result = _build(txs)
+        last = result.daily_states[-1]
+        # cash = 100 + 50 - 120 = 30
+        # K[1]=0, R[1]=30
+        assert last.cash_value == Decimal("30")
+        assert last.cash_from_contributed_capital == Decimal("0")
+        assert last.cash_from_generated_returns == Decimal("30")
+
+    def test_redeposit_on_different_broker_restores_from_w(self):
+        """W is global: re-deposit on broker 2 restores from W (earned on broker 1)."""
+        txs = [
+            # Broker 1: deposit + dividend + full withdrawal (R goes to W)
+            _c(_tx(tx_id=1, broker_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("100"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, broker_id=1, tx_type=TransactionType.DIVIDEND, asset_id=1,
+                   quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 3))),
+            # Withdraw all 150: K[1]=100→0, R[1]=50→0, W=50
+            _c(_tx(tx_id=3, broker_id=1, tx_type=TransactionType.WITHDRAWAL, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("-150"), dt=date(2025, 1, 4))),
+            # Re-deposit 30 on broker 2: restore=min(30, W=50)=30 → R[2]+=30, W=20
+            _c(_tx(tx_id=4, broker_id=2, tx_type=TransactionType.DEPOSIT, asset_id=None,
+                   quantity=Decimal("0"), amount=Decimal("30"), dt=date(2025, 1, 8))),
+        ]
+        result = _build(txs)
+        last = result.daily_states[-1]
+        # cash = 100 + 50 - 150 + 30 = 30
+        # K[1]=0, R[1]=0, K[2]=0, R[2]=30
+        assert last.cash_value == Decimal("30")
+        assert last.cash_from_contributed_capital == Decimal("0")
+        assert last.cash_from_generated_returns == Decimal("30")
