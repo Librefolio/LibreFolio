@@ -15,7 +15,7 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {RefreshCw, PieChart, AreaChart, BrainCircuit} from 'lucide-svelte';
+    import {RefreshCw, PieChart, AreaChart, Brain} from 'lucide-svelte';
     import {copyAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
 
@@ -532,7 +532,7 @@
     function handleDocumentClick(e: MouseEvent) {
         if (aiExportDropdownOpen) {
             const target = e.target as HTMLElement;
-            if (!target.closest?.('[data-ai-export-panel]') && target !== aiExportTriggerEl) {
+            if (!target.closest?.('[data-ai-export-panel]') && !target.closest?.('[data-testid="ai-export-button"]')) {
                 aiExportDropdownOpen = false;
             }
         }
@@ -660,7 +660,7 @@
                 data-testid="ai-export-button"
                 title={$_('dashboard.aiExport')}
             >
-                <BrainCircuit size={14} class={aiExportLoading ? 'animate-pulse' : ''} />
+                <Brain size={14} class={aiExportLoading ? 'animate-pulse' : ''} />
                 {#if layout.showActionLabels}
                     <span>{aiExportLoading ? $_('dashboard.aiExportBuilding') : $_('dashboard.aiExport')}</span>
                 {/if}
@@ -674,7 +674,7 @@
                         onclick={() => handleAiExport('full')}
                         data-testid="ai-export-full"
                     >
-                        <BrainCircuit size={14} class="text-purple-500" />
+                        <Brain size={14} class="text-purple-500" />
                         {$_('dashboard.aiExportFull')}
                     </button>
                     <button

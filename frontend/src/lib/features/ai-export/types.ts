@@ -46,6 +46,8 @@ export interface AiMethodology {
 		purpose: string;
 		not_trading_signals: boolean;
 	};
+	allocation_basis: string;
+	metric_definitions: Record<string, string>;
 }
 
 // ─── Portfolio Snapshot ──────────────────────────────────────────────────────
@@ -80,6 +82,9 @@ export interface AiPosition {
 	cost_basis?: number;
 	unrealized_pnl?: number;
 	unrealized_pnl_percent?: number;
+	is_open: boolean;
+	/** Only set for assets flagged as missing in data_quality */
+	valuation_source?: string;
 	/** Period contribution fields (from positions_contribution) */
 	period_pnl?: number;
 	period_pnl_percent?: number;

@@ -78,7 +78,7 @@ function renderTechnicalAsset(asset: AiTechnicalAsset): string {
 	lines.push('```\n');
 
 	if (asset.series.length > 0) {
-		const cols = ['Date', 'Close', 'Return %', 'RSI14', 'MACD Hist', 'EMA20', 'EMA50', 'EMA200'];
+		const cols = ['Date', 'Close', 'Return from 3M base %', 'RSI14', 'MACD Hist', 'EMA20', 'EMA50', 'EMA200'];
 		lines.push('| ' + cols.join(' | ') + ' |');
 		lines.push('|' + cols.map(() => '---:').join('|') + '|');
 
