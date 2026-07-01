@@ -501,9 +501,10 @@ class DailyStateBuilder:
         cumulative_qty: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
         wac_pool_qty: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
         wac_pool_cost: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
-        capital_cash_pool = zero
-        returns_cash_pool = zero
-        withdrawn_returns_pool = zero  # W: returns that left system (hidden, trackable)
+        # 3-pool: per-broker K and R, global W
+        K: dict[int, Decimal] = defaultdict(lambda: zero)  # capital pool per broker
+        R: dict[int, Decimal] = defaultdict(lambda: zero)  # returns pool per broker
+        W: Decimal = zero  # withdrawn returns (global, exits system)
         # Period accumulators for contribution (only frame txs counted)
         per_realized: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
         per_income: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
@@ -525,9 +526,10 @@ class DailyStateBuilder:
         for day in preframe_tx_dates:
             cumulative_cash += cash_deltas.get(day, zero)
             cumulative_ecf += ecf_by_date.get(day, zero)
-            # Pre-frame 3-pool: process DEPOSIT/WITHDRAWAL for correct K/R/W state
+            # Pre-frame 3-pool per-broker: process all tx types
             for ctxn in all_txs_by_date.get(day, []):
                 tx = ctxn.tx
+                bid = tx.broker_id
                 if tx.amount is None or tx.amount == 0 or tx.currency is None:
                     continue
                 amt = self._convert(abs(tx.amount), tx.currency, tx.date)
@@ -535,31 +537,44 @@ class DailyStateBuilder:
                     continue
                 amt = amt * ctxn.share
                 if tx.type == TransactionType.DEPOSIT:
-                    restore = min(amt, withdrawn_returns_pool)
-                    returns_cash_pool += restore
-                    withdrawn_returns_pool -= restore
-                    capital_cash_pool += (amt - restore)
+                    restore = min(amt, W)
+                    R[bid] += restore
+                    W -= restore
+                    K[bid] += (amt - restore)
                 elif tx.type == TransactionType.WITHDRAWAL:
-                    from_k = min(amt, max(capital_cash_pool, zero))
-                    capital_cash_pool -= from_k
+                    from_k = min(amt, max(K[bid], zero))
+                    K[bid] -= from_k
                     remaining = amt - from_k
-                    from_r = min(remaining, max(returns_cash_pool, zero))
-                    returns_cash_pool -= from_r
-                    withdrawn_returns_pool += from_r
+                    from_r = min(remaining, max(R[bid], zero))
+                    R[bid] -= from_r
+                    W += from_r
                 elif tx.type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
-                    returns_cash_pool += amt
+                    R[bid] += amt
                 elif tx.type in (TransactionType.FEE, TransactionType.TAX):
-                    returns_cash_pool -= amt
-                    if returns_cash_pool < zero:
-                        capital_cash_pool += returns_cash_pool
-                        returns_cash_pool = zero
+                    R[bid] -= amt
+                    if R[bid] < zero:
+                        K[bid] += R[bid]
+                        R[bid] = zero
                 elif tx.type == TransactionType.BUY and tx.asset_id:
-                    from_r = min(amt, max(returns_cash_pool, zero))
-                    returns_cash_pool -= from_r
-                    capital_cash_pool -= (amt - from_r)
+                    from_r = min(amt, max(R[bid], zero))
+                    R[bid] -= from_r
+                    K[bid] -= (amt - from_r)
                 elif tx.type == TransactionType.SELL and tx.asset_id:
-                    # For pre-frame sells, approximate: all goes to K (no WAC available yet)
-                    capital_cash_pool += amt
+                    # Pre-frame sells: approximate all proceeds to K (WAC not tracked yet in pre-frame for sell cost basis)
+                    K[bid] += amt
+                elif tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION):
+                    # Linked-internal cash transfer: move pools from src to dst
+                    if ctxn.classification == "linked_internal" and tx.amount < 0:
+                        # Departure leg (negative amount = outflow)
+                        from_r = min(amt, max(R[bid], zero))
+                        R[bid] -= from_r
+                        from_k = amt - from_r
+                        K[bid] -= from_k
+                        # Arrival leg will add these back to paired broker
+                    elif ctxn.classification == "linked_internal" and tx.amount > 0:
+                        # Arrival leg (positive amount = inflow)
+                        # Approximate: add to K (can't track exact split without buffering)
+                        K[bid] += amt
             # Update WAC pools for position txs
             day_pos_txs = position_txs_by_date.get(day)
             if day_pos_txs:
@@ -692,6 +707,7 @@ class DailyStateBuilder:
 
             for ctxn in day_additions + day_reductions + day_non_position:
                 tx = ctxn.tx
+                bid = tx.broker_id
                 key = (tx.asset_id, tx.broker_id) if tx.asset_id else None
                 tx_qty = (tx.quantity * ctxn.share) if tx.quantity else zero
 
@@ -748,42 +764,42 @@ class DailyStateBuilder:
                             wac_pool_cost[key] = zero
                         cumulative_qty[key] += tx_qty
 
-                        # 3-pool: SELL → K += cost_basis, R += gain
+                        # 3-pool per-broker: SELL → K[bid] += cost_basis, R[bid] += gain
                         if amount_target is not None:
                             gain = amount_target - sell_cb_target
-                            capital_cash_pool += sell_cb_target
-                            returns_cash_pool += gain
-                            if returns_cash_pool < zero:
-                                capital_cash_pool += returns_cash_pool
-                                returns_cash_pool = zero
+                            K[bid] += sell_cb_target
+                            R[bid] += gain
+                            if R[bid] < zero:
+                                K[bid] += R[bid]
+                                R[bid] = zero
 
                         # Period accumulator: realized gain/loss
                         if amount_target is not None:
                             per_realized[key] += amount_target - sell_cb_target
                         continue  # skip generic 3-pool/accumulator below
 
-                # ── 3-pool + period accumulators for non-SELL txs ──
+                # ── 3-pool per-broker + period accumulators for non-SELL txs ──
                 if amount_target is None:
                     continue
 
+                bid = tx.broker_id
+
                 if tx.type == TransactionType.DEPOSIT:
-                    # DEPOSIT D>0: restore = min(D, W); R += restore; W -= restore; K += (D - restore)
-                    restore = min(amount_target, withdrawn_returns_pool)
-                    returns_cash_pool += restore
-                    withdrawn_returns_pool -= restore
-                    capital_cash_pool += (amount_target - restore)
+                    restore = min(amount_target, W)
+                    R[bid] += restore
+                    W -= restore
+                    K[bid] += (amount_target - restore)
 
                 elif tx.type == TransactionType.WITHDRAWAL:
-                    # WITHDRAWAL X>0: from_K first, then from_R → W
-                    from_k = min(amount_target, max(capital_cash_pool, zero))
-                    capital_cash_pool -= from_k
+                    from_k = min(amount_target, max(K[bid], zero))
+                    K[bid] -= from_k
                     remaining = amount_target - from_k
-                    from_r = min(remaining, max(returns_cash_pool, zero))
-                    returns_cash_pool -= from_r
-                    withdrawn_returns_pool += from_r
+                    from_r = min(remaining, max(R[bid], zero))
+                    R[bid] -= from_r
+                    W += from_r
 
                 elif tx.type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
-                    returns_cash_pool += amount_target
+                    R[bid] += amount_target
                     # Period accumulator
                     if tx.asset_id:
                         per_income[(tx.asset_id, tx.broker_id)] += amount_target
@@ -791,10 +807,10 @@ class DailyStateBuilder:
                         unalloc_income[tx.broker_id] += amount_target
 
                 elif tx.type in (TransactionType.FEE, TransactionType.TAX):
-                    returns_cash_pool -= amount_target
-                    if returns_cash_pool < zero:
-                        capital_cash_pool += returns_cash_pool
-                        returns_cash_pool = zero
+                    R[bid] -= amount_target
+                    if R[bid] < zero:
+                        K[bid] += R[bid]
+                        R[bid] = zero
                     # Period accumulator
                     if tx.asset_id:
                         per_fees_taxes[(tx.asset_id, tx.broker_id)] += amount_target
@@ -802,9 +818,22 @@ class DailyStateBuilder:
                         unalloc_fees[tx.broker_id] += amount_target
 
                 elif tx.type == TransactionType.BUY and tx.asset_id:
-                    from_r = min(amount_target, max(returns_cash_pool, zero))
-                    returns_cash_pool -= from_r
-                    capital_cash_pool -= (amount_target - from_r)
+                    from_r = min(amount_target, max(R[bid], zero))
+                    R[bid] -= from_r
+                    K[bid] -= (amount_target - from_r)
+
+                elif tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION):
+                    # Linked-internal: pool transfer between brokers
+                    if ctxn.classification == "linked_internal" and tx.amount < 0:
+                        # Departure leg: R exits first, then K
+                        from_r = min(amount_target, max(R[bid], zero))
+                        R[bid] -= from_r
+                        from_k = amount_target - from_r
+                        K[bid] -= from_k
+                    elif ctxn.classification == "linked_internal" and tx.amount > 0:
+                        # Arrival leg: receives from paired broker
+                        # Approximate: proportional to departure (use K as default)
+                        K[bid] += amount_target
 
             # 4c. Market value per asset (after all txs for the day are processed)
             market_value = zero
@@ -850,20 +879,24 @@ class DailyStateBuilder:
             book = open_cost_basis + cumulative_cash + in_transit_bv
             ug = nav - book
 
-            # 4g. Clamp pools (rounding safety)
-            capital_cash_pool = max(capital_cash_pool, zero)
-            returns_cash_pool = max(returns_cash_pool, zero)
+            # 4g. Clamp pools per-broker (rounding safety)
+            for bid in list(K.keys()):
+                K[bid] = max(K[bid], zero)
+            for bid in list(R.keys()):
+                R[bid] = max(R[bid], zero)
 
-            # Derive final display values reconciled to actual cash
+            # Derive final display values (aggregated across brokers)
+            capital_cash_pool_total = sum(K.values())
+            returns_cash_pool_total = sum(R.values())
             book_asset_like = open_cost_basis + it_asset_cb
             cash_like = cumulative_cash + it_cash
-            pool_sum = capital_cash_pool + returns_cash_pool
+            pool_sum = capital_cash_pool_total + returns_cash_pool_total
             if pool_sum > zero and abs(pool_sum - cash_like) > Decimal("0.01"):
                 scale = cash_like / pool_sum
-                cash_from_contributed = max(capital_cash_pool * scale, zero)
+                cash_from_contributed = max(capital_cash_pool_total * scale, zero)
                 cash_from_generated = max(cash_like - cash_from_contributed, zero)
             else:
-                cash_from_contributed = min(capital_cash_pool, cash_like)
+                cash_from_contributed = min(capital_cash_pool_total, cash_like)
                 cash_from_generated = max(cash_like - cash_from_contributed, zero)
 
             total_pnl = nav - capital_baseline
@@ -936,9 +969,9 @@ class DailyStateBuilder:
                 cumulative_qty=dict(cumulative_qty),
                 wac_pool_qty=dict(wac_pool_qty),
                 wac_pool_cost=dict(wac_pool_cost),
-                capital_cash_pool=capital_cash_pool,
-                returns_cash_pool=returns_cash_pool,
-                withdrawn_returns_pool=withdrawn_returns_pool,
+                capital_pool=dict(K),
+                returns_pool=dict(R),
+                withdrawn_pool=W,
             ),
             scope_broker_ids=list(set(ctxn.tx.broker_id for ctxn in self.classified_txs)),
             target_currency=self.target_currency,
@@ -1278,9 +1311,9 @@ class EngineEndState:
     cumulative_qty: dict[tuple[int, int], Decimal]
     wac_pool_qty: dict[tuple[int, int], Decimal]
     wac_pool_cost: dict[tuple[int, int], Decimal]
-    capital_cash_pool: Decimal
-    returns_cash_pool: Decimal
-    withdrawn_returns_pool: Decimal
+    capital_pool: dict[int, Decimal]  # K per broker
+    returns_pool: dict[int, Decimal]  # R per broker
+    withdrawn_pool: Decimal  # W global
 
 
 @dataclass
