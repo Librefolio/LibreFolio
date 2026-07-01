@@ -65,15 +65,13 @@ export async function buildAiExport(options: AiExportOptions): Promise<AiPortfol
 	const aiMetadata = buildMetadata(metadata, options);
 	const methodology = buildMethodology();
 	const snapshot = buildSnapshot(summary);
-	const positions = buildPositions(summary, contribution);
+	const quality = buildDataQuality(dataQuality, summary);
+	const missingAssetIds = new Set((quality.missing_price_assets_ids ?? []) as number[]);
+	const positions = buildPositions(summary, contribution, missingAssetIds);
 	const allocation = buildAllocation(summary, positions);
 	const brokerSummary = buildBrokerSummary(summary, positions);
-	const quality = buildDataQuality(dataQuality, summary);
 
 	// Build technical context for eligible assets
-	const missingAssetIds = new Set(
-		(quality.missing_price_assets_ids ?? []) as number[],
-	);
 	const technicalInputs = buildTechnicalInputs(positions, missingAssetIds, options);
 	const technical = await buildTechnicalContext(technicalInputs);
 
@@ -127,6 +125,16 @@ function buildMethodology(): AiMethodology {
 			purpose: 'descriptive_context_only',
 			not_trading_signals: true,
 		},
+		allocation_basis: 'market_value_excluding_cash',
+		metric_definitions: {
+			nav: 'Total portfolio value: market_value + cash',
+			total_pnl: 'NAV minus total invested capital (lifetime)',
+			period_pnl: 'NAV change minus net cash flows in selected period',
+			deposited_capital: 'Total deposits minus total withdrawals (net external capital)',
+			unrealized_pnl: 'Current market value minus cost basis of open positions',
+			twrr_percent: 'Time-Weighted Rate of Return (eliminates cash flow timing effect)',
+			mwrr_annualized_percent: 'Money-Weighted Rate of Return (XIRR), annualized',
+		},
 	};
 }
 
@@ -142,12 +150,12 @@ function buildSnapshot(summary: Record<string, any> | null): AiPortfolioSnapshot
 		book_value: parseCurrency(summary.book_value),
 		deposited_capital: parseCurrency(summary.net_deposited_capital),
 		total_pnl: parseCurrency(summary.total_gain_loss),
-		total_pnl_percent: parseNum(summary.total_gain_loss_percent),
+		total_pnl_percent: ratioToPct(summary.total_gain_loss_percent),
 		unrealized_pnl: parseCurrency(summary.unrealized_gain_loss),
 		period_pnl: parseCurrency(summary.period_pnl),
-		twrr_percent: parseNum(summary.twrr_percent),
-		mwrr_annualized_percent: parseNum(summary.mwrr_annualized_percent),
-		simple_roi_percent: parseNum(summary.simple_roi_percent),
+		twrr_percent: ratioToPct(summary.twrr_percent),
+		mwrr_annualized_percent: ratioToPct(summary.mwrr_annualized_percent),
+		simple_roi_percent: ratioToPct(summary.simple_roi_percent),
 	}) as AiPortfolioSnapshot;
 }
 
@@ -156,6 +164,7 @@ function buildSnapshot(summary: Record<string, any> | null): AiPortfolioSnapshot
 function buildPositions(
 	summary: Record<string, any> | null,
 	contribution: Record<string, any> | null,
+	missingPriceAssetIds: Set<number>,
 ): AiPosition[] {
 	const holdings: any[] = summary?.holdings ?? [];
 	if (holdings.length === 0) return [];
@@ -174,10 +183,14 @@ function buildPositions(
 		const currency = assetInfo?.currency ?? '';
 		const contribKey = `${h.asset_id}|${h.broker_id}`;
 		const cp = contribMap.get(contribKey);
-
 		const qty = parseNum(h.quantity) ?? 0;
+
+		// Skip closed positions that had no activity in the period
+		if (qty === 0 && !cp) continue;
+
 		const wac = parseNum(h.wac_per_unit);
 		const costBasis = wac != null && qty > 0 ? Math.round(wac * qty * 100) / 100 : undefined;
+		const isMissingPrice = missingPriceAssetIds.has(h.asset_id);
 
 		positions.push(
 			stripUndefined({
@@ -192,10 +205,12 @@ function buildPositions(
 				wac,
 				cost_basis: costBasis,
 				unrealized_pnl: parseCurrency(h.gain_loss),
-				unrealized_pnl_percent: parseNum(h.gain_loss_percent),
+				unrealized_pnl_percent: ratioToPct(h.gain_loss_percent),
+				is_open: qty > 0 ? true : false,
+				valuation_source: isMissingPrice ? 'LAST_BUY_PRICE_OR_MISSING' : undefined,
 				// Period contribution
 				period_pnl: parseNum(cp?.period_pnl),
-				period_pnl_percent: parseNum(cp?.period_pnl_percent),
+				period_pnl_percent: ratioToPct(cp?.period_pnl_percent),
 				period_unrealized_delta: parseNum(cp?.period_unrealized_delta),
 				period_realized: parseNum(cp?.period_realized_gain_loss),
 				period_income: parseNum(cp?.period_income),
@@ -214,9 +229,9 @@ function buildPositions(
 // ─── Allocation ──────────────────────────────────────────────────────────────
 
 function buildAllocation(summary: Record<string, any> | null, positions: AiPosition[]): AiAllocation {
-	const byType = mapAllocation(summary?.allocation_by_type);
-	const bySector = mapAllocation(summary?.allocation_by_sector);
-	const byGeo = mapAllocation(summary?.allocation_by_geography);
+	const byType = ensureAllocSums100(mapAllocation(summary?.allocation_by_type));
+	const bySector = ensureAllocSums100(mapAllocation(summary?.allocation_by_sector));
+	const byGeo = ensureAllocSums100(mapAllocation(summary?.allocation_by_geography));
 
 	// Compute by_currency from positions + assetStore
 	const currencyWeights = new Map<string, number>();
@@ -240,9 +255,9 @@ function buildAllocation(summary: Record<string, any> | null, positions: AiPosit
 		.map(([name, percent]) => ({name, percent: Math.round(percent * 100) / 100}))
 		.sort((a, b) => b.percent - a.percent);
 
-	// by_asset from positions
+	// by_asset from positions (only open)
 	const byAsset: AiAllocationItem[] = positions
-		.filter((p) => p.nav_weight_percent != null && p.nav_weight_percent > 0)
+		.filter((p) => p.is_open && p.nav_weight_percent != null && p.nav_weight_percent > 0)
 		.map((p) => ({name: p.symbol ?? p.name, percent: p.nav_weight_percent!}));
 
 	return {
@@ -261,6 +276,17 @@ function mapAllocation(items: any[] | undefined): AiAllocationItem[] {
 		.filter((i) => i.name && i.value != null)
 		.map((i) => ({name: i.name, percent: Math.round(parseFloat(i.value) * 100) / 100}))
 		.sort((a, b) => b.percent - a.percent);
+}
+
+/** If allocation doesn't sum to ~100%, add an 'Other / Unallocated' entry */
+function ensureAllocSums100(items: AiAllocationItem[]): AiAllocationItem[] {
+	if (items.length === 0) return items;
+	const total = items.reduce((s, i) => s + i.percent, 0);
+	const gap = Math.round((100 - total) * 100) / 100;
+	if (Math.abs(gap) > 0.5) {
+		return [...items, {name: 'Other / Unallocated', percent: gap}];
+	}
+	return items;
 }
 
 // ─── Broker Summary ─────────────────────────────────────────────────────────
@@ -413,6 +439,13 @@ function parseNum(val: any): number | undefined {
 	if (typeof val === 'number') return val;
 	const n = parseFloat(String(val));
 	return Number.isNaN(n) ? undefined : n;
+}
+
+/** Convert backend ratio (0.17) to human-readable percentage points (17.0) */
+function ratioToPct(val: any): number | undefined {
+	const n = parseNum(val);
+	if (n == null) return undefined;
+	return Math.round(n * 10000) / 100;
 }
 
 /** Remove undefined values from an object */

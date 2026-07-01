@@ -78,6 +78,17 @@ export async function buildTechnicalContext(inputs: TechnicalExportInput[]): Pro
 		}
 	}
 
+	// Limit total events to 40 (most recent across all assets)
+	const MAX_TOTAL_EVENTS = 40;
+	const allEvents = assets.flatMap((a) => a.events);
+	if (allEvents.length > MAX_TOTAL_EVENTS) {
+		const eventsByDate = allEvents.sort((a, b) => b.date.localeCompare(a.date));
+		const keepDates = new Set(eventsByDate.slice(0, MAX_TOTAL_EVENTS).map((e) => `${e.asset}|${e.date}|${e.event}`));
+		for (const asset of assets) {
+			asset.events = asset.events.filter((e) => keepDates.has(`${e.asset}|${e.date}|${e.event}`));
+		}
+	}
+
 	return {assets, unavailable};
 }
 
@@ -95,8 +106,12 @@ async function buildSingleAsset(input: TechnicalExportInput): Promise<AiTechnica
 
 	if (prices.length < 5) return null;
 
+	// Filter out backward-filled (non-trading day) prices for cleaner signal data
+	const tradingPrices = prices.filter((p) => !p.backwardFillInfo || p.backwardFillInfo.daysBack === 0);
+	const effectivePrices = tradingPrices.length >= 5 ? tradingPrices : prices;
+
 	// Convert to LineDataPoint
-	const priceData: LineDataPoint[] = prices.map((p) => ({date: p.date, value: p.close}));
+	const priceData: LineDataPoint[] = effectivePrices.map((p) => ({date: p.date, value: p.close}));
 
 	// Compute signals using the full data range (includes warm-up)
 	const defaultStyle = {color: '#000', lineWidth: 1, lineType: 'solid' as const, markerStart: null, markerEnd: null};
