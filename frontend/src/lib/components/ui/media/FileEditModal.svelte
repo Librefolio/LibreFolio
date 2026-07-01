@@ -135,7 +135,7 @@
             </h2>
             <div class="header-actions">
                 {#if hasChanges}
-                    <button type="button" class="restore-btn" on:click={restoreOriginal} title={$_('uploads.resetAll') || 'Reset All'}>
+                    <button type="button" class="restore-btn" on:click={restoreOriginal} title={$_('common.resetAllChanges') || 'Reset All'}>
                         <RefreshCw size={16} />
                     </button>
                 {/if}

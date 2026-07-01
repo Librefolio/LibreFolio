@@ -93,9 +93,9 @@
     // asset currency is still shown prominently in the tab label via
     // ``assetDetail.eventsInCurrency`` so the user knows the unit.
     let eventColumns: ColumnDef[] = $derived([
-        {key: 'type', label: $t('dataEditor.col.type'), type: 'enum', editable: true, required: true, enumOptions: eventTypeOptions},
+        {key: 'type', label: $t('common.type'), type: 'enum', editable: true, required: true, enumOptions: eventTypeOptions},
         {key: 'amount', label: $t('dataEditor.col.amount'), type: 'number', editable: true, required: true, step: 0.01, placeholder: '1.25'},
-        {key: 'notes', label: $t('dataEditor.col.notes'), type: 'string', editable: true, required: false, placeholder: 'Q1 payout'},
+        {key: 'notes', label: $t('common.notes'), type: 'string', editable: true, required: false, placeholder: 'Q1 payout'},
     ]);
 
     // =========================================================================

@@ -237,7 +237,7 @@
             <!-- Preview Chart -->
             <div>
                 <div class="flex items-center justify-between mb-2">
-                    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">{$t('chartSettings.preview')}</h3>
+                    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">{$t('common.preview')}</h3>
                     <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                         <button
                             class="px-2.5 py-1 text-[10px] font-medium transition-colors {previewViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
@@ -286,7 +286,7 @@
                 {$t('common.cancel')}
             </button>
             <button class="px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSave} type="button">
-                {$t('chartSettings.apply')}
+                {$t('common.apply')}
             </button>
         </div>
     </div>

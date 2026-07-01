@@ -220,7 +220,7 @@
             <h3 class="text-lg font-semibold text-gray-700 mb-2">{$_('common.error')}</h3>
             <p class="text-gray-500 mb-4">{error}</p>
             <button on:click={loadBroker} class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors">
-                {$_('error.tryAgain')}
+                {$_('common.retry')}
             </button>
         </div>
     {:else if broker}
@@ -383,7 +383,7 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4" data-testid="broker-transactions">
                     <div class="flex items-center space-x-2 text-gray-700 mb-3">
                         <ArrowRightLeft size={18} />
-                        <h3 class="font-semibold">{$_('brokers.recentTransactions')}</h3>
+                        <h3 class="font-semibold">{$_('common.recentTransactions')}</h3>
                     </div>
 
                     {#if transactions.length > 0}

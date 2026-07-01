@@ -1172,7 +1172,7 @@
                     onclick={() => {
                         selectedIds = [];
                     }}
-                    title={$t('table.clearSelection') || 'Clear selection'}
+                    title={$t('common.clearSelection') || 'Clear selection'}
                 >
                     <span>{selectedIds.length}</span>
                     <span class="hidden sm:inline">{$t('common.selected')}</span>

@@ -35,7 +35,7 @@
 <div class="toolbar">
     <div class="toolbar-right">
         {#if selectedCount > 0}
-            <button type="button" class="selected-count-btn" onclick={() => onClearSelection?.()} title={$t('table.clearSelection') || 'Clear selection'}>
+            <button type="button" class="selected-count-btn" onclick={() => onClearSelection?.()} title={$t('common.clearSelection') || 'Clear selection'}>
                 <span class="count-text">{selectedCount} {$t('common.selected')}</span>
                 <span class="clear-icon">×</span>
             </button>

@@ -592,7 +592,7 @@
                 {#if usedProviders.length > 0}
                     <div class="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-slate-700">
                         <span class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider flex-shrink-0">
-                            {$_('fx.providers')}
+                            {$_('common.providers')}
                         </span>
                         <div class="flex items-center gap-1.5 flex-wrap">
                             {#each usedProviders as prov}

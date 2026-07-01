@@ -491,7 +491,7 @@
 
     function eventTooltipText(eventId: number): string {
         const ev = eventTooltipMap.get(eventId);
-        if (!ev) return $t('transactions.linkedEvent') || 'Linked event';
+        if (!ev) return $t('common.linkedEvent') || 'Linked event';
         const emoji = getEventTypeEmoji(ev.type);
         const typeName = $t(`assetDetail.eventType.${ev.type}`) || ev.type;
         const amount = Number(ev.value);
@@ -619,7 +619,7 @@
     let allColumns = $derived<ColumnDef<DisplayRow>[]>([
         {
             id: 'date',
-            header: () => $t('transactions.table.date'),
+            header: () => $t('common.date'),
             type: 'date',
             width: 110,
             urlKey: 'date',
@@ -628,7 +628,7 @@
         },
         {
             id: 'typeIcon',
-            header: () => $t('transactions.table.type'),
+            header: () => $t('common.type'),
             type: 'enum',
             width: 90,
             sortable: true,
@@ -721,7 +721,7 @@
         },
         {
             id: 'asset',
-            header: () => $t('transactions.table.asset'),
+            header: () => $t('common.asset'),
             type: 'enum',
             width: 220,
             urlKey: 'asset_id',
@@ -798,7 +798,7 @@
         },
         {
             id: 'tags',
-            header: () => $t('transactions.table.tags'),
+            header: () => $t('common.tags'),
             type: 'multi-enum',
             width: 200,
             urlKey: 'tags',
@@ -834,7 +834,7 @@
         },
         {
             id: 'description',
-            header: $t('transactions.table.description') || 'Description',
+            header: $t('common.description') || 'Description',
             type: 'text',
             width: 180,
             urlKey: 'description',
@@ -888,7 +888,7 @@
         {
             id: 'edit',
             icon: Pencil,
-            label: () => $t('transactions.actions.edit') || 'Edit',
+            label: () => $t('common.edit') || 'Edit',
             onClick: (d) => onEditRow?.(d.tx),
             visible: (d) => rowAccessLevel(d) === 'full',
         },
@@ -915,7 +915,7 @@
         {
             id: 'delete',
             icon: Trash2,
-            label: () => $t('transactions.actions.delete') || 'Delete',
+            label: () => $t('common.delete') || 'Delete',
             variant: 'danger',
             onClick: (d) => onDeleteRow?.(d.tx),
             visible: (d) => rowAccessLevel(d) === 'full',

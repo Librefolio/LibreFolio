@@ -393,7 +393,7 @@
                     : ''}"
                 onclick={() => hasPctData && (viewMode = 'pct')}
                 disabled={!hasPctData}
-                title={!hasPctData ? $_('dashboard.noData') : ''}
+                title={!hasPctData ? $_('common.noData') : ''}
                 data-testid="growth-toggle-pct"
             >
                 {$_('dashboard.pct')}
@@ -408,7 +408,7 @@
             <div class="absolute inset-0 z-10 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
         {:else if history.length === 0}
             <div class="absolute inset-0 z-10 flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
-                {$_('dashboard.noData')}
+                {$_('common.noData')}
             </div>
         {/if}
         <!-- Persistent chart container — never destroyed -->

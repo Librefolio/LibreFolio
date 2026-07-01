@@ -369,7 +369,7 @@
                         data-testid="{testid}-sync-fx-btn"
                     >
                         <RefreshCw size={11} />
-                        {$t('transactions.wacPreview.syncFx') ?? 'Sync FX rates'}
+                        {$t('common.syncFxRates') ?? 'Sync FX Rates'}
                     </button>
                 {/if}
             </div>
@@ -417,8 +417,8 @@
                 <thead class="bg-gray-50 dark:bg-slate-800 sticky top-0">
                     <tr>
                         <th class="px-2 py-1 text-left min-w-[28px]">#</th>
-                        <th class="px-2 py-1 text-left min-w-[120px]">{$t('transactions.table.type')}</th>
-                        <th class="px-2 py-1 text-left min-w-[90px]">{$t('transactions.table.date')}</th>
+                        <th class="px-2 py-1 text-left min-w-[120px]">{$t('common.type')}</th>
+                        <th class="px-2 py-1 text-left min-w-[90px]">{$t('common.date')}</th>
                         <th class="px-2 py-1 text-center min-w-[35px]">{$t('transactions.table.quantity')}</th>
                         <th class="px-2 py-1 text-center min-w-[120px]">{$t('transactions.wacPreview.unitCost') ?? 'Unit'}</th>
                         <th class="px-2 py-1 text-right min-w-[110px]">{$t('transactions.wacPreview.effectLabel') ?? 'Effect'}</th>

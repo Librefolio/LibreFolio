@@ -37,7 +37,7 @@
 
     // Group 2: Market Data (global/shared data)
     const marketDataItems = [
-        {href: '/assets', icon: BarChart3, labelKey: 'assets.title'},
+        {href: '/assets', icon: BarChart3, labelKey: 'common.assets'},
         {href: '/fx', icon: Coins, labelKey: 'fx.title'},
     ];
 

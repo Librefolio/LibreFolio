@@ -716,7 +716,7 @@
             // --- ASSET DETAILS (scope 'all' only) ---
             if (scope === 'all') {
                 compareStringField('display_name', $t('common.name'), displayName, pd.display_name);
-                compareStringField('asset_type', $t('assets.type'), assetType, pd.asset_type);
+                compareStringField('asset_type', $t('common.type'), assetType, pd.asset_type);
                 compareStringField('currency', $t('common.currency'), currency, pd.currency);
             }
 
@@ -1275,7 +1275,7 @@
                         <!-- Asset Type -->
                         <div>
                             <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                                {$t('assets.type')} *
+                                {$t('common.type')} *
                             </span>
                             <SimpleSelect bind:value={assetType} options={assetTypeOptions} dropdownPosition="auto">
                                 {#snippet item(opt)}
@@ -1364,7 +1364,7 @@
         <!-- Description (short, always visible) -->
         <div>
             <label for="asset-description" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                {$t('brokers.description')}
+                {$t('common.description')}
             </label>
             <textarea
                 id="asset-description"
@@ -1589,7 +1589,7 @@
                 <Info size={14} class="text-gray-400 cursor-help shrink-0" />
             </Tooltip>
             <span id="asset-active-label" class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                {active ? $t('assets.edit.status.active') : $t('assets.edit.status.inactive')}
+                {active ? $t('common.active') : $t('assets.edit.status.inactive')}
             </span>
             <button
                 type="button"

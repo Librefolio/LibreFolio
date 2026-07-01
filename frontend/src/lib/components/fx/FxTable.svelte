@@ -236,7 +236,7 @@
             })),
             {
                 id: 'providers',
-                header: () => $t('fx.providers'),
+                header: () => $t('common.providers'),
                 cell: (row) => ({type: 'html', html: providerChainHtml(row)}),
                 type: 'text',
                 getValue: (row) => row.providers.map((p) => p.providerCode).join(', '),

@@ -133,7 +133,7 @@
                     {#if diffDesc}
                         <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-3" data-testid="promote-merge-field-description">
                             <div class="flex items-center justify-between mb-2">
-                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">{$t('transactions.promote.fieldDescription')}</div>
+                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">{$t('common.description')}</div>
                                 <Tooltip text={$t('transactions.promote.concat')}>
                                     <button
                                         type="button"

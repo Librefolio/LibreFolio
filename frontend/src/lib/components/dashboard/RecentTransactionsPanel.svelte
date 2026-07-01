@@ -79,10 +79,7 @@
                 return (await zodiosApi.query_transactions_api_v1_transactions_get(params as never)) as TXReadItem[];
             };
 
-            const all =
-                brokerIds && brokerIds.length > 1
-                    ? Array.from(new Map((await Promise.all(brokerIds.map((id) => fetchForBroker(id)))).flat().map((tx) => [tx.id, tx])).values())
-                    : await fetchForBroker(brokerIds?.[0]);
+            const all = brokerIds && brokerIds.length > 1 ? Array.from(new Map((await Promise.all(brokerIds.map((id) => fetchForBroker(id)))).flat().map((tx) => [tx.id, tx])).values()) : await fetchForBroker(brokerIds?.[0]);
 
             const sorted = [...all].sort((a, b) => {
                 if (b.date !== a.date) return b.date.localeCompare(a.date);
@@ -118,10 +115,10 @@
     <!-- Header -->
     <div class="flex items-center justify-between mb-3">
         <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
-            {$_('dashboard.recentTransactions')}
+            {$_('common.recentTransactions')}
         </h2>
         <a href={transactionsHref} class="text-xs text-libre-green dark:text-green-400 hover:underline font-medium" data-testid="recent-transactions-see-all">
-            {$_('dashboard.seeAllTransactions')}
+            {$_('common.seeAll')}
         </a>
     </div>
 
@@ -135,21 +132,11 @@
         <p class="text-sm text-red-500 dark:text-red-400 py-4 text-center">{error}</p>
     {:else if rows.length === 0}
         <p class="text-sm text-gray-400 dark:text-gray-500 py-4 text-center flex-1 flex items-center justify-center">
-            {$_('dashboard.noData')}
+            {$_('common.noData')}
         </p>
     {:else}
         <div class="overflow-x-auto flex-1">
-            <TransactionsTable
-                mainRows={rows}
-                partnerRows={[]}
-                {brokers}
-                eventTooltipMap={new Map()}
-                pageSize={limit}
-                compact={true}
-                hiddenColumns={HIDDEN_COLUMNS}
-                storageKeyOverride="dashboard-recent-tx"
-                onRowDoubleClickOverride={handleRowDoubleClick}
-            />
+            <TransactionsTable mainRows={rows} partnerRows={[]} {brokers} eventTooltipMap={new Map()} pageSize={limit} compact={true} hiddenColumns={HIDDEN_COLUMNS} storageKeyOverride="dashboard-recent-tx" onRowDoubleClickOverride={handleRowDoubleClick} />
         </div>
     {/if}
 </div>

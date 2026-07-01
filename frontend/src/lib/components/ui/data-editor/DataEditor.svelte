@@ -603,7 +603,7 @@
                     data-testid="fx-data-add-row-btn"
                 >
                     <Plus size={13} />
-                    {$t('dataEditor.addRow')}
+                    {$t('common.addRow')}
                 </button>
             {/if}
         </div>
@@ -648,7 +648,7 @@
                         dataTableRef?.clearSelection();
                         selectedIds = [];
                     }}
-                    title={$t('dataEditor.clearSelection')}
+                    title={$t('common.clearSelection')}
                 >
                     {selectedIds.length}
                     {$t('common.selected')} <span class="opacity-60">×</span>

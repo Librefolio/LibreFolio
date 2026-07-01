@@ -357,16 +357,16 @@
     <!-- Footer -->
     <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-slate-700">
         <button type="button" data-testid="scheduler-config-cancel" class="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" onclick={() => (open = false)}>
-            {$_('settings.global.scheduler.configCancel')}
+            {$_('common.cancel')}
         </button>
         <button type="button" data-testid="scheduler-config-save" class="px-4 py-2 text-sm font-medium text-white bg-libre-green hover:bg-libre-green/90 rounded-lg transition-colors disabled:opacity-50" disabled={!canSave || saving} onclick={handleSave}>
             {#if saving}
                 <span class="inline-flex items-center gap-1">
                     <span class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                    {$_('settings.global.scheduler.configSave')}
+                    {$_('common.save')}
                 </span>
             {:else}
-                {$_('settings.global.scheduler.configSave')}
+                {$_('common.save')}
             {/if}
         </button>
     </div>
