@@ -21,7 +21,7 @@ Il modulo è progettato per essere intuitivo e dinamico. Quando si seleziona un 
 
 - **Dettagli Base:** Data, Tipo, Valuta e Importo.
 - **Specifiche dell'Asset:** Se la transazione coinvolge un asset (come ACQUISTO o VENDITA), appariranno i campi per selezionare l'asset, inserire la quantità e impostare il prezzo unitario.
-- **Pannello di Anteprima (WAC):** Per le operazioni che influenzano il portafoglio, in basso appare un'anteprima in tempo reale. Questa mostra il costo di carico attuale, il nuovo costo di carico previsto e qualsiasi guadagno/perdita realizzato.
+- **Pannello di Anteprima (PMC):** Per le operazioni che influenzano il portafoglio, in basso appare un'anteprima in tempo reale. Questa mostra il costo di carico attuale, il nuovo costo di carico previsto e qualsiasi guadagno/perdita realizzato.
 
 !!! note "Calcoli Automatici"
 

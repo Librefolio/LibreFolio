@@ -42,7 +42,7 @@ Para ayudarle a elegir la métrica adecuada para su análisis, utilice esta guí
 
 ### 2. [Valor Contable (Book Value)](book-value.md)
 * **Pregunta clave:** "¿Cuánto costó construir mi cartera actual?"
-* **Concepto de la fórmula:** $\text{Coste Posiciones Abiertas} + \text{Efectivo} + \text{Coste en Tránsito}$ utilizando el Coste Medio Ponderado (CMP / WAC).
+* **Concepto de la fórmula:** $\text{Coste Posiciones Abiertas} + \text{Efectivo} + \text{Coste en Tránsito}$ utilizando el Precio Medio Ponderado (PMP).
 * **Mejor caso de uso:** Evaluar el capital comprometido y compararlo con el valor actual de mercado (NAV) para determinar las ganancias latentes.
 
 ### 3. [P&L del Periodo](period-pnl.md)

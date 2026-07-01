@@ -26,7 +26,7 @@ Pour exporter l'historique de vos transactions depuis eToro :
 
 !!! warning "CFD vs Actifs Réels"
 
-    eToro prend en charge les CFD (contrats pour la différence) et les actifs réels. L'analyseur importera les transactions CFD, mais comme les CFD ne représentent pas des actions sous-jacentes, la base de coût et la logique WAC peuvent nécessiter une validation manuelle dans la grille des transactions.
+    eToro prend en charge les CFD (contrats pour la différence) et les actifs réels. L'analyseur importera les transactions CFD, mais comme les CFD ne représentent pas des actions sous-jacentes, la base de coût et la logique PMP peuvent nécessiter une validation manuelle dans la grille des transactions.
 
 ## 📝 Notes
 

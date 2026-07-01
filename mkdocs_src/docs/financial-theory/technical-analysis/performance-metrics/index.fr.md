@@ -42,7 +42,7 @@ Pour vous aider à choisir le bon indicateur pour votre analyse, utilisez ce gui
 
 ### 2. [Valeur Comptable (Book Value)](book-value.md)
 * **Question centrale :** « Combien la construction de mon portefeuille actuel a-t-elle coûté ? »
-* **Concept de la formule :** $\text{Coût Positions Ouvertes} + \text{Liquidité} + \text{Coût en Transit}$ en utilisant le Coût Moyen Pondéré (CMP / WAC).
+* **Concept de la formule :** $\text{Coût Positions Ouvertes} + \text{Liquidité} + \text{Coût en Transit}$ en utilisant le Prix Moyen Pondéré (PMP).
 * **Meilleur cas d'utilisation :** Évaluer le capital engagé et le comparer à la valeur actuelle du marché (NAV) pour déterminer les plus-values latentes.
 
 ### 3. [P&L de la Période](period-pnl.md)

@@ -34,7 +34,7 @@ Scenari comuni:
 
     Durante il trasferimento di asset, il **costo di acquisizione originale** deve essere preservato. Il trasferimento stesso non è un evento imponibile nella maggior parte delle giurisdizioni (sebbene le norme varino). LibreFolio consente un **override del costo di acquisizione** opzionale sul lato ricevente.
 
-    Consulta **[📊 Costo Medio Ponderato (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** per scoprire come viene calcolato automaticamente il costo di acquisizione.
+    Consulta **[📊 Prezzo Medio di Carico (PMC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** per scoprire come viene calcolato automaticamente il costo di acquisizione.
 
 ---
 

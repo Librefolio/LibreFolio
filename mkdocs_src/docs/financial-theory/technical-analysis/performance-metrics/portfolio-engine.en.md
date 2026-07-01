@@ -105,73 +105,51 @@ $$
 
 ---
 
-## 📐 6. Three-Pool Cash Model $(K, R, W)$
+## 📐 6. Three-Pool Cash Model — Per-Broker $(K_b, R_b, W)$
 
-Three accumulator pools track cash provenance:
+Three accumulator pools track cash provenance. $K$ and $R$ are maintained **per-broker** $b$; $W$ is global (exits the system entirely).
 
-| Pool | Meaning |
-|------|---------|
-| $K$ | Capital Pool — external capital still in system |
-| $R$ | Returns Pool — generated returns still in system |
-| $W$ | Withdrawn Returns — returns that left (hidden) |
+| Pool | Scope | Meaning |
+|------|-------|---------|
+| $K_b$ | Per-broker | External capital still in broker $b$ as cash |
+| $R_b$ | Per-broker | Generated returns still in broker $b$ as cash |
+| $W$ | Global | Returns that left the system (hidden, restorable on re-deposit) |
 
-### Update rules (per-transaction, chronological)
+!!! info "Key property"
 
-**DEPOSIT** $D > 0$:
+    A BUY on broker $b_1$ can only consume $R_{b_1}$, never $R_{b_2}$. Cash does not teleport between brokers — only explicit transfers move pool balances.
 
-$$
-r = \min(D, W), \quad R \mathrel{+}= r, \quad W \mathrel{-}= r, \quad K \mathrel{+}= D - r
-$$
+### Update rules (per-transaction on broker $b$, chronological)
 
-**WITHDRAWAL** $X > 0$:
+| Icon & Type | Update Formulas | Logic & Description |
+|:---:|---|---|
+| ![](../../../static/icons/transactions/deposit.png){: width="24" }<br>**DEPOSIT**<br>$D > 0$ | $r = \min(D,\, W)$<br>$R_b \mathrel{+}= r$<br>$W \mathrel{-}= r$<br>$K_b \mathrel{+}= D - r$ | Restores previously withdrawn returns from the global tracker $W$ first, then adds the remainder to capital $K_b$. |
+| ![](../../../static/icons/transactions/withdrawal.png){: width="24" }<br>**WITHDRAWAL**<br>$X > 0$ | $k = \min(X,\, K_b)$<br>$K_b \mathrel{-}= k$<br>$\rho = \min(X - k,\, R_b)$<br>$R_b \mathrel{-}= \rho$<br>$W \mathrel{+}= \rho$ | Consumes capital $K_b$ first, then moves remaining returns $\rho$ to the global tracker $W$. |
+| ![](../../../static/icons/transactions/dividend.png){: width="24" } ![](../../../static/icons/transactions/interest.png){: width="24" }<br>**DIVIDEND / INTEREST**<br>$I > 0$ | $R_b \mathrel{+}= I$ | Yields directly increase the returns pool $R_b$. |
+| ![](../../../static/icons/transactions/fee.png){: width="24" } ![](../../../static/icons/transactions/tax.png){: width="24" }<br>**FEE / TAX**<br>$F > 0$ | $R_b \mathrel{-}= F$<br>$\text{if } R_b < 0\text{: } K_b \mathrel{+}= R_b,\; R_b = 0$ | Consumes returns $R_b$ first; if $R_b$ becomes negative, it drains from capital $K_b$. |
+| ![](../../../static/icons/transactions/buy.png){: width="24" }<br>**BUY**<br>$B > 0$ | $\rho = \min(B,\, R_b)$<br>$R_b \mathrel{-}= \rho$<br>$K_b \mathrel{-}= (B - \rho)$ | Consumes returns $R_b$ first, then drains the rest from capital $K_b$. |
+| ![](../../../static/icons/transactions/sell.png){: width="24" }<br>**SELL** | $G = P - C$<br>$K_b \mathrel{+}= C$<br>$R_b \mathrel{+}= G$<br>$\text{if } R_b < 0\text{: } K_b \mathrel{+}= R_b, \quad R_b = 0$ | Cost basis $C = |q_s| \cdot w_{\text{pre}}$ returns to capital $K_b$; gain $G$ goes to returns $R_b$ (if $G < 0$, it behaves like a fee).<br><br>!!! warning "Critical ordering"<br><br>    $C$ must be computed **before** the WAC pool is reduced (full-sell would give $C = 0$ otherwise). |
+| ![](../../../static/icons/transactions/cash-transfer.png){: width="24" }<br>**CASH TRANSFER**<br>(Internal, $s \to d$, $X > 0$) | **Departure Leg ($s$):**<br>$\rho = \min(X,\, R_s)$<br>$R_s \mathrel{-}= \rho$<br>$\kappa = X - \rho$<br>$K_s \mathrel{-}= \kappa$<br><br>**Arrival Leg ($d$):**<br>$K_d \mathrel{+}= \kappa$<br>$R_d \mathrel{+}= \rho$ | Internal cash transfers move pool allocations ($R_s \to R_d$, $K_s \to K_d$) proportional to the departure balance.<br>The global tracker $W$ is **never** touched (capital remains inside the system). |
 
-$$
-k = \min(X, K), \quad K \mathrel{-}= k
-$$
+If departure and arrival dates differ, the transfer is in-transit: subtracted from $s$ at departure day, added to $d$ at arrival day. Between those dates, $\sum K_b + \sum R_b < \mathrm{Cash}_{\text{like}}$ by the in-transit amount — handled by proportional reconciliation.
 
-$$
-\rho = \min(X - k,\ R), \quad R \mathrel{-}= \rho, \quad W \mathrel{+}= \rho
-$$
-
-**DIVIDEND / INTEREST** $I > 0$:
-
-$$
-R \mathrel{+}= I
-$$
-
-**FEE / TAX** $F > 0$:
+### Aggregation for output
 
 $$
-R \mathrel{-}= F, \quad \text{if } R < 0: \ K \mathrel{+}= R,\ R = 0
-$$
-
-**BUY** $B > 0$:
-
-$$
-\rho = \min(B, R), \quad R \mathrel{-}= \rho, \quad K \mathrel{-}= (B - \rho)
-$$
-
-**SELL** (proceeds $P$, cost basis $C = |q_{\text{sold}}| \cdot w_{\text{pre}}$):
-
-!!! warning "Critical"
-
-    $C$ must be computed **before** the WAC pool is reduced.
-
-$$
-G = P - C, \quad K \mathrel{+}= C, \quad R \mathrel{+}= G
+\mathrm{CashFromCapital}(t) = \sum_{b \in S} K_b(t)
 $$
 
 $$
-\text{if } R < 0: \quad K \mathrel{+}= R, \quad R = 0
+\mathrm{CashFromReturns}(t) = \sum_{b \in S} R_b(t)
 $$
 
 ### Reconciliation invariant
 
 $$
-\mathrm{Cash}_{\text{like}}(t) \approx K(t) + R(t)
+\mathrm{Cash}_{\text{like}}(t) \approx \sum_{b \in S} K_b(t) + \sum_{b \in S} R_b(t)
 $$
 
-Proportional scaling applied if drift $> 0.01$ (from FX rounding or in-transit timing).
+Proportional per-broker scaling applied if drift $> 0.01$ (from FX rounding or in-transit timing).
 
 ---
 

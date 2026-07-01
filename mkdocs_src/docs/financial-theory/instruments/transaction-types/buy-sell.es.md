@@ -48,6 +48,6 @@ $$
 
 ## 🔗 Relacionado
 
-- 📊 **[Coste Medio Ponderado (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Coste medio por unidad a través de múltiples compras
+- 📊 **[Precio Medio Ponderado (PMP)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Coste medio por unidad a través de múltiples compras
 - 💰 **[Tributación](../../fundamentals/taxation.md)** — Plusvalías, métodos de emparejamiento, compensación de pérdidas
 - 📈 **[Rentabilidades](../../fundamentals/returns.md)** — Medición del rendimiento de la inversión
