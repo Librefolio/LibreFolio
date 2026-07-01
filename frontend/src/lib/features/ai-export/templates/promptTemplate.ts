@@ -23,7 +23,7 @@ export const PROMPT_INVESTOR_ASSUMPTIONS_NOTE = `Do not assume the user's risk t
 export const PROMPT_ANALYSIS_REQUEST = `Please:
 
 1. Summarize the portfolio composition and current state.
-2. Evaluate current allocation, concentration, and diversification.
+2. Evaluate current allocation, concentration, and diversification. When analyzing geography and sectors, consider that very small country/sector exposures may be grouped into minor buckets.
 3. Identify possible underweight and overweight areas relative to common long-term portfolio heuristics, clearly stating the assumptions used.
 4. If the monthly PAC amount is not provided, propose allocation percentages or priority buckets instead of exact monetary amounts.
 5. Provide 2-3 neutral monthly PAC allocation scenarios:

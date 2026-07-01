@@ -9,6 +9,7 @@ import {zodiosApi} from '$lib/api';
 import {getAssetInfo, ensureAssetsLoaded, getAllAssets} from '$lib/stores/reference/assetStore';
 import {buildTechnicalContext, type TechnicalExportInput} from './technical/technicalExportBuilder';
 import {getResponseLanguage} from './templates/languageMap';
+import {compactGeography, compactSector} from './allocationCompaction';
 import type {
 	AiPortfolioExport,
 	AiPortfolioSnapshot,
@@ -23,6 +24,9 @@ import type {
 	AiInvestorAssumptions,
 	AiTechnicalSummaryItem,
 } from './types';
+
+/** Country/sector entries below this percent are grouped into a minor bucket. */
+const ALLOCATION_COMPACTION_THRESHOLD = 1;
 
 // ─── Options ─────────────────────────────────────────────────────────────────
 
@@ -140,6 +144,20 @@ function buildMethodology(): AiMethodology {
 			technical_indicators_are_context_only: true,
 		},
 		allocation_basis: 'nav_including_cash',
+		allocation_compaction_policy: {
+			geography: {
+				country_threshold_percent: ALLOCATION_COMPACTION_THRESHOLD,
+				below_threshold_grouping: 'continent',
+				keep_unknown_separate: true,
+				keep_liquidity_separate: true,
+			},
+			sector: {
+				sector_threshold_percent: ALLOCATION_COMPACTION_THRESHOLD,
+				below_threshold_grouping: 'minor_sectors',
+				keep_unknown_separate: true,
+				keep_liquidity_separate: true,
+			},
+		},
 		metric_definitions: {
 			nav: 'Total portfolio value: market_value + cash',
 			total_invested: 'Lifetime net external capital: sum(deposits) - sum(withdrawals)',
@@ -242,12 +260,20 @@ function buildPositions(
 
 function buildAllocation(summary: Record<string, any> | null, positions: AiPosition[]): AiAllocation {
 	const byType = ensureAllocSums100(mapAllocation(summary?.allocation_by_type));
-	const bySector = ensureAllocSums100(mapAllocation(summary?.allocation_by_sector));
-	const byGeo = ensureAllocSums100(mapAllocation(summary?.allocation_by_geography));
+	const bySectorRaw = mapAllocation(summary?.allocation_by_sector);
+	const bySector = ensureAllocSums100(compactSector(bySectorRaw, ALLOCATION_COMPACTION_THRESHOLD));
 
 	const navValue = parseCurrency(summary?.net_worth) ?? 0;
 	const cashTotal = parseCurrency(summary?.cash_total) ?? 0;
 	const cashPercentOfNav = navValue > 0 ? Math.round((cashTotal / navValue) * 10000) / 100 : 0;
+
+	// Geography: backend doesn't classify cash geographically — add it explicitly
+	// as "Liquidity" (matching type/sector convention) before compacting long-tail countries.
+	const byGeoRaw = mapAllocation(summary?.allocation_by_geography);
+	if (cashPercentOfNav > 0) {
+		byGeoRaw.push({name: 'Liquidity', percent: cashPercentOfNav});
+	}
+	const byGeo = ensureAllocSums100(compactGeography(byGeoRaw, ALLOCATION_COMPACTION_THRESHOLD));
 
 	// Compute by_currency from positions, then add cash by currency (nav_including_cash basis)
 	const currencyWeights = new Map<string, number>();

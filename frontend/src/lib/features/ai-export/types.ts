@@ -55,6 +55,20 @@ export interface AiMethodology {
 		technical_indicators_are_context_only: boolean;
 	};
 	allocation_basis: string;
+	allocation_compaction_policy: {
+		geography: {
+			country_threshold_percent: number;
+			below_threshold_grouping: string;
+			keep_unknown_separate: boolean;
+			keep_liquidity_separate: boolean;
+		};
+		sector: {
+			sector_threshold_percent: number;
+			below_threshold_grouping: string;
+			keep_unknown_separate: boolean;
+			keep_liquidity_separate: boolean;
+		};
+	};
 	metric_definitions: Record<string, string>;
 }
 
