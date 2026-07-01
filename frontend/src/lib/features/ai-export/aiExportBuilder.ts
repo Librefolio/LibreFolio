@@ -170,8 +170,9 @@ function buildMethodology(): AiMethodology {
 			unrealized_pnl: 'Current market value minus cost basis of open positions',
 			twrr_percent: 'Time-Weighted Return (eliminates cash flow timing effect)',
 			mwrr_annualized_percent: 'Money-Weighted Return (XIRR), annualized',
+			simple_roi_percent: 'Simple ROI for the selected period: (NAV - period_net_deposits) / period_net_deposits',
 			position_period_pnl_percent:
-				'Position-level period P&L percentage (field: period_pnl_percent on each position), computed as period_pnl / |start_value| for the selected period; it is not the same as the technical price return_3m_percent shown in Technical Summary/Series.',
+				'Position-level period gain/loss percentage (field: period_pnl_percent on each position), computed as period_pnl / |start_value| for the selected period; it is not the same as the technical price return_3m_percent shown in Technical Summary/Series.',
 		},
 	};
 }
