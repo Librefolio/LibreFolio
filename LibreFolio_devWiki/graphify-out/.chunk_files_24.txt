@@ -1,0 +1,15 @@
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/phase07-transactions.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/phase08-scheduler-backend.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/phase09-dashboard-batch.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/phase09-portfolio-engine-dashboard.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/r2-parallel-features-pwa-borsa-fx.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/r2-sp-a-cost-basis-wac.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/r2-sp-b-backend-tests.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/r2-sp-c-bugfix-chain.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/r2-sp-c-bulkmodal-suggest-ux.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/r3-sp-d-formmodal-wac-fx-chain.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/roadmap-v1-summary.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/roadmap-v4-index.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/source-code-v0.9.0-batch.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/todos.md
+/Users/ea_enel/Documents/00_My/LibreFolio/LibreFolio_devWiki/corpus/wiki/sources/wiki-audit-2026-06-18.md

@@ -4,9 +4,57 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
-## [2026-06-04] ingest | SP-D Plan Chain (6 plans: FormModal + EventPicker + WAC FX + Currency + Bugfixes)
+## [2026-06-30] ingest | Group 1 — Phase 07 PlanD-D1D2: Split/Promote Full Stack
 
-Ingested 6 completed plans from the R3-SP-D sub-plan chain (FormModal props unification, AssetEventPicker, WAC FX staleness feedback, WAC target currency selector, UX polish, FxSyncModal integration) @ anchor `61cc81e5`.
+Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/README.md` @ git:`8f363d79`.
+Batch ingest of sub-plan bundle (D1 backend batch pipeline, D2 frontend PromoteMergeModal, Centralize payload layer, 4 bugfix rounds). Key insights: `_PromoteCandidate` duck-typing, endpoint elimination (no standalone /split or /promote), centralized txPayloadHelpers.ts + txCommitApi.ts (9 callsites), PMC override UX.
+Created: [[sources/phase07-pland-split-promote]], [[decisions/batch-only-split-promote]], [[concepts/centralized-tx-payload]].
+
+## [2026-06-30] ingest | Group 2 — Phase 07 Part 5: BRIM Import Wizard v5
+
+Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte5/plan-phase07Part5-v5-ImportWizard.prompt.md` @ git:`5592f299`.
+Major paradigm shift v4→v5: single-file breadcrumb → multi-file 4-step stepper (z:70 wide modal). Schwab parser added. ImportTodo signals and WorkspaceIntent pattern documented. 4-level data pipeline captured.
+Created: [[sources/phase07-part5-import-wizard-v5]], [[entities/import-wizard-modal]], [[concepts/workspace-intent-pattern]], [[concepts/import-todo-signals]], [[decisions/import-wizard-v5-paradigm]].
+
+## [2026-06-30] ingest | Group 3 — Phase 07 Standalone: PWA Mobile Optimizations
+
+Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Standalone/plan-pwa-mobile-optimizations.prompt.md` @ git:`66f56432`.
+Archive re-anchor for PWA plan (already ingested as r2-parallel-features-pwa-borsa-fx). Two additional bugfixes captured: Svelte 5 runes reactivity fix for HelpMenu, and beforeinstallprompt race condition fix with early-capture in app.html.
+Created: [[sources/phase07-standalone-pwa]].
+Updated: [[features/F-098]] (cross-reference only, status remains implemented).
+
+## [2026-06-30] ingest | Group 4 — Phase 08: Market Data Scheduler Backend
+
+Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-08-subplan/plan-phase08Step1-2-backend.prompt.md` @ git:`5592f299`.
+Embedded FastAPI scheduler daemon with leader election (psutil + file-lock), 2 job types (current-price + history-sync), 5 new settings, fetch_interval column removal, atomic state persistence, JSONL log. Test checkpoint covers Phase 07 Part 5 + Phase 08.
+Created: [[sources/phase08-scheduler-backend]], [[entities/market-data-scheduler]].
+
+## [2026-06-30] ingest | Group 5 — Phase 09: Portfolio Engine + Dashboard (Milestone 2)
+
+Source: `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md` @ git:`39106380`.
+Major: 4-layer portfolio architecture (Engine→Service→API→Store), 4-stage engine pipeline, 3-pool cash model, MWRR double-counting bug fix (initial_nav correction), unified /portfolio/report endpoint, L2 TTL cache, P&L breakdown analysis. 6 known issues documented.
+Created: [[sources/phase09-portfolio-engine-dashboard]], [[entities/portfolio-engine]], [[entities/portfolio-service]], [[concepts/3-pool-cash-model]], [[concepts/portfolio-report-unified]], [[decisions/mwrr-boundary-fix]].
+
+## [2026-06-30] ingest | Group 6 — Wiki Audit 2026-06-18
+
+Sources: `wiki_audit_2026_06_18/audit_transactions.md`, `audit_backend_infra.md`, `audit_assets_brokers_brim.md` @ git:`010ec3ed`.
+Two critical corrections: WorkspaceIntent is frontend-only Svelte 5 pattern (not backend multi-tenancy); test_runner is now a modular package at scripts/test_runner/ (18 modules, not monolithic .py file). New mkdocs: runner_architecture.md, scheduler.md, transaction-draft.md update. lf-screenshot-carousel component created.
+Created: [[sources/wiki-audit-2026-06-18]], [[entities/test-runner]].
+Updated: [[concepts/workspace-intent-pattern]] (new page with correct categorization).
+
+## [2026-06-30] ingest | Group 7 — Phase Final Bug Report 2026-06-25
+
+Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-final-subplan/bug_vari_report20260625.md` @ git:`1400451d`.
+Static code analysis on Docker build: 5 bug categories. Critical: broker icon race condition (3 pages), import wizard oncreated path skips identifier prompt, BulkModal toolbar clipped by overflow-y:auto after import.
+Created: [[sources/phase-final-bugs-2026-06-25]], [[problems/broker-icon-race-condition]], [[problems/import-wizard-identifier-prompt]], [[problems/bulk-modal-sticky-z-index]].
+
+## [2026-06-30] ingest | Group 8 — CI/CD Release Pipeline
+
+Source: `.github/workflows/release.yml` @ git:`a688bcb9` (commits a688bcb9..b79735e2).
+GitHub Actions full automated pipeline: Node 24, Vite 7.3.5, package-lock.json, Docker :test tag, Playwright 8 workers + networkidle, screenshot cache, crypto.randomUUID polyfill.
+Created: [[sources/ci-release-pipeline-2026-06]], [[concepts/ci-release-pipeline]].
+
+
 
 **Created** (1 source page):
 - [[sources/r3-sp-d-formmodal-wac-fx-chain]]
@@ -963,3 +1011,21 @@ Updated: [[features/F-054]].
 Source: Source Code @ git:`6d89b44`.
 Ingested new source code implementations including Remotion Video Promo, MkDocs Pros/Cons Slider, and Gallery Overhaul.
 Created: [[sources/source-code-v0.9.0-batch]], [[entities/video-promo-remotion]], [[concepts/interactive-pros-cons-slider]].
+
+## [2026-07-01] lint | Full wiki health check — post Phase 7-9 ingest
+
+Graph: 6399 nodes, 17688 edges, 366 communities. 1080 corpus files.
+God nodes: Currency (426 edges), TransactionType (199), Transaction (166), User (158), Asset (152).
+Issues found: 4 (1 high, 2 medium, 1 low).
+
+Repaired:
+- [HIGH] Dead link in `index.md`: `problems/pydantic-422-pre-emption` → `problems/pydantic-422-preemption` (typo fix)
+
+Deferred (medium):
+- Index drift: 20 wiki/features/ files not listed in index.md (F-001–F-074 gaps) — acceptable: index uses domains as navigation hub, not exhaustive feature list
+- Concept debt: "Phase 07 Part 4" node cluster [5x] and "Multi-Broker Atomic Transaction Batch" [4x] without new concept pages — already covered by decisions/multi-broker-atomic-tx.md and source pages
+
+Low:
+- graph.html not regenerated (6399 nodes > 5000 threshold)
+
+Next recommended: ingest Phase 10 / next development cycle when available.
