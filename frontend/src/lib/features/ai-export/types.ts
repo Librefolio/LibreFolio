@@ -15,6 +15,7 @@ export interface AiPortfolioExport {
 	positions: AiPosition[];
 	broker_summary: AiBrokerSummary[];
 	pac_context: AiPacContext;
+	investor_assumptions: AiInvestorAssumptions;
 	technical_summary: AiTechnicalSummaryItem[];
 	technical_context: AiTechnicalAsset[];
 	technical_context_unavailable: AiTechnicalUnavailable[];
@@ -47,6 +48,11 @@ export interface AiMethodology {
 	technical_indicators_policy: {
 		purpose: string;
 		not_trading_signals: boolean;
+	};
+	technical_context_policy: {
+		technical_window: string;
+		technical_window_is_independent_from_selected_portfolio_range: boolean;
+		technical_indicators_are_context_only: boolean;
 	};
 	allocation_basis: string;
 	metric_definitions: Record<string, string>;
@@ -85,8 +91,6 @@ export interface AiPosition {
 	cost_basis?: number;
 	unrealized_pnl?: number;
 	unrealized_pnl_percent?: number;
-	/** Only set for assets flagged as missing in data_quality */
-	valuation_source?: string;
 	/** Period contribution fields (from positions_contribution) */
 	period_pnl?: number;
 	period_pnl_percent?: number;
@@ -183,6 +187,12 @@ export interface AiPacContext {
 	preferred_action: string;
 	avoid_sale_suggestions: boolean;
 	allow_new_assets: string;
+}
+
+export interface AiInvestorAssumptions {
+	risk_tolerance: string;
+	investment_horizon: string;
+	target_allocation: string;
 }
 
 // ─── Data Quality ────────────────────────────────────────────────────────────

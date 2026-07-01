@@ -12,6 +12,12 @@ export function renderDataOnly(data: AiPortfolioExport): string {
 
 	sections.push('# LibreFolio Portfolio Data Export\n');
 
+	// Methodology (context needed to interpret the data correctly)
+	sections.push('```yaml');
+	sections.push(toYaml({methodology: data.methodology}));
+	sections.push('```\n');
+
+	// Export Metadata (right after Methodology)
 	sections.push('```yaml');
 	sections.push(toYaml({metadata: data.metadata}));
 	sections.push('```\n');
@@ -38,6 +44,10 @@ export function renderDataOnly(data: AiPortfolioExport): string {
 
 	sections.push('```yaml');
 	sections.push(toYaml({pac_context: data.pac_context}));
+	sections.push('```\n');
+
+	sections.push('```yaml');
+	sections.push(toYaml({investor_assumptions: data.investor_assumptions}));
 	sections.push('```\n');
 
 	if (data.technical_summary.length > 0) {

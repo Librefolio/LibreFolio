@@ -20,6 +20,7 @@ import type {
 	AiMethodology,
 	AiMetadata,
 	AiPacContext,
+	AiInvestorAssumptions,
 	AiTechnicalSummaryItem,
 } from './types';
 
@@ -69,7 +70,7 @@ export async function buildAiExport(options: AiExportOptions): Promise<AiPortfol
 	const snapshot = buildSnapshot(summary);
 	const quality = buildDataQuality(dataQuality, summary);
 	const missingAssetIds = new Set((quality.missing_price_assets_ids ?? []) as number[]);
-	const positions = buildPositions(summary, contribution, missingAssetIds);
+	const positions = buildPositions(summary, contribution);
 	const allocation = buildAllocation(summary, positions);
 	const brokerSummary = buildBrokerSummary(summary, positions);
 
@@ -88,6 +89,7 @@ export async function buildAiExport(options: AiExportOptions): Promise<AiPortfol
 		positions,
 		broker_summary: brokerSummary,
 		pac_context: buildPacContext(options),
+		investor_assumptions: buildInvestorAssumptions(),
 		technical_summary: technicalSummary,
 		technical_context: technical.assets,
 		technical_context_unavailable: technical.unavailable,
@@ -132,6 +134,11 @@ function buildMethodology(): AiMethodology {
 			purpose: 'descriptive_context_only',
 			not_trading_signals: true,
 		},
+		technical_context_policy: {
+			technical_window: '3M',
+			technical_window_is_independent_from_selected_portfolio_range: true,
+			technical_indicators_are_context_only: true,
+		},
 		allocation_basis: 'nav_including_cash',
 		metric_definitions: {
 			nav: 'Total portfolio value: market_value + cash',
@@ -173,7 +180,6 @@ function buildSnapshot(summary: Record<string, any> | null): AiPortfolioSnapshot
 function buildPositions(
 	summary: Record<string, any> | null,
 	contribution: Record<string, any> | null,
-	missingPriceAssetIds: Set<number>,
 ): AiPosition[] {
 	const holdings: any[] = summary?.holdings ?? [];
 	if (holdings.length === 0) return [];
@@ -199,7 +205,6 @@ function buildPositions(
 
 		const wac = parseNum(h.wac_per_unit);
 		const costBasis = wac != null && qty > 0 ? Math.round(wac * qty * 100) / 100 : undefined;
-		const isMissingPrice = missingPriceAssetIds.has(h.asset_id);
 
 		positions.push(
 			stripUndefined({
@@ -215,7 +220,6 @@ function buildPositions(
 				cost_basis: costBasis,
 				unrealized_pnl: parseCurrency(h.gain_loss),
 				unrealized_pnl_percent: ratioToPct(h.gain_loss_percent),
-				valuation_source: isMissingPrice ? 'LAST_BUY_PRICE_OR_MISSING' : undefined,
 				// Period contribution
 				period_pnl: parseNum(cp?.period_pnl),
 				period_pnl_percent: ratioToPct(cp?.period_pnl_percent),
@@ -241,32 +245,56 @@ function buildAllocation(summary: Record<string, any> | null, positions: AiPosit
 	const bySector = ensureAllocSums100(mapAllocation(summary?.allocation_by_sector));
 	const byGeo = ensureAllocSums100(mapAllocation(summary?.allocation_by_geography));
 
-	// Compute by_currency from positions + assetStore
+	const navValue = parseCurrency(summary?.net_worth) ?? 0;
+	const cashTotal = parseCurrency(summary?.cash_total) ?? 0;
+	const cashPercentOfNav = navValue > 0 ? Math.round((cashTotal / navValue) * 10000) / 100 : 0;
+
+	// Compute by_currency from positions, then add cash by currency (nav_including_cash basis)
 	const currencyWeights = new Map<string, number>();
 	for (const p of positions) {
 		if (p.currency && p.nav_weight_percent != null) {
 			currencyWeights.set(p.currency, (currencyWeights.get(p.currency) ?? 0) + p.nav_weight_percent);
 		}
 	}
+	const cashBalances: any[] = summary?.cash_balances ?? [];
+	for (const cb of cashBalances) {
+		const amount = parseCurrency(cb);
+		if (amount == null || navValue <= 0) continue;
+		const pct = Math.round((amount / navValue) * 10000) / 100;
+		if (pct <= 0) continue;
+		currencyWeights.set(cb.code, (currencyWeights.get(cb.code) ?? 0) + pct);
+	}
 	const byCurrency: AiAllocationItem[] = Array.from(currencyWeights.entries())
 		.map(([name, percent]) => ({name, percent: Math.round(percent * 100) / 100}))
 		.sort((a, b) => b.percent - a.percent);
 
-	// Compute by_broker from positions
+	// Compute by_broker from positions, then add cash per broker (nav_including_cash basis)
 	const brokerWeights = new Map<string, number>();
 	for (const p of positions) {
 		if (p.nav_weight_percent != null) {
 			brokerWeights.set(p.broker, (brokerWeights.get(p.broker) ?? 0) + p.nav_weight_percent);
 		}
 	}
+	const byBrokerRaw: any[] = summary?.by_broker ?? [];
+	for (const b of byBrokerRaw) {
+		const cash = parseCurrency(b.cash_total);
+		if (cash == null || navValue <= 0) continue;
+		const pct = Math.round((cash / navValue) * 10000) / 100;
+		if (pct <= 0) continue;
+		brokerWeights.set(b.broker_name, (brokerWeights.get(b.broker_name) ?? 0) + pct);
+	}
 	const byBroker: AiAllocationItem[] = Array.from(brokerWeights.entries())
 		.map(([name, percent]) => ({name, percent: Math.round(percent * 100) / 100}))
 		.sort((a, b) => b.percent - a.percent);
 
-	// by_asset from positions (all are open since closed are filtered out)
+	// by_asset from positions, plus a single Cash / Liquidity entry (nav_including_cash basis)
 	const byAsset: AiAllocationItem[] = positions
 		.filter((p) => p.nav_weight_percent != null && p.nav_weight_percent > 0)
 		.map((p) => ({name: p.symbol ?? p.name, percent: p.nav_weight_percent!}));
+	if (cashPercentOfNav > 0) {
+		byAsset.push({name: 'Cash / Liquidity', percent: cashPercentOfNav});
+	}
+	byAsset.sort((a, b) => b.percent - a.percent);
 
 	return {
 		by_asset: byAsset,
@@ -434,6 +462,16 @@ function buildPacContext(options: AiExportOptions): AiPacContext {
 		preferred_action: 'allocate_new_capital',
 		avoid_sale_suggestions: true,
 		allow_new_assets: 'unknown',
+	};
+}
+
+// ─── Investor Assumptions ────────────────────────────────────────────────────
+
+function buildInvestorAssumptions(): AiInvestorAssumptions {
+	return {
+		risk_tolerance: 'unavailable',
+		investment_horizon: 'unavailable',
+		target_allocation: 'unavailable',
 	};
 }
 
