@@ -81,6 +81,7 @@ export interface AiPortfolioSnapshot {
 	cash?: number;
 	book_value?: number;
 	total_invested?: number;
+	period_nav_start?: number;
 	period_net_deposits?: number;
 	total_pnl?: number;
 	total_pnl_percent?: number;

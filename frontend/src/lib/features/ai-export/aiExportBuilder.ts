@@ -145,7 +145,8 @@ function buildMethodology(): AiMethodology {
 		},
 		allocation_basis: 'nav_including_cash',
 		allocation_basis_exceptions: {
-			by_geography: 'market_value_excluding_cash — backend does not classify cash geographically; percentages are not rescaled to NAV and do not sum to 100%',
+			by_geography:
+				'invested_market_value_excluding_cash_rescaled_to_100 — backend does not classify cash geographically, so country/continent percentages are rescaled to sum to ~100% of invested market value only (excluding cash), not of NAV like the other allocation sections',
 		},
 		allocation_compaction_policy: {
 			geography: {
@@ -166,11 +167,13 @@ function buildMethodology(): AiMethodology {
 			total_invested: 'Lifetime net external capital: sum(deposits) - sum(withdrawals)',
 			total_pnl: 'NAV minus total_invested (lifetime gain/loss)',
 			period_pnl: 'NAV change minus net external flows within selected period',
+			period_nav_start: 'NAV at the start of the selected period',
 			period_net_deposits: 'Deposits minus withdrawals within selected period only',
 			unrealized_pnl: 'Current market value minus cost basis of open positions',
 			twrr_percent: 'Time-Weighted Return (eliminates cash flow timing effect)',
 			mwrr_annualized_percent: 'Money-Weighted Return (XIRR), annualized',
-			simple_roi_percent: 'Simple ROI for the selected period: (NAV - period_net_deposits) / period_net_deposits',
+			simple_roi_percent:
+				'Simple ROI for the selected period, computed as period_pnl divided by the capital base for the period (approximately period_nav_start + period_net_deposits); treat as an approximation, not an exact reproducible formula from the other exported fields.',
 			position_period_pnl_percent:
 				'Position-level period gain/loss percentage (field: period_pnl_percent on each position), computed as period_pnl / |start_value| for the selected period; it is not the same as the technical price return_3m_percent shown in Technical Summary/Series.',
 		},
@@ -188,6 +191,7 @@ function buildSnapshot(summary: Record<string, any> | null): AiPortfolioSnapshot
 		cash: parseCurrency(summary.cash_total),
 		book_value: parseCurrency(summary.book_value),
 		total_invested: parseCurrency(summary.total_invested),
+		period_nav_start: parseCurrency(summary.period_nav_start),
 		period_net_deposits: parseCurrency(summary.net_deposited_capital),
 		total_pnl: parseCurrency(summary.total_gain_loss),
 		total_pnl_percent: ratioToPct(summary.total_gain_loss_percent),
