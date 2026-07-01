@@ -145,6 +145,8 @@
 | [[concepts/3-pool-cash-model]] | Cash decomposed into deposited/invested/realized — powers GrowthChart 3-line visualization | backend, portfolio, cash, decomposition, dashboard |
 | [[concepts/portfolio-report-unified]] | /portfolio/report runs engine once and returns all dashboard data — prevents race conditions + double runs | backend, api, portfolio, performance, cache |
 | [[concepts/ci-release-pipeline]] | GitHub Actions full pipeline: build→test→docker→push→release. Node 24, Vite 7.3.5, package-lock, 8 workers | ci, github-actions, release, docker, playwright |
+| [[concepts/inline-wac-computation]] | Single-pass inline WAC replacing N×M `compute_wac_iterative` DB calls — pool_qty/pool_cost accumulators in per-tx loop | backend, portfolio, wac, performance, engine |
+| [[concepts/pre-frame-frame-separation]] | No market eval before t0; pre-frame builds accounting state (qty/WAC/cash/K/R/W pools) from historical transactions | backend, portfolio, engine, performance, pre-frame |
 
 ## Problems
 
@@ -264,13 +266,14 @@
 | [[sources/wiki-audit-2026-06-18]] | Wiki audit: WorkspaceIntent = frontend-only (not backend), test_runner now modular package, lf-screenshot-carousel ✅ | 2026-06-30 | audit, documentation, workspace-intent, test-runner |
 | [[sources/phase-final-bugs-2026-06-25]] | Phase final QA: 5 bug categories (broker icon race, files refresh, import wizard identifier, bulk modal toolbar) | 2026-06-30 | bugs, qa, docker, race-condition |
 | [[sources/ci-release-pipeline-2026-06]] | CI/CD: GitHub Actions release.yml — Node 24, Vite 7.3.5, package-lock, Docker :test tag, 8 Playwright workers ✅ | 2026-06-30 | ci, release, docker, playwright, nodejs |
+| [[sources/phase09-portfolio-engine-3pool-refactor]] | Phase 09 Engine Refactor: inline WAC single-pass, 3-pool K/R/W event-driven, SELL fix, pre-frame/frame, blob cache ✅ | 2026-07-01 | phase09, portfolio, engine, wac, 3-pool, refactor |
 
 
 ## Recent Additions (Phase 09 + Final + CI)
 - [[sources/phase09-portfolio-engine-dashboard]] — 2026-06-30
-- [[entities/portfolio-engine]] — 2026-06-30
-- [[entities/portfolio-service]] — 2026-06-30
-- [[concepts/3-pool-cash-model]] — 2026-06-30
+- [[entities/portfolio-engine]] — 2026-06-30 (updated 2026-07-01)
+- [[entities/portfolio-service]] — 2026-06-30 (updated 2026-07-01)
+- [[concepts/3-pool-cash-model]] — 2026-06-30 (updated 2026-07-01)
 - [[concepts/portfolio-report-unified]] — 2026-06-30
 - [[decisions/mwrr-boundary-fix]] — 2026-06-30
 - [[sources/phase07-part5-import-wizard-v5]] — 2026-06-30
@@ -288,6 +291,9 @@
 - [[sources/phase-final-bugs-2026-06-25]] — 2026-06-30
 - [[problems/broker-icon-race-condition]] — 2026-06-30
 - [[problems/import-wizard-identifier-prompt]] — 2026-06-30
+- [[sources/phase09-portfolio-engine-3pool-refactor]] — 2026-07-01
+- [[concepts/inline-wac-computation]] — 2026-07-01
+- [[concepts/pre-frame-frame-separation]] — 2026-07-01
 - [[problems/bulk-modal-sticky-z-index]] — 2026-06-30
 - [[sources/ci-release-pipeline-2026-06]] — 2026-06-30
 - [[concepts/ci-release-pipeline]] — 2026-06-30
