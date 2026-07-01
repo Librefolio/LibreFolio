@@ -144,18 +144,21 @@ function buildMethodology(): AiMethodology {
 			technical_indicators_are_context_only: true,
 		},
 		allocation_basis: 'nav_including_cash',
+		allocation_basis_exceptions: {
+			by_geography: 'market_value_excluding_cash — backend does not classify cash geographically; percentages are not rescaled to NAV and do not sum to 100%',
+		},
 		allocation_compaction_policy: {
 			geography: {
 				country_threshold_percent: ALLOCATION_COMPACTION_THRESHOLD,
 				below_threshold_grouping: 'continent',
 				keep_unknown_separate: true,
-				keep_liquidity_separate: true,
+				includes_liquidity: false,
 			},
 			sector: {
 				sector_threshold_percent: ALLOCATION_COMPACTION_THRESHOLD,
 				below_threshold_grouping: 'minor_sectors',
 				keep_unknown_separate: true,
-				keep_liquidity_separate: true,
+				includes_liquidity: true,
 			},
 		},
 		metric_definitions: {
@@ -167,6 +170,8 @@ function buildMethodology(): AiMethodology {
 			unrealized_pnl: 'Current market value minus cost basis of open positions',
 			twrr_percent: 'Time-Weighted Return (eliminates cash flow timing effect)',
 			mwrr_annualized_percent: 'Money-Weighted Return (XIRR), annualized',
+			position_period_pnl_percent:
+				'Position-level period P&L percentage (field: period_pnl_percent on each position), computed as period_pnl / |start_value| for the selected period; it is not the same as the technical price return_3m_percent shown in Technical Summary/Series.',
 		},
 	};
 }
@@ -267,12 +272,10 @@ function buildAllocation(summary: Record<string, any> | null, positions: AiPosit
 	const cashTotal = parseCurrency(summary?.cash_total) ?? 0;
 	const cashPercentOfNav = navValue > 0 ? Math.round((cashTotal / navValue) * 10000) / 100 : 0;
 
-	// Geography: backend doesn't classify cash geographically — add it explicitly
-	// as "Liquidity" (matching type/sector convention) before compacting long-tail countries.
+	// Geography: backend excludes cash from this dimension (unlike type/sector, which
+	// include a "Liquidity" bucket). Kept on its own market_value_excluding_cash basis —
+	// no rescale, no Liquidity line added, so country percentages stay as reported.
 	const byGeoRaw = mapAllocation(summary?.allocation_by_geography);
-	if (cashPercentOfNav > 0) {
-		byGeoRaw.push({name: 'Liquidity', percent: cashPercentOfNav});
-	}
 	const byGeo = ensureAllocSums100(compactGeography(byGeoRaw, ALLOCATION_COMPACTION_THRESHOLD));
 
 	// Compute by_currency from positions, then add cash by currency (nav_including_cash basis)
@@ -340,13 +343,24 @@ function mapAllocation(items: any[] | undefined): AiAllocationItem[] {
 		.sort((a, b) => b.percent - a.percent);
 }
 
-/** If allocation doesn't sum to ~100%, add an 'Other / Unallocated' entry */
+/**
+ * If allocation doesn't sum to ~100%, add an 'Other / Unallocated' entry.
+ * Never emits a negative-percent bucket — if the section already exceeds 100%
+ * beyond tolerance (e.g. rounding or double-counting upstream), the excess is
+ * logged as a warning and silently omitted rather than exported as confusing
+ * negative data.
+ */
 function ensureAllocSums100(items: AiAllocationItem[]): AiAllocationItem[] {
 	if (items.length === 0) return items;
 	const total = items.reduce((s, i) => s + i.percent, 0);
 	const gap = Math.round((100 - total) * 100) / 100;
-	if (Math.abs(gap) > 0.5) {
+	const TOLERANCE = 0.5;
+
+	if (gap > TOLERANCE) {
 		return [...items, {name: 'Other / Unallocated', percent: gap}];
+	}
+	if (gap < -TOLERANCE) {
+		console.warn(`[ai-export] allocation section exceeds 100% by ${Math.abs(gap)}pp — omitting negative residual bucket`);
 	}
 	return items;
 }

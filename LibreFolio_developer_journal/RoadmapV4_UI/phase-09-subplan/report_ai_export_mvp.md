@@ -36,22 +36,39 @@ frontend/src/lib/i18n/{en,it,fr,es}.json           # dashboard.aiExport* keys
 
 ```yaml
 allocation_basis: nav_including_cash
+allocation_basis_exceptions:
+  by_geography: "market_value_excluding_cash — backend does not classify cash geographically; percentages are not rescaled to NAV and do not sum to 100%"
 ```
 
-All allocation sections are computed on a NAV-including-cash basis so they sum to
+Most allocation sections are computed on a NAV-including-cash basis so they sum to
 ~100% (small residual gaps are captured explicitly, never silently dropped):
 
 | Section | Cash included | Source |
 |---|---|---|
 | `by_asset_type` | ✅ (backend emits `Liquidity` bucket) | `summary.allocation_by_type` |
 | `by_sector` | ✅ (backend emits `Liquidity` bucket) | `summary.allocation_by_sector` |
-| `by_geography` | ✅ — `Liquidity` line added explicitly (backend has no geography for cash) | `summary.allocation_by_geography` + frontend-added `Liquidity` |
+| `by_geography` | ❌ **exception** — backend has no cash geography; NOT rescaled to NAV, sums to ~100% of market_value only | `summary.allocation_by_geography` |
 | `by_currency` | ✅ — added from `summary.cash_balances` | frontend-computed |
 | `by_broker` | ✅ — added from `summary.by_broker[].cash_total` | frontend-computed |
 | `by_asset` | ✅ — single `Cash / Liquidity` line added | frontend-computed |
 
-`ensureAllocSums100()` adds an `Other / Unallocated` entry whenever a section's total
-percent deviates from 100% by more than 0.5 points (covers any residual rounding).
+**Root cause fixed**: an earlier iteration added a `Liquidity` line to `by_geography`
+using the NAV-based cash percentage, while the country percentages underneath were
+already summing to ~100% of *market_value only* (backend `by_geo` denominator excludes
+cash, unlike `by_type`/`by_sector` which already fold cash into their own `Liquidity`
+bucket). Adding NAV-based cash on top of a market-value-based 100% pushed the section
+to ~101%, and `ensureAllocSums100()` then emitted a negative `Other / Unallocated`
+residual to force the sum back to 100 — an invalid, confusing value.
+
+**Fix**: `by_geography` is no longer rescaled and no `Liquidity` line is added to it.
+Country percentages are exported exactly as returned by the backend (their own
+100%-of-market-value basis), and the basis exception is declared explicitly in
+`methodology.allocation_basis_exceptions` so the AI does not assume `by_geography`
+sums to 100% of NAV like the other sections.
+
+`ensureAllocSums100()` now also guards against emitting negative residuals: if a
+section exceeds 100% by more than the 0.5pp tolerance, the excess is logged as a
+console warning and silently omitted rather than exported as a negative bucket.
 
 ## 4. Geography / sector compaction (long-tail reduction)
 
@@ -65,12 +82,12 @@ allocation_compaction_policy:
     country_threshold_percent: 1
     below_threshold_grouping: continent
     keep_unknown_separate: true
-    keep_liquidity_separate: true
+    includes_liquidity: false
   sector:
     sector_threshold_percent: 1
     below_threshold_grouping: minor_sectors
     keep_unknown_separate: true
-    keep_liquidity_separate: true
+    includes_liquidity: true
 ```
 
 Rules:
@@ -78,15 +95,17 @@ Rules:
   Countries < 1% are grouped by continent into `Europe minor countries`,
   `Asia-Pacific minor countries`, `North America minor countries`,
   `South America minor countries`, `Africa minor countries`. Codes without a
-  continent mapping fall into `Other minor countries`.
+  continent mapping fall into `Other minor countries`. `Liquidity` is not part of
+  this section at all (see §3 basis exception above).
 - **Sector**: sectors ≥ 1% kept individually; sectors < 1% are merged into a single
   `Minor sectors` bucket (no per-sector breakdown retained, to keep the export compact).
-- **`Unknown` and `Liquidity`** are never merged into a minor bucket, regardless of
-  their weight — they stay meaningful standalone signals for the AI.
+  `Liquidity` (from the backend) is kept as its own line, never merged.
+- **`Unknown`** is never merged into a minor bucket in either dimension, regardless of
+  its weight — it stays a meaningful standalone signal for the AI.
 - Declared in `methodology.allocation_compaction_policy` so the AI knows small
   exposures may be aggregated (also referenced in the Requested Analysis text).
 
-**Example output** (geography, compacted):
+**Example output** (geography, compacted, sums to ~100% of market_value — cash excluded):
 ```yaml
 by_geography:
   - name: ITA
@@ -101,13 +120,12 @@ by_geography:
     percent: 4.03
   - name: Asia-Pacific minor countries
     percent: 6.58
-  - name: Liquidity
-    percent: 1.06
 ```
 
 - `by_asset`, `by_asset_type`, `by_currency`, `by_broker` are **not** compacted —
   left complete for now (asset-level detail is needed for PAC decisions; type/currency/
   broker lists are already short).
+
 
 ## 5. Section order (final)
 
@@ -170,10 +188,14 @@ technical_context_policy:
 - snake_case YAML keys throughout (`ema20`, `macd_histogram`, `rsi14`, `threshold`) —
   no more `{0: 0}`-style ambiguous detail keys
 
-## 9. Kept as-is per product decision
+## 9. Kept as-is per product decision + new definition added
 
 - `period_pnl` and `period_pnl_percent` on `AiPosition` — retained, considered reliable
   (sourced from `positions_contribution`).
+- **New**: `metric_definitions.position_period_pnl_percent` added to clarify that
+  this is `period_pnl / |start_value|` at the position level, distinct from the
+  technical `return_3m_percent` (price-only return) shown in Technical Summary/Series —
+  prevents the AI from conflating a P&L metric with a price return metric.
 - No new backend DTOs, no MCP/AI provider integration.
 
 ## 10. Validations executed
@@ -187,6 +209,11 @@ No `api sync` was run — this round only touched frontend TypeScript/Svelte fil
 
 ## 11. Known limitations
 
+- **`by_geography` uses a different basis than the rest** (`market_value_excluding_cash`
+  vs `nav_including_cash`) — this is a real, permanent asymmetry in the backend data
+  (cash has no geography), not a bug. It is declared explicitly via
+  `methodology.allocation_basis_exceptions.by_geography` so the AI does not assume
+  this section sums to 100% of NAV like the others.
 - **Country → continent mapping** (`allocationCompaction.ts`) is a static, frontend-only
   ISO 3166-1 alpha-3 lookup table (~230 codes across 5 continents). It is not
   exhaustive of every possible territory/dependency code; unmapped codes fall into
