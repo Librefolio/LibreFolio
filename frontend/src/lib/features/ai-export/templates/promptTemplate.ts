@@ -18,11 +18,13 @@ If you do not have web access, state it and rely only on the provided data.`;
 export const PROMPT_TECHNICAL_DISCLAIMER = `Technical indicators are descriptive context only.
 Do not treat them as deterministic buy/sell signals.`;
 
+export const PROMPT_INVESTOR_ASSUMPTIONS_NOTE = `Do not assume the user's risk tolerance, investment horizon, income, age, or target allocation. Ask clarifying questions when needed.`;
+
 export const PROMPT_ANALYSIS_REQUEST = `Please:
 
 1. Summarize the portfolio composition and current state.
 2. Evaluate current allocation, concentration, and diversification.
-3. Identify underweight and overweight areas relative to typical long-term strategies.
+3. Identify possible underweight and overweight areas relative to common long-term portfolio heuristics, clearly stating the assumptions used.
 4. If the monthly PAC amount is not provided, propose allocation percentages or priority buckets instead of exact monetary amounts.
 5. Provide 2-3 neutral monthly PAC allocation scenarios:
    - Rebalance-oriented (reduce overweight, increase underweight)

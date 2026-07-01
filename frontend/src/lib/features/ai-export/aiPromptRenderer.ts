@@ -3,7 +3,14 @@
  */
 
 import type {AiPortfolioExport, AiTechnicalAsset} from './types';
-import {PROMPT_ROLE, PROMPT_WEB_RESEARCH, PROMPT_TECHNICAL_DISCLAIMER, PROMPT_ANALYSIS_REQUEST, buildResponseLanguageLine} from './templates/promptTemplate';
+import {
+	PROMPT_ROLE,
+	PROMPT_WEB_RESEARCH,
+	PROMPT_TECHNICAL_DISCLAIMER,
+	PROMPT_INVESTOR_ASSUMPTIONS_NOTE,
+	PROMPT_ANALYSIS_REQUEST,
+	buildResponseLanguageLine,
+} from './templates/promptTemplate';
 
 export function renderFullPrompt(data: AiPortfolioExport): string {
 	const sections: string[] = [];
@@ -16,6 +23,12 @@ export function renderFullPrompt(data: AiPortfolioExport): string {
 	sections.push('## Methodology\n');
 	sections.push('```yaml');
 	sections.push(toYaml(data.methodology));
+	sections.push('```\n');
+
+	// Export Metadata (right after Methodology)
+	sections.push('## Export Metadata\n');
+	sections.push('```yaml');
+	sections.push(toYaml(data.metadata));
 	sections.push('```\n');
 
 	// Portfolio Snapshot
@@ -50,6 +63,13 @@ export function renderFullPrompt(data: AiPortfolioExport): string {
 	sections.push('## PAC Context\n');
 	sections.push('```yaml');
 	sections.push(toYaml({pac_context: data.pac_context}));
+	sections.push('```\n');
+
+	// Investor Assumptions
+	sections.push('## Investor Assumptions\n');
+	sections.push(PROMPT_INVESTOR_ASSUMPTIONS_NOTE + '\n');
+	sections.push('```yaml');
+	sections.push(toYaml({investor_assumptions: data.investor_assumptions}));
 	sections.push('```\n');
 
 	// Technical Summary (compact overview before full tables)
@@ -96,12 +116,6 @@ export function renderFullPrompt(data: AiPortfolioExport): string {
 		sections.push(toYaml(data.data_quality));
 		sections.push('```\n');
 	}
-
-	// Metadata
-	sections.push('## Export Metadata\n');
-	sections.push('```yaml');
-	sections.push(toYaml(data.metadata));
-	sections.push('```\n');
 
 	// Analysis Request
 	sections.push('## Requested Analysis\n');
