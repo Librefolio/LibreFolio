@@ -20,7 +20,7 @@ The orchestration layer between the API and the Portfolio Engine. `PortfolioServ
 
 ## Location
 
-`backend/app/services/portfolio_service.py` (1946 lines)
+`backend/app/services/portfolio_service.py` (~2558 lines, +612 from commit `39106380` 3-pool refactor)
 
 ## Key Methods
 
@@ -50,13 +50,14 @@ cache_key = (
 
 Cache invalidated on: any transaction add/edit/delete, any price update.
 
-## Known Issues / Technical Debt
+## Known Issues / Technical Debt (Post-Refactor)
 
-1. **WAC redundancy**: `get_summary()` calls `compute_wac_iterative()` per asset even when `get_report()` already has `wac_series` pre-loaded in the engine result. N redundant DB+FX calls per summary.
-2. **Valuation gap**: `get_summary()` uses "latest price only" for holdings value; engine uses backward-fill + TRANSACTION_IMPLIED. P2P/crowdfund holdings show `current_value=None`.
-3. **Realized P&L duplication**: Same per-sell WAC calculation runs separately in `get_summary()` and `get_positions_contribution()` when both are requested via `get_report()`.
+1. **`get_summary()` not fully wired**: `get_summary()` still uses `compute_wac_iterative()` per asset even though the engine now computes WAC inline. N redundant DB+FX calls remain until wiring is completed (Priorità 1 backlog).
+2. **Valuation gap**: `get_summary()` uses "latest price only" for holdings value; engine uses backward-fill + `LAST_BUY_PRICE` fallback. P2P/crowdfund holdings still show `current_value=None` in the holdings table.
+3. **Realized P&L duplication**: Same per-SELL WAC calculation runs separately in `get_summary()` and `get_positions_contribution()` when both are requested via `get_report()`.
+4. **DataQualityReport never populated**: `data_quality` field in `PortfolioSummary` and `AllocationHistoryResponse` is always `None` — the per-day quality data exists but aggregation is not implemented.
 
-These are tracked in `ARCHITECTURE_CURRENT_STATE.md` as bugs 2, 5, 6.
+These are tracked in `ARCHITECTURE_CURRENT_STATE.md` §5 bugs 2, 5, 6 and `implementation_status_report.md` §3.
 
 ## Source files
 
