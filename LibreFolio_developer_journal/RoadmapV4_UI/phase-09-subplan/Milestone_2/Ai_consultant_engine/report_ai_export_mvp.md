@@ -188,26 +188,42 @@ technical_context_policy:
 - snake_case YAML keys throughout (`ema20`, `macd_histogram`, `rsi14`, `threshold`) —
   no more `{0: 0}`-style ambiguous detail keys
 
-## 9. Kept as-is per product decision + new definition added
+## 9. Kept as-is per product decision + definitions added/fixed
 
 - `period_pnl` and `period_pnl_percent` on `AiPosition` — retained, considered reliable
   (sourced from `positions_contribution`).
-- **New**: `metric_definitions.position_period_pnl_percent` added to clarify that
-  this is `period_pnl / |start_value|` at the position level, distinct from the
-  technical `return_3m_percent` (price-only return) shown in Technical Summary/Series —
+- `metric_definitions.position_period_pnl_percent` added to clarify that this is
+  `period_pnl / |start_value|` at the position level, distinct from the technical
+  `return_3m_percent` (price-only return) shown in Technical Summary/Series —
   prevents the AI from conflating a P&L metric with a price return metric.
+- `metric_definitions.simple_roi_percent` added: `(NAV - period_net_deposits) /
+  period_net_deposits`, tied explicitly to the `period_net_deposits` field already
+  exported in Portfolio Snapshot (verified against `calculate_simple_roi()` in
+  `backend/app/utils/financial/roi_utils.py` — the denominator is the *period* net
+  deposits, not lifetime `total_invested`).
 - No new backend DTOs, no MCP/AI provider integration.
 
-## 10. Validations executed
+## 10. HTML escaping fix
+
+The `position_period_pnl_percent` definition originally contained a literal `&`
+character ("P&L"). Any Markdown-to-HTML rendering step downstream of the clipboard
+(e.g. viewing the copied text through a Markdown-aware tool) legitimately re-encodes
+raw `&` as `&amp;` per CommonMark/HTML rules — this could confuse an AI reading the
+rendered version. Fixed by rewording the string to avoid the ampersand entirely
+("gain/loss" instead of "P&L"); the clipboard renderer itself does no escaping of its
+own (`navigator.clipboard.writeText()` writes the plain string as-is — verified no
+other literal `&` remains anywhere in `frontend/src/lib/features/ai-export/`).
+
+## 11. Validations executed
 
 ```text
 svelte-check:  0 errors, 0 warnings
-./dev.py i18n audit:  1503 keys, 0 incomplete
+./dev.py i18n audit:  1476 keys, 0 incomplete
 ```
 
 No `api sync` was run — this round only touched frontend TypeScript/Svelte files.
 
-## 11. Known limitations
+## 12. Known limitations
 
 - **`by_geography` uses a different basis than the rest** (`market_value_excluding_cash`
   vs `nav_including_cash`) — this is a real, permanent asymmetry in the backend data
