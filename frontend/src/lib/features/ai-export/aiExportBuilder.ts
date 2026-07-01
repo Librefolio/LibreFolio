@@ -19,6 +19,8 @@ import type {
 	AiDataQuality,
 	AiMethodology,
 	AiMetadata,
+	AiPacContext,
+	AiTechnicalSummaryItem,
 } from './types';
 
 // ─── Options ─────────────────────────────────────────────────────────────────
@@ -75,6 +77,9 @@ export async function buildAiExport(options: AiExportOptions): Promise<AiPortfol
 	const technicalInputs = buildTechnicalInputs(positions, missingAssetIds, options);
 	const technical = await buildTechnicalContext(technicalInputs);
 
+	// Build technical summary from computed assets
+	const technicalSummary = buildTechnicalSummary(technical.assets, positions);
+
 	return {
 		metadata: aiMetadata,
 		methodology,
@@ -82,6 +87,8 @@ export async function buildAiExport(options: AiExportOptions): Promise<AiPortfol
 		current_allocation: allocation,
 		positions,
 		broker_summary: brokerSummary,
+		pac_context: buildPacContext(options),
+		technical_summary: technicalSummary,
 		technical_context: technical.assets,
 		technical_context_unavailable: technical.unavailable,
 		data_quality: {
@@ -125,15 +132,16 @@ function buildMethodology(): AiMethodology {
 			purpose: 'descriptive_context_only',
 			not_trading_signals: true,
 		},
-		allocation_basis: 'market_value_excluding_cash',
+		allocation_basis: 'nav_including_cash',
 		metric_definitions: {
 			nav: 'Total portfolio value: market_value + cash',
-			total_pnl: 'NAV minus total invested capital (lifetime)',
-			period_pnl: 'NAV change minus net cash flows in selected period',
-			deposited_capital: 'Total deposits minus total withdrawals (net external capital)',
+			total_invested: 'Lifetime net external capital: sum(deposits) - sum(withdrawals)',
+			total_pnl: 'NAV minus total_invested (lifetime gain/loss)',
+			period_pnl: 'NAV change minus net external flows within selected period',
+			period_net_deposits: 'Deposits minus withdrawals within selected period only',
 			unrealized_pnl: 'Current market value minus cost basis of open positions',
-			twrr_percent: 'Time-Weighted Rate of Return (eliminates cash flow timing effect)',
-			mwrr_annualized_percent: 'Money-Weighted Rate of Return (XIRR), annualized',
+			twrr_percent: 'Time-Weighted Return (eliminates cash flow timing effect)',
+			mwrr_annualized_percent: 'Money-Weighted Return (XIRR), annualized',
 		},
 	};
 }
@@ -148,7 +156,8 @@ function buildSnapshot(summary: Record<string, any> | null): AiPortfolioSnapshot
 		market_value: parseCurrency(summary.market_value),
 		cash: parseCurrency(summary.cash_total),
 		book_value: parseCurrency(summary.book_value),
-		deposited_capital: parseCurrency(summary.net_deposited_capital),
+		total_invested: parseCurrency(summary.total_invested),
+		period_net_deposits: parseCurrency(summary.net_deposited_capital),
 		total_pnl: parseCurrency(summary.total_gain_loss),
 		total_pnl_percent: ratioToPct(summary.total_gain_loss_percent),
 		unrealized_pnl: parseCurrency(summary.unrealized_gain_loss),
@@ -185,8 +194,8 @@ function buildPositions(
 		const cp = contribMap.get(contribKey);
 		const qty = parseNum(h.quantity) ?? 0;
 
-		// Skip closed positions that had no activity in the period
-		if (qty === 0 && !cp) continue;
+		// Skip closed positions entirely — not relevant for PAC advice
+		if (qty <= 0.0001) continue;
 
 		const wac = parseNum(h.wac_per_unit);
 		const costBasis = wac != null && qty > 0 ? Math.round(wac * qty * 100) / 100 : undefined;
@@ -206,7 +215,6 @@ function buildPositions(
 				cost_basis: costBasis,
 				unrealized_pnl: parseCurrency(h.gain_loss),
 				unrealized_pnl_percent: ratioToPct(h.gain_loss_percent),
-				is_open: qty > 0 ? true : false,
 				valuation_source: isMissingPrice ? 'LAST_BUY_PRICE_OR_MISSING' : undefined,
 				// Period contribution
 				period_pnl: parseNum(cp?.period_pnl),
@@ -255,9 +263,9 @@ function buildAllocation(summary: Record<string, any> | null, positions: AiPosit
 		.map(([name, percent]) => ({name, percent: Math.round(percent * 100) / 100}))
 		.sort((a, b) => b.percent - a.percent);
 
-	// by_asset from positions (only open)
+	// by_asset from positions (all are open since closed are filtered out)
 	const byAsset: AiAllocationItem[] = positions
-		.filter((p) => p.is_open && p.nav_weight_percent != null && p.nav_weight_percent > 0)
+		.filter((p) => p.nav_weight_percent != null && p.nav_weight_percent > 0)
 		.map((p) => ({name: p.symbol ?? p.name, percent: p.nav_weight_percent!}));
 
 	return {
@@ -415,6 +423,56 @@ function buildTechnicalInputs(
 	}
 
 	return inputs;
+}
+
+// ─── PAC Context ─────────────────────────────────────────────────────────────
+
+function buildPacContext(options: AiExportOptions): AiPacContext {
+	return {
+		monthly_pac_amount: 'unavailable',
+		monthly_pac_currency: options.targetCurrency,
+		preferred_action: 'allocate_new_capital',
+		avoid_sale_suggestions: true,
+		allow_new_assets: 'unknown',
+	};
+}
+
+// ─── Technical Summary ───────────────────────────────────────────────────────
+
+function buildTechnicalSummary(
+	assets: import('./types').AiTechnicalAsset[],
+	positions: AiPosition[],
+): AiTechnicalSummaryItem[] {
+	// Build NAV weight lookup by asset name
+	const weightMap = new Map<string, number>();
+	for (const p of positions) {
+		const key = p.symbol ?? p.name;
+		weightMap.set(key, (weightMap.get(key) ?? 0) + (p.nav_weight_percent ?? 0));
+	}
+
+	return assets.map((a) => {
+		const lastPoint = a.series.length > 0 ? a.series[a.series.length - 1] : null;
+		const label = a.metadata.symbol ?? a.metadata.asset;
+		const lastClose = lastPoint?.close ?? 0;
+
+		return stripUndefined({
+			asset: a.metadata.asset,
+			symbol: a.metadata.symbol,
+			nav_weight_percent: weightMap.get(label),
+			return_3m_percent: lastPoint?.return_from_base_pct ?? 0,
+			latest_rsi14: lastPoint?.rsi14,
+			latest_macd_histogram: lastPoint?.macd_hist,
+			price_vs_ema20_percent: lastPoint?.ema20 && lastClose > 0
+				? Math.round(((lastClose - lastPoint.ema20) / lastPoint.ema20) * 10000) / 100
+				: undefined,
+			price_vs_ema50_percent: lastPoint?.ema50 && lastClose > 0
+				? Math.round(((lastClose - lastPoint.ema50) / lastPoint.ema50) * 10000) / 100
+				: undefined,
+			price_vs_ema200_percent: lastPoint?.ema200 && lastClose > 0
+				? Math.round(((lastClose - lastPoint.ema200) / lastPoint.ema200) * 10000) / 100
+				: undefined,
+		}) as AiTechnicalSummaryItem;
+	}).sort((a, b) => (b.nav_weight_percent ?? 0) - (a.nav_weight_percent ?? 0));
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

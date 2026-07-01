@@ -46,9 +46,23 @@ export function renderFullPrompt(data: AiPortfolioExport): string {
 		sections.push('```\n');
 	}
 
+	// PAC Context
+	sections.push('## PAC Context\n');
+	sections.push('```yaml');
+	sections.push(toYaml({pac_context: data.pac_context}));
+	sections.push('```\n');
+
+	// Technical Summary (compact overview before full tables)
+	if (data.technical_summary.length > 0) {
+		sections.push('## Technical Summary\n');
+		sections.push('```yaml');
+		sections.push(toYaml({technical_summary: data.technical_summary}));
+		sections.push('```\n');
+	}
+
 	// Technical Context
 	if (data.technical_context.length > 0) {
-		sections.push('## Technical Context\n');
+		sections.push('## Technical Series Detail\n');
 		sections.push(PROMPT_TECHNICAL_DISCLAIMER + '\n');
 
 		for (const asset of data.technical_context) {

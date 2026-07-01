@@ -36,6 +36,16 @@ export function renderDataOnly(data: AiPortfolioExport): string {
 		sections.push('```\n');
 	}
 
+	sections.push('```yaml');
+	sections.push(toYaml({pac_context: data.pac_context}));
+	sections.push('```\n');
+
+	if (data.technical_summary.length > 0) {
+		sections.push('```yaml');
+		sections.push(toYaml({technical_summary: data.technical_summary}));
+		sections.push('```\n');
+	}
+
 	if (data.technical_context.length > 0) {
 		for (const asset of data.technical_context) {
 			sections.push(renderTechnicalAsset(asset));

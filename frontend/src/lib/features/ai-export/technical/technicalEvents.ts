@@ -152,8 +152,8 @@ export function detectTechnicalEvents(signals: SignalSeries): TechnicalEvent[] {
 	// Sort by date ascending, limit to max 5 per call (caller aggregates per asset)
 	events.sort((a, b) => a.date.localeCompare(b.date));
 
-	// Keep only the 5 most recent events (most relevant for PAC decisions)
-	const MAX_EVENTS = 5;
+	// Keep only the 4 most recent events (most relevant for PAC decisions)
+	const MAX_EVENTS = 4;
 	return events.length > MAX_EVENTS ? events.slice(-MAX_EVENTS) : events;
 }
 

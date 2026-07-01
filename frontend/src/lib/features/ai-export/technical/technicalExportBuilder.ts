@@ -78,8 +78,8 @@ export async function buildTechnicalContext(inputs: TechnicalExportInput[]): Pro
 		}
 	}
 
-	// Limit total events to 40 (most recent across all assets)
-	const MAX_TOTAL_EVENTS = 40;
+	// Limit total events to 30 (most recent across all assets)
+	const MAX_TOTAL_EVENTS = 30;
 	const allEvents = assets.flatMap((a) => a.events);
 	if (allEvents.length > MAX_TOTAL_EVENTS) {
 		const eventsByDate = allEvents.sort((a, b) => b.date.localeCompare(a.date));
