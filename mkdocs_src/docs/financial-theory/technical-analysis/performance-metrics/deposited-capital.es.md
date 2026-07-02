@@ -29,7 +29,7 @@ $$
 
 ---
 
-## 📊 Modelo de Efectivo de Tres Pools
+## 📊 Modelo de Efectivo de Tres Pools {: #three-pool-cash-model }
 
 El Gráfico de Crecimiento descompone el efectivo actual en dos agregados visibles más un rastreador global oculto:
 
@@ -49,7 +49,7 @@ $$
     - Una COMPRA en el bróker $b_1$ solo consume $R_{b_1}$, nunca $R_{b_2}$.
     - Las transferencias de efectivo entre brókers mueven $R$ y $K$ desde el origen al destino sin afectar a $W$.
 
-🔗 Reglas completas de actualización por bróker: **[Portfolio Engine — §6 Modelo de Efectivo de Tres Pools](portfolio-engine.md#6-modelo-de-efectivo-de-tres-pools-por-broker-k_b-r_b-w)**
+🔗 Reglas completas de actualización por bróker: **[Portfolio Engine — §6 Modelo de Efectivo de Tres Pools](portfolio-engine.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)**
 
 ---
 
@@ -96,7 +96,7 @@ El modelo de 3 pools se ejecuta en un **único ciclo por transacción** (basado 
 2. Actualizar K/R/W según las reglas del tipo de transacción
 3. Luego reducir el pool PMP (para las VENTAS)
 
-🔗 Ver **[Portfolio Engine — §6](portfolio-engine.md#6-modelo-de-efectivo-de-tres-pools-por-broker-k_b-r_b-w)** para todas las reglas formales.
+🔗 Ver **[Portfolio Engine — §6](portfolio-engine.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)** para todas las reglas formales.
 
 ---
 

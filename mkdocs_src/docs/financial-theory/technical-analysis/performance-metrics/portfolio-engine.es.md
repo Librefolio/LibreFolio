@@ -23,7 +23,7 @@ Esta página define formalmente el modelo matemático que sustenta el motor de c
 
 ---
 
-## 📐 2. Precio de Valoración
+## 📐 2. Precio de Valoración {: #2-valuation-price }
 
 $$
 p(a, t) = \begin{cases}
@@ -39,7 +39,7 @@ $$
 
 ---
 
-## 📐 3. Estado de la Posición
+## 📐 3. Estado de la Posición {: #3-position-state }
 
 Para cada posición $(a, b)$ con $q(a,b,t) > 0$:
 
@@ -85,7 +85,7 @@ $$
 
 ---
 
-## 📐 5. Agregación de Cartera
+## 📐 5. Agregación de Cartera {: #5-portfolio-aggregation }
 
 $$
 \mathrm{MV}(t) = \sum_{(a,b) \in S} \mathrm{MV}(a,b,t)
@@ -105,7 +105,7 @@ $$
 
 ---
 
-## 📐 6. Modelo de Efectivo de Tres Pools — Por Bróker $(K_b, R_b, W)$
+## 📐 6. Modelo de Efectivo de Tres Pools — Por Bróker $(K_b, R_b, W)$ {: #6-three-pool-cash-model-per-broker-k_b-r_b-w }
 
 Tres pools acumuladores rastrean la procedencia del efectivo. $K$ y $R$ se mantienen **por bróker** $b$; $W$ es global (sale completamente del sistema).
 
@@ -153,7 +153,7 @@ Se aplica un escalado proporcional por bróker si la deriva es $> 0.01$ (debido 
 
 ---
 
-## 📐 7. Contribución del Periodo
+## 📐 7. Contribución del Periodo {: #7-period-contribution }
 
 Para el periodo $[t_0, t_1]$, por posición $(a,b)$:
 

@@ -116,7 +116,7 @@ $$
 
 !!! tip "Auto PMP en la interfaz de usuario"
 
-    En el formulario de transacciones, el interruptor "Auto" utiliza este modo. La tabla muestra la etiqueta de efecto **Auto PMP** (en español), indicando que las unidades entraron al coste actual del pool sin alterar el PMP.
+    En el formulario de transacciones, el interruptor "Auto" utiliza este modo. La tabla muestra la etiqueta de efecto **Auto PMP** (en español, **Auto WAC** en inglés), indicando que las unidades entraron al coste actual del pool sin alterar el PMP.
 
 ??? example "Ejemplo 4: Transferencia en Modo Auto — PMP sin cambios"
 

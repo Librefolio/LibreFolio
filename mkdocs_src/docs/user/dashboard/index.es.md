@@ -14,9 +14,9 @@ El Panel Principal (Dashboard) es el **centro de comando de su cartera** — una
 
 | Sección | Ubicación | Contenido |
 |---------|-----------|-----------|
-| **[Tarjetas KPI](kpi-cards.md)** | Fila superior | [Patrimonio Neto](kpi-cards.md#tarjeta-1-patrimonio-neto) · [P&L del Periodo](kpi-cards.md#tarjeta-2-pl-del-periodo) · [Rendimientos](kpi-cards.md#tarjeta-3-retornos) |
-| **[Gráfico de Crecimiento](charts.md#grafico-de-crecimiento-de-la-cartera)** | Centro izquierda | Área apilada absoluta + serie de rendimiento porcentual |
-| **[Panel de Asignación](charts.md#panel-de-asignacion)** | Centro derecha + inferior | Tipo / Sector / Geografía — actual e histórico |
+| **[Tarjetas KPI](kpi-cards.md)** | Fila superior | [Patrimonio Neto](kpi-cards.md#card-1-net-worth) · [P&L del Periodo](kpi-cards.md#card-2-period-pl) · [Rendimientos](kpi-cards.md#card-3-returns) |
+| **[Gráfico de Crecimiento](charts.md#portfolio-growth-chart)** | Centro izquierda | Área apilada absoluta + serie de rendimiento porcentual |
+| **[Panel de Asignación](charts.md#allocation-panel)** | Centro derecha + inferior | Tipo / Sector / Geografía — actual e histórico |
 
 ---
 

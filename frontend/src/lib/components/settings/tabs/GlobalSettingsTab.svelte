@@ -477,6 +477,7 @@
                         {/if}
                         <button
                             on:click={toggleLock}
+                            data-testid="settings-lock-toggle"
                             class="p-2 rounded-lg transition-all
                                 {isLocked ? 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'}"
                             title={isLocked ? $_('settings.clickToEdit') : $_('settings.clickToLock')}

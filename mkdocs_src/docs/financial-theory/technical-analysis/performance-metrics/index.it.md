@@ -22,12 +22,13 @@ Questi due attori possono avere performance molto diverse. Potresti scegliere un
 | **[Net Asset Value (NAV)](nav.md)** | Net Worth / Net Asset Value. La valutazione di mercato totale del portafoglio (asset + liquidità) alla fine della finestra temporale. |
 | **[Book Value](book-value.md)** | Il costo contabile storico delle posizioni aperte più la liquidità. Utilizzato per confrontare il costo di acquisto con il valore di mercato. |
 | **[P&L del Periodo](period-pnl.md)** | Il profitto o la perdita monetaria assoluta generata dal portafoglio nel periodo selezionato, rettificata per i flussi di cassa. |
-| **[Capitale Depositato & P&L Totale](deposited-capital.md)** | Capitale esterno netto conferito dall'inizio; l'ancora per il calcolo del P&L Totale e l'algoritmo di scomposizione della liquidità. |
+| **[Capitale Depositato & P&L Totale](deposited-capital.md)** | Capitale esterno netto conferito dall'inizio; l'ancora per il calcolo del P&L Totale e l'algoritmo di scomposizione della liquidità a **3 pool**. |
 | **[Effetto Timing](timing-effect.md)** | Differenza tra MWRR cumulativo e TWRR cumulativo. Mostra quanto il timing e l'importo dei flussi hanno inciso sul rendimento complessivo. |
 | **[ROI Semplice](roi.md)** | Rendimento percentuale assoluto generato da un investimento rispetto al suo costo. Ideale per valutare singole posizioni. |
 | **[TWRR](twrr.md)** | Rendimento Ponderato nel Tempo (Time-Weighted Rate of Return). Misura la performance pura degli asset sottostanti, ignorando il timing dei flussi di cassa. |
-| **[MWRR (XIRR)](mwrr.md)** | Rendimento Ponderato per il Capitale (Money-Weighted Rate of Return). Misura la tua performance personale come investitore, tenendo conto del timing dei flussi di cassa. Copre sia la forma **Annualizzata** sia quella **Cumulativa**. |
+| **[MWRR (XIRR)](mwrr.md)** | Rendimento Ponderato per il Capitale (Money-Weighted Rate of Return). Misura la tua performance personale come investitore, tenendo conto del timing dei flussi di cassa. Copre sia la forma Annualizzata sia quella Cumulativa. |
 | **[Costo Medio Ponderato](weighted-average-cost.md)** | Il costo unitario medio di un asset in portafoglio, ponderato per le quantità acquistate. |
+| **[Portfolio Engine](portfolio-engine.md)** | Modello matematico completo: catena di valutazione, PMC, aggregazione, modello a 3 pool, contributo, architettura pre-frame/frame. |
 
 ---
 
@@ -145,3 +146,4 @@ Per facilitare la navigazione, la dashboard di LibreFolio presenta icone e link 
 * I widget del **ROI** collegano direttamente alla [Pagina del ROI Semplice](roi.md).
 * I widget del **TWRR** collegano direttamente alla [Pagina del TWRR](twrr.md).
 * I widget del **MWRR** collegano direttamente alla [Pagina del MWRR](mwrr.md).
+* **Capitale Depositato / P&L Totale** (tooltip del Grafico di Crescita) collega alla [Pagina Capitale Depositato & P&L Totale](deposited-capital.md).

@@ -555,6 +555,17 @@ test.describe('Gallery Screenshots', () => {
                     await waitForNetworkSettled(page);
                     await page.waitForTimeout(500);
 
+                    // Settings start locked by default — unlock via the lock toggle
+                    // before interacting with scheduler-config-btn (disabled while locked)
+                    const lockToggle = page.getByTestId('settings-lock-toggle');
+                    if (await lockToggle.isVisible({timeout: 3_000}).catch(() => false)) {
+                        const isLocked = await page.getByTestId('scheduler-config-btn').isDisabled().catch(() => false);
+                        if (isLocked) {
+                            await lockToggle.click();
+                            await page.waitForTimeout(200);
+                        }
+                    }
+
                     // Click the configure button to open SchedulerConfigModal
                     const configBtn = page.getByTestId('scheduler-config-btn');
                     await configBtn.scrollIntoViewIfNeeded();
@@ -773,9 +784,19 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('transaction form modal variants - all languages and themes', async ({page}, testInfo) => {
+            // Heaviest gallery test: 7 types × 4 langs × 2 themes = 56 sub-flows in ONE
+            // persistently-open modal. Measured locally: ~24s per type-switch cycle
+            // (combobox open + select + waitForNetworkSettled + screenshot), so the full
+            // run needs ~22-24 minutes end-to-end — confirmed linear, not a hang/leak
+            // (progress is identical and deterministic across reruns, just slow).
+            // This is architecturally a very heavy single test; a future refactor could
+            // split it into 7 per-type tests to parallelize across workers instead of
+            // serializing inside one modal. For now, give it generous headroom — this is
+            // a docs/gallery-only nightly step, not a PR gate.
+            test.setTimeout(1_500_000); // 25 minutes
             // Screenshots for different transaction types in the form modal.
             // Open the form ONCE per lang/theme and switch types inside it — avoids
-            // 7 × navigation overhead and stays well within the 3-min timeout.
+            // 7 × navigation overhead and stays well within the 25-min timeout.
             const viewport = getViewport(testInfo);
             const typesToShoot: Array<{type: string; name: string}> = [
                 {type: 'SELL', name: 'form-modal-sell'},
@@ -832,6 +853,8 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('transaction picker modal - all languages and themes', async ({page}, testInfo) => {
+            // Heavier than the default 3-min budget: nested modal navigation × 4 langs × 2 themes.
+            test.setTimeout(300_000); // 5 minutes
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
@@ -1227,6 +1250,8 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('import wizard step 4 asset resolution - all languages and themes', async ({page}, testInfo) => {
+            // Heavier than the default 3-min budget: real CSV parse via backend × 4 langs × 2 themes.
+            test.setTimeout(300_000); // 5 minutes
             // generic_simple.csv contains UNETF (unknown asset → unresolved card in step 4)
             const viewport = getViewport(testInfo);
             const GENERIC_SIMPLE = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
@@ -1363,6 +1388,8 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('import bulk staging - all languages and themes', async ({page}, testInfo) => {
+            // Heavier than the default 3-min budget under load: real backend list load × 4 langs × 2 themes.
+            test.setTimeout(300_000); // 5 minutes
             // Show the BulkModal (staging grid) — open it in edit mode from the transactions table.
             // The BulkModal staging view is the same whether populated from wizard import or manual edit.
             const viewport = getViewport(testInfo);
@@ -2416,6 +2443,8 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('Asset create modal from import wizard - all languages and themes', async ({page}, testInfo) => {
+            // Heavier than the default 3-min budget: full import wizard + CSV parse × 4 langs × 2 themes.
+            test.setTimeout(300_000); // 5 minutes
             // Opens AssetModal from ImportWizard step4 — pre-filled with extracted ticker/ISIN/name
             // Uses generic_simple.csv which has UNETF (unresolved asset)
             const viewport = getViewport(testInfo);

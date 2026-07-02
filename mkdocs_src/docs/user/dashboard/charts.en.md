@@ -6,7 +6,7 @@ The chart section sits below the KPI cards and gives you a **historical and stru
 
 ---
 
-## 📈 Portfolio Growth Chart
+## 📈 Portfolio Growth Chart {: #portfolio-growth-chart }
 
 The growth chart shows how your portfolio evolved in value over the selected period. Use the **Abs / %** toggle in the top-right corner to switch between two views.
 
@@ -64,7 +64,7 @@ The gap between MWRR and TWRR is the [Timing Effect](../../financial-theory/tech
 
 ---
 
-## 🥧 Allocation Panel
+## 🥧 Allocation Panel {: #allocation-panel }
 
 The allocation panel shows how your portfolio is distributed at the current point in time and how it evolved historically.
 

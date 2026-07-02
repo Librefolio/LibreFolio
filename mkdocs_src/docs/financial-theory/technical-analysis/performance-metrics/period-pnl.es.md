@@ -48,7 +48,7 @@ $$
 \mathcal{P} = \mathcal{P}(t_0) \cup \mathcal{P}(t_1) \cup \text{keys(Realized)} \cup \text{keys(Income)} \cup \text{keys(Fees)}
 $$
 
-🔗 Consulte **[Portfolio Engine — §7 Contribución del Periodo](portfolio-engine.md#7-contribucion-del-periodo)** para más detalles.
+🔗 Consulte **[Portfolio Engine — §7 Contribución del Periodo](portfolio-engine.md#7-period-contribution)** para más detalles.
 
 ---
 

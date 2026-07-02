@@ -116,7 +116,7 @@ $$
 
 !!! tip "Auto PMC nell'interfaccia utente"
 
-    Nel modulo di transazione, l'interruttore "Auto" utilizza questa modalità. La tabella dei risultati mostra il badge dell'effetto **Auto PMC** (in italiano), indicando che le unità sono entrate al costo attuale del pool senza alterare il PMC.
+    Nel modulo di transazione, l'interruttore "Auto" utilizza questa modalità. La tabella dei risultati mostra il badge dell'effetto **Auto PMC** (in italiano, **Auto WAC** in inglese), indicando che le unità sono entrate al costo attuale del pool senza alterare il PMC.
 
 ??? example "Esempio 4: Trasferimento in modalità Auto — PMC invariato"
 

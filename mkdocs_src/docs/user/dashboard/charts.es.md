@@ -6,7 +6,7 @@ La sección de gráficos se encuentra debajo de las tarjetas de KPI y ofrece una
 
 ---
 
-## 📈 Gráfico de Crecimiento de la Cartera
+## 📈 Gráfico de Crecimiento de la Cartera {: #portfolio-growth-chart }
 
 El gráfico de crecimiento muestra cómo ha evolucionado el valor de su cartera durante el periodo seleccionado. Utilice el interruptor **Abs / %** en la esquina superior derecha para cambiar entre dos vistas.
 
@@ -44,7 +44,7 @@ Cuando pasa el cursor sobre el gráfico, la información emergente muestra:
 
     Cuando reinvierte todos los retornos en nuevos activos, el área de Retornos se mantiene cerca de cero y los ingresos obtenidos terminan integrados en el área de Coste de Activos. Esto es matemáticamente correcto: su base de coste creció porque reinvirtió el beneficio.
 
-🔗 **Teoría**: [Capital Depositado y P&L Total](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md) · [Descomposición del Efectivo](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md#modelo-de-efectivo-de-tres-pools)
+🔗 **Teoría**: [Capital Depositado y P&L Total](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md) · [Descomposición del Efectivo](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md#three-pool-cash-model)
 
 ### Modo % — tasa de retorno
 
@@ -64,7 +64,7 @@ La brecha entre MWRR y TWRR es el [Efecto de temporalidad](../../financial-theor
 
 ---
 
-## 🥧 Panel de Asignación
+## 🥧 Panel de Asignación {: #allocation-panel }
 
 El panel de asignación muestra cómo está distribuida su cartera en el momento actual y cómo ha evolucionado históricamente.
 
