@@ -29,7 +29,7 @@ $$
 
 ---
 
-## 📊 Modèle de Cash à Trois Pools
+## 📊 Modèle de Cash à Trois Pools {: #three-pool-cash-model }
 
 Le graphique de croissance décompose le cash actuel en deux agrégats visibles plus un indicateur global caché :
 
@@ -49,7 +49,7 @@ $$
     - Un ACHAT sur le courtier $b_1$ ne consomme que $R_{b_1}$, jamais $R_{b_2}$.
     - Les transferts de cash entre courtiers déplacent $R$ et $K$ de la source vers la destination sans toucher à $W$.
 
-🔗 Règles complètes de mise à jour par courtier : **[Portfolio Engine — §6 Modèle de Cash à Trois Pools](portfolio-engine.md#6-modele-de-cash-a-trois-pools-par-courtier-k_b-r_b-w)**
+🔗 Règles complètes de mise à jour par courtier : **[Portfolio Engine — §6 Modèle de Cash à Trois Pools](portfolio-engine.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)**
 
 ---
 
@@ -96,7 +96,7 @@ Le modèle à 3 pools s'exécute dans une **boucle unique par transaction** (bas
 2. Mise à jour de K/R/W selon les règles par type de transaction
 3. Décrémentation ensuite du pool PMP (pour les VENTES)
 
-🔗 Voir **[Portfolio Engine — §6](portfolio-engine.md#6-modele-de-cash-a-trois-pools-par-courtier-k_b-r_b-w)** pour toutes les règles formelles.
+🔗 Voir **[Portfolio Engine — §6](portfolio-engine.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)** pour toutes les règles formelles.
 
 ---
 

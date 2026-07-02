@@ -23,7 +23,7 @@ Questa pagina definisce formalmente il modello matematico alla base del motore d
 
 ---
 
-## 📐 2. Prezzo di Valutazione
+## 📐 2. Prezzo di Valutazione {: #2-valuation-price }
 
 $$
 p(a, t) = \begin{cases}
@@ -39,7 +39,7 @@ $$
 
 ---
 
-## 📐 3. Stato della Posizione
+## 📐 3. Stato della Posizione {: #3-position-state }
 
 Per ogni posizione $(a, b)$ con $q(a,b,t) > 0$:
 
@@ -85,7 +85,7 @@ $$
 
 ---
 
-## 📐 5. Aggregazione del Portafoglio
+## 📐 5. Aggregazione del Portafoglio {: #5-portfolio-aggregation }
 
 $$
 \mathrm{MV}(t) = \sum_{(a,b) \in S} \mathrm{MV}(a,b,t)
@@ -105,7 +105,7 @@ $$
 
 ---
 
-## 📐 6. Modello Cash a Tre Pool — Per Broker $(K_b, R_b, W)$
+## 📐 6. Modello Cash a Tre Pool — Per Broker $(K_b, R_b, W)$ {: #6-three-pool-cash-model-per-broker-k_b-r_b-w }
 
 Tre pool di accumulo tracciano la provenienza della liquidità. $K$ e $R$ sono mantenuti **per broker** $b$; $W$ è globale (esce completamente dal sistema).
 
@@ -153,7 +153,7 @@ Viene applicato uno scaling proporzionale per broker se il drift è $> 0.01$ (do
 
 ---
 
-## 📐 7. Contributo di Periodo
+## 📐 7. Contributo di Periodo {: #7-period-contribution }
 
 Per il periodo $[t_0, t_1]$, per posizione $(a,b)$:
 

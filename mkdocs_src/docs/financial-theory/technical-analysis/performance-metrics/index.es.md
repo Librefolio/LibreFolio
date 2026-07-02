@@ -22,12 +22,13 @@ Estos dos actores pueden tener rendimientos muy diferentes. Puede elegir una acc
 | **[Net Asset Value (NAV)](nav.md)** | Net Worth / Net Asset Value. La valoración de mercado total de la cartera (activos + efectivo) al final de la ventana de tiempo. |
 | **[Book Value](book-value.md)** | El coste contable histórico de las posiciones abiertas más el efectivo. Se utiliza para comparar el coste de adquisición con el valor de mercado. |
 | **[P&L del Periodo](period-pnl.md)** | La ganancia o pérdida monetaria absoluta de la cartera en la ventana seleccionada, descontando los flujos de efectivo. |
-| **[Capital Depositado & P&L Total](deposited-capital.md)** | Capital externo neto aportado desde el origen; el ancla para calcular el P&L Total y el algoritmo de descomposición de efectivo. |
+| **[Capital Depositado & P&L Total](deposited-capital.md)** | Capital externo neto aportado desde el origen; el ancla para calcular el P&L Total y el algoritmo de descomposición de efectivo de **3 pools**. |
 | **[Efecto Timing](timing-effect.md)** | Diferencia entre el MWRR acumulado y el TWRR acumulado. Muestra cuánto afectaron el momento y el importe de sus flujos de efectivo a su rendimiento general. |
 | **[ROI Simple](roi.md)** | Porcentaje de retorno absoluto generado por una inversión en relación con su costo. Ideal para evaluar posiciones individuales. |
 | **[TWRR](twrr.md)** | Tasa de Retorno Ponderada por el Tiempo (Time-Weighted Rate of Return). Mide el rendimiento puro de los activos subyacentes, ignorando la temporalidad de los flujos de caja. |
-| **[MWRR (XIRR)](mwrr.md)** | Tasa de Retorno Ponderada por el Dinero (Money-Weighted Rate of Return). Mide su rendimiento personal como inversor, teniendo en cuenta la temporalidad de los flujos de caja. Abarca tanto la forma **Anualizada** como la **Acumulada**. |
+| **[MWRR (XIRR)](mwrr.md)** | Tasa de Retorno Ponderada por el Dinero (Money-Weighted Rate of Return). Mide su rendimiento personal como inversor, teniendo en cuenta la temporalidad de los flujos de caja. Abarca tanto la forma Anualizada como la Acumulada. |
 | **[Coste Medio Ponderado](weighted-average-cost.md)** | El coste unitario medio de un activo en una cartera, ponderado por las cantidades adquiridas. |
+| **[Portfolio Engine](portfolio-engine.md)** | Modelo matemático completo: cadena de valoración, PMP, agregación, modelo de 3 pools, contribución, arquitectura pre-frame/frame. |
 
 ---
 
@@ -145,3 +146,4 @@ Para facilitar la navegación, el panel de control de LibreFolio presenta iconos
 * Los widgets de **ROI** enlazan directamente con la [Página del ROI Simple](roi.md).
 * Los widgets de **TWRR** enlazan directamente con la [Página del TWRR](twrr.md).
 * Los widgets de **MWRR** enlazan directamente con la [Página del MWRR](mwrr.md).
+* **Capital Depositado / P&L Total** (tooltip del Gráfico de Crecimiento) enlaza con la [Página de Capital Depositado y P&L Total](deposited-capital.md).

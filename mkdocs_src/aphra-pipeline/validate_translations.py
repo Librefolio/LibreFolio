@@ -364,7 +364,12 @@ def check_artifacts(
         ))
 
     # Glossary markers [N] not part of links
-    glossary_markers = re.findall(r'\[(\d+)\](?!\()', translated)
+    # Exclude LaTeX nth-root notation like \sqrt[365]{...} — a legitimate math
+    # construct, not a leftover translation glossary marker.
+    glossary_markers = [
+        m.group(1) for m in re.finditer(r'\[(\d+)\](?!\()', translated)
+        if not re.search(r'\\sqrt\s*$', translated[:m.start()])
+    ]
     if glossary_markers:
         issues.append(Issue(
             severity=Severity.WARN,
@@ -741,6 +746,23 @@ def check_html_attrs(
             results.append((tag_name, attrs))
         return results
 
+    def _is_expected_relative_depth_shift(src_val: str, tr_val: str) -> bool:
+        """
+        Return True if `tr_val` is `src_val` with exactly one extra leading
+        `../` segment prepended.
+
+        Translated docs are served one directory level deeper than the EN
+        source (mkdocs-static-i18n adds a `/it/`, `/fr/`, `/es/` prefix to the
+        built URL), so relative `src`/`href` paths pointing at shared assets
+        (e.g. `static/...`) legitimately need one more `../` in translations.
+        This is not a translation bug — only flag genuine mismatches.
+        """
+        if src_val.startswith(("http://", "https://", "/", "#")):
+            return False
+        if tr_val.startswith(("http://", "https://", "/", "#")):
+            return False
+        return tr_val == "../" + src_val
+
     issues = []
     src_clean = _strip_code_blocks(source)
     tr_clean = _strip_code_blocks(translated)
@@ -771,6 +793,8 @@ def check_html_attrs(
                     ),
                 ))
             elif t_val != s_val:
+                if attr in ("src", "href") and _is_expected_relative_depth_shift(s_val, t_val):
+                    continue  # expected extra ../ level for localized doc path
                 issues.append(Issue(
                     severity=Severity.WARN,
                     file=cache_key, lang=lang,

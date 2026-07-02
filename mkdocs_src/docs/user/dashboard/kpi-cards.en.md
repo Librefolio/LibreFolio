@@ -6,7 +6,7 @@ The three KPI cards at the top of the dashboard give you a quick diagnostic of y
 
 ---
 
-## 💰 Card 1 — Net Worth
+## 💰 Card 1 — Net Worth {: #card-1-net-worth }
 
 The **Net Worth** card shows the absolute value of your portfolio at the end of the selected period.
 
@@ -35,7 +35,7 @@ The hero number shows the net balance (deposited − withdrawn).
 
 ---
 
-## 📉 Card 2 — Period P&L
+## 📉 Card 2 — Period P&L {: #card-2-period-pl }
 
 The **Period P&L** card shows how much money your portfolio actually *earned* in the selected window — after removing the effect of your own deposits and withdrawals.
 
@@ -62,7 +62,7 @@ A positive number means you earned money from investment activity. A negative nu
 
 ---
 
-## 📈 Card 3 — Returns
+## 📈 Card 3 — Returns {: #card-3-returns }
 
 The **Returns** card shows *rate-of-return* metrics — percentages that let you compare performance independently of portfolio size.
 

@@ -6,7 +6,7 @@ Las tres tarjetas de KPI en la parte superior del panel de control proporcionan 
 
 ---
 
-## 💰 Tarjeta 1 — Patrimonio Neto
+## 💰 Tarjeta 1 — Patrimonio Neto {: #card-1-net-worth }
 
 La tarjeta de **Patrimonio Neto** muestra el valor absoluto de su cartera al final del periodo seleccionado.
 
@@ -35,7 +35,7 @@ El número principal muestra el saldo neto (depositado − retirado).
 
 ---
 
-## 📉 Tarjeta 2 — P&L del Periodo
+## 📉 Tarjeta 2 — P&L del Periodo {: #card-2-period-pl }
 
 La tarjeta de **P&L del Periodo** muestra cuánto dinero *ganó* realmente su cartera en la ventana seleccionada, tras eliminar el efecto de sus propios depósitos y retiros.
 
@@ -62,7 +62,7 @@ Un número positivo significa que ganó dinero gracias a la actividad de inversi
 
 ---
 
-## 📈 Tarjeta 3 — Retornos
+## 📈 Tarjeta 3 — Retornos {: #card-3-returns }
 
 La tarjeta de **Retornos** muestra métricas de *tasa de retorno* — porcentajes que le permiten comparar el rendimiento independientemente del tamaño de la cartera.
 

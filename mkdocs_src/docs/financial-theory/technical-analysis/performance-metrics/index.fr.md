@@ -22,12 +22,13 @@ Ces deux acteurs peuvent obtenir des performances très différentes. Vous pouve
 | **[Net Asset Value (NAV)](nav.md)** | Net Worth / Net Asset Value. La valorisation boursière totale du portefeuille (actifs + liquidités) à la fin de la fenêtre de temps sélectionnée. |
 | **[Book Value](book-value.md)** | Le coût historique d'acquisition des positions ouvertes plus la liquidité. Utilisé pour comparer le coût d'achat à la valeur de marché. |
 | **[P&L de la Période](period-pnl.md)** | Le profit ou la perte monétaire absolu généré par votre portefeuille au cours de la période sélectionnée, ajusté des flux de trésorerie. |
-| **[Capital Déposé & P&L Total](deposited-capital.md)** | Capital externe net versé depuis l'origine ; l'ancrage pour le calcul du P&L Total et l'algorithme de décomposition des liquidités. |
+| **[Capital Déposé & P&L Total](deposited-capital.md)** | Capital externe net versé depuis l'origine ; l'ancrage pour le calcul du P&L Total et l'algorithme de décomposition des liquidités à **3 pools**. |
 | **[Effet de timing](timing-effect.md)** | Différence entre le MWRR cumulé et le TWRR cumulé. Indique à quel point le moment et le montant de vos flux de trésorerie ont influencé votre rendement global. |
 | **[ROI Simple](roi.md)** | Rendement en pourcentage absolu généré par un investissement par rapport à son coût. Idéal pour évaluer des positions individuelles. |
 | **[TWRR](twrr.md)** | Taux de rendement pondéré par le temps (Time-Weighted Rate of Return). Mesure la performance pure des actifs sous-jacents, en ignorant le timing des flux de trésorerie. |
-| **[MWRR (XIRR)](mwrr.md)** | Taux de rendement pondéré par les capitaux (Money-Weighted Rate of Return). Mesure votre performance personnelle en tant qu'investisseur, en tenant compte du timing des flux de trésorerie. Comprend à la fois la forme **Annualisée** et la forme **Cumulative**. |
+| **[MWRR (XIRR)](mwrr.md)** | Taux de rendement pondéré par les capitaux (Money-Weighted Rate of Return). Mesure votre performance personnelle en tant qu'investisseur, en tenant compte du timing des flux de trésorerie. Comprend à la fois la forme Annualisée et la forme Cumulative. |
 | **[Coût Moyen Pondéré](weighted-average-cost.md)** | Le coût unitaire moyen d'un actif dans un portefeuille, pondéré par les quantités acquises. |
+| **[Portfolio Engine](portfolio-engine.md)** | Modèle mathématique complet : chaîne de valorisation, PMP, agrégation, modèle à 3 pools, contribution, architecture pre-frame/frame. |
 
 ---
 
@@ -145,3 +146,4 @@ Pour faciliter la navigation, le tableau de bord de LibreFolio propose des icôn
 * Les widgets du **ROI** renvoient directement à la [Page du ROI Simple](roi.md).
 * Les widgets du **TWRR** renvoient directement à la [Page du TWRR](twrr.md).
 * Les widgets du **MWRR** renvoient directement à la [Page du MWRR](mwrr.md).
+* **Capital Déposé / P&L Total** (infobulle du Graphique de Croissance) renvoie à la [Page Capital Déposé & P&L Total](deposited-capital.md).

@@ -116,7 +116,7 @@ $$
 
 !!! tip "PMP Auto dans l'interface"
 
-    Dans le formulaire de transaction, l'interrupteur "Auto" utilise ce mode. Le tableau des transactions éligibles affiche le badge d'effet **Auto PMP** (en français), indiquant que les unités sont entrées au coût actuel du pool sans modifier le PMP.
+    Dans le formulaire de transaction, l'interrupteur "Auto" utilise ce mode. Le tableau des transactions éligibles affiche le badge d'effet **Auto PMP** (en français, **Auto WAC** en anglais), indiquant que les unités sont entrées au coût actuel du pool sans modifier le PMP.
 
 ??? example "Exemple 4 : Transfert en mode Auto — PMP inchangé"
 

@@ -20,7 +20,7 @@ $$
 \mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 0}} q(a,b,t) \cdot w(a,b,t) \cdot \mathrm{fx}(\mathrm{ccy}_w, C^*, t)
 $$
 
-🔗 Voir **[Portfolio Engine — §3 État de la Position](portfolio-engine.md#3-etat-de-la-position)** pour la dérivation complète.
+🔗 Voir **[Portfolio Engine — §3 État de la Position](portfolio-engine.md#3-position-state)** pour la dérivation complète.
 
 ---
 

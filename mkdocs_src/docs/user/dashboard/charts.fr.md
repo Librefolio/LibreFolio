@@ -6,7 +6,7 @@ La section des graphiques se situe sous les cartes KPI et vous offre une **vue h
 
 ---
 
-## 📈 Graphique de croissance du portefeuille
+## 📈 Graphique de croissance du portefeuille {: #portfolio-growth-chart }
 
 Le graphique de croissance montre comment la valeur de votre portefeuille a évolué sur la période sélectionnée. Utilisez l'**interrupteur Abs / %** dans le coin supérieur droit pour basculer entre deux vues.
 
@@ -44,7 +44,7 @@ Lorsque vous survolez le graphique, l'infobulle affiche :
 
     Lorsque vous réinvestissez tous les rendements dans de nouveaux actifs, la zone Rendements reste proche de zéro, et les revenus gagnés finissent par être intégrés dans la zone Coût des actifs. C'est mathématiquement correct : votre base de coût a augmenté parce que vous avez réinvesti vos profits.
 
-🔗 **Théorie** : [Capital déposé & P&L Total](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md) · [Décomposition de la trésorerie](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md#modele-de-cash-a-trois-pools)
+🔗 **Théorie** : [Capital déposé & P&L Total](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md) · [Décomposition de la trésorerie](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md#three-pool-cash-model)
 
 ### Mode % — taux de rendement
 
@@ -64,7 +64,7 @@ L'écart entre le MWRR et le TWRR est l'[Effet de Timing](../../financial-theory
 
 ---
 
-## 🥧 Panneau d'allocation
+## 🥧 Panneau d'allocation {: #allocation-panel }
 
 Le panneau d'allocation montre comment votre portefeuille est réparti à l'instant présent et comment cette répartition a évolué historiquement.
 

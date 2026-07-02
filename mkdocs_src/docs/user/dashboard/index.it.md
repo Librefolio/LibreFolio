@@ -14,9 +14,9 @@ La Dashboard è il **centro di comando del tuo portafoglio** — una singola sch
 
 | Sezione | Posizione | Contenuto |
 |---------|-----------|-----------|
-| **[Schede KPI](kpi-cards.md)** | Riga superiore | [Patrimonio Netto](kpi-cards.md#scheda-1-net-worth) · [P&L del Periodo](kpi-cards.md#scheda-2-period-pl) · [Rendimenti](kpi-cards.md#scheda-3-returns) |
-| **[Grafico di Crescita](charts.md#grafico-di-crescita-del-portafoglio)** | Centro sinistra | Area stacked assoluta + serie dei rendimenti percentuali |
-| **[Pannello di Allocazione](charts.md#pannello-di-allocazione)** | Centro destra + fondo | Tipo / Settore / Area Geografica — attuale e storico |
+| **[Schede KPI](kpi-cards.md)** | Riga superiore | [Patrimonio Netto](kpi-cards.md#card-1-net-worth) · [P&L del Periodo](kpi-cards.md#card-2-period-pl) · [Rendimenti](kpi-cards.md#card-3-returns) |
+| **[Grafico di Crescita](charts.md#portfolio-growth-chart)** | Centro sinistra | Area stacked assoluta + serie dei rendimenti percentuali |
+| **[Pannello di Allocazione](charts.md#allocation-panel)** | Centro destra + fondo | Tipo / Settore / Area Geografica — attuale e storico |
 
 ---
 

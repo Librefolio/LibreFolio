@@ -6,7 +6,7 @@ Le tre schede KPI nella parte superiore della dashboard forniscono una rapida di
 
 ---
 
-## 💰 Scheda 1 — Net Worth
+## 💰 Scheda 1 — Net Worth {: #card-1-net-worth }
 
 La scheda **Net Worth** mostra il valore assoluto del tuo portafoglio alla fine del periodo selezionato.
 
@@ -35,7 +35,7 @@ Il valore principale mostra il saldo netto (depositati − prelevati).
 
 ---
 
-## 📉 Scheda 2 — Period P&L
+## 📉 Scheda 2 — Period P&L {: #card-2-period-pl }
 
 La scheda **Period P&L** mostra quanto denaro il tuo portafoglio ha effettivamente *guadagnato* nella finestra selezionata — dopo aver rimosso l'effetto dei tuoi depositi e prelievi.
 
@@ -62,7 +62,7 @@ Un numero positivo significa che hai guadagnato denaro dall'attività di investi
 
 ---
 
-## 📈 Scheda 3 — Returns
+## 📈 Scheda 3 — Returns {: #card-3-returns }
 
 La scheda **Returns** mostra metriche di *tasso di rendimento* — percentuali che ti permettono di confrontare le performance indipendentemente dalla dimensione del portafoglio.
 
