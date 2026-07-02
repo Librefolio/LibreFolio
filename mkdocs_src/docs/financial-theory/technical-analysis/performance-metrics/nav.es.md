@@ -16,7 +16,7 @@ $$
 
 Donde $\mathrm{MV}(t) = \sum_{(a,b) \in S} q(a,b,t) \cdot p(a,t) \cdot \mathrm{fx}(\mathrm{ccy}_p, C^*, t)$
 
-🔗 Consulte **[Portfolio Engine — §5 Agregación de Cartera](portfolio-engine.md#5-agregacion-de-cartera)** para ver la derivación completa.
+🔗 Consulte **[Portfolio Engine — §5 Agregación de Cartera](portfolio-engine.md#5-portfolio-aggregation)** para ver la derivación completa.
 
 ---
 
@@ -28,7 +28,7 @@ El precio $p(a,t)$ sigue una prioridad estricta:
 2. **Último precio de compra** — precio unitario de la compra (COMPRA) más reciente de $V(u)$ (todos los brókers visibles)
 3. **Ausente** — la posición se excluye del NAV
 
-El PMP **nunca** se utiliza para la valoración. Consulte **[Portfolio Engine — §2](portfolio-engine.md#2-precio-de-valoracion)**.
+El PMP **nunca** se utiliza para la valoración. Consulte **[Portfolio Engine — §2](portfolio-engine.md#2-valuation-price)**.
 
 ---
 

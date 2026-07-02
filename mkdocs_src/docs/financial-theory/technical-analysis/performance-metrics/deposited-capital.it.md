@@ -29,7 +29,7 @@ $$
 
 ---
 
-## 📊 Modello di Liquidità a Tre Pool
+## 📊 Modello di Liquidità a Tre Pool {: #three-pool-cash-model }
 
 Il Grafico di Crescita scompone la liquidità corrente in due aggregati visibili più un tracker globale nascosto:
 
@@ -49,7 +49,7 @@ $$
     - Un ACQUISTO sul broker $b_1$ consuma solo $R_{b_1}$, mai $R_{b_2}$.
     - I trasferimenti di liquidità tra broker spostano $R$ e $K$ dalla sorgente alla destinazione senza toccare $W$.
 
-🔗 Regole complete di aggiornamento per broker: **[Portfolio Engine — §6 Modello Cash a Tre Pool](portfolio-engine.md#6-modello-cash-a-tre-pool-per-broker-k_b-r_b-w)**
+🔗 Regole complete di aggiornamento per broker: **[Portfolio Engine — §6 Modello Cash a Tre Pool](portfolio-engine.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)**
 
 ---
 
@@ -96,7 +96,7 @@ Il modello a 3 pool gira in un **unico loop per transazione** (event-driven, non
 2. Aggiornamento di K/R/W secondo le regole del tipo di transazione
 3. Riduzione del pool PMC (per le VENDITE)
 
-🔗 Vedi **[Portfolio Engine — §6](portfolio-engine.md#6-modello-cash-a-tre-pool-per-broker-k_b-r_b-w)** per tutte le regole formali.
+🔗 Vedi **[Portfolio Engine — §6](portfolio-engine.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)** per tutte le regole formali.
 
 ---
 

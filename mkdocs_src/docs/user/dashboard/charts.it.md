@@ -6,7 +6,7 @@ La sezione dei grafici si trova sotto le schede KPI e fornisce una **vista stori
 
 ---
 
-## 📈 Grafico di Crescita del Portafoglio
+## 📈 Grafico di Crescita del Portafoglio {: #portfolio-growth-chart }
 
 Il grafico di crescita mostra come il valore del tuo portafoglio si è evoluto nel periodo selezionato. Usa l'interruttore **Abs / %** nell'angolo in alto a destra per passare tra le due visualizzazioni.
 
@@ -44,7 +44,7 @@ Passando il mouse sopra il grafico, il suggerimento mostra:
 
     Quando reinvesti tutti i rendimenti in nuovi asset, l'area Rendimenti rimane vicina allo zero e il reddito guadagnato finisce per essere incorporato nell'area Costo asset. Questo è matematicamente corretto: la tua base di costo è cresciuta perché hai reinvestito il profitto.
 
-🔗 **Teoria**: [Capitale Depositato & P&L Totale](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md) · [Decomposizione della Liquidità](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md#modello-di-liquidita-a-tre-pool)
+🔗 **Teoria**: [Capitale Depositato & P&L Totale](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md) · [Decomposizione della Liquidità](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md#three-pool-cash-model)
 
 ### Modalità % — tasso di rendimento
 
@@ -64,7 +64,7 @@ Il divario tra MWRR e TWRR è l'[Effetto Timing](../../financial-theory/technica
 
 ---
 
-## 🥧 Pannello di Allocazione
+## 🥧 Pannello di Allocazione {: #allocation-panel }
 
 Il pannello di allocazione mostra come il tuo portafoglio è distribuito al momento attuale e come si è evoluto storicamente.
 

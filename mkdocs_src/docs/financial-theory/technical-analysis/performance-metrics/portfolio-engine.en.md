@@ -23,7 +23,7 @@ This page formally defines the mathematical model underlying LibreFolio's portfo
 
 ---
 
-## 📐 2. Valuation Price
+## 📐 2. Valuation Price {: #2-valuation-price }
 
 $$
 p(a, t) = \begin{cases}
@@ -39,7 +39,7 @@ $$
 
 ---
 
-## 📐 3. Position State
+## 📐 3. Position State {: #3-position-state }
 
 For each position $(a, b)$ with $q(a,b,t) > 0$:
 
@@ -85,7 +85,7 @@ $$
 
 ---
 
-## 📐 5. Portfolio Aggregation
+## 📐 5. Portfolio Aggregation {: #5-portfolio-aggregation }
 
 $$
 \mathrm{MV}(t) = \sum_{(a,b) \in S} \mathrm{MV}(a,b,t)
@@ -105,7 +105,7 @@ $$
 
 ---
 
-## 📐 6. Three-Pool Cash Model — Per-Broker $(K_b, R_b, W)$
+## 📐 6. Three-Pool Cash Model — Per-Broker $(K_b, R_b, W)$ {: #6-three-pool-cash-model-per-broker-k_b-r_b-w }
 
 Three accumulator pools track cash provenance. $K$ and $R$ are maintained **per-broker** $b$; $W$ is global (exits the system entirely).
 
@@ -153,7 +153,7 @@ Proportional per-broker scaling applied if drift $> 0.01$ (from FX rounding or i
 
 ---
 
-## 📐 7. Period Contribution
+## 📐 7. Period Contribution {: #7-period-contribution }
 
 For period $[t_0, t_1]$, per-position $(a,b)$:
 

@@ -29,7 +29,7 @@ $$
 
 ---
 
-## 📊 Three-Pool Cash Model
+## 📊 Three-Pool Cash Model {: #three-pool-cash-model }
 
 The Growth Chart decomposes current cash into two visible aggregates plus a hidden global tracker:
 

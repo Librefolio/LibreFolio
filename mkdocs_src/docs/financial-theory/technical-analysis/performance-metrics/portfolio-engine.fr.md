@@ -23,7 +23,7 @@ Cette page définit formellement le modèle mathématique sous-jacent au moteur 
 
 ---
 
-## 📐 2. Prix d'Évaluation
+## 📐 2. Prix d'Évaluation {: #2-valuation-price }
 
 $$
 p(a, t) = \begin{cases}
@@ -39,7 +39,7 @@ $$
 
 ---
 
-## 📐 3. État de la Position
+## 📐 3. État de la Position {: #3-position-state }
 
 Pour chaque position $(a, b)$ avec $q(a,b,t) > 0$ :
 
@@ -85,7 +85,7 @@ $$
 
 ---
 
-## 📐 5. Agrégation du Portefeuille
+## 📐 5. Agrégation du Portefeuille {: #5-portfolio-aggregation }
 
 $$
 \mathrm{MV}(t) = \sum_{(a,b) \in S} \mathrm{MV}(a,b,t)
@@ -105,7 +105,7 @@ $$
 
 ---
 
-## 📐 6. Modèle de Cash à Trois Pools — Par Courtier $(K_b, R_b, W)$
+## 📐 6. Modèle de Cash à Trois Pools — Par Courtier $(K_b, R_b, W)$ {: #6-three-pool-cash-model-per-broker-k_b-r_b-w }
 
 Trois pools accumulateurs suivent la provenance du cash. $K$ et $R$ sont maintenus **par courtier** $b$ ; $W$ est global (sort entièrement du système).
 
@@ -153,7 +153,7 @@ Une mise à l'échelle proportionnelle par courtier est appliquée si la dérive
 
 ---
 
-## 📐 7. Contribution de Période
+## 📐 7. Contribution de Période {: #7-period-contribution }
 
 Pour la période $[t_0, t_1]$, par position $(a,b)$ :
 

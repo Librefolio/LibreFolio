@@ -16,7 +16,7 @@ $$
 
 Où $\mathrm{MV}(t) = \sum_{(a,b) \in S} q(a,b,t) \cdot p(a,t) \cdot \mathrm{fx}(\mathrm{ccy}_p, C^*, t)$
 
-🔗 Voir **[Portfolio Engine — §5 Agrégation du Portefeuille](portfolio-engine.md#5-agregation-du-portefeuille)** pour la dérivation complète.
+🔗 Voir **[Portfolio Engine — §5 Agrégation du Portefeuille](portfolio-engine.md#5-portfolio-aggregation)** pour la dérivation complète.
 
 ---
 
@@ -28,7 +28,7 @@ Le prix $p(a,t)$ suit une priorité stricte :
 2. **Dernier prix d'achat** — prix unitaire d'achat (ACHAT) le plus récent provenant de $V(u)$ (tous les courtiers visibles)
 3. **Manquant** — la position est exclue de la NAV
 
-Le PMP n'est **jamais** utilisé pour la valorisation. Voir **[Portfolio Engine — §2](portfolio-engine.md#2-prix-devaluation)**.
+Le PMP n'est **jamais** utilisé pour la valorisation. Voir **[Portfolio Engine — §2](portfolio-engine.md#2-valuation-price)**.
 
 ---
 
