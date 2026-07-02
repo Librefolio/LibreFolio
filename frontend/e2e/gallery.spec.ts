@@ -116,7 +116,10 @@ function getViewport(testInfo: any): 'desktop' | 'mobile' {
 test.describe('Gallery Screenshots', () => {
     // Gallery tests iterate over 4 languages × 2 themes = 8 screenshots per test
     // Some tests also navigate (broker detail, import modal) so need extra time
-    test.setTimeout(180_000); // 3 minutes per test
+    // Bumped from 180s: CI runs on a 4-vCPU public runner with --workers matched
+    // to CPU count, but transient contention (backend workers, mkdocs build,
+    // node overhead) still warrants a bit more default headroom.
+    test.setTimeout(240_000); // 4 minutes per test (default; heavy tests override above)
 
     // Each gallery test is independent (logs in fresh, navigates, screenshots).
     // Run in parallel across workers for faster generation.
@@ -559,7 +562,10 @@ test.describe('Gallery Screenshots', () => {
                     // before interacting with scheduler-config-btn (disabled while locked)
                     const lockToggle = page.getByTestId('settings-lock-toggle');
                     if (await lockToggle.isVisible({timeout: 3_000}).catch(() => false)) {
-                        const isLocked = await page.getByTestId('scheduler-config-btn').isDisabled().catch(() => false);
+                        const isLocked = await page
+                            .getByTestId('scheduler-config-btn')
+                            .isDisabled()
+                            .catch(() => false);
                         if (isLocked) {
                             await lockToggle.click();
                             await page.waitForTimeout(200);
