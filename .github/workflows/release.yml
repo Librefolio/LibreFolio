@@ -30,12 +30,12 @@ jobs:
       # 1. BASE SETUP (Checkout & Environments)
       # ==========================================
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0 # Required for mkdocs gh-deploy (history and branches)
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
           
@@ -43,7 +43,7 @@ jobs:
         run: pip install pipenv
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '24'
 
@@ -51,7 +51,7 @@ jobs:
       # 2. CACHES
       # ==========================================
       - name: Cache Pipenv
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.local/share/virtualenvs
           key: ${{ runner.os }}-pipenv-${{ hashFiles('**/Pipfile.lock') }}
@@ -59,7 +59,7 @@ jobs:
             ${{ runner.os }}-pipenv-
 
       - name: Cache NPM
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.npm
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
@@ -73,7 +73,7 @@ jobs:
         run: echo "PLAYWRIGHT_VERSION=$(node -p "require('./package.json').devDependencies['@playwright/test'].replace(/[\^~]/g, '')" || echo 'fallback')" >> $GITHUB_ENV
 
       - name: Cache Playwright Browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
@@ -139,7 +139,7 @@ jobs:
 
       - name: Cache Gallery Screenshots
         id: cache-screenshots
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             mkdocs_src/docs/gallery/**/*.png
@@ -153,7 +153,14 @@ jobs:
           steps.cache-screenshots.outputs.cache-hit != 'true' ||
           github.event.inputs.force_gallery == 'true'
         timeout-minutes: 120
-        run: pipenv run ./dev.py mkdocs gallery --workers 8
+        # ubuntu-latest (public repo) runners have 4 vCPU. --workers 8 was 2x
+        # oversubscribed, causing heavy CPU contention across Chromium instances
+        # + backend uvicorn workers + node build processes — this was the root
+        # cause of inconsistent per-test timeouts (a different test would time
+        # out on each run). Matched to actual CPU count for stable, predictable
+        # per-test timing (verified locally: --workers 2-3 gives a constant,
+        # non-degrading ~21s/interaction rate with zero flakiness).
+        run: pipenv run ./dev.py mkdocs gallery --workers 4
 
 
       - name: Build MkDocs Documentation
@@ -168,13 +175,13 @@ jobs:
       # 4. DOCKER BUILD & PUSH (Single Image)
       # ==========================================
       - name: Setup QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: GHCR Authentication
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -182,7 +189,7 @@ jobs:
 
       - name: Extract Docker Metadata (Version)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/librefolio/librefolio
           tags: |
@@ -195,7 +202,7 @@ jobs:
 
 
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
@@ -221,7 +228,7 @@ jobs:
       # 6. ARTIFACTS (Optional, for archival)
       # ==========================================
       - name: Archive Generated Screenshots
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: playwright-screenshots
           path: |
