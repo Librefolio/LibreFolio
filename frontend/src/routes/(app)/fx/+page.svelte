@@ -11,7 +11,7 @@
     import {_} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
-    import {getStart, getEnd, setDateRange, resolveDateSentinel} from '$lib/stores/dateRangeStore.svelte';
+    import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {ArrowLeftRight, Coins, Plus, RefreshCw, RotateCw, Settings, Trash2, X} from 'lucide-svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
     import type {FxRow} from '$lib/components/fx/FxTable.svelte';
@@ -59,14 +59,30 @@
     // Filters
     let filterCurrency1 = $state('');
     let filterCurrency2 = $state('');
-    // Date range — global store is source of truth; URL seeds only on fresh page load
-    let dateStart = $state(getStart());
-    let dateEnd = $state(getEnd());
-    let activePreset: any = $state(null);
+    // Date range — global store is source of truth; URL seeds only on fresh page load.
+    // dateStart/dateEnd are ALWAYS a concrete, resolved date (sentinels resolved immediately)
+    // — used everywhere internally (queries, cache, URLs). displayDateStart is the ONLY
+    // thing bound to the picker; it shows the literal "min" sentinel (pending label) until
+    // the real earliest date is extracted from a backend response (see fetchAllPairData).
+    let dateStart = $state(resolveDateSentinel(getStart()));
+    let dateEnd = $state(resolveDateSentinel(getEnd()));
+    const initialIsMaxPending = isMaxSentinel(getStart());
+    let isMaxPending = $state(initialIsMaxPending);
+    // Seeded from the plain `initialIsMaxPending`/`dateStart`'s initial value above (not from
+    // the isMaxPending/dateStart $state bindings) to avoid a state_referenced_locally warning —
+    // displayDateStart is manually resynced elsewhere and bound bidirectionally to
+    // DateRangePicker, so it's intentionally NOT a pure $derived of dateStart/isMaxPending.
+    let displayDateStart = $state(initialIsMaxPending ? 'min' : resolveDateSentinel(getStart()));
+    let activePreset: any = $state(initialIsMaxPending ? 'MAX' : null);
 
-    /** Resolved dates for API calls (sentinels → concrete dates) */
-    let apiDateStart = $derived(resolveDateSentinel(dateStart));
-    let apiDateEnd = $derived(resolveDateSentinel(dateEnd));
+    /**
+     * Sentinel-aware values for building URLs (own history + cross-page nav
+     * links). While "All" is the active selection, these stay "min"/"max"
+     * (generic) instead of a concrete resolved date, for the lifetime of the
+     * selection — not just until the real date is resolved.
+     */
+    let urlDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
+    let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
 
     let globalViewMode = $state<'absolute' | 'percentage'>('absolute');
     let refreshing = $state(false);
@@ -125,7 +141,7 @@
     // Which delta periods are visible for the selected date range
     let visiblePeriods = $derived(
         DELTA_PERIODS.filter((p) => {
-            const rangeMs = new Date(apiDateEnd).getTime() - new Date(apiDateStart).getTime();
+            const rangeMs = new Date(dateEnd).getTime() - new Date(dateStart).getTime();
             const rangeDays = rangeMs / (1000 * 60 * 60 * 24);
             return rangeDays >= p.days;
         }),
@@ -279,6 +295,24 @@
         }
     }
 
+    /**
+     * When "All" (MAX) is pending resolution, extract the real earliest date
+     * across ALL loaded pairs (global minimum) and update dateStart/
+     * displayDateStart. The URL is left untouched — it keeps showing the
+     * generic "min"/"max" sentinel (set in handleDateRangeChange) so the
+     * "All" selection survives reloads/shares instead of freezing to a
+     * specific historical date. No-op once already resolved or if no pair
+     * has any rate data yet.
+     */
+    function resolveMaxStartFromPairs() {
+        if (!isMaxPending) return;
+        const firstDates = pairs.map((p) => p.data?.[0]?.date).filter((d): d is string => !!d);
+        if (firstDates.length === 0) return;
+        dateStart = firstDates.reduce((min, d) => (d < min ? d : min));
+        displayDateStart = dateStart;
+        isMaxPending = false;
+    }
+
     async function fetchAllPairData() {
         if (pairs.length === 0) return;
 
@@ -287,30 +321,32 @@
         for (let i = 0; i < pairs.length; i++) {
             const pair = pairs[i];
             const store = getFxStore(pair.config.slug);
-            if (store.getMissingIntervals(apiDateStart, apiDateEnd).length === 0) {
+            if (store.getMissingIntervals(dateStart, dateEnd).length === 0) {
                 // Fast path: already cached — update data without loading indicator
-                pairs[i] = {...pair, data: store.getRange(apiDateStart, apiDateEnd).data};
+                pairs[i] = {...pair, data: store.getRange(dateStart, dateEnd).data};
             } else {
                 needFetch.push({index: i, slug: pair.config.slug});
                 pairs[i] = {...pair, loading: true};
             }
         }
 
-        if (needFetch.length === 0) return;
+        if (needFetch.length === 0) {
+            resolveMaxStartFromPairs();
+            return;
+        }
 
         // Single bulk call for all pairs with gaps
         try {
-            const bulkResults = await ensureFxRangeLoadedBulk(
-                needFetch.map((nf) => ({slug: nf.slug, start: apiDateStart, end: apiDateEnd})),
-            );
+            const bulkResults = await ensureFxRangeLoadedBulk(needFetch.map((nf) => ({slug: nf.slug, start: dateStart, end: dateEnd})));
             for (const nf of needFetch) {
                 const data = bulkResults.get(nf.slug) ?? [];
                 pairs[nf.index] = {...pairs[nf.index], data, loading: false};
             }
+            resolveMaxStartFromPairs();
         } catch {
             // Fallback: update with whatever is cached
             for (const nf of needFetch) {
-                const existingData = getFxStore(nf.slug).getRange(apiDateStart, apiDateEnd).data;
+                const existingData = getFxStore(nf.slug).getRange(dateStart, dateEnd).data;
                 pairs[nf.index] = {...pairs[nf.index], data: existingData, loading: false};
             }
         }
@@ -322,18 +358,18 @@
 
         // Fast path: data fully cached — update without showing loading spinner
         const store = getFxStore(pair.config.slug);
-        if (store.getMissingIntervals(apiDateStart, apiDateEnd).length === 0) {
-            pairs[index] = {...pair, data: store.getRange(apiDateStart, apiDateEnd).data};
+        if (store.getMissingIntervals(dateStart, dateEnd).length === 0) {
+            pairs[index] = {...pair, data: store.getRange(dateStart, dateEnd).data};
             return;
         }
 
         pairs[index] = {...pair, loading: true};
 
         try {
-            const loaded = await ensureFxRangeLoaded(pair.config.slug, apiDateStart, apiDateEnd);
+            const loaded = await ensureFxRangeLoaded(pair.config.slug, dateStart, dateEnd);
             pairs[index] = {...pair, data: loaded, loading: false};
         } catch (e: any) {
-            const existingData = getFxStore(pair.config.slug).getRange(apiDateStart, apiDateEnd).data;
+            const existingData = getFxStore(pair.config.slug).getRange(dateStart, dateEnd).data;
             pairs[index] = {...pair, data: existingData, loading: false};
             if (e?.response?.status !== 404) {
                 console.error(`Failed to fetch data for ${pair.config.slug}:`, e);
@@ -444,7 +480,7 @@
         const idx = pairs.findIndex((p) => p.config.slug === detail.slug);
         if (idx < 0) return;
         const store = getFxStore(detail.slug);
-        store.invalidateRange(apiDateStart, apiDateEnd);
+        store.invalidateRange(dateStart, dateEnd);
         await fetchPairData(idx);
     }
 
@@ -498,11 +534,16 @@
     }
 
     function handleDateRangeChange(newStart: string, newEnd: string) {
-        dateStart = newStart;
-        dateEnd = newEnd;
+        isMaxPending = isMaxSentinel(newStart);
+        dateStart = resolveDateSentinel(newStart);
+        dateEnd = resolveDateSentinel(newEnd);
+        displayDateStart = isMaxPending ? 'min' : dateStart;
         setDateRange(newStart, newEnd);
-        // Sync URL for shareability + navigationStore tracking
-        gotoDateRange(dateStart, dateEnd);
+        // Sync URL for shareability + navigationStore tracking. Keep the generic
+        // "min"/"max" sentinel when "All" is selected (instead of a concrete
+        // resolved date) so the URL stays meaningful across reloads/shares and
+        // the "All" badge doesn't look stuck on a specific historical date.
+        gotoDateRange(newStart, newEnd);
         fetchAllPairData();
     }
 
@@ -612,8 +653,8 @@
         try {
             const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
                 pairs: [slug],
-                start: apiDateStart,
-                end: apiDateEnd,
+                start: dateStart,
+                end: dateEnd,
             });
             const r = (response as any)?.results?.[0];
             if (r) {
@@ -623,7 +664,7 @@
             }
             // After sync, refresh the pair
             const store = getFxStore(slug);
-            store.invalidateRange(apiDateStart, apiDateEnd);
+            store.invalidateRange(dateStart, dateEnd);
             await fetchPairData(idx);
         } catch (e: any) {
             toasts.error(get(_)('fx.sync.toastFailed', {values: {pair: slug.replace('-', '/')}}));
@@ -705,7 +746,7 @@
         >
             <!-- DateRangePicker -->
             <div class="max-w-md" data-testid="fx-date-range-picker">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={dateStart} compact={true} onchange={handleDateRangeChange} />
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} onchange={handleDateRangeChange} />
             </div>
 
             <!-- Currency Filters — always grouped as a pair -->
@@ -847,8 +888,8 @@
                     slug={pair.config.slug}
                     data={pair.data}
                     loading={pair.loading}
-                    {dateStart}
-                    {dateEnd}
+                    dateStart={urlDateStart}
+                    dateEnd={urlDateEnd}
                     manualOnly={pair.config.providers.length === 1 && pair.config.providers[0].providerCode === 'MANUAL'}
                     {globalViewMode}
                     chartSettings={getSettingsForPair(pair.config.slug, 'fx')}
@@ -867,8 +908,8 @@
             data={fxTableRows}
             loading={false}
             {visiblePeriods}
-            {dateStart}
-            {dateEnd}
+            dateStart={urlDateStart}
+            dateEnd={urlDateEnd}
             onsync={handleSyncPair}
             onrefresh={handleRefreshPair}
             ondelete={handleDeletePair}

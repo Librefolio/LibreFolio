@@ -56,7 +56,7 @@
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
-    import {getStart, getEnd, setDateRange, resolveDateSentinel} from '$lib/stores/dateRangeStore.svelte';
+    import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {fetchCurrentPrices} from '$lib/services/livePriceService';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
@@ -95,8 +95,29 @@
 
     // Date range — global store is source of truth (resolve min/max sentinels for API)
     let dateEnd = $state(resolveDateSentinel(getEnd()));
-    let dateStart = $state(resolveDateSentinel(getStart()));
-    let activePreset: any = $state(null);
+    const initialStart = getStart();
+    let dateStart = $state(resolveDateSentinel(initialStart));
+    // Whether "All" (MAX) is the active semantic choice and its real earliest date
+    // hasn't been resolved yet from backend data (survives navigation via the store).
+    const initialIsMaxPending = isMaxSentinel(initialStart);
+    let isMaxPending = $state(initialIsMaxPending);
+    // Bound to the picker's `start` — shows the literal "min" sentinel (pending
+    // label) while isMaxPending, otherwise mirrors the resolved dateStart.
+    // Seeded from the plain `initialIsMaxPending`/`initialStart` above (not from the
+    // dateStart/isMaxPending $state bindings) to avoid a state_referenced_locally warning —
+    // displayDateStart is manually resynced elsewhere and bound bidirectionally to
+    // DateRangePicker, so it's intentionally NOT a pure $derived of dateStart/isMaxPending.
+    let displayDateStart = $state(initialIsMaxPending ? 'min' : resolveDateSentinel(initialStart));
+    let activePreset: any = $state(initialIsMaxPending ? 'MAX' : null);
+
+    /**
+     * Sentinel-aware values for building URLs (own history + cross-page nav
+     * links). While "All" is the active selection, these stay "min"/"max"
+     * (generic) instead of a concrete resolved date, for the lifetime of the
+     * selection — not just until the real date is resolved.
+     */
+    let urlDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
+    let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
 
     let viewMode: ViewMode = $state('percentage');
     let chartType: ChartType = $state('line');
@@ -284,7 +305,7 @@
         if (!fxPairSlug) return undefined;
         const main = requiredFxPairs.find((p) => p.slug === fxPairSlug);
         if (!main || main.status !== 'ok') return undefined;
-        return `/fx/${fxPairSlug}?start=${dateStart}&end=${dateEnd}`;
+        return `/fx/${fxPairSlug}?start=${urlDateStart}&end=${urlDateEnd}`;
     });
 
     /**
@@ -489,7 +510,7 @@
             fxPairCreateSlug = target;
             showFxPairAddModal = true;
         } else if (action === 'navigate_fx' && target) {
-            goto(`/fx/${target}?start=${dateStart}&end=${dateEnd}`);
+            goto(`/fx/${target}?start=${urlDateStart}&end=${urlDateEnd}`);
         } else if (action === 'sync_fx' && target) {
             handleSyncPair(target);
         }
@@ -827,6 +848,21 @@
         }
     }
 
+    /**
+     * When "All" (MAX) is pending resolution, extract the real earliest date
+     * from just-loaded chart data and update dateStart/displayDateStart.
+     * The URL is left untouched — it keeps showing the generic "min"/"max"
+     * sentinel (set in handleDateRangeChange) so the "All" selection survives
+     * reloads/shares instead of freezing to a specific historical date.
+     * No-op once already resolved or if there's no data yet.
+     */
+    function resolveMaxStartFromChartData() {
+        if (!isMaxPending || chartData.length === 0) return;
+        dateStart = chartData[0].date;
+        displayDateStart = dateStart;
+        isMaxPending = false;
+    }
+
     async function loadChartData(force = false) {
         const effectiveCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : (assetInfo?.currency ?? '');
         const targetCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : undefined;
@@ -854,6 +890,7 @@
                 } else {
                     error = null;
                 }
+                resolveMaxStartFromChartData();
                 return;
             }
         }
@@ -888,6 +925,7 @@
             if (chartData.length === 0 && !error) {
                 error = '_i18n:assetDetail.noData';
             }
+            resolveMaxStartFromChartData();
         } catch (e: any) {
             console.error('Failed to load chart data:', e);
             if (chartData.length === 0) error = e?.message || 'Failed to load prices';
@@ -1173,11 +1211,16 @@
     }
 
     async function handleDateRangeChange(newStart: string, newEnd: string) {
+        isMaxPending = isMaxSentinel(newStart);
         dateStart = resolveDateSentinel(newStart);
         dateEnd = resolveDateSentinel(newEnd);
+        displayDateStart = isMaxPending ? 'min' : dateStart;
         setDateRange(newStart, newEnd);
-        // Sync URL for shareability
-        replaceHistoryDateRange(dateStart, dateEnd);
+        // Sync URL for shareability. Keep the generic "min"/"max" sentinel when
+        // "All" is selected (instead of a concrete resolved date) so the URL
+        // stays meaningful across reloads/shares and the "All" badge doesn't
+        // look stuck on a specific historical date.
+        replaceHistoryDateRange(newStart, newEnd);
         await loadChartData();
         await maybeLoadComparison();
     }
@@ -1290,7 +1333,7 @@
     }
 
     function handleDetailAsset(assetId: number) {
-        goto(`/assets/${assetId}?start=${dateStart}&end=${dateEnd}`);
+        goto(`/assets/${assetId}?start=${urlDateStart}&end=${urlDateEnd}`);
     }
 
     async function handleSyncPair(slug: string) {
@@ -1320,7 +1363,7 @@
     }
 
     function handleDetailPair(slug: string) {
-        goto(`/fx/${slug}?start=${dateStart}&end=${dateEnd}`);
+        goto(`/fx/${slug}?start=${urlDateStart}&end=${urlDateEnd}`);
     }
 
     async function handleAssetUpdated() {
@@ -1459,7 +1502,7 @@
         <!-- Filters block: wide+tablet = row (side by side), tablet-s = column (stacked), mobile = centered -->
         <div class="flex gap-3 {layout.layoutMode === 'mobile' ? 'flex-col items-center' : layout.layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : 'flex-row items-center flex-1'}">
             <div class="max-w-md">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={dateStart} compact={true} onchange={handleDateRangeChange} />
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} onchange={handleDateRangeChange} />
             </div>
 
             {#if assetInfo}
@@ -1807,6 +1850,7 @@
                         if (expandedRange) {
                             dateStart = expandedRange.start;
                             dateEnd = expandedRange.end;
+                            displayDateStart = isMaxPending ? 'min' : dateStart;
                         }
                         await handleRefresh();
                     }}

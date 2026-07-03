@@ -23,7 +23,7 @@
     import {zodiosApi} from '$lib/api';
     import {ensureBrokersLoaded} from '$lib/stores/reference/brokerStore';
     import {globalSettings} from '$lib/stores/app/globalSettings';
-    import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
+    import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
@@ -78,9 +78,33 @@
     /** Debounce timer for broker filter changes. */
     let reloadTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 
-    /** Date range — backed by global store (shared with assets/fx pages). */
-    let dateFrom = $state(getStart());
-    let dateTo = $state(getEnd());
+    /**
+     * Date range — backed by global store (shared with assets/fx pages).
+     * dateFrom/dateTo are ALWAYS a concrete, resolved date (sentinels resolved
+     * immediately) — used everywhere internally (report queries, AI export).
+     * displayDateFrom is the ONLY thing bound to the picker; it shows the
+     * literal "min" sentinel (pending label) until the real earliest date is
+     * extracted from the loaded portfolio history (see loadAll).
+     */
+    let dateFrom = $state(resolveDateSentinel(getStart()));
+    let dateTo = $state(resolveDateSentinel(getEnd()));
+    const initialIsMaxPending = isMaxSentinel(getStart());
+    let isMaxPending = $state(initialIsMaxPending);
+    // Seeded from the plain `initialIsMaxPending`/`dateFrom`'s initial value above (not from
+    // the isMaxPending/dateFrom $state bindings) to avoid a state_referenced_locally warning —
+    // displayDateFrom is manually resynced elsewhere and bound bidirectionally to
+    // DateRangePicker, so it's intentionally NOT a pure $derived of dateFrom/isMaxPending.
+    let displayDateFrom = $state(initialIsMaxPending ? 'min' : resolveDateSentinel(getStart()));
+    /** Bound to the picker so the "All" badge stays highlighted regardless of dateFrom/isMaxPending resolving to a concrete date. */
+    let activePreset: any = $state(initialIsMaxPending ? 'MAX' : null);
+
+    /**
+     * Sentinel-aware values for building "See all" links (assets/transactions).
+     * While "All" is the active selection, these stay "min"/"max" (generic)
+     * instead of a concrete resolved date, for the lifetime of the selection.
+     */
+    let urlDateFrom = $derived(activePreset === 'MAX' ? 'min' : dateFrom);
+    let urlDateTo = $derived(activePreset === 'MAX' ? 'max' : dateTo);
 
     /** Display currency override — always concrete, defaults to user base currency. */
     let targetCurrency = $state($globalSettings.default_currency || 'EUR');
@@ -415,8 +439,8 @@
     const fmtPct = (v: number) => `${v.toFixed(2)}%`;
 
     /** URL for "See all" assets link — preserves current date range. */
-    const assetsHref = $derived(`/assets?start=${dateFrom}&end=${dateTo}`);
-    const transactionsHref = $derived(`/transactions?start=${dateFrom}&end=${dateTo}`);
+    const assetsHref = $derived(`/assets?start=${urlDateFrom}&end=${urlDateTo}`);
+    const transactionsHref = $derived(`/transactions?start=${urlDateFrom}&end=${urlDateTo}`);
 
     // =========================================================================
     // Loaders
@@ -432,6 +456,18 @@
         void force;
     }
 
+    /**
+     * When "All" (MAX) is pending resolution, extract the real earliest date
+     * from the just-loaded portfolio history and update dateFrom/displayDateFrom.
+     * No-op once already resolved or if there's no history data yet.
+     */
+    function resolveMaxStartFromHistory() {
+        if (!isMaxPending || history.length === 0) return;
+        dateFrom = history[0].date;
+        displayDateFrom = dateFrom;
+        isMaxPending = false;
+    }
+
     async function loadAll(force = false) {
         // Invalidate allocation history cache whenever filters change
         allocationHistoryCacheKey = null;
@@ -444,6 +480,7 @@
             allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
             // Contribution data comes from the same report when requested
             positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
+            resolveMaxStartFromHistory();
         } finally {
             reportLoading = false;
         }
@@ -499,8 +536,10 @@
     }
 
     function handleDateChange(from: string, to: string) {
-        dateFrom = from;
-        dateTo = to;
+        isMaxPending = isMaxSentinel(from);
+        dateFrom = resolveDateSentinel(from);
+        dateTo = resolveDateSentinel(to);
+        displayDateFrom = isMaxPending ? 'min' : dateFrom;
         setDateRange(from, to);
         void loadAll();
     }
@@ -516,13 +555,18 @@
         aiExportDropdownOpen = false;
         aiExportLoading = true;
         try {
-            await copyAiExport(mode, {
-                brokerIds: activeBrokerIds ?? undefined,
-                dateFrom: dateFrom || undefined,
-                dateTo: dateTo || undefined,
-                targetCurrency: targetCurrency,
-                locale: $currentLanguage,
-            }, toasts, $_);
+            await copyAiExport(
+                mode,
+                {
+                    brokerIds: activeBrokerIds ?? undefined,
+                    dateFrom: dateFrom || undefined,
+                    dateTo: dateTo || undefined,
+                    targetCurrency: targetCurrency,
+                    locale: $currentLanguage,
+                },
+                toasts,
+                $_,
+            );
         } finally {
             aiExportLoading = false;
         }
@@ -568,7 +612,7 @@
         data-testid="dashboard-filter-bar"
     >
         <!-- LEFT: Date range picker (wired to global store) -->
-        <DateRangePicker bind:start={dateFrom} bind:end={dateTo} compact={true} onchange={handleDateChange} />
+        <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} onchange={handleDateChange} />
 
         <!-- CENTER-LEFT: Currency override selector -->
         <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
@@ -668,12 +712,7 @@
 
             {#if aiExportDropdownOpen}
                 <div class="absolute right-0 z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" data-ai-export-panel>
-                    <button
-                        type="button"
-                        class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-                        onclick={() => handleAiExport('full')}
-                        data-testid="ai-export-full"
-                    >
+                    <button type="button" class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" onclick={() => handleAiExport('full')} data-testid="ai-export-full">
                         <Brain size={14} class="text-purple-500" />
                         {$_('dashboard.aiExportFull')}
                     </button>
