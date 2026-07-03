@@ -132,6 +132,9 @@
     // This ensures badges highlight correctly even when dates come from URL params.
     let effectivePreset = $derived.by(() => {
         if (activePreset) return activePreset;
+        // "min" is the MAX/"All" sentinel — may still be pending resolution to a
+        // concrete date by the controller, but the badge should highlight regardless.
+        if (start === 'min') return 'MAX';
         if (!start || !end) return null;
         const today = todayISO();
         // End must be today (presets always go "backwards from today")
@@ -490,6 +493,12 @@
 
     function displayDate(iso: string): string {
         if (!iso) return '—';
+        // "min" is the MAX/"All" sentinel, pending resolution to a concrete date
+        // by the controller (once the real earliest date is known from backend data).
+        if (iso === 'min') return $_('datePicker.resolvingStart');
+        // "max" should never persist (controllers resolve it to today immediately),
+        // kept only as a defensive fallback.
+        if (iso === 'max') return displayDate(todayISO());
         if (compact) return iso; // YYYY-MM-DD — fits narrow cells
         const d = new Date(iso + 'T00:00:00');
         return d.toLocaleDateString('en', {day: '2-digit', month: 'short', year: 'numeric'});
@@ -497,8 +506,8 @@
 
     /** Highlights object for CalendarMonth instances */
     let calHighlights: CalendarHighlights = $derived({
-        rangeStart: start || undefined,
-        rangeEnd: end || undefined,
+        rangeStart: start === 'min' ? undefined : start || undefined,
+        rangeEnd: end === 'max' ? undefined : end || undefined,
         pending: pendingDate ?? undefined,
         hovered: hoveredDate ?? undefined,
     });

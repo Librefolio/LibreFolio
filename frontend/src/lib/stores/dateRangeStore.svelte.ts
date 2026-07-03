@@ -128,6 +128,15 @@ export function resolveDateSentinel(value: string): string {
 }
 
 /**
+ * True when `value` is the "min" sentinel (i.e. the "All" / MAX preset is
+ * the active semantic choice, regardless of whether it has been resolved to
+ * a concrete date yet).
+ */
+export function isMaxSentinel(value: string): boolean {
+    return value === 'min';
+}
+
+/**
  * Get start/end with sentinels resolved for non-sentinel APIs.
  */
 export function getResolvedStart(): string {

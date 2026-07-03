@@ -40,7 +40,7 @@
     import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
-    import {getStart, getEnd, setDateRange, resolveDateSentinel} from '$lib/stores/dateRangeStore.svelte';
+    import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
@@ -129,17 +129,33 @@
     let filterShowActive = $state(true);
     let filterShowInactive = $state(false);
 
-    // Date range — global store is source of truth; URL seeds only on fresh page load
-    let dateStart = $state(getStart());
-    let dateEnd = $state(getEnd());
-    let activePreset: any = $state(null);
+    // Date range — global store is source of truth; URL seeds only on fresh page load.
+    // dateStart/dateEnd are ALWAYS a concrete, resolved date (sentinels resolved immediately)
+    // — used everywhere internally (queries, cache, URLs). displayDateStart is the ONLY
+    // thing bound to the picker; it shows the literal "min" sentinel (pending label) until
+    // the real earliest date is extracted from a backend response (see fetchAllPriceData).
+    let dateStart = $state(resolveDateSentinel(getStart()));
+    let dateEnd = $state(resolveDateSentinel(getEnd()));
+    const initialIsMaxPending = isMaxSentinel(getStart());
+    let isMaxPending = $state(initialIsMaxPending);
+    // Seeded from the plain `initialIsMaxPending`/`dateStart`'s initial value above (not from
+    // the isMaxPending/dateStart $state bindings) to avoid a state_referenced_locally warning —
+    // displayDateStart is manually resynced elsewhere and bound bidirectionally to
+    // DateRangePicker, so it's intentionally NOT a pure $derived of dateStart/isMaxPending.
+    let displayDateStart = $state(initialIsMaxPending ? 'min' : resolveDateSentinel(getStart()));
+    let activePreset: any = $state(initialIsMaxPending ? 'MAX' : null);
 
-    /** Resolved dates for API calls (sentinels → concrete dates) */
-    let apiDateStart = $derived(resolveDateSentinel(dateStart));
-    let apiDateEnd = $derived(resolveDateSentinel(dateEnd));
+    /**
+     * Sentinel-aware values for building URLs (own history + cross-page nav
+     * links). While "All" is the active selection, these stay "min"/"max"
+     * (generic) instead of a concrete resolved date, for the lifetime of the
+     * selection — not just until the real date is resolved.
+     */
+    let urlDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
+    let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
 
     /** True when the date range ends today (or later) → show live prices from providers */
-    let isHeadToday = $derived(apiDateEnd >= new Date().toISOString().slice(0, 10));
+    let isHeadToday = $derived(dateEnd >= new Date().toISOString().slice(0, 10));
 
     // View mode
     let viewMode = $state<'grid' | 'list'>('grid');
@@ -226,7 +242,7 @@
     // Which delta periods are visible for the selected date range
     let visiblePeriods = $derived(
         DELTA_PERIODS.filter((p) => {
-            const rangeMs = new Date(apiDateEnd).getTime() - new Date(apiDateStart).getTime();
+            const rangeMs = new Date(dateEnd).getTime() - new Date(dateStart).getTime();
             const rangeDays = rangeMs / (1000 * 60 * 60 * 24);
             return rangeDays >= p.days;
         }),
@@ -374,6 +390,24 @@
         }
     }
 
+    /**
+     * When "All" (MAX) is pending resolution, extract the real earliest date
+     * across ALL loaded assets (global minimum) and update dateStart/
+     * displayDateStart. The URL is left untouched — it keeps showing the
+     * generic "min"/"max" sentinel (set in handleDateRangeChange) so the
+     * "All" selection survives reloads/shares instead of freezing to a
+     * specific historical date. No-op once already resolved or if no asset
+     * has any price data yet.
+     */
+    function resolveMaxStartFromAssets() {
+        if (!isMaxPending) return;
+        const firstDates = assets.map((a) => a.chartData?.[0]?.date).filter((d): d is string => !!d);
+        if (firstDates.length === 0) return;
+        dateStart = firstDates.reduce((min, d) => (d < min ? d : min));
+        displayDateStart = dateStart;
+        isMaxPending = false;
+    }
+
     async function fetchAllPriceData() {
         if (assets.length === 0) return;
 
@@ -382,9 +416,9 @@
         const needFetch: AssetState[] = [];
         for (const asset of assets) {
             const store = getAssetPriceStore(asset.id, asset.currency);
-            const gaps = store.getMissingIntervals(apiDateStart, apiDateEnd);
+            const gaps = store.getMissingIntervals(dateStart, dateEnd);
             if (gaps.length === 0) {
-                const rangeData = store.getRange(apiDateStart, apiDateEnd).data;
+                const rangeData = store.getRange(dateStart, dateEnd).data;
                 cached.set(
                     asset.id,
                     rangeData.map((p) => ({
@@ -406,6 +440,7 @@
         // If all cached — update instantly, no loading indicators
         if (needFetch.length === 0) {
             assets = assets.map((asset) => buildAssetStateFromPrices(asset, cached.get(asset.id) ?? []));
+            resolveMaxStartFromAssets();
             return;
         }
 
@@ -416,7 +451,7 @@
             // Bulk query only assets with gaps
             const queries = needFetch.map((a) => ({
                 asset_id: a.id,
-                date_range: {start: apiDateStart, end: apiDateEnd},
+                date_range: {start: dateStart, end: dateEnd},
             }));
 
             const response = (await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(queries)) as any;
@@ -432,7 +467,7 @@
                 if (asset && prices.length > 0) {
                     const store = getAssetPriceStore(asset.id, asset.currency);
                     store.merge(apiPricesToAssetPricePoints(prices));
-                    store.markFetched(apiDateStart, apiDateEnd);
+                    store.markFetched(dateStart, dateEnd);
                 }
             }
 
@@ -441,6 +476,7 @@
                 const prices = cached.get(asset.id) ?? resultMap.get(asset.id) ?? [];
                 return buildAssetStateFromPrices(asset, prices);
             });
+            resolveMaxStartFromAssets();
         } catch (e: any) {
             console.error('Failed to fetch prices bulk:', e);
             // For cached assets, still use cached data; for others, clear loading
@@ -491,11 +527,16 @@
     }
 
     function handleDateRangeChange(newStart: string, newEnd: string) {
-        dateStart = newStart;
-        dateEnd = newEnd;
+        isMaxPending = isMaxSentinel(newStart);
+        dateStart = resolveDateSentinel(newStart);
+        dateEnd = resolveDateSentinel(newEnd);
+        displayDateStart = isMaxPending ? 'min' : dateStart;
         setDateRange(newStart, newEnd);
-        // Sync URL for shareability + navigationStore tracking
-        gotoDateRange(dateStart, dateEnd);
+        // Sync URL for shareability + navigationStore tracking. Keep the generic
+        // "min"/"max" sentinel when "All" is selected (instead of a concrete
+        // resolved date) so the URL stays meaningful across reloads/shares and
+        // the "All" badge doesn't look stuck on a specific historical date.
+        gotoDateRange(newStart, newEnd);
         fetchAllPriceData();
     }
 
@@ -552,7 +593,7 @@
             const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
                 {
                     asset_id: asset.id,
-                    date_range: {start: apiDateStart, end: apiDateEnd},
+                    date_range: {start: dateStart, end: dateEnd},
                 },
             ]);
             const r = (response as any)?.results?.[0];
@@ -736,7 +777,7 @@
     /** Fetch FX rate data for all configured pairs (populates FxStores) */
     async function loadFxRateData() {
         const promises = fxPairSlugs.map(async (slug) => {
-            await ensureFxRangeLoaded(slug, apiDateStart, apiDateEnd);
+            await ensureFxRangeLoaded(slug, dateStart, dateEnd);
         });
         await Promise.allSettled(promises);
     }
@@ -890,7 +931,7 @@
         >
             <!-- DateRangePicker -->
             <div class="max-w-md" data-testid="assets-date-range">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={dateStart} compact={true} onchange={handleDateRangeChange} />
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} onchange={handleDateRangeChange} />
             </div>
 
             <!-- Filters 2×2 block (tablet+tablet-s) / inline (wide) / stacked (mobile) -->
@@ -1155,9 +1196,8 @@
                     livePriceDirection={livePriceMap.get(asset.id)?.direction ?? 'neutral'}
                     deltaPercent={asset.deltaPercent}
                     deltaAbs={asset.deltaAbs}
-                    {dateStart}
-                    {dateEnd}
-                    {globalViewMode}
+                    dateStart={urlDateStart}
+                    dateEnd={urlDateEnd}
                     chartSettings={getSettingsForPair(`asset-${asset.id}`, 'assets')}
                     renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
                     chartData={asset.chartData}
@@ -1178,8 +1218,8 @@
             loading={false}
             {visiblePeriods}
             {livePriceMap}
-            {dateStart}
-            {dateEnd}
+            dateStart={urlDateStart}
+            dateEnd={urlDateEnd}
             onsync={handleSyncAsset}
             onrefresh={handleRefreshAsset}
             ondelete={handleDeleteAsset}

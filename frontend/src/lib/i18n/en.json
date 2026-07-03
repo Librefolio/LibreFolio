@@ -860,7 +860,6 @@
     "unrealizedPnl": "Unrealized P&L",
     "realized": "Realized",
     "costs": "Costs",
-    "impact": "Impact",
     "unallocated": "Unallocated",
     "sharedScale": "Shared scale: 100% = max(gains, losses)",
     "noPositions": "No positions available",
@@ -875,7 +874,9 @@
     "aiExportCopiedData": "Portfolio data copied to clipboard",
     "aiExportFailed": "Failed to copy to clipboard",
     "aiExportEmpty": "No portfolio data to export",
-    "aiExportBuilding": "Building export…"
+    "aiExportBuilding": "Building export…",
+    "costsTooltip": "Fees and taxes recorded in the selected period.",
+    "periodPnlTooltip": "Total gain or loss attributable to the selected period only (unrealized change + realized + income − fees). May differ from the position's total lifetime gain."
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",
@@ -965,7 +966,8 @@
       "yearsShort": "Y"
     },
     "info": "Preset windows always go from N days/weeks/months/years before today to today. For a custom date range, use the calendar picker below.",
-    "today": "Today"
+    "today": "Today",
+    "resolvingStart": "Finding…"
   },
   "error": {
     "pageNotFound": "Page Not Found",

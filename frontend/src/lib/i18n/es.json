@@ -860,7 +860,6 @@
     "unrealizedPnl": "P&L no realizado",
     "realized": "Realizado",
     "costs": "Costes",
-    "impact": "Impacto",
     "unallocated": "No asignado",
     "sharedScale": "Escala compartida: 100% = máx(ganancias, pérdidas)",
     "noPositions": "Sin posiciones disponibles",
@@ -875,7 +874,9 @@
     "aiExportCopiedData": "Datos del portafolio copiados",
     "aiExportFailed": "Error al copiar al portapapeles",
     "aiExportEmpty": "No hay datos de portafolio para exportar",
-    "aiExportBuilding": "Preparando exportación…"
+    "aiExportBuilding": "Preparando exportación…",
+    "costsTooltip": "Comisiones e impuestos registrados en el período seleccionado.",
+    "periodPnlTooltip": "Ganancia o pérdida total atribuible solo al período seleccionado (cambio no realizado + realizado + ingresos − comisiones). Puede diferir de la ganancia total de la posición."
   },
   "dataQuality": {
     "headerInfoOnly": "Nota de calidad de datos",
@@ -965,7 +966,8 @@
       "yearsShort": "A"
     },
     "info": "Las ventanas preestablecidas van siempre desde N días/semanas/meses/años antes de hoy hasta hoy. Para un rango personalizado, use el calendario de abajo.",
-    "today": "Hoy"
+    "today": "Hoy",
+    "resolvingStart": "Buscando…"
   },
   "error": {
     "pageNotFound": "Página No Encontrada",

@@ -860,7 +860,6 @@
     "unrealizedPnl": "P&L latent",
     "realized": "Réalisé",
     "costs": "Coûts",
-    "impact": "Impact",
     "unallocated": "Non alloué",
     "sharedScale": "Échelle partagée: 100% = max(gains, pertes)",
     "noPositions": "Aucune position disponible",
@@ -875,7 +874,9 @@
     "aiExportCopiedData": "Données du portefeuille copiées",
     "aiExportFailed": "Échec de la copie dans le presse-papiers",
     "aiExportEmpty": "Aucune donnée de portefeuille à exporter",
-    "aiExportBuilding": "Préparation de l'export…"
+    "aiExportBuilding": "Préparation de l'export…",
+    "costsTooltip": "Commissions et taxes enregistrées dans la période sélectionnée.",
+    "periodPnlTooltip": "Gain ou perte total attribuable uniquement à la période sélectionnée (variation non réalisée + réalisé + revenu − frais). Peut différer du gain total de la position."
   },
   "dataQuality": {
     "headerInfoOnly": "Note de qualité des données",
@@ -965,7 +966,8 @@
       "yearsShort": "A"
     },
     "info": "Les fenêtres prédéfinies vont toujours de N jours/semaines/mois/années avant aujourd'hui à aujourd'hui. Pour un intervalle personnalisé, utilisez le calendrier ci-dessous.",
-    "today": "Aujourd'hui"
+    "today": "Aujourd'hui",
+    "resolvingStart": "Recherche…"
   },
   "error": {
     "pageNotFound": "Page Non Trouvée",
