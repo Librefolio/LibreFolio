@@ -17,6 +17,7 @@ from backend.app.schemas.utilities import (
     CurrencyListItem,
     CurrencyListResponse,
     CurrencyNormalizationResponse,
+    SectorItem,
     SectorListResponse,
 )
 from backend.app.utils.currency_utils import (
@@ -125,16 +126,37 @@ async def list_sectors(include_other: bool = Query(True, description="Include 'O
     }
     ```
     """
+    SECTOR_EMOJI: dict[str, str] = {
+        "Industrials": "🏭",
+        "Technology": "💻",
+        "Financials": "🏦",
+        "Consumer Discretionary": "🛍️",
+        "Health Care": "🏥",
+        "Real Estate": "🏠",
+        "Basic Materials": "⛏️",
+        "Energy": "⚡",
+        "Consumer Staples": "🛒",
+        "Telecommunication": "📡",
+        "Utilities": "💡",
+        "Other": "📦",
+        "Liquidity": "💰",
+        "Unknown": "❓",
+    }
+
     if include_other:
         sectors = FinancialSector.list_all_with_other()
     else:
         sectors = FinancialSector.list_all()
 
-    return SectorListResponse(items=sectors)
+    items = [SectorItem(key=s, emoji=SECTOR_EMOJI.get(s, "📊")) for s in sectors]
+    return SectorListResponse(items=items)
 
 
 @router.get("/countries", response_model=CountryListResponse)
-async def list_countries(language: str = Query("en", description="Language for country names (default: en)")):
+async def list_countries(
+    language: str = Query("en", description="Language for country names (default: en)"),
+    include_other: bool = Query(True, description="Append 'Other' catch-all entry at the end"),
+):
     """
     Get list of all countries with ISO codes and flag emoji.
 
@@ -143,6 +165,9 @@ async def list_countries(language: str = Query("en", description="Language for c
     - ISO-3166-A2 code (e.g., US)
     - Country name in requested language (via Babel)
     - Flag emoji (e.g., 🇺🇸)
+
+    When `include_other` is True (default), an additional "Other" entry
+    is appended at the end for catch-all geographic allocation.
 
     **Supported Languages**:
     - en (English) - default
@@ -173,6 +198,11 @@ async def list_countries(language: str = Query("en", description="Language for c
     """
     countries_data = list_countries_util(language)
     countries = [CountryListItem(**c) for c in countries_data]
+
+    if include_other:
+        OTHER_NAMES = {"en": "Other", "it": "Altro", "fr": "Autre", "es": "Otro"}
+        other_name = OTHER_NAMES.get(language, "Other")
+        countries.append(CountryListItem(iso3="Other", iso2="XX", name=other_name, flag_emoji="🏳️"))
 
     return CountryListResponse(items=countries, language=language)
 

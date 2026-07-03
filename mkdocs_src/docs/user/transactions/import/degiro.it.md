@@ -32,7 +32,3 @@ Per esportare le tue transazioni da Degiro:
 
 - Supporta operazioni di acquisto/vendita, dividendi, commissioni di transazione, depositi e prelievi.
 - Le conversioni valutarie effettuate da Degiro vengono elaborate automaticamente.
-
-## 🔗 Riferimenti per Sviluppatori
-
-→ [Degiro Provider — Dettagli di Implementazione](../../../developer/backend/brim/providers_list.md)

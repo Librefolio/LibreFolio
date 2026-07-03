@@ -38,9 +38,15 @@ Création de compte facile avec une indication de la force du mot de passe.
 Votre portefeuille en un coup d'œil — statistiques clés, graphiques d'allocation et un état vide épuré pour les nouveaux utilisateurs.
 
 <div class="lf-screenshot-carousel lf-mobile-carousel" data-carousel="carousel-mobile-0" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Vue principale" alt="Tableau de bord principal">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-charts" data-title="📊 Allocation & Composition" alt="Graphiques d'allocation du tableau de bord">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="empty-state" data-title="🌱 Nouveau portefeuille (état vide)" alt="État vide du tableau de bord">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Vue principale (Absolue)" alt="📈 Vue principale (Absolue)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📈 Vue principale (Pourcentage)" alt="📈 Vue principale (Pourcentage)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Allocation par Type (Actuelle)" alt="📊 Allocation par Type (Actuelle)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-history" data-title="📊 Allocation par Type (Historique)" alt="📊 Allocation par Type (Historique)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-now" data-title="📊 Allocation par Secteur (Actuelle)" alt="📊 Allocation par Secteur (Actuelle)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-history" data-title="📊 Allocation par Secteur (Historique)" alt="📊 Allocation par Secteur (Historique)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-now" data-title="📊 Allocation Géographique (Actuelle)" alt="📊 Allocation Géographique (Actuelle)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-history" data-title="📊 Allocation Géographique (Historique)" alt="📊 Allocation Géographique (Historique)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="empty-state" data-title="🌱 Nouveau portefeuille (état vide)" alt="🌱 Nouveau portefeuille (état vide)">
 </div>
 
 ### ☰ Menu de Navigation
@@ -120,6 +126,7 @@ Importez des transactions depuis les fichiers d'exportation de votre courtier �
  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Modale rapide" alt="Modale d'importation">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step1" data-title="🧙 Étape 1 : Téléchargement" alt="Assistant d'importation Étape 1">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Étape 2 : Analyseur" alt="Assistant d'importation Étape 2">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step3" data-title="🧠 Étape 3 : Analyse" alt="Assistant d'importation Étape 3">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step4-resolution" data-title="🔍 Étape 4 : Résolution d'actifs" alt="Résolution d'actifs de l'assistant d'importation">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-duplicate" data-title="⚠️ Détection de doublons" alt="Détection de doublons de l'assistant d'importation">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Zone de transit" alt="Zone de transit pour importations en masse">

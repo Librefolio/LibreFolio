@@ -47,6 +47,9 @@
         {id: 'defaults', icon: Users, keys: ['default_currency', 'default_language']},
     ];
 
+    // Keys managed exclusively via SchedulerConfigModal — never shown as raw fields
+    const SCHEDULER_HIDDEN_KEYS = new Set(['scheduler_current_price_frequency_minutes', 'scheduler_history_sync_times', 'scheduler_history_sync_days', 'scheduler_history_sync_horizon_days', 'scheduler_timezone']);
+
     let settings: GlobalSetting[] = [];
     let editedValues: Record<string, string> = {};
     let isLocked = true;
@@ -316,8 +319,9 @@
     // Reactive: filter settings based on selected category
     $: filteredSettings =
         selectedCategory === 'all'
-            ? settings
+            ? settings.filter((s) => !SCHEDULER_HIDDEN_KEYS.has(s.key))
             : settings.filter((s) => {
+                  if (SCHEDULER_HIDDEN_KEYS.has(s.key)) return false;
                   const category = categories.find((c) => c.id === selectedCategory);
                   return category ? category.keys.includes(s.key) : true;
               });
@@ -466,13 +470,14 @@
                                 </button>
                             {/if}
                             {#if hasAnyNonDefault}
-                                <button on:click={resetAllToDefaults} class="p-2 rounded-lg transition-all bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50" title={$_('settings.resetAllToDefault')}>
+                                <button on:click={resetAllToDefaults} class="p-2 rounded-lg transition-all bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50" title={$_('common.resetAll')}>
                                     <RotateCcw size={18} />
                                 </button>
                             {/if}
                         {/if}
                         <button
                             on:click={toggleLock}
+                            data-testid="settings-lock-toggle"
                             class="p-2 rounded-lg transition-all
                                 {isLocked ? 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'}"
                             title={isLocked ? $_('settings.clickToEdit') : $_('settings.clickToLock')}
@@ -739,7 +744,7 @@
                                     </p>
                                 </div>
                             </div>
-                            <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0" type="button" data-testid="scheduler-config-btn" on:click={() => (showConfigModal = true)}>
+                            <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" type="button" data-testid="scheduler-config-btn" disabled={isLocked} on:click={() => (showConfigModal = true)}>
                                 {$_('settings.global.scheduler.status.configure')}
                             </button>
                         </div>
@@ -754,6 +759,8 @@
 <SchedulerConfigModal
     bind:open={showConfigModal}
     {serverTz}
+    serverNowUtc={schedulerState?.server_now_utc || ''}
+    schedulerTimezone={schedulerState?.scheduler_timezone || ''}
     currentValues={{
         frequency: parseInt(editedValues['scheduler_current_price_frequency_minutes'] || '10', 10),
         times: editedValues['scheduler_history_sync_times'] || '06:00,23:00',

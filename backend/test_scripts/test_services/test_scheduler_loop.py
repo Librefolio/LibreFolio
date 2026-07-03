@@ -39,6 +39,7 @@ class TestBothJobsDue:
             history_sync_times=[time(6, 0), time(23, 0)],
             history_sync_days=["mon", "tue", "wed", "thu", "fri", "sat"],
             history_sync_horizon_days=14,
+            scheduler_timezone="UTC",
         )
         state = SchedulerState()  # all None
 
@@ -68,6 +69,7 @@ class TestDisabledScheduler:
             history_sync_times=[time(6, 0)],
             history_sync_days=["mon"],
             history_sync_horizon_days=14,
+            scheduler_timezone="UTC",
         )
 
         assert settings.scheduler_enabled is False
@@ -89,6 +91,7 @@ class TestDisabledScheduler:
             history_sync_times=[time(6, 0)],
             history_sync_days=["mon"],
             history_sync_horizon_days=14,
+            scheduler_timezone="UTC",
         )
         state = SchedulerState()
         now = datetime(2026, 6, 8, 10, 0, 0, tzinfo=TZ)

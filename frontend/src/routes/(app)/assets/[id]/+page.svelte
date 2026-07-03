@@ -29,6 +29,7 @@
     import type {SignalDataSummary} from '$lib/components/charts/ChartSignalsSection.svelte';
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
     import AllocationPieChart from '$lib/components/charts/AllocationPieChart.svelte';
+    import {getSectorEmoji} from '$lib/stores/reference/sectorStore';
     import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
@@ -55,7 +56,7 @@
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
-    import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
+    import {getStart, getEnd, setDateRange, resolveDateSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {fetchCurrentPrices} from '$lib/services/livePriceService';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
@@ -92,9 +93,9 @@
         return error.startsWith('_i18n:') ? $t(error.slice(6)) : error;
     });
 
-    // Date range — global store is source of truth
-    let dateEnd = $state(getEnd());
-    let dateStart = $state(getStart());
+    // Date range — global store is source of truth (resolve min/max sentinels for API)
+    let dateEnd = $state(resolveDateSentinel(getEnd()));
+    let dateStart = $state(resolveDateSentinel(getStart()));
     let activePreset: any = $state(null);
 
     let viewMode: ViewMode = $state('percentage');
@@ -1172,8 +1173,8 @@
     }
 
     async function handleDateRangeChange(newStart: string, newEnd: string) {
-        dateStart = newStart;
-        dateEnd = newEnd;
+        dateStart = resolveDateSentinel(newStart);
+        dateEnd = resolveDateSentinel(newEnd);
         setDateRange(newStart, newEnd);
         // Sync URL for shareability
         replaceHistoryDateRange(dateStart, dateEnd);
@@ -1390,7 +1391,7 @@
             <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3" data-testid="asset-detail-info">
                 <div class="flex items-center gap-3">
                     <AssetIcon iconUrl={assetInfo.icon_url} assetType={assetInfo.asset_type} altText={assetInfo.display_name} size="md" />
-                    <span class="w-2.5 h-2.5 rounded-full shrink-0 {assetInfo.active !== false ? 'bg-green-500' : 'bg-red-400'}" data-testid="asset-status-dot" title={assetInfo.active !== false ? $t('assets.status.active') : $t('assets.status.archived')}></span>
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0 {assetInfo.active !== false ? 'bg-green-500' : 'bg-red-400'}" data-testid="asset-status-dot" title={assetInfo.active !== false ? $t('common.active') : $t('assets.status.archived')}></span>
                     <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100 truncate max-w-[15ch] sm:max-w-[30ch] lg:max-w-none" title={assetInfo.display_name}>{assetInfo.display_name}</h2>
                 </div>
 
@@ -1905,7 +1906,7 @@
                     <!-- Description (from classification_params.short_description) — always first if set -->
                     {#if shortDescription}
                         <div>
-                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('assetDetail.metadataDescription')}</h4>
+                            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('common.description')}</h4>
                             <p class="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{shortDescription}</p>
                         </div>
                     {/if}
@@ -1934,7 +1935,7 @@
                                 {#if sectorDistribution && Object.keys(sectorDistribution).length > 0}
                                     <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
                                         <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.sectorDistribution')}</h5>
-                                        <AllocationPieChart data={sectorDistribution} height="280px" />
+                                        <AllocationPieChart data={Object.entries(sectorDistribution).map(([name, w]) => ({name, value: w * 100, amount: 0, emoji: getSectorEmoji(name)}))} height="280px" />
                                     </div>
                                 {/if}
                             </div>

@@ -25,7 +25,7 @@
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {getBrokerIconUrlById} from '$lib/utils/broker/brokerHelpers';
+    import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {getRoleSvgHtml} from '$lib/utils/broker/brokerRoleHelpers';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
@@ -44,11 +44,16 @@
 
     let mainRows = $state<TXReadItem[]>([]);
     let partnerRows = $state<TXReadItem[]>([]);
+    /** Becomes true after ensurePluginIconsLoaded() resolves — used as a reactive
+     *  dependency in the brokers $derived so that icon-only brokers (step 3 of
+     *  the fallback chain) appear correctly without a manual reload. */
+    let pluginIconsReady = $state(false);
     /** Brokers are sourced from the global `brokerStore` cache; this derived
      *  re-evaluates whenever the store version bumps (load/merge/invalidate),
      *  so icon/name edits propagate without a manual reload. */
     let brokers = $derived.by<BrokerLike[]>(() => {
         void $brokerStoreVersion;
+        void pluginIconsReady; // Re-run after plugin icon cache is populated
         return getAllBrokers() as BrokerLike[];
     });
     let eventTooltipMap = $state<Map<number, AssetEvent>>(new Map());
@@ -143,6 +148,7 @@
         // Pre-load plugin icon cache so getBrokerIconUrl can resolve
         // brokers that only have default_import_plugin (no icon_url/portal_url).
         await ensurePluginIconsLoaded();
+        pluginIconsReady = true;
     }
 
     async function loadEventTooltipMap(rows: TXReadItem[]): Promise<void> {
@@ -609,7 +615,12 @@
         return {
             brokers: brkrs as unknown as Array<{id: number; name: string}>,
             assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
-            getBrokerIconUrl: (brokerId: number) => getBrokerIconUrlById(brokerId, brkrs as any[]),
+            getBrokerIconHtml: (brokerId: number) =>
+                getBrokerIconHtmlById(brokerId, brkrs as any[], {
+                    width: 16,
+                    height: 16,
+                    style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
+                }),
         };
     }
 
@@ -618,8 +629,11 @@
         const info = getBrokerInfo(brokerId);
         const name = info?.name ?? `#${brokerId}`;
         const brkrs = getAllBrokers();
-        const iconUrl = getBrokerIconUrlById(brokerId, brkrs as any[]);
-        const iconTag = iconUrl ? `<img src="${iconUrl}" alt="" width="14" height="14" style="display:inline;vertical-align:middle;margin-right:2px;border-radius:2px" onerror="this.style.display='none'">` : '';
+        const iconTag = getBrokerIconHtmlById(brokerId, brkrs as any[], {
+            width: 14,
+            height: 14,
+            style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
+        });
         const role = getBrokerRole(brokerId);
         const roleSvg = role ? getRoleSvgHtml(role) : '';
         return `${iconTag}<strong>${name}</strong>${roleSvg ? ' ' + roleSvg : ''}`;
@@ -757,10 +771,10 @@
                 <DataTableToolbar
                     selectedCount={selectedRows.length}
                     bulkActions={[
-                        {id: 'edit', icon: Pencil, label: () => $_('transactions.actions.edit') || 'Edit', onClick: () => onEditBulk()},
+                        {id: 'edit', icon: Pencil, label: () => $_('common.edit') || 'Edit', onClick: () => onEditBulk()},
                         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone') || 'Clone', onClick: () => onCloneBulk()},
                         ...(promoteMatch ? [{id: 'promote', icon: Link2, label: () => `🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`, onClick: () => onPromotePair()}] : []),
-                        {id: 'delete', icon: Trash2, label: () => $_('transactions.actions.delete') || 'Delete', variant: 'danger', onClick: () => onBulkDelete()},
+                        {id: 'delete', icon: Trash2, label: () => $_('common.delete') || 'Delete', variant: 'danger', onClick: () => onBulkDelete()},
                     ]}
                     onClearSelection={() => {
                         transactionsTableComponent?.getTableRef()?.clearSelection();
@@ -788,7 +802,7 @@
             </button>
             <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all" data-testid="tx-import-button" onclick={onImportFromBroker}>
                 <Upload size={15} />
-                <span class="hidden sm:inline">{$_('transactions.import')}</span>
+                <span class="hidden sm:inline">{$_('common.import')}</span>
             </button>
             <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="tx-add-button" onclick={onAddTransaction}>
                 <Plus size={15} />

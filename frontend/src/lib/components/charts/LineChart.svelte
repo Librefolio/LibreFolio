@@ -20,6 +20,7 @@
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {tooltipPositionSide} from './echartsTooltipHelpers';
 
     // =========================================================================
     // Types
@@ -580,6 +581,8 @@
                 : {
                       trigger: 'axis',
                       appendToBody: true,
+                      confine: true,
+                      position: tooltipPositionSide,
                       backgroundColor: isDark ? '#1e293b' : '#ffffff',
                       borderColor: isDark ? '#334155' : '#e2e8f0',
                       textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},

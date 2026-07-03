@@ -37,11 +37,7 @@ def am_i_leader() -> bool:
 
         # Multi-worker production mode: parent is uvicorn master with N children.
         # Compete via lowest-PID among running, non-zombie siblings.
-        siblings = [
-            p
-            for p in parent.children(recursive=False)
-            if p.is_running() and p.status() != psutil.STATUS_ZOMBIE
-        ]
+        siblings = [p for p in parent.children(recursive=False) if p.is_running() and p.status() != psutil.STATUS_ZOMBIE]
         if len(siblings) <= 1:
             return True
         return me.pid == min(p.pid for p in siblings)

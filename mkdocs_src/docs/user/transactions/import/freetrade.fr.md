@@ -1,4 +1,4 @@
-# <img src="https://freetrade.io/favicon.ico" alt=""> Freetrade
+# <img src="https://cdn.prod.website-files.com/66289cd2c30bc8d40bd60733/66f526a076ad61485c78771c_favicon.png" alt=""> Freetrade
 
 !!! info "Beta"
 
@@ -29,7 +29,3 @@ Pour exporter votre relevé de transactions depuis Freetrade :
 - Courtier basé au Royaume-Uni.
 - Prend en charge les transactions sur actions et d'ETF, les dividendes, les dépôts d'espèces et les retraits.
 - Prise en charge complète multi-devises pour les actifs en GBP, EUR et USD.
-
-## 🔗 Référence développeur
-
-→ [Fournisseur Freetrade — Détails d'implémentation](../../../developer/backend/brim/providers_list.md)

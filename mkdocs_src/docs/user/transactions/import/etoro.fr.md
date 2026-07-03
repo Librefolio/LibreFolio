@@ -26,13 +26,13 @@ Pour exporter l'historique de vos transactions depuis eToro :
 
 !!! warning "CFD vs Actifs Réels"
 
-    eToro prend en charge les CFD (contrats pour la différence) et les actifs réels. L'analyseur importera les transactions CFD, mais comme les CFD ne représentent pas des actions sous-jacentes, la base de coût et la logique WAC peuvent nécessiter une validation manuelle dans la grille des transactions.
+    eToro prend en charge les CFD (contrats pour la différence) et les actifs réels. L'analyseur importera les transactions CFD, mais comme les CFD ne représentent pas des actions sous-jacentes, la base de coût et la logique PMP peuvent nécessiter une validation manuelle dans la grille des transactions.
 
 ## 📝 Notes
 
 - Prise en charge des transactions sur actions, ETF, crypto et CFD, des dividendes versés, des dépôts, des retraits et des ajustements de frais.
 - Toutes les valeurs dans les fichiers exportés d'eToro sont libellées en USD.
 
-## 🔗 Référence Développeur
+## 🔗 Référence pour les Développeurs
 
-→ [Fournisseur eToro — Détails d'implémentation](../../../developer/backend/brim/providers_list.md)
+→ [eToro Provider — Détails d'Implémentation](../../../developer/backend/brim/providers_list.md)

@@ -12,13 +12,14 @@
     import {t} from '$lib/i18n';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {type BulkAction, type ColumnDef, DataTable, type FilterValue, type RowAction} from '$lib/components/table';
+    import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {Download, Eye, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image as ImageIcon, Link, Trash2} from 'lucide-svelte';
     import type {BrimFile, BrokerInfo, FileData, UploadedFile} from '$lib/types';
     import {safeNumber} from '$lib/types';
     // Generate a consistent color based on broker id for visual distinction
     // Uses shared golden-ratio color utility
     import {getIndexColor} from '$lib/utils/colors';
-    import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/broker/brokerHelpers';
+    import {getBrokerIconCandidates} from '$lib/utils/broker/brokerHelpers';
     import {canPreviewFileData} from '$lib/utils/files/filePreview';
     import {getCachedPreview} from '$lib/stores/files/imagePreviewCache';
 
@@ -235,30 +236,27 @@
                 cols.push({
                     id: 'broker',
                     urlKey: 'broker',
-                    header: () => $t('uploads.broker') || 'Broker',
+                    header: () => $t('common.broker') || 'Broker',
                     cell: (row) => {
                         const name = getBrokerName(row);
                         if (name === '-') return '-';
                         const brimFile = row as BrimFile;
                         const brokerId = safeNumber(brimFile.target_broker_id);
-                        const iconSrc = brokerId ? getBrokerIconUrlById(brokerId, brokers!) : null;
-                        if (iconSrc) {
-                            return {
-                                type: 'html' as const,
-                                html: `<span class="broker-cell" title="${escapeHtml(name)}"><img src="${escapeHtml(iconSrc)}" alt="" class="broker-cell-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'" /><span class="broker-cell-dot" style="display:none;background:${getBrokerColor(brokerId!).bg}"></span><span class="broker-cell-name">${escapeHtml(name)}</span></span>`,
-                            };
-                        }
-                        // No icon — show colored dot + name
-                        const dotColor = brokerId ? getBrokerColor(brokerId).bg : '#94a3b8';
                         return {
-                            type: 'html' as const,
-                            html: `<span class="broker-cell" title="${escapeHtml(name)}"><span class="broker-cell-dot" style="background:${dotColor}"></span><span class="broker-cell-name">${escapeHtml(name)}</span></span>`,
+                            type: 'custom' as const,
+                            component: BrokerBadge,
+                            props: {
+                                broker: brokerId ? (brokers?.get(brokerId) ?? {id: brokerId, name}) : {id: 0, name},
+                                size: 16,
+                                showName: true,
+                                tooltip: name,
+                            },
                         };
                     },
                     type: 'enum',
                     enumOptions: Array.from(brokers.values()).map((b) => {
-                        const iconUrl = getBrokerIconUrl(b);
-                        return {value: String(b.id), label: b.name, iconUrl: iconUrl ?? undefined};
+                        const dotColor = getBrokerColor(b.id).bg;
+                        return {value: String(b.id), label: b.name, iconCandidates: getBrokerIconCandidates(b), dotColor};
                     }),
                     width: 160,
                     getValue: (row) => String((row as BrimFile).target_broker_id || ''),
@@ -268,7 +266,7 @@
             cols.push({
                 id: 'status',
                 urlKey: 'status',
-                header: () => $t('uploads.status'),
+                header: () => $t('common.status'),
                 cell: (row) => ({
                     type: 'badge',
                     text: translateStatus((row as BrimFile).status),
@@ -354,7 +352,7 @@
         actions.push({
             id: 'preview',
             icon: Eye,
-            label: () => $t('uploads.preview'),
+            label: () => $t('common.preview'),
             onClick: (file) => onPreview?.(file),
             visible: (file) => Boolean(onPreview) && canPreviewFileData(file, type),
         });
@@ -474,42 +472,3 @@
         tableLayout="auto"
     />
 </div>
-
-<style>
-    :global {
-        .broker-cell {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            max-width: 100%;
-            min-width: 0;
-        }
-        .broker-cell-icon {
-            width: 1rem;
-            height: 1rem;
-            border-radius: 3px;
-            object-fit: contain;
-            flex-shrink: 0;
-        }
-        .broker-cell-dot {
-            display: inline-block;
-            width: 0.625rem;
-            height: 0.625rem;
-            border-radius: 9999px;
-            flex-shrink: 0;
-            box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06);
-        }
-        .dark .broker-cell-dot {
-            box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08);
-        }
-        .broker-cell-name {
-            font-size: 0.8125rem;
-            color: inherit;
-            min-width: 0;
-            flex: 1 1 auto;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-    }
-</style>

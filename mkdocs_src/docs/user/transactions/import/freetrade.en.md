@@ -1,4 +1,4 @@
-# <img src="https://freetrade.io/favicon.ico" alt=""> Freetrade
+# <img src="https://cdn.prod.website-files.com/66289cd2c30bc8d40bd60733/66f526a076ad61485c78771c_favicon.png" alt=""> Freetrade
 
 !!! info "Beta"
 
@@ -29,7 +29,3 @@ To export your transaction statement from Freetrade:
 - UK-based broker.
 - Supports equity and ETF trades, dividends, cash deposits, and withdrawals.
 - Full multi-currency support for GBP, EUR, and USD assets.
-
-## 🔗 Developer Reference
-
-→ [Freetrade Provider — Implementation Details](../../../developer/backend/brim/providers_list.md)

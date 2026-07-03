@@ -216,7 +216,7 @@
     <!-- Description -->
     <div>
         <label class="block text-sm font-medium text-gray-700 mb-1" for="broker-description">
-            {$_('brokers.description')}
+            {$_('common.description')}
         </label>
         <textarea bind:value={description} class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-colors resize-none" id="broker-description" maxlength="500" placeholder={$_('brokers.descriptionPlaceholder')} rows="3"></textarea>
     </div>

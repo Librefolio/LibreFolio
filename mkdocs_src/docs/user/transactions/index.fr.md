@@ -29,8 +29,7 @@ Voici un résumé des opérations et outils disponibles directement sur la page 
 | **Importation depuis le courtier** | Glissez-déposez votre relevé de courtier pour importer votre historique automatiquement. | [Importation depuis le courtier](import/index.md) |
 | **Tri et Filtrage** | Cliquez sur l'en-tête de n'importe quelle colonne pour trier la liste. Utilisez la barre de recherche pour filtrer par nom d'actif, type ou notes. | |
 | **Suppression et Actions groupées** | Faites un clic droit sur une ligne pour ouvrir le menu contextuel et accéder aux actions rapides, cliquez sur l'icône de la corbeille pour supprimer, ou cochez plusieurs lignes pour effectuer des suppressions groupées. | |
-| **Division et Promotion** | **Divisez** une transaction composite (comme un transfert ou une conversion FX) en segments de trésorerie/actifs individuels, ou **Promouvez** deux opérations distinctes pour les lier ensemble. | |
-| **Coût Moyen Pondéré (CMP)** | LibreFolio calcule votre prix de revient en temps réel. Les lignes impactées sont marquées d'un indicateur ⚡, affichant des aperçus en ligne. | |
+| **Transactions Composites et Promotion** | Liez des opérations individuelles dans une **Transaction Composite** via une **Promotion** pour permettre un suivi et des analyses plus sophistiqués, ou divisez à nouveau une transaction composite en opérations individuelles. | [Formulaire de transaction](form.md#composite-transactions) |
 
 ---
 

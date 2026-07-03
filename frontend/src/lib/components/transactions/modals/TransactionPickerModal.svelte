@@ -16,7 +16,7 @@
     import TransactionsTable from '../TransactionsTable.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {canEditBroker, getBrokerRole, getBrokerInfo, getAllBrokers} from '$lib/stores/reference/brokerStore';
-    import {getBrokerIconUrlById} from '$lib/utils/broker/brokerHelpers';
+    import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {getRoleSvgHtml} from '$lib/utils/broker/brokerRoleHelpers';
     import {txStoreGetAll, txStoreGet, type TXReadItem} from '$lib/stores/transactions/txStore.svelte';
 
@@ -77,10 +77,13 @@
         const broker = brokers.find((b) => b.id === brokerId);
         const brokerFromStore = getBrokerInfo(brokerId);
         const bName = broker?.name ?? brokerFromStore?.name ?? `#${brokerId}`;
-        const iconUrl = getBrokerIconUrlById(brokerId, brokers);
         const currentRole = getBrokerRole(brokerId);
         const roleLabelCurrent = currentRole ? currentRole.charAt(0) + currentRole.slice(1).toLowerCase() : 'None';
-        const brokerIconHtml = iconUrl ? `<img src="${iconUrl}" width="14" height="14" style="display:inline;vertical-align:middle;border-radius:3px;margin-right:3px" alt="" onerror="this.style.display='none'">` : '';
+        const brokerIconHtml = getBrokerIconHtmlById(brokerId, brokers, {
+            width: 14,
+            height: 14,
+            style: 'display:inline-block;vertical-align:middle;border-radius:3px;margin-right:3px',
+        });
         const currentRoleSvg = getRoleSvgHtml(currentRole);
         const requiredRoleSvg = getRoleSvgHtml('EDITOR');
         return `${brokerIconHtml}<strong>${bName}</strong> ${currentRoleSvg} ${roleLabelCurrent}<br>${$t('transactions.picker.requiredRole') || 'required'} ${requiredRoleSvg} Editor`;

@@ -29,8 +29,7 @@ Aquí tiene un resumen de las operaciones y herramientas disponibles directament
 | **Importación de Bróker** | Arrastre y suelte el archivo del extracto de su bróker para importar su historial automáticamente. | [Importación desde Bróker](import/index.md) |
 | **Ordenación y Filtrado** | Haga clic en cualquier encabezado de columna para ordenar la lista. Use la barra de búsqueda para filtrar por nombre del activo, tipo o notas. | |
 | **Eliminación y Acciones Masivas** | Haga clic derecho en cualquier fila para abrir el Menú Contextual para acciones rápidas, haga clic en el icono de la papelera para eliminar, o marque varias filas para realizar eliminaciones masivas. | |
-| **División y Promoción** | Realice una **división** de una transacción compuesta (como una transferencia o conversión de divisa) en partes individuales de efectivo/activo, o **Promueva** dos operaciones separadas para vincularlas entre sí. | |
-| **Coste Medio Ponderado (WAC)** | LibreFolio calcula su base de coste en tiempo real. Las filas afectadas están marcadas con un indicador ⚡, que muestra vistas previas integradas. | |
+| **Transacciones Compuestas y Promoción** | Vincule operaciones individuales en una **Transacción Compuesta** mediante **Promoción** para permitir un seguimiento y análisis más sofisticados, o divida una transacción compuesta de nuevo en operaciones individuales. | [Formulario de Transacción](form.md#composite-transactions) |
 
 ---
 

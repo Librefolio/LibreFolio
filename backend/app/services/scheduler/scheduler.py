@@ -2,7 +2,7 @@
 
 import asyncio
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import structlog
 
@@ -56,9 +56,7 @@ def due_history_sync(now: datetime, settings: SchedulerSettings, state: Schedule
             last_dt = None
 
     for slot_time in settings.history_sync_times:
-        slot_dt = now.replace(
-            hour=slot_time.hour, minute=slot_time.minute, second=0, microsecond=0
-        )
+        slot_dt = now.replace(hour=slot_time.hour, minute=slot_time.minute, second=0, microsecond=0)
         if now >= slot_dt:
             if last_dt is None or last_dt < slot_dt:
                 return True
@@ -95,7 +93,7 @@ async def scheduler_loop(shutdown_event: asyncio.Event) -> None:
 
                 if settings.scheduler_enabled:
                     state = load_state()
-                    now = datetime.now().astimezone()
+                    now = datetime.now(timezone.utc)
 
                     if due_current_price(now, settings, state):
                         await run_current_price_refresh(state)

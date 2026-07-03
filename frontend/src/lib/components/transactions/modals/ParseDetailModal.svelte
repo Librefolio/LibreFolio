@@ -189,7 +189,7 @@
 
             <!-- Assets -->
             <section>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('importWizard.assetsSection')}</h3>
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('common.assets')}</h3>
                 {#if assetMappings.length > 0}
                     <div class="space-y-1.5">
                         {#each assetMappings as mapping}
@@ -242,7 +242,7 @@
                             <li class="flex items-start gap-2 px-3 py-1.5 rounded bg-amber-50 dark:bg-amber-900/20 text-sm">
                                 <CircleAlert size={14} class="mt-0.5 shrink-0 text-amber-500" />
                                 <div class="min-w-0 flex-1">
-                                    <span class="font-medium text-amber-800 dark:text-amber-300">{$t('importWizard.issueRow', {values: {n: issue.row}})}</span>
+                                    <span class="font-medium text-amber-800 dark:text-amber-300">{$t('common.rowN', {values: {n: issue.row}})}</span>
                                     {#if issue.field}
                                         <span class="text-xs text-amber-600 dark:text-amber-400 ml-1">({issue.field})</span>
                                     {/if}

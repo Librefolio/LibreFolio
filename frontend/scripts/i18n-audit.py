@@ -48,6 +48,7 @@ def _check_deps() -> None:
 # Configuration
 I18N_DIR = Path(__file__).parent.parent / "src" / "lib" / "i18n"
 LANGUAGES = ["en", "it", "fr", "es"]  # Order matters for display
+BACKEND_DIR = Path(__file__).parent.parent.parent / "backend"  # repo_root/backend
 
 
 def flatten_dict(d: dict, parent_key: str = "", sep: str = ".") -> dict[str, Any]:
@@ -109,8 +110,14 @@ def find_used_keys_in_sources() -> tuple[set[str], set[str]]:
 
     # Patterns for DYNAMIC keys (template literals / concatenation)
     patterns_dynamic = [
-        # `prefix.${...}` - extract the prefix
+        # `prefix.${...}` - extract the prefix (dot required before the interpolation)
         re.compile(r"`([a-zA-Z0-9_.]+)\.\$\{"),
+        # `prefixSuffix${...}` - extract the prefix when the interpolation directly
+        # continues a camelCase word with no dot separator, e.g.
+        # `settings.global.scheduler.historyDays${day...}`. Only accepted when the
+        # captured prefix already contains a dot, to avoid over-matching bare
+        # single-segment words (which would mark too many unrelated keys as "used").
+        re.compile(r"`([a-zA-Z0-9_.]+\.[a-zA-Z0-9_]*)\$\{"),
         # 'prefix.' + var or "prefix." + var
         re.compile(r"['\"]([a-zA-Z0-9_.]+)\.['\"]?\s*\+"),
         ]
@@ -142,7 +149,11 @@ def find_used_keys_in_sources() -> tuple[set[str], set[str]]:
                 # Find dynamic prefixes
                 for pattern in patterns_dynamic:
                     matches = pattern.findall(content)
-                    prefix_patterns.update(matches)
+                    # Normalize away any trailing dot so e.g. "sectors" and "sectors."
+                    # (captured by different regex variants) collapse to one entry;
+                    # startswith() matching is unaffected since it's the more
+                    # permissive (superset) form.
+                    prefix_patterns.update(m.rstrip(".") for m in matches)
 
             except Exception:
                 pass  # Skip files that can't be read
@@ -158,12 +169,50 @@ def is_key_potentially_used(key: str, exact_keys: set[str], prefix_patterns: set
     if key in exact_keys:
         return True
 
-    # Check if any prefix pattern matches the start of this key
+    # Check if any prefix pattern matches the start of this key.
+    # Plain startswith (no forced trailing dot) so that camelCase-continuation
+    # templates like `settings.global.scheduler.historyDays${day}` (captured
+    # prefix "settings.global.scheduler.historyDays", no separator before the
+    # variable) also correctly match keys like
+    # "settings.global.scheduler.historyDaysFri". This is a superset of the
+    # previous "prefix + '.'" check, so dot-anchored prefixes still match keys
+    # nested under them exactly as before.
     for prefix in prefix_patterns:
-        if key.startswith(prefix + "."):
+        if key.startswith(prefix):
             return True
 
     return False
+
+
+def find_used_keys_in_backend() -> set[str]:
+    """
+    Scan backend/**/*.py for i18n keys passed as data (not called via $t()/$_()
+    in the frontend at all). Confirmed pattern: API response fields such as
+    `message_i18n_key="dataQuality.missingFx"` are set in backend services and
+    consumed dynamically in the frontend via `$_(issue.message_i18n_key)` —
+    a variable reference the static frontend scan can never resolve.
+
+    Returns the set of literal i18n keys found as `..._i18n_key="ns.key"` (or
+    `'ns.key'`) assignments anywhere under backend/.
+    """
+    import re
+
+    backend_keys: set[str] = set()
+    if not BACKEND_DIR.is_dir():
+        return backend_keys
+
+    pattern = re.compile(r"[a-zA-Z_]*i18n_key\s*=\s*['\"]([a-zA-Z0-9_.]+)['\"]")
+
+    for file_path in BACKEND_DIR.rglob("*.py"):
+        if "__pycache__" in str(file_path):
+            continue
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        backend_keys.update(pattern.findall(content))
+
+    return backend_keys
 
 
 def load_translations() -> dict[str, dict[str, str]]:
@@ -353,9 +402,11 @@ def generate_unused_keys_report(
         f"\n## ⚠️ Potentially Unused Translation Keys ({len(unused_keys)})\n",
         "The following keys exist in translation files but were not found in source code.\n",
         "\n**Note:** This analysis cannot detect:\n",
-        "- Keys constructed dynamically (e.g., `$t(\\`prefix.${var}\\`)`)\n",
-        "- Keys passed as variables\n",
-        "- Keys used in computed expressions\n\n",
+        "- Keys passed as variables computed from unrecognized expressions\n",
+        "- Keys used in computed expressions not matching a known dynamic pattern\n\n",
+        "Backend-driven keys (e.g. `message_i18n_key=\"ns.key\"` set in `backend/**/*.py` and consumed "
+        "via `$_(issue.message_i18n_key)`) and camelCase-continuation dynamic templates (e.g. "
+        "`` $t(`prefix.historyDays${day}`) ``) ARE detected automatically and excluded below.\n\n",
         ]
 
     if prefix_patterns:
@@ -848,6 +899,10 @@ def run_audit(format_type: str = "none", output: str | None = None, duplicates: 
     print("🔎 Scanning source files for used keys...")
     all_keys = get_all_keys(translations)
     exact_keys, prefix_patterns = find_used_keys_in_sources()
+    backend_keys = find_used_keys_in_backend()
+    if backend_keys:
+        print(f"   Found {len(backend_keys)} keys used via backend-driven i18n_key fields: {', '.join(sorted(backend_keys))}")
+        exact_keys = exact_keys | backend_keys
     unused_report, unused_keys = generate_unused_keys_report(all_keys, exact_keys, prefix_patterns)
     print(f"   Found {len(exact_keys)} exact keys in source code")
     print(f"   Found {len(prefix_patterns)} dynamic prefixes: {', '.join(sorted(prefix_patterns)) or 'none'}")

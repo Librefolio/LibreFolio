@@ -77,7 +77,7 @@ COL_FEES = "Fees & Comm"
 TYPE_MAPPINGS: Dict[str, TransactionType] = {
     # BUY
     "buy": TransactionType.BUY,
-    "reinvest shares": TransactionType.BUY,       # shares purchased with reinvested dividend
+    "reinvest shares": TransactionType.BUY,  # shares purchased with reinvested dividend
     # SELL
     "sell": TransactionType.SELL,
     # DIVIDEND — Schwab splits reinvestment into two rows:
@@ -85,20 +85,20 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "dividend": TransactionType.DIVIDEND,
     "qualified dividend": TransactionType.DIVIDEND,
     "cash dividend": TransactionType.DIVIDEND,
-    "reinvest dividend": TransactionType.DIVIDEND, # cash portion of reinvested dividend
+    "reinvest dividend": TransactionType.DIVIDEND,  # cash portion of reinvested dividend
     "qual div reinvest": TransactionType.DIVIDEND,
     "non-qualified div": TransactionType.DIVIDEND,
     "special non qual div": TransactionType.DIVIDEND,
     "pr yr cash div": TransactionType.DIVIDEND,
-    "pr yr div reinvest": TransactionType.DIVIDEND, # prior year dividend cash portion
+    "pr yr div reinvest": TransactionType.DIVIDEND,  # prior year dividend cash portion
     "long term cap gain reinvest": TransactionType.DIVIDEND,  # cap gains distribution
     # INTEREST
     "credit interest": TransactionType.INTEREST,
     # DEPOSIT / WITHDRAWAL (sign of Amount determines direction)
     "wire funds": TransactionType.DEPOSIT,
     "moneylink transfer": TransactionType.DEPOSIT,
-    "wire sent": TransactionType.WITHDRAWAL,        # outgoing wire always withdrawal
-    "internal transfer": TransactionType.DEPOSIT,   # cash transfer between accounts (sign-corrected below)
+    "wire sent": TransactionType.WITHDRAWAL,  # outgoing wire always withdrawal
+    "internal transfer": TransactionType.DEPOSIT,  # cash transfer between accounts (sign-corrected below)
     # FEE
     "advisor fee": TransactionType.FEE,
     "adr mgmt fee": TransactionType.FEE,
@@ -109,16 +109,18 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
 # Corporate actions mapped to ADJUSTMENT
 # Note: stock splits and reverse splits are mapped to ADJUSTMENT.
 # It is expected that the price provider adjusts the asset historical prices accordingly starting from the action date.
-CORPORATE_ACTIONS: frozenset[str] = frozenset({
-    "stock split",
-    "reverse split",
-    "stock merger",
-    "name change",
-    "spin-off",
-    "journaled shares",
-    "conversion",
-    "stock div dist",   # stock dividend (shares, not cash)
-})
+CORPORATE_ACTIONS: frozenset[str] = frozenset(
+    {
+        "stock split",
+        "reverse split",
+        "stock merger",
+        "name change",
+        "spin-off",
+        "journaled shares",
+        "conversion",
+        "stock div dist",  # stock dividend (shares, not cash)
+    }
+)
 
 
 def _parse_schwab_date(value: str) -> Optional[date_type]:
@@ -281,10 +283,7 @@ class SchwabBrokerProvider(BRIMProvider):
                             if tx_type == TransactionType.DIVIDEND:
                                 # Dividend from a cash fund (e.g. money-market) with no ticker
                                 # → treat as INTEREST (cash yield, no asset needed)
-                                warnings.append(
-                                    f"Row {row_num}: DIVIDEND '{description}' has no ticker"
-                                    f" — reclassified as INTEREST"
-                                )
+                                warnings.append(f"Row {row_num}: DIVIDEND '{description}' has no ticker" f" — reclassified as INTEREST")
                                 tx_type = TransactionType.INTEREST
                             else:
                                 warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")
@@ -314,9 +313,7 @@ class SchwabBrokerProvider(BRIMProvider):
 
                     # If it's a corporate action ADJUSTMENT, it must have a non-zero quantity
                     if tx_type == TransactionType.ADJUSTMENT and quantity == Decimal("0"):
-                        warnings.append(
-                            f"Row {row_num}: corporate action '{action}' has quantity = 0, skipping"
-                        )
+                        warnings.append(f"Row {row_num}: corporate action '{action}' has quantity = 0, skipping")
                         continue
 
                     # Adjust signs (Schwab already has correct signs in Amount)

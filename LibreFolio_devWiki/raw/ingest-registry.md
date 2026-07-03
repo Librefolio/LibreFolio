@@ -12,6 +12,34 @@
 >
 > For untracked files (external articles, PDFs in raw/): hash = `untracked`, no drift check possible.
 
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/README.md` | `8f363d79` | 2026-06-30 | [[sources/phase07-pland-split-promote]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/plan-PlanD1_BackendBatchSuggest.prompt.md` | `8f363d79` | 2026-06-30 | [[sources/phase07-pland-split-promote]], [[decisions/batch-only-split-promote]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/plan-PlanD2_FrontendSplitPromoteUI.prompt.md` | `8f363d79` | 2026-06-30 | [[sources/phase07-pland-split-promote]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/plan-CentralizePayloadCommit.prompt.md` | `8f363d79` | 2026-06-30 | [[sources/phase07-pland-split-promote]], [[concepts/centralized-tx-payload]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte5/plan-phase07Part5-v5-ImportWizard.prompt.md` | `5592f299` | 2026-06-30 | [[sources/phase07-part5-import-wizard-v5]], [[entities/import-wizard-modal]], [[decisions/import-wizard-v5-paradigm]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte5/plan-phase07Part5-BRIMImportBridge.prompt.md` | `5592f299` | 2026-06-30 | [[sources/phase07-part5-import-wizard-v5]] (superseded v4) |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte5/plan-phase07Part5-M1-ParseAndSee.prompt.md` | `5592f299` | 2026-06-30 | [[sources/phase07-part5-import-wizard-v5]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte5/brim-plugin-sign-audit-2026-06-08.md` | `5592f299` | 2026-06-30 | [[sources/phase07-part5-import-wizard-v5]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Standalone/plan-pwa-mobile-optimizations.prompt.md` | `66f56432` | 2026-06-30 | [[sources/phase07-standalone-pwa]], [[features/F-098]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-08-subplan/plan-phase08Step1-2-backend.prompt.md` | `5592f299` | 2026-06-30 | [[sources/phase08-scheduler-backend]], [[entities/market-data-scheduler]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-08-subplan/plan-test-checkpoint-phase07-08.md` | `5592f299` | 2026-06-30 | [[sources/phase08-scheduler-backend]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-08-subplan/README.md` | `5592f299` | 2026-06-30 | [[sources/phase08-scheduler-backend]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md` | `39106380` | 2026-06-30 | [[sources/phase09-portfolio-engine-dashboard]], [[entities/portfolio-engine]], [[entities/portfolio-service]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` | `39106380` | 2026-06-30 | [[sources/phase09-portfolio-engine-dashboard]], [[concepts/3-pool-cash-model]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md` | `39106380` | 2026-06-30 | [[sources/phase09-portfolio-engine-dashboard]], [[decisions/mwrr-boundary-fix]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/pnl_breakdown_analysis.md` | `39106380` | 2026-06-30 | [[sources/phase09-portfolio-engine-dashboard]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/plan_ui_dashboard.md` | `39106380` | 2026-06-30 | [[sources/phase09-portfolio-engine-dashboard]], [[concepts/portfolio-report-unified]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/wiki_audit_2026_06_18/audit_transactions.md` | `010ec3ed` | 2026-06-30 | [[sources/wiki-audit-2026-06-18]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/wiki_audit_2026_06_18/audit_backend_infra.md` | `010ec3ed` | 2026-06-30 | [[sources/wiki-audit-2026-06-18]], [[entities/test-runner]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/wiki_audit_2026_06_18/audit_assets_brokers_brim.md` | `010ec3ed` | 2026-06-30 | [[sources/wiki-audit-2026-06-18]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-final-subplan/bug_vari_report20260625.md` | `1400451d` | 2026-06-30 | [[sources/phase-final-bugs-2026-06-25]], [[problems/broker-icon-race-condition]], [[problems/import-wizard-identifier-prompt]], [[problems/bulk-modal-sticky-z-index]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md` | `d27902b7` | 2026-07-01 | [[sources/phase09-portfolio-engine-3pool-refactor]], [[entities/portfolio-engine]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` | `d27902b7` | 2026-07-01 | [[sources/phase09-portfolio-engine-3pool-refactor]], [[concepts/3-pool-cash-model]], [[concepts/inline-wac-computation]], [[concepts/pre-frame-frame-separation]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/ARCH_ANALYSIS_PORTFOLIO_ENGINE.md` | `d27902b7` | 2026-07-01 | [[sources/phase09-portfolio-engine-3pool-refactor]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/implementation_status_report.md` | `d27902b7` | 2026-07-01 | [[sources/phase09-portfolio-engine-3pool-refactor]], [[entities/portfolio-engine]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md` | `d27902b7` | 2026-07-01 | [[sources/phase09-portfolio-engine-3pool-refactor]], [[decisions/mwrr-boundary-fix]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/pnl_breakdown_analysis.md` | `d27902b7` | 2026-07-01 | [[sources/phase09-portfolio-engine-3pool-refactor]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/report_asset_level_contribution_gap_analysis.md` | `d27902b7` | 2026-07-01 | [[sources/phase09-portfolio-engine-3pool-refactor]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-R3-SP-D-FormModalEventPickerWacFx.prompt.md` | `61cc81e5` | 2026-06-04 | [[sources/r3-sp-d-formmodal-wac-fx-chain]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-BugfixRound1.prompt.md` | `61cc81e5` | 2026-06-04 | [[sources/r3-sp-d-formmodal-wac-fx-chain]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-BugfixRound2.prompt.md` | `61cc81e5` | 2026-06-04 | [[sources/r3-sp-d-formmodal-wac-fx-chain]] |

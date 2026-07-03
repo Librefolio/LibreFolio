@@ -151,7 +151,7 @@
         <!-- Description -->
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1" for="cash-description">
-                {$_('brokers.description')}
+                {$_('common.description')}
             </label>
             <textarea bind:value={description} class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-libre-green focus:border-libre-green resize-none" id="cash-description" rows="2"></textarea>
         </div>

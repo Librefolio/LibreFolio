@@ -30,6 +30,6 @@ Per esportare le tue transazioni da Finpension:
 - Supporta depositi di contanti, acquisti, vendite, ritenute fiscali e commissioni di gestione.
 - Denominato in CHF.
 
-## 🔗 Riferimenti per Sviluppatori
+## 🔗 Riferimento per Sviluppatori
 
 → [Finpension Provider — Dettagli di Implementazione](../../../developer/backend/brim/providers_list.md)

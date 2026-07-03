@@ -105,6 +105,7 @@ class AllocationItem(BaseModel):
     name: str = Field(..., description="Category name, e.g. 'ETF', 'Technology', 'US', 'Unknown'")
     value: SafeDecimal = Field(..., description="Percentage share (0-100)")
     amount: SafeDecimal = Field(..., description="Absolute value in base currency")
+    emoji: Optional[str] = Field(None, description="Display emoji for the category (sector/type/geo)")
 
 
 # =============================================================================
@@ -174,6 +175,7 @@ class IssueCode(StrEnum):
     MISSING_FX_MARKET = "MISSING_FX_MARKET"
     NAV_INCOMPLETE = "NAV_INCOMPLETE"
     MWRR_NOT_CALCULABLE = "MWRR_NOT_CALCULABLE"
+    MWRR_SERIES_UNRELIABLE = "MWRR_SERIES_UNRELIABLE"
 
     # Asset detail (constructed client-side in assets/[id]/+page.svelte)
     ASSET_ARCHIVED = "ASSET_ARCHIVED"
@@ -267,13 +269,59 @@ class PortfolioHolding(BaseModel):
     asset_name: str
     asset_ticker: Optional[str] = None
     asset_type: str
+    broker_id: Optional[int] = Field(None, description="Broker that holds this position")
+    broker_name: Optional[str] = Field(None, description="Broker display name")
     quantity: SafeDecimal
     wac_per_unit: Optional[SafeDecimal] = Field(None, description="None if FX rate missing")
     current_price: Optional[SafeDecimal] = Field(None, description="None if FX rate missing")
     current_value: Optional[SafeDecimal] = None
-    gain_loss: Optional[SafeDecimal] = None
+    gain_loss: Optional[SafeDecimal] = Field(None, description="Unrealized P&L: current_value - cost_basis")
     gain_loss_percent: Optional[SafeDecimal] = None
-    allocation_percent: Optional[SafeDecimal] = None
+    price_change_1d: Optional[SafeDecimal] = Field(None, description="Percentage price change vs previous day: (price_today - price_yesterday) / price_yesterday")
+    allocation_percent: Optional[SafeDecimal] = Field(None, description="Weight vs total market value (excludes cash)")
+    nav_weight_percent: Optional[SafeDecimal] = Field(None, description="Weight vs NAV (includes cash): current_value / NAV * 100")
+
+
+class AssetPeriodContribution(BaseModel):
+    """Per-asset period P&L contribution for the Contributo dashboard view."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int
+    asset_name: str
+    asset_ticker: Optional[str] = None
+    asset_type: str
+    broker_id: int
+    broker_name: str
+    period_unrealized_delta: Optional[SafeDecimal] = Field(None, description="Change in unrealized P&L over the period")
+    period_realized_gain_loss: Optional[SafeDecimal] = Field(None, description="Realized gain/loss from SELLs in period")
+    period_income: Optional[SafeDecimal] = Field(None, description="DIVIDEND/INTEREST attributed to this asset in period")
+    period_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX attributed to this asset in period (positive value)")
+    period_pnl: Optional[SafeDecimal] = Field(None, description="Total period P&L: unrealized_delta + realized + income - fees_taxes")
+    period_pnl_percent: Optional[SafeDecimal] = Field(None, description="Period return %: period_pnl / |start_value|. None if start_value=0")
+    is_fully_sold: bool = Field(False, description="True if position quantity is 0 at period end")
+
+
+class UnallocatedContribution(BaseModel):
+    """Broker-level fees/income not attributed to a specific asset."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    broker_id: int
+    broker_name: str
+    unallocated_income: Optional[SafeDecimal] = Field(None, description="DIVIDEND/INTEREST without asset_id in period")
+    unallocated_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX without asset_id in period (positive value)")
+
+
+class PositionsContribution(BaseModel):
+    """Complete per-asset contribution breakdown for a period."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    positions: List[AssetPeriodContribution] = Field(default_factory=list)
+    unallocated: List[UnallocatedContribution] = Field(default_factory=list)
+    gross_gains: SafeDecimal = Field(default=0, description="Sum of max(period_pnl, 0) across all positions")
+    gross_losses: SafeDecimal = Field(default=0, description="Sum of |min(period_pnl, 0)| across all positions")
 
 
 class BrokerBreakdown(BaseModel):
@@ -303,8 +351,27 @@ class PortfolioSummary(BaseModel):
     in_transit_book_value: Optional[Currency] = Field(None, description="Cost basis of assets/cash in transit")
     book_value: Optional[Currency] = Field(None, description="open_cost_basis + cash + in_transit_book_value")
     unrealized_gain_loss: Optional[Currency] = Field(None, description="nav_value - book_value")
+    total_deposited: Optional[Currency] = Field(None, description="Sum of all DEPOSIT amounts (positive) in target currency")
+    total_withdrawn: Optional[Currency] = Field(None, description="Sum of all WITHDRAWAL amounts (positive) in target currency")
+    net_deposited_capital: Optional[Currency] = Field(None, description="total_deposited - total_withdrawn")
+    period_nav_start: Optional[Currency] = Field(None, description="NAV at start of selected period")
+    period_market_value_start: Optional[Currency] = Field(None, description="Market value of held assets at start of selected period")
+    period_book_value_start: Optional[Currency] = Field(None, description="Book value at start of selected period")
+    period_net_flows: Optional[Currency] = Field(None, description="Sum of external cash flows in selected period")
+    period_pnl: Optional[Currency] = Field(None, description="Period P&L = nav_end - nav_start - net_flows")
+    period_unrealized_gain_loss_start: Optional[Currency] = Field(None, description="Unrealized G/L at start of period")
+    period_unrealized_gain_loss_end: Optional[Currency] = Field(None, description="Unrealized G/L at end of period (snapshot)")
+    period_unrealized_gain_loss_delta: Optional[Currency] = Field(None, description="Change in unrealized G/L over the period")
+    period_realized_gain_loss: Optional[Currency] = Field(None, description="Realized G/L from sales in period (WAC-based)")
+    period_income: Optional[Currency] = Field(None, description="DIVIDEND + INTEREST in period (positive)")
+    period_fees_taxes: Optional[Currency] = Field(None, description="FEE + TAX in period (positive value, shown negative in UI)")
+    period_fees: Optional[Currency] = Field(None, description="FEE only in period (commissions)")
+    period_taxes: Optional[Currency] = Field(None, description="TAX only in period")
+    period_other_result: Optional[Currency] = Field(None, description="pnl - unrealized_delta - realized - income + fees_taxes")
     twrr_percent: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return (None if not calculable)")
-    mwrr_percent: Optional[SafeDecimal] = Field(None, description="Money-Weighted Return / XIRR (None if not converged)")
+    mwrr_annualized_percent: Optional[SafeDecimal] = Field(None, description="Annualized MWRR / XIRR (None if not converged)")
+    mwrr_cumulative_percent: Optional[SafeDecimal] = Field(None, description="Cumulative MWRR for the period: (1+r_ann)^(days/365)-1")
+    mwrr_period_days: Optional[int] = Field(None, description="Number of days in the MWRR calculation period")
     simple_roi_percent: SafeDecimal
     allocation_by_type: List[AllocationItem] = Field(default_factory=list)
     allocation_by_sector: List[AllocationItem] = Field(default_factory=list)
@@ -337,9 +404,15 @@ class PortfolioHistoryPoint(BaseModel):
     in_transit_asset_cost_basis: Optional[Currency] = Field(None, description="Cost basis of assets in transit")
     in_transit_book_value: Optional[Currency] = Field(None, description="Cost basis of all in-transit items")
     book_value: Optional[Currency] = Field(None, description="open_cost_basis + cash + in_transit_book_value")
+    capital_baseline: Currency = Field(..., description="Net external capital contributed to scope (deposits − withdrawals + linked-external flows)")
+    book_asset_like: Currency = Field(..., description="open_cost_basis + in_transit_asset_cost_basis (asset-like book value)")
+    cash_from_contributed_capital: Currency = Field(..., description="Portion of cash attributable to undeployed external capital")
+    cash_from_generated_returns: Currency = Field(..., description="Portion of cash from returns (interest, dividends, realized gains)")
+    total_pnl: Currency = Field(..., description="NAV - Capital Baseline (total P&L vs external capital)")
     unrealized_gain_loss: Optional[Currency] = Field(None, description="nav_value - book_value")
     twrr: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return series point")
-    mwrr: Optional[SafeDecimal] = Field(None, description="Money-Weighted Return series point")
+    mwrr_annualized: Optional[SafeDecimal] = Field(None, description="Annualized MWRR at this point")
+    mwrr_cumulative: Optional[SafeDecimal] = Field(None, description="Cumulative MWRR at this point: (1+r_ann)^(days/365)-1")
     roi: Optional[SafeDecimal] = Field(None, description="Simple ROI series point")
 
 
@@ -350,7 +423,8 @@ class AssetHistoryPoint(BaseModel):
     wac: SafeDecimal
     market_price: SafeDecimal
     twrr: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return series point")
-    mwrr: Optional[SafeDecimal] = Field(None, description="Money-Weighted Return series point")
+    mwrr_annualized: Optional[SafeDecimal] = Field(None, description="Annualized MWRR at this point")
+    mwrr_cumulative: Optional[SafeDecimal] = Field(None, description="Cumulative MWRR at this point")
     roi: Optional[SafeDecimal] = Field(None, description="Simple ROI series point")
 
 
@@ -433,6 +507,7 @@ class PortfolioReportQuery(BaseModel):
     include_history: bool = Field(True, description="Include daily history time series.")
     include_allocation_history: bool = Field(True, description="Include allocation history by all dimensions.")
     include_breakdown: bool = Field(False, description="Include per-broker breakdown in summary.")
+    include_positions_contribution: bool = Field(False, description="Include per-asset period P&L contribution.")
 
 
 class PortfolioReportResponse(BaseModel):
@@ -449,3 +524,4 @@ class PortfolioReportResponse(BaseModel):
     history: Optional[List[PortfolioHistoryPoint]] = None
     allocation_history: Optional[AllocationHistoryDimensions] = None
     data_quality: Optional[DataQualityReport] = None
+    positions_contribution: Optional[PositionsContribution] = Field(None, description="Per-asset period P&L contribution. Only when include_positions_contribution=True.")

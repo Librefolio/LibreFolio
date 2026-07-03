@@ -105,6 +105,9 @@
 | [[decisions/cost-basis-currency-object]] | cost_basis_override changed from bare SafeDecimal to Currency object {code, amount} — enables WAC cross-currency | 2026-05-24 | transactions, cost-basis, currency, schema, breaking-change |
 | [[decisions/wac-inline-validate-commit]] | WAC computed in /validate response (preview) and applied in /commit post-flush — no standalone endpoint in editing flow | 2026-05-28 | backend, frontend, transactions, wac, architecture, api |
 | [[decisions/port-6040-scheme]] | All ports migrated from 8000/8001/8002 to 6040/6041/6042 — "60/40 rule" mnemonic | 2026-05-27 | infrastructure, ports, developer-ergonomics |
+| [[decisions/batch-only-split-promote]] | Standalone /split and /promote endpoints eliminated — batch-only via execute_batch | 2026-05-12 | backend, transactions, split, promote, batch-pipeline |
+| [[decisions/import-wizard-v5-paradigm]] | Import Wizard v4→v5 paradigm: single-file modal → multi-file 4-step stepper | 2026-06-08 | frontend, brim, import-wizard, ux, stepper |
+| [[decisions/mwrr-boundary-fix]] | MWRR XIRR double-counting deposits fix: initial_nav = nav_snapshots[0].nav | 2026-06-30 | backend, portfolio, mwrr, xirr, financial-math |
 
 ## Concepts
 
@@ -136,6 +139,14 @@
 | [[concepts/log-level-policy]] | 6-level hierarchy (CRITICAL→TRACE=5) with practical rules; structlog LEVEL_TO_NAME patched | backend, logging, structlog, trace, policy |
 | [[concepts/image-preview-cache-pattern]] | objectUrl cache with size-based reuse; no ref counting, held for page lifetime | frontend, images, cache, performance, objecturl |
 | [[concepts/fx-range-helper-pattern]] | ensureFxRangeLoaded centralizes gap-detect→bulk-fetch→merge for FX stores | frontend, fx, stores, dry, cache |
+| [[concepts/centralized-tx-payload]] | txPayloadHelpers.ts + txCommitApi.ts — 9 callsites → single resolveOps()→buildBatchPayload()→commitBatch() | frontend, transactions, payload, api, dry |
+| [[concepts/workspace-intent-pattern]] | Frontend-only Svelte 5 declarative API for bulk staging intents (create/edit/clone/delete/import) — NOT backend multi-tenancy | frontend, svelte5, transactions, bulkModal, staging |
+| [[concepts/import-todo-signals]] | Plugin-emitted field blanks (severity: blocker/warning) — wizard-local, never touch PendingOp | frontend, brim, import, wizard, signals |
+| [[concepts/3-pool-cash-model]] | Cash decomposed into deposited/invested/realized — powers GrowthChart 3-line visualization | backend, portfolio, cash, decomposition, dashboard |
+| [[concepts/portfolio-report-unified]] | /portfolio/report runs engine once and returns all dashboard data — prevents race conditions + double runs | backend, api, portfolio, performance, cache |
+| [[concepts/ci-release-pipeline]] | GitHub Actions full pipeline: build→test→docker→push→release. Node 24, Vite 7.3.5, package-lock, 8 workers | ci, github-actions, release, docker, playwright |
+| [[concepts/inline-wac-computation]] | Single-pass inline WAC replacing N×M `compute_wac_iterative` DB calls — pool_qty/pool_cost accumulators in per-tx loop | backend, portfolio, wac, performance, engine |
+| [[concepts/pre-frame-frame-separation]] | No market eval before t0; pre-frame builds accounting state (qty/WAC/cash/K/R/W pools) from historical transactions | backend, portfolio, engine, performance, pre-frame |
 
 ## Problems
 
@@ -156,12 +167,15 @@
 | [[problems/svelte5-effect-read-write-loop]] | `$effect` reads and writes same `$state` → `effect_update_depth_exceeded` crash | resolved | frontend, svelte5, reactivity, infinite-loop |
 | [[problems/babel-currency-symbol-locale]] | `get_currency_symbol('USD', locale='it')` returns `'USD'` not `'$'` — fix: always use `locale='en'` for symbol | resolved | backend, python, babel, currency, i18n |
 | [[problems/datatable-filter-options-disappear]] | Enum filter options disappeared when count reached 0 due to `.filter(o => o.count > 0)` — removed that filter | resolved | frontend, datatable, filter, enum |
-| [[problems/pydantic-422-pre-emption]] | Pydantic 422 pre-emption blocked service-layer validation; fixed by lenient per-row parse in unified pipeline | resolved | backend, pydantic, fastapi, transactions |
+| [[problems/pydantic-422-preemption]] | Pydantic 422 pre-emption blocked service-layer validation; fixed by lenient per-row parse in unified pipeline | resolved | backend, pydantic, fastapi, transactions |
 | [[problems/browser-autofill-numeric-fields]] | Chrome autofill on numeric text inputs — fixed with `autocomplete="off"` + randomised `name` | resolved | frontend, ux, forms, autofill |
 | [[problems/dual-form-collect-duplication]] | FormModal/BulkModal had duplicated collect logic causing 3 cascading bugs — fixed via txPayloadHelpers.ts | resolved | frontend, transactions, dual-form, code-duplication |
 | [[problems/wac-feedback-loop]] | WAC recalc → field update → WAC recalc infinite loop — fixed via explicit cost_basis_mode field | resolved | frontend, wac, reactivity, infinite-loop |
 | [[problems/clone-link-uuid-duplication]] | Clone paired rows from DB didn't generate link_uuid — fixed via type-rule check | resolved | frontend, clone, link-uuid, paired |
 | [[problems/fx-multi-route-no-fallback]] | FX sync_pairs_bulk used only primary route with no fallback — alternative routes (ECB/FED/SNB) ignored on failure | resolved | backend, fx, providers, sync, fallback |
+| [[problems/broker-icon-race-condition]] | ensurePluginIconsLoaded race condition — broker icons show only dot in /files, tx filter, dashboard filter | open | frontend, broker-icon, race-condition, async |
+| [[problems/import-wizard-identifier-prompt]] | oncreated path skips resolveAssetManual() → identifier prompt never opens for newly created assets | open | frontend, import-wizard, brim, identifier-prompt |
+| [[problems/bulk-modal-sticky-z-index]] | After BRIM import row-selector toolbar clipped by overflow-y:auto container in BulkModal | open | frontend, bulk-modal, z-index, overflow, sticky |
 
 ## Entities
 
@@ -171,6 +185,11 @@
 | [[entities/backup-router]] | `/api/v1/backup` read-only export router (asset prices/events, FX rates) — Policy D pre-wipe snapshot |
 | [[entities/db-models]] | All SQLModel ORM models — tables, enums, constraints, design notes |
 | [[entities/devpy-cli]] | `dev.py` — single CLI entry point for all developer operations |
+| [[entities/import-wizard-modal]] | 4-step BRIM Import Wizard (wide modal, z:70) — UploadedFileEntry→FileSelection→ParsedFileResult→MergedTransaction pipeline |
+| [[entities/market-data-scheduler]] | Embedded FastAPI scheduler daemon — current-price + history-sync jobs, leader election, JSONL log |
+| [[entities/portfolio-engine]] | 4-layer portfolio engine (1603 lines) — ScopeAwareClassifier→DailyStateBuilder→DerivedViewsBuilder→PortfolioCalculationEngine |
+| [[entities/portfolio-service]] | PortfolioService (1946 lines) — orchestration, L2 TTL cache, get_report/summary/history/contribution |
+| [[entities/test-runner]] | Modular test runner package at scripts/test_runner/ — 18 modules, distributed registry pattern |
 
 ## Workflows
 
@@ -239,15 +258,52 @@
 | [[sources/r2-parallel-features-pwa-borsa-fx]] | Batch 3: PWA, Port 60/40, Borsa Italiana, FX fix (parallel commits) ✅ | 2026-06-02 | pwa, mobile, ports, assets, fx, borsa-italiana |
 | [[sources/independent-batch-2026-06-01]] | Batch 4: 5 independent plans (LogAudit, Candlestick, FxRange, LazyImage, RsiBands) ✅ | 2026-06-01 | backend, frontend, logging, charts, fx, cache, signals |
 | [[sources/r3-sp-d-formmodal-wac-fx-chain]] | SP-D chain (6 plans): FormModal props + EventPicker + WAC FX feedback + currency selector + bugfixes ✅ | 2026-06-04 | phase07, transactions, wac, fx, event-picker, formmodal |
+| [[sources/phase07-pland-split-promote]] | PlanD-D1D2: batch-only split/promote, _PromoteCandidate duck-typing, centralized payload layer ✅ | 2026-06-30 | phase07, transactions, split, promote, batch-pipeline |
+| [[sources/phase07-part5-import-wizard-v5]] | BRIM Import Wizard v5: 4-step stepper, multi-file, ImportTodo signals, WorkspaceIntent, Schwab ✅ | 2026-06-30 | phase07, brim, import-wizard, stepper, multi-file |
+| [[sources/phase07-standalone-pwa]] | PWA archive plan: mobile CSS + manifest + install button + 2 bugfixes (Svelte 5 runes, beforeinstallprompt race) ✅ | 2026-06-30 | pwa, mobile, svelte5, race-condition |
+| [[sources/phase08-scheduler-backend]] | Phase 08: embedded scheduler daemon, leader election, 5 new settings, fetch_interval cleanup, test checkpoint ✅ | 2026-06-30 | phase08, scheduler, backend, leader-election |
+| [[sources/phase09-portfolio-engine-dashboard]] | Phase 09 M2: 4-layer portfolio engine, 3-pool cash, MWRR fix, unified /report endpoint, L2 cache ✅ | 2026-06-30 | phase09, portfolio, engine, kpi, mwrr, dashboard |
+| [[sources/wiki-audit-2026-06-18]] | Wiki audit: WorkspaceIntent = frontend-only (not backend), test_runner now modular package, lf-screenshot-carousel ✅ | 2026-06-30 | audit, documentation, workspace-intent, test-runner |
+| [[sources/phase-final-bugs-2026-06-25]] | Phase final QA: 5 bug categories (broker icon race, files refresh, import wizard identifier, bulk modal toolbar) | 2026-06-30 | bugs, qa, docker, race-condition |
+| [[sources/ci-release-pipeline-2026-06]] | CI/CD: GitHub Actions release.yml — Node 24, Vite 7.3.5, package-lock, Docker :test tag, 8 Playwright workers ✅ | 2026-06-30 | ci, release, docker, playwright, nodejs |
+| [[sources/phase09-portfolio-engine-3pool-refactor]] | Phase 09 Engine Refactor: inline WAC single-pass, 3-pool K/R/W event-driven, SELL fix, pre-frame/frame, blob cache ✅ | 2026-07-01 | phase09, portfolio, engine, wac, 3-pool, refactor |
 
 
-## Recent Additions (Phase 09)
-- [[sources/phase09-dashboard-batch]]
-- [[concepts/twrr-mwrr-algorithms]]
-- [[concepts/fifo-lot-tracking]]
-- [[sources/source-code-v0.9.0-batch]]
-- [[entities/video-promo-remotion]]
-- [[concepts/interactive-pros-cons-slider]]
+## Recent Additions (Phase 09 + Final + CI)
+- [[sources/phase09-portfolio-engine-dashboard]] — 2026-06-30
+- [[entities/portfolio-engine]] — 2026-06-30 (updated 2026-07-01)
+- [[entities/portfolio-service]] — 2026-06-30 (updated 2026-07-01)
+- [[concepts/3-pool-cash-model]] — 2026-06-30 (updated 2026-07-01)
+- [[concepts/portfolio-report-unified]] — 2026-06-30
+- [[decisions/mwrr-boundary-fix]] — 2026-06-30
+- [[sources/phase07-part5-import-wizard-v5]] — 2026-06-30
+- [[entities/import-wizard-modal]] — 2026-06-30
+- [[concepts/workspace-intent-pattern]] — 2026-06-30
+- [[concepts/import-todo-signals]] — 2026-06-30
+- [[decisions/import-wizard-v5-paradigm]] — 2026-06-30
+- [[sources/phase07-pland-split-promote]] — 2026-06-30
+- [[decisions/batch-only-split-promote]] — 2026-06-30
+- [[concepts/centralized-tx-payload]] — 2026-06-30
+- [[sources/phase08-scheduler-backend]] — 2026-06-30
+- [[entities/market-data-scheduler]] — 2026-06-30
+- [[sources/wiki-audit-2026-06-18]] — 2026-06-30
+- [[entities/test-runner]] — 2026-06-30
+- [[sources/phase-final-bugs-2026-06-25]] — 2026-06-30
+- [[problems/broker-icon-race-condition]] — 2026-06-30
+- [[problems/import-wizard-identifier-prompt]] — 2026-06-30
+- [[sources/phase09-portfolio-engine-3pool-refactor]] — 2026-07-01
+- [[concepts/inline-wac-computation]] — 2026-07-01
+- [[concepts/pre-frame-frame-separation]] — 2026-07-01
+- [[problems/bulk-modal-sticky-z-index]] — 2026-06-30
+- [[sources/ci-release-pipeline-2026-06]] — 2026-06-30
+- [[concepts/ci-release-pipeline]] — 2026-06-30
+- [[sources/phase07-standalone-pwa]] — 2026-06-30
+- [[sources/phase09-dashboard-batch]] — (previously listed)
+- [[concepts/twrr-mwrr-algorithms]] — (previously listed)
+- [[concepts/fifo-lot-tracking]] — (previously listed)
+- [[sources/source-code-v0.9.0-batch]] — (previously listed)
+- [[entities/video-promo-remotion]] — (previously listed)
+- [[concepts/interactive-pros-cons-slider]] — (previously listed)
 
 
 ## Uncategorized / Auto-Recovered

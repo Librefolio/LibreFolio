@@ -15,7 +15,7 @@
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
     import {formatBytes} from '$lib/utils/files/upload';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
-    import {ensureBrokersLoaded, getEditableBrokers, refreshAllBrokers, type BrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getEditableBrokers, refreshAllBrokers, getBrokerInfo, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getAssetInfo, refreshAllAssets, type AssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
@@ -30,6 +30,7 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
     import ImportPluginSelect, {getCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
@@ -390,6 +391,14 @@
      */
     async function resolveAssetManual(fakeAssetId: number, realAssetId: number, res: AssetResolution) {
         resolveAsset(fakeAssetId, realAssetId);
+        await checkAndPromptIdentifier(fakeAssetId, realAssetId, res);
+    }
+
+    /**
+     * Check if a resolved asset is missing the extracted identifier and, if so, open the prompt.
+     * Shared by resolveAssetManual and the oncreated callback (new asset from AssetModal).
+     */
+    async function checkAndPromptIdentifier(fakeAssetId: number, realAssetId: number, res: AssetResolution) {
         let info = getAssetInfo(realAssetId);
         if (!info) {
             await refreshAllAssets();
@@ -1061,7 +1070,7 @@ ${arrow}<span>${label}</span></span>`,
         },
         {
             id: 'broker',
-            header: () => $t('importWizard.assignBroker'),
+            header: () => $t('common.broker'),
             cell: (row) =>
                 row.status === 'error'
                     ? '—'
@@ -1072,7 +1081,7 @@ ${arrow}<span>${label}</span></span>`,
                               brokers,
                               value: row.brokerId,
                               onchange: (v: number | null) => onFileBrokerChange(row.id, v),
-                              placeholder: $t('importWizard.assignBroker'),
+                              placeholder: $t('common.broker'),
                               createLabel: $t('common.createNew'),
                               onCreateNew: () => {
                                   createBrokerContext = row.id;
@@ -1107,7 +1116,7 @@ ${arrow}<span>${label}</span></span>`,
         {
             id: 'delete',
             icon: Trash2,
-            label: () => $t('importWizard.remove'),
+            label: () => $t('common.remove'),
             onClick: (row) => removePendingFileById(row.id),
             variant: 'danger',
         },
@@ -1409,23 +1418,17 @@ ${arrow}<span>${label}</span></span>`,
         {
             id: 'brokerName',
             header: () => 'Broker',
-            cell: (row) => {
-                const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-                const faviconUrl = row.brokerPortalUrl
-                    ? (() => {
-                          try {
-                              return new URL(row.brokerPortalUrl!).origin + '/favicon.ico';
-                          } catch {
-                              return null;
-                          }
-                      })()
-                    : null;
-                const imgSrc = row.brokerIconUrl || faviconUrl;
-                const icon = imgSrc
-                    ? `<img src="${esc(imgSrc)}" class="w-5 h-5 rounded-full object-cover shrink-0" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">${`<span class="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0" style="display:none">${esc(row.brokerName.charAt(0).toUpperCase())}</span>`}`
-                    : `<span class="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">${esc(row.brokerName.charAt(0).toUpperCase())}</span>`;
-                return {type: 'html', html: `<div class="flex items-center gap-1.5 min-w-0">${icon}<span class="truncate text-xs">${esc(row.brokerName)}</span></div>`} as const;
-            },
+            cell: (row) =>
+                ({
+                    type: 'custom',
+                    component: BrokerBadge,
+                    props: {
+                        broker: getBrokerInfo(row.brokerId) ?? {id: row.brokerId, name: row.brokerName},
+                        size: 20,
+                        showName: true,
+                        tooltip: row.brokerName,
+                    },
+                }) as const,
             type: 'text',
             sortable: true,
             width: 130,
@@ -1466,7 +1469,7 @@ ${arrow}<span>${label}</span></span>`,
                 const labelMap: Record<string, string> = {
                     pending: $t('importWizard.filePending'),
                     done: $t('importWizard.fileDone'),
-                    error: $t('importWizard.fileError'),
+                    error: $t('common.error'),
                 };
                 return {type: 'badge', text: labelMap[row.status] ?? row.status, variant: variantMap[row.status] ?? 'default'} as const;
             },
@@ -1753,7 +1756,7 @@ ${arrow}<span>${label}</span></span>`,
                                     {brokers}
                                     value={globalBrokerId}
                                     onchange={onGlobalBrokerChange}
-                                    placeholder={$t('importWizard.assignBroker')}
+                                    placeholder={$t('common.broker')}
                                     createLabel={$t('common.createNew')}
                                     onCreateNew={() => {
                                         createBrokerContext = 'global';
@@ -1771,7 +1774,7 @@ ${arrow}<span>${label}</span></span>`,
                                     {
                                         id: 'bulk-delete',
                                         icon: Trash2,
-                                        label: () => $t('importWizard.remove'),
+                                        label: () => $t('common.remove'),
                                         variant: 'danger',
                                         onClick: () => {
                                             removePendingFilesByIds(step1SelectedIds);
@@ -1851,7 +1854,7 @@ ${arrow}<span>${label}</span></span>`,
                                     {:else}
                                         <ChevronRight size={14} class="text-gray-400" />
                                     {/if}
-                                    <BrokerIcon iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
+                                    <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
                                     <span class="font-medium text-sm text-gray-800 dark:text-gray-200">{broker.name}</span>
                                     {#if selectedFiles.filter((f) => f.brokerId === broker.id).length > 0}
                                         <span class="text-xs font-medium text-libre-green ml-1">({selectedFiles.filter((f) => f.brokerId === broker.id).length})</span>
@@ -1875,7 +1878,7 @@ ${arrow}<span>${label}</span></span>`,
                                             onRowDoubleClick={(row) => openPreview(row.file_id)}
                                             enableActions={true}
                                             actionsColumnWidth="60px"
-                                            rowActions={[{id: 'preview', icon: Eye, label: $t('importWizard.preview'), onClick: (row) => openPreview(row.file_id)}]}
+                                            rowActions={[{id: 'preview', icon: Eye, label: $t('common.preview'), onClick: (row) => openPreview(row.file_id)}]}
                                             enableSorting={true}
                                             enableColumnFilters={true}
                                             enableColumnResize={true}
@@ -2110,7 +2113,7 @@ ${arrow}<span>${label}</span></span>`,
                     <!-- Toolbar row -->
                     <div class="flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-gray-700">
                         <div class="flex items-center gap-3 text-sm">
-                            <span class="font-semibold">{$t('importWizard.transactionsSection')}</span>
+                            <span class="font-semibold">{$t('transactions.title')}</span>
                             <span class="text-gray-500">{step4SelectedCount} / {step4TotalCount}</span>
                             {#if step4LikelyDupCount > 0}
                                 <span class="text-xs text-amber-600 dark:text-amber-400">⚠ {step4LikelyDupCount} {$t('importWizard.likelyDuplicate')}</span>
@@ -2118,11 +2121,11 @@ ${arrow}<span>${label}</span></span>`,
                         </div>
                         <div class="flex items-center gap-2">
                             <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1" onclick={step4SelectAll}>
-                                <CheckSquare size={12} /><span class="hidden sm:inline">{$t('importWizard.selectAll')}</span>
+                                <CheckSquare size={12} /><span class="hidden sm:inline">{$t('common.selectAll')}</span>
                             </button>
                             <span class="text-gray-300 dark:text-gray-600">|</span>
                             <button type="button" class="text-xs text-gray-500 hover:underline flex items-center gap-1" onclick={step4DeselectAll}>
-                                <Square size={12} /><span class="hidden sm:inline">{$t('importWizard.deselectAll')}</span>
+                                <Square size={12} /><span class="hidden sm:inline">{$t('common.deselectAll')}</span>
                             </button>
                             <span class="text-gray-300 dark:text-gray-600">|</span>
                             <ColumnVisibilityToggle tableRef={step4TableRef} />
@@ -2160,7 +2163,7 @@ ${arrow}<span>${label}</span></span>`,
         {#if currentStep === 1}
             <div class="flex items-center gap-1">
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={handleClose}>
-                    {$t('importWizard.cancel')}
+                    {$t('common.cancel')}
                 </button>
                 {#if pendingFiles.length > 0 && step1HasUnassigned}
                     <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
@@ -2193,7 +2196,7 @@ ${arrow}<span>${label}</span></span>`,
         {:else if currentStep === 2}
             <div class="flex items-center gap-1">
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
-                    ◀ {$t('importWizard.back')}
+                    ◀ {$t('common.back')}
                 </button>
                 {#if selectedFiles.length > 0 && !step2CanParse}
                     <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
@@ -2213,7 +2216,7 @@ ${arrow}<span>${label}</span></span>`,
         {:else if currentStep === 3}
             <div class="flex items-center gap-1">
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
-                    ◀ {$t('importWizard.back')}
+                    ◀ {$t('common.back')}
                 </button>
                 {#if parseParsing}
                     <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
@@ -2243,12 +2246,12 @@ ${arrow}<span>${label}</span></span>`,
                 {/if}
             </div>
             <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step3CanContinue} data-testid="import-wizard-continue">
-                {$t('importWizard.continue')} ▶
+                {$t('common.continue')} ▶
             </button>
         {:else}
             <div class="flex items-center gap-1">
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
-                    ◀ {$t('importWizard.back')}
+                    ◀ {$t('common.back')}
                 </button>
                 {#if step4HasUnresolvedSelected}
                     <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
@@ -2276,7 +2279,7 @@ ${arrow}<span>${label}</span></span>`,
 </ModalBase>
 
 <!-- Unsaved guard -->
-<ConfirmModal open={confirmCloseOpen} title={$t('importWizard.discardTitle')} message={$t('importWizard.discardMessage')} confirmText={$t('importWizard.discardConfirm')} warning zIndex={80} onConfirm={confirmDiscard} onCancel={() => (confirmCloseOpen = false)} />
+<ConfirmModal open={confirmCloseOpen} title={$t('common.discardImport')} message={$t('common.discardChangesMessage')} confirmText={$t('common.discard')} warning zIndex={80} onConfirm={confirmDiscard} onCancel={() => (confirmCloseOpen = false)} />
 
 <!-- Step 3 → 4: warning acknowledgement (custom modal with accordion) -->
 <ModalBase open={showWarningConfirm} maxWidth="lg" zIndex={85} onRequestClose={() => (showWarningConfirm = false)}>
@@ -2374,9 +2377,16 @@ ${arrow}<span>${label}</span></span>`,
             : []}
         initialSearchQuery=""
         zIndex={90}
+        initialNoProvider={true}
         oncreated={(assetId) => {
-            resolveAsset(createAssetForFakeId!, assetId);
+            const fakeId = createAssetForFakeId!;
+            const res = assetResolutions.find((r) => r.fakeAssetId === fakeId);
+            resolveAsset(fakeId, assetId);
             createAssetForFakeId = null;
+            if (res) {
+                // Trigger identifier prompt if the new asset is missing the extracted identifier.
+                void checkAndPromptIdentifier(fakeId, assetId, res);
+            }
         }}
         onclose={() => (createAssetForFakeId = null)}
     />

@@ -42,7 +42,3 @@ For more advanced portfolios, you can configure a **Flex Query** to export speci
 - Supports standard IBKR activity reports (trades, dividends, tax withholdings, fees, deposits, withdrawals).
 - Multi-currency accounts are supported.
 - Corporate actions (splits, mergers) may require manual adjustments inside the staging grid.
-
-## 🔗 Developer Reference
-
-→ [IBKR Provider — Implementation Details](../../../developer/backend/brim/providers_list.md)

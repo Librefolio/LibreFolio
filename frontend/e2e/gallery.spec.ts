@@ -116,7 +116,10 @@ function getViewport(testInfo: any): 'desktop' | 'mobile' {
 test.describe('Gallery Screenshots', () => {
     // Gallery tests iterate over 4 languages × 2 themes = 8 screenshots per test
     // Some tests also navigate (broker detail, import modal) so need extra time
-    test.setTimeout(180_000); // 3 minutes per test
+    // Bumped from 180s: CI runs on a 4-vCPU public runner with --workers matched
+    // to CPU count, but transient contention (backend workers, mkdocs build,
+    // node overhead) still warrants a bit more default headroom.
+    test.setTimeout(240_000); // 4 minutes per test (default; heavy tests override above)
 
     // Each gallery test is independent (logs in fresh, navigates, screenshots).
     // Run in parallel across workers for faster generation.
@@ -181,6 +184,96 @@ test.describe('Gallery Screenshots', () => {
         });
     });
 
+    function parseLocalDateString(s: string): Date {
+        const [year, month, day] = s.split('-').map(Number);
+        return new Date(year, month - 1, day);
+    }
+
+    function getLocalDateString(d: Date): string {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function shiftDatesToToday(obj: any): any {
+        const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+        let maxDateStr: string | null = null;
+
+        function findMaxDate(val: any) {
+            if (typeof val === 'string' && datePattern.test(val)) {
+                if (!maxDateStr || val > maxDateStr) {
+                    maxDateStr = val;
+                }
+            } else if (Array.isArray(val)) {
+                for (const item of val) findMaxDate(item);
+            } else if (val && typeof val === 'object') {
+                for (const key of Object.keys(val)) findMaxDate(val[key]);
+            }
+        }
+        findMaxDate(obj);
+
+        if (!maxDateStr) return obj;
+
+        const today = new Date();
+        const maxDate = parseLocalDateString(maxDateStr);
+        
+        today.setHours(0, 0, 0, 0);
+        maxDate.setHours(0, 0, 0, 0);
+
+        const diffTime = today.getTime() - maxDate.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays === 0) return obj;
+
+        function shift(val: any): any {
+            if (typeof val === 'string' && datePattern.test(val)) {
+                const d = parseLocalDateString(val);
+                d.setDate(d.getDate() + diffDays);
+                return getLocalDateString(d);
+            } else if (Array.isArray(val)) {
+                return val.map(shift);
+            } else if (val && typeof val === 'object') {
+                const newObj: any = {};
+                for (const key of Object.keys(val)) {
+                    newObj[key] = shift(val[key]);
+                }
+                return newObj;
+            }
+            return val;
+        }
+
+        return shift(obj);
+    }
+
+    async function setupDashboardMockReport(page: Page) {
+        const mockDataPath = path.join(__dirname, 'dashboard-report.json');
+        if (fs.existsSync(mockDataPath)) {
+            try {
+                const rawMockData = JSON.parse(fs.readFileSync(mockDataPath, 'utf8'));
+                const adjustedMockData = shiftDatesToToday(rawMockData);
+                await page.route('**/api/v1/portfolio/report', async route => {
+                    await route.fulfill({
+                        status: 200,
+                        contentType: 'application/json',
+                        body: JSON.stringify(adjustedMockData)
+                    });
+                });
+            } catch (err) {
+                console.error('Failed to setup mock portfolio report:', err);
+            }
+        }
+    }
+
+    async function selectMaxDateRange(page: Page) {
+        const maxBtn = page.getByRole('button', { name: 'MAX' });
+        const y2Btn = page.getByRole('button', { name: '2Y' });
+        if (await maxBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+            await maxBtn.click();
+        } else if (await y2Btn.isVisible({ timeout: 500 }).catch(() => false)) {
+            await y2Btn.click();
+        }
+    }
+
     test.describe('Dashboard', () => {
         test.beforeEach(async ({page}) => {
             // Use TEST_ADMIN since db populate assigns brokers to admin
@@ -189,12 +282,32 @@ test.describe('Gallery Screenshots', () => {
 
         test('main dashboard - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectMaxDateRange(page);
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
+
+                // Scroll to the growth chart so it is visible and positioned nicely
+                const growthChart = page.getByTestId('growth-chart');
+                if (await growthChart.isVisible({timeout: 5000}).catch(() => false)) {
+                    await growthChart.scrollIntoViewIfNeeded();
+                    await page.waitForTimeout(500); // Give e-charts time to redraw/stabilize
+                }
+                
+                // Screenshot absolute mode (default)
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'main');
+
+                // Toggle and screenshot percentage mode
+                const pctToggle = page.getByTestId('growth-toggle-pct');
+                if (await pctToggle.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await pctToggle.click();
+                    await page.waitForTimeout(500); // Give e-charts time to redraw
+                }
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'main-pct');
             });
         });
 
@@ -203,6 +316,7 @@ test.describe('Gallery Screenshots', () => {
                 test.skip();
                 return;
             }
+            await setupDashboardMockReport(page);
 
             const menuToggle = page.getByTestId('mobile-menu-toggle');
 
@@ -211,6 +325,8 @@ test.describe('Gallery Screenshots', () => {
                 for (const theme of THEMES) {
                     // Navigate fresh to dashboard for each combo (ensures clean state)
                     await page.goto('/dashboard');
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
+                    await selectMaxDateRange(page);
                     await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await freezeAnimations(page);
 
@@ -231,19 +347,64 @@ test.describe('Gallery Screenshots', () => {
 
         test('dashboard allocation charts - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectMaxDateRange(page);
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
+                
                 // Scroll to the allocation panel
                 const allocPanel = page.getByTestId('allocation-panel');
                 if (await allocPanel.isVisible({timeout: 5_000}).catch(() => false)) {
                     await allocPanel.scrollIntoViewIfNeeded();
-                    await waitForNetworkSettled(page);
-                    await page.waitForTimeout(800); // Extra time for ECharts render
+                    await page.waitForTimeout(400);
                 }
-                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-charts');
+
+                const viewNowBtn = page.getByTestId('allocation-view-now');
+                const viewHistBtn = page.getByTestId('allocation-view-history');
+                const tabTypeBtn = page.getByTestId('allocation-tab-type');
+                const tabSectorBtn = page.getByTestId('allocation-tab-sector');
+                const tabGeoBtn = page.getByTestId('allocation-tab-geo');
+
+                // 1. TYPE + NOW
+                await tabTypeBtn.click();
+                await viewNowBtn.click();
+                await page.waitForTimeout(500); // Wait for ECharts animation
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-type-now');
+
+                // 2. TYPE + HISTORY
+                await viewHistBtn.click();
+                await page.waitForLoadState('networkidle', {timeout: 10_000});
+                await page.waitForTimeout(500);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-type-history');
+
+                // 3. SECTOR + NOW
+                await tabSectorBtn.click();
+                await viewNowBtn.click();
+                await page.waitForTimeout(500);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-sector-now');
+
+                // 4. SECTOR + HISTORY
+                await viewHistBtn.click();
+                await page.waitForLoadState('networkidle', {timeout: 10_000});
+                await page.waitForTimeout(500);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-sector-history');
+
+                // 5. GEO + NOW
+                await tabGeoBtn.click();
+                await viewNowBtn.click();
+                await page.waitForTimeout(500);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-geo-now');
+
+                // 6. GEO + HISTORY
+                await viewHistBtn.click();
+                await page.waitForLoadState('networkidle', {timeout: 10_000});
+                await page.waitForTimeout(500);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-geo-history');
+
                 // Scroll back to top so next iteration starts clean
                 await page.evaluate(() => window.scrollTo(0, 0));
             });
@@ -396,6 +557,20 @@ test.describe('Gallery Screenshots', () => {
                         .catch(() => {});
                     await waitForNetworkSettled(page);
                     await page.waitForTimeout(500);
+
+                    // Settings start locked by default — unlock via the lock toggle
+                    // before interacting with scheduler-config-btn (disabled while locked)
+                    const lockToggle = page.getByTestId('settings-lock-toggle');
+                    if (await lockToggle.isVisible({timeout: 3_000}).catch(() => false)) {
+                        const isLocked = await page
+                            .getByTestId('scheduler-config-btn')
+                            .isDisabled()
+                            .catch(() => false);
+                        if (isLocked) {
+                            await lockToggle.click();
+                            await page.waitForTimeout(200);
+                        }
+                    }
 
                     // Click the configure button to open SchedulerConfigModal
                     const configBtn = page.getByTestId('scheduler-config-btn');
@@ -615,9 +790,19 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('transaction form modal variants - all languages and themes', async ({page}, testInfo) => {
+            // Heaviest gallery test: 7 types × 4 langs × 2 themes = 56 sub-flows in ONE
+            // persistently-open modal. Measured locally: ~24s per type-switch cycle
+            // (combobox open + select + waitForNetworkSettled + screenshot), so the full
+            // run needs ~22-24 minutes end-to-end — confirmed linear, not a hang/leak
+            // (progress is identical and deterministic across reruns, just slow).
+            // This is architecturally a very heavy single test; a future refactor could
+            // split it into 7 per-type tests to parallelize across workers instead of
+            // serializing inside one modal. For now, give it generous headroom — this is
+            // a docs/gallery-only nightly step, not a PR gate.
+            test.setTimeout(1_500_000); // 25 minutes
             // Screenshots for different transaction types in the form modal.
             // Open the form ONCE per lang/theme and switch types inside it — avoids
-            // 7 × navigation overhead and stays well within the 3-min timeout.
+            // 7 × navigation overhead and stays well within the 25-min timeout.
             const viewport = getViewport(testInfo);
             const typesToShoot: Array<{type: string; name: string}> = [
                 {type: 'SELL', name: 'form-modal-sell'},
@@ -674,6 +859,8 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('transaction picker modal - all languages and themes', async ({page}, testInfo) => {
+            // Heavier than the default 3-min budget: nested modal navigation × 4 langs × 2 themes.
+            test.setTimeout(300_000); // 5 minutes
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
@@ -1069,6 +1256,8 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('import wizard step 4 asset resolution - all languages and themes', async ({page}, testInfo) => {
+            // Heavier than the default 3-min budget: real CSV parse via backend × 4 langs × 2 themes.
+            test.setTimeout(300_000); // 5 minutes
             // generic_simple.csv contains UNETF (unknown asset → unresolved card in step 4)
             const viewport = getViewport(testInfo);
             const GENERIC_SIMPLE = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
@@ -1105,6 +1294,9 @@ test.describe('Gallery Screenshots', () => {
                             await parseBtn.click();
                             await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
                             await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
+                            await page.waitForTimeout(500); // Let UI settle
+                            await freezeAnimations(page);
+                            await screenshot(page, viewport, lang, theme, 'brokers', 'import-wizard-step3');
 
                             // Continue to step 4
                             await page.getByTestId('import-wizard-continue').click();
@@ -1202,6 +1394,8 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('import bulk staging - all languages and themes', async ({page}, testInfo) => {
+            // Heavier than the default 3-min budget under load: real backend list load × 4 langs × 2 themes.
+            test.setTimeout(300_000); // 5 minutes
             // Show the BulkModal (staging grid) — open it in edit mode from the transactions table.
             // The BulkModal staging view is the same whether populated from wizard import or manual edit.
             const viewport = getViewport(testInfo);
@@ -2255,6 +2449,8 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('Asset create modal from import wizard - all languages and themes', async ({page}, testInfo) => {
+            // Heavier than the default 3-min budget: full import wizard + CSV parse × 4 langs × 2 themes.
+            test.setTimeout(300_000); // 5 minutes
             // Opens AssetModal from ImportWizard step4 — pre-filled with extracted ticker/ISIN/name
             // Uses generic_simple.csv which has UNETF (unresolved asset)
             const viewport = getViewport(testInfo);

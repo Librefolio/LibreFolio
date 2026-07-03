@@ -8,7 +8,7 @@ Le ROI Simple mesure le rendement en pourcentage absolu généré par un investi
 ## 🧮 Formule
 
 $$
-ROI = \frac{\text{Valeur Actuelle}}{\text{Coût Moyen Pondéré (CMP)}} - 1
+ROI = \frac{\text{Valeur Actuelle}}{\text{Prix de Revient Moyen (PRM)}} - 1
 $$
 
 ## 🎯 Quand l'utiliser
@@ -16,4 +16,4 @@ $$
 - Lorsque vous souhaitez un aperçu rapide et intuitif du profit total non ajusté.
 
 ## ⚠️ Le défaut : Dilution des flux de trésorerie
-Le ROI Simple perd sa pertinence lorsque vous effectuez des investissements successifs dans le même actif. Si vous achetez une action et qu'elle grimpe de +50 %, votre ROI est de +50 %. Si vous investissez ensuite 10 fois plus de capital dans cette même action et que le prix ne bouge pas, votre gain absolu reste le même, mais votre nouvelle base de capital considérable diluera instantanément votre ROI pour le ramener, par exemple, à +5 %. On a l'impression que votre performance s'est effondrée, alors que le marché n'a pas bougé.
+Le ROI Simple perd sa pertinence lorsque vous effectuez des investissements successifs dans le même actif. Si vous achetez une action et qu'elle grimpe de +50 %, votre ROI est de +50 %. Si vous investissez ensuite 10 fois plus de capital dans cette même action et que le prix ne bouge pas, votre gain absolu reste le même, mais votre nouvelle base de capital considérable diluera instantanément votre ROI pour le ramener, par exemple, à +5 %. On a l'impression que votre performance s'est effondrée, alors que le marché n'a pas bougé. Pour remédier à cet effet de dilution et mesurer le profit monétaire réel net corrigé des flux de capitaux, reportez-vous à la page du [P&L de la Période](period-pnl.md).

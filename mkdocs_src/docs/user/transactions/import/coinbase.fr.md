@@ -33,6 +33,6 @@ Pour exporter votre relevé de transactions depuis Coinbase :
 - Prend en charge les achats, les ventes, les conversions, les envois, les réceptions, les récompenses de staking et l'évaluation des frais.
 - Prend en charge les principales devises fiduciaires de base (USD, EUR, GBP).
 
-## 🔗 Référence Développeur
+## 🔗 Référence pour les Développeurs
 
-→ [Coinbase Provider — Détails d'implémentation](../../../developer/backend/brim/providers_list.md)
+→ [Coinbase Provider — Détails d'Implémentation](../../../developer/backend/brim/providers_list.md)

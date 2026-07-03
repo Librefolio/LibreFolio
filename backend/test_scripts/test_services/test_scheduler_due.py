@@ -45,6 +45,7 @@ def _make_settings(
         history_sync_times=times if times is not None else [time(6, 0), time(23, 0)],
         history_sync_days=days if days is not None else ["mon", "tue", "wed", "thu", "fri", "sat"],
         history_sync_horizon_days=14,
+        scheduler_timezone="UTC",
     )
 
 

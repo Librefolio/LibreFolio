@@ -90,9 +90,11 @@ plugins:
             Signals: Segnali
             Measures: Misure
             Data Editor: Editor Dati
+            Events: Eventi
             Provider Config: Configurazione Provider
             Chart Settings: Impostazioni Grafico
             "📈 Assets": "📈 Asset"
+            "Create & Edit": "Crea & Modifica"
             "🔌 Providers": "🔌 Provider"
             Yahoo Finance: Yahoo Finance
             justETF: justETF
@@ -197,6 +199,10 @@ plugins:
             Max Drawdown: Massimo Drawdown
             Volatility: Volatilità
             Weighted Average Cost: Costo Medio Ponderato
+            NAV / Net Worth: NAV / Net Worth
+            Book Value: Valore Contabile
+            Period P&L: P&L del Periodo
+            Timing Effect: Effetto Timing
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             "🖼️ Gallery": "🖼️ Galleria"
             Desktop: Desktop
@@ -228,9 +234,11 @@ plugins:
             Signals: Signaux
             Measures: Mesures
             Data Editor: Éditeur de Données
+            Events: Événements
             Provider Config: Configuration du Fournisseur
             Chart Settings: Paramètres du Graphique
             "📈 Assets": "📈 Actifs"
+            "Create & Edit": "Créer & Modifier"
             "🔌 Providers": "🔌 Fournisseurs"
             Yahoo Finance: Yahoo Finance
             justETF: justETF
@@ -335,6 +343,10 @@ plugins:
             Max Drawdown: Drawdown Maximum
             Volatility: Volatilité
             Weighted Average Cost: Coût Moyen Pondéré
+            NAV / Net Worth: NAV / Net Worth
+            Book Value: Valeur Comptable
+            Period P&L: P&L de la Période
+            Timing Effect: Effet de timing
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             "🖼️ Gallery": "🖼️ Galerie"
             Desktop: Bureau
@@ -366,9 +378,11 @@ plugins:
             Signals: Señales
             Measures: Medidas
             Data Editor: Editor de Datos
+            Events: Eventos
             Provider Config: Configuración del Proveedor
             Chart Settings: Ajustes del Gráfico
             "📈 Assets": "📈 Activos"
+            "Create & Edit": "Crear & Editar"
             "🔌 Providers": "🔌 Proveedores"
             Yahoo Finance: Yahoo Finance
             justETF: justETF
@@ -473,6 +487,10 @@ plugins:
             Max Drawdown: Drawdown Máximo
             Volatility: Volatilidad
             Weighted Average Cost: Coste Medio Ponderado
+            NAV / Net Worth: NAV / Net Worth
+            Book Value: Valor Contable
+            Period P&L: P&L del Periodo
+            Timing Effect: Efecto timing
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             "🖼️ Gallery": "🖼️ Galería"
             Desktop: Escritorio
@@ -509,6 +527,8 @@ nav:
       - Install as App (PWA): user/pwa.md
       - 📊 Dashboard:
           - Overview: user/dashboard/index.md
+          - KPI Cards: user/dashboard/kpi-cards.md
+          - Charts: user/dashboard/charts.md
       - 🏦 Brokers:
           - Overview: user/brokers/index.md
           - Broker Sharing: user/brokers/sharing.md
@@ -633,6 +653,12 @@ nav:
               - Sine Wave: financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md
           - 🏆 Performance Metrics:
               - Overview: financial-theory/technical-analysis/performance-metrics/index.md
+              - Portfolio Engine: financial-theory/technical-analysis/performance-metrics/portfolio-engine.md
+              - NAV / Net Worth: financial-theory/technical-analysis/performance-metrics/nav.md
+              - Book Value: financial-theory/technical-analysis/performance-metrics/book-value.md
+              - Period P&L: financial-theory/technical-analysis/performance-metrics/period-pnl.md
+              - Deposited Capital & Total P&L: financial-theory/technical-analysis/performance-metrics/deposited-capital.md
+              - Timing Effect: financial-theory/technical-analysis/performance-metrics/timing-effect.md
               - ROI: financial-theory/technical-analysis/performance-metrics/roi.md
               - TWRR: financial-theory/technical-analysis/performance-metrics/twrr.md
               - MWRR: financial-theory/technical-analysis/performance-metrics/mwrr.md
@@ -742,6 +768,7 @@ nav:
                   - Authentication: developer/frontend/components/features/auth.md
                   - Settings: developer/frontend/components/features/settings.md
                   - Live Ticker: developer/frontend/components/features/live-ticker.md
+                  - Charts & Animations: developer/frontend/components/charts.md
                   - 🏦 Brokers:
                       - Overview: developer/frontend/components/features/brokers/index.md
                       - Cards: developer/frontend/components/features/brokers/cards.md
@@ -769,6 +796,8 @@ nav:
               - Front-FX: developer/test-walkthrough/front-fx.md
       - 📝 Documentation:
           - Translation Pipeline: developer/docs/translation-pipeline.md
+          - Release Pipeline: developer/docs/release-pipeline.md
+
   - 🖼️ Gallery:
       - Overview: gallery/index.md
       - Desktop: gallery/desktop.md

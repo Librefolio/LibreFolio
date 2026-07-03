@@ -30,11 +30,7 @@ async def run_current_price_refresh(state: SchedulerState) -> None:
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
-        stmt = (
-            select(Asset.id, Asset.display_name, Asset.icon_url)
-            .join(AssetProviderAssignment, Asset.id == AssetProviderAssignment.asset_id)
-            .where(Asset.active == True)  # noqa: E712 — SQLAlchemy expression
-        )
+        stmt = select(Asset.id, Asset.display_name, Asset.icon_url).join(AssetProviderAssignment, Asset.id == AssetProviderAssignment.asset_id).where(Asset.active == True)  # noqa: E712 — SQLAlchemy expression
         result = await session.execute(stmt)
         rows = result.all()
         asset_ids = [r[0] for r in rows]
@@ -46,9 +42,7 @@ async def run_current_price_refresh(state: SchedulerState) -> None:
             return
 
         # Call service layer (includes F.2/F.3 OHLC upsert)
-        results = await AssetSourceManager.get_current_prices_bulk(
-            asset_ids, session, concurrency=3
-        )
+        results = await AssetSourceManager.get_current_prices_bulk(asset_ids, session, concurrency=3)
 
     duration = time_module.monotonic() - t_start
     ok_count = sum(1 for r in results if r.value is not None)
@@ -65,9 +59,7 @@ async def run_current_price_refresh(state: SchedulerState) -> None:
     )
 
     # Write detailed job log entry
-    entry = build_current_price_entry(
-        results, asset_names, round(duration, 2), status, asset_icons=asset_icons
-    )
+    entry = build_current_price_entry(results, asset_names, round(duration, 2), status, asset_icons=asset_icons)
     append_entry(entry)
 
     logger.info(
@@ -95,11 +87,7 @@ async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> Non
 
     # --- Asset history sync ---
     async with AsyncSession(engine) as session:
-        stmt = (
-            select(Asset.id, Asset.display_name, Asset.icon_url)
-            .join(AssetProviderAssignment, Asset.id == AssetProviderAssignment.asset_id)
-            .where(Asset.active == True)  # noqa: E712
-        )
+        stmt = select(Asset.id, Asset.display_name, Asset.icon_url).join(AssetProviderAssignment, Asset.id == AssetProviderAssignment.asset_id).where(Asset.active == True)  # noqa: E712
         result = await session.execute(stmt)
         rows = result.all()
         asset_ids = [r[0] for r in rows]
@@ -116,9 +104,7 @@ async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> Non
         ]
 
         async with AsyncSession(engine) as session:
-            response = await AssetSourceManager.bulk_refresh_prices(
-                refresh_items, session, concurrency=3
-            )
+            response = await AssetSourceManager.bulk_refresh_prices(refresh_items, session, concurrency=3)
             asset_ok = response.success_count
             asset_err = len(response.results) - response.success_count
             asset_results_list = list(response.results)
@@ -143,9 +129,7 @@ async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> Non
 
         if pairs_set:
             pairs_list = sorted(pairs_set)
-            fx_response = await sync_pairs_bulk(
-                session, pairs_list, (start_date, today)
-            )
+            fx_response = await sync_pairs_bulk(session, pairs_list, (start_date, today))
             fx_ok = sum(1 for r in fx_response.results if r.status == "ok")
             fx_err = len(fx_response.results) - fx_ok
             fx_results_list = list(fx_response.results)

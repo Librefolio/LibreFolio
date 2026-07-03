@@ -235,6 +235,16 @@ def services_roi_fifo_utils(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "ROI/FIFO/Portfolio service tests", verbose=verbose)
 
 
+def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
+    """Test Portfolio Engine vNext: inline WAC, last_buy_price, 3-pool, position states."""
+    print_section("Services: Portfolio Engine vNext")
+    print_info("Testing: backend/app/services/portfolio_engine.py (DailyStateBuilder)")
+    print_info("Tests: inline WAC, last_buy_price fallback, 3-pool K/R/W, position snapshots, period accumulators, pre-frame/frame")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_portfolio_engine_vnext.py", test_names)
+    return run_command(cmd, "Portfolio Engine vNext tests", verbose=verbose)
+
+
 def services_asset_sync_counts(verbose: bool = False, test_names: list = None) -> bool:
     """Test asset sync count tracking."""
     print_section("Services: Asset Sync Counts")
@@ -360,6 +370,7 @@ Note: No backend server required.
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base default properties")
     add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
     add_test(cat, "roi-fifo-utils", services_roi_fifo_utils, name="ROI/FIFO/Portfolio Utils", desc="TWRR, MWRR warm-start, SimpleROI series, FIFO lots, _build_history_series")
+    add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
     add_test(cat, "scheduler-state", services_scheduler_state, name="Scheduler State", desc="Load/save/atomic write, corrupt/partial JSON recovery")

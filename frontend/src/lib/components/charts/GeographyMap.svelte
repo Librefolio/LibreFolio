@@ -23,8 +23,10 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
     import {_ as t} from '$lib/i18n';
+    import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
     // =========================================================================
     // Props
@@ -33,13 +35,17 @@
     interface Props {
         /** Geographic distribution: key = ISO A3 code, value = weight (0-1) */
         data: Record<string, number>;
+        /** Absolute amounts per ISO A3 code in base currency (optional) */
+        amounts?: Record<string, number>;
         /** CSS height of the chart container */
         height?: string;
         /** Language code for localized country names (e.g. 'it', 'en') */
         language?: string;
+        /** Currency code for absolute amount formatting */
+        currency?: string;
     }
 
-    let {data = {}, height = '320px', language = 'en'}: Props = $props();
+    let {data = {}, amounts = {}, height = '320px', language = 'en', currency = 'EUR'}: Props = $props();
 
     // =========================================================================
     // State
@@ -51,8 +57,9 @@
     let mapRegistered = $state(false);
     let mapError = $state<string | null>(null);
 
-    /** Percentage of value with no geographic classification (key "Unknown" in data) */
-    const unknownPct = $derived(+((data['Unknown'] ?? 0) * 100).toFixed(1));
+    /** Percentage of value with no geographic classification (key "Unknown" or "Other" in data).
+     *  "Other" is a provider placeholder for "rest of world" — treated as unclassified. */
+    const unknownPct = $derived(+((((data['Unknown'] ?? 0) + (data['Other'] ?? 0)) * 100).toFixed(1)));
 
     /** ISO A3 → GeoJSON feature name (built dynamically from loaded world.json) */
     let iso3ToGeoName: Record<string, string> = {};
@@ -155,7 +162,7 @@
         // Convert ISO A3 → GeoJSON country name + percentage (skip unclassified)
         const chartData: Array<{name: string; value: number}> = [];
         for (const [code, weight] of Object.entries(data)) {
-            if (weight <= 0 || code === 'Unknown') continue;
+            if (weight <= 0 || code === 'Unknown' || code === 'Other') continue;
             const countryName = iso3ToGeoName[code] ?? code;
             chartData.push({name: countryName, value: +(weight * 100).toFixed(2)});
         }
@@ -165,14 +172,21 @@
         // Restore full roam on desktop; pinch-zoom only on touch to avoid blocking page scroll
         const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
-        // Fixed label — show flag + translated country name on countries that have data.
+        // Fixed label — show flag + translated country name + % + absolute amount on hover
         const labelFormatter = (params: any) => {
             const iso3 = geoNameToIso3[params.name] ?? '';
             const info = iso3 ? getCountryInfo(iso3) : null;
             const flag = info?.flag_emoji ?? '';
             const displayName = info?.name ?? params.name;
             const prefix = flag ? `${flag} ` : '';
-            return params.value != null && !isNaN(params.value) && params.value > 0 ? `${prefix}${displayName}: ${params.value}%` : `${prefix}${displayName}`;
+            if (params.value != null && !isNaN(params.value) && params.value > 0) {
+                const absAmt = iso3 ? amounts[iso3] : undefined;
+                const amtLine = absAmt != null && absAmt > 0
+                    ? `\n${formatCurrencyAmountPlain(absAmt, currency, {showSign: false})}`
+                    : '';
+                return `${prefix}${displayName}: ${params.value}%${amtLine}`;
+            }
+            return `${prefix}${displayName}`;
         };
 
         const fixedLabelStyle = {
@@ -230,7 +244,7 @@
             ],
         };
 
-        chartInstance.setOption(option, true);
+        chartInstance.setOption(option, CHART_SET_OPTION_OPTS);
         chartInstance.resize();
     }
 </script>

@@ -308,7 +308,7 @@
     <!-- Provider badge toggles -->
     {#if searchableProviders.length > 0}
         <div class="flex items-center gap-2 flex-wrap">
-            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('assets.search.providers')}:</span>
+            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.providers')}:</span>
             {#each searchableProviders as prov}
                 <button
                     type="button"

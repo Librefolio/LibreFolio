@@ -20,6 +20,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
 
     // =========================================================================
     // Types
@@ -293,7 +294,7 @@
             ],
         };
 
-        chartInstance.setOption(option, true);
+        chartInstance.setOption(option, CHART_SET_OPTION_OPTS);
         chartInstance.resize();
     }
 </script>

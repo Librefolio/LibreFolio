@@ -238,6 +238,86 @@ export async function ensureFxRangeLoaded(slug: string, start: string, end: stri
 }
 
 /**
+ * Bulk-load FX data for multiple pairs in a single HTTP call.
+ * Collects gaps from all pairs, issues one /fx/currencies/convert request,
+ * and distributes results back to per-pair stores.
+ *
+ * @param requests  Array of { slug, start, end } for each pair
+ * @returns         Map from slug to FxDataPoint[] (all cached data in [start, end])
+ */
+export async function ensureFxRangeLoadedBulk(
+    requests: Array<{slug: string; start: string; end: string}>,
+): Promise<Map<string, FxDataPoint[]>> {
+    // Collect all gaps across all pairs
+    type GapEntry = {slug: string; base: string; quote: string; gap: {start: string; end: string}};
+    const allGaps: GapEntry[] = [];
+
+    for (const req of requests) {
+        const store = getFxStore(req.slug);
+        const gaps = store.getMissingIntervals(req.start, req.end);
+        if (gaps.length > 0) {
+            const {base, quote} = parsePairSlug(req.slug);
+            for (const gap of gaps) {
+                allGaps.push({slug: req.slug, base, quote, gap});
+            }
+        }
+    }
+
+    // If there are gaps, fetch them all in one bulk call
+    if (allGaps.length > 0) {
+        const convertRequests = allGaps.map((entry) => ({
+            from_amount: {code: entry.base, amount: '1'},
+            to: entry.quote,
+            date_range: {start: entry.gap.start, end: entry.gap.end},
+        }));
+
+        try {
+            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
+            const results = (response as any)?.results ?? [];
+
+            // Group results by pair slug for efficient store updates
+            const pointsBySlug = new Map<string, FxDataPoint[]>();
+            for (const result of results) {
+                const fromCode = result.from_amount?.code;
+                const toCode = result.to_amount?.code;
+                if (!fromCode || !toCode) continue;
+                const slug = createPairSlug(fromCode, toCode);
+                const point = apiResultToFxDataPoint(result);
+                if (!pointsBySlug.has(slug)) pointsBySlug.set(slug, []);
+                pointsBySlug.get(slug)!.push(point);
+            }
+
+            // Merge results into each pair's store
+            for (const [slug, points] of pointsBySlug) {
+                if (points.length > 0) {
+                    getFxStore(slug).merge(points);
+                }
+            }
+
+            // Mark all gaps as fetched (even those with no results — avoids re-fetch)
+            for (const entry of allGaps) {
+                getFxStore(entry.slug).markFetched(entry.gap.start, entry.gap.end);
+            }
+        } catch (e: any) {
+            if (e?.response?.status === 404) {
+                // No rates for any pair — mark all fetched to avoid re-fetch
+                for (const entry of allGaps) {
+                    getFxStore(entry.slug).markFetched(entry.gap.start, entry.gap.end);
+                }
+            }
+            // Network / 5xx errors: don't mark — allow retry
+        }
+    }
+
+    // Return all cached data for each requested pair
+    const resultMap = new Map<string, FxDataPoint[]>();
+    for (const req of requests) {
+        resultMap.set(req.slug, getFxStore(req.slug).getRange(req.start, req.end).data);
+    }
+    return resultMap;
+}
+
+/**
  * Async lookup with auto-fetch. Checks cache first, fetches from backend if miss.
  * Result is merged into TimeSeriesStore for future cache hits.
  * Returns null if the pair is not configured (404) or fetch fails.

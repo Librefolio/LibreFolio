@@ -11,7 +11,7 @@
     import {_} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
-    import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
+    import {getStart, getEnd, setDateRange, resolveDateSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {ArrowLeftRight, Coins, Plus, RefreshCw, RotateCw, Settings, Trash2, X} from 'lucide-svelte';
     import FxCard from '$lib/components/fx/FxCard.svelte';
     import type {FxRow} from '$lib/components/fx/FxTable.svelte';
@@ -28,7 +28,7 @@
     import {type ChartSettings, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, ensureFxRangeLoaded, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, ensureFxRangeLoaded, ensureFxRangeLoadedBulk, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, removeFxStore} from '$lib/stores/fxStoreRegistry';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
@@ -63,6 +63,11 @@
     let dateStart = $state(getStart());
     let dateEnd = $state(getEnd());
     let activePreset: any = $state(null);
+
+    /** Resolved dates for API calls (sentinels → concrete dates) */
+    let apiDateStart = $derived(resolveDateSentinel(dateStart));
+    let apiDateEnd = $derived(resolveDateSentinel(dateEnd));
+
     let globalViewMode = $state<'absolute' | 'percentage'>('absolute');
     let refreshing = $state(false);
 
@@ -97,7 +102,7 @@
 
     // Filter bar adaptive layout (shared helper)
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    const fxLayout = createResponsiveLayout({wide: 1020, tablet: 660, tabletS: 520, labelHide: 500});
+    const fxLayout = createResponsiveLayout({wide: 1120, tablet: 760, tabletS: 520, labelHide: 500});
     let layoutMode = $derived(fxLayout.layoutMode);
     let showActionLabels = $derived(fxLayout.showActionLabels);
 
@@ -120,7 +125,7 @@
     // Which delta periods are visible for the selected date range
     let visiblePeriods = $derived(
         DELTA_PERIODS.filter((p) => {
-            const rangeMs = new Date(dateEnd).getTime() - new Date(dateStart).getTime();
+            const rangeMs = new Date(apiDateEnd).getTime() - new Date(apiDateStart).getTime();
             const rangeDays = rangeMs / (1000 * 60 * 60 * 24);
             return rangeDays >= p.days;
         }),
@@ -275,8 +280,40 @@
     }
 
     async function fetchAllPairData() {
-        const promises = pairs.map((_, idx) => fetchPairData(idx));
-        await Promise.allSettled(promises);
+        if (pairs.length === 0) return;
+
+        // Separate fully cached pairs from those needing fetch
+        const needFetch: Array<{index: number; slug: string}> = [];
+        for (let i = 0; i < pairs.length; i++) {
+            const pair = pairs[i];
+            const store = getFxStore(pair.config.slug);
+            if (store.getMissingIntervals(apiDateStart, apiDateEnd).length === 0) {
+                // Fast path: already cached — update data without loading indicator
+                pairs[i] = {...pair, data: store.getRange(apiDateStart, apiDateEnd).data};
+            } else {
+                needFetch.push({index: i, slug: pair.config.slug});
+                pairs[i] = {...pair, loading: true};
+            }
+        }
+
+        if (needFetch.length === 0) return;
+
+        // Single bulk call for all pairs with gaps
+        try {
+            const bulkResults = await ensureFxRangeLoadedBulk(
+                needFetch.map((nf) => ({slug: nf.slug, start: apiDateStart, end: apiDateEnd})),
+            );
+            for (const nf of needFetch) {
+                const data = bulkResults.get(nf.slug) ?? [];
+                pairs[nf.index] = {...pairs[nf.index], data, loading: false};
+            }
+        } catch {
+            // Fallback: update with whatever is cached
+            for (const nf of needFetch) {
+                const existingData = getFxStore(nf.slug).getRange(apiDateStart, apiDateEnd).data;
+                pairs[nf.index] = {...pairs[nf.index], data: existingData, loading: false};
+            }
+        }
     }
 
     async function fetchPairData(index: number) {
@@ -285,18 +322,18 @@
 
         // Fast path: data fully cached — update without showing loading spinner
         const store = getFxStore(pair.config.slug);
-        if (store.getMissingIntervals(dateStart, dateEnd).length === 0) {
-            pairs[index] = {...pair, data: store.getRange(dateStart, dateEnd).data};
+        if (store.getMissingIntervals(apiDateStart, apiDateEnd).length === 0) {
+            pairs[index] = {...pair, data: store.getRange(apiDateStart, apiDateEnd).data};
             return;
         }
 
         pairs[index] = {...pair, loading: true};
 
         try {
-            const loaded = await ensureFxRangeLoaded(pair.config.slug, dateStart, dateEnd);
+            const loaded = await ensureFxRangeLoaded(pair.config.slug, apiDateStart, apiDateEnd);
             pairs[index] = {...pair, data: loaded, loading: false};
         } catch (e: any) {
-            const existingData = getFxStore(pair.config.slug).getRange(dateStart, dateEnd).data;
+            const existingData = getFxStore(pair.config.slug).getRange(apiDateStart, apiDateEnd).data;
             pairs[index] = {...pair, data: existingData, loading: false};
             if (e?.response?.status !== 404) {
                 console.error(`Failed to fetch data for ${pair.config.slug}:`, e);
@@ -407,7 +444,7 @@
         const idx = pairs.findIndex((p) => p.config.slug === detail.slug);
         if (idx < 0) return;
         const store = getFxStore(detail.slug);
-        store.invalidateRange(dateStart, dateEnd);
+        store.invalidateRange(apiDateStart, apiDateEnd);
         await fetchPairData(idx);
     }
 
@@ -575,8 +612,8 @@
         try {
             const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
                 pairs: [slug],
-                start: dateStart,
-                end: dateEnd,
+                start: apiDateStart,
+                end: apiDateEnd,
             });
             const r = (response as any)?.results?.[0];
             if (r) {
@@ -586,7 +623,7 @@
             }
             // After sync, refresh the pair
             const store = getFxStore(slug);
-            store.invalidateRange(dateStart, dateEnd);
+            store.invalidateRange(apiDateStart, apiDateEnd);
             await fetchPairData(idx);
         } catch (e: any) {
             toasts.error(get(_)('fx.sync.toastFailed', {values: {pair: slug.replace('-', '/')}}));

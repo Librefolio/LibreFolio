@@ -32,7 +32,6 @@ uvicorn = "*"
 starlette = "*"
 mergedeep = "*"
 websocket-client = "*"
-justetf-scraping = {git = "https://github.com/Librefolio/justetf-scraping.git", ref = "main"}
 python-multipart = "*"
 babel = "*"
 theine = "*"
@@ -45,6 +44,7 @@ PyJWT = "*"
 mkdocs-static-i18n = "*"
 "borsa-italiana-scraping " = {git = "https://github.com/Librefolio/borsaItaliana-scraping.git"}
 scipy = "*"
+justetf-scraping = {git = "https://github.com/Librefolio/justetf-scraping.git", ref = "main"}
 
 [dev-packages]
 pytest = "*"

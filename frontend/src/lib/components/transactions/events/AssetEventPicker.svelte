@@ -363,7 +363,7 @@
 </script>
 
 <div class="flex flex-col gap-1" data-testid="tx-form-event-select">
-    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.linkedEvent')}</span>
+    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.linkedEvent')}</span>
     <div class="relative">
         <!-- Trigger button -->
         <button

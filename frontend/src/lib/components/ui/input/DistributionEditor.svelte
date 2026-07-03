@@ -33,7 +33,7 @@
     import type {CountryInfo} from '$lib/stores/reference/countryStore';
     import {ensureCountriesLoaded, getAllCountries} from '$lib/stores/reference/countryStore';
     import {getSectorKeysList, sectorI18nKey} from '$lib/utils/assetTypes';
-    import {ensureSectorsLoaded} from '$lib/stores/reference/sectorStore';
+    import {ensureSectorsLoaded, getSectorEmoji} from '$lib/stores/reference/sectorStore';
     import {CountrySearchSelect, SectorSearchSelect} from '$lib/components/ui/select';
     import {generateUUID} from '$lib/utils/core/uuid';
 
@@ -132,10 +132,10 @@
     let validBarClass = $derived(isValid ? 'bg-libre-green' : isExcess ? 'bg-red-400' : 'bg-amber-400');
 
     /** Sector select options (all keys, with i18n labels) */
-    let allSectorOptions = $derived(getSectorKeysList().map((k) => ({value: k, label: $t(`sectors.${sectorI18nKey(k)}`) || k})));
+    let allSectorOptions = $derived(getSectorKeysList().map((k) => ({value: k, label: `${getSectorEmoji(k)} ${$t(`sectors.${sectorI18nKey(k)}`) || k}`.trim()})));
 
-    /** Country select options (all countries + 'Other' catch-all, with flag + name) */
-    let allCountryOptions = $derived([...countries.map((c) => ({value: c.iso3, label: `${c.flag_emoji || ''} ${c.iso3} — ${c.name}`.trim()})), {value: 'Other', label: `🏳️ Other — ${$t('common.other')}`}]);
+    /** Country select options (all countries, including 'Other' from backend) */
+    let allCountryOptions = $derived(countries.map((c) => ({value: c.iso3, label: `${c.flag_emoji || ''} ${c.iso3} — ${c.name}`.trim()})));
 
     /** Already-used keys for exclusion in "Add" logic */
     let usedKeys = $derived(new Set(entries.map((e) => e.key)));
@@ -177,7 +177,8 @@
             const firstUnused = countries.find((c) => !usedKeys.has(c.iso3));
             defaultKey = firstUnused?.iso3 ?? '';
         }
-        entries = [...entries, {id: generateUUID(), key: defaultKey, weight: 100}];
+        const remaining = Math.max(0, Math.round((100 - totalPercent) * 100) / 100);
+        entries = [...entries, {id: generateUUID(), key: defaultKey, weight: remaining}];
         emitChange();
     }
 
