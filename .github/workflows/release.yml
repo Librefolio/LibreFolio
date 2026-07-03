@@ -245,8 +245,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME="${{ github.event.release.tag_name }}"
-          DOCKER_CMD="\n\n## 📦 Docker Installation\n\n\`\`\`bash\n# Install the latest version\ndocker pull ghcr.io/librefolio/librefolio:latest\n\n# Or install this specific release\ndocker pull ghcr.io/librefolio/librefolio:${TAG_NAME}\n\`\`\`\n"
-          
-          # Append the instructions to the existing release body
-          gh release edit "$TAG_NAME" --notes-append "$DOCKER_CMD"
+          DOCKER_CMD=$(printf '\n\n## 📦 Docker Installation\n\n```bash\n# Install the latest version\ndocker pull ghcr.io/librefolio/librefolio:latest\n\n# Or install this specific release\ndocker pull ghcr.io/librefolio/librefolio:%s\n```\n' "$TAG_NAME")
+
+          # gh CLI has no --notes-append flag: fetch current notes and append manually
+          CURRENT_NOTES=$(gh release view "$TAG_NAME" --json body -q .body)
+          gh release edit "$TAG_NAME" --notes "${CURRENT_NOTES}${DOCKER_CMD}"
 
