@@ -32,15 +32,16 @@
 
 /* Logo (Now with solid white background to match main app) */
 .premium-logo-img {
-    width: 80px !important;
-    height: 80px !important;
+    width: clamp(44px, 11.25vw, 80px) !important;
+    height: clamp(44px, 11.25vw, 80px) !important;
     display: block;
     object-fit: contain;
     margin: 0 !important;
-    padding: 10px !important;
+    padding: clamp(5px, 1.5vw, 10px) !important;
     background-color: #ffffff !important;
-    border-radius: 12px !important;
+    border-radius: clamp(8px, 2vw, 12px) !important;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
+    flex-shrink: 0;
 }
 
 .premium-motto h1 {
@@ -69,7 +70,7 @@
 }
 
 .premium-hero h1 {
-    font-size: 4rem !important;
+    font-size: clamp(2.2rem, 9vw, 4rem) !important;
     line-height: 1.1 !important;
     font-weight: 900 !important;
     margin: 0 !important;
@@ -80,10 +81,11 @@
     color: var(--md-default-fg-color) !important;
     width: auto !important;
     display: inline-block !important;
+    white-space: nowrap !important;
 }
 
 .premium-hero h2 {
-    font-size: 2.2rem;
+    font-size: clamp(1.1rem, 5.5vw, 2.2rem) !important;
     line-height: 1.2;
     font-weight: 700;
     margin-top: 0;
@@ -93,8 +95,17 @@
     -webkit-text-fill-color: transparent;
 }
 
+/* Inside hero h2: let clamp() handle scaling — suppress forced break */
+.premium-hero h2 .mobile-break {
+    display: none !important;
+}
+
+.premium-hero h2 .desktop-space {
+    display: inline !important;
+}
+
 .hero-subtitle {
-    font-size: 1.4rem;
+    font-size: clamp(1rem, 3.5vw, 1.4rem);
     color: var(--md-default-fg-color--light);
     max-width: 800px;
     margin: 1.5rem auto 2rem auto;
@@ -147,7 +158,7 @@
 .premium-badges {
     display: flex;
     justify-content: center;
-    gap: 2rem;
+    gap: clamp(0.5rem, 3vw, 2rem);
     flex-wrap: wrap;
     margin-top: -1rem;
 }
@@ -159,7 +170,7 @@
     padding: 0.5rem 1.2rem;
     border-radius: 50px;
     font-weight: 700;
-    font-size: 0.9rem;
+    font-size: clamp(0.7rem, 2.5vw, 0.9rem);
     color: var(--md-primary-fg-color);
     border: 1px solid rgba(0, 0, 0, 0.05);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
@@ -290,6 +301,7 @@
 
 .lf-quick-install-docker-body p {
     margin: 0;
+    font-size: clamp(0.85rem, 3vw, 1rem);
     color: var(--md-default-fg-color--light);
 }
 
@@ -310,12 +322,12 @@
 }
 
 .lf-quick-install-dev-body h4 {
-    font-size: 1.1rem;
+    font-size: clamp(0.9rem, 3vw, 1.1rem);
 }
 
 .lf-quick-install-dev-body p {
     margin: 0;
-    font-size: 0.9rem;
+    font-size: clamp(0.8rem, 2.5vw, 0.9rem);
     color: var(--md-default-fg-color--light);
 }
 
@@ -386,6 +398,7 @@
     padding: 0.75rem 1.5rem;
     border-radius: 8px;
     font-weight: 600;
+    font-size: clamp(0.875rem, 3vw, 1rem);
     text-decoration: none;
     transition: background 0.2s, transform 0.2s;
     white-space: nowrap;
@@ -404,6 +417,7 @@
     padding: 0.5rem 1.25rem;
     border-radius: 8px;
     font-weight: 600;
+    font-size: clamp(0.875rem, 3vw, 1rem);
     text-decoration: none;
     transition: all 0.2s;
     white-space: nowrap;
@@ -518,7 +532,7 @@
 }
 
 .deep-dive-content p {
-    font-size: 1.2rem;
+    font-size: clamp(0.95rem, 3.5vw, 1.2rem);
     line-height: 1.6;
     color: var(--md-default-fg-color--light);
     margin-bottom: 0;
@@ -593,13 +607,13 @@
 
 .provider-info h4 {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: clamp(0.9rem, 3vw, 1.1rem);
     font-weight: 700;
 }
 
 .provider-info p {
     margin: 0;
-    font-size: 0.9rem;
+    font-size: clamp(0.75rem, 2.5vw, 0.9rem);
     opacity: 0.8;
 }
 
@@ -960,7 +974,7 @@
 .lf-fit-cell h4 {
   font-weight: 800;
   margin: 0;
-  font-size: 1.05rem;
+  font-size: clamp(0.85rem, 3vw, 1.05rem);
   color: var(--md-default-fg-color);
 }
 
@@ -1236,14 +1250,14 @@
 .lf-screenshot-carousel-item.is-active {
   transform: translateX(0) scale(1);
   opacity: 1;
-  z-index: 10;
+  z-index: 3;
   filter: none;
 }
 
 .lf-screenshot-carousel-item.is-prev {
   transform: translateX(-95%) scale(0.85);
   opacity: 0.6;
-  z-index: 5;
+  z-index: 2;
   filter: brightness(0.6) contrast(0.9);
   cursor: pointer;
 }
@@ -1251,7 +1265,7 @@
 .lf-screenshot-carousel-item.is-next {
   transform: translateX(95%) scale(0.85);
   opacity: 0.6;
-  z-index: 5;
+  z-index: 2;
   filter: brightness(0.6) contrast(0.9);
   cursor: pointer;
 }
@@ -1281,7 +1295,7 @@
   color: white;
   border: none;
   cursor: pointer;
-  z-index: 20;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1321,7 +1335,7 @@
   top: 1rem;
   left: 50%;
   transform: translateX(-50%) translateY(-10px);
-  z-index: 100;
+  z-index: 3;
   background: rgba(15, 23, 42, 0.85);
   color: white;
   padding: 0.35rem 0.9rem;
@@ -1348,7 +1362,7 @@
   position: absolute;
   left: 50%;
   bottom: 0.75rem;
-  z-index: 20;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -1388,4 +1402,31 @@
   .lf-screenshot-carousel-dot {
     transition: none !important;
   }
+}
+
+/* ====================================================================
+   Responsive scaling for remaining landing page elements
+   All use the same proportional approach as .hero-subtitle
+   ==================================================================== */
+
+/* "A Modular Ecosystem" section title (deep-dive block heading) */
+.md-typeset .premium-landing .deep-dive > h2,
+.md-typeset .premium-landing .deep-dive-content h2 {
+    font-size: clamp(1.5rem, 5.5vw, 2.5rem) !important;
+}
+
+/* "Is LibreFolio for you?" section — header paragraph */
+.lf-fit-header p {
+    font-size: clamp(0.9rem, 3.5vw, 1.1rem);
+}
+
+/* Comparison table cell text */
+.lf-fit-cell p,
+.lf-fit-heading-card p {
+    font-size: clamp(0.85rem, 3vw, 1.1rem);
+}
+
+/* Ecosystem section inline-styled <p> (overrides inline font-size) */
+.premium-landing .deep-dive > p {
+    font-size: clamp(0.9rem, 3.5vw, 1.05rem) !important;
 }

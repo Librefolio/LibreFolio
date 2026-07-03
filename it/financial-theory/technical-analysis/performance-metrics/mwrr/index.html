@@ -126,7 +126,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#mwrr-money-weighted-rate-of-return-xirr" class="md-skip">
+        <a href="#mwrr-rendimento-ponderato-per-il-capitale-xirr" class="md-skip">
           Vai al contenuto
         </a>
       
@@ -768,6 +768,62 @@
     
   
     Panoramica
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../user/dashboard/kpi-cards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    KPI Cards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../user/dashboard/charts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Charts
   
 
     
@@ -1519,7 +1575,7 @@
   <span class="md-ellipsis">
     
   
-    Create & Edit
+    Crea & Modifica
   
 
     
@@ -1769,7 +1825,7 @@
   <span class="md-ellipsis">
     
   
-    Events
+    Eventi
   
 
     
@@ -5177,6 +5233,174 @@
   
   
     <li class="md-nav__item">
+      <a href="../portfolio-engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Portfolio Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nav/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NAV / Net Worth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../book-value/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Valore Contabile
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../period-pnl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P&L del Periodo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deposited-capital/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deposited Capital & Total P&L
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../timing-effect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Effetto Timing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../roi/" class="md-nav__link">
         
   
@@ -5304,35 +5528,191 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#come-funziona" class="md-nav__link">
+  <a href="#mwrr-annualizzato-vs-mwrr-cumulativo" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🧮 Come funziona
+        📈 MWRR Annualizzato vs. MWRR Cumulativo
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📈 MWRR Annualizzato vs. MWRR Cumulativo">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#annualized-mwrr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MWRR Annualizzato
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MWRR Annualizzato">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-forma-intuitiva-del-valore-finale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Forma Intuitiva del Valore Finale
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#quando-usarlo" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#2-portare-tutto-al-valore-attuale-npv-0" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🎯 Quando usarlo
+        2. Portare tutto al Valore Attuale (NPV = 0)
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#come-viene-calcolata-la-serie-cumulativa-grafico" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#3-esempio-di-srotolamento-dei-flussi-di-cassa" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📈 Come viene calcolata la Serie Cumulativa (Grafico)
+        3. Esempio di Srotolamento dei Flussi di Cassa
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-ancoraggio-del-grafico-cumulativo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Ancoraggio del Grafico Cumulativo
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cumulative-mwrr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MWRR Cumulativo
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#esempio-numerico-su-10-anni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔢 Esempio Numerico su 10 Anni
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔢 Esempio Numerico su 10 Anni">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#confronto-roi-semplice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confronto ROI Semplice
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#effetto-timing-del-mwrr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Effetto Timing del MWRR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#conversione-in-mwrr-cumulativo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conversione in MWRR Cumulativo
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cosa-significa-24014" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cosa significa +240,14%?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integrazione-ui-e-uso-nella-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🖥️ Integrazione UI e Uso nella Dashboard
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🖥️ Integrazione UI e Uso nella Dashboard">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#grafico-percentuale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grafico Percentuale (%)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#card-dei-kpi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Card dei KPI
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -7638,7 +8018,7 @@
   <span class="md-ellipsis">
     
   
-    Events
+    Eventi
   
 
     
@@ -9132,6 +9512,34 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../../../developer/frontend/components/charts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Charts & Animations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
     
@@ -9148,10 +9556,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_4_2_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_6_4_2_8" >
         
           
-          <label class="md-nav__link" for="__nav_5_6_4_2_7" id="__nav_5_6_4_2_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_6_4_2_8" id="__nav_5_6_4_2_8_label" tabindex="0">
             
   
   
@@ -9169,8 +9577,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_6_4_2_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_6_4_2_7">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_6_4_2_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6_4_2_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -10102,6 +10510,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../developer/docs/release-pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -10472,35 +10908,191 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#come-funziona" class="md-nav__link">
+  <a href="#mwrr-annualizzato-vs-mwrr-cumulativo" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🧮 Come funziona
+        📈 MWRR Annualizzato vs. MWRR Cumulativo
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📈 MWRR Annualizzato vs. MWRR Cumulativo">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#annualized-mwrr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MWRR Annualizzato
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MWRR Annualizzato">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-forma-intuitiva-del-valore-finale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Forma Intuitiva del Valore Finale
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#quando-usarlo" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#2-portare-tutto-al-valore-attuale-npv-0" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🎯 Quando usarlo
+        2. Portare tutto al Valore Attuale (NPV = 0)
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#come-viene-calcolata-la-serie-cumulativa-grafico" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#3-esempio-di-srotolamento-dei-flussi-di-cassa" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📈 Come viene calcolata la Serie Cumulativa (Grafico)
+        3. Esempio di Srotolamento dei Flussi di Cassa
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-ancoraggio-del-grafico-cumulativo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Ancoraggio del Grafico Cumulativo
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cumulative-mwrr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MWRR Cumulativo
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#esempio-numerico-su-10-anni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔢 Esempio Numerico su 10 Anni
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔢 Esempio Numerico su 10 Anni">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#confronto-roi-semplice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confronto ROI Semplice
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#effetto-timing-del-mwrr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Effetto Timing del MWRR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#conversione-in-mwrr-cumulativo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conversione in MWRR Cumulativo
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cosa-significa-24014" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cosa significa +240,14%?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integrazione-ui-e-uso-nella-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🖥️ Integrazione UI e Uso nella Dashboard
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🖥️ Integrazione UI e Uso nella Dashboard">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#grafico-percentuale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grafico Percentuale (%)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#card-dei-kpi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Card dei KPI
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -10524,39 +11116,164 @@
   
 
 
-<h1 id="mwrr-money-weighted-rate-of-return-xirr">💵 MWRR (Money-Weighted Rate of Return) / XIRR</h1>
+<h1 id="mwrr-rendimento-ponderato-per-il-capitale-xirr">💵 MWRR (Rendimento Ponderato per il Capitale) / XIRR</h1>
 <p><em><a href="../">⬅️ Torna alla Panoramica delle Metriche di Performance</a></em></p>
 <h2 id="cose">💡 Cos'è?</h2>
-<p>Il MWRR (conosciuto anche come Tasso Interno di Rendimento) misura la <em>tua performance personale</em>. Pesa fortemente i periodi in cui avevi investito la maggior quantità di denaro.</p>
-<h2 id="come-funziona">🧮 Come funziona</h2>
-<p>Analizza le date esatte e l'entità di tutti i tuoi flussi di cassa (depositi e prelievi) e il valore finale del portafoglio, calcolando il tasso di interesse costante che una banca avrebbe dovuto offrirti per raggiungere l'esatto stesso risultato finale.</p>
+<p>Il MWRR (conosciuto anche come Tasso Interno di Rendimento) misura la <strong>tua performance personale</strong> come investitore. A differenza delle metriche focalizzate solo sugli asset, il MWRR tiene conto sia del rendimento degli strumenti sottostanti, sia del <strong>tempismo (timing) e dell'entità</strong> dei tuoi depositi e prelievi.</p>
+<p>Per offrire una visibilità completa, LibreFolio distingue tra due forme di questa metrica: <strong>MWRR Annualizzato</strong> e <strong>MWRR Cumulativo</strong>.</p>
+<hr />
+<h2 id="mwrr-annualizzato-vs-mwrr-cumulativo">📈 MWRR Annualizzato vs. MWRR Cumulativo</h2>
+<h3 id="annualized-mwrr">MWRR Annualizzato</h3>
+<p>Il MWRR Annualizzato è il tasso composto annuo che rende il Valore Attuale Netto (NPV) di tutti i flussi di cassa pari a zero.</p>
+<p>Questo tasso composto è matematicamente equivalente al <strong>CAGR</strong> (Compound Annual Growth Rate - Tasso di crescita annuale composto) del tuo capitale effettivamente investito, rappresentando il tasso di crescita annuo costante necessario affinché il capitale iniziale raggiunga il saldo finale, tenendo conto di tutti i movimenti intermedi.</p>
 <div class="arithmatex">\[
-0 = \sum_{i=0}^{n} \frac{CF_i}{(1 + r)^{t_i}}
+0 = \sum_{i=0}^{n} \frac{CF_i}{(1 + r)^{\frac{t_i}{365}}}
 \]</div>
-<p>Dove <span class="arithmatex">\(CF_i\)</span> è ogni singolo flusso di cassa (depositi positivi, prelievi negativi, valore finale del portafoglio positivo).</p>
-<h2 id="quando-usarlo">🎯 Quando usarlo</h2>
+<details class="note">
+<summary>🧮 Come si srotola l'equazione NPV</summary>
+<h4 id="1-forma-intuitiva-del-valore-finale">1. Forma Intuitiva del Valore Finale</h4>
+<p>Immagina di voler proiettare il valore finale del tuo portafoglio (NAV) facendo crescere ciascun flusso di cassa ad un tasso composto <span class="arithmatex">\(r\)</span>:</p>
+<div class="arithmatex">\[
+NAV_{finale} = CF_0 \times (1 + r)^{\frac{d_0}{365}} + CF_1 \times (1 + r)^{\frac{d_1}{365}} + \dots + CF_n \times (1 + r)^{\frac{d_n}{365}}
+\]</div>
+<p>Dove <span class="arithmatex">\(d_i\)</span> rappresenta il numero di giorni in cui ciascun flusso di cassa è rimasto investito durante il periodo.</p>
+<h4 id="2-portare-tutto-al-valore-attuale-npv-0">2. Portare tutto al Valore Attuale (NPV = 0)</h4>
+<p>Dividendo entrambi i membri dell'equazione per <span class="arithmatex">\((1 + r)^{\frac{\text{giorni totali}}{365}}\)</span>, riportiamo tutti i flussi di cassa all'inizio del periodo (<span class="arithmatex">\(t_0\)</span>). Si ottiene così l'equazione standard del Valore Attuale Netto (NPV) dove la somma dei flussi attualizzati è pari a zero:</p>
+<div class="arithmatex">\[
+0 = \sum_{i=0}^{n} \frac{CF_i}{(1 + r)^{\frac{t_i}{365}}}
+\]</div>
+<p>Dove <span class="arithmatex">\(t_i\)</span> è il numero di giorni trascorsi dall'inizio del periodo alla data del flusso di cassa <span class="arithmatex">\(i\)</span>.</p>
+<h4 id="3-esempio-di-srotolamento-dei-flussi-di-cassa">3. Esempio di Srotolamento dei Flussi di Cassa</h4>
+<p>Vediamo come si popolano i flussi di cassa per un portafoglio in un periodo di 31 giorni:</p>
 <ul>
-<li>Per giudicare il <strong>tuo timing personale</strong>.</li>
-<li>Per vedere la realtà nuda e cruda dell'effettiva crescita del tuo denaro.</li>
+<li><strong>Giorno 0:</strong> Il portafoglio iniziale vale 1.000 € (rappresentato come deposito/investimento).</li>
+<li><strong>Giorno 15:</strong> Depositi 100 €.</li>
+<li><strong>Giorno 31:</strong> Il NAV finale del portafoglio è di 1.150 €.</li>
 </ul>
-<h2 id="come-viene-calcolata-la-serie-cumulativa-grafico">📈 Come viene calcolata la Serie Cumulativa (Grafico)</h2>
-<p>Per visualizzare il MWRR come un grafico storico nel tempo, il calcolo viene eseguito <strong>cumulativamente</strong> dall'inizio per ogni singolo giorno della serie. </p>
-<p>Per ogni punto dati tracciato al giorno <span class="arithmatex">\(t_N\)</span>:</p>
-<ol>
-<li>Il calcolo considera l'intera finestra temporale da <span class="arithmatex">\(t_0\)</span> a <span class="arithmatex">\(t_N\)</span>.</li>
-<li>Imposta l'equazione del Valore Attuale Netto (NPV) in cui il flusso di cassa iniziale a <span class="arithmatex">\(t_0\)</span> è il valore di partenza del portafoglio (rappresentato come un flusso di cassa negativo: un "investimento").</li>
-<li>Tutti i flussi di cassa intermedi tra <span class="arithmatex">\(t_0\)</span> e <span class="arithmatex">\(t_N\)</span> vengono riportati sulla linea temporale.</li>
-<li>Il flusso di cassa finale a <span class="arithmatex">\(t_N\)</span> rappresenta la liquidazione ipotetica del portafoglio, che è il NAV a <span class="arithmatex">\(t_N\)</span> (rappresentato come un flusso di cassa positivo). </li>
-</ol>
-<p><strong>Caso limite matematico importante:</strong> 
-Se un flusso di cassa esterno avviene esattamente nell'ultimo giorno <span class="arithmatex">\(t_N\)</span> del periodo valutato, il NAV a <span class="arithmatex">\(t_N\)</span> incorpora già quel flusso di cassa. Nell'equazione NPV per quel giorno specifico, il flusso di cassa netto finale deve tenere conto sia del NAV finale che del flusso di cassa effettuato in quello stesso giorno. </p>
-<p><strong>Esempio:</strong>
-Immagina di iniziare a <span class="arithmatex">\(t_0\)</span> con un portafoglio di $1.000. 
-- Il flusso di cassa a <span class="arithmatex">\(t_0\)</span> è -$1.000.
-- Al giorno <span class="arithmatex">\(t_{31}\)</span>, depositi altri $100.
-- Il NAV del tuo portafoglio balza immediatamente a $1.100 (assumendo che non ci sia stata crescita del mercato). </p>
-<p>Se l'algoritmo utilizzasse il NAV finale di +$1.100 come flusso di cassa terminale senza compensare il deposito effettuato esattamente in quel giorno, la matematica assumerebbe che un investimento di $1.000 sia cresciuto a $1.100 puramente grazie alla performance del mercato (un falso guadagno del 10%). Includendo correttamente il deposito di -$100 al giorno <span class="arithmatex">\(t_{31}\)</span> insieme al NAV terminale, il flusso di cassa netto finale diventa +$1.000 ($1.100 - $100), dimostrando correttamente che il rendimento reale è stato dello 0%.</p>
-<p>Questa logica assicura inoltre che, nel primissimo giorno (<span class="arithmatex">\(t_0\)</span>), il NAV di partenza e l'investimento iniziale si annullino perfettamente a vicenda, ancorando l'inizio del grafico esattamente allo 0%.</p>
+<p>Innanzitutto, costruiamo la tabella delle transazioni dal punto di vista del portafoglio (il denaro che entra nel portafoglio investito è negativo, quello che ritorna indietro all'investitore è positivo):</p>
+<table>
+<thead>
+<tr>
+<th>Passo (<span class="arithmatex">\(i\)</span>)</th>
+<th>Giorno (<span class="arithmatex">\(t_i\)</span>)</th>
+<th>Evento</th>
+<th>Flusso di Cassa Portafoglio (<span class="arithmatex">\(CF_i\)</span>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>Saldo Iniziale</td>
+<td><strong>-1.000 €</strong> (Uscita)</td>
+</tr>
+<tr>
+<td>1</td>
+<td>15</td>
+<td>Deposito</td>
+<td><strong>-100 €</strong> (Uscita)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>31</td>
+<td>Liquidazione Ipotetica (NAV)</td>
+<td><strong>+1.150 €</strong> (Entrata)</td>
+</tr>
+</tbody>
+</table>
+<p>Ora srotoliamo queste transazioni nella sommatoria NPV:</p>
+<div class="arithmatex">\[
+0 = -1000 + \frac{-100}{(1+r)^{\frac{15}{365}}} + \frac{1150}{(1+r)^{\frac{31}{365}}}
+\]</div>
+<p>Il solver matematico cerca iterativamente il valore di <span class="arithmatex">\(r\)</span> (MWRR Annualizzato) che rende il membro destro dell'equazione pari a 0.</p>
+<h4 id="4-ancoraggio-del-grafico-cumulativo">4. Ancoraggio del Grafico Cumulativo</h4>
+<p>Questa convenzione sui segni assicura che, nel primissimo giorno (<span class="arithmatex">\(t_0\)</span>), il deposito iniziale (<span class="arithmatex">\(CF_0 = -1000\)</span>) e la liquidazione ipotetica (<span class="arithmatex">\(CF_1 = +1000\)</span>) si annullino perfettamente a vicenda:</p>
+<div class="arithmatex">\[
+0 = -1000 + 1000 = 0\%
+\]</div>
+<p>Questo àncora l'inizio del grafico del MWRR Cumulativo esattamente allo <strong>0%</strong>.</p>
+</details>
+<p><strong>Descrizione delle Variabili:</strong></p>
+<ul>
+<li><span class="arithmatex">\(r\)</span> = MWRR Annualizzato (che rappresenta il CAGR del tuo denaro reale).</li>
+<li><span class="arithmatex">\(CF_i\)</span> = Flusso di cassa dal punto di vista dell'investitore:<ul>
+<li><strong>Flussi di cassa negativi (<span class="arithmatex">\(CF_i &lt; 0\)</span>):</strong> Capitale versato nel portafoglio (depositi, acquisti). Questo rappresenta denaro che esce dal portafoglio/portafogli dell'investitore per essere investito.</li>
+<li><strong>Flussi di cassa positivi (<span class="arithmatex">\(CF_i &gt; 0\)</span>):</strong> Capitale restituito all'investitore (prelievi, dividendi). Questo rappresenta denaro che ritorna nel portafoglio personale.</li>
+<li><strong>Valutazione finale (<span class="arithmatex">\(CF_n &gt; 0\)</span>):</strong> Il Net Asset Value (NAV) finale del portafoglio alla fine del periodo, trattato come un afflusso positivo (una liquidazione ipotetica in cui l'intero portafoglio viene convertito nuovamente in liquidità che ritorna all'investitore).</li>
+</ul>
+</li>
+<li><span class="arithmatex">\(t_i\)</span> = Giorni trascorsi dall'inizio del periodo (<span class="arithmatex">\(t_0 = 0\)</span>).</li>
+</ul>
+<p><strong>Concetti Chiave:</strong></p>
+<ul>
+<li>Rappresenta una <strong>velocità o tasso annuo composto</strong> di crescita.</li>
+<li>È ideale per confronti a lungo termine (es. per confrontare la tua performance con un tasso di interesse bancario o con il CAGR).</li>
+<li><strong>Avviso di Volatilità:</strong> Su periodi brevi (es. pochi giorni o settimane), il rendimento annualizzato può essere estremamente volatile e mostrare percentuali enormi perché la matematica ipotizza che il rendimento di pochi giorni si ripeta per l'intero anno (365 giorni).</li>
+</ul>
+<h3 id="cumulative-mwrr">MWRR Cumulativo</h3>
+<p>Il MWRR Cumulativo rappresenta il rendimento totale equivalente del periodo, ottenuto capitalizzando il tasso annualizzato per la durata reale della finestra temporale selezionata.</p>
+<p><strong>Formula Diretta (senza radici, usa direttamente <span class="arithmatex">\(r\)</span>):</strong></p>
+<div class="arithmatex">\[
+\text{MWRR}_{\text{cumulativo}} = (1 + r)^{\frac{\text{giorni}}{365}} - 1
+\]</div>
+<p><strong>Formula per Tasso Giornaliero (con radice):</strong></p>
+<div class="arithmatex">\[
+\text{MWRR}_{\text{cumulativo}} = (1 + r_d)^{\text{giorni}} - 1 \quad \text{dove} \quad r_d = \sqrt[365]{1 + r} - 1
+\]</div>
+<p>Le due formule sono matematicamente equivalenti. Tuttavia, a livello computazionale, si preferisce la formula diretta con <span class="arithmatex">\(r\)</span> (senza radici) una volta che il tasso annualizzato <span class="arithmatex">\(r\)</span> è stato trovato, poiché l'elevamento a potenza diretto è più semplice ed efficiente da calcolare per il software.</p>
+<p><strong>Descrizione delle Variabili:</strong></p>
+<ul>
+<li><span class="arithmatex">\(\text{giorni}\)</span> = Il numero effettivo di giorni di calendario nel periodo selezionato.</li>
+</ul>
+<p><strong>Concetti Chiave:</strong></p>
+<ul>
+<li>Rappresenta la <strong>distanza totale percorsa</strong> nel periodo.</li>
+<li>Parte da 0% e cresce lungo la finestra temporale, rendendolo la metrica ideale da tracciare nel grafico seriale.</li>
+<li><strong>Non è un ROI semplice:</strong> Sebbene rappresenti un rendimento cumulativo, si tratta di un rendimento cumulativo ponderato per il capitale (money-weighted). Non va confuso con il ROI semplice, che ignora il timing dei flussi di cassa.</li>
+</ul>
+<hr />
+<h2 id="esempio-numerico-su-10-anni">🔢 Esempio Numerico su 10 Anni</h2>
+<p>Vediamo uno scenario su 10 anni per capire come il timing influenzi la performance e come si convertono queste metriche:</p>
+<ul>
+<li><strong>Anno 0:</strong> Depositi <strong>10.000 €</strong>.</li>
+<li><strong>Anno 5:</strong> Depositi altri <strong>90.000 €</strong>.</li>
+<li><strong>Anno 10:</strong> Il valore finale del portafoglio (NAV) è <strong>200.000 €</strong>.</li>
+</ul>
+<h3 id="confronto-roi-semplice">Confronto ROI Semplice</h3>
+<p>Il ROI semplice viene calcolato esclusivamente sul totale netto dei versamenti:</p>
+<div class="arithmatex">\[
+ROI = \frac{200.000 - 100.000}{100.000} = +100\%
+\]</div>
+<h3 id="effetto-timing-del-mwrr">Effetto Timing del MWRR</h3>
+<p>Se il grosso del capitale (90.000 €) è stato depositato all'Anno 5, subito prima di un forte recupero pluriennale del mercato, il tuo denaro ha lavorato con estrema efficienza. Poiché la cifra più consistente è rimasta esposta agli anni ad alta crescita, il tuo <strong>MWRR Annualizzato</strong> risulterà molto superiore al TWRR del mercato.</p>
+<p>Utilizzando un solver matematico NPV per questo specifico scenario:
+* Il <strong>MWRR Annualizzato (<span class="arithmatex">\(r\)</span>)</strong> è esattamente del <strong>13,02%</strong>.</p>
+<h3 id="conversione-in-mwrr-cumulativo">Conversione in MWRR Cumulativo</h3>
+<p>Capitalizzando questo rendimento annualizzato del 13,02% per un periodo di 10 anni:</p>
+<div class="arithmatex">\[
+\text{MWRR}_{\text{cumulativo}} = (1 + 0,130227)^{10} - 1 \approx +240,14\%
+\]</div>
+<h3 id="cosa-significa-24014">Cosa significa +240,14%?</h3>
+<ul>
+<li><strong>Non</strong> significa che i 100.000 € totali che hai versato siano diventati 340.140 €.</li>
+<li>Significa che un <strong>euro teorico</strong>, investito all'inizio del periodo di 10 anni e mai più toccato, sarebbe diventato 3,40 €, ottenendo un rendimento totale del 240,14% crescendo alla stessa velocità media composta generata dai tuoi flussi reali.</li>
+</ul>
+<hr />
+<h2 id="integrazione-ui-e-uso-nella-dashboard">🖥️ Integrazione UI e Uso nella Dashboard</h2>
+<p>LibreFolio mostra queste metriche di performance nella dashboard:</p>
+<h3 id="grafico-percentuale">Grafico Percentuale (<code>%</code>)</h3>
+<p>Le serie tracciate utilizzano il <strong>MWRR Cumulativo</strong>, il <strong>TWRR Cumulativo</strong> e il <strong>ROI Semplice</strong>. Questo consente un confronto visivo diretto, in quanto tutte e tre le serie partono dallo 0% e mostrano l'avanzamento totale lungo il periodo temporale selezionato.</p>
+<h3 id="card-dei-kpi">Card dei KPI</h3>
+<ul>
+<li><strong>ROI Semplice</strong> (Metrica principale per il rendimento assoluto).</li>
+<li><strong>TWRR Cumulativo</strong> (Indicatore della performance di strategia/allocazione).</li>
+<li><strong>MWRR Cumulativo</strong> (Indicatore principale del timing personale).</li>
+<li><strong>MWRR Annualizzato</strong> (Mostrato come metrica secondaria/comparativa per comprendere il tasso composto annuo).</li>
+</ul>
+<div class="admonition tip">
+<p class="admonition-title">Analizzare la Differenza di Performance</p>
+<p>Per interpretare la differenza tra MWRR cumulativo e TWRR cumulativo, vedi la pagina dell'<a href="../timing-effect/">Effetto Timing</a>.</p>
+</div>
 
 
 
