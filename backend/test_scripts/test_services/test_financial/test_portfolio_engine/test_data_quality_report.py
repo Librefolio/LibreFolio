@@ -19,7 +19,6 @@ from backend.app.schemas.portfolio import (
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.portfolio_engine import DailyPortfolioState, DerivedViewsBuilder
 
-
 # =============================================================================
 # HELPERS
 # =============================================================================
@@ -88,9 +87,7 @@ class TestMissingPriceIssue:
 
     def test_missing_price_produces_error_issue(self):
         views = _make_views()
-        report = views.build_data_quality_report(
-            missing_price_assets_dto=[_make_missing_asset()]
-        )
+        report = views.build_data_quality_report(missing_price_assets_dto=[_make_missing_asset()])
         issue = next(i for i in report.issues if i.code == IssueCode.MISSING_PRICE)
         assert issue.severity == IssueSeverity.ERROR
 
@@ -105,9 +102,7 @@ class TestMissingPriceIssue:
 
     def test_missing_price_has_navigate_asset_cta(self):
         views = _make_views()
-        report = views.build_data_quality_report(
-            missing_price_assets_dto=[_make_missing_asset()]
-        )
+        report = views.build_data_quality_report(missing_price_assets_dto=[_make_missing_asset()])
         issue = next(i for i in report.issues if i.code == IssueCode.MISSING_PRICE)
         assert issue.cta_action == "navigate_asset"
 
@@ -132,9 +127,7 @@ class TestStalePriceIssue:
 
     def test_stale_price_produces_warning_issue(self):
         views = _make_views()
-        report = views.build_data_quality_report(
-            stale_prices_dto=[_make_stale_asset()]
-        )
+        report = views.build_data_quality_report(stale_prices_dto=[_make_stale_asset()])
         issue = next(i for i in report.issues if i.code == IssueCode.STALE_PRICE)
         assert issue.severity == IssueSeverity.WARNING
 
@@ -161,36 +154,28 @@ class TestMissingFxMarketIssue:
 
     def test_missing_fx_produces_warning_issue(self):
         views = _make_views()
-        report = views.build_data_quality_report(
-            missing_fx_pairs_dto=[_make_missing_fx("EUR-USD")]
-        )
+        report = views.build_data_quality_report(missing_fx_pairs_dto=[_make_missing_fx("EUR-USD")])
         issue = next(i for i in report.issues if i.code == IssueCode.MISSING_FX_MARKET)
         assert issue.severity == IssueSeverity.WARNING
 
     def test_missing_fx_deduplicates_pairs(self):
         # Same pair appearing twice (e.g. from multiple assets)
         views = _make_views()
-        report = views.build_data_quality_report(
-            missing_fx_pairs_dto=[_make_missing_fx("EUR-USD"), _make_missing_fx("EUR-USD")]
-        )
+        report = views.build_data_quality_report(missing_fx_pairs_dto=[_make_missing_fx("EUR-USD"), _make_missing_fx("EUR-USD")])
         issue = next(i for i in report.issues if i.code == IssueCode.MISSING_FX_MARKET)
         assert issue.affected_fx_pairs == ["EUR-USD"]
         assert issue.count == 1
 
     def test_missing_fx_lists_pairs(self):
         views = _make_views()
-        report = views.build_data_quality_report(
-            missing_fx_pairs_dto=[_make_missing_fx("EUR-USD"), _make_missing_fx("EUR-GBP")]
-        )
+        report = views.build_data_quality_report(missing_fx_pairs_dto=[_make_missing_fx("EUR-USD"), _make_missing_fx("EUR-GBP")])
         issue = next(i for i in report.issues if i.code == IssueCode.MISSING_FX_MARKET)
         assert "EUR-USD" in issue.affected_fx_pairs
         assert "EUR-GBP" in issue.affected_fx_pairs
 
     def test_missing_fx_has_add_fx_pair_cta(self):
         views = _make_views()
-        report = views.build_data_quality_report(
-            missing_fx_pairs_dto=[_make_missing_fx("EUR-USD")]
-        )
+        report = views.build_data_quality_report(missing_fx_pairs_dto=[_make_missing_fx("EUR-USD")])
         issue = next(i for i in report.issues if i.code == IssueCode.MISSING_FX_MARKET)
         assert issue.cta_action == "add_fx_pair"
 
@@ -306,18 +291,14 @@ class TestTransactionImpliedIssue:
     def test_implied_assets_produce_warning_issue(self):
         views = _make_views()
         asset = _make_missing_asset(1, "BTP Più")
-        report = views.build_data_quality_report(
-            transaction_implied_assets_dto=[asset]
-        )
+        report = views.build_data_quality_report(transaction_implied_assets_dto=[asset])
         issue = next(i for i in report.issues if i.code == IssueCode.TRANSACTION_IMPLIED)
         assert issue.severity == IssueSeverity.WARNING
 
     def test_implied_assets_include_names(self):
         views = _make_views()
         asset = _make_missing_asset(42, "BTP SC 2033")
-        report = views.build_data_quality_report(
-            transaction_implied_assets_dto=[asset]
-        )
+        report = views.build_data_quality_report(transaction_implied_assets_dto=[asset])
         issue = next(i for i in report.issues if i.code == IssueCode.TRANSACTION_IMPLIED)
         assert "BTP SC 2033" in issue.affected_asset_names
         assert 42 in issue.affected_asset_ids
@@ -325,9 +306,7 @@ class TestTransactionImpliedIssue:
 
     def test_implied_has_navigate_asset_cta(self):
         views = _make_views()
-        report = views.build_data_quality_report(
-            transaction_implied_assets_dto=[_make_missing_asset()]
-        )
+        report = views.build_data_quality_report(transaction_implied_assets_dto=[_make_missing_asset()])
         issue = next(i for i in report.issues if i.code == IssueCode.TRANSACTION_IMPLIED)
         assert issue.cta_action == "navigate_asset"
 

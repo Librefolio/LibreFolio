@@ -17,6 +17,7 @@
     import type {RenderedSignal} from '$lib/charts/signals';
     import {buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
     import {buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
+    import {tooltipPositionSide} from './echartsTooltipHelpers';
     import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
     import {ChartLine, ChartCandlestick} from 'lucide-svelte';
 
@@ -717,31 +718,7 @@
                 borderColor: isDark ? '#334155' : '#e2e8f0',
                 textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
                 confine: true,
-                position: (point: any, _params: any, _dom: any, _rect: any, size: any) => {
-                    // Center tooltip horizontally on cursor, vertically pinned above finger
-                    const tooltipW = size.contentSize[0];
-                    const tooltipH = size.contentSize[1];
-                    const viewW = size.viewSize[0];
-                    let x = point[0] - tooltipW / 2;
-                    // On touch devices, position well above the finger to avoid occlusion
-                    // On desktop, position above cursor with adaptive gap
-                    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-                    let y: number;
-                    if (isTouch) {
-                        // Position above finger with large gap (80px) so it's not covered
-                        const gap = 80;
-                        y = point[1] - tooltipH - gap;
-                        if (y < 0) y = 0;
-                    } else {
-                        const gap = 30;
-                        y = point[1] - tooltipH - gap;
-                        if (y < 0) y = 0;
-                    }
-                    // Clamp horizontal to chart bounds
-                    if (x < 8) x = 8;
-                    if (x + tooltipW > viewW - 8) x = viewW - tooltipW - 8;
-                    return [x, y];
-                },
+                position: tooltipPositionSide,
                 formatter: (params: any) => {
                     const items = Array.isArray(params) ? params : [params];
                     if (!items.length) return '';

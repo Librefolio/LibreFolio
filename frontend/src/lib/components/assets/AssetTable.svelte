@@ -119,7 +119,7 @@
         [
             {
                 id: 'name',
-                header: () => $t('assets.table.name'),
+                header: () => $t('common.name'),
                 cell: (row) => {
                     const icon = assetIconHtml(row);
                     const activeDot = row.active ? '<span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>' : '<span class="w-2 h-2 rounded-full bg-red-400 shrink-0"></span>';
@@ -201,7 +201,7 @@
             })),
             {
                 id: 'provider',
-                header: () => $t('assets.table.provider'),
+                header: () => $t('common.provider'),
                 cell: (row) => ({
                     type: 'html' as const,
                     html: row.provider_code ? assetProviderBadgeHtml(row.provider_code) : '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">✏️ Manual</span>',
@@ -229,6 +229,7 @@
     getRowId={(row) => String(row.id)}
     isLoading={loading}
     onRowClick={(row) => goto(`/assets/${row.id}${dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : ''}`)}
+    getRowHref={(row) => `/assets/${row.id}${dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : ''}`}
     onSelectionChange={(ids) => onselectionchange?.(data.filter((row) => ids.includes(String(row.id))))}
     rowActions={[
         {

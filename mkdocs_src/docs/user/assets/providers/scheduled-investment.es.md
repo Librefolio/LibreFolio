@@ -1,4 +1,4 @@
-# <img src="../../static/scheduled_investment.png" alt=""> Proveedor de Inversión Programada
+# <img src="../../../../../static/scheduled_investment.png" alt=""> Proveedor de Inversión Programada
 
 El proveedor de Inversión Programada está diseñado para instrumentos de renta fija donde el valor se calcula a partir de un calendario de tasas de interés en lugar de precios de mercado. Los ejemplos incluyen cuentas de ahorro, depósitos fijos y bonos gubernamentales con tasas de cupón conocidas.
 

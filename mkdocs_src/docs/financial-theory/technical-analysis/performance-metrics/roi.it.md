@@ -8,7 +8,7 @@ Il ROI Semplice misura il rendimento percentuale assoluto generato da un investi
 ## 🧮 Formula
 
 $$
-ROI = \frac{\text{Valore Attuale}}{\text{Costo Medio Ponderato (WAC)}} - 1
+ROI = \frac{\text{Valore Attuale}}{\text{Prezzo di Carico Medio (PCM)}} - 1
 $$
 
 ## 🎯 Quando usarlo
@@ -16,4 +16,4 @@ $$
 - Quando si desidera un'istantanea rapida e intuitiva del profitto totale non rettificato.
 
 ## ⚠️ Il Difetto: Diluizione del Flusso di Cassa
-Il ROI Semplice diventa fuorviante quando si effettuano investimenti successivi nello stesso asset. Se acquisti un'azione e questa sale del +50%, il tuo ROI è del +50%. Se poi investi un capitale dieci volte maggiore nella stessa azione e il prezzo non si muove, il tuo guadagno assoluto rimane lo stesso, ma la nuova massiccia base di capitale diluirà istantaneamente il tuo ROI, portandolo magari al +5%. Sembrerà che la tua performance sia crollata, nonostante il mercato non si sia mosso.
+Il ROI Semplice diventa fuorviante quando si effettuano investimenti successivi nello stesso asset. Se acquisti un'azione e questa sale del +50%, il tuo ROI è del +50%. Se poi investi un capitale dieci volte maggiore nella stessa azione e il prezzo non si muove, il tuo guadagno assoluto rimane lo stesso, ma la nuova massiccia base di capitale diluirà istantaneamente il tuo ROI, portandolo magari al +5%. Sembrerà che la tua performance sia crollata, nonostante il mercato non si sia mosso. Per ovviare a questo problema di diluizione ed esaminare il profitto monetario reale depurato dai movimenti di capitale, consulta il [P&L del Periodo](period-pnl.md).

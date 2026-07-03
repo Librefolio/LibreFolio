@@ -48,6 +48,6 @@ $$
 
 ## 🔗 Correlati
 
-- 📊 **[Costo Medio Ponderato (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Costo medio per unità su più acquisti
+- 📊 **[Prezzo Medio di Carico (PMC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Costo medio per unità su più acquisti
 - 💰 **[Tassazione](../../fundamentals/taxation.md)** — Plusvalenze, metodi di associazione, riporto delle perdite
 - 📈 **[Rendimenti](../../fundamentals/returns.md)** — Misurazione delle performance dell'investimento

@@ -22,7 +22,7 @@ class FIFOTransactionInput(NamedTuple):
     """
 
     id: int
-    type: str       # "BUY" | "SELL"
+    type: str  # "BUY" | "SELL"
     quantity: Decimal
     price: Decimal
     date: date
@@ -49,8 +49,8 @@ class ClosedLot:
     sell_date: date
     buy_price: Decimal
     sell_price: Decimal
-    quantity: Decimal       # matched quantity
-    realized_pnl: Decimal   # (sell_price - buy_price) * quantity
+    quantity: Decimal  # matched quantity
+    realized_pnl: Decimal  # (sell_price - buy_price) * quantity
 
 
 @dataclass(frozen=True)
@@ -101,26 +101,25 @@ def calculate_fifo_lots(transactions: list[FIFOTransactionInput]) -> FIFOResult:
             sell_qty_remaining = tx.quantity
             while sell_qty_remaining > Decimal("0"):
                 if not buy_queue:
-                    raise ValueError(
-                        f"SELL transaction {tx.id} on {tx.date} exceeds available bought quantity. "
-                        "Possible unrecognized stock split or missing BUY transactions."
-                    )
+                    raise ValueError(f"SELL transaction {tx.id} on {tx.date} exceeds available bought quantity. " "Possible unrecognized stock split or missing BUY transactions.")
                 buy_tx, buy_remaining = buy_queue[0]
 
                 matched_qty = min(sell_qty_remaining, buy_remaining)
                 realized_pnl = (tx.price - buy_tx.price) * matched_qty
                 total_realized_pnl += realized_pnl
 
-                closed_lots.append(ClosedLot(
-                    buy_transaction_id=buy_tx.id,
-                    sell_transaction_id=tx.id,
-                    buy_date=buy_tx.date,
-                    sell_date=tx.date,
-                    buy_price=buy_tx.price,
-                    sell_price=tx.price,
-                    quantity=matched_qty,
-                    realized_pnl=realized_pnl,
-                ))
+                closed_lots.append(
+                    ClosedLot(
+                        buy_transaction_id=buy_tx.id,
+                        sell_transaction_id=tx.id,
+                        buy_date=buy_tx.date,
+                        sell_date=tx.date,
+                        buy_price=buy_tx.price,
+                        sell_price=tx.price,
+                        quantity=matched_qty,
+                        realized_pnl=realized_pnl,
+                    )
+                )
 
                 buy_queue[0][1] -= matched_qty
                 sell_qty_remaining -= matched_qty
@@ -139,9 +138,7 @@ def calculate_fifo_lots(transactions: list[FIFOTransactionInput]) -> FIFOResult:
         for entry in buy_queue
     ]
 
-    total_unrealized_quantity = sum(
-        (lot.remaining_quantity for lot in open_lots), Decimal("0")
-    )
+    total_unrealized_quantity = sum((lot.remaining_quantity for lot in open_lots), Decimal("0"))
 
     return FIFOResult(
         open_lots=open_lots,

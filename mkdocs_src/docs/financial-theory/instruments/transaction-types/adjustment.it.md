@@ -39,7 +39,7 @@ Le rettifiche vengono utilizzate quando nessun altro tipo di transazione è adat
 
 Le rettifiche con quantità positiva **aumentano** la quantità dei lotti (FIFO). Il costo di carico per i lotti creati tramite rettifica dipende dalla presenza di un **Cost Basis Override**:
 
-- **Con override**: il valore specificato viene utilizzato come **costo di acquisizione per unità** (WAC — Weighted Average Cost)
+- **Con override**: il valore specificato viene utilizzato come **costo di acquisizione per unità** (PMC — Prezzo Medio di Carico)
 - **Senza override**: il lotto viene creato con costo zero (acquisizione gratuita — ad es. regali, airdrop)
 
 !!! info "Valore per unità"
@@ -47,16 +47,16 @@ Le rettifiche con quantità positiva **aumentano** la quantità dei lotti (FIFO)
     Il Cost Basis Override è il costo medio **per singola unità** dell'asset.
     Per ottenere il costo totale del blocco trasferito, moltiplicare per la quantità:
 
-    $$\text{Costo totale} = \text{WAC} \times \text{quantità}$$
+    $$\text{Costo totale} = \text{PMC} \times \text{quantità}$$
 
 ### 🏦 Costo di Carico Automatico nei Trasferimenti
 
-Quando si trasferiscono asset tra broker, LibreFolio **calcola automaticamente** il Cost Basis Override lato ricevente utilizzando il **Weighted Average Cost (WAC)** della posizione del broker di origine.
+Quando si trasferiscono asset tra broker, LibreFolio **calcola automaticamente** il Cost Basis Override lato ricevente utilizzando il **Prezzo Medio di Carico (PMC)** della posizione del broker di origine.
 
 !!! tip "Scopri di più"
 
     Per la formula completa, esempi e casi particolari, consulta la pagina dedicata:
-    **[📊 Weighted Average Cost (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)**
+    **[📊 Prezzo Medio di Carico (PMC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)**
 
 ??? note "✏️ Quando effettuare l'Override Manualmente"
 
@@ -67,7 +67,7 @@ Quando si trasferiscono asset tra broker, LibreFolio **calcola automaticamente**
     | **Trasferimento normale** | Lasciare vuoto — calcolato automaticamente |
     | **Exit Tax** | Valore di mercato alla data del trasferimento (specifico per giurisdizione) |
     | **Eredità** | Valore equo di mercato alla data del decesso (o stepped-up basis) |
-    | **Regalo** | Costo di carico originale del donatore (carryover basis) |
+    | **Regalo** | Costo di carico originale del donante (carryover basis) |
     | **Operazione societaria** | Costo di carico rettificato secondo i termini dell'operazione societaria |
 
     !!! warning "Responsabilità dell'Utente"
@@ -78,7 +78,7 @@ Quando si trasferiscono asset tra broker, LibreFolio **calcola automaticamente**
 
 ## 🔗 Correlati
 
-- 📊 **[Weighted Average Cost (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Come viene calcolato il costo di carico automatico
+- 📊 **[Prezzo Medio di Carico (PMC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Come viene calcolato il costo di carico automatico
 - 🔄 **[Trasferimento Asset](transfer.md)** — Due rettifiche collegate possono essere promosse a un Trasferimento Asset
 - 🛒 **[Acquisto e Vendita](buy-sell.md)** — Transazioni standard di asset con cassa
 - 💰 **[Commissioni e Tasse](fee.md)** — Correzioni di sola cassa (usare Commissioni/Tasse invece di Rettifica)

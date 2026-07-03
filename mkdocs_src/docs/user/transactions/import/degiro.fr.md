@@ -32,7 +32,3 @@ Pour exporter vos transactions depuis Degiro :
 
 - Prise en charge des opérations d'achat/vente, des dividendes, des frais de transaction, des dépôts et des retraits.
 - Les conversion de devise effectuées par Degiro sont traitées automatiquement.
-
-## 🔗 Référence Développeur
-
-→ [Fournisseur Degiro — Détails d'Implémentation](../../../developer/backend/brim/providers_list.md)

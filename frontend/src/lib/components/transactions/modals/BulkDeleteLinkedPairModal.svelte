@@ -174,7 +174,7 @@
                     <thead class="bg-gray-50 dark:bg-gray-800 text-[10px] uppercase text-gray-500 dark:text-gray-400">
                         <tr>
                             <th class="text-left px-2 py-1.5">{$t('transactions.bulkDelete.colSelected')}</th>
-                            <th class="text-left px-2 py-1.5">{$t('transactions.bulkDelete.colType')}</th>
+                            <th class="text-left px-2 py-1.5">{$t('common.type')}</th>
                             <th class="text-left px-2 py-1.5">{$t('transactions.bulkDelete.colPartner')}</th>
                             <th class="text-left px-2 py-1.5">{$t('transactions.bulkDelete.colAction')}</th>
                         </tr>
@@ -230,7 +230,7 @@
 
     <div class="flex items-center justify-end gap-2 p-3 border-t border-gray-200 dark:border-gray-700">
         <button class="px-4 py-1.5 text-xs rounded text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onclick={onClose} data-testid="tx-bulk-cancel">
-            {$t('transactions.bulkDelete.cancel')}
+            {$t('common.cancel')}
         </button>
         <button class="px-4 py-1.5 text-xs rounded text-white bg-red-600 hover:bg-red-700 disabled:opacity-50" disabled={committing || finalIds.length === 0} onclick={commit} data-testid="tx-bulk-confirm">
             {committing ? $t('transactions.bulkDelete.deleting') : $t('transactions.bulkDelete.confirm', {values: {n: finalIds.length}})}

@@ -42,7 +42,3 @@ Pour des portefeuilles plus avancés, vous pouvez configurer une **Flex Query** 
 - Prend en charge les rapports d'activité standard d'IBKR (transactions, dividendes, retenues fiscales, frais, dépôts, retraits).
 - Les comptes multi-devises sont pris en charge.
 - Les opérations sur titres (divisions, fusions) peuvent nécessiter des ajustements manuels dans la grille de staging.
-
-## 🔗 Référence développeur
-
-→ [Fournisseur IBKR — Détails d'implémentation](../../../developer/backend/brim/providers_list.md)

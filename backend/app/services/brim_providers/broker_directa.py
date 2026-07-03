@@ -86,6 +86,12 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "dividendi": TransactionType.DIVIDEND,
     "dividendo": TransactionType.DIVIDEND,
     "coupon": TransactionType.DIVIDEND,
+    # TAX (must be before cedola/provento to catch "Rit.cedola", "Rit.provento")
+    "rit.": TransactionType.TAX,
+    "ritenuta": TransactionType.TAX,
+    "tobin": TransactionType.TAX,
+    "bollo": TransactionType.TAX,  # Bollo portafoglio titoli (stamp duty)
+    "imposta": TransactionType.TAX,  # generic tax keyword
     # INTEREST (bond coupons)
     "cedola": TransactionType.INTEREST,
     # DEPOSIT
@@ -93,12 +99,6 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "bonifico": TransactionType.DEPOSIT,
     # WITHDRAWAL
     "prelievo": TransactionType.WITHDRAWAL,
-    # TAX
-    "rit.": TransactionType.TAX,
-    "ritenuta": TransactionType.TAX,
-    "tobin": TransactionType.TAX,
-    "bollo": TransactionType.TAX,    # Bollo portafoglio titoli (stamp duty)
-    "imposta": TransactionType.TAX,  # generic tax keyword
     # FEE
     "commissioni": TransactionType.FEE,
     "commissione": TransactionType.FEE,

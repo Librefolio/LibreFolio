@@ -40,7 +40,7 @@
     import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
-    import {getStart, getEnd, setDateRange} from '$lib/stores/dateRangeStore.svelte';
+    import {getStart, getEnd, setDateRange, resolveDateSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
@@ -134,8 +134,12 @@
     let dateEnd = $state(getEnd());
     let activePreset: any = $state(null);
 
+    /** Resolved dates for API calls (sentinels → concrete dates) */
+    let apiDateStart = $derived(resolveDateSentinel(dateStart));
+    let apiDateEnd = $derived(resolveDateSentinel(dateEnd));
+
     /** True when the date range ends today (or later) → show live prices from providers */
-    let isHeadToday = $derived(dateEnd >= new Date().toISOString().slice(0, 10));
+    let isHeadToday = $derived(apiDateEnd >= new Date().toISOString().slice(0, 10));
 
     // View mode
     let viewMode = $state<'grid' | 'list'>('grid');
@@ -176,7 +180,7 @@
 
     // Filter bar adaptive layout (shared helper)
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    const layout = createResponsiveLayout({wide: 1240, tablet: 960, tabletS: 500, labelHide: 460});
+    const layout = createResponsiveLayout({wide: 1340, tablet: 1060, tabletS: 500, labelHide: 460});
     let layoutMode = $derived(layout.layoutMode);
     let showActionLabels = $derived(layout.showActionLabels);
 
@@ -222,7 +226,7 @@
     // Which delta periods are visible for the selected date range
     let visiblePeriods = $derived(
         DELTA_PERIODS.filter((p) => {
-            const rangeMs = new Date(dateEnd).getTime() - new Date(dateStart).getTime();
+            const rangeMs = new Date(apiDateEnd).getTime() - new Date(apiDateStart).getTime();
             const rangeDays = rangeMs / (1000 * 60 * 60 * 24);
             return rangeDays >= p.days;
         }),
@@ -378,9 +382,9 @@
         const needFetch: AssetState[] = [];
         for (const asset of assets) {
             const store = getAssetPriceStore(asset.id, asset.currency);
-            const gaps = store.getMissingIntervals(dateStart, dateEnd);
+            const gaps = store.getMissingIntervals(apiDateStart, apiDateEnd);
             if (gaps.length === 0) {
-                const rangeData = store.getRange(dateStart, dateEnd).data;
+                const rangeData = store.getRange(apiDateStart, apiDateEnd).data;
                 cached.set(
                     asset.id,
                     rangeData.map((p) => ({
@@ -412,7 +416,7 @@
             // Bulk query only assets with gaps
             const queries = needFetch.map((a) => ({
                 asset_id: a.id,
-                date_range: {start: dateStart, end: dateEnd},
+                date_range: {start: apiDateStart, end: apiDateEnd},
             }));
 
             const response = (await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(queries)) as any;
@@ -428,7 +432,7 @@
                 if (asset && prices.length > 0) {
                     const store = getAssetPriceStore(asset.id, asset.currency);
                     store.merge(apiPricesToAssetPricePoints(prices));
-                    store.markFetched(dateStart, dateEnd);
+                    store.markFetched(apiDateStart, apiDateEnd);
                 }
             }
 
@@ -548,7 +552,7 @@
             const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
                 {
                     asset_id: asset.id,
-                    date_range: {start: dateStart, end: dateEnd},
+                    date_range: {start: apiDateStart, end: apiDateEnd},
                 },
             ]);
             const r = (response as any)?.results?.[0];
@@ -732,7 +736,7 @@
     /** Fetch FX rate data for all configured pairs (populates FxStores) */
     async function loadFxRateData() {
         const promises = fxPairSlugs.map(async (slug) => {
-            await ensureFxRangeLoaded(slug, dateStart, dateEnd);
+            await ensureFxRangeLoaded(slug, apiDateStart, apiDateEnd);
         });
         await Promise.allSettled(promises);
     }
@@ -815,7 +819,7 @@
     <div class="flex items-center justify-between">
         <div>
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                {$t('assets.title')}
+                {$t('common.assets')}
                 {#if assets.length > 0}
                     <span data-testid="assets-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{assets.length}</span>
                 {/if}

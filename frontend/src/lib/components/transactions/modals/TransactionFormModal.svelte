@@ -36,6 +36,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {X, ArrowRight, ArrowDown, Check, Pencil, Save, Info} from 'lucide-svelte';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
+    import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
 
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
@@ -930,19 +931,12 @@
     let resolverCtx: ResolverContext = $derived({
         brokers: brokers as unknown as Array<{id: number; name: string}>,
         assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
-        getBrokerIconUrl: (brokerId: number) => {
-            const b = brokers.find((br) => br.id === brokerId);
-            if (!b) return null;
-            if (b.icon_url?.trim()) return b.icon_url;
-            if (b.portal_url?.trim()) {
-                try {
-                    return new URL(b.portal_url).origin + '/favicon.ico';
-                } catch {
-                    /* skip */
-                }
-            }
-            return null;
-        },
+        getBrokerIconHtml: (brokerId: number) =>
+            getBrokerIconHtmlById(brokerId, brokers as any[], {
+                width: 16,
+                height: 16,
+                style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
+            }),
     });
     $effect(() => {
         if (!open || isReadonly) return;
@@ -1409,12 +1403,12 @@
                  yellow for validate issues. Both error types show categorized lists. -->
             {#if formError}
                 <InfoBanner variant="error" dismissible ondismiss={() => (formError = null)}>
-                    <p class="font-semibold mb-1" data-testid="tx-form-error">⛔ {$t('transactions.form.rolledBackTitle')}</p>
+                    <p class="font-semibold mb-1" data-testid="tx-form-error">⛔ {$t('common.saveCancelled')}</p>
                     <p>{formError}</p>
                 </InfoBanner>
             {:else if commitFailed && issues.length > 0}
                 <InfoBanner variant="error" dismissible ondismiss={() => (commitFailed = false)}>
-                    <p class="font-semibold mb-1" data-testid="tx-form-error">⛔ {$t('transactions.form.rolledBackTitle')}</p>
+                    <p class="font-semibold mb-1" data-testid="tx-form-error">⛔ {$t('common.saveCancelled')}</p>
                     {#if fieldIssues.length > 0}
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.issuesHeader')}</p>
                         <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
@@ -1496,7 +1490,7 @@
                     <div class="text-sm">
                         <!-- Type: editable in create dual mode (W41), readonly in edit/view -->
                         <div class="flex flex-col gap-1{hl('tx-form-type-wrap')}" data-testid="tx-form-type-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.type')}</span>
                             {#if typeImmutable}
                                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
                                      readonly type as a plain inline [icon] [name]
@@ -1528,7 +1522,7 @@
                             {#if brokerImmutable}
                                 {@const b = brokers.find((br) => br.id === draft.broker_id)}
                                 <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-broker-readonly">
-                                    <BrokerIcon iconUrl={b?.icon_url ?? null} portalUrl={b?.portal_url ?? null} pluginCode={b?.default_import_plugin ?? null} altText={b?.name ?? ''} size="sm" />
+                                    <BrokerIcon brokerId={b?.id ?? null} iconUrl={b?.icon_url ?? null} portalUrl={b?.portal_url ?? null} pluginCode={b?.default_import_plugin ?? null} altText={b?.name ?? ''} size="sm" />
                                     <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
                                 </div>
                             {:else}
@@ -1540,7 +1534,7 @@
                     <!-- Transfer Asset: shared asset + quantity -->
                     {#if pairLayout === 'transfer_asset'}
                         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.asset')} *</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.asset')} *</span>
                             <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly ? undefined : $t('assets.create') || 'New asset'} onCreateNew={isReadonly ? undefined : () => (createAssetOpen = true)} />
                         </div>
                         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
@@ -1581,10 +1575,10 @@
                     <div class="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-start overflow-hidden" data-testid="tx-form-dual-split">
                         <!-- DA (From) -->
                         <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3 min-w-0" data-testid="tx-form-dual-from">
-                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('transactions.form.from')}</div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('common.from')}</div>
                             <!-- Date (from side) -->
                             <div class="flex flex-col gap-1 mb-2">
-                                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
+                                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.date')}</span>
                                 {#if isReadonly}
                                     <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{draft.date || '—'}</div>
                                 {:else}
@@ -1626,13 +1620,13 @@
 
                         <!-- A (To) -->
                         <div class="border border-gray-200 dark:border-slate-700 rounded-lg p-3 min-w-0" data-testid="tx-form-dual-to">
-                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('transactions.form.to')}</div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{$t('common.to')}</div>
                             <!-- Date (to side) — hidden when partner is inaccessible (role=null or not in store) -->
                             {#if inaccessiblePartnerBrokerId != null || (isReadonly && !partnerRow && dualTo.broker_id > 0 && getBrokerRole(dualTo.broker_id) == null)}
                                 <!-- partner inaccessible — hide date -->
                             {:else}
                                 <div class="flex flex-col gap-1 mb-2">
-                                    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.date')}</span>
                                     {#if isReadonly}
                                         <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{dualTo.date || '—'}</div>
                                     {:else}
@@ -1661,7 +1655,7 @@
                                         <div class="flex flex-col gap-1.5 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400" data-testid="tx-form-partner-locked">
                                             <div class="flex items-center gap-1.5">
                                                 {#if pInfo?.icon_url || pInfo?.portal_url || pInfo?.default_import_plugin}
-                                                    <BrokerIcon iconUrl={pInfo.icon_url} portalUrl={pInfo.portal_url} pluginCode={pInfo.default_import_plugin} altText={pInfo.name ?? ''} size="sm" />
+                                                    <BrokerIcon brokerId={pInfo.id} iconUrl={pInfo.icon_url} portalUrl={pInfo.portal_url} pluginCode={pInfo.default_import_plugin} altText={pInfo.name ?? ''} size="sm" />
                                                 {/if}
                                                 <strong>{pInfo?.name ?? `#${inaccessiblePartnerBrokerId}`}</strong>
                                                 <RoleIconC size={14} class="{getRoleIconColor(null)} shrink-0" />
@@ -1681,7 +1675,7 @@
                                             {#if toInfo && toRole != null}
                                                 <!-- Accessible broker (OWNER/EDITOR/VIEWER) -->
                                                 {@const RoleIcon = getRoleIcon(toRole)}
-                                                <BrokerIcon iconUrl={toInfo.icon_url} portalUrl={toInfo.portal_url} pluginCode={toInfo.default_import_plugin} altText={toInfo.name} size="sm" />
+                                                <BrokerIcon brokerId={toInfo.id} iconUrl={toInfo.icon_url} portalUrl={toInfo.portal_url} pluginCode={toInfo.default_import_plugin} altText={toInfo.name} size="sm" />
                                                 <span class="font-medium">{toInfo.name}</span>
                                                 <RoleIcon size={14} class="{getRoleIconColor(toRole)} shrink-0" />
                                             {:else if toInfo && toRole == null}
@@ -1690,7 +1684,7 @@
                                                 {@const lockColor = getRoleIconColor(null)}
                                                 <div class="flex items-center gap-1.5">
                                                     {#if toInfo.icon_url || toInfo.portal_url || toInfo.default_import_plugin}
-                                                        <BrokerIcon iconUrl={toInfo.icon_url} portalUrl={toInfo.portal_url} pluginCode={toInfo.default_import_plugin} altText={toInfo.name ?? ''} size="sm" />
+                                                        <BrokerIcon brokerId={toInfo.id} iconUrl={toInfo.icon_url} portalUrl={toInfo.portal_url} pluginCode={toInfo.default_import_plugin} altText={toInfo.name ?? ''} size="sm" />
                                                     {/if}
                                                     <strong>{toInfo.name}</strong>
                                                     <LockIcon size={14} class="{lockColor} shrink-0" />
@@ -1776,7 +1770,7 @@
                     <div class="grid grid-cols-2 gap-3 text-sm">
                         <!-- Date -->
                         <div class="flex flex-col gap-1{hl('tx-form-date-wrap')}" data-testid="tx-form-date-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.date')}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.date')}</span>
                             {#if isReadonly}
                                 <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-date-readonly">{draft.date || '—'}</div>
                             {:else}
@@ -1786,7 +1780,7 @@
 
                         <!-- Type -->
                         <div class="flex flex-col gap-1{hl('tx-form-type-wrap')}" data-testid="tx-form-type-wrap">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.table.type')}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.type')}</span>
                             {#if typeImmutable}
                                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
                                      readonly type as a plain inline [icon] [name]
@@ -1914,7 +1908,7 @@
                     {#if rule.assetField !== 'forbidden'}
                         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400"
-                                >{$t('transactions.table.asset')}{rule.assetField === 'required' ? ' *' : ''}{#if rule.assetField === 'optional'}
+                                >{$t('common.asset')}{rule.assetField === 'required' ? ' *' : ''}{#if rule.assetField === 'optional'}
                                     <span class="text-gray-400 italic">({$t('common.optional')})</span>{/if}</span
                             >
                             <AssetSelect bind:value={draft.asset_id} disabled={isReadonly} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly ? undefined : $t('assets.create') || 'New asset'} onCreateNew={isReadonly ? undefined : () => (createAssetOpen = true)} />
@@ -1929,7 +1923,7 @@
                             <!-- Bugfix-4 §U19: readonly broker also shows the icon
                                  (parity with the editable BrokerSearchSelect). -->
                             <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-broker-readonly">
-                                <BrokerIcon iconUrl={b?.icon_url ?? null} portalUrl={b?.portal_url ?? null} pluginCode={b?.default_import_plugin ?? null} altText={b?.name ?? ''} size="sm" />
+                                <BrokerIcon brokerId={b?.id ?? null} iconUrl={b?.icon_url ?? null} portalUrl={b?.portal_url ?? null} pluginCode={b?.default_import_plugin ?? null} altText={b?.name ?? ''} size="sm" />
                                 <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
                             </div>
                         {:else}
@@ -2016,7 +2010,7 @@
 
                         <!-- 2. Tags -->
                         <div class="flex flex-col gap-1">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.tags')}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.tags')}</span>
                             <TagInput
                                 value={draft.tags}
                                 {availableTags}
@@ -2030,7 +2024,7 @@
 
                         <!-- 3. Description -->
                         <label class="flex flex-col gap-1{hl('tx-form-description')}">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('transactions.form.description')}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.description')}</span>
                             <textarea
                                 autocomplete="off"
                                 class="px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg resize-y min-h-[60px] disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
@@ -2116,12 +2110,12 @@
                         disabled={committing || loadingPartner || !!dualValidationError || hasSignViolation || (!commitOnSave && !isFormComplete)}
                         onclick={commit}
                         data-testid="tx-form-save"
-                        title={committing ? $t('common.saving') : !commitOnSave ? $t('transactions.form.apply') : $t('common.save')}
+                        title={committing ? $t('common.saving') : !commitOnSave ? $t('common.apply') : $t('common.save')}
                     >
                         {#if committing}
                             <span class="hidden sm:inline">{$t('common.saving')}</span>
                         {:else if !commitOnSave}
-                            <Check size={16} /> <span class="hidden sm:inline">{$t('transactions.form.apply')}</span>
+                            <Check size={16} /> <span class="hidden sm:inline">{$t('common.apply')}</span>
                         {:else}
                             <Save size={15} /> <span class="hidden sm:inline">{$t('common.save')}</span>
                         {/if}

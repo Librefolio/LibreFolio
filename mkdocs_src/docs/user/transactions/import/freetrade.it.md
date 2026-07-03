@@ -1,4 +1,4 @@
-# <img src="https://freetrade.io/favicon.ico" alt=""> Freetrade
+# <img src="https://cdn.prod.website-files.com/66289cd2c30bc8d40bd60733/66f526a076ad61485c78771c_favicon.png" alt=""> Freetrade
 
 !!! info "Beta"
 
@@ -29,7 +29,3 @@ Per esportare l'estratto conto delle transazioni da Freetrade:
 - Broker con sede nel Regno Unito.
 - Supporta operazioni su azioni ed ETF, dividendi, depositi di liquidità e prelievi.
 - Pieno supporto multi-valuta per asset in GBP, EUR e USD.
-
-## 🔗 Riferimenti per Sviluppatori
-
-→ [Freetrade Provider — Dettagli di Implementazione](../../../developer/backend/brim/providers_list.md)

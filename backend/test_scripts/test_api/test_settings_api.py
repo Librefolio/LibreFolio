@@ -759,11 +759,7 @@ class TestSchedulerSettingsKeys:
                     print_info(f"  {key}='{val}' ✓")
             finally:
                 # Restore all originals
-                restore_items = [
-                    {"key": k, "value": v}
-                    for k, v in originals.items()
-                    if v is not None
-                ]
+                restore_items = [{"key": k, "value": v} for k, v in originals.items() if v is not None]
                 if restore_items:
                     await client.patch(
                         f"{API_BASE}/settings/global/bulk",

@@ -271,10 +271,10 @@
         <!-- Select All / Deselect All -->
         <div class="flex items-center gap-3 pt-2">
             <button type="button" onclick={selectAll} class="text-xs text-libre-green hover:text-libre-green/80 font-medium transition-colors">
-                {$t('assets.comparison.selectAll')}
+                {$t('common.selectAll')}
             </button>
             <button type="button" onclick={deselectAll} class="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-medium transition-colors">
-                {$t('assets.comparison.deselectAll')}
+                {$t('common.deselectAll')}
             </button>
         </div>
     </div>

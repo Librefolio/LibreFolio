@@ -1,4 +1,4 @@
-# <img src="../../static/cssscraper.png" alt=""> CSS Scraper
+# <img src="../../../../../static/cssscraper.png" alt=""> CSS Scraper
 
 Il provider CSS Scraper consente di estrarre i dati dei prezzi da qualsiasi pagina web utilizzando i selettori CSS. Questo è particolarmente utile per gli asset non coperti da altri provider, come i titoli di stato italiani (BTP) su Borsa Italiana.
 

@@ -42,9 +42,15 @@ La retroalimentación de la fuerza de la contraseña en tiempo real ayuda a los 
 Su cartera de un vistazo: estadísticas clave, gráficos de asignación y un estado vacío limpio para nuevos usuarios.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-0" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Vista principal" alt="Panel de Control Principal">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-charts" data-title="📊 Asignación y Composición" alt="Gráficos de Asignación del Panel">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="empty-state" data-title="🌱 Nueva cartera (estado vacío)" alt="Estado Vacío del Panel">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Vista Principal (Absoluta)" alt="📈 Vista Principal (Absoluta)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📈 Vista Principal (Porcentaje)" alt="📈 Vista Principal (Porcentaje)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Asignación por Tipo (Actual)" alt="📊 Asignación por Tipo (Actual)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-history" data-title="📊 Asignación por Tipo (Histórico)" alt="📊 Asignación por Tipo (Histórico)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-now" data-title="📊 Asignación por Sector (Actual)" alt="📊 Asignación por Sector (Actual)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-history" data-title="📊 Asignación por Sector (Histórico)" alt="📊 Asignación por Sector (Histórico)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-now" data-title="📊 Asignación Geográfica (Actual)" alt="📊 Asignación Geográfica (Actual)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-history" data-title="📊 Asignación Geográfica (Histórico)" alt="📊 Asignación Geográfica (Histórico)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="empty-state" data-title="🌱 Nueva cartera (estado vacío)" alt="🌱 Nueva cartera (estado vacío)">
 </div>
 
 ---
@@ -116,6 +122,7 @@ Importe transacciones desde los archivos de exportación de su bróker, a travé
  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Modal de importación rápida" alt="Modal de Importación">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step1" data-title="🧙 Asistente — Paso 1: Carga" alt="Asistente de Importación Paso 1">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Asistente — Paso 2: Configuración del Parser" alt="Asistente de Importación Paso 2">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step3" data-title="🧠 Asistente — Paso 3: Análisis" alt="Asistente de Importación Paso 3">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step4-resolution" data-title="🔍 Asistente — Paso 4: Resolución de Activos" alt="Resolución de Activos del Asistente de Importación">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-duplicate" data-title="⚠️ Detección de Duplicados" alt="Detección de Duplicados del Asistente de Importación">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Preparación Masiva" alt="Área de Preparación Masiva de Importación">

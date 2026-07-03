@@ -27,6 +27,7 @@ const PNG_MAP: Record<string, string> = {
     CROWDFUND_LOAN: 'crowdfunding',
     INDEX: 'index',
     OTHER: 'other',
+    LIQUIDITY: 'liquidity',
 };
 
 /**

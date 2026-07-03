@@ -1,38 +1,32 @@
 # <img src="https://www.directa.it/favicon.ico" alt=""> Directa SIM
 
-!!! info "Bêta"
+!!! info "Beta"
 
-    Ce plugin est en version **Bêta** — testé avec des fichiers d'exemple, mais des cas particuliers peuvent exister.
+    Ce plugin est en **Beta** — testé avec des fichiers d'exemple, mais des cas particuliers peuvent exister.
 
 ## 📥 Comment exporter
 
-Pour exporter vos transactions depuis Directa SIM :
+LibreFolio prend en charge le format **CSV** exporté depuis Directa SIM. Les captures d'écran ci-dessous proviennent de la version bureau, mais les étapes sont similaires sur mobile.
 
-1. Connectez-vous à votre [Portail Directa](https://www.directatrading.com) (en utilisant l'interface dLite ou Classic).
-2. Allez dans **INFO** ou **Operazioni** dans le menu principal, puis sélectionnez **Movimenti** (Mouvements de trésorerie) ou **Tabella Ordini** (Historique des ordres).
-3. Sélectionnez la plage de dates que vous souhaitez exporter.
-4. Cliquez sur l'icône de téléchargement **CSV** ou sur le bouton d'exportation en haut à droite du tableau.
-5. Enregistrez le fichier directement sans l'ouvrir ni le modifier dans Excel.
+### Étape 1 — Ouvrir la liste des mouvements
 
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <!-- [Screenshot Placeholder: Directa SIM Portal - Movimenti Cash / Transazioni CSV export page] -->
-</div>
+Connectez-vous à [Directa](https://www.directatrading.com) et cliquez sur l'onglet **CONTO** (❶). Cliquez ensuite sur l'icône filtre/mouvements à gauche (❷) et sélectionnez la période souhaitée — ex. **6M** (❸).
 
-## ⚠️ Pièges courants
+![Directa SIM — onglet CONTO, liste des mouvements, sélecteur de période](../../../static/broker-guides/Directa_1.png){ style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-!!! warning "Lignes d'en-tête"
+### Étape 2 — Exporter en CSV
 
-    Les fichiers Directa SIM contiennent un bloc d'en-tête de métadonnées (généralement 9 lignes) avant le tableau de données réel. Le parseur est conçu pour ignorer ce bloc automatiquement. **Ne supprimez pas ces lignes d'en-tête manuellement**, sinon le parseur ne pourra pas trouver les colonnes de données correctes.
+Cliquez sur l'icône d'exportation (l'icône du tableur avec le **X** vert) en haut du tableau. Dans la boîte de dialogue, sélectionnez **File separato da virgole (csv)** et cliquez sur **ESTRAI**.
 
-!!! warning "Délimiteurs"
+![Directa SIM — boîte de dialogue d'exportation, option CSV sélectionnée](../../../static/broker-guides/Directa_2.png){ style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-    Les exports Directa utilisent le point-virgule `;` comme délimiteur et le formatage numérique italien standard (virgule `,` pour les décimales). Le parseur analyse ces paramètres automatiquement. Évitez d'enregistrer le CSV via un logiciel qui convertit ces délimiteurs (comme l'ouverture et l'enregistrement dans Microsoft Excel sans paramètres de texte brut).
+Enregistrez le fichier sans l'ouvrir ni le modifier dans Excel, puis importez-le dans LibreFolio.
 
 ## 📝 Notes
 
-- Prise en charge des transactions d'actions, d'obligations et d'ETF, des dividendes, des taxes (ritenute fiscali) et des frais de transaction.
+- Prise en charge des transactions d'actions, d'obligations et d'ETF, des dividendes, des taxes (*ritenute fiscali*) et des frais de transaction.
+- Seul le format **CSV** est pris en charge — pas xlsx ni ods.
 - Les opérations de compte sont libellées en EUR.
+- L'exportation couvre jusqu'à 3 000 lignes par fichier. Pour des historiques plus longs, exportez plusieurs périodes et importez-les successivement.
 
-## 🔗 Référence développeur
 
-→ [Fournisseur Directa SIM — Détails d'implémentation](../../../developer/backend/brim/providers_list.md)

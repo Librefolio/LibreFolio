@@ -26,7 +26,7 @@ Para exportar su historial de transacciones desde eToro:
 
 !!! warning "CFD frente a Activos Reales"
 
-    eToro admite tanto CFD (contratos por diferencias) como activos reales. El analizador importará las transacciones de CFD, pero debido a que los CFD no representan acciones subyacentes, la base de costo y la lógica WAC podrían requerir una validación manual en la cuadrícula de transacciones.
+    eToro admite tanto CFD (contratos por diferencias) como activos reales. El analizador importará las transacciones de CFD, pero debido a que los CFD no representan acciones subyacentes, la base de costo y la lógica PMP podrían requerir una validación manual en la cuadrícula de transacciones.
 
 ## 📝 Notas
 
@@ -35,4 +35,4 @@ Para exportar su historial de transacciones desde eToro:
 
 ## 🔗 Referencia para Desarrolladores
 
-→ [Proveedor eToro — Detalles de Implementación](../../../developer/backend/brim/providers_list.md)
+→ [eToro Provider — Detalles de Implementación](../../../developer/backend/brim/providers_list.md)

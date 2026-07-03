@@ -90,7 +90,7 @@
             {$_('dashboard.holdings')}
         </h2>
         <a href={assetsHref} class="text-xs text-libre-green dark:text-green-400 hover:underline font-medium" data-testid="holdings-see-all">
-            {$_('dashboard.seeAllAssets')}
+            {$_('common.seeAll')}
         </a>
     </div>
 
@@ -102,7 +102,7 @@
         </div>
     {:else if holdings.length === 0}
         <p class="text-sm text-gray-400 dark:text-gray-500 py-4 text-center flex-1 flex items-center justify-center">
-            {$_('dashboard.noData')}
+            {$_('common.noData')}
         </p>
     {:else}
         <div class="overflow-x-auto flex-1">

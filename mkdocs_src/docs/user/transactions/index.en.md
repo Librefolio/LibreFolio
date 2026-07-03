@@ -29,8 +29,7 @@ Here is a summary of the operations and tools available directly within the tran
 | **Broker Import** | Drag-and-drop your broker statement file to import your history automatically. | [Import from Broker](import/index.md) |
 | **Sorting & Filtering** | Click any column header to sort the list. Use the search bar to filter by asset name, type, or notes. | |
 | **Deleting & Bulk Actions** | Right-click any row to open the Context Menu for quick actions, click the trash icon to delete, or check multiple rows to perform bulk deletions. | |
-| **Split & Promote** | **Split** a composite transaction (like a transfer or FX conversion) into individual cash/asset legs, or **Promote** two separate operations to link them together. | |
-| **Weighted Average Cost (WAC)** | LibreFolio calculates your cost basis in real-time. Impacted rows are marked with a ⚡ indicator, showing inline previews. | |
+| **Composite & Promotion** | Link single operations (like two cash legs) into a **Composite Transaction** via **Promotion** to enable advanced tracking and portfolio analytics, or split a composite transaction back into single operations. | [Transaction Form](form.md#composite-transactions) |
 
 ---
 

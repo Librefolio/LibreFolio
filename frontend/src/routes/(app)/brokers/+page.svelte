@@ -162,7 +162,7 @@
             <h3 class="text-lg font-semibold text-gray-700 mb-2">{$_('common.error')}</h3>
             <p class="text-gray-500 mb-4">{error}</p>
             <button on:click={loadBrokers} class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors">
-                {$_('error.tryAgain')}
+                {$_('common.retry')}
             </button>
         </div>
     {:else if brokers.length === 0}

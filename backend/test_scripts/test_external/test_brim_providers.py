@@ -298,11 +298,7 @@ class TestBRIMPlugin:
         just the first file that happens to parse cleanly.
         """
         if code == "broker_generic_csv":
-            samples = [
-                f
-                for f in get_all_sample_files()
-                if BRIMProviderRegistry.auto_detect_plugin(f) == "broker_generic_csv"
-            ]
+            samples = [f for f in get_all_sample_files() if BRIMProviderRegistry.auto_detect_plugin(f) == "broker_generic_csv"]
         else:
             samples = get_sample_files_for_plugin(plugin)
 
@@ -312,20 +308,8 @@ class TestBRIMPlugin:
         for sample in samples:
             out = plugin.parse(sample, broker_id=1)
             if out.validation_issues:
-                details = "\n".join(
-                    f"  Row {issue.row}: {issue.code}"
-                    + (f" field={issue.field}" if issue.field else "")
-                    + (f" ctx={issue.params}" if issue.params else "")
-                    + f" — {issue.message}"
-                    for issue in out.validation_issues
-                )
-                pytest.fail(
-                    f"{code} [{sample.name}] produced {len(out.validation_issues)}"
-                    f" schema validation issue(s):\n{details}\n"
-                    f"Fix the plugin's sign rules or add an explicit skip/warning"
-                    f" for rows that cannot be imported."
-                )
-
+                details = "\n".join(f"  Row {issue.row}: {issue.code}" + (f" field={issue.field}" if issue.field else "") + (f" ctx={issue.params}" if issue.params else "") + f" — {issue.message}" for issue in out.validation_issues)
+                pytest.fail(f"{code} [{sample.name}] produced {len(out.validation_issues)}" f" schema validation issue(s):\n{details}\n" f"Fix the plugin's sign rules or add an explicit skip/warning" f" for rows that cannot be imported.")
 
         """Plugin must parse ALL its compatible sample files without raising."""
         if code == "broker_generic_csv":

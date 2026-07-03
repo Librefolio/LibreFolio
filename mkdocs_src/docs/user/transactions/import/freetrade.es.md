@@ -1,4 +1,4 @@
-# <img src="https://freetrade.io/favicon.ico" alt=""> Freetrade
+# <img src="https://cdn.prod.website-files.com/66289cd2c30bc8d40bd60733/66f526a076ad61485c78771c_favicon.png" alt=""> Freetrade
 
 !!! info "Beta"
 
@@ -29,7 +29,3 @@ Para exportar su estado de transacciones desde Freetrade:
 - Bróker con sede en el Reino Unido.
 - Admite operaciones con acciones y ETF, dividendos, depósitos de efectivo y retiradas.
 - Soporte multidivisa completo para activos en GBP, EUR y USD.
-
-## 🔗 Referencia para Desarrolladores
-
-→ [Proveedor de Freetrade — Detalles de Implementación](../../../developer/backend/brim/providers_list.md)

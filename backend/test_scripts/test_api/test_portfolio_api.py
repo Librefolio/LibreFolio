@@ -72,12 +72,49 @@ async def commit_batch(client: httpx.AsyncClient, **kwargs) -> dict:
     return data
 
 
+async def post_portfolio_report(client: httpx.AsyncClient, body: dict | None = None) -> httpx.Response:
+    """Call unified /portfolio/report endpoint."""
+    default_body = {"include_summary": True, "include_history": True, "include_allocation_history": True}
+    if body:
+        default_body.update(body)
+    return await client.post(f"{API_BASE}/portfolio/report", json=default_body, timeout=TIMEOUT)
+
+
 async def post_portfolio_summary(client: httpx.AsyncClient, body: dict | None = None) -> httpx.Response:
-    return await client.post(f"{API_BASE}/portfolio/summary", json=body or {}, timeout=TIMEOUT)
+    """Get summary via /report endpoint. Returns a fake Response whose .json() = summary dict."""
+    report_body = {"include_summary": True, "include_history": False, "include_allocation_history": False}
+    if body:
+        report_body.update(body)
+    resp = await client.post(f"{API_BASE}/portfolio/report", json=report_body, timeout=TIMEOUT)
+    # Wrap: inject summary-level data at top for backward compat with tests
+    if resp.status_code == 200:
+        report = resp.json()
+        summary = report.get("summary") or {}
+        # Monkey-patch the response to return summary directly
+        resp._summary_data = summary
+        original_json = resp.json
+
+        def _patched_json(**kwargs):
+            return resp._summary_data
+        resp.json = _patched_json
+    return resp
 
 
 async def post_portfolio_history(client: httpx.AsyncClient, body: dict | None = None) -> httpx.Response:
-    return await client.post(f"{API_BASE}/portfolio/history", json=body or {}, timeout=TIMEOUT)
+    """Get history via /report endpoint. Returns a fake Response whose .json() = history list."""
+    report_body = {"include_summary": False, "include_history": True, "include_allocation_history": False}
+    if body:
+        report_body.update(body)
+    resp = await client.post(f"{API_BASE}/portfolio/report", json=report_body, timeout=TIMEOUT)
+    if resp.status_code == 200:
+        report = resp.json()
+        history = report.get("history") or []
+        original_json = resp.json
+
+        def _patched_json(**kwargs):
+            return history
+        resp.json = _patched_json
+    return resp
 
 
 @pytest.fixture(scope="module")
@@ -176,11 +213,15 @@ class TestPortfolioSummaryEndpoint:
         # Cash ledger: 1000 - 400 + 25 - 10 + 150 = 765
         assert data["cash_total"]["amount"].startswith("765")
         assert data["total_invested"]["amount"].startswith("1000")
-        # Holdings show no current_value (no market price)
-        assert data["holdings"][0]["current_value"] is None
-        # Asset without market price still appears in missing_price_assets (no actual price)
-        assert len(data["missing_price_assets"]) == 1
-        print_success("Signed cash ledger and missing-price reporting OK")
+        # Holdings: no market price but LAST_BUY_PRICE fallback provides value
+        # last_buy_price = 400/4 = 100 EUR/share, net qty = 3 → current_value = 300
+        holding = data["holdings"][0]
+        assert holding["current_value"] is not None
+        assert holding["current_value"].startswith("300")
+        # Asset without market price does NOT appear in missing_price_assets
+        # (LAST_BUY_PRICE gives it a value — appears in data_quality as warning instead)
+        assert len(data["missing_price_assets"]) == 0
+        print_success("Signed cash ledger and LAST_BUY_PRICE reporting OK")
 
     async def test_summary_uses_quote_base_quantity(self, test_server):
         """Summary valuation honors quote_base_quantity for raw market quotes."""
@@ -218,7 +259,8 @@ class TestPortfolioSummaryEndpoint:
             resp = await post_portfolio_summary(client)
         assert resp.status_code == 200
         data = resp.json()
-        assert data["holdings"][0]["current_value"]["amount"].startswith("204")
+        # qty=200, quote_base=100, price=102 → value = 200 * 102 / 100 = 204
+        assert data["holdings"][0]["current_value"].startswith("204")
         assert data["net_worth"]["amount"].startswith("504")
         print_success("quote_base_quantity summary valuation OK")
 
@@ -405,44 +447,6 @@ class TestPortfolioHistoryEndpoint:
 
 
 # ---------------------------------------------------------------------------
-# TestAssetHistoryEndpoint
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-class TestAssetHistoryEndpoint:
-    async def test_unauthenticated(self, test_server):
-        """GET /portfolio/asset-history without auth → 401."""
-        print_section("Asset History: unauthenticated")
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{API_BASE}/portfolio/asset-history?asset_id=1", timeout=TIMEOUT)
-        assert resp.status_code == 401
-        print_success("401 as expected")
-
-    async def test_missing_asset_id(self, test_server):
-        """asset_id is required → 422 if missing."""
-        print_section("Asset History: missing asset_id")
-        async with httpx.AsyncClient() as client:
-            await create_test_user(client)
-            resp = await client.get(f"{API_BASE}/portfolio/asset-history", timeout=TIMEOUT)
-        assert resp.status_code == 422
-        print_success("422 as expected")
-
-    async def test_nonexistent_asset(self, test_server):
-        """Non-existent asset_id → empty array (no 500)."""
-        print_section("Asset History: nonexistent asset")
-        async with httpx.AsyncClient() as client:
-            await create_test_user(client)
-            resp = await client.get(
-                f"{API_BASE}/portfolio/asset-history?asset_id=999999",
-                timeout=TIMEOUT,
-            )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert isinstance(data, list)
-        print_success("Graceful empty response")
-
-
 # ---------------------------------------------------------------------------
 # TestFIFOLotsEndpoint
 # ---------------------------------------------------------------------------

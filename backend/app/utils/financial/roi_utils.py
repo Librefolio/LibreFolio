@@ -74,6 +74,30 @@ _PREC_PCT = Decimal("0.000001")  # 6 decimals for percentages
 _PREC_AMT = Decimal("0.01")  # 2 decimals for monetary values
 
 
+def annualized_to_cumulative(rate: Decimal | None, days: int) -> Decimal | None:
+    """Convert annualized MWRR/XIRR to cumulative return for a given period.
+
+    Formula: r_cum = (1 + r_ann)^(days / 365) - 1
+
+    Returns None if rate is None, <= -1, or computation is invalid.
+    """
+    if rate is None:
+        return None
+    if rate <= Decimal("-1"):
+        return None
+    if days <= 0:
+        return Decimal("0")
+    try:
+        base = float(Decimal("1") + rate)
+        exponent = days / 365.0
+        cumulative = base**exponent - 1.0
+        if not math.isfinite(cumulative):
+            return None
+        return Decimal(str(cumulative)).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
+    except (OverflowError, InvalidOperation, ValueError):
+        return None
+
+
 def calculate_simple_roi(current_nav: Decimal, total_invested: Decimal) -> Decimal:
     """ROI = (NAV - Invested) / Invested. Returns 0 if total_invested == 0."""
     if total_invested == Decimal("0"):
@@ -275,11 +299,19 @@ def calculate_mwrr(
 def calculate_mwrr_series(
     nav_snapshots: list[NAVSnapshot],
     cash_flows: list[CashFlowInput],
+    *,
+    use_warm_start: bool = True,
 ) -> list[MWRRPoint]:
-    """Cumulative MWRR series with warm-start optimization.
+    """Cumulative MWRR series with optional warm-start optimization.
 
     Solves XIRR for each snapshot using the previous solution as x0 (initial guess).
     This makes Newton-Raphson converge in ~1-2 iterations per point instead of ~20.
+
+    Warm-start guard: if the solver produces an extreme annualized rate (|rate| > 2),
+    the warm-start resets to 0.1 for the next iteration to prevent contamination.
+
+    When use_warm_start=False (cold-start mode), every point starts from x0=0.1.
+    Slower but guaranteed no contamination from prior extreme values.
 
     Note: CPU-bound — callers should wrap in asyncio.to_thread() for long series.
 
@@ -297,8 +329,11 @@ def calculate_mwrr_series(
     start_date = sorted_navs[0].date
     initial_nav = sorted_navs[0].nav
 
+    _DEFAULT_GUESS = 0.1
+    _WARM_START_CAP = 2.0  # |rate| above this resets warm-start
+
     result: list[MWRRPoint] = []
-    prev_guess: float = 0.1  # warm-start seed
+    prev_guess: float = _DEFAULT_GUESS
 
     for i in range(1, len(sorted_navs)):
         snap = sorted_navs[i]
@@ -323,11 +358,28 @@ def calculate_mwrr_series(
             return sum(amount / (1.0 + r) ** (d / 365.0) for d, amount in _flows)
 
         try:
-            rate = scipy_newton(npv, x0=prev_guess, tol=1e-8, maxiter=100)
+            x0 = prev_guess if use_warm_start else _DEFAULT_GUESS
+            rate = scipy_newton(npv, x0=x0, tol=1e-8, maxiter=100)
             if not math.isfinite(rate):
                 result.append(MWRRPoint(date=snap.date, mwrr=None))
                 continue
-            prev_guess = rate  # warm-start next iteration
+
+            if use_warm_start:
+                # Guard: only propagate warm-start if rate is moderate
+                if abs(rate) <= _WARM_START_CAP:
+                    prev_guess = rate
+                else:
+                    # Extreme rate — try again from default guess to find moderate root
+                    rate2 = scipy_newton(npv, x0=_DEFAULT_GUESS, tol=1e-8, maxiter=100)
+                    if math.isfinite(rate2) and abs(rate2) < abs(rate):
+                        rate = rate2
+                        if abs(rate) <= _WARM_START_CAP:
+                            prev_guess = rate
+                        else:
+                            prev_guess = _DEFAULT_GUESS
+                    else:
+                        prev_guess = _DEFAULT_GUESS
+
             mwrr = Decimal(str(rate)).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
             result.append(MWRRPoint(date=snap.date, mwrr=mwrr))
         except (RuntimeError, ValueError, InvalidOperation):

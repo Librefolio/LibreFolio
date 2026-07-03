@@ -41,6 +41,7 @@
     import {zodiosApi} from '$lib/api';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/reference/assetStore';
     import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getTransactionTypeIconUrl, getCostBasisRule} from '$lib/stores/transactions/transactionTypeStore';
     import {findPromoteMatch, type PromoteContext} from '$lib/stores/transactions/transactionTypeStore';
@@ -48,6 +49,7 @@
     import {createValidateScheduler} from '$lib/utils/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
     import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, upgradeAutoToDetail, type TxFields, type TxOriginal, type ResolvedOp, type ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
+    import {cashAmountsCancel} from '$lib/utils/transactions/promoteHelpers';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {formatCurrencyAmountHtml, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
@@ -1277,19 +1279,12 @@
     let resolverCtx: ResolverContext = $derived({
         brokers: brokers as unknown as Array<{id: number; name: string}>,
         assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
-        getBrokerIconUrl: (brokerId: number) => {
-            const b = brokers.find((br) => br.id === brokerId);
-            if (!b) return null;
-            if (b.icon_url?.trim()) return b.icon_url;
-            if (b.portal_url?.trim()) {
-                try {
-                    return new URL(b.portal_url).origin + '/favicon.ico';
-                } catch {
-                    /* skip */
-                }
-            }
-            return null;
-        },
+        getBrokerIconHtml: (brokerId: number) =>
+            getBrokerIconHtmlById(brokerId, brokers as any[], {
+                width: 16,
+                height: 16,
+                style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
+            }),
     });
 
     $effect(() => {
@@ -1373,8 +1368,8 @@
      *  Uses ch-based min-width so the shorter label (e.g. "A:") is padded
      *  to match the longer one (e.g. "From:"), keeping content aligned. */
     function renderDualHtml(fromText: string, toText: string): string {
-        const fromLabel = $t('transactions.form.from');
-        const toLabel = $t('transactions.form.to');
+        const fromLabel = $t('common.from');
+        const toLabel = $t('common.to');
         // Pad to the longer label + colon + 1ch spacing
         const maxCh = Math.max(fromLabel.length, toLabel.length) + 2;
         const labelCls = `inline-block text-gray-400 dark:text-gray-500 font-medium`;
@@ -1417,17 +1412,12 @@
 
     /** H1-fix: Broker name with favicon icon for readonly cells. */
     function renderBrokerHtml(brokerId: number): string {
-        const b = brokers.find((br) => br.id === brokerId);
-        const name = b?.name ?? '—';
-        let iconSrc = '';
-        if (b?.icon_url) {
-            iconSrc = b.icon_url;
-        } else if (b?.portal_url) {
-            try {
-                iconSrc = new URL(b.portal_url).origin + '/favicon.ico';
-            } catch {}
-        }
-        const iconHtml = iconSrc ? `<img src="${iconSrc}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+        const name = brokers.find((br) => br.id === brokerId)?.name ?? '—';
+        const iconHtml = getBrokerIconHtmlById(brokerId, brokers as any[], {
+            width: 16,
+            height: 16,
+            className: 'w-4 h-4 rounded-full object-contain shrink-0',
+        });
         return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${name}</span>`;
     }
 
@@ -1435,7 +1425,7 @@
         return [
             {
                 id: 'status',
-                header: () => $t('transactions.bulk.status'),
+                header: () => $t('common.status'),
                 type: 'text',
                 width: 70,
                 sortable: false,
@@ -1482,7 +1472,7 @@
             },
             {
                 id: 'date',
-                header: () => $t('transactions.table.date'),
+                header: () => $t('common.date'),
                 type: 'text',
                 width: 140,
                 sortable: false,
@@ -1499,7 +1489,7 @@
             },
             {
                 id: 'type',
-                header: () => $t('transactions.table.type'),
+                header: () => $t('common.type'),
                 type: 'text',
                 width: 155,
                 sortable: false,
@@ -1529,7 +1519,7 @@
             },
             {
                 id: 'asset',
-                header: () => $t('transactions.table.asset'),
+                header: () => $t('common.asset'),
                 type: 'text',
                 width: 180,
                 sortable: false,
@@ -1689,7 +1679,7 @@
                     const typeLabel = $t(`assetDetail.eventType.${ev.type}`) || ev.type.replace(/_/g, ' ');
                     let tooltipHtml = `<strong>${emoji} ${typeLabel}</strong><br>${fullDate}`;
                     if (amt !== 0) tooltipHtml += `<br>${$t('transactions.bulk.eventTooltipAmount')}: <span style="font-family:monospace">${amt.toFixed(4)} ${ev.code}</span>`;
-                    if (ev.notes) tooltipHtml += `<br>📝 ${$t('transactions.bulk.eventTooltipNotes')}: ${ev.notes}`;
+                    if (ev.notes) tooltipHtml += `<br>📝 ${$t('common.notes')}: ${ev.notes}`;
                     return {
                         type: 'html',
                         html: `<span class="inline-flex items-center gap-1 text-xs"><span class="text-sm">${emoji}</span><span class="text-gray-600 dark:text-gray-400">${shortDate}</span>${fmtAmt ? `<span class="font-mono text-gray-500">${fmtAmt}</span>` : ''}</span>`,
@@ -1699,7 +1689,7 @@
             },
             {
                 id: 'description',
-                header: () => $t('transactions.form.description'),
+                header: () => $t('common.description'),
                 type: 'text',
                 width: 200,
                 sortable: false,
@@ -1717,7 +1707,7 @@
             },
             {
                 id: 'tags',
-                header: () => $t('transactions.table.tags'),
+                header: () => $t('common.tags'),
                 type: 'text',
                 width: 180,
                 sortable: false,
@@ -1954,7 +1944,7 @@
     let actionCount = $derived(newCount + editedCount + deleteCount + pendingSplits.length + pendingPromotes.length);
     let hasTodoBlockers = $derived(ops.some((op) => op.todos?.some((t) => t.severity === 'blocker')));
     let commitDisabled = $derived(committing || ops.length === 0 || actionCount === 0 || hasTodoBlockers);
-    let commitLabel = $derived(committing ? $t('common.saving') : $t('transactions.bulk.commitAll'));
+    let commitLabel = $derived(committing ? $t('common.saving') : $t('common.saveAll'));
 
     // -------------------------------------------------------------------------
     // Nested FormModal (Bugfix-5 §A4): "+ Add row" + row-action "Edit single".
@@ -2322,6 +2312,9 @@
         };
     }
 
+    // cashAmountsCancel is imported from '$lib/utils/transactions/promoteHelpers'
+    // (extracted for unit-testability — see promoteHelpers.ts)
+
     /** Selection-based promote detection — 2 standalone rows with matching promote rule. */
     let selectedForPromote = $derived.by(() => {
         if (bulkTableSelectedRows.length !== 2) return null;
@@ -2332,6 +2325,9 @@
         if ((a.op === 'edit' && a.markedDelete) || (b.op === 'edit' && b.markedDelete)) return null;
         const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
         if (!match) return null;
+        // For CASH_TRANSFER: require exact cash cancel (same currency, opposite sign).
+        // For FX_CONVERSION: amounts are in different currencies — no cancel check.
+        if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b)) return null;
         return {...match, opA: a, opB: b};
     });
 
@@ -2483,7 +2479,7 @@
                 const delta = daysDiff(dA, dB);
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(newStandalone[i].fields.type, newStandalone[j].fields.type, $t, buildPromoteCtx(newStandalone[i], newStandalone[j]));
-                if (match) {
+                if (match && (match.targetType !== 'CASH_TRANSFER' || cashAmountsCancel(newStandalone[i], newStandalone[j]))) {
                     results.push({
                         tempIdA: newStandalone[i].tempId,
                         tempIdB: newStandalone[j].tempId,
@@ -2518,6 +2514,8 @@
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
                 if (!match) continue;
+                // CASH_TRANSFER: amounts must cancel. FX_CONVERSION: different currencies, no cancel check.
+                if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b)) continue;
                 const pairKey = `${(a as any).txId}-${(b as any).txId}`;
                 if (seenPairs.has(pairKey)) continue;
                 seenPairs.add(pairKey);
@@ -2707,9 +2705,9 @@
         <!-- Banners -->
         <div class="px-5 pt-3 space-y-2 shrink-0">
             {#if formError}
-                <TransactionResultBanner variant="error" title={`⛔ ${$t('transactions.bulk.rolledBackTitle')}`} subtitle={formError} dismissible ondismiss={() => (formError = null)} testId="tx-bulk-error" />
+                <TransactionResultBanner variant="error" title={`⛔ ${$t('common.saveCancelled')}`} subtitle={formError} dismissible ondismiss={() => (formError = null)} testId="tx-bulk-error" />
             {:else if commitFailed && issues.length > 0}
-                <TransactionResultBanner variant="error" title={`⛔ ${$t('transactions.bulk.rolledBackTitle')}`} dismissible ondismiss={() => (commitFailed = false)} testId="tx-bulk-error">
+                <TransactionResultBanner variant="error" title={`⛔ ${$t('common.saveCancelled')}`} dismissible ondismiss={() => (commitFailed = false)} testId="tx-bulk-error">
                     {#snippet titleAction()}
                         {#if hasWacFxIssues}
                             <button type="button" class="text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-800/40 hover:bg-red-200 dark:hover:bg-red-700/50 font-medium whitespace-nowrap" onclick={handleSyncFx} disabled={syncFxLoading} data-testid="tx-bulk-sync-fx-error">
@@ -2724,7 +2722,7 @@
                                 <li>
                                     <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
                                         {#if issue.index < 0}{getVisualRowLabel(issue)}:
-                                        {:else}{$t('transactions.bulk.rowN', {values: {n: getVisualRowLabel(issue)}})}:
+                                        {:else}{$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}:
                                         {/if}{@html resolveIssueMessage(issue, $t, resolverCtx)}
                                     </button>
                                 </li>
@@ -2738,7 +2736,7 @@
                                 <li>
                                     {#if issue.index >= 0}
                                         <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)}>
-                                            {$t('transactions.bulk.rowN', {values: {n: getVisualRowLabel(issue)}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                            {$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
                                         </button>
                                     {:else}
                                         {getVisualRowLabel(issue)}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
@@ -2764,7 +2762,7 @@
                                 <li>
                                     <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
                                         {#if issue.index < 0}{getVisualRowLabel(issue)}:
-                                        {:else}{$t('transactions.bulk.rowN', {values: {n: getVisualRowLabel(issue)}})}:
+                                        {:else}{$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}:
                                         {/if}{@html resolveIssueMessage(issue, $t, resolverCtx)}
                                     </button>
                                 </li>
@@ -2778,7 +2776,7 @@
                                 <li>
                                     {#if issue.index >= 0}
                                         <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)}>
-                                            {$t('transactions.bulk.rowN', {values: {n: getVisualRowLabel(issue)}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                            {$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
                                         </button>
                                     {:else}
                                         {getVisualRowLabel(issue)}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
@@ -2936,17 +2934,17 @@
 
             <!-- Right: actions -->
             <div class="ml-auto flex flex-row-reverse items-center gap-2 flex-wrap">
-                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row" title={$t('transactions.bulk.addRow') || 'Add row'}>
-                    <Plus size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.addRow') || 'Add row'}</span>
+                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row" title={$t('common.addRow') || 'Add row'}>
+                    <Plus size={12} /> <span class="hidden sm:inline">{$t('common.addRow') || 'Add row'}</span>
                 </button>
                 <button
                     type="button"
                     class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 border border-gray-200 dark:border-gray-600"
                     onclick={() => (importWizardOpen = true)}
                     data-testid="tx-bulk-import"
-                    title={$t('importWizard.import') || 'Import'}
+                    title={$t('common.import') || 'Import'}
                 >
-                    <Upload size={12} /> <span class="hidden sm:inline">{$t('importWizard.import') || 'Import'}</span>
+                    <Upload size={12} /> <span class="hidden sm:inline">{$t('common.import') || 'Import'}</span>
                 </button>
                 {#if importableSuggestions.length > 0}
                     <button
@@ -2961,8 +2959,8 @@
                     </button>
                 {/if}
                 {#if visibleOps.some((d) => d.op === 'edit' && (deriveStatus(d) === 'edited' || deriveStatus(d) === 'delete')) || pendingSplits.length > 0}
-                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all" title={$t('transactions.bulk.resetAll')}>
-                        <Undo2 size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.resetAll')}</span>
+                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all" title={$t('common.resetAllChanges')}>
+                        <Undo2 size={12} /> <span class="hidden sm:inline">{$t('common.resetAllChanges')}</span>
                     </button>
                 {/if}
                 <ColumnVisibilityToggle tableRef={tableRefForToggle} />
@@ -3020,7 +3018,10 @@
                 storageKey="tx-bulk-modal"
                 enableSelection={true}
                 enableColumnFilters={false}
-                enablePagination={false}
+                enablePagination={true}
+                alwaysShowPagination={true}
+                defaultPageSize={25}
+                pageSizeOptions={[5, 10, 25, 50, 0]}
                 enableSorting={false}
                 enableColumnVisibility={true}
                 enableActions={true}

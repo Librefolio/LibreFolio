@@ -5,37 +5,38 @@
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Formulario de Auto-Creación del Asistente de Importación" alt="Crear Activo desde el Asistente">
 </div>
 
+
 ## 🚀 Flujos de Creación de Activos
 
 En LibreFolio, puedes crear nuevos activos de dos maneras diferentes:
 
 === "Creación Manual (con Búsqueda Inteligente)"
 
- ```mermaid
- flowchart LR
- A[Inicio: Clic en '+ Nuevo Activo'] --> B[Escribir Nombre, ISIN o Ticker en búsqueda inteligente]
- B --> C{¿Coincidencia encontrada?}
- C -->|Sí| D[Auto-completar detalles desde proveedores externos]
- C -->|No| E[Ingresar manualmente nombre, categoría y moneda]
- D --> F[Ajustar config / Asignar proveedor de precios]
- E --> F
- F --> G[Clic en Guardar]
- G --> H[Activo añadido a la biblioteca]
- ```
+    ```mermaid
+    flowchart LR
+    A[Inicio: Clic en '+ Nuevo Activo'] --> B[Escribir Nombre, ISIN o Ticker en búsqueda inteligente]
+    B --> C{¿Coincidencia encontrada?}
+    C -->|Sí| D[Auto-completar detalles desde proveedores externos]
+    C -->|No| E[Ingresar manualmente nombre, categoría y moneda]
+    D --> F[Ajustar config / Asignar proveedor de precios]
+    E --> F
+    F --> G[Clic en Guardar]
+    G --> H[Activo añadido a la biblioteca]
+    ```
 
 === "Auto-Creación por Importación de Bróker"
 
- ```mermaid
- flowchart LR
- A[Inicio: Subir reporte CSV en el Asistente de Importación] --> B[Analizar filas del reporte]
- B --> C{¿ID de activo reconocido?}
- C -->|Sí| D[Auto-emparejar con activo existente]
- C -->|No| E[Marcar advertencia ⚠️ y mostrar botón 'Crear']
- E --> F[Clic en 'Crear' para abrir modal pre-rellenado]
- F --> G[Guardar activo para resolver el mapeo]
- G --> D
- D --> H[Confirmar todas las transacciones]
- ```
+    ```mermaid
+    flowchart LR
+    A[Inicio: Subir reporte CSV en el Asistente de Importación] --> B[Analizar filas del reporte]
+    B --> C{¿ID de activo reconocido?}
+    C -->|Sí| D[Auto-emparejar con activo existente]
+    C -->|No| E[Marcar advertencia ⚠️ y mostrar botón 'Crear']
+    E --> F[Clic en 'Crear' para abrir modal pre-rellenado]
+    F --> G[Guardar activo para resolver el mapeo]
+    G --> D
+    D --> H[Confirmar todas las transacciones]
+    ```
 
 ## 🧪 Prueba de Configuración del Proveedor
 

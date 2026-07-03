@@ -361,7 +361,9 @@ class TransactionService:
             stmt = stmt.where(Transaction.id.notin_(params.exclude_ids))
 
         stmt = stmt.order_by(Transaction.date.desc(), Transaction.id.desc())
-        stmt = stmt.offset(params.offset).limit(params.limit)
+        stmt = stmt.offset(params.offset)
+        if params.limit is not None:
+            stmt = stmt.limit(params.limit)
 
         result = await self.session.execute(stmt)
         items = [TXReadItem.from_db_model(tx) for tx in result.scalars().all()]

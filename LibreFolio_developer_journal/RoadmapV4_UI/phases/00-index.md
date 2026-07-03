@@ -44,6 +44,7 @@ I sotto-piani di implementazione per ogni fase vanno in `phases/phase-XX-subplan
 | **8**   | [phase-08-scheduler.md](./phase-08-scheduler.md)                   | Market Data Scheduler (daemon + settings)  | ✅      | 2      |
 | **9**   | [phase-09-dashboard.md](./phase-09-dashboard.md)                   | Dashboard con KPI e Charts                 | ✅      | 3      |
 | **10**  | [phase-10-polish.md](./phase-10-polish.md)                         | UI Components, Responsive                  | ⏳      | 2      |
+| **QA**  | [phase-final-subplan/README.md](./phase-final-subplan/README.md)   | QA trasversale 2026-06-25: 27 fix (A–L)    | ✅      | 1      |
 
 **Totale stimato**: ~6,5 settimane (~33 giorni)
 

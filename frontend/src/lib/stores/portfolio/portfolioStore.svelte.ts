@@ -15,16 +15,43 @@
 import {zodiosApi} from '$lib/api';
 
 // ============================================================================
-// TYPES — inferred from direct-return endpoints for cleaner types
-// (PortfolioReport wraps fields in Optional unions that are harder to narrow)
+// TYPES — derived from unified /report endpoint response
 // ============================================================================
 
 type ApiReturnType<T extends (...args: never[]) => Promise<unknown>> = Awaited<ReturnType<T>>;
 
-// Use the direct endpoint return types — clean, no optional union wrappers
-export type PortfolioSummary = ApiReturnType<typeof zodiosApi.get_portfolio_summary_api_v1_portfolio_summary_post>;
-export type PortfolioHistoryPoint = ApiReturnType<typeof zodiosApi.get_portfolio_history_api_v1_portfolio_history_post> extends (infer U)[] ? U : never;
 export type PortfolioReport = ApiReturnType<typeof zodiosApi.get_portfolio_report_api_v1_portfolio_report_post>;
+
+// Extract summary type from report response
+type RawSummary = PortfolioReport['summary'];
+export type PortfolioSummary = NonNullable<RawSummary> extends infer S
+    ? S extends {net_worth: unknown} ? S : never : never;
+
+// History point type — define inline (generated type is not exported)
+export type PortfolioHistoryPoint = {
+    date: string;
+    cash_value: {code: string; amount: string};
+    market_value: {code: string; amount: string};
+    broker_nav_value?: {code: string; amount: string} | null;
+    in_transit_cash_value?: {code: string; amount: string} | null;
+    in_transit_asset_market_value?: {code: string; amount: string} | null;
+    in_transit_market_value?: {code: string; amount: string} | null;
+    nav_value: {code: string; amount: string};
+    open_cost_basis?: {code: string; amount: string} | null;
+    in_transit_asset_cost_basis?: {code: string; amount: string} | null;
+    in_transit_book_value?: {code: string; amount: string} | null;
+    book_value?: {code: string; amount: string} | null;
+    capital_baseline: {code: string; amount: string};
+    book_asset_like: {code: string; amount: string};
+    cash_from_contributed_capital: {code: string; amount: string};
+    cash_from_generated_returns: {code: string; amount: string};
+    total_pnl: {code: string; amount: string};
+    unrealized_gain_loss?: {code: string; amount: string} | null;
+    twrr?: string | null;
+    mwrr_annualized?: string | null;
+    mwrr_cumulative?: string | null;
+    roi?: string | null;
+};
 
 // For allocation history dimensions we use the report type (no separate direct endpoint)
 type RawAlloc = PortfolioReport['allocation_history'];
@@ -33,6 +60,10 @@ export type AllocationHistoryDimensions = Extract<NonNullable<RawAlloc>, {type?:
 // Data quality also from report
 type RawDQ = PortfolioReport['data_quality'];
 export type DataQualityReport = Extract<NonNullable<RawDQ>, {issues?: unknown}>;
+
+// Positions contribution also from report
+type RawContrib = PortfolioReport['positions_contribution'];
+export type PositionsContribution = Extract<NonNullable<RawContrib>, {positions?: unknown}>;
 
 // ============================================================================
 // CACHE INFRASTRUCTURE
@@ -89,8 +120,8 @@ export function portfolioError(): string | null {
  * @param targetCurrency — Override base currency (ISO 4217). Defaults to user setting.
  * @param force          — Bypass cache and re-fetch.
  */
-export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false): Promise<PortfolioReport | null> {
-    const key = makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency);
+export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false, includeContribution = false): Promise<PortfolioReport | null> {
+    const key = makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency) + (includeContribution ? '|contrib' : '');
 
     if (!force) {
         const cached = reportCache.get(key);
@@ -110,6 +141,7 @@ export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateT
                 include_summary: true,
                 include_history: true,
                 include_allocation_history: true,
+                include_positions_contribution: includeContribution,
             };
             if (brokerIds && brokerIds.length > 0) body.broker_ids = brokerIds;
             if (dateFrom || dateTo) {

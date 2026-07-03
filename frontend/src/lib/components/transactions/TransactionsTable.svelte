@@ -28,11 +28,12 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTablePagination from '$lib/components/table/DataTablePagination.svelte';
     import type {ColumnDef, CellContent, FilterValue, RowAction, SortState} from '$lib/components/table/types';
+    import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
 
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {ensureCurrenciesLoaded, currencyStoreVersion} from '$lib/stores/reference/currencyStore';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
-    import {getBrokerIconUrl, getBrokerIconUrlById} from '$lib/utils/broker/brokerHelpers';
+    import {getBrokerIconCandidates, getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {getStringBadgeStyle, getStringColor} from '$lib/utils/colors';
     import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {formatTxQuantity} from './shared/txDisplayHelpers';
@@ -107,6 +108,13 @@
         enableTouchSelection?: boolean;
         /** B3-fix: hide row actions and context menu (used in Picker mode). */
         hideActions?: boolean;
+        /** Column IDs to exclude from the table (e.g. ['links', 'tags', 'id']). */
+        hiddenColumns?: string[];
+        /** Override localStorage key for column preferences (default: "transactions-list"). */
+        storageKeyOverride?: string;
+        /** Compact/embedded mode: disables selection, pagination, filters, sorting,
+         *  column visibility toggle, and row actions. Used by dashboard home. */
+        compact?: boolean;
     }
 
     let {
@@ -132,6 +140,9 @@
         onRowDoubleClickOverride,
         enableTouchSelection = false,
         hideActions = false,
+        hiddenColumns,
+        storageKeyOverride,
+        compact = false,
     }: Props = $props();
 
     /** Exposed DataTable ref for ColumnVisibilityToggle / external selection control. */
@@ -480,7 +491,7 @@
 
     function eventTooltipText(eventId: number): string {
         const ev = eventTooltipMap.get(eventId);
-        if (!ev) return $t('transactions.linkedEvent') || 'Linked event';
+        if (!ev) return $t('common.linkedEvent') || 'Linked event';
         const emoji = getEventTypeEmoji(ev.type);
         const typeName = $t(`assetDetail.eventType.${ev.type}`) || ev.type;
         const amount = Number(ev.value);
@@ -505,9 +516,11 @@
         const name = escapeHtml(info?.name ?? brokerName(brokerId));
         const role = getBrokerRole(brokerId);
         const roleSvg = getRoleSvgHtml(role);
-        // Resolve icon via the full fallback chain (icon_url → portal_url → plugin)
-        const iconUrl = getBrokerIconUrlById(brokerId, brokers);
-        const iconTag = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" width="16" height="16" style="display:inline-block;vertical-align:middle;margin-right:3px;border-radius:2px" onerror="this.style.display='none'" />` : '';
+        const iconTag = getBrokerIconHtmlById(brokerId, brokers, {
+            width: 16,
+            height: 16,
+            style: 'display:inline-block;vertical-align:middle;margin-right:3px;border-radius:2px',
+        });
         return `${iconTag}<strong>${name}</strong> ${roleSvg}`;
     }
 
@@ -603,10 +616,10 @@
         return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
-    let columns = $derived<ColumnDef<DisplayRow>[]>([
+    let allColumns = $derived<ColumnDef<DisplayRow>[]>([
         {
             id: 'date',
-            header: () => $t('transactions.table.date'),
+            header: () => $t('common.date'),
             type: 'date',
             width: 110,
             urlKey: 'date',
@@ -615,7 +628,7 @@
         },
         {
             id: 'typeIcon',
-            header: () => $t('transactions.table.type'),
+            header: () => $t('common.type'),
             type: 'enum',
             width: 90,
             sortable: true,
@@ -708,7 +721,7 @@
         },
         {
             id: 'asset',
-            header: () => $t('transactions.table.asset'),
+            header: () => $t('common.asset'),
             type: 'enum',
             width: 220,
             urlKey: 'asset_id',
@@ -755,31 +768,37 @@
             width: 160,
             urlKey: 'broker_id',
             enumOptions: brokers.map((b) => {
-                const iconUrl = getBrokerIconUrl(b);
                 const color = getBrokerColor(b.id, brokers);
-                return {value: String(b.id), label: b.name ?? `#${b.id}`, iconUrl: iconUrl ?? undefined, dotColor: iconUrl ? undefined : color.bg};
+                return {
+                    value: String(b.id),
+                    label: b.name ?? `#${b.id}`,
+                    iconCandidates: getBrokerIconCandidates(b),
+                    dotColor: color.bg,
+                };
             }),
             getValue: (d) => String(d.tx.broker_id),
             cell: (d) => {
                 const name = brokerName(d.tx.broker_id);
-                const iconSrc = getBrokerIconUrlById(d.tx.broker_id, brokers);
-                const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" class="tx-broker-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'" /><span class="tx-broker-dot" style="display:none"></span>` : `<span class="tx-broker-dot"></span>`;
                 const role = getBrokerRole(d.tx.broker_id);
-                const roleSvg = role ? getRoleSvgHtml(role) : '';
-                // CustomCell — broker name shown via real Tooltip (no native HTML title).
                 return {
                     type: 'custom',
-                    component: TxTooltipCell,
+                    component: BrokerBadge,
                     props: {
-                        html: `<span class="tx-broker-cell" data-testid="tx-broker-cell-${d.tx.broker_id}">${iconHtml}<span class="tx-broker-name">${escapeHtml(name)}</span>${roleSvg}</span>`,
+                        broker: getBrokerInfo(d.tx.broker_id) ?? brokers.find((b) => b.id === d.tx.broker_id) ?? {id: d.tx.broker_id, name},
+                        size: 16,
+                        showName: true,
+                        showRole: true,
+                        role,
                         tooltip: name,
+                        rootClass: 'tx-broker-cell',
+                        nameClass: 'tx-broker-name',
                     },
                 };
             },
         },
         {
             id: 'tags',
-            header: () => $t('transactions.table.tags'),
+            header: () => $t('common.tags'),
             type: 'multi-enum',
             width: 200,
             urlKey: 'tags',
@@ -815,7 +834,7 @@
         },
         {
             id: 'description',
-            header: $t('transactions.table.description') || 'Description',
+            header: $t('common.description') || 'Description',
             type: 'text',
             width: 180,
             urlKey: 'description',
@@ -839,6 +858,9 @@
             },
         },
     ]);
+
+    /** Columns visible in this instance — filters out hiddenColumns IDs. */
+    let columns = $derived(hiddenColumns?.length ? allColumns.filter((c) => !hiddenColumns.includes(c.id)) : allColumns);
 
     /** Get the partner's broker_id for a given display row (null if standalone/not found). */
     function getPartnerBrokerId(d: DisplayRow): number | null | undefined {
@@ -866,7 +888,7 @@
         {
             id: 'edit',
             icon: Pencil,
-            label: () => $t('transactions.actions.edit') || 'Edit',
+            label: () => $t('common.edit') || 'Edit',
             onClick: (d) => onEditRow?.(d.tx),
             visible: (d) => rowAccessLevel(d) === 'full',
         },
@@ -893,7 +915,7 @@
         {
             id: 'delete',
             icon: Trash2,
-            label: () => $t('transactions.actions.delete') || 'Delete',
+            label: () => $t('common.delete') || 'Delete',
             variant: 'danger',
             onClick: (d) => onDeleteRow?.(d.tx),
             visible: (d) => rowAccessLevel(d) === 'full',
@@ -958,15 +980,16 @@
         fullData={displayRows}
         {columns}
         {getRowId}
-        storageKey="transactions-list"
-        enableSelection={true}
-        selectionMode="multi"
-        enableActions={!hideActions}
-        rowActions={hideActions ? [] : rowActions}
-        enablePagination={!isGrouped}
-        enableColumnVisibility={true}
-        enableColumnFilters={true}
-        enableSorting={true}
+        storageKey={storageKeyOverride ?? 'transactions-list'}
+        enableSelection={!compact}
+        selectionMode={compact ? 'none' : 'multi'}
+        enableActions={!compact && !hideActions}
+        rowActions={compact || hideActions ? [] : rowActions}
+        enablePagination={!compact && !isGrouped}
+        enableColumnVisibility={!compact}
+        enableColumnFilters={!compact}
+        enableSorting={!compact}
+        enableContextMenu={!compact}
         stickyActions={false}
         actionsColumnWidth="160px"
         emptyMessage={$t('transactions.empty') || 'No transactions yet'}
@@ -1008,43 +1031,6 @@
         }
         .dark .tx-table-wrap tr.tx-row-tinted:hover > td {
             background: color-mix(in srgb, var(--broker-vivid, transparent) 22%, #0f0f18);
-        }
-        /* Broker cell: icon/dot + name with proper truncation when narrow. */
-        .tx-table-wrap .tx-broker-cell {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            max-width: 100%;
-            min-width: 0;
-        }
-        .tx-table-wrap .tx-broker-icon {
-            width: 1rem;
-            height: 1rem;
-            border-radius: 3px;
-            object-fit: contain;
-            flex-shrink: 0;
-        }
-        .tx-table-wrap .tx-broker-dot {
-            display: inline-block;
-            width: 0.625rem;
-            height: 0.625rem;
-            border-radius: 9999px;
-            background: var(--broker-bg, #94a3b8);
-            flex-shrink: 0;
-            box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06);
-        }
-        .dark .tx-table-wrap .tx-broker-dot {
-            background: var(--broker-dark-bg, #475569);
-            box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08);
-        }
-        .tx-table-wrap .tx-broker-name {
-            font-size: 0.8125rem;
-            color: inherit;
-            min-width: 0;
-            flex: 1 1 auto;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
         }
         /* Type-icon column: clickable button (opens mkdocs doc page). */
         .tx-table-wrap .tx-type-icon-link {

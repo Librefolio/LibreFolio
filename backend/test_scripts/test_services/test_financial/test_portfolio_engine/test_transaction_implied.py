@@ -17,7 +17,6 @@ from backend.app.services.portfolio_engine import (
     DailyStateBuilder,
 )
 
-
 # =============================================================================
 # HELPERS (same pattern as test_daily_state_builder.py)
 # =============================================================================
@@ -96,7 +95,7 @@ class TestTransactionImpliedWithoutPriceHistory:
         ]
         builder = _builder(
             classified_txs=txs,
-            price_map={},   # no prices
+            price_map={},  # no prices
             wac_series={},  # no WAC
             date_from="2025-01-05",
             date_to="2025-01-05",
@@ -121,7 +120,7 @@ class TestTransactionImpliedWithoutPriceHistory:
 
         builder = _builder(
             classified_txs=txs,
-            price_map={},       # no market prices yet
+            price_map={},  # no market prices yet
             wac_series=wac_series,
             date_from="2025-01-05",
             date_to="2025-01-05",

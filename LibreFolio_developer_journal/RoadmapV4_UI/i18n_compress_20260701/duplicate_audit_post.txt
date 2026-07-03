@@ -1,0 +1,1454 @@
+============================================================
+  LibreFolio i18n Audit Tool
+============================================================
+
+📂 Loading translation files...
+✓ Loaded en.json (1510 keys)
+✓ Loaded it.json (1510 keys)
+✓ Loaded fr.json (1510 keys)
+✓ Loaded es.json (1510 keys)
+
+🔍 Analyzing translations...
+🔎 Scanning source files for used keys...
+   Found 1522 exact keys in source code
+   Found 24 dynamic prefixes: asset.types, assetDetail.eventType, assetDetail.eventTypeTooltip, assets.events.types, assets.types, auth.passwordStrength, auth.passwordStrength.rules, chartSettings, chartSettings.params, chartSettings.signals, dataQuality.cta, fileStatus, importWizard, importWizard.confidence, importWizard.confidenceTip, importWizard.fileStatus, sectors, settings.globalSettingCategories, settings.globalSettingDescriptions, settings.globalSettingNames, settings.globalSettingUnits, transactions.errors, transactions.fields, transactions.types
+   Found 14 potentially unused keys
+
+🔄 Analyzing duplicate values across languages...
+   Found 157 unique duplicate groups
+
+# LibreFolio i18n Audit Report
+
+*Generated: 2026-07-01 14:06*
+
+## 📊 Translation Coverage Summary
+
+**Total keys**: 1510
+
+- **EN**: 1510/1510 (100.0%)
+- **IT**: 1510/1510 (100.0%)
+- **FR**: 1510/1510 (100.0%)
+- **ES**: 1510/1510 (100.0%)
+
+**✅ All translations complete!**
+
+
+## ✅ No Missing Translations
+
+All keys are translated in all languages.
+
+
+## ⚠️ Potentially Unused Translation Keys (14)
+
+The following keys exist in translation files but were not found in source code.
+
+
+**Note:** This analysis cannot detect:
+
+- Keys constructed dynamically (e.g., `$t(\`prefix.${var}\`)`)
+
+- Keys passed as variables
+
+- Keys used in computed expressions
+
+
+**Dynamic prefixes detected:** `asset.types, assetDetail.eventType, assetDetail.eventTypeTooltip, assets.events.types, assets.types, auth.passwordStrength, auth.passwordStrength.rules, chartSettings, chartSettings.params, chartSettings.signals, dataQuality.cta, fileStatus, importWizard, importWizard.confidence, importWizard.confidenceTip, importWizard.fileStatus, sectors, settings.globalSettingCategories, settings.globalSettingDescriptions, settings.globalSettingNames, settings.globalSettingUnits, transactions.errors, transactions.fields, transactions.types`
+
+Keys under these prefixes are marked as potentially used.
+
+
+
+### ❌ Likely Unused (14 keys)
+
+These keys have no source code reference and no dynamic prefix match.
+
+
+**dataQuality**
+
+- `dataQuality.missingFx`
+- `dataQuality.missingPrice`
+- `dataQuality.mwrrNotAvailable`
+- `dataQuality.mwrrSeriesUnreliable`
+- `dataQuality.navIncomplete`
+- `dataQuality.stalePrice`
+- `dataQuality.transactionImplied`
+
+
+**settings**
+
+- `settings.global.scheduler.historyDaysFri`
+- `settings.global.scheduler.historyDaysMon`
+- `settings.global.scheduler.historyDaysSat`
+- `settings.global.scheduler.historyDaysSun`
+- `settings.global.scheduler.historyDaysThu`
+- `settings.global.scheduler.historyDaysTue`
+- `settings.global.scheduler.historyDaysWed`
+
+
+## 🔄 Duplicate Value Analysis
+
+Keys with identical values (case-insensitive). Not necessarily a problem — helps spot repeated or unoptimised keys.
+
+**157 duplicate groups found.**  
+Breakdown: ALL langs: 48 · 3/4 langs: 39 · 2/4 langs: 30 · 1/4 langs: 40
+
+
+---
+
+### 🔴 Duplicates in ALL languages
+
+
+**EN, IT, FR, ES — EN="days" · IT="giorni" · FR="jours" · ES="días"** (4 keys)
+
+| Key                                                               | EN   | IT     | FR    | ES   |
+|-------------------------------------------------------------------|------|--------|-------|------|
+| `assets.schedule.days`                                            | days | giorni | jours | días |
+| `datePicker.granularity.days`                                     | Days | Giorni | Jours | Días |
+| `settings.global.scheduler.horizonSuffix`                         | days | giorni | jours | días |
+| `settings.globalSettingUnits.scheduler_history_sync_horizon_days` | days | giorni | jours | días |
+
+
+**EN, IT, FR, ES — EN="Assets" · IT="asset" · FR="actifs" · ES="activos"** (4 keys)
+
+| Key                                           | EN     | IT    | FR     | ES      |
+|-----------------------------------------------|--------|-------|--------|---------|
+| `assets.sync.assetsCount`                     | assets | asset | actifs | activos |
+| `assets.title`                                | Assets | Asset | Actifs | Activos |
+| `importWizard.assetsSection`                  | Assets | Asset | Actifs | Activos |
+| `settings.global.scheduler.log.assetsSection` | Assets | Asset | Actifs | Activos |
+
+
+**EN, IT, FR, ES — EN="Other" · IT="Altro" · FR="Autre" · ES="Otro"** (3 keys)
+
+| Key                  | EN    | IT    | FR    | ES   |
+|----------------------|-------|-------|-------|------|
+| `assets.types.OTHER` | Other | Altro | Autre | Otro |
+| `common.other`       | Other | Altro | Autre | Otro |
+| `sectors.Other`      | Other | Altro | Autre | Otro |
+
+
+**EN, IT, FR, ES — EN="Preview" · IT="Anteprima" · FR="Aperçu" · ES="Vista previa"** (3 keys)
+
+| Key                     | EN      | IT        | FR     | ES           |
+|-------------------------|---------|-----------|--------|--------------|
+| `chartSettings.preview` | Preview | Anteprima | Aperçu | Vista previa |
+| `importWizard.preview`  | Preview | Anteprima | Aperçu | Vista previa |
+| `uploads.preview`       | Preview | Anteprima | Aperçu | Vista previa |
+
+
+**EN, IT, FR, ES — EN="Asset" · IT="Asset" · FR="Actif" · ES="Activo"** (3 keys)
+
+| Key                                         | EN    | IT    | FR    | ES     |
+|---------------------------------------------|-------|-------|-------|--------|
+| `chartSettings.signals.assetComparisonAbbr` | Asset | Asset | Actif | Activo |
+| `common.asset`                              | Asset | Asset | Actif | Activo |
+| `transactions.fields.asset_id`              | Asset | Asset | Actif | Activo |
+
+
+**EN, IT, FR, ES — EN="Broker" · IT="Broker" · FR="Courtier" · ES="Broker"** (3 keys)
+
+| Key                             | EN     | IT     | FR       | ES     |
+|---------------------------------|--------|--------|----------|--------|
+| `common.broker`                 | Broker | Broker | Courtier | Broker |
+| `importWizard.assignBroker`     | Broker | Broker | Courtier | Broker |
+| `transactions.fields.broker_id` | Broker | Broker | Courtier | Broker |
+
+
+**EN, IT, FR, ES — EN="Error" · IT="Errore" · FR="Erreur" · ES="Error"** (3 keys)
+
+| Key                             | EN    | IT     | FR     | ES    |
+|---------------------------------|-------|--------|--------|-------|
+| `common.error`                  | Error | Errore | Erreur | Error |
+| `importWizard.fileError`        | Error | Errore | Erreur | Error |
+| `importWizard.fileStatus.error` | Error | Errore | Erreur | Error |
+
+
+**EN, IT, FR, ES — EN="Deposited Capital" · IT="Capitale versato" · FR="Capital versé" · ES="Capital depositado"** (3 keys)
+
+| Key                                | EN                | IT               | FR            | ES                 |
+|------------------------------------|-------------------|------------------|---------------|--------------------|
+| `dashboard.capitalBaseline`        | Deposited Capital | Capitale versato | Capital versé | Capital depositado |
+| `dashboard.capitalBaselineTooltip` | Deposited Capital | Capitale versato | Capital versé | Capital depositado |
+| `dashboard.netDepositedCapital`    | Deposited Capital | Capitale versato | Capital versé | Capital depositado |
+
+
+**EN, IT, FR, ES — EN="Double-click on the chart to jum..." · IT="Doppio clic sul grafico per salt..." · FR="Double-cliquez sur le graphique ..." · ES="Doble clic en el gráfico para ir..."** (2 keys)
+
+| Key                            | EN                                            | IT                                            | FR                                            | ES                                           |
+|--------------------------------|-----------------------------------------------|-----------------------------------------------|-----------------------------------------------|----------------------------------------------|
+| `assetDetail.editorTipDesktop` | Double-click on the chart to jump to that ... | Doppio clic sul grafico per saltare a quel... | Double-cliquez sur le graphique pour aller... | Doble clic en el gráfico para ir a esa fecha |
+| `fxDetail.editorTipDesktop`    | Double-click on the chart to jump to that ... | Doppio clic sul grafico per saltare a quel... | Double-cliquez sur le graphique pour aller... | Doble clic en el gráfico para ir a esa fecha |
+
+
+**EN, IT, FR, ES — EN="Long-press on the chart to jump ..." · IT="Pressione prolungata sul grafico..." · FR="Appui long sur le graphique pour..." · ES="Mantén presionado en el gráfico ..."** (2 keys)
+
+| Key                           | EN                                           | IT                                            | FR                                            | ES                                            |
+|-------------------------------|----------------------------------------------|-----------------------------------------------|-----------------------------------------------|-----------------------------------------------|
+| `assetDetail.editorTipMobile` | Long-press on the chart to jump to that date | Pressione prolungata sul grafico per salta... | Appui long sur le graphique pour aller à c... | Mantén presionado en el gráfico para ir a ... |
+| `fxDetail.editorTipMobile`    | Long-press on the chart to jump to that date | Pressione prolungata sul grafico per salta... | Appui long sur le graphique pour aller à c... | Mantén presionado en el gráfico para ir a ... |
+
+
+**EN, IT, FR, ES — EN="Dividend" · IT="Dividendo" · FR="Dividende" · ES="Dividendo"** (2 keys)
+
+| Key                              | EN       | IT        | FR        | ES        |
+|----------------------------------|----------|-----------|-----------|-----------|
+| `assetDetail.eventType.DIVIDEND` | Dividend | Dividendo | Dividende | Dividendo |
+| `transactions.types.DIVIDEND`    | Dividend | Dividendo | Dividende | Dividendo |
+
+
+**EN, IT, FR, ES — EN="Interest" · IT="Interesse" · FR="Intérêt" · ES="Interés"** (2 keys)
+
+| Key                                  | EN       | IT        | FR      | ES      |
+|--------------------------------------|----------|-----------|---------|---------|
+| `assetDetail.eventType.INTEREST`     | Interest | Interesse | Intérêt | Interés |
+| `assets.schedule.eventType.INTEREST` | Interest | Interesse | Intérêt | Interés |
+
+
+**EN, IT, FR, ES — EN="Price Adjustment" · IT="Aggiustamento Prezzo" · FR="Ajustement de prix" · ES="Ajuste de precio"** (2 keys)
+
+| Key                                          | EN               | IT                   | FR                 | ES               |
+|----------------------------------------------|------------------|----------------------|--------------------|------------------|
+| `assetDetail.eventType.PRICE_ADJUSTMENT`     | Price Adjustment | Aggiustamento Prezzo | Ajustement de prix | Ajuste de precio |
+| `assets.schedule.eventType.PRICE_ADJUSTMENT` | Price Adjustment | Aggiustamento Prezzo | Ajustement de Prix | Ajuste de Precio |
+
+
+**EN, IT, FR, ES — EN="Total" · IT="Totale" · FR="Total" · ES="Total"** (2 keys)
+
+| Key                         | EN    | IT     | FR    | ES    |
+|-----------------------------|-------|--------|-------|-------|
+| `assets.distribution.total` | Total | Totale | Total | Total |
+| `assets.probe.totalTime`    | Total | Totale | Total | Total |
+
+
+**EN, IT, FR, ES — EN="Currency" · IT="Valuta" · FR="Devise" · ES="Moneda"** (2 keys)
+
+| Key                         | EN       | IT     | FR     | ES     |
+|-----------------------------|----------|--------|--------|--------|
+| `assets.schedule.currency`  | Currency | Valuta | Devise | Moneda |
+| `settings.categoryCurrency` | Currency | Valuta | Devise | Moneda |
+
+
+**EN, IT, FR, ES — EN="Period" · IT="Periodo" · FR="Période" · ES="Período"** (2 keys)
+
+| Key                           | EN     | IT      | FR      | ES      |
+|-------------------------------|--------|---------|---------|---------|
+| `assets.schedule.period`      | Period | Periodo | Période | Período |
+| `chartSettings.params.period` | Period | Periodo | Période | Período |
+
+
+**EN, IT, FR, ES — EN="Deposit" · IT="Deposito" · FR="Dépôt" · ES="Depósito"** (2 keys)
+
+| Key                          | EN      | IT       | FR    | ES       |
+|------------------------------|---------|----------|-------|----------|
+| `brokers.deposit`            | Deposit | Deposito | Dépôt | Depósito |
+| `transactions.types.DEPOSIT` | Deposit | Deposito | Dépôt | Depósito |
+
+
+**EN, IT, FR, ES — EN="No transactions yet" · IT="Nessuna transazione" · FR="Aucune transaction" · ES="Sin transacciones"** (2 keys)
+
+| Key                      | EN                  | IT                  | FR                 | ES                |
+|--------------------------|---------------------|---------------------|--------------------|-------------------|
+| `brokers.noTransactions` | No transactions yet | Nessuna transazione | Aucune transaction | Sin transacciones |
+| `transactions.empty`     | No transactions yet | Nessuna transazione | Aucune transaction | Sin transacciones |
+
+
+**EN, IT, FR, ES — EN="Apply" · IT="Applica" · FR="Appliquer" · ES="Aplicar"** (2 keys)
+
+| Key                       | EN    | IT      | FR        | ES      |
+|---------------------------|-------|---------|-----------|---------|
+| `chartSettings.apply`     | Apply | Applica | Appliquer | Aplicar |
+| `transactions.form.apply` | Apply | Applica | Appliquer | Aplicar |
+
+
+**EN, IT, FR, ES — EN="EMA" · IT="EMA" · FR="EMA" · ES="EMA"** (2 keys)
+
+| Key                             | EN   | IT   | FR   | ES   |
+|---------------------------------|------|------|------|------|
+| `chartSettings.signals.ema`     | EMA  | EMA  | EMA  | EMA  |
+| `chartSettings.signals.emaAbbr` | EMA  | EMA  | EMA  | EMA  |
+
+
+**EN, IT, FR, ES — EN="MACD" · IT="MACD" · FR="MACD" · ES="MACD"** (2 keys)
+
+| Key                              | EN   | IT   | FR   | ES   |
+|----------------------------------|------|------|------|------|
+| `chartSettings.signals.macd`     | MACD | MACD | MACD | MACD |
+| `chartSettings.signals.macdAbbr` | MACD | MACD | MACD | MACD |
+
+
+**EN, IT, FR, ES — EN="RSI" · IT="RSI" · FR="RSI" · ES="RSI"** (2 keys)
+
+| Key                             | EN   | IT   | FR   | ES   |
+|---------------------------------|------|------|------|------|
+| `chartSettings.signals.rsi`     | RSI  | RSI  | RSI  | RSI  |
+| `chartSettings.signals.rsiAbbr` | RSI  | RSI  | RSI  | RSI  |
+
+
+**EN, IT, FR, ES — EN="Back" · IT="Indietro" · FR="Retour" · ES="Atrás"** (2 keys)
+
+| Key                 | EN   | IT       | FR     | ES    |
+|---------------------|------|----------|--------|-------|
+| `common.back`       | Back | Indietro | Retour | Atrás |
+| `importWizard.back` | Back | Indietro | Retour | Atrás |
+
+
+**EN, IT, FR, ES — EN="Cancel" · IT="Annulla" · FR="Annuler" · ES="Cancelar"** (2 keys)
+
+| Key                   | EN     | IT      | FR      | ES       |
+|-----------------------|--------|---------|---------|----------|
+| `common.cancel`       | Cancel | Annulla | Annuler | Cancelar |
+| `importWizard.cancel` | Cancel | Annulla | Annuler | Cancelar |
+
+
+**EN, IT, FR, ES — EN="Continue" · IT="Continua" · FR="Continuer" · ES="Continuar"** (2 keys)
+
+| Key                     | EN       | IT       | FR        | ES        |
+|-------------------------|----------|----------|-----------|-----------|
+| `common.continue`       | Continue | Continua | Continuer | Continuar |
+| `importWizard.continue` | Continue | Continua | Continuer | Continuar |
+
+
+**EN, IT, FR, ES — EN="Currency" · IT="Valuta" · FR="Devise" · ES="Divisa"** (2 keys)
+
+| Key                             | EN       | IT     | FR     | ES     |
+|---------------------------------|----------|--------|--------|--------|
+| `common.currency`               | Currency | Valuta | Devise | Divisa |
+| `transactions.fields.cash_code` | Currency | Valuta | Devise | Divisa |
+
+
+**EN, IT, FR, ES — EN="Date" · IT="Data" · FR="Date" · ES="Fecha"** (2 keys)
+
+| Key                        | EN   | IT   | FR   | ES    |
+|----------------------------|------|------|------|-------|
+| `common.date`              | Date | Data | Date | Fecha |
+| `transactions.fields.date` | Date | Data | Date | Fecha |
+
+
+**EN, IT, FR, ES — EN="Description" · IT="Descrizione" · FR="Description" · ES="Descripción"** (2 keys)
+
+| Key                               | EN          | IT          | FR          | ES          |
+|-----------------------------------|-------------|-------------|-------------|-------------|
+| `common.description`              | Description | Descrizione | Description | Descripción |
+| `transactions.fields.description` | Description | Descrizione | Description | Descripción |
+
+
+**EN, IT, FR, ES — EN="Quantity" · IT="Quantità" · FR="Quantité" · ES="Cantidad"** (2 keys)
+
+| Key                            | EN       | IT       | FR       | ES       |
+|--------------------------------|----------|----------|----------|----------|
+| `common.quantity`              | Quantity | Quantità | Quantité | Cantidad |
+| `transactions.fields.quantity` | Quantity | Quantità | Quantité | Cantidad |
+
+
+**EN, IT, FR, ES — EN="Type" · IT="Tipo" · FR="Type" · ES="Tipo"** (2 keys)
+
+| Key                        | EN   | IT   | FR   | ES   |
+|----------------------------|------|------|------|------|
+| `common.type`              | Type | Tipo | Type | Tipo |
+| `transactions.fields.type` | Type | Tipo | Type | Tipo |
+
+
+**EN, IT, FR, ES — EN="Purchase Cost" · IT="Valore di acquisto" · FR="Coût d'achat" · ES="Coste de compra"** (2 keys)
+
+| Key                      | EN            | IT                 | FR           | ES              |
+|--------------------------|---------------|--------------------|--------------|-----------------|
+| `dashboard.assetsAtCost` | Purchase Cost | Valore di acquisto | Coût d'achat | Coste de compra |
+| `dashboard.bookValue`    | Purchase Cost | Valore di acquisto | Coût d'achat | Coste de compra |
+
+
+**EN, IT, FR, ES — EN="TWRR" · IT="TWRR" · FR="TWRR" · ES="TWRR"** (2 keys)
+
+| Key                 | EN   | IT   | FR   | ES   |
+|---------------------|------|------|------|------|
+| `dashboard.twrr`    | TWRR | TWRR | TWRR | TWRR |
+| `dashboard.twrrCum` | TWRR | TWRR | TWRR | TWRR |
+
+
+**EN, IT, FR, ES — EN="FX Rates" · IT="Tassi di Cambio" · FR="Taux de Change" · ES="Tipos de Cambio"** (2 keys)
+
+| Key                                       | EN       | IT              | FR             | ES              |
+|-------------------------------------------|----------|-----------------|----------------|-----------------|
+| `fx.title`                                | FX Rates | Tassi di Cambio | Taux de Change | Tipos de Cambio |
+| `settings.global.scheduler.log.fxSection` | FX Rates | Tassi di Cambio | Taux de Change | Tipos de Cambio |
+
+
+**EN, IT, FR, ES — EN="{n} likely duplicates" · IT="{n} probabili duplicati" · FR="{n} doublons probables" · ES="{n} duplicados probables"** (2 keys)
+
+| Key                             | EN                    | IT                      | FR                     | ES                       |
+|---------------------------------|-----------------------|-------------------------|------------------------|--------------------------|
+| `importWizard.duplicatesCount`  | {n} likely duplicates | {n} probabili duplicati | {n} doublons probables | {n} duplicados probables |
+| `importWizard.likelyDuplicates` | {n} likely duplicates | {n} probabili duplicati | {n} doublons probables | {n} duplicados probables |
+
+
+**EN, IT, FR, ES — EN="Uploaded" · IT="Caricato" · FR="Téléversé" · ES="Subido"** (2 keys)
+
+| Key                                | EN       | IT       | FR        | ES     |
+|------------------------------------|----------|----------|-----------|--------|
+| `importWizard.fileStatus.uploaded` | Uploaded | Caricato | Téléversé | Subido |
+| `uploads.uploadDate`               | Uploaded | Caricato | Téléversé | Subido |
+
+
+**EN, IT, FR, ES — EN="Import" · IT="Importa" · FR="Importer" · ES="Importar"** (2 keys)
+
+| Key                   | EN     | IT      | FR       | ES       |
+|-----------------------|--------|---------|----------|----------|
+| `importWizard.import` | Import | Importa | Importer | Importar |
+| `transactions.import` | Import | Importa | Importer | Importar |
+
+
+**EN, IT, FR, ES — EN="Row {n}" · IT="Riga {n}" · FR="Ligne {n}" · ES="Fila {n}"** (2 keys)
+
+| Key                      | EN      | IT       | FR        | ES       |
+|--------------------------|---------|----------|-----------|----------|
+| `importWizard.issueRow`  | Row {n} | Riga {n} | Ligne {n} | Fila {n} |
+| `transactions.bulk.rowN` | Row {n} | Riga {n} | Ligne {n} | Fila {n} |
+
+
+**EN, IT, FR, ES — EN="File" · IT="File" · FR="Fichier" · ES="Archivo"** (2 keys)
+
+| Key                       | EN   | IT   | FR      | ES      |
+|---------------------------|------|------|---------|---------|
+| `importWizard.sourceFile` | File | File | Fichier | Archivo |
+| `uploads.file`            | file | file | fichier | archivo |
+
+
+**EN, IT, FR, ES — EN="Upload" · IT="Carica" · FR="Téléverser" · ES="Subir"** (2 keys)
+
+| Key                       | EN     | IT     | FR         | ES    |
+|---------------------------|--------|--------|------------|-------|
+| `importWizard.step1Title` | Upload | Carica | Téléverser | Subir |
+| `uploads.upload`          | Upload | Carica | Téléverser | Subir |
+
+
+**EN, IT, FR, ES — EN="Transactions" · IT="Transazioni" · FR="Transactions" · ES="Transacciones"** (2 keys)
+
+| Key                                | EN           | IT          | FR           | ES            |
+|------------------------------------|--------------|-------------|--------------|---------------|
+| `importWizard.transactionsSection` | Transactions | Transazioni | Transactions | Transacciones |
+| `transactions.title`               | Transactions | Transazioni | Transactions | Transacciones |
+
+
+**EN, IT, FR, ES — EN="Validation Issues" · IT="Problemi di validazione" · FR="Problèmes de validation" · ES="Problemas de validación"** (2 keys)
+
+| Key                                             | EN                | IT                      | FR                      | ES                      |
+|-------------------------------------------------|-------------------|-------------------------|-------------------------|-------------------------|
+| `importWizard.validationIssues`                 | Validation Issues | Problemi di validazione | Problèmes de validation | Problemas de validación |
+| `transactions.deleteModal.validateWarningTitle` | Validation issues | Problemi di validazione | Problèmes de validation | Problemas de validación |
+
+
+**EN, IT, FR, ES — EN="Lookback Horizon" · IT="Orizzonte di Recupero" · FR="Horizon de Récupération" · ES="Horizonte de Recuperación"** (2 keys)
+
+| Key                                                               | EN               | IT                    | FR                      | ES                        |
+|-------------------------------------------------------------------|------------------|-----------------------|-------------------------|---------------------------|
+| `settings.global.scheduler.horizonLabel`                          | Lookback horizon | Orizzonte di recupero | Horizon de récupération | Horizonte de recuperación |
+| `settings.globalSettingNames.scheduler_history_sync_horizon_days` | Lookback Horizon | Orizzonte di Recupero | Horizon de Récupération | Horizonte de Recuperación |
+
+
+**EN, IT, FR, ES — EN="Reset all" · IT="Reimposta tutto" · FR="Tout réinitialiser" · ES="Restablecer todo"** (2 keys)
+
+| Key                          | EN        | IT              | FR                 | ES               |
+|------------------------------|-----------|-----------------|--------------------|------------------|
+| `transactions.bulk.resetAll` | Reset all | Reimposta tutto | Tout réinitialiser | Restablecer todo |
+| `uploads.resetAll`           | Reset All | Reimposta tutto | Tout réinitialiser | Restablecer todo |
+
+
+**EN, IT, FR, ES — EN="Save cancelled" · IT="Salvataggio annullato" · FR="Sauvegarde annulée" · ES="Guardado cancelado"** (2 keys)
+
+| Key                                 | EN             | IT                    | FR                 | ES                 |
+|-------------------------------------|----------------|-----------------------|--------------------|--------------------|
+| `transactions.bulk.rolledBackTitle` | Save cancelled | Salvataggio annullato | Sauvegarde annulée | Guardado cancelado |
+| `transactions.form.rolledBackTitle` | Save cancelled | Salvataggio annullato | Sauvegarde annulée | Guardado cancelado |
+
+
+**EN, IT, FR, ES — EN="Please select an asset" · IT="Seleziona un asset" · FR="Veuillez sélectionner un actif" · ES="Selecciona un activo"** (2 keys)
+
+| Key                                      | EN                     | IT                 | FR                             | ES                   |
+|------------------------------------------|------------------------|--------------------|--------------------------------|----------------------|
+| `transactions.errors.assetRequired`      | Please select an asset | Seleziona un asset | Veuillez sélectionner un actif | Selecciona un activo |
+| `transactions.fieldErrors.assetRequired` | Please select an asset | Seleziona un asset | Veuillez sélectionner un actif | Selecciona un activo |
+
+
+**EN, IT, FR, ES — EN="Linked TX" · IT="TX Collegata" · FR="TX Liée" · ES="TX Vinculada"** (2 keys)
+
+| Key                             | EN        | IT           | FR      | ES           |
+|---------------------------------|-----------|--------------|---------|--------------|
+| `transactions.fields.link_uuid` | Linked TX | TX Collegata | TX Liée | TX Vinculada |
+| `transactions.form.linkUuid`    | Linked TX | TX Collegata | TX Liée | TX Vinculada |
+
+
+**EN, IT, FR, ES — EN="Currency Exchange" · IT="Cambio Valuta" · FR="Change de Devises" · ES="Cambio de Divisas"** (2 keys)
+
+| Key                                | EN                | IT            | FR                | ES                |
+|------------------------------------|-------------------|---------------|-------------------|-------------------|
+| `transactions.form.fxTitle`        | Currency Exchange | Cambio Valuta | Change de Devises | Cambio de Divisas |
+| `transactions.types.FX_CONVERSION` | Currency Exchange | Cambio Valuta | Change de Devises | Cambio de Divisas |
+
+
+**EN, IT, FR, ES — EN="Files" · IT="file" · FR="Fichiers" · ES="Archivos"** (2 keys)
+
+| Key             | EN    | IT   | FR       | ES       |
+|-----------------|-------|------|----------|----------|
+| `uploads.files` | files | file | fichiers | archivos |
+| `uploads.title` | Files | File | Fichiers | Archivos |
+
+
+---
+
+### 🟠 Duplicates in 3/4 languages
+
+
+**IT, FR, ES — IT="Importo" · FR="Montant" · ES="Importe"** (6 keys)
+
+| Key                                    | EN          | IT      | FR      | ES      |
+|----------------------------------------|-------------|---------|---------|---------|
+| `common.amount`                        | Amount      | Importo | Montant | Importe |
+| `dataEditor.col.amount`                | Amount      | Importo | Montant | Importe |
+| `transactions.bulk.eventTooltipAmount` | Amount      | Importo | Montant | Importe |
+| `transactions.fields.amount`           | Amount      | Importo | Montant | Importe |
+| `transactions.fields.cash`             | Cash        | Importo | Montant | Importe |
+| `transactions.fields.cash_amount`      | Cash amount | Importo | Montant | Importe |
+
+
+**EN, IT, FR — EN="Amount" · IT="Importo" · FR="Montant"** (5 keys)
+
+| Key                                    | EN     | IT      | FR      | ES      |
+|----------------------------------------|--------|---------|---------|---------|
+| `brokers.amount`                       | Amount | Importo | Montant | Monto   |
+| `common.amount`                        | Amount | Importo | Montant | Importe |
+| `dataEditor.col.amount`                | Amount | Importo | Montant | Importe |
+| `transactions.bulk.eventTooltipAmount` | Amount | Importo | Montant | Importe |
+| `transactions.fields.amount`           | Amount | Importo | Montant | Importe |
+
+
+**EN, IT, FR — EN="Currency" · IT="Valuta" · FR="Devise"** (4 keys)
+
+| Key                             | EN       | IT     | FR     | ES     |
+|---------------------------------|----------|--------|--------|--------|
+| `assets.schedule.currency`      | Currency | Valuta | Devise | Moneda |
+| `common.currency`               | Currency | Valuta | Devise | Divisa |
+| `settings.categoryCurrency`     | Currency | Valuta | Devise | Moneda |
+| `transactions.fields.cash_code` | Currency | Valuta | Devise | Divisa |
+
+
+**EN, IT, FR — EN="Broker" · IT="Broker" · FR="Courtier"** (4 keys)
+
+| Key                             | EN     | IT     | FR       | ES     |
+|---------------------------------|--------|--------|----------|--------|
+| `common.broker`                 | Broker | Broker | Courtier | Broker |
+| `importWizard.assignBroker`     | Broker | Broker | Courtier | Broker |
+| `transactions.fields.broker_id` | Broker | Broker | Courtier | Broker |
+| `transactions.table.broker`     | Broker | Broker | Courtier | Bróker |
+
+
+**EN, IT, ES — EN="Interest" · IT="Interesse" · ES="Interés"** (3 keys)
+
+| Key                                  | EN       | IT        | FR       | ES      |
+|--------------------------------------|----------|-----------|----------|---------|
+| `assetDetail.eventType.INTEREST`     | Interest | Interesse | Intérêt  | Interés |
+| `assets.schedule.eventType.INTEREST` | Interest | Interesse | Intérêt  | Interés |
+| `transactions.types.INTEREST`        | Interest | Interesse | Intérêts | Interés |
+
+
+**EN, IT, ES — EN="Uploaded" · IT="Caricato" · ES="Subido"** (3 keys)
+
+| Key                                | EN       | IT       | FR         | ES     |
+|------------------------------------|----------|----------|------------|--------|
+| `fileStatus.uploaded`              | Uploaded | Caricato | Téléchargé | Subido |
+| `importWizard.fileStatus.uploaded` | Uploaded | Caricato | Téléversé  | Subido |
+| `uploads.uploadDate`               | Uploaded | Caricato | Téléversé  | Subido |
+
+
+**EN, FR, ES — EN="Reset All" · FR="Tout Réinitialiser" · ES="Restablecer Todo"** (3 keys)
+
+| Key                          | EN        | IT               | FR                 | ES               |
+|------------------------------|-----------|------------------|--------------------|------------------|
+| `settings.resetAllToDefault` | Reset All | Ripristina Tutto | Tout Réinitialiser | Restablecer Todo |
+| `transactions.bulk.resetAll` | Reset all | Reimposta tutto  | Tout réinitialiser | Restablecer todo |
+| `uploads.resetAll`           | Reset All | Reimposta tutto  | Tout réinitialiser | Restablecer todo |
+
+
+**IT, FR, ES — IT="Sincronizza prezzi" · FR="Synchroniser les prix" · ES="Sincronizar precios"** (2 keys)
+
+| Key                      | EN                | IT                 | FR                    | ES                  |
+|--------------------------|-------------------|--------------------|-----------------------|---------------------|
+| `assetDetail.syncPrices` | Sync Prices       | Sincronizza prezzi | Synchroniser les prix | Sincronizar precios |
+| `assets.sync.modalTitle` | Sync Asset Prices | Sincronizza Prezzi | Synchroniser les Prix | Sincronizar Precios |
+
+
+**EN, IT, ES — EN="Deselect All" · IT="Deseleziona Tutto" · ES="Deseleccionar todo"** (2 keys)
+
+| Key                             | EN           | IT                | FR                  | ES                 |
+|---------------------------------|--------------|-------------------|---------------------|--------------------|
+| `assets.comparison.deselectAll` | Deselect All | Deseleziona Tutto | Tout deselectionner | Deseleccionar todo |
+| `importWizard.deselectAll`      | Deselect all | Deseleziona tutto | Tout désélectionner | Deseleccionar todo |
+
+
+**EN, IT, ES — EN="Select All" · IT="Seleziona Tutto" · ES="Seleccionar todo"** (2 keys)
+
+| Key                           | EN         | IT              | FR                | ES               |
+|-------------------------------|------------|-----------------|-------------------|------------------|
+| `assets.comparison.selectAll` | Select All | Seleziona Tutto | Tout selectionner | Seleccionar todo |
+| `importWizard.selectAll`      | Select all | Seleziona tutto | Tout sélectionner | Seleccionar todo |
+
+
+**EN, IT, FR — EN="History" · IT="Storico" · FR="Historique"** (2 keys)
+
+| Key                    | EN      | IT      | FR         | ES        |
+|------------------------|---------|---------|------------|-----------|
+| `assets.probe.history` | History | Storico | Historique | Historial |
+| `dashboard.history`    | History | Storico | Historique | Histórico |
+
+
+**EN, IT, FR — EN="Merge" · IT="Unisci" · FR="Fusionner"** (2 keys)
+
+| Key                                 | EN    | IT     | FR        | ES       |
+|-------------------------------------|-------|--------|-----------|----------|
+| `assets.schedule.merge`             | Merge | Unisci | Fusionner | Fusionar |
+| `transactions.promoteSuggest.merge` | Merge | Unisci | Fusionner | Combinar |
+
+
+**IT, FR, ES — IT="Liquidità" · FR="Liquidité" · ES="Liquidez"** (2 keys)
+
+| Key                      | EN        | IT        | FR        | ES       |
+|--------------------------|-----------|-----------|-----------|----------|
+| `assets.types.HOLD`      | Hold      | Liquidità | Liquidité | Liquidez |
+| `assets.types.LIQUIDITY` | Liquidity | Liquidità | Liquidité | Liquidez |
+
+
+**EN, IT, ES — EN="Liquidity" · IT="Liquidità" · ES="Liquidez"** (2 keys)
+
+| Key                      | EN        | IT        | FR         | ES       |
+|--------------------------|-----------|-----------|------------|----------|
+| `assets.types.LIQUIDITY` | Liquidity | Liquidità | Liquidité  | Liquidez |
+| `sectors.Liquidity`      | Liquidity | Liquidità | Liquidités | Liquidez |
+
+
+**IT, FR, ES — IT="Azione" · FR="Action" · ES="Acción"** (2 keys)
+
+| Key                                 | EN     | IT     | FR     | ES     |
+|-------------------------------------|--------|--------|--------|--------|
+| `assets.types.STOCK`                | Stock  | Azione | Action | Acción |
+| `transactions.bulkDelete.colAction` | Action | Azione | Action | Acción |
+
+
+**EN, FR, ES — EN="Recent Transactions" · FR="Transactions Récentes" · ES="Transacciones Recientes"** (2 keys)
+
+| Key                            | EN                  | IT                  | FR                    | ES                      |
+|--------------------------------|---------------------|---------------------|-----------------------|-------------------------|
+| `brokers.recentTransactions`   | Recent Transactions | Transazioni Recenti | Transactions Récentes | Transacciones Recientes |
+| `dashboard.recentTransactions` | Recent Transactions | Ultime Transazioni  | Transactions Récentes | Transacciones Recientes |
+
+
+**IT, FR, ES — IT="Prelievo" · FR="Retrait" · ES="Retiro"** (2 keys)
+
+| Key                             | EN         | IT       | FR      | ES     |
+|---------------------------------|------------|----------|---------|--------|
+| `brokers.withdraw`              | Withdraw   | Prelievo | Retrait | Retiro |
+| `transactions.types.WITHDRAWAL` | Withdrawal | Prelievo | Retrait | Retiro |
+
+
+**EN, IT, ES — EN="Discard" · IT="Scarta" · ES="Descartar"** (2 keys)
+
+| Key                     | EN      | IT     | FR         | ES        |
+|-------------------------|---------|--------|------------|-----------|
+| `chartSettings.discard` | Discard | Scarta | Rejeter    | Descartar |
+| `common.discard`        | Discard | Scarta | Abandonner | Descartar |
+
+
+**EN, FR, ES — EN="Cash" · FR="Espèces" · ES="Efectivo"** (2 keys)
+
+| Key                       | EN   | IT       | FR      | ES       |
+|---------------------------|------|----------|---------|----------|
+| `common.cash`             | Cash | Contante | Espèces | Efectivo |
+| `transactions.table.cash` | Cash | Importo  | Espèces | Efectivo |
+
+
+**EN, FR, ES — EN="Discard" · FR="Abandonner" · ES="Descartar"** (2 keys)
+
+| Key                           | EN      | IT      | FR         | ES        |
+|-------------------------------|---------|---------|------------|-----------|
+| `common.discard`              | Discard | Scarta  | Abandonner | Descartar |
+| `importWizard.discardConfirm` | Discard | Annulla | Abandonner | Descartar |
+
+
+**EN, IT, ES — EN="Edit" · IT="Modifica" · ES="Editar"** (2 keys)
+
+| Key                           | EN   | IT       | FR       | ES     |
+|-------------------------------|------|----------|----------|--------|
+| `common.edit`                 | Edit | Modifica | Modifier | Editar |
+| `transactions.bulk.stateEdit` | edit | modifica | modif.   | editar |
+
+
+**EN, IT, FR — EN="Min" · IT="Min" · FR="Min"** (2 keys)
+
+| Key                                                                     | EN   | IT   | FR   | ES   |
+|-------------------------------------------------------------------------|------|------|------|------|
+| `common.min`                                                            | Min  | Min  | Min  | Mín  |
+| `settings.globalSettingUnits.scheduler_current_price_frequency_minutes` | min  | min  | min  | min  |
+
+
+**EN, FR, ES — EN="optional" · FR="optionnel" · ES="opcional"** (2 keys)
+
+| Key                                 | EN       | IT        | FR        | ES       |
+|-------------------------------------|----------|-----------|-----------|----------|
+| `common.optional`                   | optional | opzionale | optionnel | opcional |
+| `transactions.form.sectionOptional` | Optional | Opzionali | Optionnel | Opcional |
+
+
+**EN, IT, ES — EN="Save All" · IT="Salva Tutto" · ES="Guardar Todo"** (2 keys)
+
+| Key                           | EN       | IT          | FR               | ES           |
+|-------------------------------|----------|-------------|------------------|--------------|
+| `common.saveAll`              | Save All | Salva Tutto | Enregistrer Tout | Guardar Todo |
+| `transactions.bulk.commitAll` | Save all | Salva tutto | Tout enregistrer | Guardar todo |
+
+
+**EN, FR, ES — EN="See all →" · FR="Voir tout →" · ES="Ver todo →"** (2 keys)
+
+| Key                         | EN        | IT           | FR          | ES         |
+|-----------------------------|-----------|--------------|-------------|------------|
+| `common.seeAll`             | See all → | Vedi tutti → | Voir tout → | Ver todo → |
+| `dashboard.seeAllPositions` | See all → | Vedi tutte → | Voir tout → | Ver todo → |
+
+
+**EN, FR, ES — EN="Select All" · FR="Tout sélectionner" · ES="Seleccionar Todo"** (2 keys)
+
+| Key                      | EN         | IT              | FR                | ES               |
+|--------------------------|------------|-----------------|-------------------|------------------|
+| `common.selectAll`       | Select All | Seleziona Tutti | Tout Sélectionner | Seleccionar Todo |
+| `importWizard.selectAll` | Select all | Seleziona tutto | Tout sélectionner | Seleccionar todo |
+
+
+**EN, IT, ES — EN="Tags" · IT="Tag" · ES="Etiquetas"** (2 keys)
+
+| Key                              | EN   | IT   | FR         | ES        |
+|----------------------------------|------|------|------------|-----------|
+| `common.tags`                    | Tags | Tag  | Étiquettes | Etiquetas |
+| `transactions.promote.fieldTags` | Tags | Tag  | Tags       | Etiquetas |
+
+
+**EN, IT, FR — EN="Add Row" · IT="Aggiungi riga" · FR="Ajouter une ligne"** (2 keys)
+
+| Key                        | EN      | IT            | FR                | ES           |
+|----------------------------|---------|---------------|-------------------|--------------|
+| `dataEditor.addRow`        | Add Row | Aggiungi riga | Ajouter une ligne | Agregar fila |
+| `transactions.bulk.addRow` | Add row | Aggiungi riga | Ajouter une ligne | Añadir fila  |
+
+
+**EN, FR, ES — EN="Clear selection" · FR="Effacer la sélection" · ES="Borrar selección"** (2 keys)
+
+| Key                         | EN              | IT                | FR                   | ES               |
+|-----------------------------|-----------------|-------------------|----------------------|------------------|
+| `dataEditor.clearSelection` | Clear selection | Deseleziona       | Effacer la sélection | Borrar selección |
+| `table.clearSelection`      | Clear selection | Deseleziona tutto | Effacer la sélection | Borrar selección |
+
+
+**EN, IT, ES — EN="Failed" · IT="Fallito" · ES="Fallido"** (2 keys)
+
+| Key                         | EN     | IT      | FR     | ES      |
+|-----------------------------|--------|---------|--------|---------|
+| `fileStatus.failed`         | Failed | Fallito | Échoué | Fallido |
+| `prices.sync.failedDefault` | failed | fallito | échec  | fallido |
+
+
+**EN, IT, ES — EN="Sync FX Rates" · IT="Sincronizza Tassi FX" · ES="Sincronizar tasas FX"** (2 keys)
+
+| Key                              | EN            | IT                   | FR                       | ES                   |
+|----------------------------------|---------------|----------------------|--------------------------|----------------------|
+| `fx.sync.title`                  | Sync FX Rates | Sincronizza Tassi FX | Synchroniser les taux FX | Sincronizar tasas FX |
+| `transactions.wacPreview.syncFx` | Sync FX rates | Sincronizza tassi FX | Synchroniser taux FX     | Sincronizar tasas FX |
+
+
+**EN, FR, ES — EN="Sync FX Rates" · FR="Synchroniser les taux FX" · ES="Sincronizar tasas FX"** (2 keys)
+
+| Key                                            | EN            | IT                     | FR                       | ES                   |
+|------------------------------------------------|---------------|------------------------|--------------------------|----------------------|
+| `fx.sync.title`                                | Sync FX Rates | Sincronizza Tassi FX   | Synchroniser les taux FX | Sincronizar tasas FX |
+| `transactions.errors.wacFxUnavailableSyncLink` | Sync FX rates | Sincronizza i tassi FX | Synchroniser les taux FX | Sincronizar tasas FX |
+
+
+**EN, IT, FR — EN="Settings" · IT="Impostazioni" · FR="Paramètres"** (2 keys)
+
+| Key                       | EN       | IT           | FR         | ES            |
+|---------------------------|----------|--------------|------------|---------------|
+| `nav.settings`            | Settings | Impostazioni | Paramètres | Configuración |
+| `sharedResource.settings` | Settings | Impostazioni | Paramètres | Ajustes       |
+
+
+**EN, IT, ES — EN="partial" · IT="parziale" · ES="parcial"** (2 keys)
+
+| Key                                     | EN      | IT       | FR        | ES      |
+|-----------------------------------------|---------|----------|-----------|---------|
+| `prices.sync.partialSuffix`             | partial | parziale | partielle | parcial |
+| `settings.global.scheduler.log.partial` | Partial | Parziale | Partiel   | Parcial |
+
+
+**EN, IT, FR — EN="Please select a broker" · IT="Seleziona un broker" · FR="Veuillez sélectionner un courtier"** (2 keys)
+
+| Key                                       | EN                     | IT                  | FR                                | ES                   |
+|-------------------------------------------|------------------------|---------------------|-----------------------------------|----------------------|
+| `transactions.errors.brokerRequired`      | Please select a broker | Seleziona un broker | Veuillez sélectionner un courtier | Selecciona un bróker |
+| `transactions.fieldErrors.brokerRequired` | Please select a broker | Seleziona un broker | Veuillez sélectionner un courtier | Selecciona un broker |
+
+
+**EN, IT, ES — EN="Asset event" · IT="Evento asset" · ES="Evento de activo"** (2 keys)
+
+| Key                                  | EN          | IT           | FR                | ES               |
+|--------------------------------------|-------------|--------------|-------------------|------------------|
+| `transactions.fields.asset_event_id` | Asset event | Evento asset | Événement d'actif | Evento de activo |
+| `transactions.form.assetEvent`       | Asset event | Evento asset | Événement actif   | Evento de activo |
+
+
+**EN, IT, FR — EN="Tags" · IT="Tag" · FR="Tags"** (2 keys)
+
+| Key                              | EN   | IT   | FR   | ES        |
+|----------------------------------|------|------|------|-----------|
+| `transactions.fields.tags`       | Tags | Tag  | Tags | Tags      |
+| `transactions.promote.fieldTags` | Tags | Tag  | Tags | Etiquetas |
+
+
+**EN, IT, FR — EN="Linked event" · IT="Evento collegato" · FR="Événement lié"** (2 keys)
+
+| Key                             | EN           | IT               | FR            | ES               |
+|---------------------------------|--------------|------------------|---------------|------------------|
+| `transactions.form.linkedEvent` | Linked Event | Evento Collegato | Événement Lié | Evento Vinculado |
+| `transactions.linkedEvent`      | Linked event | Evento collegato | Événement lié | Evento enlazado  |
+
+
+**IT, FR, ES — IT="Bonifico" · FR="Virement" · ES="Transferencia bancaria"** (2 keys)
+
+| Key                                   | EN            | IT       | FR       | ES                     |
+|---------------------------------------|---------------|----------|----------|------------------------|
+| `transactions.form.transferCashTitle` | Wire Transfer | Bonifico | Virement | Transferencia Bancaria |
+| `transactions.types.CASH_TRANSFER`    | Cash Transfer | Bonifico | Virement | Transferencia bancaria |
+
+
+---
+
+### 🟡 Duplicates in 2/4 languages
+
+
+**IT, FR — IT="Importo" · FR="Montant"** (7 keys)
+
+| Key                                    | EN          | IT      | FR      | ES      |
+|----------------------------------------|-------------|---------|---------|---------|
+| `brokers.amount`                       | Amount      | Importo | Montant | Monto   |
+| `common.amount`                        | Amount      | Importo | Montant | Importe |
+| `dataEditor.col.amount`                | Amount      | Importo | Montant | Importe |
+| `transactions.bulk.eventTooltipAmount` | Amount      | Importo | Montant | Importe |
+| `transactions.fields.amount`           | Amount      | Importo | Montant | Importe |
+| `transactions.fields.cash`             | Cash        | Importo | Montant | Importe |
+| `transactions.fields.cash_amount`      | Cash amount | Importo | Montant | Importe |
+
+
+**FR, ES — FR="Actifs" · ES="Activos"** (5 keys)
+
+| Key                                           | EN     | IT     | FR     | ES      |
+|-----------------------------------------------|--------|--------|--------|---------|
+| `assets.showActive`                           | Active | Attivi | Actifs | Activos |
+| `assets.sync.assetsCount`                     | assets | asset  | actifs | activos |
+| `assets.title`                                | Assets | Asset  | Actifs | Activos |
+| `importWizard.assetsSection`                  | Assets | Asset  | Actifs | Activos |
+| `settings.global.scheduler.log.assetsSection` | Assets | Asset  | Actifs | Activos |
+
+
+**FR, ES — FR="Actif" · ES="Activo"** (4 keys)
+
+| Key                                         | EN     | IT     | FR    | ES     |
+|---------------------------------------------|--------|--------|-------|--------|
+| `chartSettings.signals.assetComparisonAbbr` | Asset  | Asset  | Actif | Activo |
+| `common.active`                             | Active | Attivo | Actif | Activo |
+| `common.asset`                              | Asset  | Asset  | Actif | Activo |
+| `transactions.fields.asset_id`              | Asset  | Asset  | Actif | Activo |
+
+
+**EN, ES — EN="Select All" · ES="Seleccionar todo"** (3 keys)
+
+| Key                           | EN         | IT              | FR                | ES               |
+|-------------------------------|------------|-----------------|-------------------|------------------|
+| `assets.comparison.selectAll` | Select All | Seleziona Tutto | Tout selectionner | Seleccionar todo |
+| `common.selectAll`            | Select All | Seleziona Tutti | Tout Sélectionner | Seleccionar Todo |
+| `importWizard.selectAll`      | Select all | Seleziona tutto | Tout sélectionner | Seleccionar todo |
+
+
+**IT, ES — IT="Liquidità" · ES="Liquidez"** (3 keys)
+
+| Key                      | EN        | IT        | FR         | ES       |
+|--------------------------|-----------|-----------|------------|----------|
+| `assets.types.HOLD`      | Hold      | Liquidità | Liquidité  | Liquidez |
+| `assets.types.LIQUIDITY` | Liquidity | Liquidità | Liquidité  | Liquidez |
+| `sectors.Liquidity`      | Liquidity | Liquidità | Liquidités | Liquidez |
+
+
+**EN, ES — EN="Discard" · ES="Descartar"** (3 keys)
+
+| Key                           | EN      | IT      | FR         | ES        |
+|-------------------------------|---------|---------|------------|-----------|
+| `chartSettings.discard`       | Discard | Scarta  | Rejeter    | Descartar |
+| `common.discard`              | Discard | Scarta  | Abandonner | Descartar |
+| `importWizard.discardConfirm` | Discard | Annulla | Abandonner | Descartar |
+
+
+**IT, FR — IT="Annulla" · FR="Annuler"** (3 keys)
+
+| Key                           | EN     | IT      | FR      | ES       |
+|-------------------------------|--------|---------|---------|----------|
+| `common.cancel`               | Cancel | Annulla | Annuler | Cancelar |
+| `importWizard.cancel`         | Cancel | Annulla | Annuler | Cancelar |
+| `transactions.bulk.undoSplit` | Undo   | Annulla | Annuler | Deshacer |
+
+
+**EN, ES — EN="Cash" · ES="Efectivo"** (3 keys)
+
+| Key                       | EN   | IT        | FR         | ES       |
+|---------------------------|------|-----------|------------|----------|
+| `common.cash`             | Cash | Contante  | Espèces    | Efectivo |
+| `dashboard.cashValue`     | Cash | Liquidità | Liquidités | Efectivo |
+| `transactions.table.cash` | Cash | Importo   | Espèces    | Efectivo |
+
+
+**EN, IT — EN="Tags" · IT="Tag"** (3 keys)
+
+| Key                              | EN   | IT   | FR         | ES        |
+|----------------------------------|------|------|------------|-----------|
+| `common.tags`                    | Tags | Tag  | Étiquettes | Etiquetas |
+| `transactions.fields.tags`       | Tags | Tag  | Tags       | Tags      |
+| `transactions.promote.fieldTags` | Tags | Tag  | Tags       | Etiquetas |
+
+
+**EN, ES — EN="Sync FX Rates" · ES="Sincronizar tasas FX"** (3 keys)
+
+| Key                                            | EN            | IT                     | FR                       | ES                   |
+|------------------------------------------------|---------------|------------------------|--------------------------|----------------------|
+| `fx.sync.title`                                | Sync FX Rates | Sincronizza Tassi FX   | Synchroniser les taux FX | Sincronizar tasas FX |
+| `transactions.errors.wacFxUnavailableSyncLink` | Sync FX rates | Sincronizza i tassi FX | Synchroniser les taux FX | Sincronizar tasas FX |
+| `transactions.wacPreview.syncFx`               | Sync FX rates | Sincronizza tassi FX   | Synchroniser taux FX     | Sincronizar tasas FX |
+
+
+**EN, ES — EN="Current Price" · ES="Precio Actual"** (2 keys)
+
+| Key                                          | EN            | IT              | FR           | ES            |
+|----------------------------------------------|---------------|-----------------|--------------|---------------|
+| `assets.probe.currentPrice`                  | Current Price | Prezzo Attuale  | Prix Actuel  | Precio Actual |
+| `settings.global.scheduler.log.currentPrice` | Current Price | Prezzo Corrente | Prix Courant | Precio Actual |
+
+
+**IT, ES — IT="Mai eseguito" · ES="Nunca ejecutado"** (2 keys)
+
+| Key                                         | EN            | IT           | FR             | ES              |
+|---------------------------------------------|---------------|--------------|----------------|-----------------|
+| `assets.provider.neverFetched`              | Never fetched | Mai eseguito | Jamais execute | Nunca ejecutado |
+| `settings.global.scheduler.status.neverRun` | Never run yet | Mai eseguito | Jamais exécuté | Nunca ejecutado |
+
+
+**FR, ES — FR="Tout désélectionner" · ES="Deseleccionar Todo"** (2 keys)
+
+| Key                        | EN           | IT                | FR                  | ES                 |
+|----------------------------|--------------|-------------------|---------------------|--------------------|
+| `common.clearAll`          | Clear All    | Deseleziona Tutti | Tout Désélectionner | Deseleccionar Todo |
+| `importWizard.deselectAll` | Deselect all | Deseleziona tutto | Tout désélectionner | Deseleccionar todo |
+
+
+**IT, ES — IT="Elimina" · ES="Eliminar"** (2 keys)
+
+| Key                          | EN     | IT      | FR        | ES       |
+|------------------------------|--------|---------|-----------|----------|
+| `common.delete`              | Delete | Elimina | Supprimer | Eliminar |
+| `transactions.bulk.stateDel` | del    | elimina | suppr.    | eliminar |
+
+
+**FR, ES — FR="Supprimer" · ES="Eliminar"** (2 keys)
+
+| Key                   | EN     | IT      | FR        | ES       |
+|-----------------------|--------|---------|-----------|----------|
+| `common.delete`       | Delete | Elimina | Supprimer | Eliminar |
+| `importWizard.remove` | Remove | Rimuovi | Supprimer | Eliminar |
+
+
+**EN, IT — EN="You have unsaved changes. Are yo..." · IT="Hai modifiche non salvate. Sei s..."** (2 keys)
+
+| Key                            | EN                                            | IT                                            | FR                                            | ES                                            |
+|--------------------------------|-----------------------------------------------|-----------------------------------------------|-----------------------------------------------|-----------------------------------------------|
+| `common.discardChangesMessage` | You have unsaved changes. Are you sure you... | Hai modifiche non salvate. Sei sicuro di v... | Vous avez des modifications non enregistré... | Tienes cambios sin guardar. ¿Estás seguro ... |
+| `importWizard.discardMessage`  | You have unsaved changes. Are you sure you... | Hai modifiche non salvate. Sei sicuro di v... | Vous avez des modifications non sauvegardé... | Tiene cambios no guardados. ¿Está seguro d... |
+
+
+**IT, FR — IT="Nessun dato disponibile" · FR="Aucune donnée disponible"** (2 keys)
+
+| Key                        | EN                     | IT                      | FR                       | ES                       |
+|----------------------------|------------------------|-------------------------|--------------------------|--------------------------|
+| `common.noData`            | No data available      | Nessun dato disponibile | Aucune donnée disponible | No hay datos disponibles |
+| `dataQuality.fxPairNoData` | No rate data available | Nessun dato disponibile | Aucune donnée disponible | Sin datos disponibles    |
+
+
+**EN, IT — EN="Remove" · IT="Rimuovi"** (2 keys)
+
+| Key                   | EN     | IT      | FR        | ES       |
+|-----------------------|--------|---------|-----------|----------|
+| `common.remove`       | Remove | Rimuovi | Retirer   | Quitar   |
+| `importWizard.remove` | Remove | Rimuovi | Supprimer | Eliminar |
+
+
+**IT, ES — IT="Ripristina Tutto" · ES="Restablecer Todo"** (2 keys)
+
+| Key                          | EN                    | IT               | FR                 | ES               |
+|------------------------------|-----------------------|------------------|--------------------|------------------|
+| `common.resetAll`            | Reset All to Defaults | Ripristina Tutto | Réinitialiser Tout | Restablecer Todo |
+| `settings.resetAllToDefault` | Reset All             | Ripristina Tutto | Tout Réinitialiser | Restablecer Todo |
+
+
+**IT, FR — IT="Riprova" · FR="Réessayer"** (2 keys)
+
+| Key              | EN        | IT      | FR        | ES                |
+|------------------|-----------|---------|-----------|-------------------|
+| `common.retry`   | Retry     | Riprova | Réessayer | Reintentar        |
+| `error.tryAgain` | Try Again | Riprova | Réessayer | Intentar de Nuevo |
+
+
+**FR, ES — FR="Sélectionner" · ES="Seleccionar"** (2 keys)
+
+| Key                       | EN           | IT             | FR           | ES          |
+|---------------------------|--------------|----------------|--------------|-------------|
+| `common.select`           | Select       | Seleziona      | Sélectionner | Seleccionar |
+| `importWizard.step2Title` | Select Files | Seleziona File | Sélectionner | Seleccionar |
+
+
+**IT, ES — IT="A" · ES="A"** (2 keys)
+
+| Key                                 | EN   | IT   | FR   | ES   |
+|-------------------------------------|------|------|------|------|
+| `common.to`                         | To   | A    | À    | A    |
+| `datePicker.granularity.yearsShort` | Y    | A    | A    | A    |
+
+
+**EN, ES — EN="Undo" · ES="Deshacer"** (2 keys)
+
+| Key                           | EN   | IT         | FR       | ES       |
+|-------------------------------|------|------------|----------|----------|
+| `common.undo`                 | Undo | Ripristina | Rétablir | Deshacer |
+| `transactions.bulk.undoSplit` | Undo | Annulla    | Annuler  | Deshacer |
+
+
+**EN, IT — EN="Discard import?" · IT="Annullare l'importazione?"** (2 keys)
+
+| Key                         | EN              | IT                        | FR                      | ES                         |
+|-----------------------------|-----------------|---------------------------|-------------------------|----------------------------|
+| `csvImport.discardTitle`    | Discard import? | Annullare l'importazione? | Annuler l'importation ? | ¿Descartar la importación? |
+| `importWizard.discardTitle` | Discard import? | Annullare l'importazione? | Abandonner l'import ?   | ¿Descartar importación?    |
+
+
+**IT, FR — IT="Liquidità" · FR="Liquidités"** (2 keys)
+
+| Key                   | EN        | IT        | FR         | ES       |
+|-----------------------|-----------|-----------|------------|----------|
+| `dashboard.cashValue` | Cash      | Liquidità | Liquidités | Efectivo |
+| `sectors.Liquidity`   | Liquidity | Liquidità | Liquidités | Liquidez |
+
+
+**IT, FR — IT="Le tue Posizioni" · FR="Vos Positions"** (2 keys)
+
+| Key                   | EN             | IT               | FR            | ES             |
+|-----------------------|----------------|------------------|---------------|----------------|
+| `dashboard.holdings`  | Your Holdings  | Le tue Posizioni | Vos Positions | Sus Posiciones |
+| `dashboard.positions` | Your Positions | Le tue posizioni | Vos positions | Tus posiciones |
+
+
+**IT, ES — IT="Minimo" · ES="Mínimo"** (2 keys)
+
+| Key                       | EN      | IT     | FR      | ES     |
+|---------------------------|---------|--------|---------|--------|
+| `dataEditor.col.low`      | Low     | Minimo | Bas     | Mínimo |
+| `import.csv.labelMinimum` | Minimum | Minimo | Minimum | Mínimo |
+
+
+**EN, FR — EN="Parsed" · FR="Analysé"** (2 keys)
+
+| Key                              | EN     | IT         | FR      | ES        |
+|----------------------------------|--------|------------|---------|-----------|
+| `fileStatus.parsed`              | Parsed | Elaborato  | Analysé | Procesado |
+| `importWizard.fileStatus.parsed` | Parsed | Analizzato | Analysé | Analizado |
+
+
+**EN, ES — EN="Warning" · ES="Advertencia"** (2 keys)
+
+| Key                             | EN      | IT         | FR            | ES          |
+|---------------------------------|---------|------------|---------------|-------------|
+| `importWizard.fieldTodoWarning` | Warning | Avviso     | Avertissement | Advertencia |
+| `settings.warning`              | Warning | Attenzione | Attention     | Advertencia |
+
+
+**EN, FR — EN="Cash Transfer" · FR="Virement"** (2 keys)
+
+| Key                                | EN            | IT        | FR       | ES                      |
+|------------------------------------|---------------|-----------|----------|-------------------------|
+| `transactions.linkTooltip.generic` | Cash transfer | Giroconto | Virement | Transferencia de fondos |
+| `transactions.types.CASH_TRANSFER` | Cash Transfer | Bonifico  | Virement | Transferencia bancaria  |
+
+
+---
+
+### 🟢 Duplicates in 1 language only
+
+
+**IT — IT="Importo"** (8 keys)
+
+| Key                                    | EN          | IT      | FR      | ES       |
+|----------------------------------------|-------------|---------|---------|----------|
+| `brokers.amount`                       | Amount      | Importo | Montant | Monto    |
+| `common.amount`                        | Amount      | Importo | Montant | Importe  |
+| `dataEditor.col.amount`                | Amount      | Importo | Montant | Importe  |
+| `transactions.bulk.eventTooltipAmount` | Amount      | Importo | Montant | Importe  |
+| `transactions.fields.amount`           | Amount      | Importo | Montant | Importe  |
+| `transactions.fields.cash`             | Cash        | Importo | Montant | Importe  |
+| `transactions.fields.cash_amount`      | Cash amount | Importo | Montant | Importe  |
+| `transactions.table.cash`              | Cash        | Importo | Espèces | Efectivo |
+
+
+**IT — IT="Asset"** (7 keys)
+
+| Key                                           | EN     | IT    | FR     | ES      |
+|-----------------------------------------------|--------|-------|--------|---------|
+| `assets.sync.assetsCount`                     | assets | asset | actifs | activos |
+| `assets.title`                                | Assets | Asset | Actifs | Activos |
+| `chartSettings.signals.assetComparisonAbbr`   | Asset  | Asset | Actif  | Activo  |
+| `common.asset`                                | Asset  | Asset | Actif  | Activo  |
+| `importWizard.assetsSection`                  | Assets | Asset | Actifs | Activos |
+| `settings.global.scheduler.log.assetsSection` | Assets | Asset | Actifs | Activos |
+| `transactions.fields.asset_id`                | Asset  | Asset | Actif  | Activo  |
+
+
+**IT — IT="Broker"** (5 keys)
+
+| Key                             | EN      | IT     | FR        | ES       |
+|---------------------------------|---------|--------|-----------|----------|
+| `brokers.title`                 | Brokers | Broker | Courtiers | Brókeres |
+| `common.broker`                 | Broker  | Broker | Courtier  | Broker   |
+| `importWizard.assignBroker`     | Broker  | Broker | Courtier  | Broker   |
+| `transactions.fields.broker_id` | Broker  | Broker | Courtier  | Broker   |
+| `transactions.table.broker`     | Broker  | Broker | Courtier  | Bróker   |
+
+
+**IT — IT="Liquidità"** (4 keys)
+
+| Key                      | EN        | IT        | FR         | ES       |
+|--------------------------|-----------|-----------|------------|----------|
+| `assets.types.HOLD`      | Hold      | Liquidità | Liquidité  | Liquidez |
+| `assets.types.LIQUIDITY` | Liquidity | Liquidità | Liquidité  | Liquidez |
+| `dashboard.cashValue`    | Cash      | Liquidità | Liquidités | Efectivo |
+| `sectors.Liquidity`      | Liquidity | Liquidità | Liquidités | Liquidez |
+
+
+**IT — IT="Annulla"** (4 keys)
+
+| Key                           | EN      | IT      | FR         | ES        |
+|-------------------------------|---------|---------|------------|-----------|
+| `common.cancel`               | Cancel  | Annulla | Annuler    | Cancelar  |
+| `importWizard.cancel`         | Cancel  | Annulla | Annuler    | Cancelar  |
+| `importWizard.discardConfirm` | Discard | Annulla | Abandonner | Descartar |
+| `transactions.bulk.undoSplit` | Undo    | Annulla | Annuler    | Deshacer  |
+
+
+**EN — EN="Cash"** (4 keys)
+
+| Key                        | EN   | IT        | FR         | ES       |
+|----------------------------|------|-----------|------------|----------|
+| `common.cash`              | Cash | Contante  | Espèces    | Efectivo |
+| `dashboard.cashValue`      | Cash | Liquidità | Liquidités | Efectivo |
+| `transactions.fields.cash` | Cash | Importo   | Montant    | Importe  |
+| `transactions.table.cash`  | Cash | Importo   | Espèces    | Efectivo |
+
+
+**ES — ES="Restablecer Todo"** (4 keys)
+
+| Key                          | EN                    | IT               | FR                 | ES               |
+|------------------------------|-----------------------|------------------|--------------------|------------------|
+| `common.resetAll`            | Reset All to Defaults | Ripristina Tutto | Réinitialiser Tout | Restablecer Todo |
+| `settings.resetAllToDefault` | Reset All             | Ripristina Tutto | Tout Réinitialiser | Restablecer Todo |
+| `transactions.bulk.resetAll` | Reset all             | Reimposta tutto  | Tout réinitialiser | Restablecer todo |
+| `uploads.resetAll`           | Reset All             | Reimposta tutto  | Tout réinitialiser | Restablecer todo |
+
+
+**IT — IT="File"** (4 keys)
+
+| Key                       | EN    | IT   | FR       | ES       |
+|---------------------------|-------|------|----------|----------|
+| `importWizard.sourceFile` | File  | File | Fichier  | Archivo  |
+| `uploads.file`            | file  | file | fichier  | archivo  |
+| `uploads.files`           | files | file | fichiers | archivos |
+| `uploads.title`           | Files | File | Fichiers | Archivos |
+
+
+**IT — IT="Deseleziona Tutto"** (3 keys)
+
+| Key                             | EN              | IT                | FR                   | ES                 |
+|---------------------------------|-----------------|-------------------|----------------------|--------------------|
+| `assets.comparison.deselectAll` | Deselect All    | Deseleziona Tutto | Tout deselectionner  | Deseleccionar todo |
+| `importWizard.deselectAll`      | Deselect all    | Deseleziona tutto | Tout désélectionner  | Deseleccionar todo |
+| `table.clearSelection`          | Clear selection | Deseleziona tutto | Effacer la sélection | Borrar selección   |
+
+
+**ES — ES="Deseleccionar todo"** (3 keys)
+
+| Key                             | EN           | IT                | FR                  | ES                 |
+|---------------------------------|--------------|-------------------|---------------------|--------------------|
+| `assets.comparison.deselectAll` | Deselect All | Deseleziona Tutto | Tout deselectionner | Deseleccionar todo |
+| `common.clearAll`               | Clear All    | Deseleziona Tutti | Tout Désélectionner | Deseleccionar Todo |
+| `importWizard.deselectAll`      | Deselect all | Deseleziona tutto | Tout désélectionner | Deseleccionar todo |
+
+
+**ES — ES="Eliminar"** (3 keys)
+
+| Key                          | EN     | IT      | FR        | ES       |
+|------------------------------|--------|---------|-----------|----------|
+| `common.delete`              | Delete | Elimina | Supprimer | Eliminar |
+| `importWizard.remove`        | Remove | Rimuovi | Supprimer | Eliminar |
+| `transactions.bulk.stateDel` | del    | elimina | suppr.    | eliminar |
+
+
+**IT — IT="Ripristina"** (3 keys)
+
+| Key                              | EN               | IT         | FR            | ES          |
+|----------------------------------|------------------|------------|---------------|-------------|
+| `common.reset`                   | Reset to Default | Ripristina | Réinitialiser | Restablecer |
+| `common.undo`                    | Undo             | Ripristina | Rétablir      | Deshacer    |
+| `transactions.bulk.unmarkDelete` | Restore          | Ripristina | Restaurer     | Restaurar   |
+
+
+**FR — FR="Virement"** (3 keys)
+
+| Key                                   | EN            | IT        | FR       | ES                      |
+|---------------------------------------|---------------|-----------|----------|-------------------------|
+| `transactions.form.transferCashTitle` | Wire Transfer | Bonifico  | Virement | Transferencia Bancaria  |
+| `transactions.linkTooltip.generic`    | Cash transfer | Giroconto | Virement | Transferencia de fondos |
+| `transactions.types.CASH_TRANSFER`    | Cash Transfer | Bonifico  | Virement | Transferencia bancaria  |
+
+
+**EN — EN="Split"** (2 keys)
+
+| Key                           | EN    | IT     | FR       | ES       |
+|-------------------------------|-------|--------|----------|----------|
+| `assetDetail.eventType.SPLIT` | Split | Split  | Division | División |
+| `assets.schedule.split`       | Split | Dividi | Diviser  | Dividir  |
+
+
+**FR — FR="Confirmer le Changement"** (2 keys)
+
+| Key                                | EN                   | IT                    | FR                      | ES                         |
+|------------------------------------|----------------------|-----------------------|-------------------------|----------------------------|
+| `assets.confirm.confirmChange`     | Confirm Change       | Conferma Cambio       | Confirmer le Changement | Confirmar Cambio           |
+| `assets.confirm.identifierChanged` | Confirm Asset Change | Conferma Cambio Asset | Confirmer le Changement | Confirmar Cambio de Activo |
+
+
+**EN — EN="deleted"** (2 keys)
+
+| Key                           | EN      | IT        | FR         | ES         |
+|-------------------------------|---------|-----------|------------|------------|
+| `assets.delete.resultDeleted` | deleted | eliminato | supprimé   | eliminado  |
+| `transactions.toast.deleted`  | deleted | eliminate | supprimées | eliminadas |
+
+
+**EN — EN="Inactive"** (2 keys)
+
+| Key                           | EN       | IT       | FR       | ES        |
+|-------------------------------|----------|----------|----------|-----------|
+| `assets.edit.status.inactive` | Inactive | Inattivo | Inactif  | Inactivo  |
+| `assets.showInactive`         | Inactive | Inattivi | Inactifs | Inactivos |
+
+
+**FR — FR="Enregistrer"** (2 keys)
+
+| Key                        | EN           | IT              | FR          | ES              |
+|----------------------------|--------------|-----------------|-------------|-----------------|
+| `assets.modal.saveChanges` | Save Changes | Salva Modifiche | Enregistrer | Guardar Cambios |
+| `common.save`              | Save         | Salva           | Enregistrer | Guardar         |
+
+
+**EN — EN="Active"** (2 keys)
+
+| Key                 | EN     | IT     | FR     | ES      |
+|---------------------|--------|--------|--------|---------|
+| `assets.showActive` | Active | Attivi | Actifs | Activos |
+| `common.active`     | Active | Attivo | Actif  | Activo  |
+
+
+**FR — FR="Faible"** (2 keys)
+
+| Key                           | EN   | IT     | FR     | ES    |
+|-------------------------------|------|--------|--------|-------|
+| `auth.passwordStrength.weak`  | Weak | Debole | Faible | Débil |
+| `importWizard.confidence.low` | Low  | Bassa  | Faible | Baja  |
+
+
+**IT — IT="Editor"** (2 keys)
+
+| Key                               | EN      | IT     | FR       | ES       |
+|-----------------------------------|---------|--------|----------|----------|
+| `brokers.sharing.editors`         | Editors | Editor | Éditeurs | Editores |
+| `brokers.sharing.roleEditorShort` | Editor  | Editor | Éditeur  | Editor   |
+
+
+**EN — EN="Discard changes?"** (2 keys)
+
+| Key                          | EN               | IT                      | FR                          | ES                      |
+|------------------------------|------------------|-------------------------|-----------------------------|-------------------------|
+| `chartSettings.discardTitle` | Discard changes? | Scartare le modifiche?  | Rejeter les modifications ? | ¿Descartar los cambios? |
+| `common.discardChanges`      | Discard Changes? | Annullare le Modifiche? | Annuler les Modifications?  | ¿Descartar Cambios?     |
+
+
+**IT — IT="Coppia FX"** (2 keys)
+
+| Key                                | EN      | IT        | FR       | ES     |
+|------------------------------------|---------|-----------|----------|--------|
+| `chartSettings.signals.fxPair`     | FX Pair | Coppia FX | Paire FX | Par FX |
+| `chartSettings.signals.fxPairAbbr` | FX      | Coppia FX | FX       | FX     |
+
+
+**EN — EN="Close"** (2 keys)
+
+| Key                    | EN    | IT       | FR      | ES     |
+|------------------------|-------|----------|---------|--------|
+| `common.close`         | Close | Chiudi   | Fermer  | Cerrar |
+| `dataEditor.col.close` | Close | Chiusura | Clôture | Cierre |
+
+
+**EN — EN="Created"** (2 keys)
+
+| Key                          | EN      | IT     | FR     | ES      |
+|------------------------------|---------|--------|--------|---------|
+| `common.created`             | Created | Creato | Créé   | Creado  |
+| `transactions.toast.created` | created | create | créées | creadas |
+
+
+**EN — EN="Delete Selected"** (2 keys)
+
+| Key                                | EN              | IT                  | FR                      | ES                     |
+|------------------------------------|-----------------|---------------------|-------------------------|------------------------|
+| `common.deleteSelected`            | Delete Selected | Elimina Selezionati | Supprimer la sélection  | Eliminar Seleccionados |
+| `transactions.bulk.deleteSelected` | Delete selected | Elimina selezionate | Supprimer sélectionnées | Eliminar seleccionadas |
+
+
+**EN — EN="From"** (2 keys)
+
+| Key               | EN   | IT   | FR   | ES    |
+|-------------------|------|------|------|-------|
+| `common.from`     | From | Da   | De   | De    |
+| `datePicker.from` | From | Dal  | Du   | Desde |
+
+
+**IT — IT="Provider"** (2 keys)
+
+| Key                | EN        | IT       | FR           | ES          |
+|--------------------|-----------|----------|--------------|-------------|
+| `common.provider`  | Provider  | Provider | Fournisseur  | Proveedor   |
+| `common.providers` | Providers | Provider | Fournisseurs | Proveedores |
+
+
+**EN — EN="selected"** (2 keys)
+
+| Key                                   | EN       | IT          | FR           | ES            |
+|---------------------------------------|----------|-------------|--------------|---------------|
+| `common.selected`                     | selected | selezionati | sélectionnés | seleccionados |
+| `transactions.bulkDelete.colSelected` | Selected | Selezionata | Sélectionnée | Seleccionada  |
+
+
+**EN — EN="To"** (2 keys)
+
+| Key             | EN   | IT   | FR   | ES    |
+|-----------------|------|------|------|-------|
+| `common.to`     | To   | A    | À    | A     |
+| `datePicker.to` | To   | Al   | Au   | Hasta |
+
+
+**EN — EN="Updated"** (2 keys)
+
+| Key                          | EN      | IT         | FR           | ES           |
+|------------------------------|---------|------------|--------------|--------------|
+| `common.updated`             | Updated | Aggiornato | Mis à jour   | Actualizado  |
+| `transactions.toast.updated` | updated | aggiornate | mises à jour | actualizadas |
+
+
+**EN — EN="Returns"** (2 keys)
+
+| Key                                  | EN      | IT         | FR         | ES           |
+|--------------------------------------|---------|------------|------------|--------------|
+| `dashboard.cashFromGeneratedReturns` | Returns | Rendimento | Rendement  | Rendimiento  |
+| `dashboard.returns`                  | Returns | Rendimenti | Rendements | Rendimientos |
+
+
+**EN — EN="Open"** (2 keys)
+
+| Key                       | EN   | IT       | FR        | ES       |
+|---------------------------|------|----------|-----------|----------|
+| `dashboard.openPositions` | Open | Aperte   | Ouvertes  | Abiertas |
+| `dataEditor.col.open`     | Open | Apertura | Ouverture | Apertura |
+
+
+**EN — EN="High"** (2 keys)
+
+| Key                            | EN   | IT      | FR    | ES     |
+|--------------------------------|------|---------|-------|--------|
+| `dataEditor.col.high`          | High | Massimo | Haut  | Máximo |
+| `importWizard.confidence.high` | High | Alta    | Haute | Alta   |
+
+
+**EN — EN="Low"** (2 keys)
+
+| Key                           | EN   | IT     | FR     | ES     |
+|-------------------------------|------|--------|--------|--------|
+| `dataEditor.col.low`          | Low  | Minimo | Bas    | Mínimo |
+| `importWizard.confidence.low` | Low  | Bassa  | Faible | Baja   |
+
+
+**FR — FR="Format"** (2 keys)
+
+| Key                            | EN           | IT          | FR     | ES                  |
+|--------------------------------|--------------|-------------|--------|---------------------|
+| `import.csv.eventsFormatLabel` | Format       | Formato     | Format | Formato             |
+| `uploads.aspectRatio`          | Aspect Ratio | Proporzioni | Format | Relación de aspecto |
+
+
+**EN — EN="Auto"** (2 keys)
+
+| Key                                  | EN   | IT         | FR          | ES         |
+|--------------------------------------|------|------------|-------------|------------|
+| `settings.themeAuto`                 | Auto | Automatico | Automatique | Automático |
+| `transactions.wacPreview.toggleAuto` | Auto | Auto       | Auto        | Auto       |
+
+
+**EN — EN="Cost basis override"** (2 keys)
+
+| Key                                       | EN                  | IT                      | FR                         | ES                      |
+|-------------------------------------------|---------------------|-------------------------|----------------------------|-------------------------|
+| `transactions.fields.cost_basis_override` | Cost basis override | Costo di carico manuale | Coût de base manuel        | Coste base manual       |
+| `transactions.form.costBasis`             | Cost basis override | Override costo medio    | Coût de revient (override) | Override de coste medio |
+
+
+**EN — EN="Required"** (2 keys)
+
+| Key                                 | EN       | IT          | FR          | ES          |
+|-------------------------------------|----------|-------------|-------------|-------------|
+| `transactions.form.sectionRequired` | Required | Obbligatori | Obligatoire | Obligatorio |
+| `transactions.picker.requiredRole`  | required | richiesto   | requis      | requerido   |
+
+
+**EN — EN="Asset Transfer"** (2 keys)
+
+| Key                                    | EN             | IT                   | FR                  | ES                       |
+|----------------------------------------|----------------|----------------------|---------------------|--------------------------|
+| `transactions.form.transferAssetTitle` | Asset Transfer | Trasferimento Asset  | Transfert d'Actif   | Transferencia de Activo  |
+| `transactions.types.TRANSFER`          | Asset Transfer | Trasferimento Titoli | Transfert de Titres | Transferencia de Activos |
+
+
+**Total: 157 duplicate groups across all languages.**
+
+
+
+============================================================
+  Summary
+============================================================
+  Total keys: 1510
+  Complete:   1510 ✅
+  Incomplete: 0 
+  Unused:     14 ⚠️
+  Duplicates: 157 unique groups ℹ️
+

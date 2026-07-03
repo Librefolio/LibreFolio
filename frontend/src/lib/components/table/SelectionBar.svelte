@@ -56,7 +56,7 @@
                    dark:bg-green-400/10 dark:text-green-400 dark:hover:bg-green-400/15
                    transition-colors cursor-pointer border border-transparent hover:border-libre-green/20 dark:hover:border-green-400/20"
             onclick={() => onClearSelection?.()}
-            title={$t('table.clearSelection')}
+            title={$t('common.clearSelection')}
         >
             <span>{selectedCount} {$t('common.selected')}</span>
             <span class="text-base leading-none opacity-60 hover:opacity-100">×</span>

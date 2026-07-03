@@ -364,7 +364,12 @@ def check_artifacts(
         ))
 
     # Glossary markers [N] not part of links
-    glossary_markers = re.findall(r'\[(\d+)\](?!\()', translated)
+    # Exclude LaTeX nth-root notation like \sqrt[365]{...} — a legitimate math
+    # construct, not a leftover translation glossary marker.
+    glossary_markers = [
+        m.group(1) for m in re.finditer(r'\[(\d+)\](?!\()', translated)
+        if not re.search(r'\\sqrt\s*$', translated[:m.start()])
+    ]
     if glossary_markers:
         issues.append(Issue(
             severity=Severity.WARN,
@@ -741,6 +746,23 @@ def check_html_attrs(
             results.append((tag_name, attrs))
         return results
 
+    def _is_expected_relative_depth_shift(src_val: str, tr_val: str) -> bool:
+        """
+        Return True if `tr_val` is `src_val` with exactly one extra leading
+        `../` segment prepended.
+
+        Translated docs are served one directory level deeper than the EN
+        source (mkdocs-static-i18n adds a `/it/`, `/fr/`, `/es/` prefix to the
+        built URL), so relative `src`/`href` paths pointing at shared assets
+        (e.g. `static/...`) legitimately need one more `../` in translations.
+        This is not a translation bug — only flag genuine mismatches.
+        """
+        if src_val.startswith(("http://", "https://", "/", "#")):
+            return False
+        if tr_val.startswith(("http://", "https://", "/", "#")):
+            return False
+        return tr_val == "../" + src_val
+
     issues = []
     src_clean = _strip_code_blocks(source)
     tr_clean = _strip_code_blocks(translated)
@@ -771,6 +793,8 @@ def check_html_attrs(
                     ),
                 ))
             elif t_val != s_val:
+                if attr in ("src", "href") and _is_expected_relative_depth_shift(s_val, t_val):
+                    continue  # expected extra ../ level for localized doc path
                 issues.append(Issue(
                     severity=Severity.WARN,
                     file=cache_key, lang=lang,
@@ -906,14 +930,47 @@ def check_latex(
     source: str, translated: str, cache_key: str, lang: str,
 ) -> list[Issue]:
     """
-    Verify LaTeX math expressions are preserved.
+    Verify LaTeX math expressions are preserved and syntactically valid.
     Inline $...$ and display $$...$$ should be identical.
     """
     issues = []
 
+    def _validate_syntax(math_str: str, is_translation: bool) -> list[Issue]:
+        syntax_issues = []
+        # Check 1: Raw euro symbol € outside \text{}
+        stripped = re.sub(r'\\text\{[^}]*\}', '', math_str)
+        if '€' in stripped:
+            loc_str = f"translated ({lang})" if is_translation else "source (en)"
+            syntax_issues.append(Issue(
+                severity=Severity.ERROR,
+                file=cache_key,
+                lang=lang if is_translation else "en",
+                check="latex-syntax-euro",
+                message=f"Raw Euro symbol '€' found outside \\text{{}} in {loc_str} math block: $${math_str.strip()}$$. Wrap it in \\text{{€}} or use EUR.",
+            ))
+            
+        # Check 2: Ampersand & or \& inside \text{}
+        text_blocks = re.findall(r'\\text\{([^}]*)\}', math_str)
+        for tb in text_blocks:
+            if '&' in tb or '\\&' in tb:
+                loc_str = f"translated ({lang})" if is_translation else "source (en)"
+                syntax_issues.append(Issue(
+                    severity=Severity.ERROR,
+                    file=cache_key,
+                    lang=lang if is_translation else "en",
+                    check="latex-syntax-ampersand",
+                    message=f"Ampersand '&' or '\\&' found inside \\text{{}} in {loc_str} math block: $${math_str.strip()}$$. Use \\text{{P}}\\&\\text{{L}} or place \\& outside \\text{{}}.",
+                ))
+        return syntax_issues
+
     # Display math ($$...$$)
     src_display = re.findall(r'\$\$(.+?)\$\$', source, re.DOTALL)
     tr_display = re.findall(r'\$\$(.+?)\$\$', translated, re.DOTALL)
+
+    for m in src_display:
+        issues.extend(_validate_syntax(m, is_translation=False))
+    for m in tr_display:
+        issues.extend(_validate_syntax(m, is_translation=True))
 
     if len(src_display) != len(tr_display):
         issues.append(Issue(
@@ -967,6 +1024,11 @@ def check_latex(
     src_inline = _extract_inline(source)
     tr_inline = _extract_inline(translated)
 
+    for m in src_inline:
+        issues.extend(_validate_syntax(m, is_translation=False))
+    for m in tr_inline:
+        issues.extend(_validate_syntax(m, is_translation=True))
+
     if len(src_inline) != len(tr_inline):
         issues.append(Issue(
             severity=Severity.WARN,
@@ -990,6 +1052,7 @@ def check_latex(
             ))
 
     return issues
+
 
 
 # ---------------------------------------------------------------------------

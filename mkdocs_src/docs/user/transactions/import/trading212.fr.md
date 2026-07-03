@@ -29,6 +29,6 @@ Pour exporter votre relevé de transactions depuis Trading212 :
 - Prend en charge les achats et ventes d'actions/ETF, les dividendes, l'intérêt sur les liquidités, les dépôts, les retraits et les frais de conversion de devise.
 - Les comptes multi-devises sont supportés.
 
-## 🔗 Référence développeur
+## 🔗 Référence pour les Développeurs
 
-→ [Fournisseur Trading212 — Détails d'implémentation](../../../developer/backend/brim/providers_list.md)
+→ [Trading212 Provider — Détails d'Implémentation](../../../developer/backend/brim/providers_list.md)

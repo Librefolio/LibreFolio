@@ -33,6 +33,6 @@ Per esportare l'estratto conto delle tue transazioni da Coinbase:
 - Supporta acquisti, vendite, conversioni, invii, ricezioni, premi di staking e l'addebito delle commissioni.
 - Supporta le principali valute fiat di base (USD, EUR, GBP).
 
-## 🔗 Riferimenti per Sviluppatori
+## 🔗 Riferimento per Sviluppatori
 
 → [Coinbase Provider — Dettagli di Implementazione](../../../developer/backend/brim/providers_list.md)

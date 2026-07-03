@@ -197,7 +197,7 @@
                                     e.stopPropagation();
                                     onpreview?.({file});
                                 }}
-                                title={$t('uploads.preview') || 'Preview'}
+                                title={$t('common.preview') || 'Preview'}
                                 data-testid={`file-grid-preview-${file.id}`}
                             >
                                 <Eye size={14} />

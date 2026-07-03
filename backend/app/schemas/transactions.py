@@ -597,7 +597,7 @@ class TXQueryParams(BaseModel):
     only_unlinked: bool = Field(default=False, description="related_transaction_id IS NULL")
     exclude_ids: Optional[List[int]] = Field(default=None, description="Transaction.id NOT IN (...)")
 
-    limit: int = Field(default=100, ge=1, le=1000, description="Max results")
+    limit: Optional[int] = Field(default=None, ge=1, le=10000, description="Max results (None = no limit)")
     offset: int = Field(default=0, ge=0, description="Offset for pagination")
 
     @field_validator("tags", mode="before")

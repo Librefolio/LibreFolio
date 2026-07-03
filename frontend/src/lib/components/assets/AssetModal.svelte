@@ -33,6 +33,8 @@
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {userSettings} from '$lib/stores/app/settings';
+    import {get} from 'svelte/store';
     import {trySave} from '$lib/utils/trySave';
     import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';
     import {generateUUID} from '$lib/utils/core/uuid';
@@ -101,12 +103,18 @@
          * Replaces concatenated initialSearchQuery for BRIM wizard.
          */
         initialSearchBadges?: Array<{label: string; value: string}>;
+        /**
+         * When true, open the provider section with "No provider" pre-selected.
+         * Used by the BRIM import wizard: assets created manually don't come
+         * from an online search, so the UI should default to no-provider mode.
+         */
+        initialNoProvider?: boolean;
         oncreated?: (assetId: number) => void;
         onupdated?: () => void;
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, initialSearchQuery = '', initialSearchBadges = [], oncreated, onupdated, onclose}: Props = $props();
+    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, initialSearchQuery = '', initialSearchBadges = [], initialNoProvider = false, oncreated, onupdated, onclose}: Props = $props();
 
     // =========================================================================
     // Constants
@@ -401,6 +409,9 @@
                 } else {
                     resetForm();
                 }
+                if (!editMode && initialNoProvider) {
+                    providerNoProvider = true;
+                }
             });
         }
     });
@@ -451,7 +462,7 @@
 
     function resetForm() {
         displayName = '';
-        currency = 'USD';
+        currency = get(userSettings)?.base_currency ?? 'EUR';
         assetType = 'STOCK';
         iconUrl = null;
         quoteBaseQuantity = 1;
@@ -705,7 +716,7 @@
             // --- ASSET DETAILS (scope 'all' only) ---
             if (scope === 'all') {
                 compareStringField('display_name', $t('common.name'), displayName, pd.display_name);
-                compareStringField('asset_type', $t('assets.type'), assetType, pd.asset_type);
+                compareStringField('asset_type', $t('common.type'), assetType, pd.asset_type);
                 compareStringField('currency', $t('common.currency'), currency, pd.currency);
             }
 
@@ -941,6 +952,18 @@
                 open = false;
                 oncreated?.(assetId);
                 return;
+            }
+        }
+
+        // Trigger a full-history sync for new assets with a real data provider.
+        // Parametric providers (e.g. scheduled_investment) generate their own
+        // data and don't need a historical fetch.
+        if (hasProvider && !skipProviderAssignment && !isParametricProvider(providerCode)) {
+            try {
+                const end = new Date().toISOString().slice(0, 10);
+                await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: '1975-01-01', end}} as any]);
+            } catch (syncErr) {
+                console.warn('Post-create full-history sync failed (non-blocking):', syncErr);
             }
         }
 
@@ -1252,7 +1275,7 @@
                         <!-- Asset Type -->
                         <div>
                             <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                                {$t('assets.type')} *
+                                {$t('common.type')} *
                             </span>
                             <SimpleSelect bind:value={assetType} options={assetTypeOptions} dropdownPosition="auto">
                                 {#snippet item(opt)}
@@ -1296,7 +1319,7 @@
                         </div>
 
                         <!-- Currency -->
-                        <div>
+                        <div data-testid="asset-modal-currency-group">
                             <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                                 {$t('common.currency')} *
                             </span>
@@ -1341,7 +1364,7 @@
         <!-- Description (short, always visible) -->
         <div>
             <label for="asset-description" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                {$t('brokers.description')}
+                {$t('common.description')}
             </label>
             <textarea
                 id="asset-description"
@@ -1566,7 +1589,7 @@
                 <Info size={14} class="text-gray-400 cursor-help shrink-0" />
             </Tooltip>
             <span id="asset-active-label" class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                {active ? $t('assets.edit.status.active') : $t('assets.edit.status.inactive')}
+                {active ? $t('common.active') : $t('assets.edit.status.inactive')}
             </span>
             <button
                 type="button"
@@ -1617,7 +1640,7 @@
     onCancel={() => {
         showSaveWithoutTestConfirm = false;
     }}
-    zIndex={70}
+    zIndex={zIndex + 20}
 />
 
 <!-- Confirmation: Identifier change in edit mode -->
@@ -1636,7 +1659,7 @@
         showIdentifierChangeConfirm = false;
         pendingSearchResult = null;
     }}
-    zIndex={70}
+    zIndex={zIndex + 20}
 />
 
 <!-- Confirmation: Discard unsaved changes -->
@@ -1651,7 +1674,7 @@
     onCancel={() => {
         showDiscardConfirm = false;
     }}
-    zIndex={70}
+    zIndex={zIndex + 20}
 />
 
 <!-- #R3-4 — Confirmation: regenerate scheduled_investment prices on params change -->
@@ -1679,7 +1702,7 @@
         showScheduledRegenConfirm = false;
         pendingSaveAssetId = null;
     }}
-    zIndex={70}
+    zIndex={zIndex + 20}
 />
 
 <!-- Provider Comparison Modal -->
@@ -1726,5 +1749,5 @@
         showIdentifierDeleteConfirm = false;
         pendingIdentifierDeleteIds = [];
     }}
-    zIndex={80}
+    zIndex={zIndex + 20}
 />

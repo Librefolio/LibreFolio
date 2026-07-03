@@ -110,6 +110,22 @@
         return initialValue?.type === 'size' ? (initialValue.maxBytes ?? numberMax) : numberMax;
     }
 
+    function handleEnumIconError(event: Event) {
+        const img = event.currentTarget as HTMLImageElement;
+        try {
+            const fallbacks = JSON.parse(img.dataset.fallbacks || '[]') as string[];
+            const next = fallbacks.shift();
+            if (next) {
+                img.dataset.fallbacks = JSON.stringify(fallbacks);
+                img.src = next;
+                return;
+            }
+        } catch {
+            // Ignore malformed fallback metadata and fall back to dot-only UI.
+        }
+        img.style.visibility = 'hidden';
+    }
+
     // Text filter state
     let textValue = $state(getInitialTextValue());
     let textMatchMode: TextMatchMode = $state(getInitialTextMatchMode());
@@ -837,17 +853,21 @@
                         <div class="enum-empty">{$t('table.filter.empty') || 'No options'}</div>
                     {:else}
                         {#each filteredEnumOptions as option}
+                            {@const iconCandidates = option.iconCandidates?.length ? option.iconCandidates : option.iconUrl ? [option.iconUrl] : []}
                             <button type="button" class="enum-option" onclick={() => toggleEnum(option.value)} data-testid={`filter-enum-option-${option.value}`}>
                                 <span class="enum-checkbox" class:checked={selectedEnums.has(option.value)}>
                                     {#if selectedEnums.has(option.value)}
                                         <Check size={12} />
                                     {/if}
                                 </span>
-                                {#if option.iconUrl}
-                                    <img src={option.iconUrl} alt="" class="enum-option-icon" />
-                                {:else if option.dotColor}
-                                    <span class="enum-option-dot" style="background:{option.dotColor}"></span>
-                                {/if}
+                                <span class="enum-icon-wrapper">
+                                    {#if option.dotColor}
+                                        <span class="enum-option-dot" style="background:{option.dotColor}"></span>
+                                    {/if}
+                                    {#if iconCandidates.length > 0}
+                                        <img src={iconCandidates[0]} alt="" class="enum-option-icon enum-icon-overlay" data-fallbacks={JSON.stringify(iconCandidates.slice(1))} onerror={handleEnumIconError} referrerpolicy="no-referrer" />
+                                    {/if}
+                                </span>
                                 <span class="enum-label">{option.label}</span>
                                 {#if option.count != null}
                                     <span class="enum-count">{option.count}</span>
@@ -877,17 +897,21 @@
                         <div class="enum-empty">{$t('table.filter.empty') || 'No options'}</div>
                     {:else}
                         {#each filteredMultiEnumOptions as option}
+                            {@const iconCandidates = option.iconCandidates?.length ? option.iconCandidates : option.iconUrl ? [option.iconUrl] : []}
                             <button type="button" class="enum-option" onclick={() => toggleMultiEnum(option.value)} data-testid={`filter-multi-enum-option-${option.value}`}>
                                 <span class="enum-checkbox" class:checked={multiEnums.has(option.value)}>
                                     {#if multiEnums.has(option.value)}
                                         <Check size={12} />
                                     {/if}
                                 </span>
-                                {#if option.iconUrl}
-                                    <img src={option.iconUrl} alt="" class="enum-option-icon" />
-                                {:else if option.dotColor}
-                                    <span class="enum-option-dot" style="background:{option.dotColor}"></span>
-                                {/if}
+                                <span class="enum-icon-wrapper">
+                                    {#if option.dotColor}
+                                        <span class="enum-option-dot" style="background:{option.dotColor}"></span>
+                                    {/if}
+                                    {#if iconCandidates.length > 0}
+                                        <img src={iconCandidates[0]} alt="" class="enum-option-icon enum-icon-overlay" data-fallbacks={JSON.stringify(iconCandidates.slice(1))} onerror={handleEnumIconError} referrerpolicy="no-referrer" />
+                                    {/if}
+                                </span>
                                 <span class="enum-label">{option.label}</span>
                                 {#if option.count != null}
                                     <span class="enum-count">{option.count}</span>
@@ -1489,6 +1513,27 @@
         object-fit: contain;
         flex-shrink: 0;
         border-radius: 2px;
+    }
+
+    /* Overlay wrapper: dot as background, img absolutely positioned on top */
+    .enum-icon-wrapper {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1rem;
+        height: 1rem;
+        flex-shrink: 0;
+    }
+
+    .enum-icon-wrapper .enum-option-dot {
+        position: absolute;
+    }
+
+    .enum-icon-wrapper .enum-option-icon {
+        position: absolute;
+        width: 1rem;
+        height: 1rem;
     }
 
     .enum-option-dot {

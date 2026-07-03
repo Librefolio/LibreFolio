@@ -496,8 +496,7 @@ async def upload_file(
         )
 
     # Get filename: prefer user-provided custom_filename over original file.filename
-    filename = (custom_filename.strip() if custom_filename and custom_filename.strip()
-                else (file.filename or "unknown"))
+    filename = custom_filename.strip() if custom_filename and custom_filename.strip() else (file.filename or "unknown")
 
     # Save file with user_id and broker_id
     file_info = brim_provider.save_uploaded_file(

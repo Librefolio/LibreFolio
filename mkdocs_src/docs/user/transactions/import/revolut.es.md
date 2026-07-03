@@ -31,4 +31,4 @@ Para exportar su historial de transacciones de acciones y criptomonedas desde Re
 
 ## 🔗 Referencia para Desarrolladores
 
-→ [Proveedor de Revolut — Detalles de Implementación](../../../developer/backend/brim/providers_list.md)
+→ [Revolut Provider — Detalles de Implementación](../../../developer/backend/brim/providers_list.md)
