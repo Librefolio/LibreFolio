@@ -276,7 +276,7 @@ test.describe('NR — Sector dropdown emoji (Bug E)', () => {
 
         // Verify the first option text starts with an emoji character
         // (emoji Unicode ranges: most common ones are >= U+2000)
-        const firstOptionText = await options.first().textContent() ?? '';
+        const firstOptionText = (await options.first().textContent()) ?? '';
         // An emoji is present if there's a non-ASCII, non-letter character before the text
         // Simple check: the trimmed text must NOT start with a plain ASCII letter
         const trimmed = firstOptionText.trim();
@@ -301,9 +301,7 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
         }
         type AssetItem = {asset_id: number; display_name: string; provider_code: string | null};
         const data = (await resp.json()) as {items: AssetItem[]};
-        const withProvider = data.items?.find(
-            (a) => a.provider_code && a.provider_code !== 'scheduled_investment',
-        );
+        const withProvider = data.items?.find((a) => a.provider_code && a.provider_code !== 'scheduled_investment');
         if (!withProvider) {
             test.skip(true, 'No non-parametric provider asset in test env');
             return;
@@ -325,10 +323,7 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
         // Make the provider dirty by clearing and re-entering the identifier
         // (so saveEdit triggers the sync path)
         // Locate provider identifier input (aria-label or placeholder-based)
-        const identifierInput = page
-            .getByTestId('asset-modal-form')
-            .locator('input[placeholder*="identifier"], input[placeholder*="ISIN"], input[id*="identifier"]')
-            .first();
+        const identifierInput = page.getByTestId('asset-modal-form').locator('input[placeholder*="identifier"], input[placeholder*="ISIN"], input[id*="identifier"]').first();
 
         if (await identifierInput.isVisible({timeout: 2000}).catch(() => false)) {
             const currentVal = await identifierInput.inputValue();

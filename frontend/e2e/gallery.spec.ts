@@ -217,7 +217,7 @@ test.describe('Gallery Screenshots', () => {
 
         const today = new Date();
         const maxDate = parseLocalDateString(maxDateStr);
-        
+
         today.setHours(0, 0, 0, 0);
         maxDate.setHours(0, 0, 0, 0);
 
@@ -251,11 +251,11 @@ test.describe('Gallery Screenshots', () => {
             try {
                 const rawMockData = JSON.parse(fs.readFileSync(mockDataPath, 'utf8'));
                 const adjustedMockData = shiftDatesToToday(rawMockData);
-                await page.route('**/api/v1/portfolio/report', async route => {
+                await page.route('**/api/v1/portfolio/report', async (route) => {
                     await route.fulfill({
                         status: 200,
                         contentType: 'application/json',
-                        body: JSON.stringify(adjustedMockData)
+                        body: JSON.stringify(adjustedMockData),
                     });
                 });
             } catch (err) {
@@ -265,11 +265,11 @@ test.describe('Gallery Screenshots', () => {
     }
 
     async function selectMaxDateRange(page: Page) {
-        const maxBtn = page.getByRole('button', { name: 'MAX' });
-        const y2Btn = page.getByRole('button', { name: '2Y' });
-        if (await maxBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+        const maxBtn = page.getByRole('button', {name: 'MAX'});
+        const y2Btn = page.getByRole('button', {name: '2Y'});
+        if (await maxBtn.isVisible({timeout: 500}).catch(() => false)) {
             await maxBtn.click();
-        } else if (await y2Btn.isVisible({ timeout: 500 }).catch(() => false)) {
+        } else if (await y2Btn.isVisible({timeout: 500}).catch(() => false)) {
             await y2Btn.click();
         }
     }
@@ -297,13 +297,13 @@ test.describe('Gallery Screenshots', () => {
                     await growthChart.scrollIntoViewIfNeeded();
                     await page.waitForTimeout(500); // Give e-charts time to redraw/stabilize
                 }
-                
+
                 // Screenshot absolute mode (default)
                 await screenshot(page, viewport, lang, theme, 'dashboard', 'main');
 
                 // Toggle and screenshot percentage mode
                 const pctToggle = page.getByTestId('growth-toggle-pct');
-                if (await pctToggle.isVisible({ timeout: 2000 }).catch(() => false)) {
+                if (await pctToggle.isVisible({timeout: 2000}).catch(() => false)) {
                     await pctToggle.click();
                     await page.waitForTimeout(500); // Give e-charts time to redraw
                 }
@@ -355,7 +355,7 @@ test.describe('Gallery Screenshots', () => {
                 await selectMaxDateRange(page);
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
-                
+
                 // Scroll to the allocation panel
                 const allocPanel = page.getByTestId('allocation-panel');
                 if (await allocPanel.isVisible({timeout: 5_000}).catch(() => false)) {

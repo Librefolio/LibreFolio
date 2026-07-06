@@ -219,16 +219,44 @@
     // Highlighted row (set by navigateToRowId, cleared on user interaction)
     let highlightedRowId = $state<string | null>(null);
 
-    // Long-press touch state for mobile selection toggle
+    // Long-press touch state for mobile selection toggle (or, when touch selection is
+    // disabled, a mobile-friendly equivalent of desktop double-click — there is no
+    // natural double-tap affordance on touch devices).
     let touchTimerId = $state<ReturnType<typeof setTimeout> | null>(null);
+    // Tracks whether the CURRENT interaction originated from a touch event, so the
+    // native context menu can be suppressed specifically for touch-originated
+    // long-press (mobile) without affecting genuine desktop mouse right-click.
+    let touchActive = false;
+    let touchActiveResetTimer: ReturnType<typeof setTimeout> | null = null;
 
     function handleTouchStart(row: T, e: TouchEvent) {
-        if (!enableTouchSelection) return;
+        touchActive = true;
+        if (touchActiveResetTimer != null) {
+            clearTimeout(touchActiveResetTimer);
+            touchActiveResetTimer = null;
+        }
         if (isRowSelectable && !isRowSelectable(row)) return;
         touchTimerId = setTimeout(() => {
             touchTimerId = null;
-            toggleRowSelection(getRowId(row));
+            if (enableTouchSelection) {
+                toggleRowSelection(getRowId(row));
+            } else if (onRowDoubleClick) {
+                // No selection concept here (e.g. compact/dashboard tables) — long-press
+                // opens the same "view" action a desktop double-click would.
+                handleRowDoubleClick(row);
+            }
         }, 500);
+    }
+
+    function resetTouchActiveSoon() {
+        // Some mobile browsers fire `contextmenu` right around `touchend`/`touchcancel` —
+        // delay clearing the flag briefly so that event can still be detected as
+        // touch-originated when it arrives.
+        if (touchActiveResetTimer != null) clearTimeout(touchActiveResetTimer);
+        touchActiveResetTimer = setTimeout(() => {
+            touchActive = false;
+            touchActiveResetTimer = null;
+        }, 100);
     }
 
     function handleTouchEnd() {
@@ -236,6 +264,7 @@
             clearTimeout(touchTimerId);
             touchTimerId = null;
         }
+        resetTouchActiveSoon();
     }
 
     function handleTouchMove() {
@@ -243,6 +272,7 @@
             clearTimeout(touchTimerId);
             touchTimerId = null;
         }
+        resetTouchActiveSoon();
     }
 
     /** Bound on the root `.datatable-container` so `navigateToRowId` can scope
@@ -1240,10 +1270,21 @@
                                 }
                             }}
                             oncontextmenu={(e) => {
-                                if (!enableContextMenu || rowActions.length === 0) return;
-                                e.preventDefault();
-                                contextMenuRow = row;
-                                contextMenuPos = {x: e.clientX, y: e.clientY};
+                                if (enableContextMenu && rowActions.length > 0) {
+                                    e.preventDefault();
+                                    contextMenuRow = row;
+                                    contextMenuPos = {x: e.clientX, y: e.clientY};
+                                    return;
+                                }
+                                // No custom context menu configured — still suppress the
+                                // browser's native one when this is a touch-originated
+                                // long-press we're already handling ourselves (selection
+                                // toggle or view-row fallback), so it doesn't pop up over
+                                // our own action on mobile. Genuine desktop mouse
+                                // right-clicks (touchActive false) are left untouched.
+                                if (touchActive && (enableTouchSelection || onRowDoubleClick)) {
+                                    e.preventDefault();
+                                }
                             }}
                             ontouchstart={(e) => handleTouchStart(row, e)}
                             ontouchend={handleTouchEnd}

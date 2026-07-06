@@ -70,13 +70,7 @@ export function buildTooltipDivider(borderColor: string): string {
  * @param otherLabel - Label for the "Other" row (e.g. "Other (5)")
  * @param formatValue - Format a number into display string (default: "X.1%")
  */
-export function buildTooltipTopN(
-    items: {name: string; value: number; color: string}[],
-    topN: number,
-    theme: TooltipTheme,
-    otherLabel: string,
-    formatValue: (v: number) => string = (v) => `${v.toFixed(1)}%`,
-): string {
+export function buildTooltipTopN(items: {name: string; value: number; color: string}[], topN: number, theme: TooltipTheme, otherLabel: string, formatValue: (v: number) => string = (v) => `${v.toFixed(1)}%`): string {
     if (items.length === 0) return '';
 
     const sorted = [...items].sort((a, b) => b.value - a.value);
@@ -108,13 +102,7 @@ export function buildTooltipTopN(
  * @param remainingLabel - Label for the grouped row (e.g. "Remaining", "Resto").
  * @param formatValue - Value formatter.
  */
-export function buildTooltipByThreshold(
-    items: {name: string; value: number; color: string}[],
-    threshold: number,
-    theme: TooltipTheme,
-    remainingLabel: string,
-    formatValue: (v: number) => string = (v) => `${v.toFixed(1)}%`,
-): string {
+export function buildTooltipByThreshold(items: {name: string; value: number; color: string}[], threshold: number, theme: TooltipTheme, remainingLabel: string, formatValue: (v: number) => string = (v) => `${v.toFixed(1)}%`): string {
     if (items.length === 0) return '';
 
     const sorted = [...items].sort((a, b) => b.value - a.value);
@@ -165,13 +153,7 @@ export function buildGridColors(isDark: boolean): ChartGridColors {
  *
  * Use as: `tooltip: { position: tooltipPositionAboveFinger, ... }`
  */
-export function tooltipPositionAboveFinger(
-    point: [number, number],
-    _params: unknown,
-    _dom: unknown,
-    _rect: unknown,
-    size: {contentSize: [number, number]; viewSize: [number, number]},
-): [number, number] {
+export function tooltipPositionAboveFinger(point: [number, number], _params: unknown, _dom: unknown, _rect: unknown, size: {contentSize: [number, number]; viewSize: [number, number]}): [number, number] {
     const tooltipW = size.contentSize[0];
     const tooltipH = size.contentSize[1];
     const viewW = size.viewSize[0];
@@ -199,13 +181,7 @@ export function tooltipPositionAboveFinger(
  *
  * Use as: `tooltip: { position: tooltipPositionSide, ... }`
  */
-export function tooltipPositionSide(
-    point: [number, number],
-    _params: unknown,
-    _dom: unknown,
-    _rect: unknown,
-    size: {contentSize: [number, number]; viewSize: [number, number]},
-): [number, number] {
+export function tooltipPositionSide(point: [number, number], _params: unknown, _dom: unknown, _rect: unknown, size: {contentSize: [number, number]; viewSize: [number, number]}): [number, number] {
     const tooltipW = size.contentSize[0];
     const tooltipH = size.contentSize[1];
     const viewW = size.viewSize[0];
@@ -244,10 +220,7 @@ export function tooltipPositionSide(
  * @param container - The chart container element
  * @param getInstance - Function to get the current ECharts instance
  */
-export function setupTooltipAutoHide(
-    container: HTMLElement,
-    getInstance: () => any | undefined,
-): () => void {
+export function setupTooltipAutoHide(container: HTMLElement, getInstance: () => any | undefined): () => void {
     let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
     function clearHideTimer() {

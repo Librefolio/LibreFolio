@@ -6,6 +6,7 @@
     import PreferencesTab from '$lib/components/settings/tabs/PreferencesTab.svelte';
     import AboutTab from '$lib/components/settings/tabs/AboutTab.svelte';
     import GlobalSettingsTab from '$lib/components/settings/tabs/GlobalSettingsTab.svelte';
+    import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
 
     type TabId = 'profile' | 'preferences' | 'about' | 'admin';
 
@@ -31,23 +32,17 @@
 
     <!-- Tabs Navigation -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div class="flex border-b border-gray-200" role="tablist">
-            {#each tabs as tab (tab.id)}
-                <button
-                    on:click={() => (activeTab = tab.id)}
-                    class="flex items-center justify-center gap-2 px-3 py-4 sm:px-6 text-sm font-medium transition-all flex-1 sm:flex-none
-						{activeTab === tab.id ? 'text-libre-green border-b-2 border-libre-green bg-libre-green/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}
-						{tab.id === 'admin' ? 'sm:ml-auto' : ''}"
-                    data-testid="settings-tab-{tab.id}"
-                    role="tab"
-                    aria-selected={activeTab === tab.id}
-                    title={$_(tab.labelKey)}
-                >
-                    <svelte:component this={tab.icon} size={18} />
-                    <span class="hidden sm:inline">{$_(tab.labelKey)}</span>
-                </button>
-            {/each}
-        </div>
+        <TabBar
+            tabs={tabs.map((tab) => ({
+                id: tab.id,
+                icon: tab.icon,
+                label: $_(tab.labelKey),
+                testId: `settings-tab-${tab.id}`,
+                className: tab.id === 'admin' ? 'sm:ml-auto' : '',
+            }))}
+            bind:activeTab
+            hideLabelOnMobile={true}
+        />
 
         <!-- Tab Content -->
         <div class="p-4 sm:p-6">

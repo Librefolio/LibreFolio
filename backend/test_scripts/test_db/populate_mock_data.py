@@ -89,7 +89,7 @@ engine = create_engine(
 _ANNUAL_VOL = {
     "STOCK": 0.25,
     "CRYPTO": 0.65,
-    "CROWDFUND_LOAN": 0.00,
+    "CROWDFUND": 0.00,
 }
 _DEFAULT_VOL = 0.25
 _INITIAL_DEPOSIT_DATE = date(2025, 9, 30)
@@ -641,7 +641,7 @@ def populate_assets(session: Session):
         {
             "display_name": "RE Loan Milano",
             "currency": "EUR",
-            "asset_type": AssetType.CROWDFUND_LOAN,
+            "asset_type": AssetType.CROWDFUND,
             # Marked inactive — fixture for testing the "inactive asset" UI state.
             "active": False,
             "classification_params": json.dumps(
@@ -655,7 +655,7 @@ def populate_assets(session: Session):
         {
             "display_name": "RE Loan Roma",
             "currency": "EUR",
-            "asset_type": AssetType.CROWDFUND_LOAN,
+            "asset_type": AssetType.CROWDFUND,
             "classification_params": json.dumps(
                 {
                     "short_description": "Residential project in Rome",

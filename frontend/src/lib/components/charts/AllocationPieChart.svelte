@@ -66,6 +66,12 @@
     let resizeObserver: ResizeObserver | null = null;
     let lastDark: boolean | null = null;
     let chartFullyInitialized = false;
+    // Tracks the distinct set of raw type keys (mode='type') used to build richStyles
+    // during the last FULL render — the fast-path data-only update below must NOT be
+    // taken if the current data introduces a type not covered by that set, otherwise its
+    // icon (and, previously, its translation via a since-removed name-based fallback)
+    // would never be registered until some unrelated full rebuild (dark mode/resize).
+    let lastRawTypeKeys = '';
 
     // Diversified color palette — high chromatic distance
     const PALETTE_LIGHT = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5', '#059669', '#ea580c', '#6366f1', '#0891b2', '#ca8a04', '#9333ea'];
@@ -95,7 +101,17 @@
 
     function setupResizeObserver() {
         if (resizeObserver || !chartContainer) return;
-        resizeObserver = new ResizeObserver(() => renderChart());
+        resizeObserver = new ResizeObserver(() => {
+            // Container size affects layout (pieCenter/pieRadius/legend orientation) which
+            // the fast-path below skips — force a full rebuild so resizing actually
+            // repositions the chart. Skip the enter/update animation for this specific
+            // call: a live window drag-resize can fire the observer many times in rapid
+            // succession, and animating every intermediate frame (800ms update transition)
+            // would queue up and look janky. Data/dark-mode driven rebuilds still animate
+            // smoothly as before.
+            chartFullyInitialized = false;
+            renderChart({skipAnimation: true});
+        });
         resizeObserver.observe(chartContainer);
     }
 
@@ -110,7 +126,7 @@
     // Chart Rendering
     // =========================================================================
 
-    function renderChart() {
+    function renderChart(opts: {skipAnimation?: boolean} = {}) {
         if (!chartContainer) return;
 
         if (!chartInstance) {
@@ -134,7 +150,10 @@
                     const emoji = entry.emoji ?? '';
                     displayName = emoji ? `${emoji} ${translated}` : translated;
                 } else {
-                    const typeKey = `asset.types.${entry.name.toUpperCase()}`;
+                    // Bugfix: namespace is plural "assets.types.X" (matches en.json) — the
+                    // singular "asset.types.X" key does not exist, so this translation was
+                    // silently failing and falling back to the raw untranslated type string.
+                    const typeKey = `assets.types.${entry.name.toUpperCase()}`;
                     const translated = tr(typeKey);
                     displayName = translated !== typeKey ? translated : entry.name;
                 }
@@ -142,18 +161,35 @@
             })
             .sort((a, b) => b.value - a.value);
 
-        // Data-only update when chart is already initialized and dark mode hasn't changed
-        if (chartFullyInitialized && lastDark === isDark) {
+        // Data-only update when chart is already initialized, dark mode hasn't changed,
+        // AND (mode='type' only) no new asset type has appeared since the last full
+        // build — a new type needs richStyles/legend/label formatters rebuilt so its
+        // icon actually registers (see lastRawTypeKeys declaration above for why).
+        const currentRawTypeKeys = mode === 'type' ? [...new Set(chartData.map((d) => d.rawName.toUpperCase()))].sort().join(',') : '';
+        const sameTypeSet = mode !== 'type' || currentRawTypeKeys === lastRawTypeKeys;
+        if (chartFullyInitialized && lastDark === isDark && sameTypeSet) {
+            // Bugfix: preserve the FULL data item (not just {name, value}) — formatters
+            // (tooltip especially) read params.data.rawName/amount, and stripping them
+            // here silently broke the fallback path for any type whose translated name
+            // does not equal its raw enum after uppercasing (e.g. IT/FR/ES "Crowdfunding" != "CROWDFUND").
             chartInstance.setOption({
-                series: [{data: chartData.map((d) => ({name: d.name, value: d.value}))}],
+                series: [{data: chartData}],
             });
             return;
         }
+        lastRawTypeKeys = currentRawTypeKeys;
 
         // Build ECharts rich-text image styles for type mode (one key per asset type)
         const richStyles: Record<string, any> = {};
+        // Bugfix: legend formatter only receives the (already-translated) display name
+        // string from ECharts, not the full data item — build a lookup back to the raw
+        // backend type key (e.g. "CROWDFUND") so it can re-translate/find the icon
+        // correctly instead of re-deriving a key from the translated name itself (which
+        // produced a mismatched key for languages whose translation differs from the
+        // enum, e.g. IT/FR/ES "Crowdfunding" -> "CROWDFUNDING" != "CROWDFUND").
+        const rawKeyByName: Record<string, string> = {};
         if (mode === 'type') {
-            for (const {rawName} of chartData) {
+            for (const {name, rawName} of chartData) {
                 const safeKey = `img_${rawName.toUpperCase().replace(/[^A-Z_]/g, '')}`;
                 richStyles[safeKey] = {
                     backgroundColor: {image: getAssetTypeIconUrl(rawName)},
@@ -161,6 +197,7 @@
                     height: 16,
                     align: 'center',
                 };
+                rawKeyByName[name] = rawName.toUpperCase().replace(/[^A-Z_]/g, '');
             }
         }
 
@@ -177,7 +214,11 @@
             mode === 'type'
                 ? {
                       formatter: (name: string) => {
-                          const rawKey = name.toUpperCase().replace(/[^A-Z_]/g, '');
+                          // Bugfix: look up the raw key from the translated name (see
+                          // rawKeyByName above) instead of re-deriving it from `name`
+                          // itself, which is already translated and would produce a
+                          // mismatched key. Defensive fallback for safety.
+                          const rawKey = rawKeyByName[name] ?? name.toUpperCase().replace(/[^A-Z_]/g, '');
                           const safeKey = `img_${rawKey}`;
                           const translated = tr(`assets.types.${rawKey}`) || name;
                           return `{${safeKey}|} ${translated}`;
@@ -236,7 +277,13 @@
                       show: true,
                       position: 'inner',
                       formatter: (params: any) => {
-                          const rawKey = (params.name as string).toUpperCase().replace(/[^A-Z_]/g, '');
+                          // Bugfix: use the raw backend type carried on the data item
+                          // (params.data.rawName) instead of re-deriving a key from
+                          // params.name (already translated — would produce a mismatched
+                          // key for languages whose translation differs from the enum,
+                          // e.g. IT/FR/ES "Crowdfunding" -> "CROWDFUNDING" != "CROWDFUND").
+                          const rawSource = params.data?.rawName ?? params.name;
+                          const rawKey = (rawSource as string).toUpperCase().replace(/[^A-Z_]/g, '');
                           return `{img_${rawKey}|}`;
                       },
                       rich: richStyles,
@@ -254,11 +301,12 @@
         // Tooltip — emoji + translated label + percentage + absolute amount (on new line)
         const tooltipFormatter = (params: any) => {
             const absAmount = amountByName[params.name];
-            const amountLine = absAmount != null && absAmount > 0
-                ? `<br/><span style="font-size:11px;opacity:0.8">${formatCurrencyAmountPlain(absAmount, currency, {showSign: false})}</span>`
-                : '';
+            const amountLine = absAmount != null && absAmount > 0 ? `<br/><span style="font-size:11px;opacity:0.8">${formatCurrencyAmountPlain(absAmount, currency, {showSign: false})}</span>` : '';
             if (mode === 'type') {
-                const rawKey = (params.name as string).toUpperCase().replace(/[^A-Z_]/g, '');
+                // Bugfix: same as above — use the raw backend type from the data item
+                // rather than re-deriving from the already-translated params.name.
+                const rawSource = params.data?.rawName ?? params.name;
+                const rawKey = (rawSource as string).toUpperCase().replace(/[^A-Z_]/g, '');
                 const translated = tr(`assets.types.${rawKey}`) || params.name;
                 const iconUrl = getAssetTypeIconUrl(rawKey);
                 return `<img src="${iconUrl}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">${translated}: ${params.value}%${amountLine}`;
@@ -269,6 +317,7 @@
 
         const option: echarts.EChartsOption = {
             ...CHART_ANIMATION_CONFIG,
+            ...(opts.skipAnimation ? {animation: false} : {}),
             color: palette,
             tooltip: {
                 trigger: 'item',

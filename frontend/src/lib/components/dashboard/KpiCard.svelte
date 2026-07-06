@@ -57,11 +57,7 @@
         {/if}
     {:else}
         <!-- Primary value (reduced opacity when refreshing for stale-while-revalidate) -->
-        <p
-            class="text-2xl font-bold text-gray-800 dark:text-gray-100 truncate transition-opacity duration-300"
-            class:opacity-50={refreshing}
-            data-testid="kpi-value"
-        >
+        <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 truncate transition-opacity duration-300" class:opacity-50={refreshing} data-testid="kpi-value">
             {value}
         </p>
 

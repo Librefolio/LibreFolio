@@ -40,6 +40,8 @@ from backend.app.schemas.brokers import (
     BRCreateResult,
     BRDeleteItem,
     BRDeleteResult,
+    BRDiscoveryItem,
+    BRListResponse,
     BRReadItem,
     BRSummary,
     BRUpdateItem,
@@ -258,7 +260,12 @@ class BrokerService:
 
         return [acc.broker_id for acc in accesses if role_order.get(acc.role, 0) >= min_role_value]
 
-    async def get_all(self, user_id: int, as_user_id: Union[int, Literal["all"], None] = None) -> List[BRReadItem]:
+    async def get_all(
+        self,
+        user_id: int,
+        as_user_id: Union[int, Literal["all"], None] = None,
+        include_inaccessible: bool = False,
+    ) -> BRListResponse:
         """
         Get brokers filtered by user access.
 
@@ -280,30 +287,41 @@ class BrokerService:
             stmt = select(Broker).order_by(Broker.name)
             result = await self.session.execute(stmt)
             brokers = result.scalars().all()
-            return [BRReadItem.model_validate(b) for b in brokers]
-        else:
-            # LEFT JOIN with BrokerUserAccess: returns ALL brokers; user_role is
-            # set when the user has access, null otherwise. This allows the
-            # frontend to know broker names even when the user has no access
-            # (for paired-tx placeholder rendering), while still distinguishing
-            # accessible (OWNER/EDITOR/VIEWER) from inaccessible (null).
-            stmt = (
-                select(Broker, BrokerUserAccess.role)
-                .outerjoin(
-                    BrokerUserAccess,
-                    and_(Broker.id == BrokerUserAccess.broker_id, BrokerUserAccess.user_id == filter_user_id),
-                )
-                .order_by(Broker.name)
+            return BRListResponse(items=[BRReadItem.model_validate(b) for b in brokers])
+
+        stmt = (
+            select(Broker, BrokerUserAccess.role, BrokerUserAccess.share_percentage)
+            .join(
+                BrokerUserAccess,
+                and_(Broker.id == BrokerUserAccess.broker_id, BrokerUserAccess.user_id == filter_user_id),
             )
+            .order_by(Broker.name)
+        )
 
         result = await self.session.execute(stmt)
         rows = result.all()
         items = []
-        for broker, role in rows:
+        for broker, role, share_percentage in rows:
             item = BRReadItem.model_validate(broker)
             item.user_role = role.value if role else None
+            item.user_share_percentage = share_percentage
             items.append(item)
-        return items
+
+        inaccessible: List[BRDiscoveryItem] = []
+        if include_inaccessible:
+            inaccessible_stmt = (
+                select(Broker.id, Broker.name, Broker.icon_url)
+                .outerjoin(
+                    BrokerUserAccess,
+                    and_(Broker.id == BrokerUserAccess.broker_id, BrokerUserAccess.user_id == filter_user_id),
+                )
+                .where(BrokerUserAccess.user_id.is_(None))
+                .order_by(Broker.name)
+            )
+            inaccessible_result = await self.session.execute(inaccessible_stmt)
+            inaccessible = [BRDiscoveryItem(id=broker_id, name=name, icon_url=icon_url) for broker_id, name, icon_url in inaccessible_result.all()]
+
+        return BRListResponse(items=items, inaccessible=inaccessible)
 
     async def get_by_id(self, broker_id: int, user_id: int, as_user_id: Union[int, Literal["all"], None] = None) -> Optional[BRReadItem]:
         """
@@ -360,13 +378,21 @@ class BrokerService:
             if not has_access:
                 return None
 
-        # Get cash balances
+        # Get cash balances. Currencies with a net-zero balance are still
+        # included (as long as they have transaction history) — a currency
+        # deposited and then fully invested should stay visible at 0, not
+        # disappear entirely.
         cash_dict = await self.tx_service.get_cash_balances(broker_id)
-        cash_balances = [Currency(code=code, amount=amount) for code, amount in cash_dict.items() if amount != Decimal("0")]
+        cash_balances = [Currency(code=code, amount=amount) for code, amount in cash_dict.items()]
 
         # Get asset holdings
         holdings_dict = await self.tx_service.get_asset_holdings(broker_id)
         holdings: List[BRAssetHolding] = []
+
+        # Batch-fetch latest prices for all held assets in one query instead of
+        # one query per holding (was the dominant N+1 cost of this endpoint).
+        held_asset_ids = [asset_id for asset_id, quantity in holdings_dict.items() if quantity != Decimal("0")]
+        latest_prices = await self._get_latest_prices_batch(held_asset_ids)
 
         for asset_id, quantity in holdings_dict.items():
             if quantity == Decimal("0"):
@@ -385,8 +411,8 @@ class BrokerService:
             if average_cost == 0:
                 average_cost = Decimal("0")
 
-            # Get current price (from latest price_history)
-            current_price = await self._get_latest_price(asset_id)
+            # Get current price (from the batch lookup above)
+            current_price = latest_prices.get(asset_id)
             current_value = None
             unrealized_pnl = None
             unrealized_pnl_percent = None
@@ -467,12 +493,20 @@ class BrokerService:
             user_share_percentage=user_share_value,
         )
 
-    async def _get_latest_price(self, asset_id: int) -> Optional[Decimal]:
-        """Get the latest price for an asset from price_history."""
-        stmt = select(PriceHistory.close).where(PriceHistory.asset_id == asset_id).order_by(PriceHistory.date.desc()).limit(1)
+    async def _get_latest_prices_batch(self, asset_ids: List[int]) -> dict:
+        """Batch lookup of the latest price per asset — a single query for N
+        assets instead of N round-trips (avoids the N+1 pattern previously in
+        `get_summary`'s per-holding loop, the dominant cost of
+        GET /brokers/{id}/summary for brokers with many holdings)."""
+        if not asset_ids:
+            return {}
+        latest_date_subq = select(PriceHistory.asset_id, func.max(PriceHistory.date).label("max_date")).where(PriceHistory.asset_id.in_(asset_ids)).group_by(PriceHistory.asset_id).subquery()
+        stmt = select(PriceHistory.asset_id, PriceHistory.close).join(
+            latest_date_subq,
+            and_(PriceHistory.asset_id == latest_date_subq.c.asset_id, PriceHistory.date == latest_date_subq.c.max_date),
+        )
         result = await self.session.execute(stmt)
-        value = result.scalar_one_or_none()
-        return value if value else None
+        return {asset_id: close for asset_id, close in result.all() if close}
 
     # =========================================================================
     # UPDATE OPERATIONS
@@ -716,12 +750,6 @@ class BrokerService:
         Returns:
             List of dicts with user_id, username, email, role, created_at
         """
-        # Check access (any role can view access list)
-        if not is_superuser:
-            role = await self._check_user_access(broker_id, user_id)
-            if not role:
-                return []
-
         # Import here to avoid circular import
         from backend.app.db.models import User, UserSettings  # noqa: PLC0415 — avoid circular import
 

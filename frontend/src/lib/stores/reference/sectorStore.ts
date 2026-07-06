@@ -77,11 +77,20 @@ export function getSectorEmoji(key: string): string {
     if (sectorEmojiMap[key]) return sectorEmojiMap[key];
     // Fallback: hardcoded map (used until API sync regenerates client)
     const FALLBACK: Record<string, string> = {
-        Industrials: '🏭', Technology: '💻', Financials: '🏦',
-        'Consumer Discretionary': '🛍️', 'Health Care': '🏥',
-        'Real Estate': '🏠', 'Basic Materials': '⛏️', Energy: '⚡',
-        'Consumer Staples': '🛒', Telecommunication: '📡',
-        Utilities: '💡', Other: '📦', Liquidity: '💰', Unknown: '❓',
+        Industrials: '🏭',
+        Technology: '💻',
+        Financials: '🏦',
+        'Consumer Discretionary': '🛍️',
+        'Health Care': '🏥',
+        'Real Estate': '🏠',
+        'Basic Materials': '⛏️',
+        Energy: '⚡',
+        'Consumer Staples': '🛒',
+        Telecommunication: '📡',
+        Utilities: '💡',
+        Other: '📦',
+        Liquidity: '💰',
+        Unknown: '❓',
     };
     return FALLBACK[key] ?? '📊';
 }

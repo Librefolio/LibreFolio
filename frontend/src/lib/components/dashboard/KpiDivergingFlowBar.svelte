@@ -18,15 +18,7 @@
         valueColor?: string;
     }
 
-    let {
-        label,
-        value,
-        tooltip = '',
-        tooltipHtml = '',
-        depositPct,
-        withdrawPct,
-        valueColor = 'text-gray-700 dark:text-gray-300',
-    }: Props = $props();
+    let {label, value, tooltip = '', tooltipHtml = '', depositPct, withdrawPct, valueColor = 'text-gray-700 dark:text-gray-300'}: Props = $props();
 
     const clampedDeposit = $derived(Math.max(0, Math.min(depositPct, 100)));
     const clampedWithdraw = $derived(Math.max(0, Math.min(withdrawPct, 100)));
@@ -51,19 +43,13 @@
     <div class="relative w-full h-1.5 flex">
         <!-- Left half (withdrawals) -->
         <div class="relative w-1/2 h-full bg-gray-100 dark:bg-slate-700 rounded-l-full overflow-hidden">
-            <div
-                class="absolute right-0 top-0 h-full bg-red-400 dark:bg-red-500 rounded-l-full transition-all duration-700 ease-out"
-                style="width: {clampedWithdraw}%"
-            ></div>
+            <div class="absolute right-0 top-0 h-full bg-red-400 dark:bg-red-500 rounded-l-full transition-all duration-700 ease-out" style="width: {clampedWithdraw}%"></div>
         </div>
         <!-- Center divider -->
         <div class="w-px h-full bg-gray-300 dark:bg-slate-500 flex-shrink-0"></div>
         <!-- Right half (deposits) -->
         <div class="relative w-1/2 h-full bg-gray-100 dark:bg-slate-700 rounded-r-full overflow-hidden">
-            <div
-                class="absolute left-0 top-0 h-full bg-green-500 dark:bg-green-400 rounded-r-full transition-all duration-700 ease-out"
-                style="width: {clampedDeposit}%"
-            ></div>
+            <div class="absolute left-0 top-0 h-full bg-green-500 dark:bg-green-400 rounded-r-full transition-all duration-700 ease-out" style="width: {clampedDeposit}%"></div>
         </div>
     </div>
 </div>

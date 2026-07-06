@@ -16,6 +16,7 @@ Questa directory raccoglie i sotto-piani di implementazione per la **Phase 9 (Da
 | [`plan_ui_broker_overview.md`](./plan_ui_broker_overview.md) | UI Broker Overview | ✅ |
 | [`plan_ui_broker_transactions.md`](./plan_ui_broker_transactions.md) | UI Broker Transactions | ✅ |
 | [`plan_ui_dashboard.md`](./plan_ui_dashboard.md) | UI Dashboard | ✅ |
+| [`Milestone_3/README.md`](./Milestone_3/README.md) | M3: Redesign UI Broker v2 (post Portfolio Engine unificato) | ✅ disegno |
 
 ## Piano principale
 → [`phase-09-dashboard.md`](../phases/phase-09-dashboard.md) — Macro plan ufficiale di Phase 9.

@@ -23,7 +23,7 @@
     import {formatBytes, uploadFile} from '$lib/utils/files/upload';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {globalSettings} from '$lib/stores/app/globalSettings';
-    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo as StoreBrokerInfo} from '$lib/stores/reference/brokerStore';
     import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal, ImageEditModal} from '$lib/components/ui/media';
@@ -37,9 +37,10 @@
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import FileGrid from '$lib/components/files/FileGrid.svelte';
+    import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
-    import type {BrimFile, Broker, BrokerInfo, FilePreviewResponse, UploadedFile} from '$lib/types';
+    import type {BrimFile, BrokerInfo, FilePreviewResponse, UploadedFile} from '$lib/types';
     import type {FilterValue} from '$lib/components/table/types';
 
     type Tab = 'static' | 'brim';
@@ -112,12 +113,12 @@
     let maxUploadSizeMB: number = 10;
 
     // Broker state for BRIM multi-user
-    let brokers: Broker[] = [];
+    let brokers: StoreBrokerInfo[] = [];
     let brokerMap: Map<number, BrokerInfo> = new Map();
     let selectedBrokerIds: Set<number> = new Set();
 
     // Broker IDs where user is VIEWER (cannot upload — greyed out in selector)
-    $: viewerBrokerIds = new Set(brokers.filter((b) => (b as any).user_role === 'VIEWER').map((b) => b.id));
+    $: viewerBrokerIds = new Set(brokers.filter((b) => b.user_role === 'VIEWER').map((b) => b.id));
 
     // URL filter state
     let initialFilters: Record<string, FilterValue> = {};
@@ -269,7 +270,7 @@
      *  changes propagate without a manual reload. */
     const _brokerStoreUnsub = brokerStoreVersion.subscribe(() => {
         const list = getAllBrokers();
-        brokers = list as unknown as Broker[];
+        brokers = list;
         brokerMap = new Map(list.map((b) => [b.id, {id: b.id, name: b.name, icon_url: b.icon_url ?? null, portal_url: b.portal_url ?? null, default_import_plugin: (b as any).default_import_plugin ?? null}]));
     });
     onDestroy(() => _brokerStoreUnsub());
@@ -707,28 +708,23 @@
                     {showBrimUploader ? $t('common.close') : $t('uploads.upload')}
                 </button>
             {/if}
-            <button
-                class="btn btn-secondary"
-                data-testid="files-refresh-button"
-                title={$t('common.refresh')}
-                disabled={loading}
-                on:click={() => loadFiles()}
-            >
+            <button class="btn btn-secondary" data-testid="files-refresh-button" title={$t('common.refresh')} disabled={loading} on:click={() => loadFiles()}>
                 <RefreshCw size={16} class={loading ? 'animate-spin' : ''} />
             </button>
         </div>
     </header>
 
     <!-- Tabs -->
-    <div class="flex items-center gap-2">
-        <div class="tabs flex-1" role="tablist">
-            <button aria-selected={activeTab === 'static'} class="tab" class:active={activeTab === 'static'} data-testid="files-tab-static" on:click={() => setActiveTab('static')} role="tab">
-                {$t('uploads.staticResources')}
-            </button>
-            <button aria-selected={activeTab === 'brim'} class="tab" class:active={activeTab === 'brim'} data-testid="files-tab-brim" on:click={() => setActiveTab('brim')} role="tab">
-                {$t('uploads.brokerReports')}
-            </button>
-        </div>
+    <div class="mb-6 flex items-center gap-2">
+        <TabBar
+            tabs={[
+                {id: 'static', label: $t('uploads.staticResources'), testId: 'files-tab-static'},
+                {id: 'brim', label: $t('uploads.brokerReports'), testId: 'files-tab-brim'},
+            ]}
+            bind:activeTab
+            onchange={(tabId) => setActiveTab(tabId as Tab)}
+            class="flex-1"
+        />
         {#if viewMode === 'list'}
             <SelectionBar
                 selectedCount={selectedFileIds.length}
@@ -1075,51 +1071,6 @@
 
     .btn-primary:hover {
         background-color: #143326;
-    }
-
-    .tabs {
-        display: flex;
-        gap: 0;
-        margin-bottom: 1.5rem;
-        border-bottom: 1px solid #e5e7eb;
-    }
-
-    :global(.dark) .tabs {
-        border-bottom-color: #4b5563;
-    }
-
-    .tab {
-        padding: 0.75rem 1.5rem;
-        background: none;
-        border: none;
-        border-bottom: 2px solid transparent;
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: #6b7280;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-
-    :global(.dark) .tab {
-        color: #9ca3af;
-    }
-
-    .tab:hover {
-        color: #1a4031;
-    }
-
-    :global(.dark) .tab:hover {
-        color: #10b981;
-    }
-
-    .tab.active {
-        color: #1a4031;
-        border-bottom-color: #1a4031;
-    }
-
-    :global(.dark) .tab.active {
-        color: #10b981;
-        border-bottom-color: #10b981;
     }
 
     .upload-area {

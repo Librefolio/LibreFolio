@@ -45,6 +45,10 @@
 html {
     font-family: Inter, system-ui, sans-serif;
     overscroll-behavior-x: none;
+    /* Reserve scrollbar space permanently so opening a modal (which locks
+       body/html overflow to hidden) never removes/re-adds the scrollbar and
+       shifts the layout (visible as a jump in the sticky Header). */
+    scrollbar-gutter: stable;
 }
 
 body {

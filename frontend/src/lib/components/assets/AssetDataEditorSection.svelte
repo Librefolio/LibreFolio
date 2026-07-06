@@ -26,6 +26,7 @@
     import {_ as t, locale} from '$lib/i18n';
     import {getEventTypeOptions, EVENT_TYPES_ALL} from '$lib/utils/transactions/eventTypes';
     import {generateUUID} from '$lib/utils/core/uuid';
+    import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
 
     // =========================================================================
     // Props
@@ -493,35 +494,27 @@
     {/if}
 
     <!-- Tab bar -->
-    <div class="flex border-b border-gray-200 dark:border-slate-600">
-        <button
-            class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
-                       {activeTab === 'prices' ? 'border-libre-green text-libre-green dark:text-emerald-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-slate-500'}"
-            onclick={() => (activeTab = 'prices')}
-            data-testid="asset-editor-prices-tab"
-        >
-            <DollarSign size={14} />
-            {$t('assetDetail.pricesTab')}
-            {#if priceDirtyCount > 0}
-                <span class="text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-full">
-                    {priceDirtyCount}
-                </span>
-            {/if}
-        </button>
-        <button
-            class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
-                       {activeTab === 'events' ? 'border-libre-green text-libre-green dark:text-emerald-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-slate-500'}"
-            onclick={() => (activeTab = 'events')}
-            data-testid="asset-editor-events-tab"
-        >
-            <CalendarClock size={14} />
-            {$t('assetDetail.eventsTab')}
-            {#if eventDirtyCount > 0}
-                <span class="text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-full">
-                    {eventDirtyCount}
-                </span>
-            {/if}
-        </button>
+    <div class="flex">
+        <TabBar
+            tabs={[
+                {
+                    id: 'prices',
+                    icon: DollarSign,
+                    label: $t('assetDetail.pricesTab'),
+                    badge: priceDirtyCount,
+                    testId: 'asset-editor-prices-tab',
+                },
+                {
+                    id: 'events',
+                    icon: CalendarClock,
+                    label: $t('assetDetail.eventsTab'),
+                    badge: eventDirtyCount,
+                    testId: 'asset-editor-events-tab',
+                },
+            ]}
+            bind:activeTab
+            class="flex-1"
+        />
 
         <!-- I-bis #3 — Currency label aligned right: "Prices in USD 🇺🇸" / "Events in USD 🇺🇸" -->
         {#if currency}

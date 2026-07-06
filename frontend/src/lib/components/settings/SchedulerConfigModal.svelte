@@ -62,9 +62,7 @@
         }
     })();
 
-    let filteredTimezones = $derived(
-        tzSearch.length > 0 ? TIMEZONES.filter((tz) => tz.toLowerCase().includes(tzSearch.toLowerCase())).slice(0, 30) : TIMEZONES.slice(0, 30)
-    );
+    let filteredTimezones = $derived(tzSearch.length > 0 ? TIMEZONES.filter((tz) => tz.toLowerCase().includes(tzSearch.toLowerCase())).slice(0, 30) : TIMEZONES.slice(0, 30));
 
     // ── UTC ↔ Local conversion helpers ──
 
@@ -226,7 +224,8 @@
         <!-- Timezone selector -->
         <section data-testid="scheduler-config-timezone">
             <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-1.5 mb-2">
-                <Globe size={14} /> {$_('settings.global.scheduler.timezone') || 'Timezone'}
+                <Globe size={14} />
+                {$_('settings.global.scheduler.timezone') || 'Timezone'}
             </h3>
             <div class="relative">
                 <input
@@ -234,8 +233,14 @@
                     bind:value={tzSearch}
                     placeholder={selectedTz}
                     class="w-full px-3 py-1.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-libre-green/40 focus:border-libre-green"
-                    onfocus={() => { tzDropdownOpen = true; }}
-                    onblur={() => { setTimeout(() => { tzDropdownOpen = false; }, 150); }}
+                    onfocus={() => {
+                        tzDropdownOpen = true;
+                    }}
+                    onblur={() => {
+                        setTimeout(() => {
+                            tzDropdownOpen = false;
+                        }, 150);
+                    }}
                 />
                 {#if tzDropdownOpen}
                     <div class="absolute z-10 mt-1 w-full max-h-40 overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg">
@@ -244,8 +249,12 @@
                                 type="button"
                                 class="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-700 {tz === selectedTz ? 'text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300'}"
                                 onmousedown={(e) => e.preventDefault()}
-                                onclick={() => { selectedTz = tz; tzSearch = ''; tzDropdownOpen = false; }}
-                            >{tz}</button>
+                                onclick={() => {
+                                    selectedTz = tz;
+                                    tzSearch = '';
+                                    tzDropdownOpen = false;
+                                }}>{tz}</button
+                            >
                         {/each}
                     </div>
                 {/if}

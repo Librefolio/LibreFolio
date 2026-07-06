@@ -51,6 +51,13 @@
     let resizeObserver: ResizeObserver | null = null;
     let observedContainer: HTMLDivElement | undefined = undefined;
     let darkModeObserver: MutationObserver | null = null;
+    /** True only for the very first render pass right after echarts.init() — mobile
+     *  layout (KPI cards etc.) can still be settling then, so ONLY that pass forces an
+     *  extra resize() to avoid stale cached dimensions. Later full rebuilds (dark mode
+     *  toggle, data updates) happen on an already-stable page and must NOT force a
+     *  resize(), since that always triggers a full internal re-render that can
+     *  interrupt an active tap-triggered tooltip on mobile — see applyFullOption(). */
+    let isFirstRenderPass = false;
 
     // Color palettes
     const COLORS = {
@@ -97,11 +104,13 @@
      * Period-relative P&L baseline: Total P&L already accumulated at the start of the shown period.
      * Subtracting this gives "how much was gained IN this period", starting at 0.
      */
-    const periodBasePnl = $derived((() => {
-        const idx = eurStackedData.totalPnl.findIndex((v) => v != null);
-        if (idx < 0) return 0;
-        return eurStackedData.totalPnl[idx] ?? 0;
-    })());
+    const periodBasePnl = $derived(
+        (() => {
+            const idx = eurStackedData.totalPnl.findIndex((v) => v != null);
+            if (idx < 0) return 0;
+            return eurStackedData.totalPnl[idx] ?? 0;
+        })(),
+    );
 
     // Translated labels for EUR mode (tracked for reactivity on locale change)
     const eurLabels = $derived({
@@ -198,6 +207,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            isFirstRenderPass = true;
             // Setup mobile tooltip auto-hide
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
@@ -225,9 +235,42 @@
             if (needsFullInit) {
                 // Full init with all visual config
                 const series: echarts.SeriesOption[] = [
-                    {name: eurLabels.bookAssetLike, type: 'line', stack: 'bookValue', data: seriesData[0].data, smooth: false, symbol: 'none', lineStyle: {color: cc('bookAssetLike'), width: 1, opacity: 0.7}, areaStyle: {color: cc('bookAssetLike') + '44'}, itemStyle: {color: cc('bookAssetLike')}, emphasis: {focus: 'series'}},
-                    {name: eurLabels.cashContributed, type: 'line', stack: 'bookValue', data: seriesData[1].data, smooth: false, symbol: 'none', lineStyle: {color: cc('cashContributed'), width: 1, opacity: 0.7}, areaStyle: {color: cc('cashContributed') + '44'}, itemStyle: {color: cc('cashContributed')}, emphasis: {focus: 'series'}},
-                    {name: eurLabels.cashGenerated, type: 'line', stack: 'bookValue', data: seriesData[2].data, smooth: false, symbol: 'none', lineStyle: {color: cc('cashGenerated'), width: 1, opacity: 0.7}, areaStyle: {color: cc('cashGenerated') + '44'}, itemStyle: {color: cc('cashGenerated')}, emphasis: {focus: 'series'}},
+                    {
+                        name: eurLabels.bookAssetLike,
+                        type: 'line',
+                        stack: 'bookValue',
+                        data: seriesData[0].data,
+                        smooth: false,
+                        symbol: 'none',
+                        lineStyle: {color: cc('bookAssetLike'), width: 1, opacity: 0.7},
+                        areaStyle: {color: cc('bookAssetLike') + '44'},
+                        itemStyle: {color: cc('bookAssetLike')},
+                        emphasis: {focus: 'series'},
+                    },
+                    {
+                        name: eurLabels.cashContributed,
+                        type: 'line',
+                        stack: 'bookValue',
+                        data: seriesData[1].data,
+                        smooth: false,
+                        symbol: 'none',
+                        lineStyle: {color: cc('cashContributed'), width: 1, opacity: 0.7},
+                        areaStyle: {color: cc('cashContributed') + '44'},
+                        itemStyle: {color: cc('cashContributed')},
+                        emphasis: {focus: 'series'},
+                    },
+                    {
+                        name: eurLabels.cashGenerated,
+                        type: 'line',
+                        stack: 'bookValue',
+                        data: seriesData[2].data,
+                        smooth: false,
+                        symbol: 'none',
+                        lineStyle: {color: cc('cashGenerated'), width: 1, opacity: 0.7},
+                        areaStyle: {color: cc('cashGenerated') + '44'},
+                        itemStyle: {color: cc('cashGenerated')},
+                        emphasis: {focus: 'series'},
+                    },
                     {name: eurLabels.nav, type: 'line', data: seriesData[3].data, smooth: false, symbol: 'none', lineStyle: {color: cc('nav'), width: 2, type: 'solid'}, itemStyle: {color: cc('nav')}, emphasis: {focus: 'series'}},
                     {name: eurLabels.capitalBaseline, type: 'line', data: seriesData[4].data, smooth: false, symbol: 'none', lineStyle: {color: cc('capitalBaseline'), width: 1.5, type: 'dashed'}, itemStyle: {color: cc('capitalBaseline')}, emphasis: {focus: 'series'}},
                 ];
@@ -246,8 +289,12 @@
 
             if (needsFullInit) {
                 const series: echarts.SeriesOption[] = pctSeries.map((s, idx) => ({
-                    name: s.name, type: 'line' as const, data: seriesData[idx].data,
-                    smooth: false, connectNulls: false, symbol: 'none',
+                    name: s.name,
+                    type: 'line' as const,
+                    data: seriesData[idx].data,
+                    smooth: false,
+                    connectNulls: false,
+                    symbol: 'none',
                     lineStyle: {color: COLORS[s.colorKey][isDark ? 'dark' : 'light'], width: 2, type: s.lineStyle},
                     itemStyle: {color: COLORS[s.colorKey][isDark ? 'dark' : 'light']},
                 }));
@@ -374,6 +421,32 @@
         };
 
         chartInstance.setOption(option, CHART_SET_OPTION_OPTS);
+        // Bugfix: on mobile, the very FIRST render can happen while the surrounding
+        // layout (KPI cards etc.) is still settling, so ECharts caches stale internal
+        // dimensions — causing the position-aware tooltip (tooltipPositionSide) to
+        // compute wildly wrong coordinates (reported: tooltip appears far below the
+        // viewport on first load, translate3d(...) with a huge Y offset). Toggling the
+        // view mode "fixed" it because that path re-triggers this same full-rebuild
+        // branch on a LATER, already-settled pass.
+        //
+        // IMPORTANT: this forced resize() must be scoped to ONLY the very first render
+        // pass, never to later full rebuilds (dark mode toggle, data updates) — resize()
+        // always triggers a full internal re-render (see node_modules/echarts
+        // .../TooltipView.js `render()`/`_keepShow()`), which was found to interrupt a
+        // just-shown tap-triggered tooltip on mobile (it would flash and disappear
+        // immediately) if a rebuild happened to fire while the tooltip was showing.
+        // A plain immediate resize() alone isn't always enough either — some mobile
+        // layouts keep shifting for another frame or two after our own tick() resolves
+        // (e.g. KPI cards populating async data) — so also schedule one more resize()
+        // on the next animation frame, still gated to first-render-only.
+        if (isFirstRenderPass) {
+            isFirstRenderPass = false;
+            chartInstance.resize();
+            const instanceAtSchedule = chartInstance;
+            requestAnimationFrame(() => {
+                if (instanceAtSchedule && !instanceAtSchedule.isDisposed()) instanceAtSchedule.resize();
+            });
+        }
     }
 </script>
 

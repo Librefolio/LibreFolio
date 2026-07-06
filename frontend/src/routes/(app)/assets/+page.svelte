@@ -171,11 +171,11 @@
         CRYPTO: 'crypto',
         FUND: 'fund',
         HOLD: 'hold',
-        CROWDFUND_LOAN: 'crowdfunding',
+        CROWDFUND: 'crowdfunding',
         INDEX: 'index',
         OTHER: 'other',
     };
-    const ALL_ASSET_TYPES = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'INDEX', 'OTHER'] as const;
+    const ALL_ASSET_TYPES = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND', 'INDEX', 'OTHER'] as const;
 
     // Count assets per type (for E5b badge in type filter dropdown)
     let typeCounts = $derived(

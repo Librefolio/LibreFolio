@@ -58,6 +58,7 @@ from backend.app.schemas.brokers import (
     BRBulkUpdateResponse,
     BRCreateItem,
     BRDeleteItem,
+    BRListResponse,
     BRReadItem,
     BRSummary,
     BRUpdateItem,
@@ -151,12 +152,13 @@ async def create_brokers(
 # =============================================================================
 
 
-@broker_router.get("", response_model=List[BRReadItem])
+@broker_router.get("", response_model=BRListResponse)
 async def list_brokers(
     current_user: Annotated[User, Depends(get_current_user)],
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
+    include_inaccessible: bool = Query(False, description="Include existing brokers without access in minimal discovery payload"),
     session: AsyncSession = Depends(get_session_generator),
-) -> List[BRReadItem]:
+) -> BRListResponse:
     """
     List brokers accessible by the current user.
 
@@ -173,7 +175,7 @@ async def list_brokers(
         raise HTTPException(status_code=403, detail="Only superusers can use as_user_id parameter")
 
     service = BrokerService(session)
-    return await service.get_all(user_id=current_user.id, as_user_id=as_user_id)
+    return await service.get_all(user_id=current_user.id, as_user_id=as_user_id, include_inaccessible=include_inaccessible)
 
 
 @broker_router.get("/{broker_id}", response_model=BRReadItem)
@@ -377,14 +379,19 @@ async def list_broker_access(
     Superusers can view any broker's access list.
     """
     service = BrokerService(session)
+    broker = await service.get_by_id(
+        broker_id=broker_id,
+        user_id=current_user.id,
+        as_user_id="all",
+    )
+    if not broker:
+        raise HTTPException(status_code=404, detail=f"Broker {broker_id} not found")
+
     accesses = await service.list_accesses(
         broker_id=broker_id,
         user_id=current_user.id,
         is_superuser=current_user.is_superuser,
     )
-
-    if not accesses and not current_user.is_superuser:
-        raise HTTPException(status_code=404, detail=f"Broker {broker_id} not found or access denied")
 
     return BRAccessListResponse(
         items=[BRAccessItem(**a) for a in accesses],

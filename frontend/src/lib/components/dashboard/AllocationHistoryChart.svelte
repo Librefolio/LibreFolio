@@ -64,9 +64,16 @@
         }
         if (dimension === 'type') {
             const typeEmojis: Record<string, string> = {
-                STOCK: '📈', ETF: '📊', BOND: '🏛️', CRYPTO: '₿',
-                FUND: '💼', HOLD: '⏸️', CROWDFUND_LOAN: '🤝',
-                INDEX: '📉', OTHER: '📦', Liquidity: '💰',
+                STOCK: '📈',
+                ETF: '📊',
+                BOND: '🏛️',
+                CRYPTO: '₿',
+                FUND: '💼',
+                HOLD: '⏸️',
+                CROWDFUND: '🤝',
+                INDEX: '📉',
+                OTHER: '📦',
+                Liquidity: '💰',
             };
             return typeEmojis[rawName] ?? '📊';
         }
@@ -93,10 +100,7 @@
 
         // Trigger load of countries/sectors, then re-render when done
         const loadRefs = async () => {
-            await Promise.allSettled([
-                ensureCountriesLoaded($currentLanguage),
-                ensureSectorsLoaded(),
-            ]);
+            await Promise.allSettled([ensureCountriesLoaded($currentLanguage), ensureSectorsLoaded()]);
             refDataVersion++;
         };
         loadRefs();
@@ -186,7 +190,10 @@
             // Data-only update — partial setOption for smooth shift animation
             chartInstance.setOption({
                 series: sortedNames.map((name) => {
-                    const legendName = (() => { const emoji = getCategoryEmoji(name); return emoji ? `${emoji} ${localizeName(name)}` : localizeName(name); })();
+                    const legendName = (() => {
+                        const emoji = getCategoryEmoji(name);
+                        return emoji ? `${emoji} ${localizeName(name)}` : localizeName(name);
+                    })();
                     return {name: legendName, data: seriesDataByName[name]};
                 }),
             });
@@ -212,9 +219,7 @@
                     areaStyle: {color: palette[i % palette.length] + '88'},
                     itemStyle: {color: palette[i % palette.length]},
                     emphasis: {focus: 'series'},
-                    label: showLabel
-                        ? {show: true, position: 'inside' as const, formatter: () => emoji, fontSize: 14, color: isDark ? '#ffffff' : '#000000', textShadowColor: isDark ? '#000' : '#fff', textShadowBlur: 2}
-                        : {show: false},
+                    label: showLabel ? {show: true, position: 'inside' as const, formatter: () => emoji, fontSize: 14, color: isDark ? '#ffffff' : '#000000', textShadowColor: isDark ? '#000' : '#fff', textShadowBlur: 2} : {show: false},
                 };
             });
 

@@ -24,8 +24,7 @@ export type PortfolioReport = ApiReturnType<typeof zodiosApi.get_portfolio_repor
 
 // Extract summary type from report response
 type RawSummary = PortfolioReport['summary'];
-export type PortfolioSummary = NonNullable<RawSummary> extends infer S
-    ? S extends {net_worth: unknown} ? S : never : never;
+export type PortfolioSummary = NonNullable<RawSummary> extends infer S ? (S extends {net_worth: unknown} ? S : never) : never;
 
 // History point type — define inline (generated type is not exported)
 export type PortfolioHistoryPoint = {
@@ -119,9 +118,17 @@ export function portfolioError(): string | null {
  * @param dateTo         — End date for history (ISO string).
  * @param targetCurrency — Override base currency (ISO 4217). Defaults to user setting.
  * @param force          — Bypass cache and re-fetch.
+ * @param includeContribution — Also request positions_contribution (per-asset period P&L).
+ * @param includeBreakdown     — Also request summary.by_broker (per-broker NAV/gain/cash breakdown).
+ * @param includeHistory           — Request the daily history series. Defaults to true for
+ *   backward compatibility — pass false for callers that only need `summary` (e.g. a broker list's
+ *   breakdown-only fetch), since the daily series can be several MB for a long-lived portfolio and
+ *   synchronously JSON-parsing it blocks the main thread for no benefit if it's never read.
+ * @param includeAllocationHistory — Request allocation_history (type/sector/geography series).
+ *   Same rationale as includeHistory — defaults to true, pass false when not consumed.
  */
-export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false, includeContribution = false): Promise<PortfolioReport | null> {
-    const key = makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency) + (includeContribution ? '|contrib' : '');
+export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, force = false, includeContribution = false, includeBreakdown = false, includeHistory = true, includeAllocationHistory = true): Promise<PortfolioReport | null> {
+    const key = makeCacheKey(brokerIds, dateFrom, dateTo, targetCurrency) + (includeContribution ? '|contrib' : '') + (includeBreakdown ? '|breakdown' : '') + (includeHistory ? '' : '|nohist') + (includeAllocationHistory ? '' : '|noalloc');
 
     if (!force) {
         const cached = reportCache.get(key);
@@ -139,9 +146,10 @@ export async function fetchReport(brokerIds?: number[], dateFrom?: string, dateT
         try {
             const body: Record<string, unknown> = {
                 include_summary: true,
-                include_history: true,
-                include_allocation_history: true,
+                include_history: includeHistory,
+                include_allocation_history: includeAllocationHistory,
                 include_positions_contribution: includeContribution,
+                include_breakdown: includeBreakdown,
             };
             if (brokerIds && brokerIds.length > 0) body.broker_ids = brokerIds;
             if (dateFrom || dateTo) {

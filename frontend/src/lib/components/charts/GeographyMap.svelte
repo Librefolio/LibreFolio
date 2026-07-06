@@ -59,7 +59,7 @@
 
     /** Percentage of value with no geographic classification (key "Unknown" or "Other" in data).
      *  "Other" is a provider placeholder for "rest of world" — treated as unclassified. */
-    const unknownPct = $derived(+((((data['Unknown'] ?? 0) + (data['Other'] ?? 0)) * 100).toFixed(1)));
+    const unknownPct = $derived(+(((data['Unknown'] ?? 0) + (data['Other'] ?? 0)) * 100).toFixed(1));
 
     /** ISO A3 → GeoJSON feature name (built dynamically from loaded world.json) */
     let iso3ToGeoName: Record<string, string> = {};
@@ -181,9 +181,7 @@
             const prefix = flag ? `${flag} ` : '';
             if (params.value != null && !isNaN(params.value) && params.value > 0) {
                 const absAmt = iso3 ? amounts[iso3] : undefined;
-                const amtLine = absAmt != null && absAmt > 0
-                    ? `\n${formatCurrencyAmountPlain(absAmt, currency, {showSign: false})}`
-                    : '';
+                const amtLine = absAmt != null && absAmt > 0 ? `\n${formatCurrencyAmountPlain(absAmt, currency, {showSign: false})}` : '';
                 return `${prefix}${displayName}: ${params.value}%${amtLine}`;
             }
             return `${prefix}${displayName}`;

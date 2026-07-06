@@ -26,19 +26,7 @@
         markerTooltip?: string;
     }
 
-    let {
-        label,
-        value,
-        numericValue,
-        formatValue,
-        tooltip = '',
-        tooltipHtml = '',
-        barPct,
-        barColor = 'bg-slate-400 dark:bg-slate-500',
-        valueColor = 'text-gray-700 dark:text-gray-300',
-        marker,
-        markerTooltip = '',
-    }: Props = $props();
+    let {label, value, numericValue, formatValue, tooltip = '', tooltipHtml = '', barPct, barColor = 'bg-slate-400 dark:bg-slate-500', valueColor = 'text-gray-700 dark:text-gray-300', marker, markerTooltip = ''}: Props = $props();
 
     const clampedBar = $derived(Math.max(0, Math.min(barPct, 100)));
     const clampedMarker = $derived(marker != null ? Math.max(0, Math.min(marker, 100)) : null);
