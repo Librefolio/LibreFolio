@@ -139,14 +139,23 @@
         if (bodyScrollLocked) return;
 
         const body = document.body;
-        const html = document.documentElement;
         const currentCount = Number(body.dataset.modalScrollLockCount || '0');
 
         if (currentCount === 0) {
-            body.dataset.modalPrevOverflow = body.style.overflow;
-            html.dataset.modalPrevOverflow = html.style.overflow;
-            body.style.overflow = 'hidden';
-            html.style.overflow = 'hidden';
+            // Freeze the page at its exact current scroll position using `position:fixed`
+            // + a negative `top` offset — this avoids BOTH the scrollbar-width shift AND
+            // the scroll-position jump some browsers introduce when locking scroll via
+            // `overflow:hidden` while the page is already scrolled down (y>0). The scroll
+            // offset is stored on `body.dataset` (not a component-local variable) so it's
+            // shared correctly across stacked modals regardless of which ModalBase
+            // instance happens to be the one un-locking last.
+            const scrollY = window.scrollY;
+            body.dataset.modalScrollY = String(scrollY);
+            body.style.position = 'fixed';
+            body.style.top = `-${scrollY}px`;
+            body.style.left = '0';
+            body.style.right = '0';
+            body.style.width = '100%';
         }
 
         body.dataset.modalScrollLockCount = String(currentCount + 1);
@@ -157,15 +166,18 @@
         if (!bodyScrollLocked) return;
 
         const body = document.body;
-        const html = document.documentElement;
         const currentCount = Math.max(Number(body.dataset.modalScrollLockCount || '1') - 1, 0);
 
         if (currentCount === 0) {
-            body.style.overflow = body.dataset.modalPrevOverflow || '';
-            html.style.overflow = html.dataset.modalPrevOverflow || '';
+            const scrollY = Number(body.dataset.modalScrollY || '0');
+            body.style.position = '';
+            body.style.top = '';
+            body.style.left = '';
+            body.style.right = '';
+            body.style.width = '';
             delete body.dataset.modalScrollLockCount;
-            delete body.dataset.modalPrevOverflow;
-            delete html.dataset.modalPrevOverflow;
+            delete body.dataset.modalScrollY;
+            window.scrollTo(0, scrollY);
         } else {
             body.dataset.modalScrollLockCount = String(currentCount);
         }

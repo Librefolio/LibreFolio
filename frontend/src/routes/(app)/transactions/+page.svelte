@@ -16,7 +16,7 @@
     import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/stores/transactions/transactionTypeStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
-    import {PromoteMergeModal, TransactionActionModal, TransactionBulkModal, TransactionDeleteModal, TransactionFormModal, TransactionsTable, resolveFormItemsForView, type FormModalItems} from '$lib/components/transactions';
+    import {PromoteMergeModal, TransactionActionModal, TransactionBulkModal, TransactionDeleteModal, TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -118,28 +118,6 @@
         return res ?? [];
     }
 
-    // NOTE: On /transactions, loadMainRows() returns ALL user-visible transactions
-    // (no server-side filtering), so partners are almost always already in mainRows.
-    // This function exists for reuse on pages that DO filter server-side (e.g. broker
-    // detail page showing only that broker's transactions) — there, a paired partner
-    // on a different broker would be missing from the main set and needs fetching.
-    async function loadPartnerRows(main: TXReadItem[]): Promise<TXReadItem[]> {
-        const mainIds = new Set(main.map((r) => r.id));
-        const missing = new Set<number>();
-        for (const r of main) {
-            const partner = r.related_transaction_id;
-            if (partner != null && !mainIds.has(partner)) missing.add(partner);
-        }
-        if (missing.size === 0) return [];
-        try {
-            const res = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {ids: [...missing]}} as never)) as TXReadItem[];
-            return res ?? [];
-        } catch (e) {
-            console.warn('Failed to load partner rows:', e);
-            return [];
-        }
-    }
-
     async function loadBrokers(): Promise<void> {
         // Sourced from the shared brokerStore cache. `ensureBrokersLoaded` is
         // a no-op after the first successful load (until invalidated); the
@@ -149,38 +127,6 @@
         // brokers that only have default_import_plugin (no icon_url/portal_url).
         await ensurePluginIconsLoaded();
         pluginIconsReady = true;
-    }
-
-    async function loadEventTooltipMap(rows: TXReadItem[]): Promise<void> {
-        const ids = [...new Set(rows.map((r) => r.asset_event_id).filter((id): id is number => id != null))];
-        if (ids.length === 0) {
-            eventTooltipMap = new Map();
-            return;
-        }
-        try {
-            const res = await zodiosApi.get_events_by_ids_api_v1_assets_events_get({queries: {ids}});
-            const map = new Map<number, AssetEvent>();
-            for (const item of res.items ?? []) {
-                for (const ev of item.events ?? []) {
-                    if (ev.id != null) {
-                        map.set(ev.id, {
-                            id: ev.id,
-                            asset_id: item.asset_id,
-                            type: ev.type,
-                            date: ev.date,
-                            value: typeof ev.value === 'object' ? ev.value.amount : String(ev.value),
-                            currency: typeof ev.value === 'object' ? ev.value.code : '',
-                            is_auto: ev.is_auto ?? false,
-                            notes: (Array.isArray(ev.notes) ? ev.notes.join(', ') : ev.notes) ?? null,
-                        });
-                    }
-                }
-            }
-            eventTooltipMap = map;
-        } catch (e) {
-            console.warn('Failed to load event tooltips:', e);
-            eventTooltipMap = new Map();
-        }
     }
 
     async function reload(opts?: {soft?: boolean}): Promise<void> {
@@ -194,8 +140,9 @@
             mainRows = main;
 
             // Stage 2: partners + tooltip + asset hydration in parallel.
-            const [partner] = await Promise.all([loadPartnerRows(main), loadEventTooltipMap(main), ensureAssetsLoaded()]);
+            const [partner, tooltipMap] = await Promise.all([loadPartnerRows(main), loadEventTooltipMap(main), ensureAssetsLoaded()]);
             partnerRows = partner;
+            eventTooltipMap = tooltipMap;
 
             // Populate txStore (single source of truth for modals).
             txStoreSetAll(main, partner);

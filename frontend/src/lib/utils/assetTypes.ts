@@ -24,7 +24,7 @@ const PNG_MAP: Record<string, string> = {
     CRYPTO: 'crypto',
     FUND: 'fund',
     HOLD: 'hold',
-    CROWDFUND_LOAN: 'crowdfunding',
+    CROWDFUND: 'crowdfunding',
     INDEX: 'index',
     OTHER: 'other',
     LIQUIDITY: 'liquidity',

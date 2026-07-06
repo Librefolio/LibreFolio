@@ -121,6 +121,23 @@ class BRReadItem(BaseModel):
 
     # User-specific: the current user's role on this broker
     user_role: Optional[str] = Field(None, description="Current user's role on this broker (OWNER/EDITOR/VIEWER)")
+    user_share_percentage: Optional[SafeDecimal] = Field(default=None, description="Current user's ownership percentage")
+
+
+class BRDiscoveryItem(BaseModel):
+    """Minimal broker payload for discovery of inaccessible brokers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int = Field(..., description="Broker ID")
+    name: str = Field(..., description="Broker name")
+    icon_url: Optional[str] = Field(default=None, description="Custom icon URL for the broker")
+
+
+class BRListResponse(BaseListResponse[BRReadItem]):
+    """Response for listing accessible brokers plus optional discovery items."""
+
+    inaccessible: List[BRDiscoveryItem] = Field(default_factory=list, description="Existing brokers without access for current user")
 
 
 # =============================================================================
@@ -165,10 +182,6 @@ class BRSummary(BRReadItem):
     - Total portfolio value in base currency (if FX rates available)
     - Current user's role and share percentage on this broker
     """
-
-    # Current user's access info
-    user_role: Optional[str] = Field(default=None, description="Current user's role on this broker (OWNER/EDITOR/VIEWER)")
-    user_share_percentage: Optional[SafeDecimal] = Field(default=None, description="Current user's ownership percentage")
 
     # Cash balances as list of Currency objects
     cash_balances: List[Currency] = Field(default_factory=list, description="Current cash balance per currency")

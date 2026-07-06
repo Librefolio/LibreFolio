@@ -152,13 +152,13 @@ class AssetType(StrEnum):
     - CRYPTO: Cryptocurrencies (e.g., Bitcoin, Ethereum)
     - FUND: Mutual funds or investment funds
     - HOLD: Assets without automatic market pricing (real estate, art, collectibles, unlisted companies)
-    - CROWDFUND_LOAN: Peer-to-peer lending or crowdfunding loans (e.g., Recrowd, Mintos)
+    - CROWDFUND: Peer-to-peer lending or crowdfunding loans (e.g., Recrowd, Mintos)
     - INDEX: Market indices and benchmarks (e.g., S&P 500, MSCI World) — no transactions allowed
     - OTHER: Any other asset type not listed above
 
     Impact:
     - Affects default valuation_model:
-      - CROWDFUND_LOAN -> SCHEDULED_YIELD
+      - CROWDFUND -> SCHEDULED_YIELD
       - HOLD -> MANUAL
       - INDEX -> MARKET_PRICE (read-only benchmark, no transactions)
       - Others -> MARKET_PRICE
@@ -171,7 +171,7 @@ class AssetType(StrEnum):
     BOND = "BOND"
     CRYPTO = "CRYPTO"
     FUND = "FUND"
-    CROWDFUND_LOAN = "CROWDFUND_LOAN"
+    CROWDFUND = "CROWDFUND"
     HOLD = "HOLD"
     INDEX = "INDEX"
     OTHER = "OTHER"

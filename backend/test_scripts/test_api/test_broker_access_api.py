@@ -14,6 +14,7 @@ by a single PUT bulk endpoint.
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
 import httpx
@@ -36,7 +37,7 @@ def unique_name(prefix: str) -> str:
 def unique_username() -> str:
     """Generate a unique username."""
     timestamp = int(datetime.now().timestamp() * 1000)
-    return f"access_test_{timestamp}"
+    return f"access_test_{timestamp}_{uuid.uuid4().hex[:6]}"
 
 
 # ============================================================================
@@ -160,7 +161,7 @@ class TestAccessList:
 
     @pytest.mark.asyncio
     async def test_list_access_no_access(self, test_server):
-        """ACCESS-002: GET /brokers/{id}/access - 404 without access."""
+        """ACCESS-002: GET /brokers/{id}/access - non-member can still list."""
         print_section("ACCESS-002: List access without permission")
 
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
@@ -173,9 +174,30 @@ class TestAccessList:
                 timeout=TIMEOUT,
             )
 
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data["items"]) == 1
+            assert data["items"][0]["role"] == "OWNER"
+            assert Decimal(str(data["items"][0]["share_percentage"])) == Decimal("1")
+            assert data["items"][0]["email"]
+
+            print_success("✓ Non-member can view full access payload")
+
+    @pytest.mark.asyncio
+    async def test_list_access_broker_not_found(self, test_server):
+        """ACCESS-003: GET /brokers/{id}/access - 404 only for missing broker."""
+        print_section("ACCESS-003: List access for missing broker")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+            response = await client.get(
+                f"{API_BASE}/brokers/999999/access",
+                timeout=TIMEOUT,
+            )
+
             assert response.status_code == 404
 
-            print_success("✓ Got 404 without access")
+            print_success("✓ Missing broker still returns 404")
 
 
 # ============================================================================
@@ -483,14 +505,7 @@ class TestMultiUserIsolation:
 
     @pytest.mark.asyncio
     async def test_user_cannot_see_others_brokers(self, test_server):
-        """ACCESS-043: User A cannot see broker of User B.
-
-        Note: GET /brokers uses LEFT JOIN and returns ALL brokers, but with
-        user_role=null for brokers the user has no access to. This allows the
-        frontend to render broker names in paired-tx placeholders. The isolation
-        guarantee is that user_role is null (no operational access), not that
-        the broker is hidden from the list.
-        """
+        """ACCESS-043: User A cannot see broker of User B in default broker list."""
         print_section("ACCESS-043: User isolation")
 
         async with httpx.AsyncClient() as client1, httpx.AsyncClient() as client2:
@@ -499,13 +514,19 @@ class TestMultiUserIsolation:
 
             await create_user_and_login(client2)
 
-            # GET /brokers returns all brokers (LEFT JOIN), but user_role must be null
-            # for brokers the user has no access to.
             list_resp = await client2.get(f"{API_BASE}/brokers", timeout=TIMEOUT)
             brokers_data = list_resp.json()
-            other_broker = next((b for b in brokers_data if b["id"] == broker_id), None)
-            assert other_broker is not None, "LEFT JOIN should expose all brokers"
-            assert other_broker.get("user_role") is None, "user_role must be null for inaccessible broker"
+            other_broker = next((b for b in brokers_data["items"] if b["id"] == broker_id), None)
+            assert other_broker is None, "Default broker list must exclude inaccessible brokers"
+
+            discovery_resp = await client2.get(
+                f"{API_BASE}/brokers",
+                params={"include_inaccessible": "true"},
+                timeout=TIMEOUT,
+            )
+            discovery_data = discovery_resp.json()
+            discovered_broker = next((b for b in discovery_data["inaccessible"] if b["id"] == broker_id), None)
+            assert discovered_broker is not None, "Discovery list should expose inaccessible broker metadata"
 
             # Direct access by ID must still return 404 (strict isolation)
             direct_resp = await client2.get(

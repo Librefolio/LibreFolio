@@ -36,5 +36,5 @@ export const PROMPT_ANALYSIS_REQUEST = `Please:
 9. Ask clarifying questions before suggesting strong actions.`;
 
 export function buildResponseLanguageLine(language: string): string {
-	return `Please provide your answer in: ${language}.`;
+    return `Please provide your answer in: ${language}.`;
 }

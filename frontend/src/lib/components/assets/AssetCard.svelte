@@ -143,7 +143,7 @@
                 return 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400';
             case 'HOLD':
                 return 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400';
-            case 'CROWDFUND_LOAN':
+            case 'CROWDFUND':
                 return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400';
             default:
                 return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
@@ -157,7 +157,7 @@
         CRYPTO: 'crypto',
         FUND: 'fund',
         HOLD: 'hold',
-        CROWDFUND_LOAN: 'crowdfunding',
+        CROWDFUND: 'crowdfunding',
         INDEX: 'index',
         OTHER: 'other',
     };

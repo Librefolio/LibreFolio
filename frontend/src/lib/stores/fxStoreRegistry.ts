@@ -245,9 +245,7 @@ export async function ensureFxRangeLoaded(slug: string, start: string, end: stri
  * @param requests  Array of { slug, start, end } for each pair
  * @returns         Map from slug to FxDataPoint[] (all cached data in [start, end])
  */
-export async function ensureFxRangeLoadedBulk(
-    requests: Array<{slug: string; start: string; end: string}>,
-): Promise<Map<string, FxDataPoint[]>> {
+export async function ensureFxRangeLoadedBulk(requests: Array<{slug: string; start: string; end: string}>): Promise<Map<string, FxDataPoint[]>> {
     // Collect all gaps across all pairs
     type GapEntry = {slug: string; base: string; quote: string; gap: {start: string; end: string}};
     const allGaps: GapEntry[] = [];

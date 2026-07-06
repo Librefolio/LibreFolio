@@ -15,33 +15,25 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
-    import {RefreshCw, PieChart, AreaChart, Brain} from 'lucide-svelte';
+    import {RefreshCw, Brain, Briefcase, TrendingUp, ArrowRightLeft, Wallet} from 'lucide-svelte';
+    import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
     import {copyAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
 
     import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {zodiosApi} from '$lib/api';
-    import {ensureBrokersLoaded} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
-    import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
-
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import AllocationPieChart from '$lib/components/charts/AllocationPieChart.svelte';
-    import AllocationHistoryChart from '$lib/components/dashboard/AllocationHistoryChart.svelte';
-    import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
+    import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
+    import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
     import RecentTransactionsPanel from '$lib/components/dashboard/RecentTransactionsPanel.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
-    import DocsLink from '$lib/components/ui/DocsLink.svelte';
-    import TweenedValue from '$lib/components/ui/TweenedValue.svelte';
-    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import KpiMetricBar from '$lib/components/dashboard/KpiMetricBar.svelte';
-    import KpiDivergingFlowBar from '$lib/components/dashboard/KpiDivergingFlowBar.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {TransactionFormModal, resolveFormItemsForView, type FormModalItems} from '$lib/components/transactions';
     import type {TXReadItem} from '$lib/components/transactions/types';
@@ -50,6 +42,7 @@
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {goto} from '$app/navigation';
+    import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
 
     // =========================================================================
     // State
@@ -117,15 +110,6 @@
     /** Filter bar ref — for ResizeObserver. */
     let filterBarRef = $state<HTMLDivElement | null>(null);
 
-    /** Active tab in the allocation panel. */
-    let allocationTab = $state<'type' | 'sector' | 'geo'>('type');
-
-    /** Allocation view mode: Now (pie/map) or History (stacked area). */
-    let allocationView = $state<'now' | 'history'>('now');
-
-    /** Allocation history data — derived from report (no separate fetch needed). */
-    let allocationHistoryLoading = $derived(reportLoading && !allocationHistoryFromReport);
-
     /** Responsive layout — same utility as assets/fx pages. */
     const layout = createResponsiveLayout({wide: 900, tablet: 660, tabletS: 480, labelHide: 460});
 
@@ -147,7 +131,11 @@
         if (targetCurrencyManuallySet || targetCurrency === baseCurrency) return;
         const hadLoadedData = summary !== null || history.length > 0;
         targetCurrency = baseCurrency;
-        if (hadLoadedData) void loadAll(true);
+        // Guard: don't stack a second overlapping loadAll() if one triggered by onMount
+        // (or a prior currency change) is still in flight — avoids duplicate concurrent
+        // fetches racing to reassign summary/history while the user may be interacting
+        // with the page (e.g. clicking a card whose click depends on stable DOM state).
+        if (hadLoadedData && !reportLoading) void loadAll(true);
     });
 
     /**
@@ -165,71 +153,16 @@
     /** Broker filter trigger label — follows assets-page type-filter pattern (no separate badge). */
     const brokerFilterLabel = $derived(brokerFilterActive ? (selectedBrokerIds.length === 1 ? (allBrokers.find((b) => b.id === selectedBrokerIds[0])?.name ?? String(selectedBrokerIds[0])) : `${$_('brokers.title')} (${selectedBrokerIds.length})`) : $_('dashboard.allBrokers'));
 
-    /** Extract a single string from SafeDecimal (may be string | (string|null)[] | null | undefined). */
-    function safeStr(v: string | (string | null)[] | null | undefined): string | null {
-        if (v == null) return null;
-        if (Array.isArray(v)) return v[0] ?? null;
-        return v;
-    }
-
-    /** Safely extract a Currency object from Zodios Optional union type. */
-    function safeCurrency(v: any): {code: string; amount: string} | null {
-        if (v == null) return null;
-        if (Array.isArray(v)) return v[0] ?? null;
-        if (typeof v === 'object' && 'amount' in v) return v as {code: string; amount: string};
-        return null;
-    }
-
-    function formatMoney(code: string | undefined, amount: string | null | undefined, opts?: {signed?: boolean; absolute?: boolean}): string {
-        if (amount == null) return '—';
-        const num = parseFloat(amount);
-        const absolute = opts?.absolute ?? false;
-        const rendered = absolute ? Math.abs(num) : num;
-        const showSign = opts?.signed ?? false;
-        return formatCurrencyAmountPlain(rendered, code ?? displayCurrency, {showSign});
-    }
-
-    /** Build tooltip HTML with right-aligned values for breakdown rows. */
-    function tooltipRows(description: string, rows: {emoji: string; label: string; value: string}[]): string {
-        let html = `<div style="font-size:12px;max-width:300px">${description}`;
-        html += `<table style="width:100%;margin-top:6px;border-collapse:collapse">`;
-        for (const r of rows) {
-            html += `<tr><td style="white-space:nowrap">${r.emoji} ${r.label}</td><td style="text-align:right;padding-left:12px;white-space:nowrap;font-weight:500">${r.value}</td></tr>`;
-        }
-        html += `</table></div>`;
-        return html;
-    }
-
-    /** Allocation data for charts — full AllocationEntry[] with amount and emoji. */
-    type AllocEntry = {name: string; value: number; amount: number; emoji?: string | null};
-    function toAllocEntries(items: any[] | null | undefined): AllocEntry[] {
-        if (!items) return [];
-        return (items as any[]).flatMap((i) => {
-            const v = parseFloat(i?.value ?? '0');
-            if (v <= 0) return [];
-            return [{name: i.name ?? '', value: v, amount: parseFloat(i?.amount ?? '0'), emoji: i?.emoji ?? null}];
-        });
-    }
-    const allocationByType = $derived(toAllocEntries(summary?.allocation_by_type as any));
-    const allocationBySector = $derived(toAllocEntries(summary?.allocation_by_sector as any));
-    const allocationByGeo = $derived(toAllocEntries(summary?.allocation_by_geography as any));
-    // GeographyMap needs Record<string, number> (weight 0-1) and amounts by ISO A3
-    const allocationByGeoMap = $derived(Object.fromEntries(allocationByGeo.map((e) => [e.name, e.value / 100])));
-    const allocationByGeoAmounts = $derived(Object.fromEntries(allocationByGeo.filter((e) => e.amount > 0).map((e) => [e.name, e.amount])));
-    const geoUnknownPercent = $derived.by(() => {
-        const unknown = allocationByGeo.find((e) => e.name === 'Unknown');
-        const other = allocationByGeo.find((e) => e.name === 'Other');
-        return (unknown ? unknown.value : 0) + (other ? other.value : 0);
-    });
     const dataQualityIssues = $derived<DataQualityIssue[]>((summary?.data_quality as {issues?: DataQualityIssue[]} | undefined)?.issues ?? []);
 
-    /** Allocation history data — derived from report, keyed by active tab dimension. */
-    const allocationHistoryData = $derived.by(() => {
-        if (!allocationHistoryFromReport) return [];
-        const dimMap: Record<string, keyof AllocationHistoryDimensions> = {type: 'type', sector: 'sector', geo: 'geography'};
-        const dim = dimMap[allocationTab] ?? 'type';
-        return (allocationHistoryFromReport as AllocationHistoryDimensions)[dim] ?? [];
-    });
+    /** Tab navigation — mirrors the broker detail page's structure (no "Info" tab
+     *  here: there's no portfolio-wide metadata/sharing concept at this level). */
+    let activeTab = $state('panoramica');
+    const dashboardTabs = $derived([
+        {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'dashboard-tab-panoramica'},
+        {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'dashboard-tab-posizioni'},
+        {id: 'transazioni', label: $_('transactions.title'), icon: ArrowRightLeft, testId: 'dashboard-tab-transazioni'},
+    ]);
 
     /** FxPairAddModal state for CTA-driven pair creation */
     let showFxPairAddModal = $state(false);
@@ -251,192 +184,6 @@
             showFxPairAddModal = true;
         }
     }
-
-    // KPI derived values — Net Worth card
-    const netWorthValue = $derived(summary ? formatMoney(summary.net_worth.code, summary.net_worth.amount) : '—');
-    const marketValueCur = $derived(summary ? safeCurrency(summary.market_value) : null);
-    const marketValueAmt = $derived(marketValueCur ? parseFloat(marketValueCur.amount) : 0);
-    const marketValueStr = $derived(marketValueCur ? formatMoney(marketValueCur.code, marketValueCur.amount) : '—');
-    const marketValueStartCur = $derived(summary ? safeCurrency(summary.period_market_value_start) : null);
-    const marketValueStartAmt = $derived(marketValueStartCur ? parseFloat(marketValueStartCur.amount) : 0);
-    const marketValueStartStr = $derived(marketValueStartCur ? formatMoney(marketValueStartCur.code, marketValueStartCur.amount) : '');
-    // Purchase Cost (= open_cost_basis: WAC × qty, excludes cash)
-    const purchaseCostCur = $derived(summary ? safeCurrency(summary.open_cost_basis) : null);
-    const purchaseCostAmt = $derived(purchaseCostCur ? parseFloat(purchaseCostCur.amount) : 0);
-    const purchaseCostStr = $derived(purchaseCostCur ? formatMoney(purchaseCostCur.code, purchaseCostCur.amount) : '—');
-    // For start-of-period marker, use period_book_value_start as a proxy (open_cost_basis at start is not exposed separately)
-    const purchaseCostStartCur = $derived(summary ? safeCurrency(summary.period_book_value_start) : null);
-    const purchaseCostStartAmt = $derived(purchaseCostStartCur ? parseFloat(purchaseCostStartCur.amount) : 0);
-    const purchaseCostStartStr = $derived(purchaseCostStartCur ? formatMoney(purchaseCostStartCur.code, purchaseCostStartCur.amount) : '');
-    const cashAmt = $derived(summary ? parseFloat(summary.cash_total.amount) : 0);
-    const cashTotalStr = $derived(summary ? formatMoney(summary.cash_total.code, summary.cash_total.amount) : '—');
-
-    // Cash breakdown from last history point (Capitale + Rendimento, for cash tooltip)
-    const lastHistoryPoint = $derived(history.length > 0 ? history[history.length - 1] : null);
-    const firstHistoryPoint = $derived(history.length > 0 ? history[0] : null);
-    const prevHistoryPoint = $derived(history.length > 1 ? history[history.length - 2] : null);
-
-    // Delta vs yesterday (for KPI sub-text)
-    const navDeltaDay = $derived.by(() => {
-        if (!lastHistoryPoint || !prevHistoryPoint) return null;
-        const last = parseFloat(lastHistoryPoint.nav_value.amount);
-        const prev = parseFloat(prevHistoryPoint.nav_value.amount);
-        return last - prev;
-    });
-    const navDeltaDayStr = $derived(navDeltaDay != null ? formatMoney(displayCurrency, String(navDeltaDay), {signed: true}) : null);
-
-    const pnlDeltaDay = $derived.by(() => {
-        if (!lastHistoryPoint || !prevHistoryPoint) return null;
-        const last = parseFloat(lastHistoryPoint.total_pnl.amount);
-        const prev = parseFloat(prevHistoryPoint.total_pnl.amount);
-        return last - prev;
-    });
-    const pnlDeltaDayStr = $derived(pnlDeltaDay != null ? formatMoney(displayCurrency, String(pnlDeltaDay), {signed: true}) : null);
-    const pnlDeltaDayPct = $derived.by(() => {
-        if (!lastHistoryPoint || !prevHistoryPoint) return null;
-        const prevNav = parseFloat(prevHistoryPoint.nav_value.amount);
-        if (prevNav === 0 || pnlDeltaDay == null) return null;
-        return ((pnlDeltaDay / prevNav) * 100).toFixed(2);
-    });
-
-    const cashContribAmt = $derived(lastHistoryPoint?.cash_from_contributed_capital != null ? parseFloat(lastHistoryPoint.cash_from_contributed_capital.amount) : null);
-    const cashGeneratedAmt = $derived(lastHistoryPoint?.cash_from_generated_returns != null ? parseFloat(lastHistoryPoint.cash_from_generated_returns.amount) : null);
-    const cashCurrency = $derived(summary?.cash_total.code ?? 'EUR');
-    const cashContribStr = $derived(cashContribAmt != null ? formatMoney(cashCurrency, String(cashContribAmt)) : '—');
-    const cashGeneratedStr = $derived(cashGeneratedAmt != null ? formatMoney(cashCurrency, String(cashGeneratedAmt)) : '—');
-    // Cash at period start — from first history point
-    const cashStartAmt = $derived(firstHistoryPoint?.cash_value != null ? parseFloat(firstHistoryPoint.cash_value.amount) : 0);
-    const cashStartStr = $derived(firstHistoryPoint?.cash_value != null ? formatMoney(firstHistoryPoint.cash_value.code, firstHistoryPoint.cash_value.amount) : '');
-
-    // Net Deposited Capital
-    const netDepositedCur = $derived(summary ? safeCurrency(summary.net_deposited_capital) : null);
-    const netDepositedAmt = $derived(netDepositedCur ? parseFloat(netDepositedCur.amount) : 0);
-    const netDepositedStr = $derived(netDepositedCur ? formatMoney(netDepositedCur.code, netDepositedCur.amount, {signed: true}) : '—');
-    const totalDepositedCur = $derived(summary ? safeCurrency(summary.total_deposited) : null);
-    const totalDepositedStr = $derived(totalDepositedCur ? formatMoney(totalDepositedCur.code, totalDepositedCur.amount, {signed: true}) : '—');
-    const totalWithdrawnCur = $derived(summary ? safeCurrency(summary.total_withdrawn) : null);
-    const totalWithdrawnStr = $derived(totalWithdrawnCur ? formatMoney(totalWithdrawnCur.code, `-${totalWithdrawnCur.amount}`) : '—');
-    const totalDepositedAmt = $derived(totalDepositedCur ? parseFloat(totalDepositedCur.amount) : 0);
-    const totalWithdrawnAmt = $derived(totalWithdrawnCur ? parseFloat(totalWithdrawnCur.amount) : 0);
-    const netDepositedPositive = $derived(netDepositedAmt >= 0);
-
-    // Net Worth bars — all bars share same scale including NAV hero
-    const navHeroAmt = $derived(summary ? parseFloat(summary.net_worth.amount) : 0);
-    const nwBarMax = $derived(Math.max(navHeroAmt, marketValueStartAmt, marketValueAmt, purchaseCostAmt, purchaseCostStartAmt, cashAmt, cashStartAmt, totalDepositedAmt, totalWithdrawnAmt) || 1);
-    const marketBarPct = $derived((marketValueAmt / nwBarMax) * 100);
-    const purchaseCostBarPct = $derived((purchaseCostAmt / nwBarMax) * 100);
-    const cashBarPct = $derived((cashAmt / nwBarMax) * 100);
-    const depositBarPct = $derived((totalDepositedAmt / nwBarMax) * 100);
-    const withdrawBarPct = $derived((totalWithdrawnAmt / nwBarMax) * 100);
-    const marketStartMarkerPct = $derived(marketValueStartAmt > 0 ? (marketValueStartAmt / nwBarMax) * 100 : 0);
-    const purchaseCostStartMarkerPct = $derived(purchaseCostStartAmt > 0 ? (purchaseCostStartAmt / nwBarMax) * 100 : 0);
-    const cashStartMarkerPct = $derived(cashStartAmt > 0 ? (cashStartAmt / nwBarMax) * 100 : 0);
-    const marketBarColor = $derived(marketValueAmt >= marketValueStartAmt ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500');
-
-    // KPI derived values — Period P&L card
-    const periodPnlCur = $derived(summary ? safeCurrency(summary.period_pnl) : null);
-    const periodPnlAmt = $derived(periodPnlCur ? parseFloat(periodPnlCur.amount) : 0);
-    const periodPnlStr = $derived(periodPnlCur ? formatMoney(periodPnlCur.code, periodPnlCur.amount, {signed: true}) : '—');
-    const periodPnlPositive = $derived(periodPnlCur ? parseFloat(periodPnlCur.amount) >= 0 : undefined);
-
-    // P&L breakdown values
-    const uglDeltaCur = $derived(summary ? safeCurrency(summary.period_unrealized_gain_loss_delta) : null);
-    const uglDeltaAmt = $derived(uglDeltaCur ? parseFloat(uglDeltaCur.amount) : 0);
-    const uglDeltaStr = $derived(uglDeltaCur ? formatMoney(uglDeltaCur.code, uglDeltaCur.amount, {signed: true}) : '—');
-    const realizedCur = $derived(summary ? safeCurrency(summary.period_realized_gain_loss) : null);
-    const realizedAmt = $derived(realizedCur ? parseFloat(realizedCur.amount) : 0);
-    const realizedStr = $derived(realizedCur ? formatMoney(realizedCur.code, realizedCur.amount, {signed: true}) : '—');
-    const incomeCur = $derived(summary ? safeCurrency(summary.period_income) : null);
-    const incomeAmt = $derived(incomeCur ? parseFloat(incomeCur.amount) : 0);
-    const incomeStr = $derived(incomeCur ? formatMoney(incomeCur.code, incomeCur.amount, {signed: true}) : '—');
-    const feesCur = $derived(summary ? safeCurrency(summary.period_fees_taxes) : null);
-    const feesAmt = $derived(feesCur ? parseFloat(feesCur.amount) : 0);
-    const feesStr = $derived(feesCur ? formatMoney(feesCur.code, `-${feesCur.amount}`) : '—');
-    const feesOnlyCur = $derived(summary ? safeCurrency(summary.period_fees) : null);
-    const feesOnlyStr = $derived(feesOnlyCur ? formatMoney(feesOnlyCur.code, `-${feesOnlyCur.amount}`) : '—');
-    const taxesOnlyCur = $derived(summary ? safeCurrency(summary.period_taxes) : null);
-    const taxesOnlyStr = $derived(taxesOnlyCur ? formatMoney(taxesOnlyCur.code, `-${taxesOnlyCur.amount}`) : '—');
-
-    // HTML tooltips with right-aligned numbers
-    const netDepositedTooltipHtml = $derived(
-        tooltipRows($_('dashboard.netDepositedCapitalTooltip', {values: {deposited: '', withdrawn: ''}}).split('\n')[0], [
-            {emoji: '🟢', label: $_('dashboard.totalDeposited'), value: totalDepositedStr},
-            {emoji: '🔴', label: $_('dashboard.totalWithdrawn'), value: totalWithdrawnStr},
-        ]),
-    );
-    const feesTooltipHtml = $derived(
-        tooltipRows($_('dashboard.feesAndTaxesTooltip', {values: {fees: '', taxes: ''}}).split('\n')[0], [
-            {emoji: '🏦', label: $_('dashboard.feesLabel') || 'Commissions', value: feesOnlyStr},
-            {emoji: '🏛️', label: $_('dashboard.taxesLabel') || 'Taxes', value: taxesOnlyStr},
-        ]),
-    );
-    // Cash tooltip: breakdown into Capitale (contributed) + Rendimento (generated)
-    const cashTooltipHtml = $derived(
-        (() => {
-            if (cashContribAmt == null && cashGeneratedAmt == null) return undefined;
-            return tooltipRows($_('dashboard.cashValueTooltip'), [
-                {emoji: '💼', label: $_('dashboard.cashFromContributedCapital'), value: cashContribStr},
-                {emoji: '🌱', label: $_('dashboard.cashFromGeneratedReturns'), value: cashGeneratedStr},
-            ]);
-        })(),
-    );
-
-    // P&L bar normalization
-    const pnlBarMax = $derived(Math.max(Math.abs(uglDeltaAmt), Math.abs(realizedAmt), Math.abs(incomeAmt), feesAmt) || 1);
-    function pnlBarPct(val: number) {
-        return (Math.abs(val) / pnlBarMax) * 100;
-    }
-    function pnlBarColor(val: number) {
-        return val >= 0 ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500';
-    }
-    function pnlValueColor(val: number) {
-        return val >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
-    }
-
-    // KPI derived values — Returns card
-    const roiVal = $derived(summary ? parseFloat(summary.simple_roi_percent) * 100 : 0);
-    const twrrCumVal = $derived.by(() => {
-        const v = summary ? safeStr(summary.twrr_percent) : null;
-        return v != null ? parseFloat(v) * 100 : 0;
-    });
-    const mwrrCumVal = $derived.by(() => {
-        const v = summary ? safeStr(summary.mwrr_cumulative_percent) : null;
-        return v != null ? parseFloat(v) * 100 : 0;
-    });
-    const mwrrAnnVal = $derived.by(() => {
-        const v = summary ? safeStr(summary.mwrr_annualized_percent) : null;
-        return v != null ? parseFloat(v) * 100 : 0;
-    });
-    const timingEffectVal = $derived(mwrrCumVal - twrrCumVal);
-    const timingEffectStr = $derived.by(() => {
-        if (!summary) return '—';
-        const formatted = Math.abs(timingEffectVal).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        return `${timingEffectVal >= 0 ? '+' : '-'}${formatted} ${$_('dashboard.pp')}`;
-    });
-    const timingIntensity = $derived(Math.min(Math.abs(timingEffectVal) / 3, 1));
-    const timingLabel = $derived.by(() => {
-        if (Math.abs(timingEffectVal) < 0.05) return $_('dashboard.timingNeutral');
-        return timingEffectVal > 0 ? $_('dashboard.timingFavorable') : $_('dashboard.timingUnfavorable');
-    });
-    const roiPct = $derived(summary ? `${roiVal.toFixed(2)}%` : '—');
-    const twrrCumPct = $derived(summary ? `${twrrCumVal.toFixed(2)}%` : '—');
-    const mwrrCumPct = $derived(summary ? `${mwrrCumVal.toFixed(2)}%` : '—');
-    const mwrrAnnPct = $derived(summary ? `${mwrrAnnVal.toFixed(2)}%` : '—');
-    const roiIsPositive = $derived(summary ? parseFloat(summary.simple_roi_percent) >= 0 : undefined);
-
-    // Returns bar normalization
-    const retBarMax = $derived(Math.max(Math.abs(roiVal), Math.abs(twrrCumVal), Math.abs(mwrrCumVal), Math.abs(mwrrAnnVal)) || 1);
-    function retBarPct(val: number) {
-        return (Math.abs(val) / retBarMax) * 100;
-    }
-    function retBarColor(val: number) {
-        return val >= 0 ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500';
-    }
-
-    // Format helpers for TweenedValue in KpiMetricBar
-    const fmtMoney = (v: number) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true});
-    const fmtMoneyUnsigned = (v: number) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: false});
-    const fmtPct = (v: number) => `${v.toFixed(2)}%`;
 
     /** URL for "See all" assets link — preserves current date range. */
     const assetsHref = $derived(`/assets?start=${urlDateFrom}&end=${urlDateTo}`);
@@ -469,8 +216,6 @@
     }
 
     async function loadAll(force = false) {
-        // Invalidate allocation history cache whenever filters change
-        allocationHistoryCacheKey = null;
         reportLoading = true;
         try {
             const report = await fetchReport(activeBrokerIds, dateFrom || undefined, dateTo || undefined, targetCurrency, force);
@@ -491,26 +236,12 @@
         if (positionsContribution || contributionLoading) return;
         contributionLoading = true;
         try {
-            const report = await fetchReport(activeBrokerIds, dateFrom || undefined, dateTo || undefined, targetCurrency, false, true);
+            // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
+            const report = await fetchReport(activeBrokerIds, dateFrom || undefined, dateTo || undefined, targetCurrency, false, true, false, false, false);
             positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
         } finally {
             contributionLoading = false;
         }
-    }
-
-    /** Build a cache key that captures all query parameters. */
-    function allocHistoryCacheKey(dimension: string) {
-        return `${dimension}|${dateFrom ?? ''}|${dateTo ?? ''}|${(activeBrokerIds ?? []).join(',')}|${targetCurrency ?? ''}`;
-    }
-
-    let allocationHistoryCacheKey = $state<string | null>(null);
-
-    async function loadAllocationHistory(dimension: string) {
-        // Allocation history is included in the report — no additional fetch needed
-        // Mark cache key as loaded so subsequent tab switches don't trigger re-fetch
-        const dimMap: Record<string, string> = {type: 'type', sector: 'sector', geo: 'geography'};
-        const apiDimension = dimMap[dimension] || 'type';
-        allocationHistoryCacheKey = allocHistoryCacheKey(apiDimension);
     }
 
     // =========================================================================
@@ -594,7 +325,7 @@
         document.addEventListener('click', handleDocumentClick);
         void (async () => {
             await ensureBrokersLoaded();
-            allBrokers = (await zodiosApi.list_brokers_api_v1_brokers_get()) as BrokerLike[];
+            allBrokers = getAllBrokers();
             await loadAll();
         })();
         return () => document.removeEventListener('click', handleDocumentClick);
@@ -604,409 +335,205 @@
 <div class="space-y-4" data-testid="dashboard-page">
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
-    <!-- ── Header row: white card — DateRangePicker | Broker filter | spacer | Sync ── -->
-    <div
-        bind:this={filterBarRef}
-        class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
-               {layout.layoutMode === 'mobile' ? 'flex-col items-start' : 'flex-row items-center'}"
-        data-testid="dashboard-filter-bar"
-    >
-        <!-- LEFT: Date range picker (wired to global store) -->
-        <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} onchange={handleDateChange} />
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden" data-testid="dashboard-controls">
+        <div
+            bind:this={filterBarRef}
+            class="flex gap-3 p-4
+                   {layout.layoutMode === 'mobile' ? 'flex-col items-start' : 'flex-row items-center'}"
+            data-testid="dashboard-filter-bar"
+        >
+            <!-- LEFT: Date range picker (wired to global store) -->
+            <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} onchange={handleDateChange} />
 
-        <!-- CENTER-LEFT: Currency override selector -->
-        <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-            <span class="whitespace-nowrap">{$_('common.currency')}:</span>
-            <div class="w-28">
-                <CurrencySearchSelect
-                    bind:value={targetCurrency}
-                    compact={true}
-                    dropdownPosition="bottom"
-                    placeholder={baseCurrency}
-                    onchange={() => {
-                        targetCurrencyManuallySet = true;
-                        void loadAll();
-                    }}
-                />
+            <!-- CENTER-LEFT: Currency override selector -->
+            <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                <span class="whitespace-nowrap">{$_('common.currency')}:</span>
+                <div class="w-28">
+                    <CurrencySearchSelect
+                        bind:value={targetCurrency}
+                        compact={true}
+                        dropdownPosition="bottom"
+                        placeholder={baseCurrency}
+                        onchange={() => {
+                            targetCurrencyManuallySet = true;
+                            void loadAll();
+                        }}
+                    />
+                </div>
             </div>
-        </div>
 
-        <!-- CENTER: Broker multi-select panel -->
-        <div class="relative">
-            <button
-                bind:this={brokerFilterTriggerEl}
-                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
+            <!-- CENTER: Broker multi-select panel -->
+            <div class="relative">
+                <button
+                    bind:this={brokerFilterTriggerEl}
+                    class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
                        {brokerFilterActive ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
-                onclick={() => (brokerFilterOpen = !brokerFilterOpen)}
-                data-testid="broker-filter-trigger"
-            >
-                {brokerFilterLabel}
-                <svg class="w-3 h-3 transition-transform {brokerFilterOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-                </svg>
-            </button>
+                    onclick={() => (brokerFilterOpen = !brokerFilterOpen)}
+                    data-testid="broker-filter-trigger"
+                >
+                    {brokerFilterLabel}
+                    <svg class="w-3 h-3 transition-transform {brokerFilterOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                    </svg>
+                </button>
 
-            {#if brokerFilterOpen}
-                <div class="absolute left-0 z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" data-broker-filter-panel>
-                    <!-- Select All / Deselect All -->
-                    <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
-                        <button
-                            type="button"
-                            class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                            onclick={() => {
-                                selectedBrokerIds = allBrokers.map((b) => b.id);
-                                scheduleReload();
-                            }}>{$_('common.selectAll')}</button
-                        >
-                        <button
-                            type="button"
-                            class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                            onclick={() => {
-                                selectedBrokerIds = [];
-                                scheduleReload();
-                            }}>{$_('common.clearAll')}</button
-                        >
-                    </div>
-                    <!-- Broker list -->
-                    <div class="max-h-52 overflow-y-auto mx-2.5 my-2 space-y-0.5">
-                        {#each allBrokers as broker (broker.id)}
-                            {@const isSelected = selectedBrokerIds.includes(broker.id)}
+                {#if brokerFilterOpen}
+                    <div class="absolute left-0 z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" data-broker-filter-panel>
+                        <!-- Select All / Deselect All -->
+                        <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
                             <button
                                 type="button"
-                                class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] rounded hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors {isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'}"
-                                onclick={() => toggleBroker(broker.id)}
-                                data-testid="broker-filter-item-{broker.id}"
+                                class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                                onclick={() => {
+                                    selectedBrokerIds = allBrokers.map((b) => b.id);
+                                    scheduleReload();
+                                }}>{$_('common.selectAll')}</button
                             >
-                                <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size={16} />
-                                <span class="flex-1 truncate">{broker.name}</span>
-                                {#if isSelected}
-                                    <svg class="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-                                    </svg>
-                                {/if}
-                            </button>
-                        {/each}
+                            <button
+                                type="button"
+                                class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                                onclick={() => {
+                                    selectedBrokerIds = [];
+                                    scheduleReload();
+                                }}>{$_('common.clearAll')}</button
+                            >
+                        </div>
+                        <!-- Broker list -->
+                        <div class="max-h-52 overflow-y-auto mx-2.5 my-2 space-y-0.5">
+                            {#each allBrokers as broker (broker.id)}
+                                {@const isSelected = selectedBrokerIds.includes(broker.id)}
+                                <button
+                                    type="button"
+                                    class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] rounded hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors {isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'}"
+                                    onclick={() => toggleBroker(broker.id)}
+                                    data-testid="broker-filter-item-{broker.id}"
+                                >
+                                    <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size={16} />
+                                    <span class="flex-1 truncate">{broker.name}</span>
+                                    {#if isSelected}
+                                        <svg class="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                                        </svg>
+                                    {/if}
+                                </button>
+                            {/each}
+                        </div>
                     </div>
-                </div>
-            {/if}
-        </div>
+                {/if}
+            </div>
 
-        <!-- Spacer -->
-        <div class="flex-1"></div>
+            <!-- Spacer -->
+            <div class="flex-1"></div>
 
-        <!-- FAR RIGHT: AI Export + Sync buttons -->
-        <div class="relative">
+            <!-- FAR RIGHT: AI Export + Sync buttons -->
+            <div class="relative">
+                <button
+                    bind:this={aiExportTriggerEl}
+                    class="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+                    onclick={() => (aiExportDropdownOpen = !aiExportDropdownOpen)}
+                    disabled={aiExportLoading}
+                    data-testid="ai-export-button"
+                    title={$_('dashboard.aiExport')}
+                >
+                    <Brain size={14} class={aiExportLoading ? 'animate-pulse' : ''} />
+                    {#if layout.showActionLabels}
+                        <span>{aiExportLoading ? $_('dashboard.aiExportBuilding') : $_('dashboard.aiExport')}</span>
+                    {/if}
+                </button>
+
+                {#if aiExportDropdownOpen}
+                    <div class="absolute right-0 z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" data-ai-export-panel>
+                        <button type="button" class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" onclick={() => handleAiExport('full')} data-testid="ai-export-full">
+                            <Brain size={14} class="text-purple-500" />
+                            {$_('dashboard.aiExportFull')}
+                        </button>
+                        <button
+                            type="button"
+                            class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-100 dark:border-slate-700"
+                            onclick={() => handleAiExport('data-only')}
+                            data-testid="ai-export-data-only"
+                        >
+                            <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                            </svg>
+                            {$_('dashboard.aiExportDataOnly')}
+                        </button>
+                    </div>
+                {/if}
+            </div>
+
             <button
-                bind:this={aiExportTriggerEl}
                 class="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
-                onclick={() => (aiExportDropdownOpen = !aiExportDropdownOpen)}
-                disabled={aiExportLoading}
-                data-testid="ai-export-button"
-                title={$_('dashboard.aiExport')}
+                onclick={handleSync}
+                disabled={syncLoading}
+                data-testid="sync-button"
+                title={$_('dashboard.syncData')}
             >
-                <Brain size={14} class={aiExportLoading ? 'animate-pulse' : ''} />
+                <RefreshCw size={14} class={syncLoading ? 'animate-spin' : ''} />
                 {#if layout.showActionLabels}
-                    <span>{aiExportLoading ? $_('dashboard.aiExportBuilding') : $_('dashboard.aiExport')}</span>
+                    <span>{$_('dashboard.syncData')}</span>
                 {/if}
             </button>
-
-            {#if aiExportDropdownOpen}
-                <div class="absolute right-0 z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" data-ai-export-panel>
-                    <button type="button" class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" onclick={() => handleAiExport('full')} data-testid="ai-export-full">
-                        <Brain size={14} class="text-purple-500" />
-                        {$_('dashboard.aiExportFull')}
-                    </button>
-                    <button
-                        type="button"
-                        class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-100 dark:border-slate-700"
-                        onclick={() => handleAiExport('data-only')}
-                        data-testid="ai-export-data-only"
-                    >
-                        <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-                        </svg>
-                        {$_('dashboard.aiExportDataOnly')}
-                    </button>
-                </div>
-            {/if}
         </div>
-
-        <button
-            class="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
-            onclick={handleSync}
-            disabled={syncLoading}
-            data-testid="sync-button"
-            title={$_('dashboard.syncData')}
-        >
-            <RefreshCw size={14} class={syncLoading ? 'animate-spin' : ''} />
-            {#if layout.showActionLabels}
-                <span>{$_('dashboard.syncData')}</span>
-            {/if}
-        </button>
+        <TabBar bind:activeTab tabs={dashboardTabs} />
     </div>
 
     <DataQualityBanner issues={dataQualityIssues} mode="grouped" onaction={handleBannerAction} />
 
-    <!-- ── KPI Row ── -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="kpi-row">
-        <!-- Card 1 — Period P&L -->
-        <div class="relative bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-period-pnl">
-            {#if periodPnlPositive !== undefined}
-                <div class="absolute top-0 left-0 right-0 h-0.5 {periodPnlPositive ? 'bg-green-500 dark:bg-green-400' : 'bg-red-500 dark:bg-red-400'}"></div>
-            {/if}
-            <div class="flex items-center justify-between">
-                <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.periodPnl')}</p>
-                <DocsLink path="financial-theory/technical-analysis/performance-metrics/period-pnl/" label={$_('dashboard.periodPnl')} size={14} />
-            </div>
-            <div class="relative">
-                {#if summaryLoading}
-                    <div class="absolute inset-0 z-10 flex flex-col gap-2">
-                        <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
-                        <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
+    {#if activeTab === 'panoramica'}
+        <div class="space-y-4" data-testid="dashboard-overview-tab">
+            <KpiSection {summary} {history} loading={summaryLoading} {displayCurrency} />
+
+            <!-- Cash Balances — same position as broker detail (right after the KPIs), using
+                 summary.cash_balances which already aggregates by currency across all brokers
+                 in scope (all accessible brokers, or the broker-filter subset if active). -->
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="dashboard-cash-balances">
+                <div class="flex items-center space-x-2 text-gray-700 dark:text-gray-200 mb-4">
+                    <Wallet size={20} />
+                    <h2 class="font-semibold">{$_('brokers.cashBalances')}</h2>
+                </div>
+
+                {#if summary?.cash_balances && summary.cash_balances.length > 0}
+                    <div class="flex flex-wrap gap-2">
+                        {#each [...summary.cash_balances].sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount)) as balance}
+                            <span class="inline-flex items-center px-3 py-1.5 bg-gray-50 dark:bg-slate-700 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-100">
+                                {@html formatCurrencyAmountHtml(parseFloat(balance.amount), balance.code)}
+                            </span>
+                        {/each}
                     </div>
-                {/if}
-                <div class:invisible={summaryLoading}>
-                    <p class="text-2xl font-bold text-right tabular-nums transition-colors duration-300 {periodPnlPositive === true ? 'text-green-700 dark:text-green-400' : periodPnlPositive === false ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}" data-testid="kpi-value">
-                        <TweenedValue value={periodPnlAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true})} />
-                    </p>
-                    {#if pnlDeltaDay != null}
-                        <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-pnl-delta-day">
-                            <TweenedValue value={pnlDeltaDay} format={fmtMoney} />
-                        </p>
-                    {/if}
-                    <div class="flex flex-col gap-2 mt-1">
-                        <KpiMetricBar
-                            label={$_('dashboard.unrealizedDelta')}
-                            tooltip={$_('dashboard.unrealizedDeltaTooltip')}
-                            value={uglDeltaStr}
-                            numericValue={uglDeltaAmt}
-                            formatValue={fmtMoney}
-                            barPct={pnlBarPct(uglDeltaAmt)}
-                            barColor={pnlBarColor(uglDeltaAmt)}
-                            valueColor={pnlValueColor(uglDeltaAmt)}
-                        />
-                        <KpiMetricBar
-                            label={$_('dashboard.realizedSales')}
-                            tooltip={$_('dashboard.realizedSalesTooltip')}
-                            value={realizedStr}
-                            numericValue={realizedAmt}
-                            formatValue={fmtMoney}
-                            barPct={pnlBarPct(realizedAmt)}
-                            barColor={pnlBarColor(realizedAmt)}
-                            valueColor={pnlValueColor(realizedAmt)}
-                        />
-                        <KpiMetricBar label={$_('dashboard.income')} tooltip={$_('dashboard.incomeTooltip')} value={incomeStr} numericValue={incomeAmt} formatValue={fmtMoney} barPct={pnlBarPct(incomeAmt)} barColor="bg-green-500 dark:bg-green-400" valueColor="text-green-600 dark:text-green-400" />
-                        <KpiMetricBar label={$_('dashboard.feesAndTaxes')} tooltipHtml={feesTooltipHtml} value={feesStr} numericValue={feesAmt} formatValue={fmtMoney} barPct={pnlBarPct(feesAmt)} barColor="bg-red-400 dark:bg-red-500" valueColor="text-red-600 dark:text-red-400" />
-                    </div>
-                    <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.cashFlowAdjustedResult')}</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card 2 — Returns -->
-        <div class="relative bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-returns">
-            {#if roiIsPositive !== undefined}
-                <div class="absolute top-0 left-0 right-0 h-0.5 {roiIsPositive ? 'bg-green-500 dark:bg-green-400' : 'bg-red-500 dark:bg-red-400'}"></div>
-            {/if}
-            <div class="flex items-center justify-between">
-                <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.returns')}</p>
-                <DocsLink path="financial-theory/technical-analysis/performance-metrics/" label={$_('dashboard.returns')} size={14} />
-            </div>
-            {#if summaryLoading}
-                <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
-                <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse mt-2"></div>
-            {:else}
-                <!-- Timing effect hero (no bar) -->
-                <div class="flex items-center justify-between">
-                    <Tooltip text={$_('dashboard.timingEffectTooltip')} position="top">
-                        <div class="flex flex-col cursor-help">
-                            <span class="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide border-b border-dotted border-gray-300 dark:border-gray-600 inline-block">{$_('dashboard.timingEffect')}</span>
-                            <span class="text-[10px] italic" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.4 + timingIntensity * 0.6})` : `rgba(220, 38, 38, ${0.4 + timingIntensity * 0.6})`}">{timingLabel}</span>
-                        </div>
-                    </Tooltip>
-                    <span class="text-2xl font-bold tabular-nums transition-colors" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.3 + timingIntensity * 0.7})` : `rgba(220, 38, 38, ${0.3 + timingIntensity * 0.7})`}">
-                        <TweenedValue value={timingEffectVal} format={(v) => `${v >= 0 ? '+' : '-'}${Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${$_('dashboard.pp')}`} />
-                    </span>
-                </div>
-                {#if pnlDeltaDayPct}
-                    <p class="text-xs text-right {pnlDeltaDay != null && pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-returns-delta-pct">{pnlDeltaDay != null && pnlDeltaDay >= 0 ? '+' : ''}{pnlDeltaDayPct}%</p>
-                {/if}
-                <div class="flex flex-col gap-2 mt-1">
-                    <KpiMetricBar label={$_('dashboard.roi')} tooltip={$_('dashboard.roiTooltip')} value={roiPct} numericValue={roiVal} formatValue={fmtPct} barPct={retBarPct(roiVal)} barColor={retBarColor(roiVal)} valueColor="font-bold text-gray-800 dark:text-gray-100" />
-                    <KpiMetricBar label={$_('dashboard.twrrCum')} tooltip={$_('dashboard.twrrTooltip')} value={twrrCumPct} numericValue={twrrCumVal} formatValue={fmtPct} barPct={retBarPct(twrrCumVal)} barColor={retBarColor(twrrCumVal)} />
-                    <KpiMetricBar label={$_('dashboard.mwrrCum')} tooltip={$_('dashboard.mwrrCumTooltip')} value={mwrrCumPct} numericValue={mwrrCumVal} formatValue={fmtPct} barPct={retBarPct(mwrrCumVal)} barColor={retBarColor(mwrrCumVal)} />
-                    <KpiMetricBar label={$_('dashboard.mwrrAnn')} tooltip={$_('dashboard.mwrrAnnTooltip')} value={mwrrAnnPct} numericValue={mwrrAnnVal} formatValue={fmtPct} barPct={retBarPct(mwrrAnnVal)} barColor={retBarColor(mwrrAnnVal)} />
-                </div>
-                <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.periodBasedReturns')}</p>
-            {/if}
-        </div>
-
-        <!-- Card 3 — Net Worth -->
-        <div class="relative bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-net-worth">
-            <div class="flex items-center justify-between">
-                <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.netWorth')}</p>
-                <DocsLink path="financial-theory/technical-analysis/performance-metrics/nav/" label={$_('dashboard.netWorth')} size={14} />
-            </div>
-            {#if summaryLoading}
-                <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
-                <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse mt-2"></div>
-            {:else}
-                <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 text-right tabular-nums" data-testid="kpi-value">
-                    <TweenedValue value={navHeroAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: false})} />
-                </p>
-                {#if navDeltaDay != null}
-                    <p class="text-xs text-right tabular-nums transition-colors duration-300 {navDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-nav-delta-day">
-                        <TweenedValue value={navDeltaDay} format={fmtMoney} />
-                    </p>
-                {/if}
-                <div class="flex flex-col gap-2 mt-1">
-                    <KpiMetricBar
-                        label={$_('dashboard.marketValue')}
-                        tooltip={$_('dashboard.marketValueTooltip')}
-                        value={marketValueStr}
-                        numericValue={marketValueAmt}
-                        formatValue={fmtMoneyUnsigned}
-                        barPct={marketBarPct}
-                        barColor={marketBarColor}
-                        marker={marketStartMarkerPct > 0 ? marketStartMarkerPct : undefined}
-                        markerTooltip="{$_('dashboard.marketValueStart')}: {marketValueStartStr}"
-                    />
-                    <KpiMetricBar
-                        label={$_('dashboard.bookValue')}
-                        tooltip={$_('dashboard.bookValueTooltip')}
-                        value={purchaseCostStr}
-                        numericValue={purchaseCostAmt}
-                        formatValue={fmtMoneyUnsigned}
-                        barPct={purchaseCostBarPct}
-                        barColor="bg-blue-500 dark:bg-blue-400"
-                        marker={purchaseCostStartMarkerPct > 0 ? purchaseCostStartMarkerPct : undefined}
-                        markerTooltip="{$_('dashboard.bookValueStart')}: {purchaseCostStartStr}"
-                    />
-                    <KpiMetricBar
-                        label={$_('dashboard.cashValue')}
-                        tooltipHtml={cashTooltipHtml}
-                        tooltip={cashTooltipHtml ? undefined : $_('dashboard.cashValueTooltip')}
-                        value={cashTotalStr}
-                        numericValue={cashAmt}
-                        formatValue={fmtMoneyUnsigned}
-                        barPct={cashBarPct}
-                        barColor="bg-emerald-500 dark:bg-emerald-400"
-                        marker={cashStartMarkerPct > 0 ? cashStartMarkerPct : undefined}
-                        markerTooltip="{$_('dashboard.cashValueStart')}: {cashStartStr}"
-                    />
-                    <KpiDivergingFlowBar
-                        label={$_('dashboard.netDepositedCapital')}
-                        tooltipHtml={netDepositedTooltipHtml}
-                        value={netDepositedStr}
-                        depositPct={depositBarPct}
-                        withdrawPct={withdrawBarPct}
-                        valueColor={netDepositedPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}
-                    />
-                </div>
-                <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.periodScopeNote')}</p>
-            {/if}
-        </div>
-    </div>
-
-    <!-- ── Charts Row ── -->
-    <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <!-- Growth Chart — 3/5 -->
-        <div class="lg:col-span-3">
-            <GrowthChart {history} loading={historyLoading} baseCurrency={displayCurrency} />
-        </div>
-
-        <!-- Allocation Panel — 2/5 -->
-        <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4 flex flex-col gap-3 min-h-[380px] lg:min-h-0" data-testid="allocation-panel">
-            <div class="flex items-center justify-between">
-                <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{$_('dashboard.allocation')}</h2>
-                <!-- Now / History toggle -->
-                <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
-                    <button
-                        class="px-2.5 py-1.5 transition-colors {allocationView === 'now' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => (allocationView = 'now')}
-                        data-testid="allocation-view-now"
-                        title={$_('dashboard.now')}><PieChart size={14} /></button
-                    >
-                    <button
-                        class="px-2.5 py-1.5 transition-colors border-l border-gray-200 dark:border-slate-600 {allocationView === 'history' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => {
-                            allocationView = 'history';
-                            loadAllocationHistory(allocationTab);
-                        }}
-                        data-testid="allocation-view-history"
-                        title={$_('dashboard.history')}><AreaChart size={14} /></button
-                    >
-                </div>
-            </div>
-
-            <!-- Tab bar -->
-            <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium self-start">
-                {#each [['type', 'dashboard.typeAllocation'], ['sector', 'dashboard.sectorAllocation'], ['geo', 'dashboard.geoAllocation']] as const as [tab, labelKey]}
-                    <button
-                        class="px-3 py-1 transition-colors {allocationTab === tab ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'} {tab !== 'type' ? 'border-l border-gray-200 dark:border-slate-600' : ''}"
-                        onclick={() => {
-                            allocationTab = tab;
-                            if (allocationView === 'history') loadAllocationHistory(tab);
-                        }}
-                        data-testid="allocation-tab-{tab}"
-                    >
-                        {$_(labelKey)}
-                    </button>
-                {/each}
-            </div>
-
-            <!-- Chart area — persistent containers for animation -->
-            <div class="flex-1 min-h-0 relative">
-                {#if summaryLoading || allocationHistoryLoading}
-                    <div class="absolute inset-0 z-10 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
-                {/if}
-                <div class="w-full h-full" class:invisible={allocationView !== 'history' || summaryLoading || allocationHistoryLoading}>
-                    <AllocationHistoryChart data={allocationHistoryData} dimension={allocationTab} height="100%" loading={false} />
-                </div>
-                {#if allocationView === 'now'}
-                    {#if !summary}
-                        <div class="absolute inset-0 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
-                            {$_('common.noData')}
-                        </div>
-                    {:else if allocationTab === 'type'}
-                        <div class="absolute inset-0">
-                            <AllocationPieChart data={allocationByType} height="100%" mode="type" legendPosition="bottom" currency={displayCurrency} />
-                        </div>
-                    {:else if allocationTab === 'sector'}
-                        <div class="absolute inset-0">
-                            <AllocationPieChart data={allocationBySector} height="100%" legendPosition="bottom" currency={displayCurrency} />
-                        </div>
-                    {:else}
-                        <div class="absolute inset-0">
-                            <GeographyMap data={allocationByGeoMap} amounts={allocationByGeoAmounts} currency={displayCurrency} height="100%" language={$currentLanguage} />
-                        </div>
-                        {#if geoUnknownPercent > 0}
-                            <p class="text-xs text-gray-400 dark:text-gray-500 text-center mt-1">
-                                {$_('dashboard.geoUnknownNote', {values: {percent: geoUnknownPercent.toFixed(1)}})}
-                            </p>
-                        {/if}
-                    {/if}
+                {:else}
+                    <p class="text-gray-400 dark:text-gray-500 text-sm italic py-4 text-center">{$_('brokers.noCashBalances')}</p>
                 {/if}
             </div>
+
+            <!-- ── Charts Row ── -->
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                <!-- Growth Chart — 3/5 -->
+                <div class="lg:col-span-3">
+                    <GrowthChart {history} loading={historyLoading} baseCurrency={displayCurrency} />
+                </div>
+
+                <!-- Allocation Panel — 2/5 -->
+                <AllocationPanel {summary} loading={summaryLoading} {displayCurrency} brokerIds={activeBrokerIds} currentLanguage={$currentLanguage} allocationHistory={allocationHistoryFromReport} />
+            </div>
         </div>
-    </div>
-
-    <!-- ── Bottom Grid: Positions | Transactions ── -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <!-- LEFT: Positions panel -->
-        <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} />
-
-        <!-- RIGHT: Recent Transactions -->
-        <RecentTransactionsPanel
-            limit={10}
-            brokerIds={activeBrokerIds}
-            {transactionsHref}
-            onViewRow={(row) => {
-                txViewItems = resolveFormItemsForView(row as TXReadItem, () => undefined, getBrokerRole);
-                txViewOpen = true;
-            }}
-        />
-    </div>
+    {:else if activeTab === 'posizioni'}
+        <div data-testid="dashboard-positions-tab">
+            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} />
+        </div>
+    {:else if activeTab === 'transazioni'}
+        <div data-testid="dashboard-transactions-tab">
+            <RecentTransactionsPanel
+                limit={10}
+                brokerIds={activeBrokerIds}
+                {transactionsHref}
+                onViewRow={(row) => {
+                    txViewItems = resolveFormItemsForView(row as TXReadItem, () => undefined, getBrokerRole);
+                    txViewOpen = true;
+                }}
+            />
+        </div>
+    {/if}
 </div>
 
 <!-- FxPairAddModal — opened from DataQualityBanner CTA -->

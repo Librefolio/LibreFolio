@@ -63,9 +63,9 @@ export function formatCurrencyAmountHtml(amount: number, code: string, opts: Cur
     const codeHtml = `<span class="currency-code">${escapeHtml(code)}</span>`;
     let suffixHtml: string;
     if (hasRealSymbol) {
-        suffixHtml = `<span class="currency-symbol">${escapeHtml(symbol)}</span> ${flagHtml}${codeHtml}`;
+        suffixHtml = `<span class="currency-symbol">${escapeHtml(symbol)}</span> ${flagHtml} ${codeHtml}`;
     } else {
-        suffixHtml = `${flagHtml}${codeHtml}`;
+        suffixHtml = `${flagHtml} ${codeHtml}`;
     }
     return `<span class="currency-amount">${escapeHtml(formatted)}</span> ${suffixHtml}`;
 }
@@ -82,7 +82,7 @@ export function formatCurrencyCodeHtml(code: string): string {
     const flagHtml = info.flag_emoji && info.flag_emoji !== '🏳️' ? `<span class="emoji-flag">${info.flag_emoji}</span>` : '';
     const codeHtml = `<span class="currency-code">${escapeHtml(code)}</span>`;
     if (hasRealSymbol) {
-        return `<span class="currency-symbol">${escapeHtml(symbol)}</span> ${flagHtml}${codeHtml}`;
+        return `<span class="currency-symbol">${escapeHtml(symbol)}</span> ${flagHtml} ${codeHtml}`;
     }
-    return `${flagHtml}${codeHtml}`;
+    return `${flagHtml} ${codeHtml}`;
 }

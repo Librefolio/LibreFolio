@@ -35,13 +35,7 @@
         class?: string;
     }
 
-    let {
-        value,
-        format = (v: number) => v.toFixed(2),
-        duration = 900,
-        loading = false,
-        class: className = '',
-    }: Props = $props();
+    let {value, format = (v: number) => v.toFixed(2), duration = 900, loading = false, class: className = ''}: Props = $props();
 
     const displayValue = tweened(0, {duration: 900, easing: cubicOut});
 

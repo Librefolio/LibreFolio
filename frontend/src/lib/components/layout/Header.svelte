@@ -13,10 +13,18 @@
     }
 </script>
 
-<header class="sticky top-0 z-30 bg-libre-beige dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 px-4 py-3 safe-top">
+<!--
+  Desktop (lg+): header stays sticky/always visible regardless of scroll.
+  Mobile (<lg): header is in normal document flow (no sticky) — it scrolls away
+  naturally with the page when the user scrolls down, and comes back into view
+  when scrolling back up, freeing vertical space on small screens. No JS/scroll
+  listener needed: this is a pure CSS behavior, avoiding the flicker caused by a
+  previous scroll-driven show/hide toggle.
+-->
+<header class="lg:sticky lg:top-0 z-30 bg-libre-beige dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 px-4 py-3 safe-top">
     <div class="flex items-center justify-between">
         <!-- Mobile menu button -->
-        <button aria-label="Toggle menu" class="lg:hidden p-2 rounded-lg transition-colors" data-testid="mobile-menu-toggle" on:click={toggleSidebar}>
+        <button aria-label="Toggle menu" class="lg:hidden p-2 rounded-lg transition-colors" data-testid="mobile-menu-toggle" onclick={toggleSidebar}>
             <Menu class="text-libre-dark dark:text-gray-200" size={24} />
         </button>
 

@@ -6,7 +6,7 @@ import {TEST_ADMIN, TEST_USER, TEST_USER_2} from '../fixtures/test-users';
  * Broker Sharing E2E Tests
  *
  * Tests for BrokerSharingModal component:
- * - Share button visibility (OWNER only)
+ * - Share button visibility (always visible; read-only unless OWNER)
  * - Modal open/close
  * - Ownership chart, add/edit/remove users
  * - Save flow
@@ -44,7 +44,7 @@ test.describe('Broker Sharing', () => {
             await expect(page.getByTestId('broker-share-button')).toBeVisible();
         });
 
-        test('S2: share button NOT visible for VIEWER', async ({page}) => {
+        test('S2: share button visible read-only for VIEWER', async ({page}) => {
             // TEST_USER_2 is VIEWER on Interactive Brokers (from populate)
             await login(page, TEST_USER_2);
             await navigateTo(page, '/brokers');
@@ -54,10 +54,15 @@ test.describe('Broker Sharing', () => {
             await expect(brokerCards.first()).toBeVisible({timeout: 10000});
             await brokerCards.first().click();
             await expect(page.getByTestId('broker-detail-page')).toBeVisible({timeout: 10000});
-            // Share button should NOT be visible for VIEWER
-            await expect(page.getByTestId('broker-share-button')).not.toBeVisible({timeout: 2000});
-            // Edit button should also NOT be visible for VIEWER
+            // Share button IS now always visible (design: everyone can see who has access)
+            const shareBtn = page.getByTestId('broker-share-button');
+            await expect(shareBtn).toBeVisible({timeout: 5000});
+            // Edit button should still NOT be visible for VIEWER (unchanged)
             await expect(page.getByTestId('broker-edit-button')).not.toBeVisible({timeout: 2000});
+            // Opening it must be read-only: no "add user" control for a non-OWNER
+            await shareBtn.click();
+            await expect(page.getByTestId('broker-sharing-modal')).toBeVisible({timeout: 5000});
+            await expect(page.getByTestId('sharing-add-user-btn')).not.toBeVisible({timeout: 2000});
         });
 
         test('S3: share button opens BrokerSharingModal', async ({page}) => {
@@ -161,7 +166,7 @@ test.describe('Broker Sharing', () => {
     });
 
     test.describe('Role-Based Access', () => {
-        test('S14: EDITOR cannot see share button on broker they edit', async ({page}) => {
+        test('S14: EDITOR sees share button read-only on broker they edit', async ({page}) => {
             // TEST_USER is EDITOR on Directa SIM (from populate)
             await login(page, TEST_USER);
             await navigateTo(page, '/brokers');
@@ -171,10 +176,15 @@ test.describe('Broker Sharing', () => {
             if (await directaCard.isVisible({timeout: 5000})) {
                 await directaCard.click();
                 await expect(page.getByTestId('broker-detail-page')).toBeVisible({timeout: 10000});
-                // Share button should NOT be visible for EDITOR
-                await expect(page.getByTestId('broker-share-button')).not.toBeVisible({timeout: 2000});
-                // But edit button should be visible (EDITOR can edit)
+                // Share button IS now always visible (design: everyone can see who has access)
+                const shareBtn = page.getByTestId('broker-share-button');
+                await expect(shareBtn).toBeVisible({timeout: 2000});
+                // But edit button should be visible too (EDITOR can edit the broker itself)
                 await expect(page.getByTestId('broker-edit-button')).toBeVisible({timeout: 2000});
+                // Opening it must be read-only: no "add user" control for a non-OWNER
+                await shareBtn.click();
+                await expect(page.getByTestId('broker-sharing-modal')).toBeVisible({timeout: 5000});
+                await expect(page.getByTestId('sharing-add-user-btn')).not.toBeVisible({timeout: 2000});
             }
         });
     });

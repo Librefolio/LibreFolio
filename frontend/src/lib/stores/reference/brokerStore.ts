@@ -84,8 +84,26 @@ function normalize(raw: Record<string, unknown>): BrokerInfo {
 // STORE INSTANCE
 // ============================================================================
 
+/**
+ * Loader — always requests `include_inaccessible=true` and merges both arrays
+ * into a single cache, restoring the original LEFT-JOIN behavior (every broker
+ * in the system is cached, `user_role=null` for ones the user cannot access).
+ * This is required by `getBrokerInfo()` consumers that render inaccessible
+ * partner-broker names/icons in paired-transaction placeholders (see
+ * `TransactionFormModal.svelte`'s `inaccessiblePartnerBrokerId` handling) —
+ * without this merge, those placeholders would silently lose the broker name.
+ * The extra discovery query is cheap (id/name/icon_url only, no Portfolio
+ * Engine involvement) so this does not reintroduce the "slow broker selector"
+ * concern that `include_inaccessible` defaults to `false` for at the API
+ * level — operable-broker selectors already filter via `getEditableBrokers()`/
+ * `getAccessibleBrokers()`, not the raw cache.
+ */
 const store = createEntityStore<BrokerInfo, number>({
-    loader: async () => (await zodiosApi.list_brokers_api_v1_brokers_get()) as Array<Record<string, unknown>>,
+    loader: async () => {
+        const response = await zodiosApi.list_brokers_api_v1_brokers_get({queries: {include_inaccessible: true}});
+        const inaccessible = (response.inaccessible ?? []).map((b) => ({...b, user_role: null}));
+        return [...(response.items ?? []), ...inaccessible] as Array<Record<string, unknown>>;
+    },
     getId: (b) => b.id,
     normalize,
     requiredFields: ['name'],
@@ -95,11 +113,7 @@ const iconFieldLoaders = new Map<number, Promise<void>>();
 
 function hasBrokerIconFields(info: BrokerInfo | null | undefined): boolean {
     if (!info) return false;
-    return Boolean(
-        normalizeBrokerIconField(info.icon_url) ||
-        normalizeBrokerIconField(info.portal_url) ||
-        normalizeBrokerIconField(info.default_import_plugin),
-    );
+    return Boolean(normalizeBrokerIconField(info.icon_url) || normalizeBrokerIconField(info.portal_url) || normalizeBrokerIconField(info.default_import_plugin));
 }
 
 // ============================================================================

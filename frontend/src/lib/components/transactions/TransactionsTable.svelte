@@ -1007,7 +1007,7 @@
         onRowDoubleClick={(d) => (onRowDoubleClickOverride ? onRowDoubleClickOverride(d.tx) : onViewRow?.(d.tx))}
     />
 
-    {#if isGrouped && externalPaginatorTotal > 0}
+    {#if !compact && isGrouped && externalPaginatorTotal > 0}
         <DataTablePagination pageIndex={safePage - 1} {pageSize} totalItems={externalPaginatorTotal} pageSizeOptions={[10, 25, 50, 100, 0]} onPageChange={(idx) => onPageChange?.(idx + 1)} onPageSizeChange={(s) => onPageSizeChange?.(s)} />
     {/if}
 </div>

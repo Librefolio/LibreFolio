@@ -19,6 +19,7 @@ Reference: backend/app/api/v1/brokers.py
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
 import httpx
@@ -41,7 +42,7 @@ def unique_name(prefix: str) -> str:
 def unique_username() -> str:
     """Generate a unique username."""
     timestamp = int(datetime.now().timestamp() * 1000)
-    return f"broker_test_{timestamp}"
+    return f"broker_test_{timestamp}_{uuid.uuid4().hex[:6]}"
 
 
 # ============================================================================
@@ -281,10 +282,50 @@ class TestBrokerRead:
 
             assert response.status_code == 200
             data = response.json()
-            assert isinstance(data, list)
-            assert len(data) >= 1
+            assert isinstance(data, dict)
+            assert "items" in data
+            assert "inaccessible" in data
+            assert len(data["items"]) >= 1
+            assert data["inaccessible"] == []
+            assert Decimal(str(data["items"][0]["user_share_percentage"])) == Decimal("1")
 
-            print_success(f"✓ Got {len(data)} brokers")
+            print_success(f"✓ Got {len(data['items'])} brokers")
+
+    @pytest.mark.asyncio
+    async def test_get_brokers_include_inaccessible(self, test_server):
+        """BR-A-010B: GET /brokers?include_inaccessible=true returns discovery items."""
+        print_section("Test BR-A-010B: GET /brokers include inaccessible")
+
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as other_client:
+            await create_test_user(owner_client)
+            payload = [{"name": unique_name("Discovery Broker")}]
+            create_resp = await owner_client.post(f"{API_BASE}/brokers", json=payload, timeout=TIMEOUT)
+            broker_id = create_resp.json()["results"][0]["broker_id"]
+
+            await create_test_user(other_client)
+
+            default_resp = await other_client.get(f"{API_BASE}/brokers", timeout=TIMEOUT)
+            assert default_resp.status_code == 200
+            assert default_resp.json()["items"] == []
+            assert default_resp.json()["inaccessible"] == []
+
+            response = await other_client.get(
+                f"{API_BASE}/brokers",
+                params={"include_inaccessible": "true"},
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["items"] == []
+            discovered_broker = next((broker for broker in data["inaccessible"] if broker["id"] == broker_id), None)
+            assert discovered_broker == {
+                "id": broker_id,
+                "name": payload[0]["name"],
+                "icon_url": None,
+            }
+
+            print_success("✓ Discovery payload returns inaccessible brokers separately")
 
     @pytest.mark.asyncio
     async def test_get_broker_by_id(self, test_server):

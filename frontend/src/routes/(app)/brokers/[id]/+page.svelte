@@ -1,43 +1,151 @@
 <script lang="ts">
     /**
-     * Broker Detail Page - Shows broker info, cash balances, holdings, and recent transactions
+     * Broker Detail Page — header + overview/positions/transactions tabs
      */
+    import {get} from 'svelte/store';
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/app/navigationStore';
-    import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileUp, Pencil, RefreshCw, Share2, TrendingUp, Wallet} from 'lucide-svelte';
-    import CashBalanceCard from '$lib/components/brokers/CashBalanceCard.svelte';
-    import CashTransactionModal from '$lib/components/brokers/CashTransactionModal.svelte';
+    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
+    import {ArrowLeft, ArrowRightLeft, Brain, Briefcase, Crown, ExternalLink, Eye, FileUp, Info, Pencil, RefreshCw, Share2, TrendingUp, Users, Wallet} from 'lucide-svelte';
+    import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import BrokerImportFilesModal from '$lib/components/brokers/BrokerImportFilesModal.svelte';
-    import BrokerSharingModal from '$lib/components/brokers/BrokerSharingModal.svelte';
-    import type {BrokerSummary, Transaction} from '$lib/types';
+    import BrokerSharingPanel from '$lib/components/brokers/BrokerSharingPanel.svelte';
+    import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
+    import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
+    import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
+    import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
+    import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
+    import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
+    import {TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
+    import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
+    import {fetchReport, invalidate, type AllocationHistoryDimensions, type PortfolioHistoryPoint, type PortfolioSummary, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {ensureBrokersLoaded, getAllBrokers, getBrokerRole, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
+    import type {BrokerSummary} from '$lib/types';
     import {parseCurrencyAmount, safeCurrency, safeString} from '$lib/types';
+    import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
+    import {copyAiExport} from '$lib/features/ai-export/aiExportClipboard';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
 
-    // Page data
     export let data: {brokerId: number};
 
-    // State
     let broker: BrokerSummary | null = null;
-    let transactions: Transaction[] = [];
     let loading = true;
+    let reportLoading = true;
     let error: string | null = null;
 
-    // Computed: can current user edit this broker? (OWNER or EDITOR)
-    $: canEdit = broker ? ['OWNER', 'EDITOR'].includes(safeString(broker.user_role) || '') : false;
+    let portfolioSummary: PortfolioSummary | null = null;
+    let portfolioHistory: PortfolioHistoryPoint[] = [];
+    let allocationHistoryFromReport: AllocationHistoryDimensions | null = null;
+    let positionsContribution: PositionsContribution | null = null;
+    let contributionLoading = false;
 
-    // Modal states
     let editModalOpen = false;
-    let cashModalOpen = false;
-    let cashModalType: 'DEPOSIT' | 'WITHDRAWAL' = 'DEPOSIT';
-    let cashModalCurrency = 'EUR';
     let importFilesModalOpen = false;
-    let sharingModalOpen = false;
+    let txViewOpen = false;
+    let txViewItems: FormModalItems | null = null;
 
-    onMount(async () => {
-        await loadBroker();
+    /** AI export state — mirrors dashboard/+page.svelte's implementation, scoped to this broker. */
+    let aiExportLoading = false;
+    let aiExportDropdownOpen = false;
+
+    // Transactions tab — full paginated history (not just "recent 10").
+    let txMainRows: TXReadItem[] = [];
+    let txPartnerRows: TXReadItem[] = [];
+    let txEventTooltipMap: Map<number, AssetEvent> = new Map();
+    let txLoading = false;
+    let txLoaded = false;
+    let txCurrentPage = 1;
+
+    let activeTab = 'panoramica';
+    let brokerTabs = [];
+    let panelBrokers: BrokerLike[] = [];
+    let allBrokersForTable: BrokerLike[] = [];
+    $: allBrokersForTable = ($brokerStoreVersion, getAllBrokers());
+    let sharingHasChanges = false; // bound from BrokerSharingPanel (Info tab), for future use (e.g. unsaved-changes guard)
+
+    const initialStart = getStart();
+    const initialEnd = getEnd();
+    let isMaxPending = isMaxSentinel(initialStart);
+    let dateFrom = resolveDateSentinel(initialStart);
+    let dateTo = resolveDateSentinel(initialEnd);
+    let displayDateFrom = isMaxPending ? 'min' : dateFrom;
+    let activePreset: any = isMaxPending ? 'MAX' : null;
+
+    let targetCurrency = get(globalSettings).default_currency || 'EUR';
+    let targetCurrencyManuallySet = false;
+
+    let canEdit = false;
+    $: canEdit = broker ? ['OWNER', 'EDITOR'].includes(safeString(broker.user_role) || '') : false;
+    $: panelBrokers = broker
+        ? [
+              {
+                  id: broker.id,
+                  name: broker.name,
+                  icon_url: safeString(broker.icon_url),
+                  portal_url: safeString(broker.portal_url),
+                  default_import_plugin: safeString(broker.default_import_plugin),
+              },
+          ]
+        : [];
+
+    let baseCurrency = 'EUR';
+    $: baseCurrency = $globalSettings.default_currency || 'EUR';
+    $: if (!targetCurrencyManuallySet && targetCurrency !== baseCurrency) {
+        const hadLoadedData = portfolioSummary !== null || portfolioHistory.length > 0;
+        targetCurrency = baseCurrency;
+        // Guard with !reportLoading: see brokers/+page.svelte for the race this avoids.
+        if (hadLoadedData && !reportLoading) void loadOverview(true);
+    }
+
+    $: brokerTabs = [
+        {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'broker-tab-panoramica'},
+        {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'broker-tab-posizioni'},
+        {id: 'transazioni', label: $_('transactions.title'), icon: ArrowRightLeft, testId: 'broker-tab-transazioni'},
+        {id: 'info', label: $_('brokers.info'), icon: Info, testId: 'broker-tab-info'},
+    ];
+
+    async function handleAiExport(mode: 'full' | 'data-only') {
+        if (!broker) return;
+        aiExportDropdownOpen = false;
+        aiExportLoading = true;
+        try {
+            await copyAiExport(
+                mode,
+                {
+                    brokerIds: [broker.id],
+                    dateFrom: dateFrom || undefined,
+                    dateTo: dateTo || undefined,
+                    targetCurrency: targetCurrency,
+                    locale: $currentLanguage,
+                },
+                toasts,
+                $_,
+            );
+        } finally {
+            aiExportLoading = false;
+        }
+    }
+
+    // Outside-click closes the AI export dropdown (mirrors dashboard/+page.svelte's handleDocumentClick).
+    function handleDocumentClick(e: MouseEvent) {
+        if (!aiExportDropdownOpen) return;
+        const target = e.target as HTMLElement;
+        if (!target.closest?.('[data-ai-export-panel]') && !target.closest?.('[data-testid="ai-export-button"]')) {
+            aiExportDropdownOpen = false;
+        }
+    }
+
+    onMount(() => {
+        document.addEventListener('click', handleDocumentClick);
+        void Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded()]);
+        return () => document.removeEventListener('click', handleDocumentClick);
     });
 
     async function loadBroker() {
@@ -46,20 +154,77 @@
 
         try {
             broker = (await zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: data.brokerId}})) as BrokerSummary;
-
-            // Load recent transactions
-            try {
-                const txResponse = await zodiosApi.query_transactions_api_v1_transactions_get({queries: {broker_id: data.brokerId, limit: 10}});
-                transactions = txResponse as Transaction[];
-            } catch {
-                transactions = [];
-            }
         } catch (e) {
             console.error('Failed to load broker:', e);
             error = $_('brokers.loadFailed');
         } finally {
             loading = false;
         }
+    }
+
+    async function loadOverview(force = false) {
+        reportLoading = true;
+        try {
+            const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, force);
+            portfolioSummary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
+            portfolioHistory = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
+            allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
+            positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
+            resolveMaxStartFromHistory();
+        } finally {
+            reportLoading = false;
+        }
+    }
+
+    async function loadContribution() {
+        if (!broker || positionsContribution || contributionLoading) return;
+        contributionLoading = true;
+        try {
+            // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
+            const report = await fetchReport([broker.id], dateFrom || undefined, dateTo || undefined, targetCurrency, false, true, false, false, false);
+            positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
+        } finally {
+            contributionLoading = false;
+        }
+    }
+
+    /** Full transaction history for this broker, paginated client-side by
+     *  `<TransactionsTable>` — loaded lazily on first visit to the
+     *  Transazioni tab (not upfront, since a prolific broker could have a
+     *  large history). The broker filter is applied server-side (immediate,
+     *  in the query itself) — `loadPartnerRows`/`loadEventTooltipMap` are
+     *  shared helpers (not internal to `TransactionsTable`, which is a pure
+     *  presentational component and never fetches on its own): they cover
+     *  paired transactions (e.g. FX conversion, transfer) whose other leg
+     *  sits on a different broker and would otherwise be missing from this
+     *  broker-filtered set. */
+    async function loadTransactions(force = false) {
+        if (!broker || (txLoaded && !force)) return;
+        txLoading = true;
+        try {
+            const main = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {broker_id: broker.id}})) as TXReadItem[];
+            txMainRows = main ?? [];
+            const [partner, tooltipMap] = await Promise.all([loadPartnerRows(txMainRows), loadEventTooltipMap(txMainRows)]);
+            txPartnerRows = partner;
+            txEventTooltipMap = tooltipMap;
+            txLoaded = true;
+        } catch (e) {
+            console.error('Failed to load transactions:', e);
+        } finally {
+            txLoading = false;
+        }
+    }
+
+    // Lazy-load the full transaction history the first time the Transazioni tab is opened.
+    $: if (activeTab === 'transazioni' && broker && !txLoaded && !txLoading) {
+        void loadTransactions();
+    }
+
+    function resolveMaxStartFromHistory() {
+        if (!isMaxPending || portfolioHistory.length === 0) return;
+        dateFrom = portfolioHistory[0].date;
+        displayDateFrom = dateFrom;
+        isMaxPending = false;
     }
 
     function handleBack() {
@@ -70,44 +235,29 @@
         editModalOpen = true;
     }
 
-    function handleDeposit(event: CustomEvent<{currency: string}>) {
-        cashModalType = 'DEPOSIT';
-        cashModalCurrency = event.detail.currency;
-        cashModalOpen = true;
+    function handleDateChange(from: string, to: string) {
+        isMaxPending = isMaxSentinel(from);
+        dateFrom = resolveDateSentinel(from);
+        dateTo = resolveDateSentinel(to);
+        displayDateFrom = isMaxPending ? 'min' : dateFrom;
+        setDateRange(from, to);
+        void loadOverview();
     }
 
-    function handleWithdraw(event: CustomEvent<{currency: string}>) {
-        cashModalType = 'WITHDRAWAL';
-        cashModalCurrency = event.detail.currency;
-        cashModalOpen = true;
-    }
-
-    function handleNewDeposit() {
-        cashModalType = 'DEPOSIT';
-        cashModalCurrency = broker?.cash_balances?.[0]?.code ?? 'EUR';
-        cashModalOpen = true;
-    }
-
-    async function handleCashSuccess() {
-        await loadBroker();
+    async function handleRefresh() {
+        invalidate();
+        await Promise.all([loadBroker(), loadOverview(true)]);
+        if (txLoaded) await loadTransactions(true);
     }
 
     async function handleUpdated() {
         await loadBroker();
     }
 
-    // Format currency - accepts string amount (from API) or number
-    function formatCurrency(amount: string | number, code: string): string {
-        const numAmount = typeof amount === 'string' ? parseFloat(amount) || 0 : amount;
-        return new Intl.NumberFormat(undefined, {
-            style: 'currency',
-            currency: code,
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(numAmount);
+    async function handleRequestAllocationHistory() {
+        await loadOverview();
     }
 
-    // Format date - handles string or array union type from generated types
     function formatDate(dateStr: unknown): string {
         const str = safeString(dateStr);
         if (!str) return '-';
@@ -118,45 +268,40 @@
         });
     }
 
-    // Transaction type badge color
-    function getTypeBadgeClass(type: string): string {
-        switch (type) {
-            case 'BUY':
-                return 'bg-green-100 text-green-800';
-            case 'SELL':
-                return 'bg-red-100 text-red-800';
-            case 'DEPOSIT':
-                return 'bg-blue-100 text-blue-800';
-            case 'WITHDRAWAL':
-                return 'bg-orange-100 text-orange-800';
-            case 'DIVIDEND':
-                return 'bg-purple-100 text-purple-800';
-            default:
-                return 'bg-gray-100 text-gray-800';
-        }
+    function toNumber(value: number | string | (string | null)[] | null | undefined): number {
+        if (Array.isArray(value)) return value[0] ? Number(value[0]) : 0;
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') return Number(value);
+        return 0;
+    }
+
+    function formatSharePercentage(value: number | string | (string | null)[] | null | undefined): string {
+        return (Math.round(toNumber(value) * 10000) / 100).toFixed(1);
     }
 </script>
 
 <div class="space-y-6" data-testid="broker-detail-page">
-    <!-- Header -->
     <div class="flex items-center space-x-4">
         <button class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors" data-testid="broker-back-button" on:click={handleBack} title={$_('common.back')}>
             <ArrowLeft size={20} />
         </button>
 
         {#if broker}
-            <!-- Broker Icon -->
             <BrokerIcon brokerId={broker.id} iconUrl={safeString(broker.icon_url)} portalUrl={safeString(broker.portal_url)} pluginCode={safeString(broker.default_import_plugin)} altText={broker.name} size="lg" />
 
             <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
                     {#if safeString(broker.user_role)}
                         {@const role = safeString(broker.user_role)}
                         <span
-                            class="inline-flex items-center justify-center w-6 h-6 rounded-full flex-shrink-0
+                            class="inline-flex items-center gap-1 px-2 py-1 rounded-full flex-shrink-0
                             {role === 'OWNER' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : role === 'EDITOR' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}"
                             title={$_(role === 'OWNER' ? 'brokers.sharing.roleOwnerShort' : role === 'EDITOR' ? 'brokers.sharing.roleEditorShort' : 'brokers.sharing.roleViewerShort')}
+                            data-testid="broker-quota-badge"
                         >
+                            {#if broker.user_share_percentage != null}
+                                <span class="text-xs font-medium">{formatSharePercentage(broker.user_share_percentage)}%</span>
+                            {/if}
                             {#if role === 'OWNER'}<Crown size={13} />{:else if role === 'EDITOR'}<Pencil size={13} />{:else}<Eye size={13} />{/if}
                         </span>
                     {/if}
@@ -168,32 +313,30 @@
             </div>
 
             <div class="grid grid-cols-2 place-items-center sm:flex sm:items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                <!-- Row 1 (mobile) / inline (desktop): Edit + Share -->
                 {#if canEdit}
                     <button on:click={handleEdit} class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" data-testid="broker-edit-button">
                         <Pencil size={18} />
                         <span class="hidden sm:inline">{$_('common.edit')}</span>
                     </button>
                 {/if}
-                {#if safeString(broker.user_role) === 'OWNER'}
-                    <button
-                        on:click={() => (sharingModalOpen = true)}
-                        class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 border border-libre-green text-libre-green rounded-lg hover:bg-libre-green/10 transition-colors"
-                        data-testid="broker-share-button"
-                        title={$_('brokers.sharing.title')}
-                    >
-                        <Share2 size={18} />
-                        <span class="hidden sm:inline">{$_('brokers.sharing.title')}</span>
-                    </button>
-                {/if}
-                <!-- Row 2 (mobile) / inline (desktop): Portal + Refresh -->
+                <button on:click={() => (activeTab = 'info')} class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 border border-libre-green text-libre-green rounded-lg hover:bg-libre-green/10 transition-colors" data-testid="broker-share-button" title={$_('brokers.sharing.title')}>
+                    <Share2 size={18} />
+                    <span class="hidden sm:inline">{$_('brokers.sharing.title')}</span>
+                </button>
                 {#if safeString(broker.portal_url)}
                     <a href={safeString(broker.portal_url)} target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors sm:w-auto w-full" title={$_('brokers.openPortal')}>
                         <ExternalLink size={20} />
                     </a>
                 {/if}
-                <button on:click={loadBroker} disabled={loading} class="flex items-center justify-center p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50 sm:w-auto w-full" title="Refresh" data-testid="broker-refresh">
-                    <RefreshCw size={20} class={loading ? 'animate-spin' : ''} />
+                <button
+                    on:click={handleRefresh}
+                    disabled={loading || reportLoading}
+                    class="flex items-center justify-center gap-2 p-2 sm:px-3 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50 sm:w-auto w-full"
+                    title={$_('dashboard.syncData')}
+                    data-testid="broker-refresh"
+                >
+                    <RefreshCw size={20} class={loading || reportLoading ? 'animate-spin' : ''} />
+                    <span class="hidden sm:inline text-sm font-medium">{$_('dashboard.syncData')}</span>
                 </button>
             </div>
         {:else if !error}
@@ -204,7 +347,6 @@
     </div>
 
     {#if loading && !broker}
-        <!-- Loading state -->
         <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
                 <RefreshCw class="text-libre-green animate-spin" size={32} />
@@ -212,158 +354,127 @@
             <p class="text-gray-500">{$_('common.loading')}</p>
         </div>
     {:else if error}
-        <!-- Error state -->
         <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-red-100">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
                 <Briefcase class="text-red-600" size={32} />
             </div>
             <h3 class="text-lg font-semibold text-gray-700 mb-2">{$_('common.error')}</h3>
             <p class="text-gray-500 mb-4">{error}</p>
-            <button on:click={loadBroker} class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors">
+            <button on:click={handleRefresh} class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors">
                 {$_('common.retry')}
             </button>
         </div>
     {:else if broker}
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Left Column: Cash Balances -->
-            <div class="lg:col-span-2 space-y-4">
-                <!-- Cash Balances Section -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4" data-testid="broker-cash-balances">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="flex items-center space-x-2 text-gray-700">
-                            <Wallet size={20} />
-                            <h2 class="font-semibold">{$_('brokers.cashBalances')}</h2>
+        <!-- Page-global controls: date range + currency + tabs — persist across ALL tabs
+             (previously the date-range picker only rendered inside the Panoramica tab's
+             content, so it disappeared on Posizioni/Transazioni even though those tabs
+             depend on the same date-scoped data). -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden" data-testid="broker-controls">
+            <div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between" data-testid="broker-overview-controls">
+                <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} onchange={handleDateChange} />
+
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                        <span class="whitespace-nowrap">{$_('common.currency')}:</span>
+                        <div class="w-28">
+                            <CurrencySearchSelect
+                                bind:value={targetCurrency}
+                                compact={true}
+                                dropdownPosition="bottom"
+                                placeholder={baseCurrency}
+                                onchange={() => {
+                                    targetCurrencyManuallySet = true;
+                                    void loadOverview();
+                                }}
+                            />
                         </div>
-                        {#if canEdit}
-                            <button on:click={handleNewDeposit} class="text-sm text-libre-green hover:underline">
-                                + {$_('brokers.deposit')}
-                            </button>
+                    </div>
+
+                    <!-- AI Export — reuses the same copyAiExport() utility as the dashboard,
+                         scoped to this single broker. -->
+                    <div class="relative">
+                        <button
+                            class="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+                            on:click={() => (aiExportDropdownOpen = !aiExportDropdownOpen)}
+                            disabled={aiExportLoading}
+                            data-testid="ai-export-button"
+                            title={$_('dashboard.aiExport')}
+                        >
+                            <Brain size={14} class={aiExportLoading ? 'animate-pulse' : ''} />
+                            <span class="hidden sm:inline">{aiExportLoading ? $_('dashboard.aiExportBuilding') : $_('dashboard.aiExport')}</span>
+                        </button>
+
+                        {#if aiExportDropdownOpen}
+                            <div class="absolute right-0 z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" data-ai-export-panel>
+                                <button type="button" class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" on:click={() => handleAiExport('full')} data-testid="ai-export-full">
+                                    <Brain size={14} class="text-purple-500" />
+                                    {$_('dashboard.aiExportFull')}
+                                </button>
+                                <button
+                                    type="button"
+                                    class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-100 dark:border-slate-700"
+                                    on:click={() => handleAiExport('data-only')}
+                                    data-testid="ai-export-data-only"
+                                >
+                                    <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                                    </svg>
+                                    {$_('dashboard.aiExportDataOnly')}
+                                </button>
+                            </div>
                         {/if}
+                    </div>
+                </div>
+            </div>
+            <TabBar bind:activeTab tabs={brokerTabs} />
+        </div>
+
+        {#if activeTab === 'panoramica'}
+            <div class="space-y-4" data-testid="broker-overview-tab">
+                <KpiSection summary={portfolioSummary} history={portfolioHistory} loading={reportLoading && !portfolioSummary} displayCurrency={targetCurrency || baseCurrency} />
+
+                <!-- Cash Balances — moved up right below the KPIs so the "economic position"
+                     (NAV + Gain/Loss + Cash by currency) is visible together at a glance. -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="broker-cash-balances">
+                    <div class="flex items-center space-x-2 text-gray-700 dark:text-gray-200 mb-4">
+                        <Wallet size={20} />
+                        <h2 class="font-semibold">{$_('brokers.cashBalances')}</h2>
                     </div>
 
                     {#if broker.cash_balances && broker.cash_balances.length > 0}
-                        <div class="space-y-3">
-                            {#each broker.cash_balances as balance}
-                                <CashBalanceCard code={balance.code} amount={parseCurrencyAmount(balance.amount)} {canEdit} on:deposit={handleDeposit} on:withdraw={handleWithdraw} />
+                        <div class="flex flex-wrap gap-2">
+                            {#each [...broker.cash_balances].sort((a, b) => parseCurrencyAmount(b.amount) - parseCurrencyAmount(a.amount)) as balance}
+                                <span class="inline-flex items-center px-3 py-1.5 bg-gray-50 dark:bg-slate-700 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-100">
+                                    {@html formatCurrencyAmountHtml(parseCurrencyAmount(balance.amount), balance.code)}
+                                </span>
                             {/each}
                         </div>
                     {:else}
-                        <p class="text-gray-400 text-sm italic py-4 text-center">{$_('brokers.noCashBalances')}</p>
+                        <p class="text-gray-400 dark:text-gray-500 text-sm italic py-4 text-center">{$_('brokers.noCashBalances')}</p>
                     {/if}
                 </div>
 
-                <!-- Holdings Section -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4" data-testid="broker-holdings">
-                    <div class="flex items-center space-x-2 text-gray-700 mb-4">
-                        <TrendingUp size={20} />
-                        <h2 class="font-semibold">{$_('brokers.holdings')}</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                    <div class="lg:col-span-3">
+                        <GrowthChart history={portfolioHistory} loading={reportLoading && portfolioHistory.length === 0} baseCurrency={targetCurrency || baseCurrency} />
                     </div>
-
-                    {#if broker.holdings && broker.holdings.length > 0}
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm">
-                                <thead>
-                                    <tr class="text-left text-gray-500 border-b">
-                                        <th class="pb-2 font-medium">Asset</th>
-                                        <th class="pb-2 font-medium text-right">Quantity</th>
-                                        <th class="pb-2 font-medium text-right">Cost</th>
-                                        <th class="pb-2 font-medium text-right">Value</th>
-                                        <th class="pb-2 font-medium text-right">P&L</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {#each broker.holdings as holding}
-                                        {@const totalCost = safeCurrency(holding.total_cost)}
-                                        {@const currentValue = safeCurrency(holding.current_value)}
-                                        {@const pnl = safeCurrency(holding.unrealized_pnl)}
-                                        <tr class="border-b border-gray-50 hover:bg-gray-50">
-                                            <td class="py-2 font-medium text-gray-800">{holding.asset_name}</td>
-                                            <td class="py-2 text-right text-gray-600">{holding.quantity.toLocaleString()}</td>
-                                            <td class="py-2 text-right text-gray-600">
-                                                {#if totalCost}
-                                                    {formatCurrency(totalCost.amount, totalCost.code)}
-                                                {:else}
-                                                    <span class="text-gray-400">-</span>
-                                                {/if}
-                                            </td>
-                                            <td class="py-2 text-right text-gray-600">
-                                                {#if currentValue}
-                                                    {formatCurrency(currentValue.amount, currentValue.code)}
-                                                {:else}
-                                                    <span class="text-gray-400">-</span>
-                                                {/if}
-                                            </td>
-                                            <td class="py-2 text-right">
-                                                {#if pnl}
-                                                    {@const pnlNum = parseCurrencyAmount(pnl.amount)}
-                                                    <span class={pnlNum >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                                        {pnlNum >= 0 ? '+' : ''}{formatCurrency(pnl.amount, pnl.code)}
-                                                    </span>
-                                                {:else}
-                                                    <span class="text-gray-400">-</span>
-                                                {/if}
-                                            </td>
-                                        </tr>
-                                    {/each}
-                                </tbody>
-                            </table>
-                        </div>
-                    {:else}
-                        <p class="text-gray-400 text-sm italic py-4 text-center">{$_('brokers.noHoldings')}</p>
-                    {/if}
+                    <AllocationPanel
+                        summary={portfolioSummary}
+                        loading={reportLoading && !portfolioSummary}
+                        displayCurrency={targetCurrency || baseCurrency}
+                        brokerIds={[broker.id]}
+                        currentLanguage={$currentLanguage}
+                        allocationHistory={allocationHistoryFromReport}
+                        onRequestAllocationHistory={handleRequestAllocationHistory}
+                    />
                 </div>
             </div>
-
-            <!-- Right Column: Info, Import Files & Recent Transactions -->
-            <div class="space-y-4">
-                <!-- Broker Info Card -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                    <h3 class="font-semibold text-gray-700 mb-3">Broker Info</h3>
-                    <div class="space-y-2 text-sm">
-                        <div class="flex justify-between">
-                            <span class="text-gray-500">{$_('brokers.isActive')}</span>
-                            <span class="font-medium {broker.is_active ? 'text-green-600' : 'text-red-500'}">
-                                {broker.is_active ? '✓ Active' : '✗ Closed'}
-                            </span>
-                        </div>
-                        {#if safeString(broker.opened_at)}
-                            <div class="flex justify-between">
-                                <span class="text-gray-500">{$_('brokers.openedAt')}</span>
-                                <span class="text-gray-700">{formatDate(broker.opened_at)}</span>
-                            </div>
-                        {/if}
-                        <div class="flex justify-between">
-                            <span class="text-gray-500">{$_('brokers.allowOverdraft')}</span>
-                            <span class="font-medium {broker.allow_cash_overdraft ? 'text-green-600' : 'text-gray-400'}">
-                                {broker.allow_cash_overdraft ? '✓' : '✗'}
-                            </span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-500">{$_('brokers.allowShorting')}</span>
-                            <span class="font-medium {broker.allow_asset_shorting ? 'text-green-600' : 'text-gray-400'}">
-                                {broker.allow_asset_shorting ? '✓' : '✗'}
-                            </span>
-                        </div>
-                        <div class="flex justify-between border-t border-gray-100 pt-2 mt-2">
-                            <span class="text-gray-500">{$_('brokers.createdInSystem')}</span>
-                            <span class="text-gray-700">{formatDate(broker.created_at)}</span>
-                        </div>
-                    </div>
-
-                    {#if broker.total_value_base_currency}
-                        {@const totalValue = safeCurrency(broker.total_value_base_currency)}
-                        {#if totalValue}
-                            <div class="mt-4 pt-4 border-t border-gray-100">
-                                <div class="text-sm text-gray-500">{$_('common.totalValue')}</div>
-                                <div class="text-2xl font-bold text-libre-green">
-                                    {formatCurrency(totalValue.amount, totalValue.code)}
-                                </div>
-                            </div>
-                        {/if}
-                    {/if}
-                </div>
-
-                <!-- Import Files Button -->
+        {:else if activeTab === 'posizioni'}
+            <div data-testid="broker-holdings">
+                <PositionsPanel summary={portfolioSummary} contribution={positionsContribution} loading={reportLoading && !portfolioSummary} {contributionLoading} assetsHref="/assets" brokers={panelBrokers} onRequestContribution={loadContribution} />
+            </div>
+        {:else if activeTab === 'transazioni'}
+            <div class="space-y-4" data-testid="broker-transactions-tab">
                 {#if canEdit}
                     <button data-testid="import-files-button" class="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group" on:click={() => (importFilesModalOpen = true)}>
                         <div class="flex items-center gap-3">
@@ -379,47 +490,88 @@
                     </button>
                 {/if}
 
-                <!-- Recent Transactions -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4" data-testid="broker-transactions">
-                    <div class="flex items-center space-x-2 text-gray-700 mb-3">
-                        <ArrowRightLeft size={18} />
-                        <h3 class="font-semibold">{$_('common.recentTransactions')}</h3>
-                    </div>
-
-                    {#if transactions.length > 0}
-                        <div class="space-y-2">
-                            {#each transactions as tx}
-                                {@const cashValue = safeCurrency(tx.cash)}
-                                <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                                    <div>
-                                        <span class="inline-block px-2 py-0.5 text-xs rounded {getTypeBadgeClass(tx.type)}">
-                                            {tx.type}
-                                        </span>
-                                        <span class="text-xs text-gray-500 ml-2">{formatDate(tx.date)}</span>
-                                    </div>
-                                    {#if cashValue}
-                                        <span class="font-medium text-gray-800">
-                                            {formatCurrency(cashValue.amount, cashValue.code)}
-                                        </span>
-                                    {:else}
-                                        <span class="text-gray-400">-</span>
-                                    {/if}
-                                </div>
-                            {/each}
+                <div data-testid="broker-transactions">
+                    {#if txLoading && !txLoaded}
+                        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-12 text-center">
+                            <RefreshCw class="text-libre-green animate-spin mx-auto" size={28} />
                         </div>
-                        <a href="/transactions?broker_id={broker.id}" class="block mt-3 text-center text-sm text-libre-green hover:underline">
-                            {$_('brokers.viewAllTransactions')} →
-                        </a>
                     {:else}
-                        <p class="text-gray-400 text-sm italic py-4 text-center">{$_('brokers.noTransactions')}</p>
+                        <TransactionsTable
+                            mainRows={txMainRows}
+                            partnerRows={txPartnerRows}
+                            brokers={allBrokersForTable}
+                            eventTooltipMap={txEventTooltipMap}
+                            currentPage={txCurrentPage}
+                            hideActions={true}
+                            onPageChange={(page) => (txCurrentPage = page)}
+                            onViewRow={(row) => {
+                                txViewItems = resolveFormItemsForView(row as TXReadItem, () => undefined, getBrokerRole);
+                                txViewOpen = true;
+                            }}
+                        />
                     {/if}
                 </div>
             </div>
-        </div>
+        {:else if activeTab === 'info'}
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4" data-testid="broker-info-tab">
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="broker-metadata">
+                    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-3">{$_('brokers.metadata')}</h3>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 dark:text-gray-400">{$_('brokers.isActive')}</span>
+                            <span class="font-medium {broker.is_active ? 'text-green-600' : 'text-red-500'}">
+                                {broker.is_active ? '✓ Active' : '✗ Closed'}
+                            </span>
+                        </div>
+                        {#if safeString(broker.opened_at)}
+                            <div class="flex justify-between">
+                                <span class="text-gray-500 dark:text-gray-400">{$_('brokers.openedAt')}</span>
+                                <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.opened_at)}</span>
+                            </div>
+                        {/if}
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 dark:text-gray-400">{$_('brokers.allowOverdraft')}</span>
+                            <span class="font-medium {broker.allow_cash_overdraft ? 'text-green-600' : 'text-gray-400'}">
+                                {broker.allow_cash_overdraft ? '✓' : '✗'}
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 dark:text-gray-400">{$_('brokers.allowShorting')}</span>
+                            <span class="font-medium {broker.allow_asset_shorting ? 'text-green-600' : 'text-gray-400'}">
+                                {broker.allow_asset_shorting ? '✓' : '✗'}
+                            </span>
+                        </div>
+                        <div class="flex justify-between border-t border-gray-100 dark:border-slate-700 pt-2 mt-2">
+                            <span class="text-gray-500 dark:text-gray-400">{$_('brokers.createdInSystem')}</span>
+                            <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.created_at)}</span>
+                        </div>
+                    </div>
+
+                    {#if broker.total_value_base_currency}
+                        {@const totalValue = safeCurrency(broker.total_value_base_currency)}
+                        {#if totalValue}
+                            <div class="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
+                                <div class="text-sm text-gray-500 dark:text-gray-400">{$_('common.totalValue')}</div>
+                                <div class="text-2xl font-bold text-libre-green">
+                                    {@html formatCurrencyAmountHtml(parseCurrencyAmount(totalValue.amount), totalValue.code)}
+                                </div>
+                            </div>
+                        {/if}
+                    {/if}
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="broker-sharing-section">
+                    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
+                        <Users size={18} class="text-libre-green" />
+                        {$_('brokers.sharing.title')}
+                    </h3>
+                    <BrokerSharingPanel brokerId={broker.id} readOnly={safeString(broker.user_role) !== 'OWNER'} onChanged={handleUpdated} bind:hasChanges={sharingHasChanges} />
+                </div>
+            </div>
+        {/if}
     {/if}
 </div>
 
-<!-- Edit Modal -->
 {#if broker}
     <BrokerModal
         isOpen={editModalOpen}
@@ -440,12 +592,7 @@
         onupdated={handleUpdated}
     />
 
-    <!-- Cash Transaction Modal -->
-    <CashTransactionModal isOpen={cashModalOpen} type={cashModalType} brokerId={broker.id} initialCurrency={cashModalCurrency} on:close={() => (cashModalOpen = false)} on:success={handleCashSuccess} />
+    <TransactionFormModal open={txViewOpen} mode="view" items={txViewItems} onClose={() => (txViewOpen = false)} />
 
-    <!-- Import Files Modal -->
     <BrokerImportFilesModal open={importFilesModalOpen} brokerId={broker.id} brokerName={broker.name} onClose={() => (importFilesModalOpen = false)} />
-
-    <!-- Sharing Modal -->
-    <BrokerSharingModal open={sharingModalOpen} brokerId={broker.id} brokerName={broker.name} onClose={() => (sharingModalOpen = false)} onChanged={handleUpdated} />
 {/if}

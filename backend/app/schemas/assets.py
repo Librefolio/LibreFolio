@@ -648,7 +648,7 @@ class FAAssetCreateItem(BaseModel):
 
     display_name: str = Field(..., description="Human-readable asset name (must be unique)")
     currency: str = Field(..., min_length=3, max_length=3, description="Asset currency (ISO 4217)")
-    asset_type: Optional[AssetType] = Field(None, description="Asset type (STOCK, ETF, BOND, CROWDFUND_LOAN, etc.)")
+    asset_type: Optional[AssetType] = Field(None, description="Asset type (STOCK, ETF, BOND, CROWDFUND, etc.)")
     icon_url: Optional[str] = Field(None, description="URL to asset icon (local or remote)")
     quote_base_quantity: Optional[int] = Field(1, description="How many units the raw market quote refers to")
     active: bool = Field(True, description="Whether asset is active")

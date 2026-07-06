@@ -216,13 +216,7 @@ test.describe('NR-D — Promote false-positive guard (Bug D)', () => {
     const TEST_TAG = 'nr-promote-fp-test';
 
     /** Create DEPOSIT + WITHDRAWAL via the commit API on different brokers. Returns [depositId, withdrawalId]. */
-    async function createTestPair(
-        page: import('@playwright/test').Page,
-        depositBrokerId: number,
-        withdrawalBrokerId: number,
-        depositAmount: string,
-        withdrawalAmount: string,
-    ): Promise<[number, number]> {
+    async function createTestPair(page: import('@playwright/test').Page, depositBrokerId: number, withdrawalBrokerId: number, depositAmount: string, withdrawalAmount: string): Promise<[number, number]> {
         const resp = await page.request.post(`${API}/transactions/commit`, {
             data: {
                 creates: [
@@ -329,7 +323,10 @@ test.describe('NR-D — Promote false-positive guard (Bug D)', () => {
 
             // Close
             await page.getByTestId('tx-bulk-close').click();
-            const discardBtn = page.locator('[data-testid="confirm-modal"] button').filter({hasText: /discard|confirm/i}).first();
+            const discardBtn = page
+                .locator('[data-testid="confirm-modal"] button')
+                .filter({hasText: /discard|confirm/i})
+                .first();
             if (await discardBtn.isVisible({timeout: 1_000}).catch(() => false)) await discardBtn.click();
         } finally {
             if (txIds) await cleanup(page, ...txIds);
@@ -352,11 +349,7 @@ test.describe('NR-D — Promote false-positive guard (Bug D)', () => {
         // Therefore this test validates the *main-table* positive promote case indirectly:
         // if NR-D1 passes (no false positive) AND the unit test passes (algorithm correct),
         // the E2E coverage is sufficient. This test explicitly documents the gap.
-        test.skip(true,
-            'Positive promote E2E covered by tx-split-promote.spec.ts (main-table path). ' +
-            'Edit-op amounts are normalised by fieldsFromTx → cashAmountsCancel always false ' +
-            'for edit+edit pairs in BulkModal — known design limitation.',
-        );
+        test.skip(true, 'Positive promote E2E covered by tx-split-promote.spec.ts (main-table path). ' + 'Edit-op amounts are normalised by fieldsFromTx → cashAmountsCancel always false ' + 'for edit+edit pairs in BulkModal — known design limitation.');
     });
 
     test('NR-D3: BulkModal pagination bar always visible', async ({page}) => {
@@ -415,7 +408,10 @@ test.describe('NR-D — Promote false-positive guard (Bug D)', () => {
 
         // Close
         await page.getByTestId('tx-bulk-close').click();
-        const discardBtn = page.locator('[data-testid="confirm-modal"] button').filter({hasText: /discard|confirm/i}).first();
+        const discardBtn = page
+            .locator('[data-testid="confirm-modal"] button')
+            .filter({hasText: /discard|confirm/i})
+            .first();
         if (await discardBtn.isVisible({timeout: 1_000}).catch(() => false)) await discardBtn.click();
     });
 });

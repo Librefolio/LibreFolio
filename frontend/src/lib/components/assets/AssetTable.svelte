@@ -102,7 +102,7 @@
             CRYPTO: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
             FUND: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400',
             HOLD: 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400',
-            CROWDFUND_LOAN: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
+            CROWDFUND: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
             INDEX: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
         };
         const cls = colors[type] ?? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
@@ -138,7 +138,7 @@
                 header: () => $t('common.type'),
                 cell: (row) => ({type: 'html', html: typeBadgeHtml(row.asset_type)}),
                 type: 'enum',
-                enumOptions: ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND_LOAN', 'OTHER'].map((v) => ({value: v, label: $t(`assets.types.${v}`) || v})),
+                enumOptions: ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND', 'OTHER'].map((v) => ({value: v, label: $t(`assets.types.${v}`) || v})),
                 getValue: (row) => row.asset_type ?? '',
                 filterable: false,
                 width: 70,
