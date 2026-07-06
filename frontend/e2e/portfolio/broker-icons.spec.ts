@@ -34,9 +34,8 @@ test.describe('Portfolio broker icons', () => {
         await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 15_000});
         await expect(page.getByTestId('positions-panel')).toBeVisible({timeout: 10_000});
 
-        await page.getByTestId('positions-toggle-exposure').click();
+        await page.getByTestId('positions-toggle-holdings').click();
         await page.getByTestId('positions-toggle-table').click();
-        await page.getByTestId('positions-toggle-open').click();
         await expect(page.getByTestId('exposure-table')).toBeVisible({timeout: 10_000});
 
         const positionsPanel = page.getByTestId('positions-panel');
