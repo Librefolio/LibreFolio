@@ -1,6 +1,7 @@
 """Portfolio API Tests. POST /api/v1/portfolio/{summary,history} + GET asset-history/lots."""
 
 import uuid
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -92,10 +93,10 @@ async def post_portfolio_summary(client: httpx.AsyncClient, body: dict | None = 
         summary = report.get("summary") or {}
         # Monkey-patch the response to return summary directly
         resp._summary_data = summary
-        original_json = resp.json
 
         def _patched_json(**kwargs):
             return resp._summary_data
+
         resp.json = _patched_json
     return resp
 
@@ -109,10 +110,10 @@ async def post_portfolio_history(client: httpx.AsyncClient, body: dict | None = 
     if resp.status_code == 200:
         report = resp.json()
         history = report.get("history") or []
-        original_json = resp.json
 
         def _patched_json(**kwargs):
             return history
+
         resp.json = _patched_json
     return resp
 
@@ -444,6 +445,87 @@ class TestPortfolioHistoryEndpoint:
         assert data[0]["market_value"]["amount"].startswith("204")
         assert data[0]["nav_value"]["amount"].startswith("504")
         print_success("quote_base_quantity history valuation OK")
+
+
+# ---------------------------------------------------------------------------
+# TestPortfolioReportEndpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestPortfolioReportEndpoint:
+    async def test_report_positions_contribution_is_date_aware(self, test_server):
+        """Report uses date_to snapshot for holdings and serializes performance rows + other effects."""
+        print_section("Portfolio Report: date-aware holdings and contribution")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_broker(client)
+            asset_id = await create_asset(client)
+
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-01-02", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2025-02-15", "quantity": "-10", "cash": {"code": "EUR", "amount": "1200"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-03-10", "quantity": "5", "cash": {"code": "EUR", "amount": "-600"}},
+                    {"broker_id": broker_id, "type": "INTEREST", "date": "2025-02-20", "quantity": "0", "cash": {"code": "EUR", "amount": "20"}},
+                    {"broker_id": broker_id, "type": "FEE", "date": "2025-02-21", "quantity": "0", "cash": {"code": "EUR", "amount": "-5"}},
+                ],
+            )
+
+            price_resp = await client.post(
+                f"{API_BASE}/assets/prices",
+                json=[
+                    {
+                        "asset_id": asset_id,
+                        "prices": [
+                            {
+                                "date": "2025-01-31",
+                                "close": "110.00",
+                                "currency": "EUR",
+                            }
+                        ],
+                    }
+                ],
+                timeout=TIMEOUT,
+            )
+            assert price_resp.status_code == 200, f"Price upsert failed: {price_resp.status_code}: {price_resp.text}"
+
+            resp = await post_portfolio_report(
+                client,
+                {
+                    "include_history": False,
+                    "include_allocation_history": False,
+                    "include_positions_contribution": True,
+                    "date_range": {"start": "2025-01-31", "end": "2025-02-28"},
+                },
+            )
+
+        assert resp.status_code == 200
+        report = resp.json()
+        assert report["summary"]["holdings"] == []
+
+        positions = report["positions_contribution"]["positions"]
+        assert len(positions) == 1
+        row = positions[0]
+        assert row["is_fully_sold"] is True
+        assert row["start_value"].startswith("1100")
+        assert row["end_value"].startswith("0")
+        assert row["period_realized_gain_loss"].startswith("200")
+        assert row["period_unrealized_delta"].startswith("-100")
+        assert row["period_pnl"].startswith("100")
+
+        effects = report["positions_contribution"]["other_effects"]
+        assert sorted((item["category"], item["description"], Decimal(item["period_pnl"]), item["broker_id"]) for item in effects) == [
+            ("Cost", "Unallocated costs", Decimal("-5"), broker_id),
+            ("Income", "Unallocated income", Decimal("20"), broker_id),
+        ]
+
+        total_positions = sum(Decimal(item["period_pnl"]) for item in positions if item["period_pnl"] is not None)
+        total_other = sum(Decimal(item["period_pnl"]) for item in effects)
+        assert total_positions + total_other == Decimal(report["summary"]["period_pnl"]["amount"])
+        print_success("Date-aware report contribution OK")
 
 
 # ---------------------------------------------------------------------------

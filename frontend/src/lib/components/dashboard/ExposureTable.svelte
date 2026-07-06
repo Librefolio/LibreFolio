@@ -1,19 +1,19 @@
 <!--
-  ExposureTable — Portfolio positions table using DataTable.
+  ExposureTable — Holdings snapshot table for open positions at the selected end date.
 
-  Open mode: current holdings + period realized/costs merged from positions_contribution.
-  Closed mode: fully sold positions from positions_contribution only.
-  Sorted by value descending (open) or |period P&L| descending (closed).
+  Shows open holdings only (snapshot at date_to).
+  Columns: Asset, Value, Weight, Unrealized P&L, P&L %, Quantity, Price, PMC, Broker.
+  Sorted by value descending.
 
   Pattern: Svelte 5 Runes, DataTable, data-testid, dark mode.
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {onMount} from 'svelte';
+    import {goto} from '$app/navigation';
     import type {ColumnDef} from '$lib/components/table/types';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
-    import type {PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
@@ -26,23 +26,21 @@
         asset_type: string;
         broker_id?: number | (number | null)[] | null;
         broker_name?: string | (string | null)[] | null;
+        quantity?: string | (string | null)[] | null;
+        wac_per_unit?: string | (string | null)[] | null;
+        current_price?: string | (string | null)[] | null;
         current_value?: string | (string | null)[] | null;
         nav_weight_percent?: string | (string | null)[] | null;
         gain_loss?: string | (string | null)[] | null;
         gain_loss_percent?: string | (string | null)[] | null;
-        price_change_1d?: string | (string | null)[] | null;
     }
 
     interface Props {
         holdings: Holding[];
         navAmount: number;
         displayCurrency: string;
-        positionFilter?: 'open' | 'closed';
-        contribution?: PositionsContribution | null;
         brokers?: ReadonlyArray<BrokerLike>;
     }
-
-    type ContributionPosition = NonNullable<PositionsContribution['positions']>[number];
 
     interface DisplayRow {
         key: string;
@@ -55,13 +53,14 @@
         currentValue: number | null;
         navWeight: number | null;
         unrealizedPnl: number | null;
-        realized: number | null;
-        costs: number | null;
-        periodPnl: number | null;
-        change1d: number | null;
+        unrealizedPnlPercent: number | null;
+        quantity: number | null;
+        price: number | null;
+        wacPerUnit: number | null;
     }
 
-    let {holdings = [], displayCurrency = 'EUR', positionFilter = 'open', contribution = null, brokers = []}: Props = $props();
+    let {holdings = [], navAmount = 0, displayCurrency = 'EUR', brokers = [], ..._legacyProps}: Props & Record<string, unknown> = $props();
+    void _legacyProps;
 
     onMount(async () => {
         await ensureAssetsLoaded();
@@ -88,14 +87,6 @@
         return `${assetId}-${brokerId ?? 0}`;
     }
 
-    function getRealizedAmount(position: ContributionPosition | null | undefined): number {
-        return (safeNum(position?.period_realized_gain_loss) ?? 0) + (safeNum(position?.period_income) ?? 0);
-    }
-
-    function getCostsAmount(position: ContributionPosition | null | undefined): number {
-        return safeNum(position?.period_fees_taxes) ?? 0;
-    }
-
     function escapeHtml(s: string): string {
         return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
@@ -109,16 +100,6 @@
         };
     }
 
-    function costsAmountCell(value: number | null) {
-        if (value == null) return '—';
-        if (value === 0) return {type: 'html' as const, html: `<span class="font-medium text-gray-500 dark:text-gray-400">${formatCurrencyAmountPlain(0, displayCurrency)}</span>`};
-        const signedValue = -Math.abs(value);
-        return {
-            type: 'html' as const,
-            html: `<span class="font-medium text-red-500 dark:text-red-400">${formatCurrencyAmountPlain(signedValue, displayCurrency, {showSign: true})}</span>`,
-        };
-    }
-
     function percentChangeCell(value: number | null) {
         if (value == null) return '—';
         const pct = (value * 100).toFixed(2);
@@ -129,44 +110,18 @@
         };
     }
 
-    let contributionMap = $derived.by(() => {
-        const map = new Map<string, ContributionPosition>();
-        for (const position of contribution?.positions ?? []) {
-            map.set(makePositionKey(position.asset_id, position.broker_id), position);
-        }
-        return map;
-    });
+    function formatQuantity(value: number | null): string {
+        return value == null ? '—' : value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
+    }
 
     let rows = $derived.by<DisplayRow[]>(() => {
         const brokerMap = new Map(brokers.map((broker) => [broker.id, broker]));
-        if (positionFilter === 'closed') {
-            return (contribution?.positions ?? [])
-                .filter((position) => position.is_fully_sold)
-                .map((position) => ({
-                    key: makePositionKey(position.asset_id, position.broker_id),
-                    assetId: position.asset_id,
-                    assetName: position.asset_name,
-                    assetType: position.asset_type,
-                    brokerId: position.broker_id,
-                    brokerName: position.broker_name,
-                    broker: brokerMap.get(position.broker_id) ?? null,
-                    currentValue: null,
-                    navWeight: null,
-                    unrealizedPnl: null,
-                    realized: getRealizedAmount(position),
-                    costs: getCostsAmount(position),
-                    periodPnl: safeNum(position.period_pnl) ?? 0,
-                    change1d: null,
-                }))
-                .sort((a, b) => Math.abs(b.periodPnl ?? 0) - Math.abs(a.periodPnl ?? 0));
-        }
 
-        const contributionLoaded = contribution != null;
         return [...holdings]
             .map((holding) => {
                 const brokerId = safeInt(holding.broker_id);
-                const position = contributionMap.get(makePositionKey(holding.asset_id, brokerId));
-                const broker = brokerId ? (brokerMap.get(brokerId) ?? null) : null;
+                const broker = brokerId == null ? null : (brokerMap.get(brokerId) ?? null);
+                const currentValue = safeNum(holding.current_value);
                 return {
                     key: makePositionKey(holding.asset_id, brokerId),
                     assetId: holding.asset_id,
@@ -175,112 +130,92 @@
                     brokerId,
                     brokerName: safeStr(holding.broker_name) || broker?.name || '—',
                     broker,
-                    currentValue: safeNum(holding.current_value),
-                    navWeight: safeNum(holding.nav_weight_percent),
+                    currentValue,
+                    navWeight: safeNum(holding.nav_weight_percent) ?? (currentValue != null && navAmount > 0 ? (currentValue / navAmount) * 100 : null),
                     unrealizedPnl: safeNum(holding.gain_loss),
-                    realized: contributionLoaded ? (position ? getRealizedAmount(position) : 0) : null,
-                    costs: contributionLoaded ? (position ? getCostsAmount(position) : 0) : null,
-                    periodPnl: contributionLoaded ? (position ? (safeNum(position.period_pnl) ?? 0) : 0) : null,
-                    change1d: safeNum(holding.price_change_1d),
+                    unrealizedPnlPercent: safeNum(holding.gain_loss_percent),
+                    quantity: safeNum(holding.quantity),
+                    price: safeNum(holding.current_price),
+                    wacPerUnit: safeNum(holding.wac_per_unit),
                 };
             })
+            .filter((row) => row.quantity == null || row.quantity !== 0)
             .sort((a, b) => (b.currentValue ?? 0) - (a.currentValue ?? 0));
     });
 
     let columns = $derived.by<ColumnDef<DisplayRow>[]>(() => {
-        const brokerMap = new Map(brokers.map((broker) => [broker.id, broker]));
-        const baseColumns: ColumnDef<DisplayRow>[] = [
-            {
-                id: 'asset',
-                header: () => $_('common.asset'),
-                type: 'text',
-                width: 200,
-                sortable: true,
-                getValue: (row) => row.assetName,
-                cell: (row) => {
-                    const info = getAssetInfo(row.assetId);
-                    const typeIconSrc = getAssetTypeIconUrl(row.assetType) || '';
-                    const name = escapeHtml(row.assetName);
-                    const typeIconHtml = typeIconSrc ? `<img src="${escapeHtml(typeIconSrc)}" alt="${escapeHtml(row.assetType)}" class="w-4 h-4 rounded object-contain shrink-0" onerror="this.style.display='none'" />` : '';
-                    return {
-                        type: 'html',
-                        html: `<div class="flex items-center gap-1.5 min-w-0">${typeIconHtml}<span class="truncate font-medium text-gray-700 dark:text-gray-200">${name}</span></div>`,
-                    };
-                },
+        const assetColumn: ColumnDef<DisplayRow> = {
+            id: 'asset',
+            header: () => $_('common.asset'),
+            type: 'text',
+            width: 240,
+            minWidth: 220,
+            maxWidth: 420,
+            resizable: true,
+            sortable: true,
+            getValue: (row) => row.assetName,
+            cell: (row) => {
+                const info = getAssetInfo(row.assetId);
+                const typeIconSrc = info?.icon_url || getAssetTypeIconUrl(row.assetType) || '';
+                const name = escapeHtml(row.assetName);
+                const typeIconHtml = typeIconSrc ? `<img src="${escapeHtml(typeIconSrc)}" alt="${escapeHtml(row.assetType)}" class="w-4 h-4 rounded object-contain shrink-0" onerror="this.style.display='none'" />` : '';
+                return {
+                    type: 'html',
+                    html: `<div class="flex items-center gap-1.5 min-w-0">${typeIconHtml}<span class="truncate font-medium text-gray-700 dark:text-gray-200">${name}</span></div>`,
+                };
             },
-            {
-                id: 'broker',
-                header: () => $_('brokers.title'),
-                type: 'text',
-                width: 130,
-                sortable: true,
-                getValue: (row) => row.brokerName,
-                cell: (row) => {
-                    const broker = row.broker;
-                    if (!broker && row.brokerId == null) return '—';
-                    return {
-                        type: 'custom',
-                        component: BrokerBadge,
-                        props: {
-                            broker: broker ?? {id: row.brokerId ?? 0, name: row.brokerName},
-                            size: 16,
-                            showName: true,
-                            tooltip: row.brokerName,
-                        },
-                    };
-                },
-            },
-        ];
+        };
 
-        if (positionFilter === 'closed') {
-            return [
-                ...baseColumns,
-                {
-                    id: 'realized',
-                    header: () => $_('dashboard.realized'),
-                    type: 'number',
-                    width: 120,
-                    sortable: true,
-                    getValue: (row) => row.realized ?? 0,
-                    cell: (row) => signedAmountCell(row.realized),
-                },
-                {
-                    id: 'costs',
-                    header: () => $_('dashboard.costs'),
-                    type: 'number',
-                    width: 120,
-                    sortable: true,
-                    getValue: (row) => row.costs ?? 0,
-                    cell: (row) => costsAmountCell(row.costs),
-                },
-                {
-                    id: 'period-pnl',
-                    header: () => $_('dashboard.periodPnl'),
-                    type: 'number',
-                    width: 120,
-                    sortable: true,
-                    getValue: (row) => row.periodPnl ?? 0,
-                    cell: (row) => signedAmountCell(row.periodPnl),
-                },
-            ];
-        }
+        const brokerColumn: ColumnDef<DisplayRow> = {
+            id: 'broker',
+            header: () => $_('brokers.title') || 'Broker',
+            type: 'text',
+            width: 130,
+            minWidth: 120,
+            maxWidth: 220,
+            resizable: true,
+            sortable: true,
+            getValue: (row) => row.brokerName,
+            cell: (row) => {
+                const broker = row.broker;
+                if (!broker && row.brokerId == null) return '—';
+                return {
+                    type: 'custom',
+                    component: BrokerBadge,
+                    props: {
+                        broker: broker ?? {id: row.brokerId ?? 0, name: row.brokerName},
+                        size: 16,
+                        showName: true,
+                        tooltip: row.brokerName,
+                    },
+                };
+            },
+        };
 
         return [
-            ...baseColumns,
+            assetColumn,
             {
                 id: 'value',
                 header: () => $_('common.value'),
                 type: 'number',
-                width: 120,
+                align: 'right',
+                width: 180,
+                minWidth: 160,
+                maxWidth: 280,
+                resizable: true,
                 sortable: true,
                 getValue: (row) => row.currentValue ?? 0,
                 cell: (row) => (row.currentValue == null ? '—' : formatCurrencyAmountPlain(row.currentValue, displayCurrency)),
             },
             {
                 id: 'weight',
-                header: () => $_('dashboard.navWeight'),
+                header: () => $_('dashboard.navWeight') || 'Weight',
                 type: 'number',
-                width: 80,
+                align: 'right',
+                width: 100,
+                minWidth: 90,
+                maxWidth: 160,
+                resizable: true,
                 sortable: true,
                 getValue: (row) => row.navWeight ?? 0,
                 cell: (row) => (row.navWeight == null ? '—' : `${row.navWeight.toFixed(1)}%`),
@@ -289,42 +224,78 @@
                 id: 'pnl',
                 header: () => $_('dashboard.unrealizedPnl'),
                 type: 'number',
-                width: 120,
+                align: 'right',
+                width: 180,
+                minWidth: 160,
+                maxWidth: 280,
+                resizable: true,
                 sortable: true,
                 getValue: (row) => row.unrealizedPnl ?? 0,
                 cell: (row) => signedAmountCell(row.unrealizedPnl),
             },
             {
-                id: 'realized',
-                header: () => $_('dashboard.realized'),
+                id: 'pnl-percent',
+                header: () => $_('dashboard.unrealizedPnlPercent') || 'P&L %',
+                headerTooltip: () => $_('dashboard.unrealizedPnlPercentTooltip') || 'Unrealized P&L as a percentage of the residual cost basis (Unrealized P&L / cost basis).',
                 type: 'number',
-                width: 120,
+                align: 'right',
+                width: 110,
+                minWidth: 100,
+                maxWidth: 180,
+                resizable: true,
                 sortable: true,
-                getValue: (row) => row.realized ?? 0,
-                cell: (row) => signedAmountCell(row.realized),
+                getValue: (row) => row.unrealizedPnlPercent ?? 0,
+                cell: (row) => percentChangeCell(row.unrealizedPnlPercent),
             },
             {
-                id: 'costs',
-                header: () => $_('dashboard.costs'),
+                id: 'quantity',
+                header: () => $_('dashboard.quantity') || 'Quantity',
                 type: 'number',
+                align: 'right',
                 width: 120,
+                minWidth: 100,
+                maxWidth: 200,
+                resizable: true,
                 sortable: true,
-                getValue: (row) => row.costs ?? 0,
-                cell: (row) => costsAmountCell(row.costs),
+                getValue: (row) => row.quantity ?? 0,
+                cell: (row) => `${formatQuantity(row.quantity)} 📈`,
             },
             {
-                id: 'change1d',
-                header: () => 'Δ 1D',
+                id: 'price',
+                header: () => $_('dashboard.price') || 'Price',
                 type: 'number',
-                width: 80,
+                align: 'right',
+                width: 180,
+                minWidth: 160,
+                maxWidth: 280,
+                resizable: true,
                 sortable: true,
-                getValue: (row) => row.change1d ?? 0,
-                cell: (row) => percentChangeCell(row.change1d),
+                getValue: (row) => row.price ?? 0,
+                cell: (row) => (row.price == null ? '—' : formatCurrencyAmountPlain(row.price, displayCurrency)),
             },
+            {
+                id: 'pmc',
+                header: () => $_('dashboard.pmc') || 'PMC',
+                headerTooltip: () => $_('dashboard.pmcTooltip') || 'Average cost per unit of the currently open position.',
+                type: 'number',
+                align: 'right',
+                width: 180,
+                minWidth: 160,
+                maxWidth: 280,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => row.wacPerUnit ?? 0,
+                cell: (row) => (row.wacPerUnit == null ? '—' : formatCurrencyAmountPlain(row.wacPerUnit, displayCurrency)),
+            },
+            brokerColumn,
         ];
     });
 
-    let tableEmptyMessage = $derived(positionFilter === 'closed' ? $_('dashboard.noPeriodPnl') : $_('dashboard.noPositions'));
+    let tableEmptyMessage = $derived($_('dashboard.noPositions') || 'No holdings at the selected date');
+
+    function goToAssetDetail(row: DisplayRow) {
+        void goto(`/assets/${row.assetId}`);
+    }
 </script>
 
 <div data-testid="exposure-table">
@@ -332,7 +303,7 @@
         data={rows}
         {columns}
         getRowId={(row) => row.key}
-        storageKey={`dashboard-exposure-${positionFilter}`}
+        storageKey="dashboard-holdings-v3"
         enableSelection={false}
         selectionMode="none"
         enableActions={false}
@@ -340,9 +311,10 @@
         enableColumnVisibility={false}
         enableColumnFilters={false}
         enableSorting={true}
-        enableColumnResize={false}
+        enableColumnResize={true}
         enableContextMenu={false}
-        tableLayout="auto"
+        tableLayout="fixed"
         emptyMessage={tableEmptyMessage}
+        onRowDoubleClick={goToAssetDetail}
     />
 </div>

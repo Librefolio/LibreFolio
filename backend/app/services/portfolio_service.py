@@ -52,6 +52,7 @@ from backend.app.schemas.portfolio import (
     IssueSeverity,
     MissingPriceAsset,
     OpenLotSchema,
+    OtherPeriodEffect,
     PortfolioHistoryPoint,
     PortfolioHolding,
     PortfolioReportMetadata,
@@ -461,6 +462,16 @@ _WITHDRAWAL_TYPES = {TransactionType.WITHDRAWAL}
 _CASH_FLOW_TYPES = _DEPOSIT_TYPES | _WITHDRAWAL_TYPES
 _HOLDING_TYPES = {TransactionType.BUY, TransactionType.SELL}
 
+# Some instruments (e.g. CROWDFUND real-estate loans redeemed via periodic partial
+# buybacks) accrue a tiny non-zero quantity residual even after the position is
+# economically fully closed — the platform computes each redemption tranche's
+# quantity independently (rounded to its own precision), and those tranches don't
+# always sum back to *exactly* the original quantity bought (observed real case:
+# 8×(-0.031102) + (-0.751182) against a +1 buy leaves a +0.000002 residual). This
+# is not Decimal arithmetic error — it's an artifact of the recorded transaction
+# quantities themselves — so treat anything at or below this threshold as closed.
+_QUANTITY_DUST_THRESHOLD = Decimal("0.00001")
+
 
 class PortfolioService:
     """Orchestrator for portfolio-level calculations.
@@ -499,6 +510,13 @@ class PortfolioService:
 
     async def _get_broker(self, broker_id: int) -> Broker | None:
         return await self.db.get(Broker, broker_id)
+
+    async def _get_brokers_map(self, broker_ids: set[int]) -> dict[int, Broker]:
+        if not broker_ids:
+            return {}
+        stmt = select(Broker).where(Broker.id.in_(broker_ids))
+        result = await self.db.execute(stmt)
+        return {broker.id: broker for broker in result.scalars().all()}
 
     async def _get_transactions(
         self,
@@ -566,6 +584,13 @@ class PortfolioService:
     async def _get_asset(self, asset_id: int) -> Asset | None:
         return await self.db.get(Asset, asset_id)
 
+    async def _get_assets_map(self, asset_ids: set[int]) -> dict[int, Asset]:
+        if not asset_ids:
+            return {}
+        stmt = select(Asset).where(Asset.id.in_(asset_ids))
+        result = await self.db.execute(stmt)
+        return {asset.id: asset for asset in result.scalars().all()}
+
     async def _get_quote_base_map(self, asset_ids: set[int]) -> dict[int, int | None]:
         if not asset_ids:
             return {}
@@ -601,6 +626,69 @@ class PortfolioService:
             merged[item.pair].update(item.dates)
         return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(merged.items())]
 
+    @staticmethod
+    def _compute_period_summary_metrics(
+        engine_result: Any,
+        date_from: date_type | None,
+    ) -> dict[str, Decimal | None]:
+        """Compute period NAV/P&L inputs from engine daily states."""
+        metrics: dict[str, Decimal | None] = {
+            "period_nav_start_val": None,
+            "period_net_flows_val": None,
+            "period_pnl_val": None,
+            "period_ugl_start": None,
+            "period_ugl_end": None,
+            "period_ugl_delta": None,
+            "period_book_value_start_val": None,
+            "period_market_value_start_val": None,
+        }
+        daily_states = getattr(engine_result, "daily_states", None) or []
+        if len(daily_states) < 2:
+            return metrics
+
+        zero = Decimal("0")
+        end_state = daily_states[-1]
+        period_ugl_end = end_state.market_value - end_state.open_cost_basis
+
+        if date_from:
+            pre_states = [s for s in daily_states if s.date <= date_from]
+            if pre_states:
+                start_state = pre_states[-1]
+                period_nav_start_val = start_state.nav_value
+                period_book_value_start_val = start_state.book_value
+                period_market_value_start_val = start_state.market_value
+                period_ugl_start = start_state.market_value - start_state.open_cost_basis
+                period_net_flows_val = end_state.cumulative_external_cash_flow - start_state.cumulative_external_cash_flow
+            else:
+                period_nav_start_val = zero
+                period_book_value_start_val = zero
+                period_market_value_start_val = zero
+                period_ugl_start = zero
+                period_net_flows_val = end_state.cumulative_external_cash_flow
+        else:
+            period_nav_start_val = zero
+            period_book_value_start_val = zero
+            period_market_value_start_val = zero
+            period_ugl_start = zero
+            period_net_flows_val = end_state.cumulative_external_cash_flow
+
+        period_pnl_val = end_state.nav_value - period_nav_start_val - period_net_flows_val
+        period_ugl_delta = period_ugl_end - period_ugl_start
+
+        metrics.update(
+            {
+                "period_nav_start_val": period_nav_start_val,
+                "period_net_flows_val": period_net_flows_val,
+                "period_pnl_val": period_pnl_val,
+                "period_ugl_start": period_ugl_start,
+                "period_ugl_end": period_ugl_end,
+                "period_ugl_delta": period_ugl_delta,
+                "period_book_value_start_val": period_book_value_start_val,
+                "period_market_value_start_val": period_market_value_start_val,
+            }
+        )
+        return metrics
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -618,17 +706,19 @@ class PortfolioService:
         """Return aggregated portfolio summary via PortfolioCalculationEngine.
 
         Uses the new engine for aggregate values (NAV, market_value, book_value,
-        allocation, performance) while keeping the per-asset holdings loop for
-        individual holding details and broker breakdown.
+        allocation, performance) and derives holding rows from end-of-period
+        position snapshots.
 
         _precomputed_engine_result: if provided by get_report(), skip engine re-run.
         """
         from backend.app.services.portfolio_engine import (  # noqa: PLC0415
+            TRANSACTION_IMPLIED_GRACE_DAYS,
             DerivedViewsBuilder,
             PortfolioCalculationEngine,
         )
 
         today = date_type.today()
+        valuation_date = date_to or today
         base_currency = target_currency_override or await self._get_base_currency()
 
         # ── 1. Run engine for aggregate values + performance ──
@@ -640,7 +730,7 @@ class PortfolioService:
                 user_id=user_id,
                 broker_ids=broker_ids,
                 date_from=None,
-                date_to=None,
+                date_to=date_to,
                 target_currency=base_currency,
             )
 
@@ -652,18 +742,23 @@ class PortfolioService:
         engine_cash = last_state.cash_value if last_state else Decimal("0")
         engine_market_value = last_state.market_value if last_state else Decimal("0")
 
-        # ── 3. Per-asset holdings loop (kept for individual holding details) ──
+        # ── 3. Broker cash / realized P&L + end-of-period holdings snapshot ──
         accesses = await self._get_user_broker_access(user_id, broker_ids)
 
         total_invested = Decimal("0")
         _total_deposited = Decimal("0")
         _total_withdrawn = Decimal("0")
-        total_cost_basis = Decimal("0")
         all_cash_balances: dict[str, Decimal] = defaultdict(Decimal)
         all_holdings: list[PortfolioHolding] = []
         by_broker_list: list[BrokerBreakdown] = []
         all_missing_pairs: list[WACMissingPairInfo] = []
         missing_price_assets: list[MissingPriceAsset] = []
+        broker_names: dict[int, str] = {}
+        broker_cash_native: dict[int, dict[str, Decimal]] = {}
+        broker_cash_base: dict[int, Decimal] = defaultdict(Decimal)
+        broker_market_values: dict[int, Decimal] = defaultdict(Decimal)
+        broker_total_invested: dict[int, Decimal] = defaultdict(Decimal)
+        first_position_dates: dict[tuple[int, int], date_type] = {}
         _income_accum = Decimal("0")
         _fees_taxes_accum = Decimal("0")
         _fees_accum = Decimal("0")
@@ -677,9 +772,10 @@ class PortfolioService:
             share = access.share_percentage or Decimal("1")
             broker = await self._get_broker(broker_id)
             broker_name = broker.name if broker else f"Broker {broker_id}"
+            broker_names[broker_id] = broker_name
 
-            broker_txns = await self._get_transactions(broker_id)
-            broker_cash: dict[str, Decimal] = defaultdict(Decimal)
+            broker_txns = await self._get_transactions(broker_id, date_to=date_to)
+            broker_cash = broker_cash_native.setdefault(broker_id, defaultdict(Decimal))
             for tx in broker_txns:
                 if tx.amount is None or tx.currency is None:
                     continue
@@ -707,6 +803,7 @@ class PortfolioService:
 
                 if tx.type in _CASH_FLOW_TYPES:
                     total_invested += amount_base_signed * share
+                    broker_total_invested[broker_id] += amount_base_signed * share
                     if in_period:
                         if tx.type in _DEPOSIT_TYPES:
                             _total_deposited += abs(amount_base_signed) * share
@@ -729,8 +826,9 @@ class PortfolioService:
                     continue
                 if tx.asset_id is not None:
                     txns_by_asset[tx.asset_id].append(tx)
-
-            broker_market_value = Decimal("0")
+                    pos_key = (broker_id, tx.asset_id)
+                    if pos_key not in first_position_dates or tx.date < first_position_dates[pos_key]:
+                        first_position_dates[pos_key] = tx.date
 
             for asset_id, asset_txns in txns_by_asset.items():
                 asset = await self._get_asset(asset_id)
@@ -778,133 +876,105 @@ class PortfolioService:
                     cost_sold = sell_qty * wac_at_sell_base
                     _realized_accum += (sell_proceeds - cost_sold) * share
 
-                wac_result = await compute_wac_iterative(
-                    session=self.db,
-                    broker_id=broker_id,
-                    asset_id=asset_id,
-                    as_of_date=today,
-                    asset_currency=asset.currency or base_currency,
-                )
-                if wac_result.wac is None:
-                    if wac_result.wac_missing_pairs:
-                        all_missing_pairs.extend(wac_result.wac_missing_pairs)
-                    continue
+        end_positions = [ps for ps in engine_result.position_states_end if ps.quantity > _QUANTITY_DUST_THRESHOLD]
+        assets_map = await self._get_assets_map({ps.asset_id for ps in end_positions})
+        brokers_map = await self._get_brokers_map({ps.broker_id for ps in end_positions})
 
-                wac_per_unit = wac_result.wac.amount
-                wac_currency = wac_result.wac.code
-                net_qty = sum((tx.quantity or Decimal("0")) for tx in asset_txns if tx.type in (TransactionType.BUY, TransactionType.SELL))
-                if net_qty <= 0:
-                    continue
+        for ps in end_positions:
+            asset = assets_map.get(ps.asset_id)
+            if not asset:
+                continue
 
-                price_data = await self._get_latest_price(asset_id)
-                current_price: Decimal | None = None
-                current_value: Decimal | None = None
-                gain_loss: Decimal | None = None
-                gain_loss_pct: Decimal | None = None
-                price_change_1d: Decimal | None = None
+            broker = brokers_map.get(ps.broker_id)
+            broker_name = broker.name if broker else broker_names.get(ps.broker_id, f"Broker {ps.broker_id}")
 
-                if price_data:
-                    raw_price, price_ccy, price_date = price_data
-                    if price_ccy != base_currency:
-                        converted, mp = await self._convert_to_base(raw_price, price_ccy, base_currency, price_date)
-                        if converted is not None:
-                            current_price = converted
-                        all_missing_pairs.extend(mp)
-                    else:
-                        current_price = raw_price
-
-                if current_price is not None:
-                    yesterday = today - timedelta(days=1)
-                    prev_price_data = await self._get_price_at_date(asset_id, yesterday)
-                    if prev_price_data:
-                        prev_raw, prev_ccy, _ = prev_price_data
-                        if prev_ccy == base_currency:
-                            prev_price_base = prev_raw
-                        else:
-                            prev_price_base, _ = await self._convert_to_base(prev_raw, prev_ccy, base_currency, yesterday)
-                        if prev_price_base and prev_price_base != 0:
-                            price_change_1d = ((current_price - prev_price_base) / prev_price_base).quantize(Decimal("0.0001"))
-
-                if current_price is not None:
-                    current_value = compute_holding_value(net_qty, current_price, asset.quote_base_quantity) * share
-                    broker_market_value += current_value
-
-                has_missing_price = price_data is None and current_price is None
-
-                if wac_currency != base_currency:
-                    wac_base, mp = await self._convert_to_base(wac_per_unit, wac_currency, base_currency, today)
-                    all_missing_pairs.extend(mp)
+            current_price: Decimal | None = None
+            if ps.valuation_price is not None and ps.valuation_price_ccy is not None:
+                if ps.valuation_price_ccy == base_currency:
+                    current_price = ps.valuation_price
                 else:
-                    wac_base = wac_per_unit
+                    current_price, mp = await self._convert_to_base(ps.valuation_price, ps.valuation_price_ccy, base_currency, ps.date)
+                    all_missing_pairs.extend(mp)
 
-                cost_basis = (wac_base or wac_per_unit) * net_qty * share
-                total_cost_basis += cost_basis
+            wac_per_unit: Decimal | None = None
+            if ps.wac_currency == base_currency:
+                wac_per_unit = ps.wac
+            else:
+                wac_per_unit, mp = await self._convert_to_base(ps.wac, ps.wac_currency, base_currency, ps.date)
+                all_missing_pairs.extend(mp)
 
-                # TRANSACTION_IMPLIED fallback: use WAC × qty as proxy value when no market price
-                is_implied = False
-                if has_missing_price and wac_base is not None:
-                    current_value = cost_basis
-                    current_price = wac_base
-                    broker_market_value += current_value
-                    is_implied = True
+            current_value = ps.market_value
+            if current_value is not None:
+                broker_market_values[ps.broker_id] += current_value
 
-                if has_missing_price and not is_implied:
-                    first_date = min((tx.date for tx in asset_txns), default=None)
-                    missing_price_assets.append(
-                        MissingPriceAsset(
-                            asset_id=asset_id,
-                            symbol=asset.identifier_ticker,
-                            name=asset.display_name,
-                            broker_id=broker_id,
-                            broker_name=broker_name,
-                            first_position_date=first_date,
-                            quantity=net_qty,
-                            open_cost_basis=cost_basis if wac_base is not None else None,
-                            currency=base_currency,
-                        )
-                    )
+            gain_loss = ps.unrealized_pnl
+            gain_loss_pct = (gain_loss / ps.cost_basis) if gain_loss is not None and ps.cost_basis != 0 else None
 
-                if current_value is not None and wac_base is not None:
-                    gain_loss = current_value - cost_basis
-                    gain_loss_pct = (gain_loss / cost_basis) if cost_basis != 0 else Decimal("0")
+            price_change_1d: Decimal | None = None
+            if ps.valuation_source == "MARKET_PRICE" and current_price is not None:
+                prev_price_data = await self._get_price_at_date(ps.asset_id, ps.date - timedelta(days=1))
+                if prev_price_data:
+                    prev_raw, prev_ccy, prev_date = prev_price_data
+                    if prev_ccy == base_currency:
+                        prev_price_base = prev_raw
+                    else:
+                        prev_price_base, mp = await self._convert_to_base(prev_raw, prev_ccy, base_currency, prev_date)
+                        all_missing_pairs.extend(mp)
+                    if prev_price_base is not None and prev_price_base != 0:
+                        price_change_1d = ((current_price - prev_price_base) / prev_price_base).quantize(Decimal("0.0001"))
 
-                all_holdings.append(
-                    PortfolioHolding(
-                        asset_id=asset_id,
-                        asset_name=asset.display_name,
-                        asset_ticker=asset.identifier_ticker,
-                        asset_type=asset.asset_type.value if asset.asset_type else "Unknown",
-                        broker_id=broker_id,
+            if ps.valuation_source == "MISSING":
+                missing_price_assets.append(
+                    MissingPriceAsset(
+                        asset_id=ps.asset_id,
+                        symbol=asset.identifier_ticker,
+                        name=asset.display_name,
+                        broker_id=ps.broker_id,
                         broker_name=broker_name,
-                        quantity=net_qty,
-                        wac_per_unit=wac_base if wac_base else wac_per_unit,
-                        current_price=current_price,
-                        current_value=current_value,
-                        gain_loss=gain_loss,
-                        gain_loss_percent=gain_loss_pct,
-                        price_change_1d=price_change_1d,
-                        allocation_percent=None,
+                        first_position_date=first_position_dates.get((ps.broker_id, ps.asset_id)),
+                        quantity=ps.quantity,
+                        open_cost_basis=ps.cost_basis if ps.cost_basis != 0 else None,
+                        currency=base_currency,
                     )
                 )
 
-            # Broker-level cash
-            broker_cash_base = Decimal("0")
+            all_holdings.append(
+                PortfolioHolding(
+                    asset_id=ps.asset_id,
+                    asset_name=asset.display_name,
+                    asset_ticker=asset.identifier_ticker,
+                    asset_type=asset.asset_type.value if asset.asset_type else "Unknown",
+                    broker_id=ps.broker_id,
+                    broker_name=broker_name,
+                    quantity=ps.quantity,
+                    wac_per_unit=wac_per_unit,
+                    current_price=current_price,
+                    current_value=current_value,
+                    gain_loss=gain_loss,
+                    gain_loss_percent=gain_loss_pct,
+                    price_change_1d=price_change_1d,
+                    allocation_percent=None,
+                )
+            )
+
+        for broker_id, broker_cash in broker_cash_native.items():
             for ccy, amt in broker_cash.items():
                 if ccy == base_currency:
-                    broker_cash_base += amt
+                    broker_cash_base[broker_id] += amt
                     all_cash_balances[ccy] += amt
                 else:
-                    converted, mp = await self._convert_to_base(amt, ccy, base_currency, today)
+                    converted, mp = await self._convert_to_base(amt, ccy, base_currency, valuation_date)
                     all_missing_pairs.extend(mp)
                     if converted is not None:
-                        broker_cash_base += converted
+                        broker_cash_base[broker_id] += converted
                         all_cash_balances[ccy] += amt
 
-            broker_nav = broker_market_value + broker_cash_base
-
-            if include_breakdown:
-                broker_gain = broker_nav - total_invested
-                broker_gl_pct = (broker_gain / total_invested) if total_invested else Decimal("0")
+        if include_breakdown:
+            for broker_id, broker_name in broker_names.items():
+                broker_nav = broker_market_values.get(broker_id, Decimal("0")) + broker_cash_base.get(broker_id, Decimal("0"))
+                broker_invested = broker_total_invested.get(broker_id, Decimal("0"))
+                broker_gain = broker_nav - broker_invested
+                broker_gl_pct = (broker_gain / broker_invested) if broker_invested else Decimal("0")
                 by_broker_list.append(
                     BrokerBreakdown(
                         broker_id=broker_id,
@@ -912,7 +982,8 @@ class PortfolioService:
                         net_worth=Currency(code=base_currency, amount=broker_nav),
                         gain_loss=Currency(code=base_currency, amount=broker_gain),
                         gain_loss_percent=broker_gl_pct,
-                        cash_total=Currency(code=base_currency, amount=broker_cash_base),
+                        cash_total=Currency(code=base_currency, amount=broker_cash_base.get(broker_id, Decimal("0"))),
+                        cash_balances=[Currency(code=ccy, amount=amt) for ccy, amt in broker_cash_native.get(broker_id, {}).items()],
                     )
                 )
 
@@ -992,62 +1063,22 @@ class PortfolioService:
         total_gl_pct = (total_gl / total_invested) if total_invested > 0 else Decimal("0")
         cash_balances_list = [Currency(code=ccy, amount=amt) for ccy, amt in all_cash_balances.items()]
 
-        # ── Period P&L computation ──
-        period_nav_start_val: Decimal | None = None
-        period_net_flows_val: Decimal | None = None
-        period_pnl_val: Decimal | None = None
-
-        if nav_snapshots and len(nav_snapshots) >= 2:
-            # Find nav at period start
-            if date_from:
-                pre_period = [s for s in nav_snapshots if s.date <= date_from]
-                # If date_from is before any portfolio data, NAV was 0
-                period_nav_start_val = pre_period[-1].nav if pre_period else Decimal("0")
-                # Sum external CFs within the period (respecting both boundaries)
-                period_net_flows_val = sum((-cf.amount) for cf in cash_flows_perf if cf.date > date_from and (date_to is None or cf.date <= date_to))
-            else:
-                # Full history: NAV at t=0 is effectively 0 (portfolio starts empty)
-                period_nav_start_val = Decimal("0")
-                # All CFs up to date_to
-                period_net_flows_val = sum((-cf.amount) for cf in cash_flows_perf if (date_to is None or cf.date <= date_to))
-
-            period_pnl_val = engine_nav - period_nav_start_val - (period_net_flows_val or Decimal("0"))
-
-        # ── Period P&L breakdown: unrealized delta, income, fees ──
-        period_ugl_start: Decimal | None = None
-        period_ugl_end: Decimal | None = None
-        period_ugl_delta: Decimal | None = None
-        period_book_value_start_val: Decimal | None = None
-        period_market_value_start_val: Decimal | None = None
+        # ── Period P&L breakdown: NAV, unrealized delta, income, fees ──
+        period_metrics = self._compute_period_summary_metrics(engine_result, date_from)
+        period_nav_start_val = period_metrics["period_nav_start_val"]
+        period_net_flows_val = period_metrics["period_net_flows_val"]
+        period_pnl_val = period_metrics["period_pnl_val"]
+        period_ugl_start = period_metrics["period_ugl_start"]
+        period_ugl_end = period_metrics["period_ugl_end"]
+        period_ugl_delta = period_metrics["period_ugl_delta"]
+        period_book_value_start_val = period_metrics["period_book_value_start_val"]
+        period_market_value_start_val = period_metrics["period_market_value_start_val"]
         period_realized_val: Decimal | None = None
         period_income_val: Decimal | None = None
         period_fees_taxes_val: Decimal | None = None
         period_other_result_val: Decimal | None = None
 
-        if engine_result.daily_states and period_pnl_val is not None:
-            # Unrealized G/L from daily states (market_value - open_cost_basis)
-            last_ds = engine_result.daily_states[-1]
-            period_ugl_end = last_ds.market_value - last_ds.open_cost_basis
-
-            if date_from:
-                # Find daily state at or before date_from
-                pre_states = [s for s in engine_result.daily_states if s.date <= date_from]
-                if pre_states:
-                    start_ds = pre_states[-1]
-                    period_ugl_start = start_ds.market_value - start_ds.open_cost_basis
-                    period_book_value_start_val = start_ds.book_value
-                    period_market_value_start_val = start_ds.market_value
-                else:
-                    period_ugl_start = Decimal("0")
-                    period_book_value_start_val = Decimal("0")
-                    period_market_value_start_val = Decimal("0")
-            else:
-                period_ugl_start = Decimal("0")
-                period_book_value_start_val = Decimal("0")
-                period_market_value_start_val = Decimal("0")
-
-            period_ugl_delta = period_ugl_end - period_ugl_start
-
+        if period_pnl_val is not None and period_ugl_delta is not None:
             # Realized, income, fees from accumulated values
             period_realized_val = _realized_accum
             period_income_val = _income_accum if _income_accum else Decimal("0")
@@ -1058,19 +1089,44 @@ class PortfolioService:
             period_other_result_val = period_pnl_val - period_ugl_delta - period_realized_val - period_income_val + period_fees_taxes_val
 
         # ── 6. Data quality report ──
-        # Collect transaction-implied assets (valued at WAC cost, no market price yet)
-        implied_asset_ids = views.aggregate_transaction_implied_ids()
+        # Scope transaction-implied assets to the SELECTED date range (like
+        # build_allocation_history's date_from filter) — NOT engine_result.daily_states'
+        # full lifetime (which always starts at t=0 regardless of the requested window,
+        # per the engine.calculate(date_from=None, ...) call above). Also apply a grace
+        # period after first acquisition: brief pre-listing/placement lag (e.g. BTP
+        # collocamento) is expected and not worth flagging as a data-quality issue.
+        first_position_date_by_asset: dict[int, date_type] = {}
+        for (_b_id, a_id), d in first_position_dates.items():
+            if a_id not in first_position_date_by_asset or d < first_position_date_by_asset[a_id]:
+                first_position_date_by_asset[a_id] = d
+
+        implied_asset_ids: set[int] = set()
+        for s in engine_result.daily_states:
+            if date_from and s.date < date_from:
+                continue
+            for aid in s.transaction_implied_asset_ids:
+                first_dt = first_position_date_by_asset.get(aid)
+                if first_dt is not None and (s.date - first_dt).days <= TRANSACTION_IMPLIED_GRACE_DAYS:
+                    continue
+                implied_asset_ids.add(aid)
+
         transaction_implied_assets: list[MissingPriceAsset] = []
-        for h in all_holdings:
-            if h.asset_id in implied_asset_ids and h.current_value is None:
+        for ps in end_positions:
+            if ps.asset_id in implied_asset_ids:
+                asset = assets_map.get(ps.asset_id)
+                if not asset:
+                    continue
+                broker = brokers_map.get(ps.broker_id)
                 transaction_implied_assets.append(
                     MissingPriceAsset(
-                        asset_id=h.asset_id,
-                        symbol=h.asset_ticker,
-                        name=h.asset_name,
-                        broker_id=0,  # approximate — not tracked per-broker here
-                        broker_name="",
-                        quantity=h.quantity,
+                        asset_id=ps.asset_id,
+                        symbol=asset.identifier_ticker,
+                        name=asset.display_name,
+                        broker_id=ps.broker_id,
+                        broker_name=broker.name if broker else broker_names.get(ps.broker_id, f"Broker {ps.broker_id}"),
+                        first_position_date=first_position_dates.get((ps.broker_id, ps.asset_id)),
+                        quantity=ps.quantity,
+                        open_cost_basis=ps.cost_basis if ps.cost_basis != 0 else None,
                         currency=base_currency,
                     )
                 )
@@ -1289,8 +1345,9 @@ class PortfolioService:
         date_from: date_type | None = None,
         date_to: date_type | None = None,
         target_currency_override: str | None = None,
+        _precomputed_engine_result=None,
     ) -> PositionsContribution:
-        """Compute per-asset period P&L contribution for the Contributo dashboard view.
+        """Compute per-asset period P&L contribution for dashboard Performance view.
 
         For each (broker_id, asset_id) pair with activity in the period, computes:
         - unrealized_delta: change in unrealized P&L over the period
@@ -1299,11 +1356,11 @@ class PortfolioService:
         - fees_taxes: FEE/TAX attributed to this asset
         - period_pnl: total = unrealized_delta + realized + income - fees_taxes
 
-        Fees/taxes without asset_id go to the unallocated bucket.
+        Fees/taxes without asset_id go to raw unallocated buckets plus UX-ready
+        other_effects rows.
         """
-        from backend.app.utils.financial.valuation_utils import compute_holding_value  # noqa: PLC0415
-
         today = date_type.today()
+        effective_end = date_to or today
         base_currency = target_currency_override or await self._get_base_currency()
 
         accesses = await self._get_user_broker_access(user_id, broker_ids)
@@ -1330,7 +1387,7 @@ class PortfolioService:
             broker = await self._get_broker(broker_id)
             broker_name = broker.name if broker else f"Broker {broker_id}"
 
-            broker_txns = await self._get_transactions(broker_id)
+            broker_txns = await self._get_transactions(broker_id, date_to=date_to)
 
             # ── Income / Fees accumulation with asset_id attribution ──
             for tx in broker_txns:
@@ -1441,16 +1498,18 @@ class PortfolioService:
                 q = tx.quantity or Decimal("0")
                 if date_from is None or tx.date <= date_from:
                     qty_at_start += q * share
-                qty_at_end += q * share
+                if tx.date <= effective_end:
+                    qty_at_end += q * share
 
-            is_fully_sold = qty_at_end <= 0
+            is_fully_sold = qty_at_end <= _QUANTITY_DUST_THRESHOLD
 
             # Unrealized P&L at start and end
             ug_start: Decimal | None = None
             ug_end: Decimal | None = None
-            start_value: Decimal | None = None
+            start_value: Decimal | None = Decimal("0") if date_from is None or qty_at_start <= _QUANTITY_DUST_THRESHOLD else None
+            end_value: Decimal | None = Decimal("0") if qty_at_end <= _QUANTITY_DUST_THRESHOLD else None
 
-            if qty_at_start > 0 and date_from is not None:
+            if qty_at_start > _QUANTITY_DUST_THRESHOLD and date_from is not None:
                 wac_s_result = await compute_wac_iterative(
                     session=self.db,
                     broker_id=broker_id,
@@ -1477,15 +1536,15 @@ class PortfolioService:
                         ug_start = mv_start - cb_start
                         start_value = mv_start
 
-            if qty_at_end > 0:
+            if qty_at_end > _QUANTITY_DUST_THRESHOLD:
                 wac_e_result = await compute_wac_iterative(
                     session=self.db,
                     broker_id=broker_id,
                     asset_id=asset_id,
-                    as_of_date=date_to or today,
+                    as_of_date=effective_end,
                     asset_currency=asset.currency or base_currency,
                 )
-                price_e_data = await self._get_latest_price(asset_id)
+                price_e_data = await self._get_price_at_date(asset_id, effective_end)
 
                 if wac_e_result.wac is not None and price_e_data is not None:
                     raw_price_e, price_ccy_e, price_date_e = price_e_data
@@ -1496,14 +1555,13 @@ class PortfolioService:
                     wac_e_ccy = wac_e_result.wac.code
                     wac_e_base = wac_e
                     if wac_e_ccy != base_currency:
-                        wac_e_base, _ = await self._convert_to_base(wac_e, wac_e_ccy, base_currency, date_to or today)
+                        wac_e_base, _ = await self._convert_to_base(wac_e, wac_e_ccy, base_currency, effective_end)
 
                     if price_e_base is not None and wac_e_base is not None:
                         mv_end = compute_holding_value(qty_at_end, price_e_base, asset.quote_base_quantity)
                         cb_end = wac_e_base * qty_at_end
                         ug_end = mv_end - cb_end
-                        if start_value is None:
-                            start_value = mv_end
+                        end_value = mv_end
 
             unrealized_delta = None
             if ug_end is not None or ug_start is not None:
@@ -1513,6 +1571,8 @@ class PortfolioService:
             realized = per_realized.get(pos_key)
             income = per_income.get(pos_key)
             fees = per_fees_taxes.get(pos_key)
+            has_period_activity = any(value is not None and value != 0 for value in (realized, income, fees))
+            has_boundary_position = qty_at_start > _QUANTITY_DUST_THRESHOLD or qty_at_end > _QUANTITY_DUST_THRESHOLD
 
             pnl_parts = [
                 unrealized_delta,
@@ -1523,8 +1583,11 @@ class PortfolioService:
             non_none = [p for p in pnl_parts if p is not None]
             period_pnl = sum(non_none, Decimal("0")) if non_none else None
 
+            if not has_period_activity and not has_boundary_position and period_pnl is None:
+                continue
+
             period_pnl_pct: Decimal | None = None
-            if period_pnl is not None and start_value and start_value != 0:
+            if period_pnl is not None and start_value not in (None, Decimal("0")):
                 period_pnl_pct = (period_pnl / abs(start_value)).quantize(Decimal("0.0001"))
 
             contributions.append(
@@ -1541,17 +1604,22 @@ class PortfolioService:
                     period_fees_taxes=fees if fees else None,
                     period_pnl=period_pnl,
                     period_pnl_percent=period_pnl_pct,
+                    start_value=start_value,
+                    end_value=end_value,
                     is_fully_sold=is_fully_sold,
                 )
             )
 
         # Include positions with income/fees only (no BUY/SELL)
-        for (bid, aid), val in per_income.items():
-            if (bid, aid) not in position_info and val > 0:
+        for bid, aid in sorted(set(per_income.keys()) | set(per_fees_taxes.keys())):
+            if (bid, aid) not in position_info:
                 asset = await self._get_asset(aid)
                 broker = await self._get_broker(bid)
+                income = per_income.get((bid, aid), Decimal("0"))
                 fees = per_fees_taxes.get((bid, aid), Decimal("0"))
-                pnl = val - fees
+                if income <= 0 and fees <= 0:
+                    continue
+                pnl = income - fees
                 contributions.append(
                     AssetPeriodContribution(
                         asset_id=aid,
@@ -1560,28 +1628,86 @@ class PortfolioService:
                         asset_type=asset.asset_type.value if asset and asset.asset_type else "Unknown",
                         broker_id=bid,
                         broker_name=broker.name if broker else f"Broker {bid}",
-                        period_income=val,
+                        period_income=income if income > 0 else None,
                         period_fees_taxes=fees if fees > 0 else None,
                         period_pnl=pnl,
-                        is_fully_sold=False,
+                        start_value=Decimal("0"),
+                        end_value=Decimal("0"),
+                        is_fully_sold=True,
                     )
                 )
 
         # Build unallocated
         unallocated: list[UnallocatedContribution] = []
+        other_effects: list[OtherPeriodEffect] = []
         for bid in set(unalloc_income.keys()) | set(unalloc_fees.keys()):
             inc = unalloc_income.get(bid)
             fee = unalloc_fees.get(bid)
             if (inc and inc > 0) or (fee and fee > 0):
                 broker = await self._get_broker(bid)
+                broker_name = broker.name if broker else f"Broker {bid}"
                 unallocated.append(
                     UnallocatedContribution(
                         broker_id=bid,
-                        broker_name=broker.name if broker else f"Broker {bid}",
+                        broker_name=broker_name,
                         unallocated_income=inc if inc and inc > 0 else None,
                         unallocated_fees_taxes=fee if fee and fee > 0 else None,
                     )
                 )
+                if inc and inc > 0:
+                    other_effects.append(
+                        OtherPeriodEffect(
+                            description="Unallocated income",
+                            category="Income",
+                            period_pnl=inc,
+                            broker_id=bid,
+                            broker_name=broker_name,
+                        )
+                    )
+                if fee and fee > 0:
+                    other_effects.append(
+                        OtherPeriodEffect(
+                            description="Unallocated costs",
+                            category="Cost",
+                            period_pnl=Decimal("0") - fee,
+                            broker_id=bid,
+                            broker_name=broker_name,
+                        )
+                    )
+
+        engine_result = _precomputed_engine_result
+        if engine_result is None:
+            from backend.app.services.portfolio_engine import PortfolioCalculationEngine  # noqa: PLC0415
+
+            engine = PortfolioCalculationEngine(self.db)
+            engine_result = await engine.calculate(
+                user_id=user_id,
+                broker_ids=broker_ids,
+                date_from=None,
+                date_to=date_to,
+                target_currency=base_currency,
+            )
+
+        period_metrics = self._compute_period_summary_metrics(engine_result, date_from)
+        period_pnl_total = period_metrics["period_pnl_val"]
+        period_ugl_delta = period_metrics["period_ugl_delta"]
+        period_other_result: Decimal | None = None
+        if period_pnl_total is not None and period_ugl_delta is not None:
+            total_realized = sum(per_realized.values(), Decimal("0"))
+            total_income = sum(per_income.values(), Decimal("0")) + sum(unalloc_income.values(), Decimal("0"))
+            total_fees = sum(per_fees_taxes.values(), Decimal("0")) + sum(unalloc_fees.values(), Decimal("0"))
+            period_other_result = period_pnl_total - period_ugl_delta - total_realized - total_income + total_fees
+
+        if period_other_result is not None and period_other_result != 0:
+            other_effects.append(
+                OtherPeriodEffect(
+                    description="Other / reconciliation residual",
+                    category="Other",
+                    period_pnl=period_other_result,
+                    broker_id=None,
+                    broker_name=None,
+                )
+            )
 
         gross_gains = sum(c.period_pnl for c in contributions if c.period_pnl and c.period_pnl > 0) or Decimal("0")
         gross_losses = sum(abs(c.period_pnl) for c in contributions if c.period_pnl and c.period_pnl < 0) or Decimal("0")
@@ -1589,6 +1715,7 @@ class PortfolioService:
         return PositionsContribution(
             positions=contributions,
             unallocated=unallocated,
+            other_effects=other_effects,
             gross_gains=gross_gains,
             gross_losses=gross_losses,
         )
@@ -1769,6 +1896,7 @@ class PortfolioService:
                 date_from=date_from,
                 date_to=date_to,
                 target_currency_override=base_currency,
+                _precomputed_engine_result=engine_result,
             )
 
         # ── 5. Data quality from engine (already computed if summary was built) ──

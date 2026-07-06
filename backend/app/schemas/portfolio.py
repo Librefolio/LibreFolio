@@ -263,7 +263,7 @@ class AllocationHistoryResponse(BaseModel):
 
 
 class PortfolioHolding(BaseModel):
-    """Single asset holding in the portfolio."""
+    """Single open holding snapshot at report end date."""
 
     asset_id: int
     asset_name: str
@@ -273,17 +273,17 @@ class PortfolioHolding(BaseModel):
     broker_name: Optional[str] = Field(None, description="Broker display name")
     quantity: SafeDecimal
     wac_per_unit: Optional[SafeDecimal] = Field(None, description="None if FX rate missing")
-    current_price: Optional[SafeDecimal] = Field(None, description="None if FX rate missing")
-    current_value: Optional[SafeDecimal] = None
-    gain_loss: Optional[SafeDecimal] = Field(None, description="Unrealized P&L: current_value - cost_basis")
+    current_price: Optional[SafeDecimal] = Field(None, description="Snapshot price at report end date. None if FX rate missing")
+    current_value: Optional[SafeDecimal] = Field(None, description="Snapshot position value at report end date")
+    gain_loss: Optional[SafeDecimal] = Field(None, description="Unrealized P&L at report end date: current_value - cost_basis")
     gain_loss_percent: Optional[SafeDecimal] = None
-    price_change_1d: Optional[SafeDecimal] = Field(None, description="Percentage price change vs previous day: (price_today - price_yesterday) / price_yesterday")
+    price_change_1d: Optional[SafeDecimal] = Field(None, description="Percentage price change vs previous day relative to report end date")
     allocation_percent: Optional[SafeDecimal] = Field(None, description="Weight vs total market value (excludes cash)")
-    nav_weight_percent: Optional[SafeDecimal] = Field(None, description="Weight vs NAV (includes cash): current_value / NAV * 100")
+    nav_weight_percent: Optional[SafeDecimal] = Field(None, description="Weight vs NAV at report end date (includes cash): current_value / NAV * 100")
 
 
 class AssetPeriodContribution(BaseModel):
-    """Per-asset period P&L contribution for the Contributo dashboard view."""
+    """Per-asset period P&L contribution for dashboard Performance view."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -299,6 +299,8 @@ class AssetPeriodContribution(BaseModel):
     period_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX attributed to this asset in period (positive value)")
     period_pnl: Optional[SafeDecimal] = Field(None, description="Total period P&L: unrealized_delta + realized + income - fees_taxes")
     period_pnl_percent: Optional[SafeDecimal] = Field(None, description="Period return %: period_pnl / |start_value|. None if start_value=0")
+    start_value: Optional[SafeDecimal] = Field(None, description="Position value at period start (0 if there was no opening position)")
+    end_value: Optional[SafeDecimal] = Field(None, description="Position value at period end (0 if the position was closed by period end)")
     is_fully_sold: bool = Field(False, description="True if position quantity is 0 at period end")
 
 
@@ -313,6 +315,18 @@ class UnallocatedContribution(BaseModel):
     unallocated_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX without asset_id in period (positive value)")
 
 
+class OtherPeriodEffect(BaseModel):
+    """Period P&L row not linked to a specific asset position."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    description: str
+    category: str = Field(..., pattern="^(Income|Cost|Other)$")
+    period_pnl: SafeDecimal
+    broker_id: Optional[int] = Field(None, description="Nullable when effect is not broker-specific")
+    broker_name: Optional[str] = Field(None, description="Nullable when effect is not broker-specific")
+
+
 class PositionsContribution(BaseModel):
     """Complete per-asset contribution breakdown for a period."""
 
@@ -320,6 +334,7 @@ class PositionsContribution(BaseModel):
 
     positions: List[AssetPeriodContribution] = Field(default_factory=list)
     unallocated: List[UnallocatedContribution] = Field(default_factory=list)
+    other_effects: List[OtherPeriodEffect] = Field(default_factory=list, description="Non-position period effects for income, costs, and reconciliation residuals")
     gross_gains: SafeDecimal = Field(default=0, description="Sum of max(period_pnl, 0) across all positions")
     gross_losses: SafeDecimal = Field(default=0, description="Sum of |min(period_pnl, 0)| across all positions")
 
@@ -327,12 +342,15 @@ class PositionsContribution(BaseModel):
 class BrokerBreakdown(BaseModel):
     """Per-broker mini-summary (only populated when include_breakdown=True)."""
 
+    model_config = ConfigDict(extra="forbid")
+
     broker_id: int
     broker_name: str
     net_worth: Currency
     gain_loss: Currency
     gain_loss_percent: SafeDecimal
     cash_total: Currency
+    cash_balances: List[Currency] = Field(default_factory=list, description="Cash balance per currency, native (unconverted)")
 
 
 class PortfolioSummary(BaseModel):

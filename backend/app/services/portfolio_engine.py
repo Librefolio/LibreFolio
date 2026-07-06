@@ -342,6 +342,11 @@ class ScopeAwareTransactionClassifier:
 
 STALE_PRICE_THRESHOLD_DAYS = 7
 
+# Grace period after first acquisition during which a missing market price is
+# considered a normal pre-listing/placement lag (e.g. BTP collocamento) rather
+# than a data-quality problem worth flagging (TRANSACTION_IMPLIED issue).
+TRANSACTION_IMPLIED_GRACE_DAYS = 14
+
 
 @dataclass
 class DailyPositionState:
@@ -1520,23 +1525,26 @@ class DerivedViewsBuilder:
                     affected_asset_ids=[a.asset_id for a in missing_price_assets_dto],
                     affected_asset_names=[a.name for a in missing_price_assets_dto],
                     cta_action="navigate_asset",
+                    cta_target=str(missing_price_assets_dto[0].asset_id),
                     group_key="missing_price",
                 )
             )
 
         # TRANSACTION_IMPLIED — warning: assets at cost (pre-market, e.g. BTP collocamento)
         if transaction_implied_assets_dto:
+            as_of_date = self.daily_states[-1].date.isoformat() if self.daily_states else None
             issues.append(
                 DataQualityIssue(
                     domain=IssueDomain.PORTFOLIO,
                     code=IssueCode.TRANSACTION_IMPLIED,
                     severity=IssueSeverity.WARNING,
                     message_i18n_key="dataQuality.transactionImplied",
-                    message_params={"count": len(transaction_implied_assets_dto)},
+                    message_params={"count": len(transaction_implied_assets_dto), "as_of_date": as_of_date},
                     count=len(transaction_implied_assets_dto),
                     affected_asset_ids=[a.asset_id for a in transaction_implied_assets_dto],
                     affected_asset_names=[a.name for a in transaction_implied_assets_dto],
                     cta_action="navigate_asset",
+                    cta_target=str(transaction_implied_assets_dto[0].asset_id),
                     group_key="transaction_implied",
                 )
             )
@@ -1554,6 +1562,7 @@ class DerivedViewsBuilder:
                     affected_asset_ids=[a.asset_id for a in stale_prices_dto],
                     affected_asset_names=[a.name for a in stale_prices_dto],
                     cta_action="navigate_asset",
+                    cta_target=str(stale_prices_dto[0].asset_id),
                     group_key="stale_price",
                 )
             )

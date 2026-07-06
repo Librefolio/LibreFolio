@@ -11,11 +11,16 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {RotateCcw} from 'lucide-svelte';
+    import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
+    import {currentLanguage} from '$lib/stores/app/language';
     import {buildTooltipTheme, buildTooltipRow, buildTooltipHeader, buildTooltipDivider} from '$lib/components/charts/echartsTooltipHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
-    import {getAssetInfo} from '$lib/stores/reference/assetStore';
-    import {getBrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {brokerStoreVersion, ensureBrokersLoaded, getBrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {ensurePluginIconsLoaded, getBrokerIconUrl} from '$lib/utils/broker/brokerHelpers';
+    import {attachTreemapZoomGuard, resetTreemapView, type TreemapZoomGuardHandle} from '$lib/components/charts/echartsTreemapZoomGuard';
 
     interface Holding {
         asset_id: number;
@@ -32,14 +37,24 @@
     interface Props {
         holdings: Holding[];
         displayCurrency?: string;
-        height?: string;
     }
 
-    let {holdings = [], displayCurrency = 'EUR', height = '320px'}: Props = $props();
+    let {holdings = [], displayCurrency = 'EUR'}: Props = $props();
 
+    let chartWrapper: HTMLDivElement | undefined = $state(undefined);
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | null = null;
     let resizeObserver: ResizeObserver | null = null;
+    let zoomGuard: TreemapZoomGuardHandle | null = null;
+    let brokerIconsReady = $state(false);
+    let chartWidth: number = $state(0);
+    let chartHeight: number = $state(0);
+    let windowResizeHandler: (() => void) | null = null;
+    let pendingResizeFrame: number | null = null;
+
+    const UPPER_LABEL_ICON_SIZE = 12;
+
+    type TreeNodeLevel = 'broker' | 'type' | 'asset';
 
     function safeNum(v: string | (string | null)[] | null | undefined): number | null {
         const s = Array.isArray(v) ? (v[0] ?? null) : v;
@@ -58,9 +73,30 @@
         return Array.isArray(v) ? (v[0] ?? null) : v;
     }
 
+    /** Broker names are user-entered data (not translated); asset TYPE is a backend
+     *  enum and must go through i18n (`assets.types.X`, plural namespace). */
+    function translateAssetType(rawType: string): string {
+        const key = `assets.types.${rawType.toUpperCase()}`;
+        const translated = $_(key);
+        return translated !== key ? translated : rawType;
+    }
+
     onMount(() => {
         const observer = new MutationObserver(() => renderChart());
         observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        windowResizeHandler = () => updateChartSize();
+        window.addEventListener('resize', windowResizeHandler);
+        resizeObserver = new ResizeObserver(() => updateChartSize());
+        if (chartWrapper) resizeObserver.observe(chartWrapper);
+        updateChartSize();
+        void (async () => {
+            try {
+                await ensureBrokersLoaded();
+                await ensurePluginIconsLoaded();
+            } finally {
+                brokerIconsReady = true;
+            }
+        })();
         return () => {
             observer.disconnect();
             cleanup();
@@ -68,7 +104,18 @@
     });
 
     function cleanup() {
+        if (windowResizeHandler) {
+            window.removeEventListener('resize', windowResizeHandler);
+            windowResizeHandler = null;
+        }
+        if (pendingResizeFrame != null) {
+            cancelAnimationFrame(pendingResizeFrame);
+            pendingResizeFrame = null;
+        }
         resizeObserver?.disconnect();
+        resizeObserver = null;
+        zoomGuard?.dispose();
+        zoomGuard = null;
         chartInstance?.dispose();
         chartInstance = null;
     }
@@ -76,37 +123,190 @@
     $effect(() => {
         void holdings;
         void displayCurrency;
+        void $brokerStoreVersion;
+        void brokerIconsReady;
+        void $currentLanguage;
         tick().then(() => renderChart());
     });
 
+    /** JS-owned size: wrapper width stays 100% of panel; height = min(full-width square,
+     *  75% viewport cap). Narrow screens stay 1:1, wide screens become landscape without
+     *  shrinking width. Explicit px sizing avoids prior CSS aspect-ratio/max-height drift.
+     *  Uses `getBoundingClientRect()` (subpixel-precise) + `Math.floor()` rather than
+     *  `clientWidth` (always browser-rounded, sometimes UP) — flooring guarantees the
+     *  canvas is never even a fraction of a pixel larger than the truly available space,
+     *  which was the suspected cause of the treemap bleeding past the card's padding on
+     *  the right/bottom edge. */
+    function updateChartSize() {
+        if (!chartWrapper) return;
+        const nextWidth = Math.floor(chartWrapper.getBoundingClientRect().width);
+        const nextHeight = Math.floor(Math.min(nextWidth, window.innerHeight * 0.75));
+        if (nextWidth === chartWidth && nextHeight === chartHeight) return;
+
+        chartWidth = nextWidth;
+        chartHeight = nextHeight;
+
+        if (chartInstance) {
+            scheduleChartResize();
+        } else if (nextWidth > 0 && nextHeight > 0) {
+            void tick().then(() => {
+                renderChart();
+                scheduleChartResize();
+            });
+        }
+    }
+
+    function scheduleChartResize() {
+        if (!chartInstance) return;
+        if (pendingResizeFrame != null) cancelAnimationFrame(pendingResizeFrame);
+        const instanceAtSchedule = chartInstance;
+        const widthAtSchedule = chartWidth;
+        const heightAtSchedule = chartHeight;
+        pendingResizeFrame = requestAnimationFrame(() => {
+            pendingResizeFrame = null;
+            if (instanceAtSchedule === chartInstance && !instanceAtSchedule.isDisposed()) {
+                instanceAtSchedule.resize({width: widthAtSchedule, height: heightAtSchedule});
+            }
+        });
+    }
+
+    function sanitizeRichKeySegment(value: string | number | null | undefined): string {
+        const sanitized = String(value ?? 'unknown')
+            .trim()
+            .replace(/[^a-zA-Z0-9_]/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_+|_+$/g, '');
+        return sanitized || 'unknown';
+    }
+
+    function buildUpperLabelRich(data: any[]): Record<string, any> {
+        const rich: Record<string, any> = {};
+
+        const visit = (nodes: any[]) => {
+            for (const node of nodes) {
+                const meta = node?._meta;
+                if (meta?.iconUrl && meta?.iconRichKey) {
+                    rich[meta.iconRichKey] = {
+                        backgroundColor: {image: meta.iconUrl},
+                        width: UPPER_LABEL_ICON_SIZE,
+                        height: UPPER_LABEL_ICON_SIZE,
+                        align: 'center',
+                        verticalAlign: 'middle',
+                        borderRadius: 3,
+                    };
+                }
+                if (Array.isArray(node?.children) && node.children.length > 0) {
+                    visit(node.children);
+                }
+            }
+        };
+
+        visit(data);
+        return rich;
+    }
+
+    function formatUpperLabel(params: any): string {
+        const meta = params.data?._meta;
+        if (!meta || (meta.level as TreeNodeLevel) === 'asset') return params.name;
+        return meta.iconRichKey ? `{${meta.iconRichKey}|} ${params.name}` : params.name;
+    }
+
     function buildTreeData(): any[] {
         // Group: Broker → AssetType → Asset
-        const brokerMap = new Map<string, Map<string, any[]>>();
+        const brokerMap = new Map<
+            string,
+            {
+                name: string;
+                brokerId: number | null;
+                iconUrl: string | null;
+                iconRichKey: string | null;
+                value: number;
+                weight: number;
+                gl: number;
+                types: Map<
+                    string,
+                    {
+                        name: string;
+                        iconUrl: string;
+                        iconRichKey: string;
+                        assets: any[];
+                        value: number;
+                        weight: number;
+                        gl: number;
+                    }
+                >;
+            }
+        >();
 
         for (const h of holdings) {
             const val = safeNum(h.current_value);
             if (val == null || val <= 0) continue;
 
             const bid = safeInt(h.broker_id);
-            const bName = safeStr(h.broker_name) || (bid ? getBrokerInfo(bid)?.name : null) || 'Unknown';
+            const brokerInfo = bid ? getBrokerInfo(bid) : null;
+            const bName = safeStr(h.broker_name) || brokerInfo?.name || 'Unknown';
             const aType = h.asset_type || 'Unknown';
+            const brokerKey = bid != null ? `broker_${bid}` : `broker_name_${bName}`;
 
-            if (!brokerMap.has(bName)) brokerMap.set(bName, new Map());
-            const typeMap = brokerMap.get(bName)!;
-            if (!typeMap.has(aType)) typeMap.set(aType, []);
+            if (!brokerMap.has(brokerKey)) {
+                const brokerIconUrl = getBrokerIconUrl(brokerInfo);
+                brokerMap.set(brokerKey, {
+                    name: bName,
+                    brokerId: bid,
+                    iconUrl: brokerIconUrl,
+                    iconRichKey: brokerIconUrl ? `broker_${sanitizeRichKeySegment(bid ?? bName)}` : null,
+                    value: 0,
+                    weight: 0,
+                    gl: 0,
+                    types: new Map(),
+                });
+            }
+            const brokerNode = brokerMap.get(brokerKey)!;
+
+            if (!brokerNode.types.has(aType)) {
+                const typeIconUrl = getAssetTypeIconUrl(aType);
+                brokerNode.types.set(aType, {
+                    name: translateAssetType(aType),
+                    iconUrl: typeIconUrl,
+                    iconRichKey: `type_${sanitizeRichKeySegment(aType.toUpperCase())}`,
+                    assets: [],
+                    value: 0,
+                    weight: 0,
+                    gl: 0,
+                });
+            }
+            const typeNode = brokerNode.types.get(aType)!;
 
             const glPct = safeNum(h.gain_loss_percent);
             const gl = safeNum(h.gain_loss);
             const weight = safeNum(h.nav_weight_percent);
 
-            typeMap.get(aType)!.push({
+            // Roll up sums for the type/broker group tooltips below — value and
+            // weight (both already NAV-normalized percentages/amounts) and gl
+            // (absolute P&L) are additive; glPct is NOT additive and gets
+            // recomputed from the aggregated value/gl once the group is built.
+            typeNode.value += val;
+            brokerNode.value += val;
+            if (weight != null) {
+                typeNode.weight += weight;
+                brokerNode.weight += weight;
+            }
+            if (gl != null) {
+                typeNode.gl += gl;
+                brokerNode.gl += gl;
+            }
+
+            typeNode.assets.push({
                 name: h.asset_name,
                 value: val,
                 itemStyle: {color: pnlColor(glPct)},
                 _meta: {
+                    level: 'asset' as TreeNodeLevel,
                     assetId: h.asset_id,
+                    name: h.asset_name,
+                    brokerId: bid,
                     broker: bName,
-                    type: aType,
+                    type: translateAssetType(aType),
                     value: val,
                     weight,
                     gl,
@@ -115,13 +315,50 @@
             });
         }
 
+        /** glPct is a ratio (gl / cost_basis), not additive across positions — recompute
+         *  it from the aggregated value/gl (cost_basis = value - gl) instead of leaving it
+         *  undefined (which previously rendered as "NaN" in the type/broker tooltip). */
+        function aggregateGlPct(value: number, gl: number): number | null {
+            const costBasis = value - gl;
+            return costBasis !== 0 ? gl / costBasis : null;
+        }
+
         const tree: any[] = [];
-        for (const [broker, typeMap] of brokerMap) {
+        for (const brokerNode of brokerMap.values()) {
             const children: any[] = [];
-            for (const [type, assets] of typeMap) {
-                children.push({name: type, children: assets});
+            for (const typeNode of brokerNode.types.values()) {
+                children.push({
+                    name: typeNode.name,
+                    children: typeNode.assets,
+                    _meta: {
+                        level: 'type' as TreeNodeLevel,
+                        brokerId: brokerNode.brokerId,
+                        broker: brokerNode.name,
+                        type: typeNode.name,
+                        iconUrl: typeNode.iconUrl,
+                        iconRichKey: typeNode.iconRichKey,
+                        value: typeNode.value,
+                        weight: typeNode.weight,
+                        gl: typeNode.gl,
+                        glPct: aggregateGlPct(typeNode.value, typeNode.gl),
+                    },
+                });
             }
-            tree.push({name: broker, children});
+            tree.push({
+                name: brokerNode.name,
+                children,
+                _meta: {
+                    level: 'broker' as TreeNodeLevel,
+                    brokerId: brokerNode.brokerId,
+                    broker: brokerNode.name,
+                    iconUrl: brokerNode.iconUrl,
+                    iconRichKey: brokerNode.iconRichKey,
+                    value: brokerNode.value,
+                    weight: brokerNode.weight,
+                    gl: brokerNode.gl,
+                    glPct: aggregateGlPct(brokerNode.value, brokerNode.gl),
+                },
+            });
         }
         return tree;
     }
@@ -131,89 +368,141 @@
         const isDark = document.documentElement.classList.contains('dark');
         if (pct >= 0) {
             const intensity = Math.min(pct * 100, 50) / 50;
-            return isDark
-                ? `rgb(${34 + intensity * 40}, ${197 + intensity * 40}, ${94 + intensity * 40})`
-                : `rgb(${22 - intensity * 10}, ${163 - intensity * 30}, ${74 + intensity * 20})`;
+            return isDark ? `rgb(${34 + intensity * 40}, ${197 + intensity * 40}, ${94 + intensity * 40})` : `rgb(${22 - intensity * 10}, ${163 - intensity * 30}, ${74 + intensity * 20})`;
         }
         const intensity = Math.min(Math.abs(pct * 100), 50) / 50;
-        return isDark
-            ? `rgb(${248}, ${113 - intensity * 40}, ${113 - intensity * 40})`
-            : `rgb(${220 + intensity * 20}, ${38 + intensity * 20}, ${38 + intensity * 20})`;
+        return isDark ? `rgb(${248}, ${113 - intensity * 40}, ${113 - intensity * 40})` : `rgb(${220 + intensity * 20}, ${38 + intensity * 20}, ${38 + intensity * 20})`;
+    }
+
+    /** Double-click on an asset leaf node → asset detail page (desktop). Mobile long-press
+     *  navigation is already covered by ExposureTable/ContributionTable; the treemap's touch
+     *  gestures are reserved for pinch-zoom/pan, so no separate long-press handler here. */
+    function handleTreemapDblClick(params: any) {
+        const meta = params?.data?._meta;
+        if (meta?.level === 'asset' && meta.assetId != null) {
+            void goto(`/assets/${meta.assetId}`);
+        }
     }
 
     function renderChart() {
-        if (!chartContainer) return;
+        if (!chartContainer || chartWidth <= 0 || chartHeight <= 0) return;
         const isDark = document.documentElement.classList.contains('dark');
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer);
-            resizeObserver = new ResizeObserver(() => chartInstance?.resize());
-            resizeObserver.observe(chartContainer);
+            zoomGuard = attachTreemapZoomGuard(chartInstance, () => ({width: chartContainer?.clientWidth ?? 0, height: chartContainer?.clientHeight ?? 0}), {minScale: 1, maxScale: 5});
+            chartInstance.on('dblclick', handleTreemapDblClick);
         }
 
         const theme = buildTooltipTheme(isDark);
         const data = buildTreeData();
+        const upperLabelRich = buildUpperLabelRich(data);
 
         if (data.length === 0) {
             chartInstance.clear();
             return;
         }
 
-        chartInstance.setOption({
-            tooltip: {
-                formatter: (params: any) => {
-                    const meta = params.data?._meta;
-                    if (!meta) return params.name;
-                    let html = buildTooltipHeader(meta.broker, theme.textColor);
-                    html += buildTooltipRow($_('common.asset'), meta.assetId ? meta.name ?? '' : params.name);
-                    html += buildTooltipRow($_('common.type'), meta.type);
-                    html += buildTooltipRow($_('common.value'), formatCurrencyAmountPlain(meta.value, displayCurrency));
-                    if (meta.weight != null) html += buildTooltipRow($_('dashboard.navWeight'), `${meta.weight.toFixed(1)}%`);
-                    html += buildTooltipDivider(theme.border);
-                    if (meta.gl != null) {
-                        const glColor = meta.gl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : (isDark ? '#f87171' : '#dc2626');
-                        html += buildTooltipRow($_('dashboard.unrealizedPnl'), `<span style="color:${glColor}">${formatCurrencyAmountPlain(meta.gl, displayCurrency, {showSign: true})}</span>`);
-                    }
-                    if (meta.glPct != null) {
-                        html += buildTooltipRow('', `${(meta.glPct * 100).toFixed(2)}%`);
-                    }
-                    return `<div style="font-size:11px;color:${theme.textColor}">${html}</div>`;
+        // Restore full roam on desktop; pinch-zoom only on touch to avoid blocking page scroll
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+        chartInstance.setOption(
+            {
+                tooltip: {
+                    formatter: (params: any) => {
+                        const meta = params.data?._meta;
+                        if (!meta) return params.name;
+                        let html = buildTooltipHeader(meta.broker, theme.textColor);
+                        html += buildTooltipRow($_('common.asset'), meta.assetId ? (meta.name ?? '') : params.name);
+                        html += buildTooltipRow($_('common.type'), meta.type);
+                        html += buildTooltipRow($_('common.value'), formatCurrencyAmountPlain(meta.value, displayCurrency));
+                        if (meta.weight != null) html += buildTooltipRow($_('dashboard.navWeight'), `${meta.weight.toFixed(1)}%`);
+                        html += buildTooltipDivider(theme.border);
+                        if (meta.gl != null) {
+                            const glColor = meta.gl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
+                            html += buildTooltipRow($_('dashboard.unrealizedPnl'), `<span style="color:${glColor}">${formatCurrencyAmountPlain(meta.gl, displayCurrency, {showSign: true})}</span>`);
+                        }
+                        if (meta.glPct != null) {
+                            html += buildTooltipRow('', `${(meta.glPct * 100).toFixed(2)}%`);
+                        }
+                        return `<div style="font-size:11px;color:${theme.textColor}">${html}</div>`;
+                    },
+                    backgroundColor: theme.bg,
+                    borderColor: theme.border,
+                    textStyle: {color: theme.textColor},
                 },
-                backgroundColor: theme.bg,
-                borderColor: theme.border,
-                textStyle: {color: theme.textColor},
-            },
-            series: [{
-                type: 'treemap',
-                data,
-                width: '100%',
-                height: '100%',
-                roam: false,
-                nodeClick: false,
-                breadcrumb: {show: false},
-                upperLabel: {
-                    show: true,
-                    height: 20,
-                    color: isDark ? '#e2e8f0' : '#334155',
-                    fontSize: 10,
-                    backgroundColor: isDark ? 'rgba(30,41,59,0.8)' : 'rgba(248,250,252,0.8)',
-                },
-                label: {
-                    show: true,
-                    formatter: '{b}',
-                    fontSize: 10,
-                    color: '#fff',
-                    textShadowColor: 'rgba(0,0,0,0.5)',
-                    textShadowBlur: 2,
-                },
-                levels: [
-                    {itemStyle: {borderWidth: 2, borderColor: isDark ? '#334155' : '#e2e8f0', gapWidth: 2}},
-                    {itemStyle: {borderWidth: 1, borderColor: isDark ? '#475569' : '#cbd5e1', gapWidth: 1}},
-                    {itemStyle: {borderWidth: 0, gapWidth: 1}},
+                series: [
+                    {
+                        type: 'treemap',
+                        data,
+                        width: '100%',
+                        height: '100%',
+                        roam: isTouchDevice ? 'scale' : true, // mobile: pinch-zoom only; desktop: full pan+zoom
+                        // IMPORTANT: keep this declared scaleLimit permissive (NOT matching our
+                        // real [1, 5] bound). ECharts resets its internal cumulative-zoom
+                        // bookkeeping (controllerHost.zoom) to 1 on EVERY render (see
+                        // echartsTreemapZoomGuard.ts for the full analysis), so each wheel/pinch
+                        // tick's delta is computed against a baseline of 1, not the true current
+                        // scale. Setting scaleLimit.min to our real floor (1) here made EVERY
+                        // zoom-OUT tick's delta get clamped to exactly 1 => zoomScale = 1/1 = 1
+                        // (a no-op) on every single attempt, completely disabling zoom-out
+                        // regardless of the actual displayed scale — a real regression, not just
+                        // a "cap at 100%". The real enforcement of the [1, 5] bound happens in
+                        // attachTreemapZoomGuard() below, which independently tracks true
+                        // cumulative scale from the live rect and corrects it after the fact —
+                        // so this per-tick limit only needs to avoid interfering with normal
+                        // ticks in either direction.
+                        scaleLimit: {min: 0.1, max: 20},
+                        nodeClick: false,
+                        breadcrumb: {show: false},
+                        upperLabel: {
+                            show: true,
+                            height: 20,
+                            formatter: formatUpperLabel,
+                            rich: upperLabelRich,
+                            color: isDark ? '#e2e8f0' : '#334155',
+                            fontSize: 10,
+                            backgroundColor: isDark ? 'rgba(30,41,59,0.8)' : 'rgba(248,250,252,0.8)',
+                        },
+                        label: {
+                            show: true,
+                            formatter: '{b}',
+                            fontSize: 10,
+                            color: '#fff',
+                            textShadowColor: 'rgba(0,0,0,0.5)',
+                            textShadowBlur: 2,
+                        },
+                        levels: [{itemStyle: {borderWidth: 2, borderColor: isDark ? '#334155' : '#e2e8f0', gapWidth: 2}}, {itemStyle: {borderWidth: 1, borderColor: isDark ? '#475569' : '#cbd5e1', gapWidth: 1}}, {itemStyle: {borderWidth: 0, gapWidth: 1}}],
+                    },
                 ],
-            }],
-        }, true);
+            },
+            true,
+        );
+    }
+
+    /** Instantly restores the natural, un-zoomed full-container view — see
+     *  resetTreemapView() in echartsTreemapZoomGuard.ts for why a plain
+     *  `setOption({series:[{zoom:1,...}]})` does NOT work for treemap roam. */
+    function resetView() {
+        if (chartInstance) resetTreemapView(chartInstance);
     }
 </script>
 
-<div bind:this={chartContainer} style="width:100%;height:{height}" data-testid="exposure-treemap"></div>
+<!-- JS sizing: wrapper always spans full panel width. ResizeObserver reads actual
+     wrapper clientWidth, viewport cap is recomputed as window.innerHeight * 0.75,
+     then chart height = min(width, cap). Result: narrow screens keep full-width
+     square; very wide screens keep full width and only clamp height, becoming
+     landscape rectangle instead of shrinking. Explicit px width/height keeps chart
+     perfectly inside card padding, no CSS aspect-ratio/max-height ambiguity. -->
+<div bind:this={chartWrapper} class="relative w-full">
+    <div bind:this={chartContainer} style="width:{chartWidth}px;height:{chartHeight}px" data-testid="exposure-treemap"></div>
+    <button
+        type="button"
+        class="absolute top-1 right-1 p-1 rounded bg-white/80 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-600 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-700 transition-colors"
+        onclick={resetView}
+        title={$_('dashboard.resetZoom')}
+        data-testid="exposure-treemap-reset-zoom"
+    >
+        <RotateCcw size={12} />
+    </button>
+</div>
