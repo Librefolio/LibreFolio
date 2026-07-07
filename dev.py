@@ -1727,14 +1727,14 @@ def copy_docs_assets():
             shutil.rmtree(dest_icons)
         shutil.copytree(src_icons, dest_icons)
 
-    # Copy promo videos
-    promo_dir = PROJECT_ROOT / "mkdocs_src" / "videoClipPrject" / "video_promo" / "out"
-    video_dest = static_dir / "video"
-    if promo_dir.exists():
-        video_dest.mkdir(parents=True, exist_ok=True)
-        for video_file in promo_dir.glob("*.mp4"):
-            shutil.copy(video_file, video_dest / video_file.name)
-            print_success(f"Copied promo video to mkdocs assets: {video_file.name}")
+    # Copy promo videos (disabled/commented out)
+    # promo_dir = PROJECT_ROOT / "mkdocs_src" / "videoClipPrject" / "video_promo" / "out"
+    # video_dest = static_dir / "video"
+    # if promo_dir.exists():
+    #     video_dest.mkdir(parents=True, exist_ok=True)
+    #     for video_file in promo_dir.glob("*.mp4"):
+    #         shutil.copy(video_file, video_dest / video_file.name)
+    #         print_success(f"Copied promo video to mkdocs assets: {video_file.name}")
 
 
 def update_js_cache():
