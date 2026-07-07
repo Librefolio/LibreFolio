@@ -241,7 +241,7 @@
     "analysis_model": "google/gemma-4-31b-it:free"
   },
   "index.en.md": {
-    "md5": "be973bee0cbc41bd2e26a1f35c47da55",
+    "md5": "a535c6949cc4cf124b074f6e5b255164",
     "langs_done": [
       "es",
       "fr",
@@ -261,7 +261,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 199.7,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-07T12:01:51.905588+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -274,7 +274,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 199.2,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-07T12:01:51.905588+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -287,7 +287,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 197.2,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-07T12:01:51.905588+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6145,7 +6145,7 @@
     }
   },
   "financial-theory/technical-analysis/performance-metrics/deposited-capital.en.md": {
-    "md5": "140b23a12833bebd8448e830af996d67",
+    "md5": "85bff7096baf6aab4ca9ddd8a09b44c5",
     "langs_done": [
       "es",
       "fr",
@@ -6165,7 +6165,7 @@
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. LATEX_COUNT: source=26, translated=30 (Δ+4)\n  EN formulas:\n    L  9: $$ \\mathrm{DepCap}(t) = \\sum_{\\tau \\leq t} D(\\tau) - \\sum_{\\…\n    L 15: $$ \\boxed{\\mathrm{TotalPnL}(t) = \\mathrm{NAV}(t) - \\mathrm{D…\n    L 36: $$ \\mathrm{Cash}(t) \\approx \\sum_b K_b(t) + \\sum_b R_b(t) $$\n    L 42: $K_b$\n    L 42: $b$\n    L 43: $R_b$\n    L 43: $b$\n    L 44: $W$\n    L 48: $\\mathrm{DepCap}$\n    L 48: $\\sum K_b$\n    L 49: $b_1$\n    L 49: $R_{b_1}$\n    L 49: $R_{b_2}$\n    L 50: $R$\n    L 50: $K$\n    L 50: $W$\n    L 60: $K$\n    L 60: $R$\n    L 70: $K$\n    L 70: $R$\n    L 70: $W$\n    L 82: $K$\n    L 82: $R$\n    L 87: $K$\n    L 87: $R$\n    L 87: $R$\n  TRN formulas:\n    L 10: $$ \\mathrm{DepCap}(t) = \\sum_{\\tau \\leq t} D(\\tau) - \\sum_{\\…\n    L 16: $$ \\boxed{\\mathrm{TotalPnL}(t) = \\mathrm{NAV}(t) - \\mathrm{D…\n    L 37: $$ \\mathrm{Cash}(t) \\approx \\sum_b K_b(t) + \\sum_b R_b(t) $$\n    L 43: $K_b$\n    L 43: $b$\n    L 44: $R_b$\n    L 44: $b$\n    L 45: $W$\n    L 49: $\\mathrm{DepCap}$\n    L 49: $\\sum K_b$\n    L 50: $b_1$\n    L 50: $R_{b_1}$\n    L 50: $R_{b_2}$\n    L 51: $R$\n    L 51: $K$\n    L 51: $W$\n    L 59: $\\rightarrow$\n    L 59: $\\rightarrow$\n    L 61: $K$\n    L 61: $R$\n    L 71: $K$\n    L 71: $R$\n    L 71: $W$\n    L 76: $\\rightarrow$\n    L 76: $\\rightarrow$\n    L 83: $K$\n    L 83: $R$\n    L 88: $K$\n    L 88: $R$\n    L 88: $R$\n\nSOURCE_OUTLINE (for reference):\n  # 💸 Deposited Capital, Total PnL and Cash Pools\n    ## 💡 Concept Overview\n    ## 🎯 What Counts\n    ## 📊 Three-Pool Cash Model\n    ## 📝 Worked Examples\n      ### A — Deposit → Buy → Sell in Gain\n      ### B — Dividend then Withdrawal\n      ### C — Full Sell Regression\n    ## ⚙️ Implementation\n    ## 🔗 Related",
         "structural_issues": 1,
         "elapsed_s": 1249.1,
-        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_at": "2026-07-07T09:53:34.050683+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6178,7 +6178,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1400.7,
-        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_at": "2026-07-07T09:53:34.050683+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6191,7 +6191,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1193.1,
-        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_at": "2026-07-07T09:53:34.050683+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6381,11 +6381,11 @@
     }
   },
   "user/dashboard/kpi-cards.en.md": {
-    "md5": "eb344c9997b948cbb191454c32362f2c",
+    "md5": "4ca3dc0b11f75207663af0b3e1a7a4b3",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-07-01T09:56:54.838591+00:00",
     "analysis": "[{\"name\": \"KPI Cards\", \"keywords\": [\"KPI dashboard financial software\"]}, {\"name\": \"broker scope\", \"keywords\": [\"investment portfolio broker filter scope\"]}, {\"name\": \"Net Worth\", \"keywords\": [\"net worth financial definition portfolio\"]}, {\"name\": \"Market Value\", \"keywords\": [\"market value vs book value finance\"]}, {\"name\": \"Book Value\", \"keywords\": [\"book value investment average cost\"]}, {\"name\": \"Deposited Capital\", \"keywords\": [\"deposited capital financial portfolio\"]}, {\"name\": \"hero number\", \"keywords\": [\"UI design hero element dashboard\"]}, {\"name\": \"snapshots\", \"keywords\": [\"financial data snapshot point-in-time\"]}, {\"name\": \"period-scoped\", \"keywords\": [\"period scoped data financial reporting\"]}, {\"name\": \"Period P&amp;L\", \"keywords\": [\"period profit and loss statement portfolio\"]}, {\"name\": \"Net External Flows\", \"keywords\": [\"net external flows portfolio accounting\"]}, {\"name\": \"Unrealized change\", \"keywords\": [\"unrealized gain loss financial terminology\"]}, {\"name\": \"Realized gain or loss\", \"keywords\": [\"realized gain loss investment\"]}, {\"name\": \"bond coupons\", \"keywords\": [\"bond coupon payments finance\"]}, {\"name\": \"FX rounding\", \"keywords\": [\"foreign exchange rounding errors\"]}, {\"name\": \"Timing Effect\", \"keywords\": [\"investment timing effect MWRR TWRR\"]}, {\"name\": \"buy-and-hold strategy\", \"keywords\": [\"buy and hold investment strategy\"]}, {\"name\": \"TWRR\", \"keywords\": [\"Time-Weighted Rate of Return definition\"]}, {\"name\": \"MWRR cumulative\", \"keywords\": [\"cumulative Money-Weighted Rate of Return\"]}, {\"name\": \"MWRR annualized\", \"keywords\": [\"annualized Money-Weighted Rate of Return\"]}, {\"name\": \"ROI\", \"keywords\": [\"Return on Investment financial metric\"]}]",
@@ -6400,7 +6400,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** The term \"holding\" is mapped to \"posizione\" in the glossary. In the \"Book Value\" row definition, the translation uses \"posizioni aperte\" for \"open positions,\" which is correct, but in the \"Unrealized change\" row, it uses \"posizioni aperte\" again. While correct, ensure that the general concept of holdings always aligns with \"posizione\".\n- **Terminology Consistency (Internal Product Terms):** The translation leaves terms like \"Net Worth\", \"Market Value\", \"Book Value\", \"Deposited Capital\", \"Period P&L\", and \"Returns\" in English in the headings and table rows. While often common in financial software, for a professional translation, if these are UI labels, they should be consistent. However, the most critical issue is the inconsistency in the \"Deposited Capital bar\" section: the text says \"La barra del Deposited Capital\" (English) but the list items use \"Total deposited\" and \"Total withdrawn\" (English). These should either be fully translated or fully kept as UI labels.\n- **Semantic Accuracy (Financial Terms):** In the \"Deposited Capital bar\" section, \"The hero number\" is translated as \"Il numero principale\". While understandable, in a technical UI context, \"hero number\" refers to the primary, large-font metric. \"Il valore principale\" or \"La cifra principale\" would be more natural.\n- **Semantic Accuracy (Translation of \"net of\"):** In the Period P&L section, \"net of capital movements\" is translated as \"al netto dei movimenti di capitale\". This is correct. However, \"net external capital contributed\" is translated as \"Capitale esterno netto versato\". This is acceptable, but \"Contributo netto di capitale esterno\" would be more precise.\n- **Grammar/Natural Phrasing:** In the \"Timing Effect\" section, \"you tended to deposit\" is translated as \"hai avuto la tendenza a depositare\". This is a bit wordy. A more natural professional phrasing would be \"hai tendenzialmente depositato\" or \"hai depositato prevalentemente\".\n- **Terminology (Specific Financial Terms):** In the \"Period P&L\" formula, \"Net External Flows in period\" is translated as \"Flussi Esterni Netti nel periodo\". To be consistent with the \"Deposited Capital\" section, \"External\" should be consistently treated.\n- **Accuracy (Returns Section):** \"cumulative money-weighted return\" is translated as \"rendimento cumulativo ponderato per il denaro\". The standard financial term in Italian is \"rendimento ponderato per il capitale\" or simply keeping \"MWRR\" as it is an industry acronym. \"Ponderato per il denaro\" is a literal translation that sounds unnatural in Italian finance. Suggest: \"rendimento cumulativo ponderato per il capitale (MWRR)\".\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 1305.3
+        "elapsed_s": 1305.3,
+        "stamped_at": "2026-07-07T09:53:34.050683+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-07-01T09:56:54.838543+00:00",
@@ -6411,7 +6413,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** In the \"Related\" section, the English source says \"Overview\" (linked via index.md in the first line). While \"vue d'ensemble\" is used in the first sentence, the glossary explicitly maps \"overview\" to \"**aperçu**\". Please update \"[⬅️ Retour à la vue d'ensemble du tableau de bord](index.md)\" to \"[⬅️ Retour à l'aperçu du tableau de bord](index.md)\".\n- **Terminology Consistency (Internal Logic):** The translation oscillates between translating UI labels and keeping them in English. For example, \"Net Worth\" is translated as \"Valeur Nette\" in the heading but remains \"Net Worth\" in the following sentence and in the \"Related\" links. Since these refer to specific UI elements (KPI Cards), they should be consistent. If the UI is in English, keep them English; if the UI is translated, translate them everywhere. Given the context, consistency is key: \"La carte **Net Worth**\" should be \"**Valeur Nette**\" to match the heading.\n- **Semantic Accuracy (Financial Terms):** In the \"Deposited Capital\" section, the phrase \"limité à la période\" for \"period-scoped\" is slightly inaccurate. In financial reporting, \"scoped\" refers to the boundaries of the calculation. A better translation would be \"**est calculé sur la période**\" or \"**est propre à la période**\".\n- **Translation Accuracy (P&L):** For \"Unrealized change\", the translation \"L'évolution du gain/perte non réalisé\" is correct, but for \"Sales\", the translation \"Gain ou perte réalisé\" is slightly imprecise for the term \"Sales\" in a P&L context. \"Sales\" here refers to the actual selling activity. I suggest \"**Ventes**\" to maintain the table's conciseness and match the source's labeling.\n- **Grammar/Syntax:** In the \"Timing Effect\" section, \"augmentant votre rendement personnel au-delà de ce que les actifs seuls ont rapporté\" is grammatically correct but slightly clunky. A more natural technical phrasing would be: \"...propulsant votre rendement personnel au-dessus de la performance intrinsèque des actifs.\"\n- **Terminology Consistency (MWRR):** The translation of \"MWRR cumulative\" as \"rendement cumulé pondéré par les flux monétaires\" is accurate but the table header should remain consistent with the terminology used in the \"TWRR vs MWRR\" note. Ensure the label in the table matches the label in the note exactly.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 1108.1
+        "elapsed_s": 1108.1,
+        "stamped_at": "2026-07-07T09:53:34.050683+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-07-01T09:56:54.838593+00:00",
@@ -6422,12 +6426,14 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** The term \"Dashboard\" is used throughout the translation, but the glossary explicitly mandates \"panel de control\".\n    - Change \"Vista General del Dashboard\" to \"Descripción general del panel de control\".\n    - Change \"parte superior del dashboard\" to \"parte superior del panel de control\".\n\n- **Terminology Consistency (Glossary):** The term \"Overview\" is translated as \"Vista General\", but the glossary mandates \"descripción general\".\n    - Change \"Vista General del Dashboard\" to \"Descripción general del panel de control\".\n\n- **Consistency/Terminology:** The translation mixes Spanish and English for UI elements (labels). For example, it translates \"Net Worth\" in the heading but leaves \"Net Worth\", \"Market Value\", \"Book Value\", and \"Deposited Capital\" in English in the body and tables. In technical documentation for software, UI labels should either be translated consistently or kept in English if the UI is English, but they should not be inconsistently mixed. Given that the headings were translated, the table rows should be as well to ensure the user can find the labels in the interface.\n    - Change \"Net Worth\" to \"Patrimonio Neto\".\n    - Change \"Market Value\" to \"Valor de Mercado\".\n    - Change \"Book Value\" to \"Valor Contable\".\n    - Change \"Cash\" to \"Efectivo\".\n    - Change \"Deposited Capital\" to \"Capital Depositado\".\n    - Change \"Period P&L\" to \"P&L del Periodo\".\n\n- **Translation Accuracy/Terminology:** \"Quantity\" is abbreviated as \"qty\" in the Spanish translation of the Book Value row. This should be fully translated for professional documentation.\n    - Change \"(coste medio × qty)\" to \"(coste medio × cantidad)\".\n\n- **Semantic Accuracy:** In the \"Timing Effect\" section, \"missed dips\" is translated as \"se perdió las caídas\". While understandable, \"perderse las caídas\" is slightly ambiguous in Spanish. A more accurate technical translation would be \"no aprovechar las caídas\".\n    - Change \"se perdió las caídas\" to \"no aprovechó las caídas\".\n\n- **Terminology Consistency:** \"MWRR cumulative\" and \"MWRR annualized\" are left in English in the table, but translated as \"MWRR acumulativo\" and \"tasa anual compuesta\" (indirectly) in the text. These should be consistent.\n    - Change \"MWRR cumulative\" to \"MWRR acumulado\".\n    - Change \"MWRR annualized\" to \"MWRR anualizado\".\n\n- **Grammar/Syntax:** In the \"Identity check\" tip, \"Verificación de identidad\" is a literal translation of \"Identity check\". In this mathematical context, \"Identity\" refers to an algebraic identity (the sum of parts equals the whole), not personal identification.\n    - Change \"Verificación de identidad\" to \"Verificación de coherencia\" or \"Comprobación de suma\".\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 1044.4
+        "elapsed_s": 1044.4,
+        "stamped_at": "2026-07-07T09:53:34.050683+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
   "user/dashboard/charts.en.md": {
-    "md5": "f3050512f8760994c85ea931581818f3",
+    "md5": "8651227b631f6a79ac79a46fdacaf851",
     "langs_done": [
       "es",
       "fr",
@@ -6447,7 +6453,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 270.0,
-        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_at": "2026-07-07T09:53:34.050683+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6460,7 +6466,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 231.0,
-        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_at": "2026-07-07T09:53:34.050683+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6473,13 +6479,13 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 150.8,
-        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_at": "2026-07-07T09:53:34.050683+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "financial-theory/technical-analysis/performance-metrics/portfolio-engine.en.md": {
-    "md5": "e09a31ea98d06b625aeb873e493ed08e",
+    "md5": "7e1c8201306f3b4de9d19358c5b9f8f1",
     "langs_done": [
       "es",
       "fr",
@@ -6499,7 +6505,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 166.8,
-        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_at": "2026-07-07T09:53:34.050683+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6512,7 +6518,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 163.0,
-        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_at": "2026-07-07T09:53:34.050683+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6525,7 +6531,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 280.2,
-        "stamped_at": "2026-07-01T10:33:54.313490+00:00",
+        "stamped_at": "2026-07-07T09:53:34.050683+00:00",
         "stamped_by": "translate-stamp"
       }
     }

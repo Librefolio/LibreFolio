@@ -55,33 +55,131 @@ description: Libre à comprendre, libre d'agir. LibreFolio regroupe tous vos inv
  <div class="lf-quick-install-card">
  <h2 class="lf-quick-install-title">Prêt à essayer<br><img id="quick-install-logo" alt="Logo LibreFolio" style="height: 1em; width: auto; vertical-align: text-bottom; margin-right: 0.2em; border-radius: 4px;"><script>(function(){var p=window.location.pathname.replace(/\/+$/,"");var base=p.replace(/\/(it|fr|es)$/,"");document.getElementById("quick-install-logo").src=base+"/static/logo.png";})();</script>LibreFolio ?</h2>
  
- <div class="lf-quick-install-docker">
- <span class="lf-quick-install-eyebrow">Recommandé</span>
- <div class="lf-quick-install-docker-body">
- <div class="lf-quick-install-heading">
- <span class="lf-quick-install-icon lf-quick-install-icon-primary">
- <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
- </span>
- <h3>Installer avec Docker</h3>
- </div>
- <p>La méthode standard pour faire fonctionner LibreFolio de manière privée et fiable.</p>
- </div>
- <a href="user/installation/" class="lf-btn-primary">Lire le guide Docker &rarr;</a>
- </div>
- 
- <div class="lf-quick-install-dev">
- <div class="lf-quick-install-dev-body">
- <div class="lf-quick-install-heading">
- <span class="lf-quick-install-icon lf-quick-install-icon-secondary">
- <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
- </span>
- <h4>Exécuter sur l'Hôte ?</h4>
- </div>
- <p>Configurez l'environnement Python + Pipenv pour exécuter LibreFolio directement sur votre machine hôte.</p>
- </div>
- <a href="admin/host_installation/" class="lf-btn-secondary">Installation sur l'Hôte &rarr;</a>
- </div>
- </div>
+  <div class="lf-quick-install-docker" style="display: block; padding: 2rem;">
+  <span class="lf-quick-install-eyebrow">Recommandé</span>
+  <div class="lf-quick-install-docker-body">
+  <div class="lf-quick-install-heading">
+  <span class="lf-quick-install-icon lf-quick-install-icon-primary">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+  </span>
+  <h3>Installer avec Docker</h3>
+  </div>
+  <p>La méthode standard pour faire fonctionner LibreFolio de manière privée et fiable.</p>
+  </div>
+  <div style="display: flex; justify-content: flex-end; margin-top: 1.25rem;">
+    <a href="user/installation/" class="lf-btn-primary">Lire le guide Docker &rarr;</a>
+  </div>
+  </div>
+  
+  <div class="lf-quick-install-dev" style="display: block; padding: 1.5rem 2rem;">
+  <div class="lf-quick-install-dev-body">
+  <div class="lf-quick-install-heading">
+  <span class="lf-quick-install-icon lf-quick-install-icon-secondary">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+  </span>
+  <h4>Exécuter sur l'Hôte ?</h4>
+  </div>
+  <p>Configurez l'environnement Python + Pipenv pour exécuter LibreFolio directement sur votre machine hôte.</p>
+  </div>
+  <div style="display: flex; justify-content: flex-end; margin-top: 1.25rem;">
+    <a href="admin/host_installation/" class="lf-btn-secondary">Installation sur l'Hôte &rarr;</a>
+  </div>
+  </div>
+
+  <div class="lf-quick-install-dev lf-quick-install-update" style="display: block; padding: 1.5rem 2rem;">
+  <div class="lf-quick-install-dev-body">
+  <div class="lf-quick-install-heading">
+  <span class="lf-quick-install-icon lf-quick-install-icon-update">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+  </span>
+  <h4>Rester informé ?</h4>
+  </div>
+  <p>Suivez nos progrès et recevez des notifications sur les nouveautés :</p>
+  <ul style="margin: 0.5rem 0 0; padding-left: 1.25rem; font-size: clamp(0.8rem, 2.5vw, 0.9rem); color: var(--md-default-fg-color--light);">
+    <li>Cliquez sur <strong>Watch</strong> en haut du dépôt GitHub.</li>
+    <li>Sélectionnez <strong>Custom</strong> dans le menu de notifications.</li>
+    <li>Cochez <strong>Releases</strong> et cliquez sur <strong>Apply</strong>.</li>
+  </ul>
+  </div>
+  <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem; align-items: center; flex-wrap: wrap;">
+    <a href="https://github.com/Librefolio/LibreFolio/subscription" target="_blank" rel="noopener noreferrer" class="lf-btn-secondary" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.4rem 1rem;">
+      <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" style="vertical-align: text-bottom;"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.35 3.12.88.01.64.01 1.11.01 1.23 0 .21-.15.46-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8z"/></svg>
+      <span>Watch</span>
+      <span class="lf-github-counter lf-watch-count">-</span>
+    </a>
+    <a href="https://github.com/Librefolio/LibreFolio" target="_blank" rel="noopener noreferrer" class="lf-btn-secondary" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.4rem 1rem;">
+      <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" style="vertical-align: text-bottom;"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
+      <span>Star</span>
+      <span class="lf-github-counter lf-star-count">-</span>
+    </a>
+  </div>
+  <style>
+    .lf-quick-install-update {
+      background: rgba(16, 185, 129, 0.03) !important;
+      border: 1px solid rgba(16, 185, 129, 0.15) !important;
+    }
+    [data-md-color-scheme="slate"] .lf-quick-install-update {
+      background: rgba(16, 185, 129, 0.08) !important;
+      border: 1px solid rgba(16, 185, 129, 0.25) !important;
+    }
+    .lf-quick-install-update h4 {
+      color: #047857 !important;
+    }
+    [data-md-color-scheme="slate"] .lf-quick-install-update h4 {
+      color: #34d399 !important;
+    }
+    .lf-quick-install-update .lf-quick-install-icon-update {
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+    .lf-quick-install-update .lf-quick-install-icon-update svg {
+      stroke: #10b981;
+    }
+    [data-md-color-scheme="slate"] .lf-quick-install-update .lf-quick-install-icon-update {
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.24);
+    }
+    [data-md-color-scheme="slate"] .lf-quick-install-update .lf-quick-install-icon-update svg {
+      stroke: #34d399;
+    }
+    .lf-github-counter {
+      background: rgba(0, 0, 0, 0.05);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      margin-left: 0.25rem;
+      color: var(--md-default-fg-color--light);
+    }
+    [data-md-color-scheme="slate"] .lf-github-counter {
+      background: rgba(255, 255, 255, 0.1);
+    }
+  </style>
+  <script>
+  (function() {
+    fetch('https://api.github.com/repos/Librefolio/LibreFolio')
+      .then(response => response.json())
+      .then(data => {
+        if (data) {
+          if (data.subscribers_count !== undefined) {
+            document.querySelectorAll('.lf-watch-count').forEach(el => el.textContent = data.subscribers_count);
+          }
+          if (data.stargazers_count !== undefined) {
+            document.querySelectorAll('.lf-star-count').forEach(el => el.textContent = data.stargazers_count);
+          }
+        }
+      })
+      .catch(err => {
+        console.warn('Could not fetch GitHub counts', err);
+        document.querySelectorAll('.lf-watch-count').forEach(el => el.textContent = '-');
+        document.querySelectorAll('.lf-star-count').forEach(el => el.textContent = '-');
+      });
+  })();
+  </script>
+  </div>
+  </section>
  </section>
 
  <!-- Deep Dive 1: Dashboard -->

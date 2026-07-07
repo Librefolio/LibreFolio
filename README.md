@@ -15,6 +15,19 @@
 
 ---
 
+> ### 📢 Stay Updated on LibreFolio Progress
+>
+> If you want to follow the development and get notified about new features, updates, and releases, set up an alert in 10 seconds:
+>
+> 1. Scroll to the top of this page.
+> 2. Click the **Watch** button (top right).
+> 3. Select **Custom** in the dropdown menu.
+> 4. Check **Releases** and click **Apply**.
+>
+> *You will receive an automatic notification directly on GitHub whenever a new version is released!*
+
+---
+
 Bring all your investments into one private, secure dashboard. Track stocks, ETFs, crypto, bonds, and loans across multiple brokers — with automated pricing, FX conversion, and technical analysis tools.
 
 Your data stays on your server. No third-party cloud. No tracking.
