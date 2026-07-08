@@ -1,7 +1,8 @@
 # Phase 9: Dashboard
 
-**Status**: ⏳ Progress
-**Sub-plans archiviati**: [`../phase-09-subplan/README.md`](../phase-09-subplan/README.md)
+**Status**: ✅ Completato (Milestone 1 & 2) · ⏳ In corso (Milestone 3 — Redesign UI Broker v2)
+**Sub-plans archiviati (M1 & M2)**: [`./phase-09-subplan/README.md`](./phase-09-subplan/README.md)
+**Sub-plans attivi (M3)**: [`../phase-09-subplan/README.md`](../phase-09-subplan/README.md)
 **Durata**: ~5 giorni (aggiornata)  
 **Priorità**: P1 (Important)  
 **Dipendenze**: Phase 4.8 (share_percentage per aggregazione), Phase 5 (PriceChartShared), Phase 6, Phase 7 (tutti i dati)
@@ -54,29 +55,29 @@ Riprogettazione completa della Dashboard Home e delle schermate di dettaglio del
 
 ## 📂 Piano Implementativo e Sub-Plans
 
-Lo sviluppo e l'architettura di questa fase sono stati dettagliati in una serie di documenti dedicati presenti nella cartella `phase-09-subplan/`. Questi documenti sostituiscono completamente le indicazioni legacy presenti più in basso in questo file.
+Lo sviluppo e l'architettura di questa fase sono stati dettagliati in una serie di documenti dedicati. Questi documenti sostituiscono completamente le indicazioni legacy presenti più in basso in questo file.
 
-### Documenti Architetturali e di Processo
-* **`implementation_roadmap.md`**: Scompone il lavoro in 5 Milestone Sequenziali e verificabili (1. Backend/API, 2. Dashboard Home, 3. Dettaglio Broker Overview, 4. Dettaglio Broker Holdings & Lotti FIFO, 5. Dettaglio Broker Transactions & Cleanup).
-* **`implementation_plan.md`**: Analizza il gap architetturale tra l'attuale (FastAPI/SvelteKit) e il desiderato, chiarendo il passaggio all'uso unificato di `portfolio_service.py` per le metriche sia di portfolio globale che del singolo broker.
+### Documenti Architetturali e di Processo — Milestone 1 & 2 ✅ (archiviati in [`phase-09-subplan/`](./phase-09-subplan/README.md))
+* **`implementation_roadmap.md`**: Scompone il lavoro in Milestone Sequenziali e verificabili (1. Backend/API, 2. Dashboard Home).
 * **`plan_financial_algorithms.md`**: Documento di dettaglio matematico/algoritmico per l'implementazione dei servizi finanziari (TWRR, MWRR e interazioni con WAC), con gestione edge-case.
 
-### Documenti di Design dell'Interfaccia (Ascii Art & Componenti)
+### Documenti di Design dell'Interfaccia — Milestone 1 & 2 ✅ (archiviati in [`phase-09-subplan/`](./phase-09-subplan/README.md))
 * **`plan_ui_dashboard.md`**: Design della Home principale. KPI Cards, filtro Multi-Broker, Grafico a torta/Mappa e Grafico storico della crescita (Investito, Liquidità, NAV).
-* **`plan_ui_broker_overview.md`**: Design del Tab 1 "Panoramica" all'interno del singolo broker. Riutilizza gli stessi componenti della Dashboard filtrando per il `broker_id` corrente, aggiungendo una sezione fissa con i metadati del broker.
-* **`plan_ui_broker_holdings.md`**: Design del Tab 2 "Posizioni". Tabella delle quote detenute e Modale "Slide-over" o overlay con lo spaccato dei lotti aperti/chiusi (logica FIFO) e la serie storica del WAC comparato con il prezzo di mercato dell'asset.
-* **`plan_ui_broker_transactions.md`**: Design del Tab 3 "Transazioni e Storico File". Riuso della `TransactionsTable` unito allo storico dei report BRIM importati.
+
+### Documenti — Milestone 3 ⏳ in corso (attivi in [`../phase-09-subplan/`](../phase-09-subplan/README.md))
+* **`implementation_plan.md`**: Analizza il gap architetturale tra l'attuale (FastAPI/SvelteKit) e il desiderato, chiarendo il passaggio all'uso unificato di `portfolio_service.py` per le metriche sia di portfolio globale che del singolo broker (copre sia M1/M2 sia M3 — riferimento condiviso, non archiviato).
+* **`Milestone_3/plan_ui_broker_overview.md`** (v2, supersede il disegno originale): Design del Tab 1 "Panoramica" all'interno del singolo broker. Riutilizza gli stessi componenti della Dashboard filtrando per il `broker_id` corrente.
+* **`Milestone_3/plan_ui_broker_holdings.md`** (v2, supersede il disegno originale): Design del Tab 2 "Posizioni". Tabella delle quote detenute e Modale "Slide-over" con lo spaccato dei lotti aperti/chiusi (logica FIFO) e la serie storica del WAC.
+* **`Milestone_3/plan_ui_broker_transactions.md`** (v2, supersede il disegno originale): Design del Tab 3 "Transazioni e Storico File". Riuso della `TransactionsTable` unito allo storico dei report BRIM importati.
 
 ---
 
 ## 📈 Summary dello Sviluppo (Work in Progress)
-*(Questa sezione verrà aggiornata man mano che le milestone vengono completate)*
 
-- [ ] **Milestone 1**: Fondamenta Backend e API di Portafoglio (TWRR, MWRR, endpoint unificati)
-- [ ] **Milestone 2**: Dashboard Home
-- [ ] **Milestone 3**: Dettaglio Broker - Shell & Tab Overview
-- [ ] **Milestone 4**: Dettaglio Broker - Posizioni e Modale Lotti FIFO
-- [ ] **Milestone 5**: Dettaglio Broker - Transazioni & File Importati (Clean up)
+- [x] **Milestone 1**: Fondamenta Backend e API di Portafoglio (TWRR, MWRR, endpoint unificati) — ✅ completata, archiviata
+- [x] **Milestone 2**: Dashboard Home (Positions/Performance panel, Portfolio Engine, GrowthChart, Allocation history) — ✅ completata, archiviata
+- [ ] **Milestone 3**: Redesign UI Broker v2 (Panoramica, Posizioni & Lotti FIFO, Transazioni & File) — ⏳ in corso, vedi [`../phase-09-subplan/Milestone_3/README.md`](../phase-09-subplan/Milestone_3/README.md)
+
 
 ---
 

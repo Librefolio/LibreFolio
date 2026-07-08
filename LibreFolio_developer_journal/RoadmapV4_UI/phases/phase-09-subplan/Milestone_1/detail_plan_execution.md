@@ -1,7 +1,7 @@
 # Phase 09 — Milestone 1: Piano Implementativo di Dettaglio
 
 > **Data esecuzione**: 2026-06-10  
-> **Sorgente**: [`implementation_plan.md`](../../../../../LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_1/implementation_plan.md)  
+> **Sorgente**: [`implementation_plan.md`](./implementation_plan.md)  
 > **Stato**: ✅ Completato  
 > **Scope**: Backend-only (nessuna modifica frontend)  
 > **Goal**: Servizi finanziari puri (WAC/TWRR/MWRR/FIFO), orchestratore portfolio, 4 nuovi endpoint REST

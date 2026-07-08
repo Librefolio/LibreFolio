@@ -7,11 +7,11 @@
 
 | Documento | Percorso | Contenuto |
 |-----------|----------|-----------|
-| **Wireframe Dashboard** | [plan_ui_dashboard.md](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/plan_ui_dashboard.md) | ASCII wireframe della Dashboard, requisiti dati frontend, specifiche KPI cards e Growth chart |
+| **Wireframe Dashboard** | [plan_ui_dashboard.md](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_ui_dashboard.md) | ASCII wireframe della Dashboard, requisiti dati frontend, specifiche KPI cards e Growth chart |
 | **Implementation Plan** | [implementation_plan.md](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/implementation_plan.md) | Gap analysis completa, decisioni architetturali su store, caching, allocazioni pesate |
-| **Roadmap Milestone** | [implementation_roadmap.md](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/implementation_roadmap.md) | Target point M2 (L31-49): criterio di verifica utente |
+| **Roadmap Milestone** | [implementation_roadmap.md](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/implementation_roadmap.md) | Target point M2 (L31-49): criterio di verifica utente |
 | **Copilot Instructions** | [copilot-instructions.md](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/.github/copilot-instructions.md) | Regole progetto: Svelte 5 Runes, Tailwind CSS 4, asyncio.to_thread, `./dev.py` CLI, no git commit |
-| **Algoritmi Finanziari** | [plan_financial_algorithms.md](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/plan_financial_algorithms.md) | Specifiche matematiche TWRR, MWRR (XIRR), Simple ROI, WAC |
+| **Algoritmi Finanziari** | [plan_financial_algorithms.md](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_financial_algorithms.md) | Specifiche matematiche TWRR, MWRR (XIRR), Simple ROI, WAC |
 
 ## Riferimenti Sorgenti Chiave
 
@@ -189,7 +189,7 @@ Cercare nel codebase i punti dove le transazioni vengono create/modificate/elimi
 
 **Target route da creare:** `frontend/src/routes/dashboard/+page.svelte`
 
-Il wireframe di riferimento è in [plan_ui_dashboard.md](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/plan_ui_dashboard.md). Riporto il layout:
+Il wireframe di riferimento è in [plan_ui_dashboard.md](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_ui_dashboard.md). Riporto il layout:
 
 ```text
 +-----------------------------------------------------------------------------------+
@@ -302,7 +302,7 @@ Struttura Tailwind CSS a griglia:
 
 **Target:** Manual testing + debug
 
-### Criterio di Verifica Utente (da [implementation_roadmap.md L48-49](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/implementation_roadmap.md)):
+### Criterio di Verifica Utente (da [implementation_roadmap.md L48-49](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/implementation_roadmap.md)):
 > *«L'utente apre l'app sulla Dashboard, interagisce con il selettore date e i filtri broker, e vede tutti i grafici (Mappa inclusa) aggiornarsi fluidamente con i dati corretti. I KPI totali combaciano con le aspettative.»*
 
 ### Checklist di Verifica — Stato Implementazione
