@@ -47,6 +47,13 @@ async function goToFirstBrokerDetail(page: Page): Promise<boolean> {
     return true;
 }
 
+/** Switch to the "Transazioni" tab — the import/new-tx buttons live there, not on
+ *  the default "Panoramica" tab. */
+async function goToTransazioniTab(page: Page): Promise<void> {
+    await page.getByTestId('broker-tab-transazioni').click();
+    await expect(page.getByTestId('broker-transactions-tab')).toBeVisible({timeout: 5000});
+}
+
 test.describe('Broker Detail Page', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
@@ -92,15 +99,18 @@ test.describe('Broker Detail Page', () => {
         const ok = await goToFirstBrokerDetail(page);
         if (!ok) return;
 
+        await goToTransazioniTab(page);
         await expect(page.getByTestId('broker-transactions')).toBeVisible({timeout: 5000});
     });
 
-    test('broker detail page has import files button', async ({page}) => {
+    test('broker detail page has show-import-history button', async ({page}) => {
         const ok = await goToFirstBrokerDetail(page);
         if (!ok) return;
 
-        // import-files-button is inside {#if canEdit} — requires OWNER or EDITOR role
-        await expect(page.getByTestId('import-files-button')).toBeVisible({timeout: 5000});
+        // broker-show-import-history is always visible (unlike the import/new-tx
+        // buttons next to it, which require OWNER or EDITOR role)
+        await goToTransazioniTab(page);
+        await expect(page.getByTestId('broker-show-import-history')).toBeVisible({timeout: 5000});
     });
 
     test('broker detail page has edit button', async ({page}) => {
@@ -131,7 +141,8 @@ test.describe('Broker Detail Page', () => {
         const ok = await goToFirstBrokerDetail(page);
         if (!ok) return;
 
-        await page.getByTestId('import-files-button').click();
+        await goToTransazioniTab(page);
+        await page.getByTestId('broker-show-import-history').click();
         await expect(page.getByTestId('import-files-modal')).toBeVisible({timeout: 5000});
     });
 
@@ -139,7 +150,8 @@ test.describe('Broker Detail Page', () => {
         const ok = await goToFirstBrokerDetail(page);
         if (!ok) return;
 
-        await page.getByTestId('import-files-button').click();
+        await goToTransazioniTab(page);
+        await page.getByTestId('broker-show-import-history').click();
         await expect(page.getByTestId('import-files-modal')).toBeVisible({timeout: 5000});
 
         // Close by pressing Escape
@@ -177,7 +189,8 @@ test.describe('Broker Detail Page', () => {
             });
         });
 
-        await page.getByTestId('import-files-button').click();
+        await goToTransazioniTab(page);
+        await page.getByTestId('broker-show-import-history').click();
         await expect(page.getByTestId('import-files-modal')).toBeVisible({timeout: 5000});
 
         const previewButton = page.getByTestId('row-action-preview').first();

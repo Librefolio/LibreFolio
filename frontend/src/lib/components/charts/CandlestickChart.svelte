@@ -357,7 +357,7 @@
             data: dates,
             boundaryGap: true,
             axisLine: {lineStyle: {color: axisColor}},
-            axisLabel: {color: labelColor, fontSize: 11},
+            axisLabel: {color: labelColor, fontSize: 14},
             splitLine: {show: false},
         };
 

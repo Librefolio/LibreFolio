@@ -745,8 +745,8 @@
                     {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-center'}"
         >
             <!-- DateRangePicker -->
-            <div class="max-w-md" data-testid="fx-date-range-picker">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} onchange={handleDateRangeChange} />
+            <div class="flex flex-1 self-stretch min-w-0" data-testid="fx-date-range-picker">
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" onchange={handleDateRangeChange} />
             </div>
 
             <!-- Currency Filters — always grouped as a pair -->

@@ -101,6 +101,9 @@
         items?: FormModalItems | null;
         /** When opened from the wizard: pre-select this broker. */
         forcedBroker?: number | null;
+        /** Soft default (unlike forcedBroker, does NOT lock the field) — e.g. when
+         *  opened from a broker-scoped page: pre-populate but let the user change it. */
+        defaultBrokerId?: number | null;
         /** Bugfix-5 §A4: when `false`, the Save button does NOT call the
          *  bulk endpoint — instead it invokes `onPushDraft` with the
          *  collected create-shaped payload, so the parent (BulkModal) can
@@ -162,6 +165,7 @@
         mode,
         items = null,
         forcedBroker = null,
+        defaultBrokerId = null,
         commitOnSave = true,
         unlockImmutable = false,
         availableTags = [],
@@ -250,8 +254,9 @@
         const brokers = getEditableBrokers();
         // Bugfix-2 §C9: only auto-pick a broker if exactly one is available;
         // otherwise leave the field empty (0 = unset sentinel) so the user
-        // is forced to choose consciously.
-        const defaultBroker = forcedBroker ?? (brokers.length === 1 ? brokers[0].id : 0);
+        // is forced to choose consciously. defaultBrokerId (soft, editable) wins
+        // over that heuristic but not over forcedBroker (hard-locked).
+        const defaultBroker = forcedBroker ?? defaultBrokerId ?? (brokers.length === 1 ? brokers[0].id : 0);
         return {
             broker_id: defaultBroker,
             asset_id: null,
@@ -498,11 +503,13 @@
             await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded(), ensureTypesLoaded()]);
             // After brokers loaded, backfill broker_id only if a single broker is
             // available (Bugfix-2 §C9) — otherwise leave it 0 so the user must
-            // pick. `forcedBroker` (from the wizard's "Create new") still wins.
+            // pick. `forcedBroker` (locked) and `defaultBrokerId` (soft) still win.
             untrack(() => {
                 if (mode === 'create' && draft.broker_id === 0) {
                     if (forcedBroker != null) {
                         draft = {...draft, broker_id: forcedBroker};
+                    } else if (defaultBrokerId != null) {
+                        draft = {...draft, broker_id: defaultBrokerId};
                     } else {
                         const all = getAllBrokers();
                         if (all.length === 1) draft = {...draft, broker_id: all[0].id};

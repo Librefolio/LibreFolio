@@ -1501,8 +1501,8 @@
     >
         <!-- Filters block: wide+tablet = row (side by side), tablet-s = column (stacked), mobile = centered -->
         <div class="flex gap-3 {layout.layoutMode === 'mobile' ? 'flex-col items-center' : layout.layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : 'flex-row items-center flex-1'}">
-            <div class="max-w-md">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} onchange={handleDateRangeChange} />
+            <div class="flex flex-1 self-stretch min-w-0">
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" onchange={handleDateRangeChange} />
             </div>
 
             {#if assetInfo}

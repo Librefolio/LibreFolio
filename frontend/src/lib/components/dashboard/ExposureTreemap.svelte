@@ -130,17 +130,31 @@
     });
 
     /** JS-owned size: wrapper width stays 100% of panel; height = min(full-width square,
-     *  75% viewport cap). Narrow screens stay 1:1, wide screens become landscape without
+     *  65% viewport cap). Narrow screens stay 1:1, wide screens become landscape without
      *  shrinking width. Explicit px sizing avoids prior CSS aspect-ratio/max-height drift.
-     *  Uses `getBoundingClientRect()` (subpixel-precise) + `Math.floor()` rather than
-     *  `clientWidth` (always browser-rounded, sometimes UP) — flooring guarantees the
-     *  canvas is never even a fraction of a pixel larger than the truly available space,
-     *  which was the suspected cause of the treemap bleeding past the card's padding on
-     *  the right/bottom edge. */
+     *
+     *  Width is measured off the `[data-testid="positions-panel"]` CARD itself (not the
+     *  nested `chartWrapper`) — `clientWidth` already excludes the card's own 1px border,
+     *  then its horizontal padding (16px each side, read live via `getComputedStyle` rather
+     *  than hardcoded in case the card's padding classes ever change) is subtracted
+     *  explicitly. Measuring the intermediate nested wrapper directly (previous approach)
+     *  intermittently reported a width that included that padding/border instead of
+     *  excluding it, bleeding the canvas a few pixels past the card's edge on the right/
+     *  bottom — this bypasses whatever nested-flex sizing quirk caused that by anchoring
+     *  the calculation to the one element whose padding/border we know for certain. */
     function updateChartSize() {
         if (!chartWrapper) return;
-        const nextWidth = Math.floor(chartWrapper.getBoundingClientRect().width);
-        const nextHeight = Math.floor(Math.min(nextWidth, window.innerHeight * 0.75));
+        const panel = chartWrapper.closest<HTMLElement>('[data-testid="positions-panel"]');
+        let nextWidth: number;
+        if (panel) {
+            const panelStyle = getComputedStyle(panel);
+            const paddingLeft = parseFloat(panelStyle.paddingLeft) || 0;
+            const paddingRight = parseFloat(panelStyle.paddingRight) || 0;
+            nextWidth = Math.floor(panel.clientWidth - paddingLeft - paddingRight);
+        } else {
+            nextWidth = Math.floor(chartWrapper.getBoundingClientRect().width);
+        }
+        const nextHeight = Math.floor(Math.min(nextWidth, window.innerHeight * 0.65));
         if (nextWidth === chartWidth && nextHeight === chartHeight) return;
 
         chartWidth = nextWidth;
@@ -209,6 +223,32 @@
         const meta = params.data?._meta;
         if (!meta || (meta.level as TreeNodeLevel) === 'asset') return params.name;
         return meta.iconRichKey ? `{${meta.iconRichKey}|} ${params.name}` : params.name;
+    }
+
+    /** Max zoom proportional to the data: at scale=1 the whole treemap area equals the
+     *  total value, and a leaf's area is (roughly, modulo squarified-layout/border
+     *  overhead) proportional to its own value — so area scales with the SQUARE of the
+     *  zoom factor. Solving for "the smallest leaf's area should fill about a sixth of
+     *  the viewport at max zoom" (viewport ≈ 6 × smallest_leaf_area — tightened from an
+     *  initial 3× which still allowed too much zoom per user feedback):
+     *    Z² × (total_area × smallest/total) = total_area / 6
+     *    Z = sqrt((total / smallest) / 6)
+     *  Pixel dimensions cancel out entirely — it only depends on the value ratio, so it
+     *  doesn't need to be recomputed on resize, only when the underlying holdings change.
+     *  Clamped to a sane [2, 12] range: a nearly-uniform portfolio (ratio ~1) would
+     *  otherwise compute a max zoom barely above 1:1 (not worth zooming for at all), and
+     *  one dominated by a single tiny sliver would otherwise compute an unusably huge one. */
+    function computeMaxZoomScale(): number {
+        let total = 0;
+        let min = Infinity;
+        for (const h of holdings) {
+            const val = safeNum(h.current_value);
+            if (val == null || val <= 0) continue;
+            total += val;
+            if (val < min) min = val;
+        }
+        if (total <= 0 || !isFinite(min) || min <= 0) return 5;
+        return Math.min(12, Math.max(2, Math.sqrt(total / min / 6)));
     }
 
     function buildTreeData(): any[] {
@@ -384,13 +424,38 @@
         }
     }
 
+    /** Centered ABOVE the tap/click point (clearing the finger and the hovered box
+     *  itself), same convention as the Performance chart's tooltip. Unlike that chart
+     *  (which has an internal scroll and is explicitly allowed to overflow above its
+     *  canvas for top rows), the treemap has no scroll context, so this stays clamped
+     *  within the chart's own container bounds on every side. `size.viewSize` here is
+     *  the chart container's own size (ECharts tooltip DOM is appended inside it by
+     *  default, not to document.body, since no `appendTo` is configured). */
+    function treemapTooltipPosition(point: [number, number], _params: unknown, _dom: unknown, _rect: unknown, size: {contentSize: [number, number]; viewSize: [number, number]}): [number, number] {
+        const tooltipW = size.contentSize[0];
+        const tooltipH = size.contentSize[1];
+        const viewW = size.viewSize[0];
+        const viewH = size.viewSize[1];
+        const gap = 12;
+
+        let x = point[0] - tooltipW / 2;
+        if (x < 4) x = 4;
+        if (x + tooltipW > viewW - 4) x = viewW - tooltipW - 4;
+
+        let y = point[1] - tooltipH - gap;
+        if (y < 4) y = 4;
+        if (y + tooltipH > viewH - 4) y = viewH - tooltipH - 4;
+
+        return [x, y];
+    }
+
     function renderChart() {
         if (!chartContainer || chartWidth <= 0 || chartHeight <= 0) return;
         const isDark = document.documentElement.classList.contains('dark');
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer);
-            zoomGuard = attachTreemapZoomGuard(chartInstance, () => ({width: chartContainer?.clientWidth ?? 0, height: chartContainer?.clientHeight ?? 0}), {minScale: 1, maxScale: 5});
+            zoomGuard = attachTreemapZoomGuard(chartInstance, () => ({width: chartContainer?.clientWidth ?? 0, height: chartContainer?.clientHeight ?? 0}), {minScale: 0.9, maxScale: computeMaxZoomScale});
             chartInstance.on('dblclick', handleTreemapDblClick);
         }
 
@@ -403,8 +468,18 @@
             return;
         }
 
-        // Restore full roam on desktop; pinch-zoom only on touch to avoid blocking page scroll
-        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        // Restore full roam on desktop; pinch-zoom only on touch to avoid blocking page scroll.
+        // Bugfix: `'ontouchstart' in window || navigator.maxTouchPoints > 0` only detects
+        // touch CAPABILITY, not the device's actual primary input — a touchscreen laptop
+        // used with a mouse/trackpad also has maxTouchPoints > 0, so it was wrongly forced
+        // into 'scale' (pinch-zoom only, drag-to-pan disabled) even for mouse users,
+        // matching the report "click-and-hold-drag shows the tooltip but never pans".
+        // `(pointer: coarse)` reflects the PRIMARY pointer's precision (CSS Media Queries
+        // Level 4) — true only for devices whose main input is an imprecise pointer
+        // (phones/tablets); a laptop with both a precise mouse/trackpad AND a touchscreen
+        // correctly reports `pointer: fine` here (the touchscreen only shows up under the
+        // separate `any-pointer: coarse`, which we deliberately don't check).
+        const isTouchDevice = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
 
         chartInstance.setOption(
             {
@@ -430,11 +505,39 @@
                     backgroundColor: theme.bg,
                     borderColor: theme.border,
                     textStyle: {color: theme.textColor},
+                    position: treemapTooltipPosition,
+                    confine: false,
+                    // Bugfix: `appendTo: document.body` was added earlier to escape an
+                    // ancestor `overflow-hidden` that used to clip the tooltip near the
+                    // container edges. That overflow-hidden was removed once the treemap's
+                    // real root-cause sizing bug got fixed (see `left/top/right/bottom: 0`
+                    // below), making `appendTo` unnecessary — and it was quietly causing a
+                    // NEW bug: with `appendTo`, ECharts/zrender must convert our chart-local
+                    // position into document-absolute coordinates (accounting for scroll),
+                    // which can drift out of sync with the real scroll position. Without
+                    // `appendTo`, the tooltip DOM stays nested inside this chart's own
+                    // container (ECharts forces it to `position:relative`), scrolling as
+                    // ONE unit with the rest of the page — no conversion, so no drift. Same
+                    // class of bug already fixed once in PriceChartFull.svelte by dropping
+                    // appendToBody (commit fcdd89e8, "Fix mobile tooltip scroll offset").
                 },
                 series: [
                     {
                         type: 'treemap',
                         data,
+                        // ECharts' treemap defaultOption has NON-ZERO left/top/right/bottom
+                        // (spacing tokens, not 0) — combined with width/height:'100%' this
+                        // makes the root rect start a few px in from the top-left corner
+                        // while still sizing itself to the FULL container, overflowing past
+                        // the bottom-right edge by exactly that same offset. Found by the
+                        // user panning the treemap and noticing the top-left corner wasn't
+                        // at the canvas's actual origin. Explicit 0 on all 4 sides removes
+                        // the implicit margin entirely — width/height:'100%' alone is not
+                        // enough to override it.
+                        left: 0,
+                        top: 0,
+                        right: 0,
+                        bottom: 0,
                         width: '100%',
                         height: '100%',
                         roam: isTouchDevice ? 'scale' : true, // mobile: pinch-zoom only; desktop: full pan+zoom

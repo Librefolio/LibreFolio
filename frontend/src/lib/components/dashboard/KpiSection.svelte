@@ -141,7 +141,8 @@
     const incomeAmt = $derived(incomeCur ? parseFloat(incomeCur.amount) : 0);
     const incomeStr = $derived(incomeCur ? formatMoney(incomeCur.code, incomeCur.amount, {signed: true}) : '—');
     const feesCur = $derived(summary ? safeCurrency(summary.period_fees_taxes) : null);
-    const feesAmt = $derived(feesCur ? parseFloat(feesCur.amount) : 0);
+    // Backend returns period_fees_taxes as a positive magnitude (see schema docstring); negate for display.
+    const feesAmt = $derived(feesCur ? -parseFloat(feesCur.amount) : 0);
     const feesStr = $derived(feesCur ? formatMoney(feesCur.code, `-${feesCur.amount}`) : '—');
     const feesOnlyCur = $derived(summary ? safeCurrency(summary.period_fees) : null);
     const feesOnlyStr = $derived(feesOnlyCur ? formatMoney(feesOnlyCur.code, `-${feesOnlyCur.amount}`) : '—');
@@ -170,7 +171,7 @@
         })(),
     );
 
-    const pnlBarMax = $derived(Math.max(Math.abs(uglDeltaAmt), Math.abs(realizedAmt), Math.abs(incomeAmt), feesAmt) || 1);
+    const pnlBarMax = $derived(Math.max(Math.abs(uglDeltaAmt), Math.abs(realizedAmt), Math.abs(incomeAmt), Math.abs(feesAmt)) || 1);
     function pnlBarPct(val: number) {
         return (Math.abs(val) / pnlBarMax) * 100;
     }

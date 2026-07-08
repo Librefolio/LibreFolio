@@ -112,11 +112,17 @@
         open: boolean;
         intent?: WorkspaceIntent;
         availableTags?: string[];
+        /** Pre-populates the broker field for new rows (create) and the global broker
+         *  selector (import) — e.g. when opened from a broker-scoped page. The field
+         *  stays visible/editable; this only changes its initial value, it never skips
+         *  a step or restricts the linked-transaction picker (which always searches
+         *  across all brokers, unaffected by this prop). */
+        defaultBrokerId?: number;
         onClose: () => void;
         onCommitted?: (resp: unknown) => void;
     }
 
-    let {open, intent, availableTags = [], onClose, onCommitted}: Props = $props();
+    let {open, intent, availableTags = [], defaultBrokerId, onClose, onCommitted}: Props = $props();
 
     const AUTO_VALIDATE_THRESHOLD = 50;
 
@@ -151,7 +157,9 @@
     /** Default DraftFields for a brand-new transaction. */
     function defaultFields(): DraftFields {
         const brokers = getAllBrokers();
-        const defaultBroker = brokers.length === 1 ? brokers[0].id : 0;
+        // defaultBrokerId (e.g. opened from a broker-scoped page) wins over the
+        // single-broker heuristic; both are just an initial value, still editable.
+        const defaultBroker = defaultBrokerId ?? (brokers.length === 1 ? brokers[0].id : 0);
         return {
             broker_id: defaultBroker,
             asset_id: null,
@@ -3108,6 +3116,7 @@
     open={formOpen}
     mode={formMode}
     items={formItems}
+    {defaultBrokerId}
     commitOnSave={false}
     unlockImmutable={formMode === 'edit'}
     availableTags={aggregatedTags}
@@ -3155,4 +3164,4 @@
 />
 
 <!-- Phase 07 Part 5 v5 M1: BRIM Import Wizard -->
-<ImportWizardModal open={importWizardOpen} zIndex={70} onClose={() => (importWizardOpen = false)} {onImportBatch} />
+<ImportWizardModal open={importWizardOpen} zIndex={70} {defaultBrokerId} onClose={() => (importWizardOpen = false)} {onImportBatch} />

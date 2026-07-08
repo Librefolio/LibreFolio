@@ -174,7 +174,7 @@
         return `${amount < 0 ? '-' : ''}${compact}`;
     }
 
-    function trimLabel(value: string, max = 28): string {
+    function trimLabel(value: string, max = 31): string {
         if (value.length <= max) return value;
         return `${value.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
     }
@@ -353,11 +353,11 @@
         isDark = document.documentElement.classList.contains('dark');
     }
 
-    function buildAxisRich(themeDark: boolean) {
+    function buildAxisRich(themeDark: boolean, desktop = false) {
         return {
             name: {
                 color: themeDark ? '#e2e8f0' : '#1f2937',
-                fontSize: 11,
+                fontSize: desktop ? 14 : 11,
                 fontWeight: 500,
             },
             secondary: {
@@ -469,25 +469,21 @@
 
     /** Local variant of the shared `tooltipPositionSide` helper (echartsTooltipHelpers.ts,
      *  used by 5 other chart components — NOT modified there to avoid affecting them).
-     *  The shared helper always pins the tooltip near y=8 of the chart's OWN canvas,
-     *  which is correct for charts that are always fully visible — but this chart can
-     *  have an internal scroll (`enableScroll`, `overflow-y-auto` + `max-height:70dvh`)
-     *  when there are many rows, so the ECharts canvas itself can be much taller than
-     *  what's currently scrolled into view. Pinning near the canvas's absolute top then
-     *  put the tooltip above the visible viewport entirely for rows near the bottom.
-     *  This version clamps Y to the wrapper's CURRENTLY VISIBLE scrolled window instead. */
+     *  Horizontal bars ⇒ tooltip is centered ABOVE the tap/click point (not offset to
+     *  left/right like a side-positioned tooltip, which made sense for the OTHER charts'
+     *  vertical bars/lines but not here) so the finger and the bar itself both stay clear.
+     *  For rows near the top of the (possibly scrolled) visible area this can legitimately
+     *  push the tooltip above the canvas/container edge entirely — acceptable per explicit
+     *  request, prioritized over keeping it fully inside the chart bounds (see
+     *  `confine: false` on the tooltip option below, which would otherwise clamp this
+     *  back in). Horizontal position is still clamped to the viewport width so it never
+     *  runs off the left/right edge. */
     function performanceTooltipPosition(point: [number, number], _params: unknown, _dom: unknown, _rect: unknown, size: {contentSize: [number, number]; viewSize: [number, number]}): [number, number] {
         const tooltipW = size.contentSize[0];
         const tooltipH = size.contentSize[1];
         const viewW = size.viewSize[0];
-        const gapX = 24;
 
-        let x: number;
-        if (point[0] > viewW / 2) {
-            x = point[0] - tooltipW - gapX;
-        } else {
-            x = point[0] + gapX;
-        }
+        let x = point[0] - tooltipW / 2;
         if (x < 8) x = 8;
         if (x + tooltipW > viewW - 8) x = viewW - tooltipW - 8;
 
@@ -740,7 +736,7 @@
                     style: {
                         text: shortMoney(entry.row.net, displayCurrency, true),
                         fill: netColor(entry.row.net, themeDark),
-                        fontSize: 11,
+                        fontSize: 14,
                         fontWeight: 700,
                         textAlign: 'left',
                         textVerticalAlign: 'middle',
@@ -813,7 +809,7 @@
                     // far right — a fixed anchor independent of the name's own length.
                     children.push({
                         type: 'text',
-                        x: coordSys.x + coordSys.width * 0.62,
+                        x: coordSys.x + coordSys.width * 0.72,
                         y,
                         silent: true,
                         style: {text: badge, rich, textAlign: 'left', textVerticalAlign: 'middle'},
@@ -841,7 +837,7 @@
                       bottom: 24,
                   }
                 : {
-                      left: 240,
+                      left: 260,
                       right: 90,
                       top: 12,
                       bottom: 24,
@@ -866,6 +862,16 @@
                 // rows near the top) per explicit request; `confine: true` would clamp
                 // it back inside and defeat that.
                 confine: false,
+                // Without `appendTo`, ECharts appends the tooltip DOM node INSIDE the
+                // chart's own container (api.getDom()) — which sits inside `scrollWrapper`
+                // (`overflow-y-auto` when `enableScroll`) and, further up, the dashboard
+                // card. Either ancestor would clip the tooltip whenever it's positioned
+                // outside their bounds, silently defeating `confine: false` above (looks
+                // like a stacking/z-index bug from the outside, but it's actual clipping).
+                // Appending to `document.body` escapes both — ECharts still translates the
+                // chart-local coordinates our position function returns into body's
+                // coordinate space automatically (see TooltipHTMLContent's makeStyleCoord).
+                appendTo: () => document.body,
                 backgroundColor: theme.bg,
                 borderColor: theme.border,
                 textStyle: {color: theme.textColor},
@@ -903,7 +909,7 @@
                 splitLine: {show: false},
                 axisLabel: {
                     show: !isMobile,
-                    width: isMobile ? undefined : 220,
+                    width: isMobile ? undefined : 235,
                     margin: 12,
                     color: gridColors.textColor,
                     formatter: (value: string | number) => {
@@ -911,7 +917,7 @@
                         const entry = displayRows[Number(value)];
                         return entry ? axisRowLabel(entry.row) : '';
                     },
-                    rich: buildAxisRich(themeDark),
+                    rich: buildAxisRich(themeDark, true),
                 },
             },
             series: buildSeries(themeDark),
