@@ -1,7 +1,7 @@
 # Piano UI v2: Pagina Brokers & Tab Panoramica (Milestone_3 — Fase 1)
 
 > **Supersede**: [`../plan_ui_broker_overview.md`](../plan_ui_broker_overview.md) (disegno originale, pre Portfolio Engine unificato).
-> **Riferimento architetturale**: [`../Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md`](../Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md),
+> **Riferimento architetturale**: [`../../phases/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md`](../../phases/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md),
 > [`LibreFolio_devWiki/wiki/concepts/portfolio-report-unified.md`](../../../../LibreFolio_devWiki/wiki/concepts/portfolio-report-unified.md).
 > **Fasi correlate**: → [`plan_ui_broker_holdings.md`](./plan_ui_broker_holdings.md) (Fase 2) · [`plan_ui_broker_transactions.md`](./plan_ui_broker_transactions.md) (Fase 3).
 > **Piano implementativo**: → [`impl_plan_broker_overview.md`](./impl_plan_broker_overview.md) (step concreti, file e riuso).

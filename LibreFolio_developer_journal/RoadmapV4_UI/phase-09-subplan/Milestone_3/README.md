@@ -2,8 +2,8 @@
 
 Questa cartella raccoglie il **redesign ad alto livello** delle pagine Broker (lista globale + dettaglio a
 tab), aggiornato dopo il lavoro su Portfolio Engine e Dashboard Home documentato in
-[`../plan_ui_dashboard.md`](../plan_ui_dashboard.md) e in
-[`../Milestone_2/portfolio_engine/`](../Milestone_2/portfolio_engine/).
+[`../../phases/phase-09-subplan/plan_ui_dashboard.md`](../../phases/phase-09-subplan/plan_ui_dashboard.md) e in
+[`../../phases/phase-09-subplan/Milestone_2/portfolio_engine/`](../../phases/phase-09-subplan/Milestone_2/portfolio_engine/).
 
 I 3 piani originali (`../plan_ui_broker_overview.md`, `../plan_ui_broker_holdings.md`,
 `../plan_ui_broker_transactions.md`) erano stati scritti **prima** che esistesse l'endpoint unificato
@@ -19,7 +19,7 @@ Solo disegno UI e requisiti dati (riusa/manca) — **nessun piano implementativo
 |---|------|-------------|-----------|:-----:|
 | 1 | [`plan_ui_broker_overview.md`](./plan_ui_broker_overview.md) | Lista Globale Brokers (+ Broker Discovery) e shell a tab del Broker Detail + Tab Panoramica | [`../plan_ui_broker_overview.md`](../plan_ui_broker_overview.md) | ✅ disegno · ✅ [piano implementativo](./impl_plan_broker_overview.md) |
 | 2 | [`plan_ui_broker_holdings.md`](./plan_ui_broker_holdings.md) | Tab Posizioni (riuso `PositionsPanel`) + Modale Lotti FIFO (bubble timeline + WAC/prezzo) | [`../plan_ui_broker_holdings.md`](../plan_ui_broker_holdings.md) | ✅ disegno · ⏳ piano implementativo |
-| 3 | [`plan_ui_broker_transactions.md`](./plan_ui_broker_transactions.md) | Tab Transazioni (riuso `<TransactionsTable>`) + File Importati | [`../plan_ui_broker_transactions.md`](../plan_ui_broker_transactions.md) | ✅ disegno · ⏳ piano implementativo |
+| 3 | [`plan_ui_broker_transactions.md`](./plan_ui_broker_transactions.md) | Tab Transazioni (riuso `<TransactionsTable>`) + File Importati | [`../plan_ui_broker_transactions.md`](../plan_ui_broker_transactions.md) | ✅ disegno · ✅ implementato (recap in-doc, nessun `impl_plan_*.md` separato — chiuso 2026-07-08, codice in working tree non ancora committato) |
 
 L'ordine riflette anche l'ordine di realizzazione consigliato: la Fase 1 introduce la shell a tab del
 Broker Detail (prerequisito condiviso), le Fasi 2 e 3 riempiono gli altri due tab.
@@ -62,6 +62,35 @@ la Fase 1 sarà implementata.
 Tutti gli altri componenti necessari (KPI cards, GrowthChart, Allocation panel, PositionsPanel,
 RecentTransactionsPanel, `GET /portfolio/lots`, `<TransactionsTable>`, storico/wizard import BRIM) esistono
 già e vengono solo riposizionati/riparametrizzati per lo scope di un singolo broker.
+
+## Studi trasversali
+
+- [`study_chart_dynamic_resolution.md`](./chart_resolution/study_chart_dynamic_resolution.md) — studio di fattibilità (righe
+  1-250) + raffinamento architetturale definitivo (righe 256+, semantic zoom daily→weekly→monthly) per i
+  grafici a 2 assi (crescita portafoglio, storico allocazione, prezzi asset) in base al periodo visibile
+  allo zoom corrente. Tradotto in 7 piani implementativi (gap-analysis + risoluzione), un file per
+  componente/workstream, in [`chart_resolution/`](./chart_resolution/), scritti in parallelo da una flotta
+  di agenti:
+  1. [`impl_plan_chart_resolution_00_foundation.md`](./chart_resolution/impl_plan_chart_resolution_00_foundation.md)
+     — nuova utility condivisa `timeSeriesAggregation.ts` (bucketing, regole di aggregazione, densità/isteresi,
+     debounce) — documento fondativo, prerequisito concettuale degli altri 6.
+  2. [`impl_plan_chart_resolution_01_price_candlestick.md`](./chart_resolution/impl_plan_chart_resolution_01_price_candlestick.md)
+     — `PriceChartFull` + `CandlestickChart` (risoluzione condivisa linea↔candela, event marker, measure
+     mode, tooltip bucket-aware).
+  3. [`impl_plan_chart_resolution_02_growth_chart.md`](./chart_resolution/impl_plan_chart_resolution_02_growth_chart.md) —
+     `GrowthChart` (5 serie EUR-mode + 3 serie %-mode).
+  4. [`impl_plan_chart_resolution_03_allocation_history.md`](./chart_resolution/impl_plan_chart_resolution_03_allocation_history.md)
+     — `AllocationHistoryChart` (serie stacked dinamiche per categoria).
+  5. [`impl_plan_chart_resolution_04_signals_overlay.md`](./chart_resolution/impl_plan_chart_resolution_04_signals_overlay.md)
+     — dispatch downsample per i 9 tipi di segnale overlay (Bollinger = envelope, MACD = 3 serie).
+  6. [`impl_plan_chart_resolution_05_badge_i18n.md`](./chart_resolution/impl_plan_chart_resolution_05_badge_i18n.md) —
+     componente condiviso `ResolutionBadge` + nuove chiavi i18n (4 lingue) sotto il namespace `chart.*`.
+  7. [`impl_plan_chart_resolution_06_compact_cards.md`](./chart_resolution/impl_plan_chart_resolution_06_compact_cards.md)
+     — `PriceChartCompact`/`LineChart` (ramo compact) nelle card `AssetCard`/`FxCard` di `/assets` e `/fx`;
+     caso **statico** (nessun `dataZoom`, ricalcolo su cambio dati/larghezza, niente isteresi/badge pill).
+
+  Stato: ✅ disegno · ✅ studio raffinato · ✅ 7 piani implementativi · ⏳ implementazione (non ancora
+  iniziata — solo documentazione fin qui, nessun file sorgente toccato).
 
 ## Piano principale
 

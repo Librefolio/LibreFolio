@@ -1,7 +1,7 @@
 # Piano UI v2: Tab Posizioni & Lotti FIFO (Milestone_3 — Fase 2)
 
 > **Supersede**: [`../plan_ui_broker_holdings.md`](../plan_ui_broker_holdings.md) (disegno originale).
-> **Riferimento architetturale**: [`../Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md`](../Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md).
+> **Riferimento architetturale**: [`../../phases/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md`](../../phases/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md).
 > **Fasi correlate**: ← [`plan_ui_broker_overview.md`](./plan_ui_broker_overview.md) (Fase 1, shell tab) ·
 > → [`plan_ui_broker_transactions.md`](./plan_ui_broker_transactions.md) (Fase 3).
 
@@ -71,6 +71,61 @@ Note sul disegno:
 - Il click riga per aprire l'overlay Lotti FIFO è l'unica interazione **non** già presente in
   `PositionsPanel` (che oggi linka a `/assets`, non apre modali) — va aggiunto un handler `onRowClick` che
   apre la modale di §2 passando `broker_id` (fisso, quello della pagina) + `asset_id` (dalla riga cliccata).
+- **Aggiornamento post-Fase 1** (dopo l'implementazione di Overview): `ExposureTable.svelte`
+  (`frontend/src/lib/components/dashboard/ExposureTable.svelte:15,297,318`) è già costruito sopra
+  `<DataTable>` e oggi fa `onRowDoubleClick={() => goto('/assets/' + row.assetId)}`. `DataTable.svelte`
+  espone già `rowActions` (colonna azioni) ed `enableContextMenu` (default `true`, tasto destro) come
+  feature generiche — **zero infrastruttura nuova** per aggiungere una colonna azioni o un context-menu a
+  `ExposureTable`/`ContributionTable`, va solo passata la prop.
+
+---
+
+## 1bis. Dove va l'interazione riga → analisi di dettaglio — ✅ deciso (2026-07-08): Opzione A
+
+Con Overview (Fase 1) implementata, il pannello Posizioni del broker detail riusa `PositionsPanel`
+1:1 dalla Dashboard — inclusi tutti i toggle e il doppio click che porta ad Asset Detail. Prima di
+costruire l'overlay Lotti FIFO di §2, va deciso **dove** questa interazione deve vivere: resta un
+modale sopra Broker Detail (disegno originale, invariato), o si sposta come nuovo tab dentro Asset
+Detail? Non sono mutuamente esclusive nel lungo periodo, ma per Milestone_3 va scelta una direzione.
+
+### Opzione A — Menu/azione riga in Broker Detail (disegno originale di §2, invariato)
+
+Click riga (o context-menu tasto destro, o icona azione dedicata) apre la modale Lotti FIFO
+(bubble timeline + tabelle lotti aperti/chiusi) **restando sulla pagina broker**.
+
+| Pro | Contro |
+|-----|--------|
+| Contesto broker **gratis** — `broker_id` è già fisso dalla pagina, nessun selettore da costruire | Un altro modale nell'inventario (già numerosi: BrokerModal, DeleteBrokerDialog, BrokerImportFilesModal, TransactionFormModal, FxPairAddModal, ConfirmModal...) |
+| `DataTable.navigateToRowId()` ("Goto & Pulse" bolla→riga) naturale in un contenitore autosufficiente (bolle + tabelle nella stessa vista) | Nessuna URL propria — non bookmarkabile, non condivisibile, niente back/forward del browser |
+| Riusa `rowActions`/`enableContextMenu` di `DataTable`, già pronti — quasi zero codice nuovo | Se in futuro serve la stessa vista anche da Asset Detail o Dashboard, va ri-arrangiata/duplicata |
+| Coerente col disegno Fase 2 già scritto e concordato | — |
+
+### Opzione B — Tab dedicato in Asset Detail, popolato in base all'utente connesso (idea nuova)
+
+Asset Detail (oggi pagina piatta, 2078 righe, nessun tab) acquisisce una struttura a tab — stesso
+pattern `TabBar` già costruito per Broker Detail/Dashboard — con un nuovo tab "Lotti FIFO"/analisi,
+che si popola solo se/come rilevante per l'utente collegato (es. solo se detiene l'asset).
+
+| Pro | Contro |
+|-----|--------|
+| URL vera, back/forward funzionante, un solo posto canonico per "tutto sull'asset" indipendentemente da dove si arriva (Broker Detail, Dashboard, ricerca diretta) | **Problema di scoping broker**: `PortfolioService.get_lots(user_id, broker_id, asset_id)` richiede `broker_id` obbligatorio (verificato: `backend/app/services/portfolio_service.py:2003-2008`, non è una lista, non è opzionale) — se lo stesso asset è su più broker, serve un selettore broker che oggi non esiste. Anche `asset-history` è per-broker (broker_id opzionale ma "primo broker accessibile" se omesso — ambiguo con più broker) |
+| Coerente col pattern `TabBar` già in uso in Broker Detail/Dashboard — consistenza strutturale in tutta l'app | Refactor più grande e rischioso: Asset Detail è già una pagina densa (2078 righe), molto più corposa di quanto Broker Detail fosse prima di Fase 1 |
+| Estendibile in futuro (altre analisi: tecnica, dividendi, confronto) senza un nuovo modale per ciascuna | "Popolato in base all'utente connesso" introduce un pattern di **tab condizionali** mai usato finora — tutti i tab esistenti (Broker/Dashboard) sono sempre visibili a prescindere dai dati |
+| — | L'ingresso da una riga di Broker Detail diventerebbe una navigazione a pagina intera (perdita del contesto "leggero" del modale) invece di un overlay istantaneo |
+
+**Deciso (2026-07-08): Opzione A** — resta un modale sopra Broker Detail, aperto dal tab Posizioni.
+Opzione B (tab in Asset Detail) scartata per Milestone_3 (coerente con quanto già anticipato in
+`plan_ui_broker_transactions.md` §"Decisioni prese", punto 1). Tabelle pro/contro sopra lasciate come
+riferimento storico.
+
+### 1ter. Sotto-decisione aperta: come si apre il modale dalla riga/tile
+
+Confermata l'Opzione A, resta da scegliere il meccanismo di innesco. Stato di partenza: `ExposureTable`/
+`ContributionTable` e `ExposureTreemap` hanno oggi **solo** il doppio click → `goto('/assets/'+assetId)`
+(`ExposureTable.svelte:296-298`, `ExposureTreemap.svelte:417-423`), invariato dalla Dashboard; su
+`ExposureTable` sia `enableActions` sia `enableContextMenu` sono oggi **disattivati**
+(`ExposureTable.svelte:309,315`). In discussione con l'utente, in attesa di conferma finale — vedi thread
+di refinement per il confronto completo delle opzioni.
 
 ---
 
