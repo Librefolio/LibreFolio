@@ -5,7 +5,6 @@ features: [F-056, F-057, F-058]
 status: stable
 mkdocs: null
 ---
-
 # Domain: CALCULATIONS
 
 > The financial arithmetic engine — FIFO cost matching, cross-currency triangulation, and return-on-investment computation, all running in the backend so the frontend is always just displaying results.
@@ -18,7 +17,7 @@ FIFO at Runtime (F-056) is the core algorithm. Given a chronologically ordered l
 
 Currency Conversion (F-057) uses the triangulation graph built by the FX domain. When converting GBP→CHF and no direct pair exists, the system traverses the configured-pairs graph to find a path (e.g., GBP→EUR→CHF) and chains the rate multiplications. The `BackwardFillInfo` mechanism handles missing rates on non-trading days: the system returns the most recent prior rate and annotates the response so the frontend can display a "rate from {date}" notice.
 
-ROI Calculations (F-058) are planned for Phase 8. The design calls for both Simple ROI (total return / total cost) and Duration-Weighted ROI (adjusts for cash flows at different times, the standard in performance measurement). The FIFO engine provides the realized/unrealized breakdown; the ROI layer aggregates these into a single percentage figure.
+ROI Calculations (F-058) implement **TWRR** (Time-Weighted Rate of Return) and **MWRR** (Money-Weighted Rate of Return / XIRR via Newton-Raphson) — see [[concepts/twrr-mwrr-algorithms]]. The FIFO/WAC engine provides the realized/unrealized breakdown and cash-flow timing; the ROI layer (`roi_utils.py`) aggregates these into the two headline percentage figures shown on the Dashboard KPI cards.
 
 ## Feature cluster
 
@@ -26,7 +25,7 @@ ROI Calculations (F-058) are planned for Phase 8. The design calls for both Simp
 |------|---------|-------|----------------|--------|
 | [[F-056]] | FIFO at Runtime (on-demand cost basis) | backend | core — lot matching, realized/unrealized P&L computation | implemented |
 | [[F-057]] | Currency Conversion (triangulation via FX graph) | backend | core — multi-hop cross-currency conversion | implemented |
-| [[F-058]] | ROI Calculations (Simple + Duration-Weighted) | backend | core — portfolio return percentage computation | planned |
+| [[F-058]] | ROI Calculations (TWRR + MWRR) | backend | core — portfolio return percentage computation | implemented |
 
 ## Architecture at a glance
 
@@ -44,8 +43,8 @@ graph TD
     ConvGraph -->|chain: GBP→EUR→CHF| ConvertedValue[Converted amount<br/>+ BackwardFillInfo if missing]
 
     UnrealizedPos --> ConvertedValue
-    RealizedGain --> ROI[F-058 ROI Calculations<br/>planned Phase 8]
-    ConvertedValue --> DashAPI[Portfolio Overview API<br/>F-054]
+    RealizedGain --> ROI[F-058 ROI Calculations<br/>TWRR + MWRR, implemented]
+    ConvertedValue --> DashAPI[Portfolio Report API<br/>F-054]
     ROI --> DashAPI
 ```
 
@@ -57,11 +56,10 @@ graph TD
 
 ## Known problems / limitations
 
-No open problems. F-056 and F-057 are implemented and correct. The FX conversion handles missing rates via `BackwardFillInfo` (returns the most recent prior rate with annotation). The only limitation is that F-058 ROI is planned but not yet built.
+No open problems. F-056, F-057, and F-058 are all implemented and correct. The FX conversion handles missing rates via `BackwardFillInfo` (returns the most recent prior rate with annotation). F-058 (TWRR/MWRR) is fully wired into the Dashboard via the unified `/portfolio/report` endpoint (see [[concepts/portfolio-report-unified]]).
 
 ## What comes next
 
-- [[F-058]] ROI Calculations — Phase 8: Simple ROI + Duration-Weighted ROI, integrated into the `portfolio/overview` endpoint for the Dashboard domain.
 - [[F-081]] Fiscal Sale Method — allow users to choose FIFO / LIFO / PMC / SelectID per fiscal jurisdiction. This will be an additive change to F-056, not a rewrite.
 - [[F-091]] Multi-Worker Cache Server — if the deployment model moves to multiple hosts, the in-process cache (currently `theine` per-process) would need a Redis backend. The abstraction in `cache_utils.py` makes this a provider-swap change.
 
@@ -72,6 +70,7 @@ No open problems. F-056 and F-057 are implemented and correct. The FX conversion
 | FIFO engine | `backend/app/services/transaction_service.py` |
 | Currency conversion | `backend/app/services/fx.py` |
 | FX conversion API | `backend/app/api/v1/fx.py` |
+| ROI utilities (TWRR/MWRR) | `backend/app/utils/roi_utils.py` |
 | DB models (Transaction, FxRate, FxConversionRoute) | `backend/app/db/models.py` |
 | Currency graph store (frontend) | `frontend/src/lib/stores/currencyGraphStore.ts` |
 | FIFO decision | `LibreFolio_devWiki/wiki/decisions/fifo-runtime-decision.md` |

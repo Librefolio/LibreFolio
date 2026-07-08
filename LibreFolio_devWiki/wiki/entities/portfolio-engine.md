@@ -11,7 +11,11 @@ related:
   - concepts/fifo-lot-tracking
   - concepts/inline-wac-computation
   - concepts/pre-frame-frame-separation
+  - concepts/holdings-performance-panel
   - decisions/mwrr-boundary-fix
+  - decisions/mwrr-solver-newton-cap
+  - decisions/portfolio-summary-direct-wiring
+  - problems/test-transaction-implied-constructor-mismatch
   - features/F-054
   - features/F-055
 ---
@@ -161,11 +165,11 @@ S    = broker_ids selected by the dashboard filter (S ⊆ V(u))
 
 ## Key Gotchas
 
-- **WAC computed inline only**: there is no pre-loaded `wac_series` anymore. Any code expecting `wac_series` from `EngineResult` needs to be updated.
+- **WAC computed inline only**: there is no pre-loaded `wac_series` anymore. Any code expecting `wac_series` from `EngineResult` needs to be updated. **Known trap**: the test helper in `test_transaction_implied.py` was never updated and still passes a `wac_series` kwarg to `DailyStateBuilder()` — see [[problems/test-transaction-implied-constructor-mismatch]].
 - **SELL order matters for 3-pool**: always read WAC before reducing pool. Reversing this causes full-exit K/R split bug.
 - **LAST_BUY_PRICE uses V(u) not S**: this is intentional — asset price is not broker-specific.
 - **Pre-frame has no daily states**: you cannot extract chart points for dates before t0 from a single run.
-- **`get_summary()` wiring incomplete**: as of commit `39106380`, `get_summary()` still uses some old logic. The new engine fields (inline WAC, 3-pool daily states) are fully available for `get_history()` but only partially for `get_summary()`. Full wiring is Priorità 1 in [[sources/phase09-portfolio-engine-3pool-refactor]].
+- **`position_states_end` is the date-aware holdings snapshot**: computed by the engine exactly at `date_to`. `PortfolioService.get_summary()` reads this directly (see [[concepts/holdings-performance-panel]]) — the older "get_summary() wiring incomplete" gap is resolved as of commit `78aaa0a3` (2026-07-06).
 
 ## History
 
@@ -175,6 +179,8 @@ S    = broker_ids selected by the dashboard filter (S ⊆ V(u))
 | Phase 09 M2 | MWRR boundary fix; unified /report endpoint; L2 cache |
 | Phase 09 M2 | ARCHITECTURE_CURRENT_STATE.md analysis identifies 6 known issues |
 | 2026-06-30 (39106380) | **Major refactor**: inline WAC (single-pass), 3-pool event-driven, SELL fix, LAST_BUY_PRICE fallback, pre-frame/frame separation, range-aware blob cache. +612 lines portfolio_service.py, 20 new unit tests. |
+| 2026-07-06 (78aaa0a3) | **Holdings/Performance panel refactor**: `get_summary()` rewired to `position_states_end` (date-aware, closes the "wiring incomplete" gap); `get_positions_contribution()` date-boundary fixes; `_compute_period_summary_metrics()` shared helper; `data_quality` now populated; TRANSACTION_IMPLIED fallback closes P2P/crowdfund valuation gap. See [[concepts/holdings-performance-panel]]. |
+| 2026-07-07 | Phase 09 Milestone 1 & 2 archived to `phases/phase-09-subplan/`; exhaustive verification confirms ~20 previously-open items resolved, ~7 resolved differently (see [[decisions/portfolio-summary-direct-wiring]], [[decisions/mwrr-solver-newton-cap]]), ~7 genuinely still open (low priority). See [[sources/phase09-m1-m2-archive-2026-07]]. |
 
 ## Source files
 
@@ -188,5 +194,5 @@ S    = broker_ids selected by the dashboard filter (S ⊆ V(u))
 | Service layer | `backend/app/services/portfolio_service.py` |
 | API layer | `backend/app/api/v1/portfolio_api.py` |
 | vNext unit tests (20) | `backend/test_scripts/test_portfolio_engine_vnext.py` |
-| Math spec | `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
-| Architecture state | `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md` |
+| Math spec | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
+| Architecture state | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md` |

@@ -18,7 +18,7 @@
 | [[domains/signals]] | TECHNICAL ANALYSIS (Signals) | F-037–F-045 | stable |
 | [[domains/transactions]] | TRANSACTIONS | F-046–F-051 | in-progress |
 | [[domains/scheduler]] | SCHEDULER | F-052–F-053 | planned |
-| [[domains/dashboard]] | DASHBOARD | F-054–F-055 | planned |
+| [[domains/dashboard]] | DASHBOARD | F-054–F-055 | implemented |
 | [[domains/calculations]] | CALCULATIONS | F-056–F-058 | stable |
 | [[domains/infrastructure]] | INFRASTRUCTURE | F-059–F-074 | stable |
 
@@ -45,6 +45,9 @@
 | [[features/F-042]] | FX Pair Comparison Signal | Signals | implemented |
 | [[features/F-047]] | Transaction List Page (DataTable, always-pair-adjacent, client-side filters) | Transactions | implemented |
 | [[features/F-048]] | Transaction Modals (Form / Bulk / Delete / Promote / Split — mode-less, Round 6 Plan D done) | Transactions | in-progress |
+| [[features/F-054]] | Dashboard KPI & Overview (unified `/portfolio/report`) | Dashboard | implemented |
+| [[features/F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | Dashboard | implemented |
+| [[features/F-058]] | ROI Calculations (TWRR + MWRR) | Calculations | implemented |
 | [[features/F-059]] | Provider Registry Pattern | Infrastructure | implemented |
 | [[features/F-060]] | Thread Isolation for Providers | Infrastructure | implemented |
 | [[features/F-061]] | 5-layer Provider Cache | Infrastructure | implemented |
@@ -108,6 +111,8 @@
 | [[decisions/batch-only-split-promote]] | Standalone /split and /promote endpoints eliminated — batch-only via execute_batch | 2026-05-12 | backend, transactions, split, promote, batch-pipeline |
 | [[decisions/import-wizard-v5-paradigm]] | Import Wizard v4→v5 paradigm: single-file modal → multi-file 4-step stepper | 2026-06-08 | frontend, brim, import-wizard, ux, stepper |
 | [[decisions/mwrr-boundary-fix]] | MWRR XIRR double-counting deposits fix: initial_nav = nav_snapshots[0].nav | 2026-06-30 | backend, portfolio, mwrr, xirr, financial-math |
+| [[decisions/mwrr-solver-newton-cap]] | Newton-Raphson-only XIRR solver + ±10000% result cap are deliberate design choices, not bugs (rejected Brent/hybrid) | 2026-07-07 | backend, portfolio, mwrr, xirr, financial-math, design-decision |
+| [[decisions/portfolio-summary-direct-wiring]] | `get_summary()` wired directly to `PortfolioCalculationEngine` (no separate `DerivedViewsBuilder.build_summary()`); unified `/portfolio/report` replaces planned `/allocation-history`; `net_worth` field name kept | 2026-07-07 | backend, portfolio, architecture, api, design-decision |
 
 ## Concepts
 
@@ -147,6 +152,7 @@
 | [[concepts/ci-release-pipeline]] | GitHub Actions full pipeline: build→test→docker→push→release. Node 24, Vite 7.3.5, package-lock, 8 workers | ci, github-actions, release, docker, playwright |
 | [[concepts/inline-wac-computation]] | Single-pass inline WAC replacing N×M `compute_wac_iterative` DB calls — pool_qty/pool_cost accumulators in per-tx loop | backend, portfolio, wac, performance, engine |
 | [[concepts/pre-frame-frame-separation]] | No market eval before t0; pre-frame builds accounting state (qty/WAC/cash/K/R/W pools) from historical transactions | backend, portfolio, engine, performance, pre-frame |
+| [[concepts/holdings-performance-panel]] | Holdings/Performance tabs (renamed Exposure/Contribution), date-aware `get_summary()`, reconciliation invariant row, treemap zoom/pan fix | frontend, backend, dashboard, portfolio, treemap, echarts |
 
 ## Problems
 
@@ -176,6 +182,8 @@
 | [[problems/broker-icon-race-condition]] | ensurePluginIconsLoaded race condition — broker icons show only dot in /files, tx filter, dashboard filter | open | frontend, broker-icon, race-condition, async |
 | [[problems/import-wizard-identifier-prompt]] | oncreated path skips resolveAssetManual() → identifier prompt never opens for newly created assets | open | frontend, import-wizard, brim, identifier-prompt |
 | [[problems/bulk-modal-sticky-z-index]] | After BRIM import row-selector toolbar clipped by overflow-y:auto container in BulkModal | open | frontend, bulk-modal, z-index, overflow, sticky |
+| [[problems/test-transaction-implied-constructor-mismatch]] | `test_transaction_implied.py` (6 tests) fails with TypeError — test's local `_builder()` helper uses pre-refactor `DailyStateBuilder.__init__` signature (stale `wac_series` kwarg, missing `asset_currencies`) | open | backend, testing, portfolio, pre-existing, unrelated |
+| [[problems/datatable-column-resize-noop]] | DataTable.svelte column-resize handle icon shows but click has no effect in some tables — root cause not yet determined | open | frontend, datatable, ui, unresolved |
 
 ## Entities
 
@@ -267,6 +275,7 @@
 | [[sources/phase-final-bugs-2026-06-25]] | Phase final QA: 5 bug categories (broker icon race, files refresh, import wizard identifier, bulk modal toolbar) | 2026-06-30 | bugs, qa, docker, race-condition |
 | [[sources/ci-release-pipeline-2026-06]] | CI/CD: GitHub Actions release.yml — Node 24, Vite 7.3.5, package-lock, Docker :test tag, 8 Playwright workers ✅ | 2026-06-30 | ci, release, docker, playwright, nodejs |
 | [[sources/phase09-portfolio-engine-3pool-refactor]] | Phase 09 Engine Refactor: inline WAC single-pass, 3-pool K/R/W event-driven, SELL fix, pre-frame/frame, blob cache ✅ | 2026-07-01 | phase09, portfolio, engine, wac, 3-pool, refactor |
+| [[sources/phase09-m1-m2-archive-2026-07]] | Phase 09 M1+M2 archived to `phases/`: Holdings/Performance panel refactor, ~20 open items resolved, ~7 resolved differently, ~7 still open ✅ | 2026-07-07 | phase09, portfolio, dashboard, archive, holdings-performance, mwrr, twrr |
 
 
 ## Recent Additions (Phase 09 + Final + CI)
@@ -304,6 +313,26 @@
 - [[sources/source-code-v0.9.0-batch]] — (previously listed)
 - [[entities/video-promo-remotion]] — (previously listed)
 - [[concepts/interactive-pros-cons-slider]] — (previously listed)
+
+
+## Recent Additions (Phase 09 M1/M2 Archive, 2026-07-07)
+- [[sources/phase09-m1-m2-archive-2026-07]] — 2026-07-07 (new)
+- [[concepts/holdings-performance-panel]] — 2026-07-07 (new)
+- [[decisions/mwrr-solver-newton-cap]] — 2026-07-07 (new — deliberate design decision, NOT a bug)
+- [[decisions/portfolio-summary-direct-wiring]] — 2026-07-07 (new)
+- [[problems/test-transaction-implied-constructor-mismatch]] — 2026-07-07 (new)
+- [[problems/datatable-column-resize-noop]] — 2026-07-07 (new)
+- [[entities/portfolio-service]] — 2026-07-07 (updated: Known Issues resolved)
+- [[entities/portfolio-engine]] — 2026-07-07 (updated: gotchas, history)
+- [[concepts/twrr-mwrr-algorithms]] — 2026-07-07 (updated: solver clarification, path fix)
+- [[concepts/portfolio-report-unified]] — 2026-07-07 (updated: confirmed sole entrypoint)
+- [[sources/phase09-portfolio-engine-dashboard]] — 2026-07-07 (updated: known issues marked resolved)
+- [[sources/phase09-portfolio-engine-3pool-refactor]] — 2026-07-07 (updated: gaps marked resolved)
+- [[sources/phase09-dashboard-batch]] — 2026-07-07 (updated: stale root-doc paths fixed)
+- [[features/F-054]], [[features/F-055]], [[features/F-058]] — 2026-07-07 (status planned→implemented)
+- [[features/registry]] — 2026-07-07 (updated status rows)
+- [[domains/dashboard]] — 2026-07-07 (fully rewritten: planned→implemented)
+- [[domains/calculations]] — 2026-07-07 (F-058 planned→implemented, stale Phase 8 text fixed)
 
 
 ## Uncategorized / Auto-Recovered

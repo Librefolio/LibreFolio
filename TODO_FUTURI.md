@@ -812,6 +812,14 @@ Attualmente, le emoji associate ai settori finanziari sono hardcodate nel fronte
 5. Aggiornare tutti i componenti frontend che mostrano i settori per usare l'emoji fornita dal backend, garantendo un'unica source of truth.
 
 
+## AI Export per pagina
+Dettagliare il tipo di export AI da applicare in base alla pagina in cui si è, aumentando le opzioni di promt:
+- Analisi di portafoglio attuale
+- Pianificazione di pac
+- Analisi per ribilanciamento
+- ....
+E tarare ogni opzione in base alla pagina, broker e periodo visto.
+
 ---
 
 Aree di miglioramento dopo aver visto compeditor:

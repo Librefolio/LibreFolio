@@ -7,7 +7,9 @@ related:
   - entities/portfolio-engine
   - concepts/portfolio-report-unified
   - concepts/3-pool-cash-model
+  - concepts/holdings-performance-panel
   - decisions/mwrr-boundary-fix
+  - decisions/portfolio-summary-direct-wiring
   - features/F-054
   - features/F-055
 ---
@@ -50,14 +52,41 @@ cache_key = (
 
 Cache invalidated on: any transaction add/edit/delete, any price update.
 
-## Known Issues / Technical Debt (Post-Refactor)
+## Known Issues / Technical Debt — RESOLVED (2026-07-06, commit `78aaa0a3`)
 
-1. **`get_summary()` not fully wired**: `get_summary()` still uses `compute_wac_iterative()` per asset even though the engine now computes WAC inline. N redundant DB+FX calls remain until wiring is completed (Priorità 1 backlog).
-2. **Valuation gap**: `get_summary()` uses "latest price only" for holdings value; engine uses backward-fill + `LAST_BUY_PRICE` fallback. P2P/crowdfund holdings still show `current_value=None` in the holdings table.
-3. **Realized P&L duplication**: Same per-SELL WAC calculation runs separately in `get_summary()` and `get_positions_contribution()` when both are requested via `get_report()`.
-4. **DataQualityReport never populated**: `data_quality` field in `PortfolioSummary` and `AllocationHistoryResponse` is always `None` — the per-day quality data exists but aggregation is not implemented.
+The four items below were the open technical debt tracked in `ARCHITECTURE_CURRENT_STATE.md` §5 bugs 2, 5, 6
+and `implementation_status_report.md` §3. All four were closed out by the Holdings/Performance panel refactor
+(see [[concepts/holdings-performance-panel]]) and confirmed resolved by exhaustive verification before the
+Phase 09 M1/M2 archive (2026-07-07, [[sources/phase09-m1-m2-archive-2026-07]]):
 
-These are tracked in `ARCHITECTURE_CURRENT_STATE.md` §5 bugs 2, 5, 6 and `implementation_status_report.md` §3.
+1. ✅ **`get_summary()` now fully wired**: rewritten to read `engine_result.position_states_end` directly
+   (computed by the engine exactly at `date_to`) instead of calling `compute_wac_iterative()` per asset. The
+   redundant N×M DB+FX calls are eliminated. Resolved differently than originally proposed — no separate
+   `DerivedViewsBuilder.build_summary()` method was introduced; wiring is direct inside `get_summary()`, backed
+   by a new shared `_compute_period_summary_metrics()` helper. See [[decisions/portfolio-summary-direct-wiring]].
+2. ✅ **Valuation gap closed**: holdings now use the engine's `TRANSACTION_IMPLIED` fallback
+   (`open_cost_basis` as valuation proxy) when no `PriceHistory` exists — P2P/crowdfund holdings no longer show
+   `current_value=None`.
+3. ⚠️ **Realized P&L duplication — improved, not fully eliminated**: `_compute_period_summary_metrics()` now
+   deduplicates the NAV/P&L-for-period computation shared by `get_summary()` and `get_positions_contribution()`.
+   `get_report()` also passes `_precomputed_engine_result` to `get_positions_contribution()` to avoid a second
+   full engine run. Whether every last per-SELL WAC computation is fully single-pass was not exhaustively
+   re-verified — treat as substantially improved rather than a guaranteed zero-duplication.
+4. ✅ **DataQualityReport now populated**: `build_data_quality_report()` implemented and wired; `data_quality`
+   field in `PortfolioSummary` / `AllocationHistoryResponse` is no longer always `None`. `DataQualityBanner.svelte`
+   reads the unified `data_quality` field.
+
+### Still open (unrelated to the above, low priority)
+
+- `internal_transfer_flow` / `scope_transfer_flow` diagnostic fields — not implemented.
+- Allocation history sampling (weekly/monthly aggregation) — not implemented, daily granularity only.
+- WAC fallback for in-transit cost basis — not implemented.
+- `get_asset_history()` ROI / unit-mix breakdown — still deferred.
+- External cash-bridge "early withdrawal / look-ahead" edge case — unhandled by design
+  (`external_cash_bridge_edge_case_report.md`).
+
+> **Not bugs**: the MWRR result cap and Newton-only solver choice were reviewed and are deliberate design
+> decisions, not open issues — see [[decisions/mwrr-solver-newton-cap]].
 
 ## Source files
 

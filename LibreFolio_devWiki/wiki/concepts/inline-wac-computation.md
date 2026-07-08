@@ -107,5 +107,5 @@ When a position is fully exited (`pool_qty → 0`), both `pool_qty` and `pool_co
 | Engine implementation | `backend/app/services/portfolio_engine.py` |
 | WAC utilities (pure math) | `backend/app/utils/wac_utils.py` |
 | vNext unit tests (20 tests) | `backend/test_scripts/test_portfolio_engine_vnext.py` |
-| Math spec | `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` §4.5 |
-| Architectural analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md` §4 |
+| Math spec | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` §4.5 |
+| Architectural analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md` §4 |
