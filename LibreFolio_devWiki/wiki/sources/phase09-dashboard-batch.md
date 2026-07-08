@@ -24,7 +24,7 @@ The Phase 09 batch encompasses the master plan, algorithmic design, UI wireframe
 ## Source files
 | File | Git Hash | Date |
 |------|----------|------|
-| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/plan_financial_algorithms.md` | `24cdc40` | 2026-06-17 |
-| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/implementation_roadmap.md` | `24cdc40` | 2026-06-17 |
-| `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/plan_ui_dashboard.md` | `24cdc40` | 2026-06-17 |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_financial_algorithms.md` (moved 2026-07-07, was `phase-09-subplan/` before archive) | `24cdc40` | 2026-06-17 |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/implementation_roadmap.md` (moved 2026-07-07, was `phase-09-subplan/` before archive) | `24cdc40` | 2026-06-17 |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_ui_dashboard.md` (moved 2026-07-07, was `phase-09-subplan/` before archive) | `24cdc40` | 2026-06-17 |
 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-dashboard.md` | `24cdc40` | 2026-06-17 |

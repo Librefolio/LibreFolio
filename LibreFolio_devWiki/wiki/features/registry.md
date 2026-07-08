@@ -131,8 +131,8 @@
 
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
-| [[F-054]] | Dashboard KPI & Overview | fullstack | `planned` | — |
-| [[F-055]] | Portfolio Charts (allocation, evolution) | frontend | `planned` | — |
+| [[F-054]] | Dashboard KPI & Overview | fullstack | `implemented` | — |
+| [[F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | frontend | `implemented` | — |
 
 ---
 
@@ -142,7 +142,7 @@
 |------|-------|-------|--------|--------|
 | [[F-056]] | FIFO at Runtime (on-demand cost basis) | backend | `implemented` | — |
 | [[F-057]] | Currency Conversion (triangulation via FX graph) | backend | `implemented` | — |
-| [[F-058]] | ROI Calculations (Simple + Duration-Weighted) | backend | `planned` | — |
+| [[F-058]] | ROI Calculations (TWRR + MWRR) | backend | `implemented` | — |
 
 ---
 

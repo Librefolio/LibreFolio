@@ -135,7 +135,7 @@ The new K/R/W model supersedes the earlier informal 2-pool description ("deposit
 | Role | Path |
 |------|------|
 | Engine implementation | `backend/app/services/portfolio_engine.py` |
-| Math spec §11 | `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
+| Math spec §11 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
 | GrowthChart component | `frontend/src/lib/components/charts/GrowthChart.svelte` |
 | Dashboard page | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | vNext unit tests | `backend/test_scripts/test_portfolio_engine_vnext.py` |

@@ -58,7 +58,7 @@ This is the standard XIRR/MWRR formula: initial investment (negative) + intermed
 
 - [[entities/portfolio-service]] — `calculate_mwrr` called from `get_summary()`/`get_history()`
 - [[concepts/twrr-mwrr-algorithms]] — algorithm documentation
-- Source: `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md`
+- Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md`
 
 ## Source files
 
@@ -66,4 +66,4 @@ This is the standard XIRR/MWRR formula: initial investment (negative) + intermed
 |------|------|
 | ROI utilities | `backend/app/utils/roi_utils.py` |
 | Portfolio service | `backend/app/services/portfolio_service.py` |
-| MWRR analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md` |
+| MWRR analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md` |

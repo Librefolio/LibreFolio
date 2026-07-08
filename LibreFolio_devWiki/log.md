@@ -1042,3 +1042,50 @@ Next recommended: ingest Phase 10 / next development cycle when available.
 Graph updated: 6514 nodes (+115 vs pre-update 6399), 17914 edges (+226), 411 communities.
 Changed files: portfolio_engine.py (AST) + 8 mkdocs risk-metrics/WAC docs (semantic) + 6 new wiki pages.
 False-deleted manifest paths (corpus/corpus/ double-prefix) ignored — full rebuild not needed.
+
+## [2026-07-07] ingest | Phase 09 M1/M2 archive closeout (Holdings/Performance panel, verification pass)
+
+Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/` (Milestone_1/, Milestone_2/ incl. `lowDashboard/`, `portfolio_engine/`, `Ai_consultant_engine/`, + 6 root cross-cutting docs) @ git:`1be3fc9c` (staged `git mv`, uncommitted at ingest time).
+Milestone_3 (Broker UI v2) intentionally NOT archived — still in progress at old `phase-09-subplan/Milestone_3/` path.
+
+This ingest is primarily a **closeout pass**: an exhaustive (non-sampled) verification against the current codebase found that ~20 items previously logged as "open" in `implementation_status_report.md` / `STATUS_REPORT_M2.md` / `ARCHITECTURE_CURRENT_STATE.md` (dated 2026-06-19/06-30) are now resolved by the Holdings/Performance refactor (commit `78aaa0a3`, 2026-07-06) and prior engine work (commit `39106380`, 2026-06-30): `get_summary()` wired to `PortfolioCalculationEngine`, `build_data_quality_report()` implemented, `first_position_date` present, GrowthChart stacked-area + rich tooltip, AllocationPanel Now/History toggle, DataQualityBanner unified field, TRANSACTION_IMPLIED fallback, tx double-click modal. ~7 items resolved *differently* than originally designed (architecture evolved) — recorded as [[decisions/portfolio-summary-direct-wiring]]. ~7 items remain genuinely open (low priority) — recorded in the source page and cross-linked from entity/domain pages. Per explicit user instruction, the MWRR "100x" result cap and Newton-only (non-Brent) solver choice are **deliberate design decisions, not bugs** — recorded as [[decisions/mwrr-solver-newton-cap]] with an explicit "do not record as a problem" note for future historians.
+
+Also captured two genuinely open, unrelated pre-existing problems found during verification: a `test_transaction_implied.py` constructor-signature mismatch (6 failing tests, root cause confirmed via `pytest --junitxml`) and an unresolved `DataTable.svelte` column-resize click-no-effect bug (root cause not yet determined).
+
+Created: [[sources/phase09-m1-m2-archive-2026-07]], [[concepts/holdings-performance-panel]], [[decisions/mwrr-solver-newton-cap]], [[decisions/portfolio-summary-direct-wiring]], [[problems/test-transaction-implied-constructor-mismatch]], [[problems/datatable-column-resize-noop]].
+
+Updated: [[entities/portfolio-service]], [[entities/portfolio-engine]], [[concepts/twrr-mwrr-algorithms]], [[concepts/portfolio-report-unified]], [[sources/phase09-portfolio-engine-dashboard]], [[sources/phase09-portfolio-engine-3pool-refactor]], [[sources/phase09-dashboard-batch]], [[features/F-054]], [[features/F-055]], [[features/F-058]], [[features/registry]], [[domains/dashboard]], [[domains/calculations]].
+
+Path corrections: fixed 8 files with stale `phase-09-subplan/Milestone_1|2` references (missing new `phases/` prefix introduced by the 2026-07-07 `git mv`) — [[decisions/mwrr-boundary-fix]], [[concepts/3-pool-cash-model]], [[concepts/pre-frame-frame-separation]], [[concepts/inline-wac-computation]], [[sources/phase09-portfolio-engine-3pool-refactor]], [[sources/phase09-portfolio-engine-dashboard]], [[entities/portfolio-engine]], [[sources/phase09-dashboard-batch]] (3 root-doc paths).
+
+## [2026-07-07] graphify | Incremental update — Phase 09 M1/M2 archive closeout
+
+Graph updated: 6527 nodes (+13 vs pre-update 6514), 18024 edges (+110), 381 communities (recomputed globally via Louvain — count not directly comparable to prior 411).
+Scope: single semantic-extraction subagent chunk over the 23 wiki pages created/updated this ingest (6 new + 17 updated). 8 node IDs remapped to existing canonical IDs before merge to avoid duplicating already-modeled entities (`portfolio_engine_entity`, `portfolio_service_entity`, `decision_mwrr_boundary_fix`, `twrr_mwrr_algorithms_concept`, `portfolio_report_unified_concept`, `dashboard_document`, `f055_portfolio_charts`, `f058_roi_calculations_simple_dwr`).
+Deferred (out of scope for this narrow update, left for a future full/incremental pass): semantic re-extraction of the 47 archived `phases/phase-09-subplan/` plan documents whose only change is the `git mv` path (content identical — these still show as "new" in manifest terms since their new path was never previously seen, but no new graph nodes are needed since content is unchanged); AST re-extraction of ~117 unrelated code files flagged as changed by `detect_incremental` (out of this session's scope). Manifest (`graphify-out/manifest.json`) stamped only for the 23 processed wiki files; as a side effect, `save_manifest`'s existing-entry reconciliation (root-relative re-anchoring) consolidated ~800 duplicate legacy absolute/relative key pairs and dropped 36 entries for genuinely-deleted/moved files — this is manifest hygiene, not a change to `graph.json`.
+Community relabeling (Step 5, LLM-based) and `graph.html` regeneration (Step 6) skipped — graph exceeds the 5000-node HTML threshold and full community relabeling is out of proportion to a 23-file incremental update, consistent with the 2026-07-01 precedent.
+
+## [2026-07-07] lint | Health check — post Phase 09 M1/M2 archive ingest
+
+Graph: 6527 nodes, 18024 edges, 381 communities. 1125 corpus files.
+God nodes unchanged from last lint (Currency 426, TransactionType 199, Transaction 166, User 158, BaseBulkResponse 155) — none are new-wiki-relevant.
+New hyperedges from this ingest: "Dashboard Unified Report Flow", "Phase 09 Archive Closeout", "Portfolio Engine Refactor Core" — all EXTRACTED confidence 1.00, confirming the new pages integrated cleanly into existing clusters.
+Issues found: 4 (0 high, 2 medium, 2 low) — all pre-existing, none introduced by this ingest.
+
+Verified clean (explicit checks requested by user):
+- No stale `phase-09-subplan/Milestone_1|2` (missing `phases/` prefix) references remain in any `wiki/` page or `index.md`. Only `raw/ingest-registry.md` and historical `log.md` entries still show the pre-move path — correct, since those are point-in-time git-hash snapshots from before the 2026-07-07 `git mv`.
+- All 6 new pages have valid frontmatter, a `## Source files` table, and ≥4 inbound `[[links]]` — no new orphans.
+- [[F-084]] (referenced from `domains/transactions.md`, `sources/todos.md`) not orphaned by the `domains/dashboard.md` rewrite — inbound links intact elsewhere.
+- All `[[...]]` links in the 19 new/updated pages resolve to real files (bare `F-NNN` codes resolve to `features/F-NNN.md`).
+
+Deferred (medium):
+- **2 pre-existing orphan pages** (unrelated to this ingest): [[sources/phase07-part4-round3]] and [[sources/phase07-part4-round5]] — near-duplicate content of already-indexed, differently-slugged pages ([[sources/phase07-part4-round3-staging-rewrite]], [[sources/phase07-part4-round5-server-type-rules]]). Not linked from any other wiki page or from index.md. Recommend a future consolidation pass (merge or delete the duplicate slug).
+- **Index drift**: 17 `wiki/features/*.md` files (F-001, F-003, F-004, F-008, F-009, F-014, F-015, F-023, F-024, F-036, F-045, F-046, F-051, F-052, F-053, F-056, F-074) not individually listed in `index.md` — same accepted pattern noted in the 2026-07-01 lint (index uses domains + Feature Registry as the navigation hub, not an exhaustive per-feature list).
+
+Low:
+- `graph.html` not regenerated (6527 nodes > 5000 threshold) — unchanged from prior lint.
+- Concept debt (Interest, Dividend, Risk Metrics, TimeSeriesStore Pattern, Svelte 5 Runes Convention, "Phase 07 Part 4" cluster, "Multi-Broker Atomic Transaction Batch") — all pre-existing, already deferred in the 2026-07-01 lint as acceptable (covered by existing decision/source pages).
+
+Not repaired this pass (deferred, low priority, unrelated to the requested ingest scope): the 2 orphan sources and the 17 unlisted feature pages.
+
+Next recommended: a dedicated dedup pass on `sources/phase07-part4-round3.md` / `sources/phase07-part4-round5.md`; ingest Milestone 3 (Broker UI v2) once it completes.

@@ -158,3 +158,6 @@
 | `LibreFolio_developer_journal/RoadmapV4_UI/plan-independent-RsiSignalBands.prompt.md` | `6f0d4c6` | 2026-06-01 | [[sources/independent-batch-2026-06-01]], [[features/F-039]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/batch` | `24cdc40` | 2026-06-17 | [[sources/phase09-dashboard-batch]] |
 | `source-code-v0.9.0-batch` | `6d89b44` | 2026-06-17 | [[sources/source-code-v0.9.0-batch]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/lowDashboard/` (Holdings/Performance refactor) | `78aaa0a3` | 2026-07-06 | [[concepts/holdings-performance-panel]], [[entities/portfolio-service]], [[features/F-054]], [[features/F-055]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/mwrr-numerical-stability-analysis.md` | `39106380` | 2026-07-07 | [[decisions/mwrr-solver-newton-cap]] |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/` (Milestone_1/ + Milestone_2/ + root docs, `git mv` archive — staged, uncommitted at ingest) | `1be3fc9c` | 2026-07-07 | [[sources/phase09-m1-m2-archive-2026-07]], [[decisions/portfolio-summary-direct-wiring]], [[problems/test-transaction-implied-constructor-mismatch]], [[problems/datatable-column-resize-noop]] |
