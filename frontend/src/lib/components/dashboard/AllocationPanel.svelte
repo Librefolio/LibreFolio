@@ -55,11 +55,6 @@
     const allocationByGeo = $derived(toAllocEntries(summary?.allocation_by_geography as any));
     const allocationByGeoMap = $derived(Object.fromEntries(allocationByGeo.map((e) => [e.name, e.value / 100])));
     const allocationByGeoAmounts = $derived(Object.fromEntries(allocationByGeo.filter((e) => e.amount > 0).map((e) => [e.name, e.amount])));
-    const geoUnknownPercent = $derived.by(() => {
-        const unknown = allocationByGeo.find((e) => e.name === 'Unknown');
-        const other = allocationByGeo.find((e) => e.name === 'Other');
-        return (unknown ? unknown.value : 0) + (other ? other.value : 0);
-    });
     const allocationHistoryData = $derived.by(() => {
         if (!allocationHistory) return [];
         const dimMap: Record<AllocationTab, keyof AllocationHistoryDimensions> = {type: 'type', sector: 'sector', geo: 'geography'};
@@ -129,11 +124,6 @@
                 <div class="absolute inset-0">
                     <GeographyMap data={allocationByGeoMap} amounts={allocationByGeoAmounts} currency={displayCurrency} height="100%" language={currentLanguage} />
                 </div>
-                {#if geoUnknownPercent > 0}
-                    <p class="text-xs text-gray-400 dark:text-gray-500 text-center mt-1">
-                        {$_('dashboard.geoUnknownNote', {values: {percent: geoUnknownPercent.toFixed(1)}})}
-                    </p>
-                {/if}
             {/if}
         {/if}
     </div>

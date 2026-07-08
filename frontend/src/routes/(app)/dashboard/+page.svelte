@@ -16,33 +16,33 @@
     import {onMount} from 'svelte';
     import {_} from '$lib/i18n';
     import {RefreshCw, Brain, Briefcase, TrendingUp, ArrowRightLeft, Wallet} from 'lucide-svelte';
-    import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
     import {copyAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
 
     import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
     import {globalSettings} from '$lib/stores/app/globalSettings';
-    import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
-    import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {createDateRangeController} from '$lib/stores/dateRangeController.svelte';
+    import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
-    import RecentTransactionsPanel from '$lib/components/dashboard/RecentTransactionsPanel.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
-    import {TransactionFormModal, resolveFormItemsForView, type FormModalItems} from '$lib/components/transactions';
-    import type {TXReadItem} from '$lib/components/transactions/types';
+    import {TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
+    import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {goto} from '$app/navigation';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
+    import {zodiosApi} from '$lib/api';
+    import {buildTransactionsFiltersUrl} from '../transactions/filterState';
 
     // =========================================================================
     // State
@@ -72,32 +72,19 @@
     let reloadTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 
     /**
-     * Date range — backed by global store (shared with assets/fx pages).
-     * dateFrom/dateTo are ALWAYS a concrete, resolved date (sentinels resolved
-     * immediately) — used everywhere internally (report queries, AI export).
-     * displayDateFrom is the ONLY thing bound to the picker; it shows the
-     * literal "min" sentinel (pending label) until the real earliest date is
-     * extracted from the loaded portfolio history (see loadAll).
+     * Date range — backed by global store (shared with assets/fx pages) via the
+     * shared dateRangeController (owns the seed/display/isMaxPending bookkeeping
+     * that used to be duplicated per-page — see dateRangeController.svelte.ts).
      */
-    let dateFrom = $state(resolveDateSentinel(getStart()));
-    let dateTo = $state(resolveDateSentinel(getEnd()));
-    const initialIsMaxPending = isMaxSentinel(getStart());
-    let isMaxPending = $state(initialIsMaxPending);
-    // Seeded from the plain `initialIsMaxPending`/`dateFrom`'s initial value above (not from
-    // the isMaxPending/dateFrom $state bindings) to avoid a state_referenced_locally warning —
-    // displayDateFrom is manually resynced elsewhere and bound bidirectionally to
-    // DateRangePicker, so it's intentionally NOT a pure $derived of dateFrom/isMaxPending.
-    let displayDateFrom = $state(initialIsMaxPending ? 'min' : resolveDateSentinel(getStart()));
-    /** Bound to the picker so the "All" badge stays highlighted regardless of dateFrom/isMaxPending resolving to a concrete date. */
-    let activePreset: any = $state(initialIsMaxPending ? 'MAX' : null);
+    const dateRangeCtl = createDateRangeController(() => void loadAll());
 
     /**
      * Sentinel-aware values for building "See all" links (assets/transactions).
      * While "All" is the active selection, these stay "min"/"max" (generic)
      * instead of a concrete resolved date, for the lifetime of the selection.
      */
-    let urlDateFrom = $derived(activePreset === 'MAX' ? 'min' : dateFrom);
-    let urlDateTo = $derived(activePreset === 'MAX' ? 'max' : dateTo);
+    let urlDateFrom = $derived(dateRangeCtl.activePreset === 'MAX' ? 'min' : dateRangeCtl.start);
+    let urlDateTo = $derived(dateRangeCtl.activePreset === 'MAX' ? 'max' : dateRangeCtl.end);
 
     /** Display currency override — always concrete, defaults to user base currency. */
     let targetCurrency = $state($globalSettings.default_currency || 'EUR');
@@ -106,19 +93,6 @@
     /** Broker filter dropdown open state. */
     let brokerFilterOpen = $state(false);
     let brokerFilterTriggerEl = $state<HTMLButtonElement | null>(null);
-
-    /** Filter bar ref — for ResizeObserver. */
-    let filterBarRef = $state<HTMLDivElement | null>(null);
-
-    /** Responsive layout — same utility as assets/fx pages. */
-    const layout = createResponsiveLayout({wide: 900, tablet: 660, tabletS: 480, labelHide: 460});
-
-    $effect(() => {
-        const el = filterBarRef;
-        if (!el) return;
-        layout.attach(el);
-        return () => layout.detach();
-    });
 
     // =========================================================================
     // Derived
@@ -168,9 +142,55 @@
     let showFxPairAddModal = $state(false);
     let fxPairCreateSlug = $state('');
 
-    /** Transaction view modal state (opened from RecentTransactionsPanel double-click). */
+    /** Transaction view modal state (opened from the Transazioni tab's row double-click). */
     let txViewOpen = $state(false);
     let txViewItems = $state<FormModalItems | null>(null);
+
+    /** Transazioni tab — filtered by the SAME broker filter + date range as the rest of the
+     *  dashboard (not just "recent 10" regardless of period), with real pagination via
+     *  TransactionsTable's built-in DataTablePagination. Lazy-loaded/reloaded whenever the
+     *  tab is active and the broker/date filter key changes (mirrors RecentTransactionsPanel's
+     *  previous key-based reload pattern, now also keyed on the date range). */
+    let txMainRows = $state<TXReadItem[]>([]);
+    let txPartnerRows = $state<TXReadItem[]>([]);
+    let txEventTooltipMap = $state<Map<number, AssetEvent>>(new Map());
+    let txLoading = $state(false);
+    let txCurrentPage = $state(1);
+    let lastTxLoadKey = $state('');
+
+    $effect(() => {
+        if (activeTab !== 'transazioni') return;
+        const key = `${dateRangeCtl.start}|${dateRangeCtl.end}|${activeBrokerIds ? [...activeBrokerIds].sort((a, b) => a - b).join(',') : 'all'}`;
+        if (key !== lastTxLoadKey) {
+            lastTxLoadKey = key;
+            txCurrentPage = 1;
+            void loadTransactions();
+        }
+    });
+
+    async function loadTransactions() {
+        txLoading = true;
+        try {
+            // Server-side filter: date range always applied; broker_id per-broker (the endpoint
+            // only accepts a single broker_id) when a subset is selected, omitted for "all".
+            const fetchForBroker = async (brokerId?: number): Promise<TXReadItem[]> => {
+                const queries: Record<string, unknown> = {};
+                if (brokerId != null) queries.broker_id = brokerId;
+                if (dateRangeCtl.start) queries.date_start = dateRangeCtl.start;
+                if (dateRangeCtl.end) queries.date_end = dateRangeCtl.end;
+                return (await zodiosApi.query_transactions_api_v1_transactions_get({queries})) as TXReadItem[];
+            };
+
+            const all = activeBrokerIds && activeBrokerIds.length > 0 ? Array.from(new Map((await Promise.all(activeBrokerIds.map((id) => fetchForBroker(id)))).flat().map((tx) => [tx.id, tx])).values()) : await fetchForBroker(undefined);
+
+            txMainRows = all;
+            const [partner, tooltipMap] = await Promise.all([loadPartnerRows(txMainRows), loadEventTooltipMap(txMainRows)]);
+            txPartnerRows = partner;
+            txEventTooltipMap = tooltipMap;
+        } finally {
+            txLoading = false;
+        }
+    }
 
     function handleBannerAction(action: string, target: string | null, _issue: DataQualityIssue) {
         if (action === 'navigate_asset' && target) {
@@ -185,9 +205,18 @@
         }
     }
 
-    /** URL for "See all" assets link — preserves current date range. */
+    /** URL for "See all" links — preserves current date range (assets) and, for
+     *  transactions, ALSO the broker filter (single broker_id / multi broker_ids),
+     *  via the SAME filter map + URL builder /transactions itself uses. */
     const assetsHref = $derived(`/assets?start=${urlDateFrom}&end=${urlDateTo}`);
-    const transactionsHref = $derived(`/transactions?start=${urlDateFrom}&end=${urlDateTo}`);
+    const transactionsHref = $derived(
+        buildTransactionsFiltersUrl({
+            date_start: dateRangeCtl.start || undefined,
+            date_end: dateRangeCtl.end || undefined,
+            broker_id: activeBrokerIds && activeBrokerIds.length === 1 ? activeBrokerIds[0] : undefined,
+            broker_ids: activeBrokerIds && activeBrokerIds.length > 1 ? activeBrokerIds : undefined,
+        }),
+    );
 
     // =========================================================================
     // Loaders
@@ -205,20 +234,17 @@
 
     /**
      * When "All" (MAX) is pending resolution, extract the real earliest date
-     * from the just-loaded portfolio history and update dateFrom/displayDateFrom.
+     * from the just-loaded portfolio history via the shared date controller.
      * No-op once already resolved or if there's no history data yet.
      */
     function resolveMaxStartFromHistory() {
-        if (!isMaxPending || history.length === 0) return;
-        dateFrom = history[0].date;
-        displayDateFrom = dateFrom;
-        isMaxPending = false;
+        dateRangeCtl.markMaxResolved(history.length > 0 ? history[0].date : null);
     }
 
     async function loadAll(force = false) {
         reportLoading = true;
         try {
-            const report = await fetchReport(activeBrokerIds, dateFrom || undefined, dateTo || undefined, targetCurrency, force);
+            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, targetCurrency, force);
             // Cast from the Zodios union types to the concrete types the dashboard expects
             summary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
             history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
@@ -237,7 +263,7 @@
         contributionLoading = true;
         try {
             // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
-            const report = await fetchReport(activeBrokerIds, dateFrom || undefined, dateTo || undefined, targetCurrency, false, true, false, false, false);
+            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, targetCurrency, false, true, false, false, false);
             positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
         } finally {
             contributionLoading = false;
@@ -266,15 +292,6 @@
         }, 2000);
     }
 
-    function handleDateChange(from: string, to: string) {
-        isMaxPending = isMaxSentinel(from);
-        dateFrom = resolveDateSentinel(from);
-        dateTo = resolveDateSentinel(to);
-        displayDateFrom = isMaxPending ? 'min' : dateFrom;
-        setDateRange(from, to);
-        void loadAll();
-    }
-
     async function handleSync() {
         syncLoading = true;
         invalidate();
@@ -290,8 +307,8 @@
                 mode,
                 {
                     brokerIds: activeBrokerIds ?? undefined,
-                    dateFrom: dateFrom || undefined,
-                    dateTo: dateTo || undefined,
+                    dateFrom: dateRangeCtl.start || undefined,
+                    dateTo: dateRangeCtl.end || undefined,
                     targetCurrency: targetCurrency,
                     locale: $currentLanguage,
                 },
@@ -335,108 +352,110 @@
 <div class="space-y-4" data-testid="dashboard-page">
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
-    <div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden" data-testid="dashboard-controls">
-        <div
-            bind:this={filterBarRef}
-            class="flex gap-3 p-4
-                   {layout.layoutMode === 'mobile' ? 'flex-col items-start' : 'flex-row items-center'}"
-            data-testid="dashboard-filter-bar"
-        >
-            <!-- LEFT: Date range picker (wired to global store) -->
-            <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} onchange={handleDateChange} />
+    <PageToolbar thresholds={{wide: 900, tablet: 660, tabletS: 480, compact: 340, labelHide: 340}} tabs={dashboardTabs} bind:activeTab testId="dashboard-controls" filterRowTestId="dashboard-filter-bar">
+        {#snippet filters({isStacked})}
+            <!-- Date range picker (wired to global store via the shared dateRangeController) -->
+            <DateRangePicker bind:activePreset={dateRangeCtl.activePreset} bind:start={dateRangeCtl.displayStart} bind:end={dateRangeCtl.end} compact={true} align="start" onchange={dateRangeCtl.onDateRangeChange} />
 
-            <!-- CENTER-LEFT: Currency override selector -->
-            <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                <span class="whitespace-nowrap">{$_('common.currency')}:</span>
-                <div class="w-28">
-                    <CurrencySearchSelect
-                        bind:value={targetCurrency}
-                        compact={true}
-                        dropdownPosition="bottom"
-                        placeholder={baseCurrency}
-                        onchange={() => {
-                            targetCurrencyManuallySet = true;
-                            void loadAll();
-                        }}
-                    />
+            <!-- Currency override + Broker multi-select — share one justified row when stacked
+                 (not each its own stacked full-width row); inline naturally otherwise, same as
+                 before (unconditional w-full here would fight DateRangePicker for row space
+                 in wide/tablet mode). -->
+            <div class="flex items-center gap-3 {isStacked ? 'w-full justify-between' : ''}">
+                <!-- Currency override selector -->
+                <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    <span class="whitespace-nowrap">{$_('common.currency')}:</span>
+                    <div class="w-28">
+                        <CurrencySearchSelect
+                            bind:value={targetCurrency}
+                            compact={true}
+                            dropdownPosition="bottom"
+                            placeholder={baseCurrency}
+                            onchange={() => {
+                                targetCurrencyManuallySet = true;
+                                void loadAll();
+                            }}
+                        />
+                    </div>
                 </div>
-            </div>
 
-            <!-- CENTER: Broker multi-select panel -->
-            <div class="relative">
-                <button
-                    bind:this={brokerFilterTriggerEl}
-                    class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
+                <!-- Broker multi-select panel -->
+                <div class="relative">
+                    <button
+                        bind:this={brokerFilterTriggerEl}
+                        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
                        {brokerFilterActive ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
-                    onclick={() => (brokerFilterOpen = !brokerFilterOpen)}
-                    data-testid="broker-filter-trigger"
-                >
-                    {brokerFilterLabel}
-                    <svg class="w-3 h-3 transition-transform {brokerFilterOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-                    </svg>
-                </button>
+                        onclick={() => (brokerFilterOpen = !brokerFilterOpen)}
+                        data-testid="broker-filter-trigger"
+                    >
+                        {brokerFilterLabel}
+                        <svg class="w-3 h-3 transition-transform {brokerFilterOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                        </svg>
+                    </button>
 
-                {#if brokerFilterOpen}
-                    <div class="absolute left-0 z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" data-broker-filter-panel>
-                        <!-- Select All / Deselect All -->
-                        <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
-                            <button
-                                type="button"
-                                class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                                onclick={() => {
-                                    selectedBrokerIds = allBrokers.map((b) => b.id);
-                                    scheduleReload();
-                                }}>{$_('common.selectAll')}</button
-                            >
-                            <button
-                                type="button"
-                                class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                                onclick={() => {
-                                    selectedBrokerIds = [];
-                                    scheduleReload();
-                                }}>{$_('common.clearAll')}</button
-                            >
-                        </div>
-                        <!-- Broker list -->
-                        <div class="max-h-52 overflow-y-auto mx-2.5 my-2 space-y-0.5">
-                            {#each allBrokers as broker (broker.id)}
-                                {@const isSelected = selectedBrokerIds.includes(broker.id)}
+                    {#if brokerFilterOpen}
+                        <div class="absolute left-0 z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" data-broker-filter-panel>
+                            <!-- Select All / Deselect All -->
+                            <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
                                 <button
                                     type="button"
-                                    class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] rounded hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors {isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'}"
-                                    onclick={() => toggleBroker(broker.id)}
-                                    data-testid="broker-filter-item-{broker.id}"
+                                    class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                                    onclick={() => {
+                                        selectedBrokerIds = allBrokers.map((b) => b.id);
+                                        scheduleReload();
+                                    }}>{$_('common.selectAll')}</button
                                 >
-                                    <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size={16} />
-                                    <span class="flex-1 truncate">{broker.name}</span>
-                                    {#if isSelected}
-                                        <svg class="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-                                        </svg>
-                                    {/if}
-                                </button>
-                            {/each}
+                                <button
+                                    type="button"
+                                    class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                                    onclick={() => {
+                                        selectedBrokerIds = [];
+                                        scheduleReload();
+                                    }}>{$_('common.clearAll')}</button
+                                >
+                            </div>
+                            <!-- Broker list -->
+                            <div class="max-h-52 overflow-y-auto mx-2.5 my-2 space-y-0.5">
+                                {#each allBrokers as broker (broker.id)}
+                                    {@const isSelected = selectedBrokerIds.includes(broker.id)}
+                                    <button
+                                        type="button"
+                                        class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] rounded hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors {isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'}"
+                                        onclick={() => toggleBroker(broker.id)}
+                                        data-testid="broker-filter-item-{broker.id}"
+                                    >
+                                        <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size={16} />
+                                        <span class="flex-1 truncate">{broker.name}</span>
+                                        {#if isSelected}
+                                            <svg class="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                                            </svg>
+                                        {/if}
+                                    </button>
+                                {/each}
+                            </div>
                         </div>
-                    </div>
-                {/if}
+                    {/if}
+                </div>
             </div>
+        {/snippet}
 
-            <!-- Spacer -->
-            <div class="flex-1"></div>
-
-            <!-- FAR RIGHT: AI Export + Sync buttons -->
-            <div class="relative">
+        {#snippet actions({showActionLabels, stretchActions})}
+            <!-- AI Export -->
+            <div class="relative {stretchActions ? 'w-full' : ''}">
                 <button
                     bind:this={aiExportTriggerEl}
-                    class="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+                    class="flex items-center justify-center gap-2 {stretchActions
+                        ? 'w-full'
+                        : ''} px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
                     onclick={() => (aiExportDropdownOpen = !aiExportDropdownOpen)}
                     disabled={aiExportLoading}
                     data-testid="ai-export-button"
                     title={$_('dashboard.aiExport')}
                 >
                     <Brain size={14} class={aiExportLoading ? 'animate-pulse' : ''} />
-                    {#if layout.showActionLabels}
+                    {#if showActionLabels}
                         <span>{aiExportLoading ? $_('dashboard.aiExportBuilding') : $_('dashboard.aiExport')}</span>
                     {/if}
                 </button>
@@ -463,20 +482,19 @@
             </div>
 
             <button
-                class="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+                class="flex items-center justify-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
                 onclick={handleSync}
                 disabled={syncLoading}
                 data-testid="sync-button"
                 title={$_('dashboard.syncData')}
             >
                 <RefreshCw size={14} class={syncLoading ? 'animate-spin' : ''} />
-                {#if layout.showActionLabels}
+                {#if showActionLabels}
                     <span>{$_('dashboard.syncData')}</span>
                 {/if}
             </button>
-        </div>
-        <TabBar bind:activeTab tabs={dashboardTabs} />
-    </div>
+        {/snippet}
+    </PageToolbar>
 
     <DataQualityBanner issues={dataQualityIssues} mode="grouped" onaction={handleBannerAction} />
 
@@ -523,15 +541,25 @@
         </div>
     {:else if activeTab === 'transazioni'}
         <div data-testid="dashboard-transactions-tab">
-            <RecentTransactionsPanel
-                limit={10}
-                brokerIds={activeBrokerIds}
-                {transactionsHref}
-                onViewRow={(row) => {
-                    txViewItems = resolveFormItemsForView(row as TXReadItem, () => undefined, getBrokerRole);
-                    txViewOpen = true;
-                }}
-            />
+            {#if txLoading && txMainRows.length === 0}
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-12 text-center">
+                    <RefreshCw class="text-libre-green animate-spin mx-auto" size={28} />
+                </div>
+            {:else}
+                <TransactionsTable
+                    mainRows={txMainRows}
+                    partnerRows={txPartnerRows}
+                    brokers={allBrokers}
+                    eventTooltipMap={txEventTooltipMap}
+                    currentPage={txCurrentPage}
+                    hideActions={true}
+                    onPageChange={(page) => (txCurrentPage = page)}
+                    onViewRow={(row) => {
+                        txViewItems = resolveFormItemsForView(row as TXReadItem, () => undefined, getBrokerRole);
+                        txViewOpen = true;
+                    }}
+                />
+            {/if}
         </div>
     {/if}
 </div>
@@ -550,5 +578,5 @@
     />
 {/if}
 
-<!-- Transaction view modal — opened from RecentTransactionsPanel double-click -->
+<!-- Transaction view modal — opened from the Transazioni tab's row double-click -->
 <TransactionFormModal open={txViewOpen} mode="view" items={txViewItems} onClose={() => (txViewOpen = false)} />

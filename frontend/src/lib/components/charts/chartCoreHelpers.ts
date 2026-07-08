@@ -72,7 +72,7 @@ export function buildPriceYAxis(config: YAxisConfig, colors: ChartColors, opts: 
         axisTick: {show: true},
         axisLabel: {
             color: colors.label,
-            fontSize: 11,
+            fontSize: 14,
             formatter: isPercentage
                 ? (v: number) => `${v.toFixed(1)}%`
                 : (v: number) => {

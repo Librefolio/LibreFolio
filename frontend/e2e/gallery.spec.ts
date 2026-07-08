@@ -1169,8 +1169,12 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await page.waitForTimeout(500);
 
-                    // Scroll to and click import files button
-                    const importBtn = page.getByTestId('import-files-button');
+                    // Switch to the Transazioni tab, where the import/new-tx buttons live
+                    await page.getByTestId('broker-tab-transazioni').click();
+                    await expect(page.getByTestId('broker-transactions-tab')).toBeVisible({timeout: 5000});
+
+                    // Scroll to and click the import history button
+                    const importBtn = page.getByTestId('broker-show-import-history');
                     await importBtn.scrollIntoViewIfNeeded();
                     await expect(importBtn).toBeVisible({timeout: 3000});
                     await importBtn.click();

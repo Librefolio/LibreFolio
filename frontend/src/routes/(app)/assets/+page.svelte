@@ -930,8 +930,8 @@
                     {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : 'flex-row items-center flex-1 flex-wrap'}"
         >
             <!-- DateRangePicker -->
-            <div class="max-w-md" data-testid="assets-date-range">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} onchange={handleDateRangeChange} />
+            <div class="flex flex-1 self-stretch min-w-0" data-testid="assets-date-range">
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" onchange={handleDateRangeChange} />
             </div>
 
             <!-- Filters 2×2 block (tablet+tablet-s) / inline (wide) / stacked (mobile) -->

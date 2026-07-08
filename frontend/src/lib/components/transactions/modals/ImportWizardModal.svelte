@@ -59,11 +59,14 @@
     interface Props {
         open: boolean;
         zIndex?: number;
+        /** Pre-populates the global broker selector (Step 1) when opened from a
+         *  broker-scoped page — still editable, still per-file overridable. */
+        defaultBrokerId?: number | null;
         onClose: () => void;
         onImportBatch: (creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>) => void;
     }
 
-    let {open, zIndex = 70, onClose, onImportBatch}: Props = $props();
+    let {open, zIndex = 70, defaultBrokerId = null, onClose, onImportBatch}: Props = $props();
 
     // =========================================================================
     // Constants
@@ -814,6 +817,7 @@ ${arrow}<span>${label}</span></span>`,
     $effect(() => {
         if (open) {
             loadBrokers();
+            globalBrokerId = defaultBrokerId ?? null;
         } else {
             resetState();
         }

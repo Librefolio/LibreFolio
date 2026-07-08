@@ -269,10 +269,10 @@
                         return header + rows;
                     },
                 },
-                legend: {bottom: 0, left: 'center', textStyle: {color: textColor, fontSize: 10}, itemWidth: 12, itemHeight: 8, type: 'scroll', width: '90%', pageTextStyle: {color: textColor}, pageIconColor: textColor, pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1'},
+                legend: {bottom: 0, left: 'center', textStyle: {color: textColor, fontSize: 14}, itemWidth: 12, itemHeight: 8, type: 'scroll', width: '90%', pageTextStyle: {color: textColor}, pageIconColor: textColor, pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1'},
                 dataZoom: [{type: 'inside', start: 0, end: 100}],
-                xAxis: {type: 'time', axisLabel: {color: textColor, fontSize: 10, rotate: 0}, axisLine: {lineStyle: {color: gridColor}}, splitLine: {show: false}},
-                yAxis: {type: 'value', max: 100, axisLabel: {color: textColor, fontSize: 10, formatter: (v: number) => `${v}%`}, axisLine: {show: false}, splitLine: {lineStyle: {color: gridColor, type: 'dashed'}}},
+                xAxis: {type: 'time', axisLabel: {color: textColor, fontSize: 14, rotate: 0}, axisLine: {lineStyle: {color: gridColor}}, splitLine: {show: false}},
+                yAxis: {type: 'value', max: 100, axisLabel: {color: textColor, fontSize: 14, formatter: (v: number) => `${v}%`}, axisLine: {show: false}, splitLine: {lineStyle: {color: gridColor, type: 'dashed'}}},
                 series,
             };
 

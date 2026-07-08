@@ -187,7 +187,7 @@ export function tooltipPositionSide(point: [number, number], _params: unknown, _
     const viewW = size.viewSize[0];
     const viewH = size.viewSize[1];
 
-    const gapX = 24;
+    const gapX = 36;
 
     // Place on the side with more space
     let x: number;

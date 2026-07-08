@@ -30,7 +30,11 @@ import type {ECharts} from 'echarts';
 
 export interface TreemapZoomGuardOptions {
     minScale?: number;
-    maxScale?: number;
+    /** Fixed value, or a function evaluated LIVE on every event (e.g. derived from the
+     *  current dataset — the smallest leaf's area relative to the total — so the max
+     *  zoom stays meaningful even as holdings/period change without needing to re-attach
+     *  the guard). */
+    maxScale?: number | (() => number);
 }
 
 export interface TreemapZoomGuardHandle {
@@ -52,7 +56,7 @@ const EPSILON = 0.5;
  */
 export function attachTreemapZoomGuard(chart: ECharts, getContainerSize: () => {width: number; height: number}, options: TreemapZoomGuardOptions = {}): TreemapZoomGuardHandle {
     const minScale = options.minScale ?? 1;
-    const maxScale = options.maxScale ?? 5;
+    const resolveMaxScale = () => (typeof options.maxScale === 'function' ? options.maxScale() : (options.maxScale ?? 5));
     let correcting = false;
 
     const handler = (params: any) => {
@@ -67,6 +71,7 @@ export function attachTreemapZoomGuard(chart: ECharts, getContainerSize: () => {
 
         // 1. Clamp cumulative scale (uniform factor, preserves aspect ratio).
         const scale = rect.width / containerWidth;
+        const maxScale = resolveMaxScale();
         const clampedScale = Math.min(Math.max(scale, minScale), maxScale);
         const factor = clampedScale / scale;
         const cx = rect.x + rect.width / 2;

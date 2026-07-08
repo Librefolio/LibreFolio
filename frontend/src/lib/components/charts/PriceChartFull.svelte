@@ -706,7 +706,7 @@
                     data: dates,
                     gridIndex: 0,
                     axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
-                    axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 11},
+                    axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 14},
                     splitLine: {show: false},
                 },
             ],

@@ -299,14 +299,19 @@
 
 <ModalBase maxWidth="900px" onRequestClose={tryClose} {open} testId="import-files-modal" zIndex={50}>
     <!-- Header with title and link -->
-    <div class="modal-header">
-        <div class="flex items-center gap-2">
-            <FileUp class="text-libre-green" size={20} />
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                {$_('brokers.importFiles')} - {brokerName}
-            </h2>
+    <div class="modal-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div class="modal-header-row">
+            <div class="flex items-center gap-2 min-w-0">
+                <FileUp class="text-libre-green shrink-0" size={20} />
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 truncate">
+                    {$_('brokers.importFiles')} - {brokerName}
+                </h2>
+            </div>
+            <button class="close-btn shrink-0 sm:hidden" onclick={tryClose} title={$_('common.close')}>
+                <X size={20} />
+            </button>
         </div>
-        <div class="flex items-center gap-2 flex-wrap">
+        <div class="modal-header-toolbar">
             <SelectionBar
                 actions={[
                     {
@@ -322,12 +327,12 @@
                 onClearSelection={() => filesTableRef?.clearSelection()}
                 selectedCount={selectedFileIds.length}
             />
-            <ColumnVisibilityToggle tableRef={filesTableRef?.getTableRef()} />
             <a class="manage-link" href="/files?tab=brim&broker={brokerId}">
                 <ExternalLink size={14} />
                 {$_('brokers.manageFiles')}
             </a>
-            <button class="close-btn" onclick={tryClose} title={$_('common.close')}>
+            <ColumnVisibilityToggle tableRef={filesTableRef?.getTableRef()} />
+            <button class="close-btn shrink-0 hidden sm:inline-flex" onclick={tryClose} title={$_('common.close')}>
                 <X size={20} />
             </button>
         </div>
@@ -419,9 +424,6 @@
     /* Backdrop and modal-content styles handled by ModalBase */
 
     .modal-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
         padding: 1rem 1.5rem;
         border-bottom: 1px solid #e5e7eb;
         flex-shrink: 0;
@@ -429,6 +431,22 @@
 
     :global(.dark) .modal-header {
         border-bottom-color: #374151;
+    }
+
+    .modal-header-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        min-width: 0;
+    }
+
+    .modal-header-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        flex-wrap: wrap;
     }
 
     .close-btn {

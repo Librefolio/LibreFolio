@@ -16,9 +16,8 @@
   Used by: FX list page, FX detail page, transaction filters, etc.
 -->
 <script lang="ts">
-    import {Calendar, Info} from 'lucide-svelte';
+    import {Calendar} from 'lucide-svelte';
     import {_} from '$lib/i18n';
-    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import type {CalendarHighlights} from './CalendarMonth.svelte';
     import CalendarMonth from './CalendarMonth.svelte';
     import {SimpleSelect} from '$lib/components/ui/select';
@@ -27,7 +26,7 @@
     // Types
     // =========================================================================
 
-    export type QuickPreset = '1W' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '2Y' | 'MAX';
+    export type QuickPreset = '1W' | '1M' | '3M' | '6M' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | '1Y' | '2Y' | '3Y' | '5Y' | '10Y' | 'MAX';
     export type Granularity = 'days' | 'weeks' | 'months' | 'years';
 
     interface Props {
@@ -51,11 +50,13 @@
         usePortal?: boolean;
         /** Allow selecting future dates (default: false) */
         allowFuture?: boolean;
+        /** Root alignment: 'center' (default, unchanged) or 'start' (left-justified — for use inside a page toolbar where the whole block shouldn't float centered) */
+        align?: 'center' | 'start';
         /** Called when dates change */
         onchange?: (start: string, end: string) => void;
     }
 
-    let {start = $bindable(''), end = $bindable(''), activePreset = $bindable(null), showPresets = true, showCustomWindow = true, showDateFields = true, compact = false, stacked = false, usePortal = false, allowFuture = false, onchange}: Props = $props();
+    let {start = $bindable(''), end = $bindable(''), activePreset = $bindable(null), showPresets = true, showCustomWindow = true, showDateFields = true, compact = false, stacked = false, usePortal = false, allowFuture = false, align = 'center', onchange}: Props = $props();
 
     // =========================================================================
     // State
@@ -118,6 +119,24 @@
         {key: 'MAX', label: $_('datePicker.presets.max')},
     ];
 
+    // "Jolly" fill badges — two independent pools, each belonging to one of the two visual
+    // blocks (Block A = core presets, Block B = YTD/Tutti/Personalizzato). They are NEVER shown
+    // via fixed CSS breakpoints — a real JS measurement (see "JS-measured jolly fill" below)
+    // decides how many of each to render, only to fill leftover space that would otherwise stay
+    // empty, never as the cause of an extra line wrap.
+    // Duration pool — extends the core year progression (Block A).
+    const durationFillPresets: {key: QuickPreset; label: string; years: number}[] = [
+        {key: '3Y', label: '3Y', years: 3},
+        {key: '5Y', label: '5Y', years: 5},
+        {key: '10Y', label: '10Y', years: 10},
+    ];
+    // Period pool — extends the "start of period to today" family alongside YTD (Block B).
+    const periodFillPresets: {key: QuickPreset; label: string}[] = [
+        {key: 'MTD', label: $_('datePicker.presets.mtd')},
+        {key: 'QTD', label: $_('datePicker.presets.qtd')},
+        {key: 'WTD', label: $_('datePicker.presets.wtd')},
+    ];
+
     const granularityOptions: {value: Granularity; labelKey: string; shortKey: string}[] = [
         {value: 'days', labelKey: 'datePicker.granularity.days', shortKey: 'datePicker.granularity.daysShort'},
         {value: 'weeks', labelKey: 'datePicker.granularity.weeks', shortKey: 'datePicker.granularity.weeksShort'},
@@ -139,7 +158,7 @@
         const today = todayISO();
         // End must be today (presets always go "backwards from today")
         if (end !== today) return null;
-        for (const p of presets) {
+        for (const p of [...presets, ...durationFillPresets, ...periodFillPresets]) {
             const expectedStart = computeStartDate(p.key);
             // Allow ±1 day tolerance (timezone edge cases)
             const diff = Math.abs(new Date(start).getTime() - new Date(expectedStart).getTime());
@@ -154,6 +173,17 @@
 
     function todayISO(): string {
         return new Date().toISOString().slice(0, 10);
+    }
+
+    // Shared by YTD/WTD/MTD/QTD: a "start of period" that's very recent (e.g. YTD on Jan 2nd,
+    // WTD on a Monday) would otherwise produce a near-empty 1-2 day chart — enforce a minimum
+    // 14-day window by falling back to "14 days ago" whenever the period start is more recent
+    // than that.
+    function withMinWindow(periodStart: string): string {
+        const minDate = new Date();
+        minDate.setDate(minDate.getDate() - 14);
+        const min14 = minDate.toISOString().slice(0, 10);
+        return periodStart < min14 ? periodStart : min14;
     }
 
     function computeStartDate(preset: QuickPreset): string {
@@ -171,18 +201,43 @@
             case '6M':
                 d.setMonth(d.getMonth() - 6);
                 break;
+            case 'WTD': {
+                const now = new Date();
+                const day = now.getDay(); // 0=Sun..6=Sat
+                const diffToMonday = day === 0 ? 6 : day - 1;
+                const monday = new Date(now);
+                monday.setDate(now.getDate() - diffToMonday);
+                return withMinWindow(monday.toISOString().slice(0, 10));
+            }
+            case 'MTD': {
+                const now = new Date();
+                const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+                return withMinWindow(monthStart);
+            }
+            case 'QTD': {
+                const now = new Date();
+                const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+                const quarterStart = `${now.getFullYear()}-${String(quarterStartMonth + 1).padStart(2, '0')}-01`;
+                return withMinWindow(quarterStart);
+            }
             case 'YTD': {
                 const jan1 = `${new Date().getFullYear()}-01-01`;
-                const minDate = new Date();
-                minDate.setDate(minDate.getDate() - 14);
-                const min14 = minDate.toISOString().slice(0, 10);
-                return jan1 < min14 ? jan1 : min14;
+                return withMinWindow(jan1);
             }
             case '1Y':
                 d.setFullYear(d.getFullYear() - 1);
                 break;
             case '2Y':
                 d.setFullYear(d.getFullYear() - 2);
+                break;
+            case '3Y':
+                d.setFullYear(d.getFullYear() - 3);
+                break;
+            case '5Y':
+                d.setFullYear(d.getFullYear() - 5);
+                break;
+            case '10Y':
+                d.setFullYear(d.getFullYear() - 10);
                 break;
             case 'MAX':
                 return 'min';
@@ -417,6 +472,180 @@
     // Ref for the custom edit container to detect click-outside reliably
     let customEditRef: HTMLDivElement | null = $state(null);
 
+    // =========================================================================
+    // JS-measured "jolly" fill badges (align='start' toolbar mode only)
+    // =========================================================================
+    // Two independent pools of extra badges fill LEFTOVER horizontal space instead of ever
+    // causing an extra line wrap — durationFillPresets (3Y/5Y/10Y) belong to Row 1 (core
+    // presets), periodFillPresets (WTD/MTD/QTD) belong to Row 2 (YTD/Tutti/Personalizzato).
+    // JS decides ONLY (a) how many jolly badges of each pool to show and (b) whether everything
+    // fits on ONE row or needs to split into TWO — the template then renders either a single
+    // flat flex-wrap row (all badges as direct siblings) or two separate full-width rows
+    // (stacked), each with native CSS `justify-between` doing the actual spreading. This avoids
+    // ever computing pixel-perfect spacing in JS: with badges always siblings in a real
+    // flex-wrap context (never just 2 fixed blocks), `justify-between` naturally distributes
+    // leftover space across every gap instead of dumping it all into one seam (Round 5b bug) or
+    // leaving it as unfilled trailing margin (Round 5b's fixed-gap-1 regression).
+    let presetRowRef: HTMLDivElement | null = $state(null);
+    let coreBadgeRefs: (HTMLButtonElement | null)[] = $state([]);
+    let trailingBadgeRefs: (HTMLButtonElement | null)[] = $state([]); // YTD, Tutti (2 items)
+    let customPlainBtnRef: HTMLButtonElement | null = $state(null); // "Personalizzato" button (not editing)
+    // Hidden (position:absolute; visibility:hidden — never in normal flow), always rendered
+    // with all 6 possible jolly badges so their REAL widths can be measured — replaces an
+    // earlier proxy-estimate approach ("reuse 2Y/YTD width + fudge factor") that Playwright
+    // testing proved inaccurate enough to cause visible overflow/wrap once actually rendered.
+    let durationMeasureRefs: (HTMLButtonElement | null)[] = $state([]);
+    let periodMeasureRefs: (HTMLButtonElement | null)[] = $state([]);
+
+    let isSingleRow = $state(true);
+    let extrasToShowDuration = $state(0);
+    let extrasToShowPeriod = $state(0);
+
+    const JOLLY_GAP_PX = 4; // matches gap-1 (0.25rem) used on every row
+
+    function sumWidths(widths: number[]): number {
+        return widths.reduce((sum, w) => sum + w, 0) + JOLLY_GAP_PX * Math.max(0, widths.length - 1);
+    }
+
+    // Greedy fill: every additional item (whichever pool) costs its own width + exactly one new
+    // gap, uniformly — true regardless of how many are already shown, since each is just one
+    // more direct sibling in a real flex row (unlike Round 5b's fixed-2-block structure, where
+    // the very first jolly didn't need its own connecting gap).
+    function greedyFillCount(budget: number, widths: number[]): number {
+        let used = 0;
+        let count = 0;
+        for (const w of widths) {
+            const cost = w + JOLLY_GAP_PX;
+            if (used + cost > budget) break;
+            used += cost;
+            count++;
+        }
+        return count;
+    }
+
+    // Shared-budget variant for the single-row case: both pools contribute a candidate per round
+    // while it still fits, naturally interleaving rather than exhausting one pool before the other.
+    function greedyFillShared(budget: number, poolA: number[], poolB: number[]): {a: number; b: number} {
+        let a = 0;
+        let b = 0;
+        let remaining = budget;
+        let addedSomething = true;
+        while (addedSomething && (a < poolA.length || b < poolB.length)) {
+            addedSomething = false;
+            if (a < poolA.length) {
+                const cost = poolA[a] + JOLLY_GAP_PX;
+                if (cost <= remaining) {
+                    remaining -= cost;
+                    a++;
+                    addedSomething = true;
+                }
+            }
+            if (b < poolB.length) {
+                const cost = poolB[b] + JOLLY_GAP_PX;
+                if (cost <= remaining) {
+                    remaining -= cost;
+                    b++;
+                    addedSomething = true;
+                }
+            }
+        }
+        return {a, b};
+    }
+
+    // Single synchronous pass — no async/tick() needed. A badge's width is intrinsic (its own
+    // text + padding), unaffected by which row/block wraps it, so isSingleRow and both jolly
+    // counts can be decided correctly in one shot from the CURRENT measurements.
+    //
+    // Bounded-retry note: flipping isSingleRow swaps the {#if}/{:else} DOM branch (Svelte
+    // destroys the old row structure and creates the new one), which changes presetRowRef's
+    // OWN height (1 line ↔ 2 lines) — that alone re-fires the ResizeObserver almost
+    // immediately. If THAT follow-up run reads coreBadgeRefs/trailingBadgeRefs before Svelte
+    // has finished re-assigning bind:this to the freshly-created elements, it sees stale
+    // (detached, 0-width) refs. Silently giving up in that case froze the layout forever at a
+    // stale decision (confirmed via Playwright: fx page got stuck in an incorrectly-narrow
+    // 2-row split even at 1400px, because every recompute attempt kept hitting this exact
+    // zero-width guard and bailing without ever retrying) — so a zero-width read now retries
+    // via requestAnimationFrame (bounded attempts) instead of abandoning the update entirely.
+    let measureRetryCount = 0;
+    const MAX_MEASURE_RETRIES = 5;
+
+    function measureAndFill() {
+        if (align !== 'start' || !presetRowRef) return;
+        const availableWidth = presetRowRef.getBoundingClientRect().width;
+
+        const coreWidths = coreBadgeRefs.map((el) => el?.getBoundingClientRect().width ?? 0);
+        const trailingWidths = trailingBadgeRefs.map((el) => el?.getBoundingClientRect().width ?? 0);
+        const customWidth = (customEditing ? customEditRef : customPlainBtnRef)?.getBoundingClientRect().width ?? 0;
+        const durationWidths = durationMeasureRefs.map((el) => el?.getBoundingClientRect().width ?? 0);
+        const periodWidths = periodMeasureRefs.map((el) => el?.getBoundingClientRect().width ?? 0);
+
+        const notReady = !availableWidth || coreWidths.some((w) => w === 0) || trailingWidths.some((w) => w === 0) || customWidth === 0 || durationWidths.some((w) => w === 0) || periodWidths.some((w) => w === 0);
+        if (notReady) {
+            if (measureRetryCount < MAX_MEASURE_RETRIES) {
+                measureRetryCount++;
+                requestAnimationFrame(() => measureAndFill());
+            }
+            return;
+        }
+        measureRetryCount = 0;
+
+        // Baseline: core + trailing + custom rendered flat, adjacent, zero jollies — gaps
+        // between EVERY pair (not a single fixed gap at one seam).
+        const coreBaseWidth = sumWidths(coreWidths);
+        const trailingBaseWidth = sumWidths([...trailingWidths, customWidth]);
+        const baseWidth = coreBaseWidth + JOLLY_GAP_PX + trailingBaseWidth;
+
+        if (baseWidth <= availableWidth) {
+            isSingleRow = true;
+            const {a, b} = greedyFillShared(availableWidth - baseWidth, durationWidths, periodWidths);
+            extrasToShowDuration = a;
+            extrasToShowPeriod = b;
+        } else {
+            isSingleRow = false;
+            extrasToShowDuration = greedyFillCount(availableWidth - coreBaseWidth, durationWidths);
+            extrasToShowPeriod = greedyFillCount(availableWidth - trailingBaseWidth, periodWidths);
+        }
+    }
+
+    // Debounced re-measure on container resize — a live window drag fires the native resize
+    // event continuously (many times/second), and re-measuring on every single one caused a
+    // visible slowdown. Only the LAST event in a burst (~100ms of quiet) actually triggers a
+    // recompute; ResizeObserver's own guaranteed initial callback still covers first mount.
+    let resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+    function scheduleMeasure() {
+        if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
+        resizeDebounceTimer = setTimeout(() => {
+            resizeDebounceTimer = null;
+            measureRetryCount = 0; // fresh retry budget for this new trigger
+            measureAndFill();
+        }, 100);
+    }
+
+    $effect(() => {
+        if (align !== 'start' || !presetRowRef) return;
+        const ro = new ResizeObserver(() => scheduleMeasure());
+        ro.observe(presetRowRef);
+        return () => {
+            ro.disconnect();
+            if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
+        };
+    });
+
+    // Re-measure when Row 2's base content changes width for reasons the row's OWN size doesn't
+    // reflect: toggling the custom-window editor, or a locale switch resizing translated labels
+    // (Tutti/Personalizzato). Discrete, infrequent events — no debounce needed, immediate via rAF.
+    $effect(() => {
+        if (align !== 'start' || !presetRowRef) return;
+        void customEditing;
+        void $_('common.custom');
+        void $_('datePicker.presets.max');
+        const raf = requestAnimationFrame(() => {
+            measureRetryCount = 0; // fresh retry budget for this new trigger
+            measureAndFill();
+        });
+        return () => cancelAnimationFrame(raf);
+    });
+
     function handleClickOutside(e: MouseEvent) {
         const target = e.target as HTMLElement;
         // If the target was detached from DOM (e.g., SimpleSelect dropdown option removed
@@ -526,62 +755,149 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
 
-<div class="flex flex-col gap-1.5 items-center">
+{#snippet coreButtons()}
+    {#each presets.slice(0, 6) as preset, i}
+        <button
+            type="button"
+            bind:this={coreBadgeRefs[i]}
+            class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
+                {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+            onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
+        >
+    {/each}
+{/snippet}
+
+{#snippet durationJollyButtons()}
+    <!-- Duration pool (3Y/5Y/10Y) — JS-measured, never a fixed CSS breakpoint set. Fills
+         leftover space in Block A only up to how many actually fit (see measureAndFill). -->
+    {#each durationFillPresets.slice(0, extrasToShowDuration) as preset}
+        <button
+            type="button"
+            class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
+                {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+            onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
+        >
+    {/each}
+{/snippet}
+
+{#snippet periodJollyButtons()}
+    <!-- Period pool (WTD/MTD/QTD) — same idea as durationJollyButtons but for Block B. -->
+    {#each periodFillPresets.slice(0, extrasToShowPeriod) as preset}
+        <button
+            type="button"
+            class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
+                {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+            onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
+        >
+    {/each}
+{/snippet}
+
+{#snippet trailingButtons()}
+    {#each presets.slice(6) as preset, i}
+        <button
+            type="button"
+            bind:this={trailingBadgeRefs[i]}
+            class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
+                {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+            onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
+        >
+    {/each}
+{/snippet}
+
+{#snippet customWindowArea()}
+    {#if showCustomWindow}
+        {#if customEditing}
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div
+                bind:this={customEditRef}
+                class="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/10 dark:bg-amber-500/20 rounded-lg border border-amber-400/40 drp-trigger"
+                role="group"
+                onclick={(e) => e.stopPropagation()}
+                onkeydown={(e) => {
+                    if (e.key === 'Escape') customEditing = false;
+                }}
+            >
+                <input
+                    type="number"
+                    bind:value={customAmount}
+                    min="1"
+                    max="999"
+                    class="w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <SimpleSelect value={customGranularity} options={granularitySelectOptions} onchange={handleGranularityChange} class="inline-block w-auto" dropdownPosition="auto" compact showChevron={false} />
+            </div>
+        {:else}
+            <button
+                type="button"
+                bind:this={customPlainBtnRef}
+                class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
+                    {effectivePreset === 'custom' ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                onclick={(e) => toggleCustomEdit(e)}>{effectivePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find((o) => o.value === customGranularity)?.shortKey ?? 'common.custom').toUpperCase()}` : $_('common.custom')}</button
+            >
+        {/if}
+    {/if}
+{/snippet}
+
+<div class="relative flex flex-col gap-1.5 {align === 'start' ? 'max-w-2xl grow self-stretch items-stretch' : 'items-center'}">
     {#if showPresets}
-        <div class="flex items-center gap-1 flex-wrap justify-center">
-            {#each presets.slice(0, 6) as preset}
-                <button
-                    type="button"
-                    class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                        {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
-                    onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
-                >
-            {/each}
-            <!-- Group: YTD, MAX, Custom, Info — wraps as a single unit on the right -->
-            <span class="inline-flex items-center gap-1">
-                {#each presets.slice(6) as preset}
-                    <button
-                        type="button"
-                        class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                            {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
-                        onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
-                    >
-                {/each}
-                {#if showCustomWindow}
-                    {#if customEditing}
-                        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                        <div
-                            bind:this={customEditRef}
-                            class="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/10 dark:bg-amber-500/20 rounded-lg border border-amber-400/40 drp-trigger"
-                            role="group"
-                            onclick={(e) => e.stopPropagation()}
-                            onkeydown={(e) => {
-                                if (e.key === 'Escape') customEditing = false;
-                            }}
-                        >
-                            <input
-                                type="number"
-                                bind:value={customAmount}
-                                min="1"
-                                max="999"
-                                class="w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            />
-                            <SimpleSelect value={customGranularity} options={granularitySelectOptions} onchange={handleGranularityChange} class="inline-block w-auto" dropdownPosition="auto" compact showChevron={false} />
+        <!-- align='start': JS decides ONLY isSingleRow + jolly counts (see measureAndFill) —
+             the actual spreading/"giustificato" look is native CSS justify-between, applied to
+             whichever real structure is rendered below. Never a fixed gap AND never a
+             justify-between with just 2 fake "block" children (both tried and rejected in
+             earlier rounds — see history above). -->
+        <div bind:this={presetRowRef} class={align === 'start' ? 'w-full' : 'flex items-center gap-1 flex-wrap justify-center'}>
+            {#if align === 'start'}
+                {#if isSingleRow}
+                    <!-- Single row: ALL badges are direct siblings in ONE flex-wrap row — CSS
+                         justify-between distributes any leftover space across every gap between
+                         them, never concentrated in one seam, and genuinely spans the full
+                         available width. -->
+                    <div class="flex items-center gap-1 flex-wrap w-full justify-between">
+                        {@render coreButtons()}
+                        {@render durationJollyButtons()}
+                        {@render periodJollyButtons()}
+                        {@render trailingButtons()}
+                        {@render customWindowArea()}
+                    </div>
+                {:else}
+                    <!-- Two rows: each is its OWN full-width flex-wrap row with its OWN
+                         justify-between — row 1 (core+duration jolly) and row 2 (period
+                         jolly+trailing+custom) each spread independently across the same full
+                         width, filled only from their own pool (see measureAndFill). -->
+                    <div class="flex flex-col gap-1.5">
+                        <div class="flex items-center gap-1 flex-wrap w-full justify-between">
+                            {@render coreButtons()}
+                            {@render durationJollyButtons()}
                         </div>
-                    {:else}
-                        <button
-                            type="button"
-                            class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                                {effectivePreset === 'custom' ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
-                            onclick={(e) => toggleCustomEdit(e)}>{effectivePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find((o) => o.value === customGranularity)?.shortKey ?? 'common.custom').toUpperCase()}` : $_('common.custom')}</button
-                        >
-                    {/if}
+                        <div class="flex items-center gap-1 flex-wrap w-full justify-between">
+                            {@render periodJollyButtons()}
+                            {@render trailingButtons()}
+                            {@render customWindowArea()}
+                        </div>
+                    </div>
                 {/if}
-                <!-- Info tooltip -->
-                <Tooltip text={$_('datePicker.info')} position="bottom" maxWidth="280px">
-                    <Info size={14} class="text-gray-400 dark:text-gray-500 hover:text-libre-green transition-colors" />
-                </Tooltip>
-            </span>
+            {:else}
+                {@render coreButtons()}
+                <span class="inline-flex items-center gap-1">
+                    {@render trailingButtons()}
+                    {@render customWindowArea()}
+                </span>
+            {/if}
+        </div>
+    {/if}
+
+    {#if align === 'start'}
+        <!-- Hidden measurement-only clone of all 6 jolly badges — position:absolute +
+             invisible keeps it OUT of normal flow/paint entirely, purely so measureAndFill()
+             can read their REAL widths (not a guessed proxy). aria-hidden since it's never
+             meant to be seen or interacted with. -->
+        <div class="absolute invisible pointer-events-none" style="top: 0; left: 0;" aria-hidden="true">
+            {#each durationFillPresets as preset, i}
+                <button type="button" bind:this={durationMeasureRefs[i]} class="px-2.5 py-1 text-xs font-medium rounded-lg" tabindex="-1">{preset.label}</button>
+            {/each}
+            {#each periodFillPresets as preset, i}
+                <button type="button" bind:this={periodMeasureRefs[i]} class="px-2.5 py-1 text-xs font-medium rounded-lg" tabindex="-1">{preset.label}</button>
+            {/each}
         </div>
     {/if}
 

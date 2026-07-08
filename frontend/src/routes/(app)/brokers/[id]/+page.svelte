@@ -10,8 +10,7 @@
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {currentLanguage} from '$lib/stores/app/language';
     import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
-    import {ArrowLeft, ArrowRightLeft, Brain, Briefcase, Crown, ExternalLink, Eye, FileUp, Info, Pencil, RefreshCw, Share2, TrendingUp, Users, Wallet} from 'lucide-svelte';
-    import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
+    import {ArrowLeft, ArrowRightLeft, Brain, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import BrokerImportFilesModal from '$lib/components/brokers/BrokerImportFilesModal.svelte';
@@ -21,8 +20,10 @@
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
+    import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import {TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
+    import {TransactionFormModal, TransactionsTable, TransactionBulkModal, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
     import {fetchReport, invalidate, type AllocationHistoryDimensions, type PortfolioHistoryPoint, type PortfolioSummary, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getBrokerRole, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
@@ -51,6 +52,21 @@
     let txViewOpen = false;
     let txViewItems: FormModalItems | null = null;
 
+    /** Bulk workspace (create / import) — same engine as /transactions, pre-populated
+     *  with this page's broker (still editable, never skips a step). */
+    let bulkOpen = false;
+    let bulkIntent: import('$lib/components/transactions/modals/TransactionBulkModal.svelte').WorkspaceIntent | undefined = undefined;
+
+    function openImportTransactions() {
+        bulkIntent = {action: 'import'};
+        bulkOpen = true;
+    }
+
+    function openNewTransaction() {
+        bulkIntent = {action: 'create'};
+        bulkOpen = true;
+    }
+
     /** AI export state — mirrors dashboard/+page.svelte's implementation, scoped to this broker. */
     let aiExportLoading = false;
     let aiExportDropdownOpen = false;
@@ -62,6 +78,7 @@
     let txLoading = false;
     let txLoaded = false;
     let txCurrentPage = 1;
+    let txTableComponent: TransactionsTable | undefined;
 
     let activeTab = 'panoramica';
     let brokerTabs = [];
@@ -312,33 +329,11 @@
                 {/if}
             </div>
 
-            <div class="grid grid-cols-2 place-items-center sm:flex sm:items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                {#if canEdit}
-                    <button on:click={handleEdit} class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" data-testid="broker-edit-button">
-                        <Pencil size={18} />
-                        <span class="hidden sm:inline">{$_('common.edit')}</span>
-                    </button>
-                {/if}
-                <button on:click={() => (activeTab = 'info')} class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 border border-libre-green text-libre-green rounded-lg hover:bg-libre-green/10 transition-colors" data-testid="broker-share-button" title={$_('brokers.sharing.title')}>
-                    <Share2 size={18} />
-                    <span class="hidden sm:inline">{$_('brokers.sharing.title')}</span>
-                </button>
-                {#if safeString(broker.portal_url)}
-                    <a href={safeString(broker.portal_url)} target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors sm:w-auto w-full" title={$_('brokers.openPortal')}>
-                        <ExternalLink size={20} />
-                    </a>
-                {/if}
-                <button
-                    on:click={handleRefresh}
-                    disabled={loading || reportLoading}
-                    class="flex items-center justify-center gap-2 p-2 sm:px-3 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors disabled:opacity-50 sm:w-auto w-full"
-                    title={$_('dashboard.syncData')}
-                    data-testid="broker-refresh"
-                >
-                    <RefreshCw size={20} class={loading || reportLoading ? 'animate-spin' : ''} />
-                    <span class="hidden sm:inline text-sm font-medium">{$_('dashboard.syncData')}</span>
-                </button>
-            </div>
+            {#if safeString(broker.portal_url)}
+                <a href={safeString(broker.portal_url)} target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors flex-shrink-0" title={$_('brokers.openPortal')}>
+                    <ExternalLink size={20} />
+                </a>
+            {/if}
         {:else if !error}
             <div class="flex-1">
                 <div class="h-8 w-48 bg-gray-200 rounded animate-pulse"></div>
@@ -369,65 +364,95 @@
              (previously the date-range picker only rendered inside the Panoramica tab's
              content, so it disappeared on Posizioni/Transazioni even though those tabs
              depend on the same date-scoped data). -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden" data-testid="broker-controls">
-            <div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between" data-testid="broker-overview-controls">
-                <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} onchange={handleDateChange} />
+        <PageToolbar thresholds={{wide: 1000, tablet: 800, tabletS: 560, compact: 380, labelHide: 380}} tabs={brokerTabs} bind:activeTab testId="broker-controls" filterRowTestId="broker-overview-controls">
+            {#snippet filters()}
+                <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} align="start" onchange={handleDateChange} />
 
-                <div class="flex items-center gap-3">
-                    <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                        <span class="whitespace-nowrap">{$_('common.currency')}:</span>
-                        <div class="w-28">
-                            <CurrencySearchSelect
-                                bind:value={targetCurrency}
-                                compact={true}
-                                dropdownPosition="bottom"
-                                placeholder={baseCurrency}
-                                onchange={() => {
-                                    targetCurrencyManuallySet = true;
-                                    void loadOverview();
-                                }}
-                            />
-                        </div>
-                    </div>
-
-                    <!-- AI Export — reuses the same copyAiExport() utility as the dashboard,
-                         scoped to this single broker. -->
-                    <div class="relative">
-                        <button
-                            class="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
-                            on:click={() => (aiExportDropdownOpen = !aiExportDropdownOpen)}
-                            disabled={aiExportLoading}
-                            data-testid="ai-export-button"
-                            title={$_('dashboard.aiExport')}
-                        >
-                            <Brain size={14} class={aiExportLoading ? 'animate-pulse' : ''} />
-                            <span class="hidden sm:inline">{aiExportLoading ? $_('dashboard.aiExportBuilding') : $_('dashboard.aiExport')}</span>
-                        </button>
-
-                        {#if aiExportDropdownOpen}
-                            <div class="absolute right-0 z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" data-ai-export-panel>
-                                <button type="button" class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" on:click={() => handleAiExport('full')} data-testid="ai-export-full">
-                                    <Brain size={14} class="text-purple-500" />
-                                    {$_('dashboard.aiExportFull')}
-                                </button>
-                                <button
-                                    type="button"
-                                    class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-100 dark:border-slate-700"
-                                    on:click={() => handleAiExport('data-only')}
-                                    data-testid="ai-export-data-only"
-                                >
-                                    <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-                                    </svg>
-                                    {$_('dashboard.aiExportDataOnly')}
-                                </button>
-                            </div>
-                        {/if}
+                <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    <span class="whitespace-nowrap">{$_('common.currency')}:</span>
+                    <div class="w-28">
+                        <CurrencySearchSelect
+                            bind:value={targetCurrency}
+                            compact={true}
+                            dropdownPosition="bottom"
+                            placeholder={baseCurrency}
+                            onchange={() => {
+                                targetCurrencyManuallySet = true;
+                                void loadOverview();
+                            }}
+                        />
                     </div>
                 </div>
-            </div>
-            <TabBar bind:activeTab tabs={brokerTabs} />
-        </div>
+            {/snippet}
+
+            {#snippet actions({showActionLabels, stretchActions})}
+                {#if canEdit}
+                    <button
+                        on:click={handleEdit}
+                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                        data-testid="broker-edit-button"
+                    >
+                        <Pencil size={14} />
+                        {#if showActionLabels}<span>{$_('common.edit')}</span>{/if}
+                    </button>
+                {/if}
+                <button
+                    on:click={() => (activeTab = 'info')}
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    data-testid="broker-share-button"
+                    title={$_('brokers.sharing.title')}
+                >
+                    <Share2 size={14} />
+                    {#if showActionLabels}<span>{$_('brokers.sharing.title')}</span>{/if}
+                </button>
+                <button
+                    on:click={handleRefresh}
+                    disabled={loading || reportLoading}
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50"
+                    title={$_('dashboard.syncData')}
+                    data-testid="broker-refresh"
+                >
+                    <RefreshCw size={14} class={loading || reportLoading ? 'animate-spin' : ''} />
+                    {#if showActionLabels}<span>{$_('dashboard.syncData')}</span>{/if}
+                </button>
+
+                <!-- AI Export — reuses the same copyAiExport() utility as the dashboard, scoped to this single broker. -->
+                <div class="relative {stretchActions ? 'w-full' : ''}">
+                    <button
+                        class="flex items-center justify-center gap-1.5 {stretchActions
+                            ? 'w-full'
+                            : ''} px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50"
+                        on:click={() => (aiExportDropdownOpen = !aiExportDropdownOpen)}
+                        disabled={aiExportLoading}
+                        data-testid="ai-export-button"
+                        title={$_('dashboard.aiExport')}
+                    >
+                        <Brain size={14} class={aiExportLoading ? 'animate-pulse' : ''} />
+                        {#if showActionLabels}<span>{aiExportLoading ? $_('dashboard.aiExportBuilding') : $_('dashboard.aiExport')}</span>{/if}
+                    </button>
+
+                    {#if aiExportDropdownOpen}
+                        <div class="absolute right-0 z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" data-ai-export-panel>
+                            <button type="button" class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" on:click={() => handleAiExport('full')} data-testid="ai-export-full">
+                                <Brain size={14} class="text-purple-500" />
+                                {$_('dashboard.aiExportFull')}
+                            </button>
+                            <button
+                                type="button"
+                                class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-100 dark:border-slate-700"
+                                on:click={() => handleAiExport('data-only')}
+                                data-testid="ai-export-data-only"
+                            >
+                                <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                                </svg>
+                                {$_('dashboard.aiExportDataOnly')}
+                            </button>
+                        </div>
+                    {/if}
+                </div>
+            {/snippet}
+        </PageToolbar>
 
         {#if activeTab === 'panoramica'}
             <div class="space-y-4" data-testid="broker-overview-tab">
@@ -475,20 +500,33 @@
             </div>
         {:else if activeTab === 'transazioni'}
             <div class="space-y-4" data-testid="broker-transactions-tab">
-                {#if canEdit}
-                    <button data-testid="import-files-button" class="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group" on:click={() => (importFilesModalOpen = true)}>
-                        <div class="flex items-center gap-3">
-                            <div class="p-2 bg-libre-green/10 rounded-lg">
-                                <FileUp size={20} class="text-libre-green" />
-                            </div>
-                            <div class="text-left">
-                                <h3 class="font-semibold text-gray-700">{$_('brokers.importFiles')}</h3>
-                                <p class="text-sm text-gray-500">{$_('brokers.uploadHint')}</p>
-                            </div>
-                        </div>
-                        <span class="text-libre-green opacity-0 group-hover:opacity-100 transition-opacity"> → </span>
+                <div class="flex flex-wrap items-center justify-between gap-2" data-testid="broker-transactions-actions">
+                    <button
+                        class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+                        on:click={() => (importFilesModalOpen = true)}
+                        data-testid="broker-show-import-history"
+                    >
+                        <FileText size={15} />
+                        <span class="hidden sm:inline">{$_('brokers.showImportHistory')}</span>
                     </button>
-                {/if}
+                    <div class="flex items-center gap-2">
+                        <ColumnVisibilityToggle tableRef={txTableComponent?.getTableRef()} />
+                        {#if canEdit}
+                            <button
+                                class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+                                on:click={openImportTransactions}
+                                data-testid="broker-import-transactions"
+                            >
+                                <Upload size={15} />
+                                <span class="hidden sm:inline">{$_('common.import')}</span>
+                            </button>
+                            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" on:click={openNewTransaction} data-testid="broker-new-transaction">
+                                <Plus size={15} />
+                                <span class="hidden sm:inline">{$_('transactions.addTransaction')}</span>
+                            </button>
+                        {/if}
+                    </div>
+                </div>
 
                 <div data-testid="broker-transactions">
                     {#if txLoading && !txLoaded}
@@ -497,6 +535,7 @@
                         </div>
                     {:else}
                         <TransactionsTable
+                            bind:this={txTableComponent}
                             mainRows={txMainRows}
                             partnerRows={txPartnerRows}
                             brokers={allBrokersForTable}
@@ -593,6 +632,17 @@
     />
 
     <TransactionFormModal open={txViewOpen} mode="view" items={txViewItems} onClose={() => (txViewOpen = false)} />
+
+    <TransactionBulkModal
+        open={bulkOpen}
+        intent={bulkIntent}
+        defaultBrokerId={broker.id}
+        onClose={() => {
+            bulkOpen = false;
+            bulkIntent = undefined;
+        }}
+        onCommitted={handleRefresh}
+    />
 
     <BrokerImportFilesModal open={importFilesModalOpen} brokerId={broker.id} brokerName={broker.name} onClose={() => (importFilesModalOpen = false)} />
 {/if}

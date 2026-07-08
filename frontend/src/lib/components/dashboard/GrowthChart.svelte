@@ -71,6 +71,46 @@
     };
 
     // =========================================================================
+    // Layout stability helper
+    // =========================================================================
+
+    /** Polls an element's bounding rect (position AND size — a plain ResizeObserver only
+     *  catches size changes, missing a pure reflow/reposition shift caused by content
+     *  ABOVE the element settling later, e.g. a KPI/cash-balances skeleton collapsing
+     *  once its async data arrives, or a Service Worker's `fetch` handler adding a hop to
+     *  the navigation request on reload — see `static/sw.js`: it only intercepts
+     *  `mode: 'navigate'` requests, so it's NOT in the loop on the very first load before
+     *  it activates, but IS on every reload after — a plausible reason this bug was only
+     *  ever reported after a page refresh, never on first entry) via requestAnimationFrame.
+     *  Calls `onStable` exactly ONCE, either once the rect is unchanged across 2
+     *  consecutive frames or after `maxFrames` as a hard cap. Deliberately does NOT call
+     *  resize() on every intermediate change (an earlier version of this did) — resize()
+     *  always triggers a full internal ECharts re-render (see the comment on
+     *  `isFirstRenderPass` above), which can interrupt/misplace an in-progress tooltip;
+     *  calling it many times during a window the user might already be interacting in
+     *  trades one bug for a higher chance of another. */
+    function waitForStableLayout(el: HTMLElement, onStable: () => void, maxFrames = 180): void {
+        let lastRect: DOMRect | null = null;
+        let stableFrames = 0;
+        let frame = 0;
+
+        function check() {
+            frame++;
+            const rect = el.getBoundingClientRect();
+            const same = lastRect !== null && rect.top === lastRect.top && rect.left === lastRect.left && rect.width === lastRect.width && rect.height === lastRect.height;
+            stableFrames = same ? stableFrames + 1 : 0;
+            lastRect = rect;
+
+            if (stableFrames >= 2 || frame >= maxFrames) {
+                onStable();
+                return;
+            }
+            requestAnimationFrame(check);
+        }
+        requestAnimationFrame(check);
+    }
+
+    // =========================================================================
     // Derived data for chart
     // =========================================================================
 
@@ -335,7 +375,18 @@
             grid: {left: '3%', right: '4%', bottom: '30px', top: '10px', containLabel: true},
             tooltip: {
                 trigger: 'axis',
-                appendToBody: true,
+                // Bugfix: `appendToBody` moves the tooltip DOM to `document.body`, which
+                // requires ECharts/zrender to convert our chart-local position into
+                // document-absolute coordinates (accounting for scroll) — the exact same
+                // class of bug already fixed once in PriceChartFull.svelte (see commit
+                // fcdd89e8: "Fix mobile tooltip scroll offset ... instead of
+                // cursor-relative positioning that shifted with vertical scroll") by
+                // dropping `appendToBody` entirely. Without it, the tooltip stays nested
+                // inside this chart's own container (forced to `position:relative`),
+                // scrolling as ONE unit with the rest of the page — no coordinate
+                // conversion needed at all, so it can't drift out of sync with scroll.
+                // Not needed for clipping either: this card has no `overflow-hidden`
+                // ancestor.
                 confine: true,
                 position: tooltipPositionSide,
                 axisPointer: {type: 'line'},
@@ -397,14 +448,14 @@
                 type: 'scroll',
                 bottom: 0,
                 left: 'center',
-                textStyle: {color: textColor, fontSize: 11},
+                textStyle: {color: textColor, fontSize: 14},
                 itemWidth: 14,
                 itemHeight: 8,
             },
             dataZoom: [{type: 'inside', start: 0, end: 100}],
             xAxis: {
                 type: 'time',
-                axisLabel: {color: textColor, fontSize: 11, rotate: 0},
+                axisLabel: {color: textColor, fontSize: 14, rotate: 0},
                 axisLine: {lineStyle: {color: gridColor}},
                 splitLine: {show: false},
             },
@@ -413,7 +464,7 @@
                 // Use a min function so the y-axis auto-scales rather than forcing 0.
                 // This gives detail visibility when portfolio values are large.
                 min: (value: {min: number; max: number}) => Math.floor(value.min - (value.max - value.min) * 0.08),
-                axisLabel: {color: textColor, fontSize: 11, formatter: yAxisFormatter},
+                axisLabel: {color: textColor, fontSize: 14, formatter: yAxisFormatter},
                 axisLine: {show: false},
                 splitLine: {lineStyle: {color: gridColor, type: 'dashed'}},
             },
@@ -435,17 +486,59 @@
         // .../TooltipView.js `render()`/`_keepShow()`), which was found to interrupt a
         // just-shown tap-triggered tooltip on mobile (it would flash and disappear
         // immediately) if a rebuild happened to fire while the tooltip was showing.
-        // A plain immediate resize() alone isn't always enough either — some mobile
-        // layouts keep shifting for another frame or two after our own tick() resolves
-        // (e.g. KPI cards populating async data) — so also schedule one more resize()
-        // on the next animation frame, still gated to first-render-only.
+        //
+        // A fixed-delay chain (immediate + next-frame + a guessed timeout) is fragile:
+        // it still regressed once when unrelated dashboard changes made surrounding
+        // async content settle slower, and it can still fire too early on a genuinely
+        // slow COLD reload (fonts/images/KPI network calls all racing at once) — which
+        // matches this bug being reported ONLY on cold reload, never on warm in-app
+        // navigation where the layout is already stable by the time this mounts.
+        // Two more principled, non-magic-number signals instead:
+        //  1) Poll ACTUAL layout stability (position AND size — a ResizeObserver alone
+        //     misses a pure reflow/reposition caused by content ABOVE this chart, e.g.
+        //     a cash-balances skeleton collapsing once its data arrives) via rAF, and
+        //     resize only once the container's rect stops moving for 2 straight frames.
+        //  2) Also resize on the browser's `load` event — fired precisely when every
+        //     page resource (fonts, images) is done loading, i.e. exactly the "cold
+        //     reload settling" signal a fixed timeout could only ever approximate.
         if (isFirstRenderPass) {
             isFirstRenderPass = false;
             chartInstance.resize();
             const instanceAtSchedule = chartInstance;
-            requestAnimationFrame(() => {
-                if (instanceAtSchedule && !instanceAtSchedule.isDisposed()) instanceAtSchedule.resize();
-            });
+            const containerAtSchedule = chartContainer;
+
+            if (containerAtSchedule) {
+                waitForStableLayout(containerAtSchedule, () => {
+                    if (instanceAtSchedule && !instanceAtSchedule.isDisposed()) instanceAtSchedule.resize();
+                });
+            }
+
+            if (document.readyState !== 'complete') {
+                window.addEventListener(
+                    'load',
+                    () => {
+                        if (instanceAtSchedule && !instanceAtSchedule.isDisposed()) instanceAtSchedule.resize();
+                    },
+                    {once: true},
+                );
+            }
+
+            // Likely root cause on COLD reload specifically: the app-shell header
+            // (LiveTicker) and currency chips (currencyFormat.ts) render flag emoji via
+            // a custom @font-face ('Noto Color Emoji', font-display: swap — see
+            // static/fonts/noto-color-emoji/noto-color-emoji.css). On a cold load the
+            // font isn't cached yet, so the browser paints a fallback glyph first and
+            // swaps in the real font once downloaded — a classic FOUT reflow that can
+            // shift the WHOLE page (header height changes) after this chart already
+            // resized. On warm in-app navigation the font is already cached from the
+            // previous page, so no swap/reflow happens — matching why this was only
+            // ever reported right after a fresh reload. `document.fonts.ready` is the
+            // precise browser signal for "all @font-face swaps are done".
+            document.fonts?.ready
+                ?.then(() => {
+                    if (instanceAtSchedule && !instanceAtSchedule.isDisposed()) instanceAtSchedule.resize();
+                })
+                .catch(() => {});
         }
     }
 </script>

@@ -177,7 +177,7 @@
             {$_('dashboard.noPeriodPnl')}
         </p>
     {:else}
-        <div class="flex-1 {visualMode === 'table' ? 'overflow-x-auto' : 'overflow-hidden'}">
+        <div class="flex-1 {visualMode === 'table' ? 'overflow-x-auto' : ''}">
             {#if semanticMode === 'holdings' && visualMode === 'table'}
                 <ExposureTable {holdings} {navAmount} {displayCurrency} {brokers} />
             {:else if semanticMode === 'holdings' && visualMode === 'map'}
