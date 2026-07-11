@@ -919,20 +919,34 @@
     }
   },
   "admin/tailscale_exposure.en.md": {
-    "md5": "57eca83bfa480885103284b307d1a665",
+    "md5": "dd1064b85f04f3ad7231a4b02a75f0b3",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "analysis": "[{\"name\": \"Exposing (in a networking context)\", \"keywords\": [\"networking\", \"port forwarding\", \"reverse proxy\", \"make accessible\", \"open to internet\", \"public access\"]}, {\"name\": \"Work In Progress (WIP)\", \"keywords\": [\"draft\", \"incomplete\", \"under development\", \"not final\", \"GitHub status\", \"documentation state\"]}, {\"name\": \"Tailscale\", \"keywords\": [\"ZeroTrust VPN\", \"mesh VPN\", \"SD-WAN\", \"secure network overlay\", \"company name\", \"product\"]}, {\"name\": \"Tailscale Funnel\", \"keywords\": [\"Tailscale feature\", \"public internet access\", \"HTTPS endpoint\", \"expose service\", \"reverse proxy built-in\"]}, {\"name\": \"Tailscale Docker Sidecar\", \"keywords\": [\"Docker pattern\", \"sidecar container\", \"auxiliary container\", \"network proxy\", \"companion container\"]}, {\"name\": \"self-hosted\", \"keywords\": [\"on-premises\", \"own server\", \"local installation\", \"user-managed infrastructure\", \"not SaaS\"]}, {\"name\": \"instance\", \"keywords\": [\"running application\", \"service deployment\", \"server process\", \"software installation\"]}, {\"name\": \"docker-compose.yml\", \"keywords\": [\"Docker Compose file\", \"YAML configuration\", \"container orchestration file\", \"docker-compose command\"]}, {\"name\": \"secure, encrypted tunnel\", \"keywords\": [\"VPN tunnel\", \"WireGuard\", \"encrypted connection\", \"secure channel\", \"network tunnel\"]}, {\"name\": \"public HTTPS access\", \"keywords\": [\"SSL/TLS\", \"secure web\", \"port 443\", \"valid certificate\", \"internet-facing\"]}, {\"name\": \"private, authenticated access only\", \"keywords\": [\"ZeroTrust\", \"access control\", \"identity-based\", \"VPN-only\", \"not public\"]}, {\"name\": \"🐳 (docker whale emoji)\", \"keywords\": [\"Docker symbol\", \"containerization\", \"DevOps emoji convention\", \"technology icon\"]}, {\"name\": \"🌐 (globe with meridians emoji)\", \"keywords\": [\"internet\", \"global\", \"network\", \"web\", \"connectivity emoji\"]}, {\"name\": \"🔒 (locked emoji)\", \"keywords\": [\"security\", \"lock\", \"encryption\", \"access control\", \"secure emoji\"]}, {\"name\": \"🚧 (construction emoji)\", \"keywords\": [\"WIP indicator\", \"work in progress\", \"caution\", \"draft status\", \"under construction emoji\"]}]",
     "analysis_model": "stepfun/step-3.5-flash:free",
-    "langs": {},
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-11T07:40:26.885329+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-11T07:40:26.885329+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-11T07:40:26.885329+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    },
     "pending_langs": [
       "it",
       "fr",
       "es"
-    ]
+    ],
+    "last_translated": "2026-07-11T07:40:26.885329+00:00"
   },
   "financial-theory/index.en.md": {
     "md5": "eeb0db5fcff0552e96b51837ab5abeeb",
