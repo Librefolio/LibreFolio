@@ -16,7 +16,7 @@ Questo approccio presenta notevoli rischi:
 
 1. **Esposizione all'intero web**: Chiunque può scansionare il tuo IP pubblico e tentare di attaccare la porta aperta.
 2. **Complessità di gestione**: È necessario configurare e rinnovare manualmente i certificati SSL (HTTPS) tramite reverse proxy (Nginx, Caddy, ecc.).
-3. **Rischi del protocollo HTTP**: Senza una crittografia HTTPS configurata correttamente, le deine credenziali e i dati finanziari viaggiano in chiaro sulla rete locale e pubblica, rendendoli intercettabili da malintenzionati (packet sniffing).
+3. **Rischi del protocollo HTTP**: Senza una crittografia HTTPS configurata correttamente, le tue credenziali e i dati finanziari viaggiano in chiaro sulla rete locale e pubblica, rendendoli intercettabili da malintenzionati (packet sniffing).
 
 Il diagramma seguente mostra il problema iniziale dell'esposizione da remoto:
 
@@ -84,7 +84,7 @@ Per far funzionare qualsiasi VPN, sono necessari **almeno 2 dispositivi connessi
 
 ---
 
-### 🏃 Livello 1: Connessione VPN Privata Point-to-Point (Partenza)
+## 🏃 Livello 1: Connessione VPN Privata Point-to-Point (Partenza)
 
 Consiste nel connettere il server e il client alla stessa rete privata Tailscale. Sul server si espone la porta del servizio tramite il comando `serve`.
 
@@ -132,7 +132,7 @@ A questo punto, con la VPN attiva sul tuo smartphone o PC, ti basterà inserire 
 
 ---
 
-### 🥉 Livello 2: Configurazione come Subnet Router (LAN Tunneling)
+## 🥉 Livello 2: Configurazione come Subnet Router (LAN Tunneling)
 
 Questo livello trasforma il tuo server in un "sub-router". Quando sei fuori casa con la VPN accesa sul client, potrai raggiungere non solo il server, ma **qualsiasi dispositivo o servizio della tua LAN domestica** inserendo semplicemente il suo IP locale.
 
@@ -146,7 +146,7 @@ graph LR
     style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
 ```
 
-#### 1. Abilitare il Subnet Routing sull'OS del Server
+### 1. Abilitare il Subnet Routing sull'OS del Server
 
 === "Linux"
 
@@ -180,11 +180,18 @@ graph LR
     tailscale up --advertise-routes=192.168.1.0/24
     ```
 
-#### 2. Approvare la rotta nel pannello di amministrazione
+### 2. Approvare la rotta nel pannello di amministrazione
 
 1. Vai su [Tailscale Admin Console](https://login.tailscale.com/admin/machines).
 2. Clicca sui tre puntini accanto al tuo server -> **Edit route settings**.
 3. Abilita la subnet pubblicizzata.
+
+!!! tip "Disattivare la scadenza della chiave (Key Expiry) per il Server"
+
+    Poiché il server agisce come infrastruttura di rete (subnet router), è consigliabile disabilitare la scadenza automatica della chiave per questo nodo, evitando che si disconnetta richiedendo periodicamente una nuova autenticazione interattiva (di default ogni 180 giorni):
+    1. Nella pagina **Machines** della console di amministrazione, individua il tuo server.
+    2. Fai clic sull'icona con i **tre puntini (...)** sulla destra della riga del dispositivo.
+    3. Seleziona l'opzione **Disable Key Expiry**.
 
 <table style="width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem;">
   <thead>
@@ -214,24 +221,13 @@ graph LR
 
 ---
 
-### 🥈 Livello 3: Esposizione Pubblica tramite Tailscale Funnel (Senza VPN sul Client)
+## 🔑 Abilitare il Funnel e le ACL sulla Console
 
-**Tailscale Funnel** consente di esporre pubblicamente un servizio a Internet. Chiunque potrà accedere al tuo LibreFolio tramite un URL HTTPS protetto fornito da MagicDNS, **senza dover installare o attivare Tailscale** sul proprio smartphone o PC. Questo è essenziale per poter installare LibreFolio come PWA su dispositivi mobili ed avere l'auto-prompt (per approfondimenti, consulta la guida [📱 Installa come App (PWA)](../user/pwa.md)).
+*Configurazione una tantum necessaria per il Livello 3 e il Livello 4*
 
-```mermaid
-graph LR
-    User["👤 Utente (Senza VPN)"] -->|Richiesta HTTPS| Funnel["☁️ Tailscale Funnel Ingress<br>(Server Pubblico Tailscale)"]
-    Funnel -->|WireGuard Tunneling| Server["🖥️ Server Locale (tailscaled)<br>(100.a.b.c)"]
-    subgraph LAN ["Rete Locale LAN"]
-        Server -->|Inoltro locale| LibreFolio["📊 LibreFolio (Porta 6040)"]
-        Server -.->|"<font color='red'><b>Impossibile esporre</b></font>"| Altro["🔌 Altri Servizi Locali (Porte diverse)"]
-    end
-    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
-    style Altro fill:#f8d7da,stroke:#dc3545,stroke-width:2px;
-    linkStyle 3 stroke:#dc3545,stroke-width:2px;
-```
+Prima di poter utilizzare Tailscale Funnel (sia sul server locale al Livello 3, sia all'interno dei container Docker al Livello 4), è necessario abilitare il Funnel e definire le regole di accesso (ACL) a livello globale per tutta la tua Tailnet. Questa operazione si esegue una sola volta direttamente sulla console amministrativa di Tailscale.
 
-#### 1. Abilitare HTTPS e Funnel sul Pannello di Controllo
+### 1. Abilitare HTTPS e Funnel sul Pannello di Controllo
 
 1. Visita la scheda [Access Controls](https://login.tailscale.com/admin/acls) della console di amministrazione Tailscale.
 2. Clicca sul pulsante **Add node attribute** per generare le autorizzazioni.
@@ -239,20 +235,20 @@ graph LR
 ![Aggiungi Node Attribute](../static/tailscale-guide/TailscaleNodeAttribute.png)
 
 3. Configura le seguenti opzioni della schermata:
-    * **Targets**: Inserisci il tag che desideri autorizzare. Un *Target* definisce la regola di associazione. **Noi suggeriamo di inserire `tag:external_access`**.
+    * **Targets**: Inserisci il tag o gruppo che desideri autorizzare ad attivare il Funnel. Un *Target* definisce a quali nodi si applica la regola. **Noi suggeriamo di inserire `tag:external_access`** (per associarlo selettivamente ai container Docker) oppure `autogroup:member` (se desideri consentire l'esposizione a tutti i dispositivi registrati col tuo account personale).
     * **Attributes**: Inserisci `funnel`.
     * **Note**: Inserisci un testo per tenere traccia delle tue motivazioni.
     * **IP Pools, App, Capability, ecc.**: Questi campi aggiuntivi non ci interessano per questa esposizione, lasciali vuoti o ai valori predefiniti.
 
-*Nota bene: La chiave di autenticazione (Auth Key) viene utilizzata esclusivamente per registrare il nodo alla tua Tailnet, e non influisce sulle impostazioni del Funnel, che sono regolate a livello globale dalle ACL della console.*
+*Nota bene: La configurazione delle ACL definisce le policy di sicurezza globali per l'abilitazione del Funnel. Essa è indipendente dalle chiavi di autenticazione (Auth Key), che servono esclusivamente per registrare inizialmente un nuovo dispositivo/container alla rete.*
 
-In alternativa, il vecchio metodo consisteva nell'utilizzare la configurazione JSON delle ACL. Di seguito è riportata una configurazione JSON funzionante, aggiornata per utilizzare il tag `tag:external_access`:
+In alternativa, se preferisci modificare direttamente la configurazione JSON delle ACL, puoi utilizzare la seguente configurazione funzionante (aggiornata per supportare sia i tuoi dispositivi che il tag `tag:external_access` dei container):
 
 ??? example "Visualizza la configurazione ACL JSON completa per abilitare il Funnel"
 
     ```json
     {
-      // Dichiarazione dei tag per i container Docker
+      // Dichiarazione dei tag autorizzati
       "tagOwners": {
         "tag:external_access": ["autogroup:admin"]
       },
@@ -286,7 +282,28 @@ In alternativa, il vecchio metodo consisteva nell'utilizzare la configurazione J
     }
     ```
 
-#### 2. Avviare the Funnel sul Server
+### 🥈 Livello 3: Esposizione Pubblica tramite Tailscale Funnel (Senza VPN sul Client)
+
+!!! warning "Prerequisito Fondamentale"
+
+    Prima di procedere, assicurati di aver completato la [configurazione una tantum del Funnel e delle ACL sulla console](#abilitare-il-funnel-e-le-acl-sulla-console).
+
+**Tailscale Funnel** consente di esporre pubblicamente un servizio a Internet. Chiunque potrà accedere al tuo LibreFolio tramite un URL HTTPS protetto fornito da MagicDNS, **senza dover installare o attivare Tailscale** sul proprio smartphone o PC. Questo è essenziale per poter installare LibreFolio come PWA su dispositivi mobili ed avere l'auto-prompt (per approfondimenti, consulta la guida [📱 Installa come App (PWA)](../user/pwa.md)).
+
+```mermaid
+graph LR
+    User["👤 Utente (Senza VPN)"] -->|Richiesta HTTPS| Funnel["☁️ Tailscale Funnel Ingress<br>(Server Pubblico Tailscale)"]
+    Funnel -->|WireGuard Tunneling| Server["🖥️ Server Locale (tailscaled)<br>(100.a.b.c)"]
+    subgraph LAN ["Rete Locale LAN"]
+        Server -->|Inoltro locale| LibreFolio["📊 LibreFolio (Porta 6040)"]
+        Server -.->|"<font color='red'><b>Impossibile esporre</b></font>"| Altro["🔌 Altri Servizi Locali (Porte diverse)"]
+    end
+    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    style Altro fill:#f8d7da,stroke:#dc3545,stroke-width:2px;
+    linkStyle 3 stroke:#dc3545,stroke-width:2px;
+```
+
+### 1. Avviare il Funnel sul Server
 
 Associa il funnel alla porta locale di LibreFolio:
 
@@ -294,10 +311,22 @@ Associa il funnel alla porta locale di LibreFolio:
 tailscale funnel 6040 on
 ```
 
-#### 3. Approvare e attendere la propagazione
+*Nota: Per questo livello non è richiesta alcuna chiave di autenticazione (Auth Key) in quanto la macchina server è già stata loggata e registrata in modo interattivo alla tua Tailnet durante il **Passo 0**.*
 
-* Il terminale genererà un link. Copialo e visitalo dal tuo computer personale per approvare l'esposizione pubblica della porta.
-* Attendi qualche minuto affinché i record DNS di MagicDNS si propaghino a livello globale.
+### 2. Approvare e attendere la propagazione
+
+Una volta avviato il comando, nel terminale comparirà un avviso che indica che il Funnel è abilitato ma non ancora autorizzato per il tuo nodo, mostrando un link simile al seguente:
+
+```text
+Funnel is enabled, but the list of allowed nodes in the tailnet policy file does not include the one you are using.
+To give access to this node you can edit the tailnet policy file, or visit:
+
+         https://login.tailscale.com/f/funnel?node=xxxxxx
+```
+
+* Visita il link indicato nel browser, effettua l'accesso a Tailscale e approva l'abilitazione del Funnel per questo nodo.
+* Una volta approvato, il terminale visualizzerà l'URL pubblico generato.
+* Attendi qualche minuto affinché i record DNS di MagicDNS si propaghino a livello globale per raggiungere il servizio da qualsiasi rete esterna.
 
 <table style="width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem;">
   <thead>
@@ -328,13 +357,17 @@ tailscale funnel 6040 on
 
 ### 🥇 Livello 4: Esposizione Multi-Funnel Avanzata via Docker (Sidecars)
 
+!!! warning "Prerequisito Fondamentale"
+
+    Prima di procedere con la configurazione dei container, assicurati di aver completato la [configurazione una tantum del Funnel e delle ACL sulla console](#abilitare-il-funnel-e-le-acl-sulla-console).
+
 Per superare il limite di un solo Funnel per nodo host, possiamo eseguire più nodi Tailscale paralleli all'interno di container Docker. Ciascun container si registrerà come un nodo indipendente sulla tua Tailnet, ottenendo un proprio URL MagicDNS dedicato.
 
 La nostra soluzione prevede l'uso di un piccolo script di startup personalizzato che installa **socat** nel container e re-indirizza il traffico HTTPS in ingresso verso l'IP LAN fisso del servizio target.
 
 ??? info "Cos'è socat?"
 
-    **socat** (SOcket CAT) è un'utilità da riga di comando estremamente flessibile che stabilisce due flussi di dati bidirezionali e trasferisce i dati tra di essi. Nel nostro caso, lo usiamo come un **mini proxy-forwarder**: ascolta sulla porta locale del container Tailscale e inoltra tutti i pacchetti ricevuti verso la porta reale del servizio sul server locale.
+    **socat** (SOcket CAT) è un'utilità da riga di comando estremamente flessibile che stabilisce due flussi di dati bidirezionali e trasferisce i dati data tra di essi. Nel nostro caso, lo usiamo come un **mini proxy-forwarder**: ascolta sulla porta locale del container Tailscale e inoltra tutti i pacchetti ricevuti verso la porta reale del servizio sul server locale.
 
 Il diagramma di rete illustra lo scenario a nodi multipli esposti in parallelo, dove i container Tailscale 1 e 2 girano sul primo host (Server 1) ed i container Tailscale 3 e 4 girano sul secondo host (Server 2):
 
@@ -367,7 +400,7 @@ graph LR
 
     Con questa architettura è possibile aggiungere ed esporre tutti i servizi desiderati semplicemente avviando nuovi container di Tailscale associati al relativo script. L'unico limite è dato dalle condizioni del proprio piano di abbonamento Tailscale (che nella versione gratuita copre fino a 100 dispositivi).
 
-#### 1. Preparazione della cartella e dello script
+### 1. Preparazione della cartella e dello script
 
 Crea una cartella sul server (es. all'interno del path dove tieni i volumi persistenti dei tuoi Docker):
 
@@ -386,7 +419,7 @@ wget https://raw.githubusercontent.com/Librefolio/LibreFolio/main/docs/static/ta
 chmod +x custom_startup.sh
 ```
 
-#### 2. Configurazione di Docker Compose
+### 2. Configurazione di Docker Compose
 
 Suggeriamo di definire e dichiarare il servizio Tailscale **all'interno dello stesso file `docker-compose.yml` del servizio** che vuoi esporre (es. LibreFolio), per mantenerli vicini e accoppiati logicamente. Aggiungi il blocco del servizio come mostrato di seguito:
 
@@ -407,12 +440,12 @@ services:
     command:
       - /custom_startup.sh
     environment:
-      - HOST_IP=192.168.1.2                 # IP locale del servizio da esporre
+      - HOST_IP=192.168.1.10                # IP locale del servizio da esporre (es. Server 1)
       - HOST_PORT=6040                      # Porta reale del servizio da esporre
       - TAILSCALE_FUNNEL_PORT=6040          # Porta interna del Funnel
-      - TS_ACCEPT_DNS=true
-      - TS_AUTHKEY=tskey-auth-...           # Chiave di autenticazione generata da Tailscale
       - TS_HOSTNAME=librefolio              # Nome del sotto-dominio pubblico (es. librefolio)
+      - TS_AUTHKEY=tskey-auth-...           # Chiave di autenticazione generata da Tailscale
+      - TS_ACCEPT_DNS=true
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_USERSPACE=false
     volumes:
@@ -458,14 +491,77 @@ services:
         La chiave di autenticazione (Auth Key) generata da Tailscale. Per ottenerla:<br>
         1. Vai su <a href="https://login.tailscale.com/admin/settings/keys" target="_blank" rel="noopener noreferrer">Tailscale Admin Settings Keys</a>.<br>
         2. Sotto la sezione <strong>Auth keys</strong> (<em>non</em> sotto la sezione API access tokens), fai clic sul pulsante <strong>Generate auth key...</strong>.<br>
-        3. (Opzionale consigliato) Scegli una chiave monouso o riutilizzabile e pre-autorizzala con il tag <code>tag:external_access</code>.<br>
-        4. Fai clic su <strong>Generate</strong> e copia la chiave generata (es. <code>tskey-auth-...</code>).
+        3. È necessario <strong>abilitare il toggle dei Tags</strong> per poter selezionare il tag desiderato (es. <code>tag:external_access</code>). Nella descrizione della chiave, inserisci una nota descrittiva per renderla facilmente riconoscibile (es. <code>docker-librefolio-funnel</code>).<br>
+        4. Fai clic su <strong>Generate</strong> e copia la chiave generata (es. <code>tskey-auth-...</code>).<br>
+        <br>
+        <em>Nota: Una volta che il container si sarà avviato correttamente, la chiave monouso verrà consumata e sparirà automaticamente dall'elenco "Keys" della console amministrativa, mentre in "Machines" comparirà il nuovo dispositivo registrato.</em>
       </td>
     </tr>
   </tbody>
 </table>
 
-#### 3. Avvio e Approvazione
+??? example "Visualizza il file Docker Compose di produzione completo (LibreFolio + Tailscale)"
+
+    Di seguito è riportato un esempio reale e completo di file `docker-compose.yml` di produzione che affianca il container principale di LibreFolio al sidecar di Tailscale per l'esposizione automatica:
+
+    ```yaml
+    # =============================================================================
+    # LibreFolio — Production Docker Compose
+    # =============================================================================
+    # Optimized for end-users running the official pre-built image from GHCR.
+    # =============================================================================
+
+    services:
+      librefolio:
+        image: ghcr.io/librefolio/librefolio:latest
+        container_name: librefolio
+        restart: unless-stopped
+        ports:
+          - "${PORT:-6040}:6040"
+        volumes:
+          - ./LibreFolio-data:/app/backend/data/prod-docker
+        env_file: .env
+        environment:
+          - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
+          - HOST=0.0.0.0
+        healthcheck:
+          test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
+          interval: 30s
+          timeout: 10s
+          start_period: 15s
+          retries: 3
+
+      tailscale-librefolio:
+        image: tailscale/tailscale:latest
+        container_name: tailscale-librefolio
+        hostname: tailscale-librefolio
+        restart: unless-stopped
+        privileged: false
+        network_mode: bridge
+        cap_add:
+          - NET_ADMIN
+          - NET_RAW
+        devices:
+          - /dev/net/tun:/dev/net/tun
+        command:
+          - /custom_startup.sh
+        environment:
+          - HOST_IP=192.168.1.10                # IP locale del servizio da esporre (es. Server 1)
+          - HOST_PORT=6040                      # Porta reale del servizio da esporre
+          - TAILSCALE_FUNNEL_PORT=6040          # Porta interna del Funnel
+          - TS_HOSTNAME=librefolio              # Nome del sotto-dominio pubblico (es. librefolio)
+          - TS_AUTHKEY=tskey-auth-...           # Sostituisci con la chiave generata
+          - TS_ACCEPT_DNS=true
+          - TS_STATE_DIR=/var/lib/tailscale
+          - TS_USERSPACE=false
+        volumes:
+          - /DATA/AppData/tailscale-nodes/tailscale-librefolio/state:/var/lib/tailscale
+          - /DATA/AppData/tailscale-nodes/custom_startup.sh:/custom_startup.sh
+          - /etc/localtime:/etc/localtime:ro
+          - /etc/timezone:/etc/timezone:ro
+    ```
+
+### 3. Avvio e Approvazione
 
 Avvia il container compose del tuo servizio (inclusivo del sidecar Tailscale):
 
@@ -479,7 +575,37 @@ Visualizza i log del container Tailscale per estrarre il link di approvazione de
 docker logs -f tailscale-librefolio
 ```
 
-Apri il link indicato nel browser per autorizzare l'esposizione.
+Nel log del container comparirà una riga di avviso con il link di autorizzazione specifico per il tuo nodo:
+
+```text
+Funnel is enabled, but the list of allowed nodes in the tailnet policy file does not include the one you are using.
+To give access to this node you can edit the tailnet policy file, or visit:
+
+         https://login.tailscale.com/f/funnel?node=nsXXXXXXX
+```
+
+* Apri il link indicato nel browser, effettua l'accesso a Tailscale ed approva l'abilitazione del Funnel.
+* Subito dopo l'approvazione, nei log del container visualizzerai la conferma di avvenuta esposizione con l'URL pubblico ed il proxy locale:
+
+```text
+Available on the internet:
+
+https://librefolio.stargazer-orfe.ts.net/
+|-- proxy http://127.0.0.1:6040
+
+Press Ctrl+C to exit.
+```
+
+* **Nota**: A questo punto il servizio è online, ma è necessario attendere qualche minuto affinché la propagazione del record DNS MagicDNS si completi a livello globale.
+
+!!! tip "Disattivare la scadenza della chiave (Key Expiry) per il Container"
+
+    Per evitare che il container del sidecar scada disconnettendosi dalla tua Tailnet dopo il periodo di default (180 giorni):
+    
+    1. Vai alla pagina **Machines** della Tailscale Admin Console.
+    2. Trova il nodo del container (es. `librefolio` o `tailscale-librefolio`) nella lista.
+    3. Clicca sull'icona con i **tre puntini (...)** sulla destra della riga del dispositivo.
+    4. Seleziona l'opzione **Disable Key Expiry**.
 
 <table style="width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem;">
   <thead>
@@ -492,7 +618,7 @@ Apri il link indicato nel browser per autorizzare l'esposizione.
     <tr>
       <td style="padding: 10px; border: 1px solid #e5e7eb; background-color: rgba(76, 175, 80, 0.08); vertical-align: top;">
         <ul>
-          <li>Possibilità di creare **infiniti Funnel pubblici indipendenti** su una sola macchina fisica.</li>
+          <li>Possibilità di creare <strong>infiniti Funnel pubblici indipendenti</strong> su una sola macchina fisica.</li>
           <li>URL separati e dedicati per ogni servizio domestico.</li>
           <li>I pacchetti di rete locali viaggiano in modo sicuro e diretto tra il container ed il servizio di destinazione.</li>
         </ul>
