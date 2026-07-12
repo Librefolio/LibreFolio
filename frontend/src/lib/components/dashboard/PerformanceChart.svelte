@@ -11,10 +11,13 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {goto} from '$app/navigation';
+    import {ExternalLink, Layers} from 'lucide-svelte';
     import {t} from '$lib/i18n';
+    import ContextMenu, {type ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-    import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide} from '$lib/components/charts/echartsTooltipHelpers';
+    import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
     interface AssetPeriodContribution {
@@ -47,9 +50,10 @@
         positions: ReadonlyArray<AssetPeriodContribution>;
         otherEffects: ReadonlyArray<OtherPeriodEffect>;
         displayCurrency?: string;
+        onAnalyze?: (assetId: number) => void;
     }
 
-    let {positions = [], otherEffects = [], displayCurrency = 'EUR'}: Props = $props();
+    let {positions = [], otherEffects = [], displayCurrency = 'EUR', onAnalyze}: Props = $props();
 
     type ComponentKey = 'unrealized' | 'realized' | 'income' | 'costs';
 
@@ -57,6 +61,7 @@
         key: string;
         kind: 'asset';
         label: string;
+        assetId: number;
         assetTicker: string | null;
         brokerName: string;
         startValue: number;
@@ -91,6 +96,8 @@
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
     let isDark = $state(false);
+    let needsInitialLayoutStabilityPass = false;
+    let contextMenu = $state<{x: number; y: number; assetId: number} | null>(null);
 
     // Narrow layout: label+bar side-by-side leaves almost no room for the bar itself
     // (fixed-width category label + right-side net label eat most of a narrow
@@ -258,6 +265,7 @@
                 key: `asset-${position.broker_id}-${position.asset_id}-${index}`,
                 kind: 'asset',
                 label: position.asset_name,
+                assetId: position.asset_id,
                 assetTicker: safeString(position.asset_ticker),
                 brokerName: position.broker_name,
                 startValue: safeNumber(position.start_value),
@@ -924,6 +932,22 @@
         };
     }
 
+    function rowFromChartEvent(params: any): ChartRow | null {
+        const dataIndex = params?.dataIndex;
+        if (typeof dataIndex !== 'number') return null;
+        return displayRows[dataIndex]?.row ?? null;
+    }
+
+    function handleChartContextMenu(params: any) {
+        const row = rowFromChartEvent(params);
+        if (row?.kind === 'asset') {
+            const nativeEvent = params?.event?.event as MouseEvent | PointerEvent | undefined;
+            nativeEvent?.preventDefault();
+            if (nativeEvent?.clientX == null || nativeEvent?.clientY == null) return;
+            contextMenu = {x: nativeEvent.clientX, y: nativeEvent.clientY, assetId: row.assetId};
+        }
+    }
+
     function setupResizeObserver() {
         if (!chartContainer) return;
         if (resizeObserver) return;
@@ -946,14 +970,19 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            needsInitialLayoutStabilityPass = true;
             setupResizeObserver();
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
             setupRowHighlightEvents(chartInstance);
+            chartInstance.on('contextmenu', handleChartContextMenu);
         }
 
         chartInstance.setOption(buildOption(isDark), true);
-        chartInstance.resize();
+        if (needsInitialLayoutStabilityPass) {
+            needsInitialLayoutStabilityPass = false;
+            scheduleFirstRenderStabilityFix(chartInstance, chartContainer);
+        }
     }
 
     /** Mobile row-highlight hover wiring (see rowHighlightSeries in buildSeries()).
@@ -1035,5 +1064,23 @@
         <div class:overflow-y-auto={enableScroll} style:max-height={enableScroll ? '70dvh' : undefined} bind:this={scrollWrapper}>
             <div bind:this={chartContainer} style="width:100%;height:{chartHeight}px"></div>
         </div>
+    {/if}
+
+    {#if contextMenu}
+        <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            items={[
+                {id: 'view-asset', label: $t('brokers.lots.viewAsset') || 'View Asset', icon: ExternalLink as unknown as ContextMenuItem['icon']},
+                {id: 'analyze-lots', label: $t('brokers.lots.analyze') || 'Analyze Lots', icon: Layers as unknown as ContextMenuItem['icon']},
+            ] satisfies ContextMenuItem[]}
+            onAction={(id) => {
+                if (!contextMenu) return;
+                if (id === 'view-asset') void goto(`/assets/${contextMenu.assetId}`);
+                else if (id === 'analyze-lots') onAnalyze?.(contextMenu.assetId);
+                contextMenu = null;
+            }}
+            onClose={() => (contextMenu = null)}
+        />
     {/if}
 </div>

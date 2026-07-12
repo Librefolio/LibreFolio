@@ -9,9 +9,10 @@
 -->
 <script lang="ts">
     import {goto} from '$app/navigation';
+    import {ExternalLink, Layers} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
-    import type {ColumnDef} from '$lib/components/table/types';
+    import type {ColumnDef, RowAction} from '$lib/components/table/types';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
@@ -20,6 +21,13 @@
 
     type NumericLike = string | (string | null)[] | null;
     type PositionStatus = 'open_at_period_end' | 'closed_by_period_end';
+
+    interface HoldingSnapshot {
+        asset_id: number;
+        broker_id?: number | (number | null)[] | null;
+        gain_loss_change_1d?: NumericLike;
+        gain_loss_change_1d_percent?: NumericLike;
+    }
 
     interface Position {
         asset_id: number;
@@ -42,17 +50,28 @@
     interface Props {
         /** Full mixed dataset from backend. Do not pre-filter open/closed in parent. */
         positions: Position[];
+        holdings?: HoldingSnapshot[];
         displayCurrency?: string;
         brokers?: ReadonlyArray<BrokerLike>;
+        onAnalyze?: (assetId: number) => void;
     }
 
-    let {positions = [], displayCurrency = 'EUR', brokers = []}: Props = $props();
+    let {positions = [], holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze}: Props = $props();
 
     function safeNum(v: NumericLike | undefined): number | null {
         const s = Array.isArray(v) ? (v[0] ?? null) : v;
         if (s == null) return null;
         const n = parseFloat(s);
         return isNaN(n) ? null : n;
+    }
+
+    function safeInt(v: number | (number | null)[] | null | undefined): number | null {
+        if (v == null) return null;
+        return Array.isArray(v) ? (v[0] ?? null) : v;
+    }
+
+    function makeHoldingLookupKey(assetId: number, brokerId: number | null): string {
+        return `${assetId}-${brokerId ?? 0}`;
     }
 
     function statusFromSoldFlag(isFullySold: boolean): PositionStatus {
@@ -82,6 +101,8 @@
         costs: number | null;
         startValue: number | null;
         endValue: number | null;
+        gainLossChange1d: number | null;
+        gainLossChange1dPercent: number | null;
         status: PositionStatus;
         statusLabel: string;
         isFullySold: boolean;
@@ -90,10 +111,20 @@
 
     let displayRows = $derived.by(() => {
         const brokerMap = new Map(brokers.map((broker) => [broker.id, broker]));
+        const holdingsByKey = new Map(
+            holdings.map((holding) => [
+                makeHoldingLookupKey(holding.asset_id, safeInt(holding.broker_id)),
+                {
+                    gainLossChange1d: safeNum(holding.gain_loss_change_1d),
+                    gainLossChange1dPercent: safeNum(holding.gain_loss_change_1d_percent),
+                },
+            ]),
+        );
         return positions
             .map((p) => {
                 const isFullySold = p.is_fully_sold ?? false;
                 const status = statusFromSoldFlag(isFullySold);
+                const holdingMatch = holdingsByKey.get(makeHoldingLookupKey(p.asset_id, p.broker_id)) ?? null;
                 return {
                     key: `pos-${p.broker_id}-${p.asset_id}`,
                     assetName: p.asset_name,
@@ -108,6 +139,8 @@
                     costs: safeNum(p.period_fees_taxes),
                     startValue: safeNum(p.start_value),
                     endValue: safeNum(p.end_value),
+                    gainLossChange1d: holdingMatch?.gainLossChange1d ?? null,
+                    gainLossChange1dPercent: holdingMatch?.gainLossChange1dPercent ?? null,
                     status,
                     statusLabel: statusLabel(status),
                     isFullySold,
@@ -138,6 +171,15 @@
         };
     }
 
+    function percentChangeCell(value: number | null) {
+        if (value == null) return '—';
+        const classes = value >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
+        return {
+            type: 'html' as const,
+            html: `<span class="font-medium tabular-nums ${classes}">${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%</span>`,
+        };
+    }
+
     function statusCell(row: DisplayRow) {
         const classes = row.isFullySold ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300';
         return {
@@ -164,6 +206,24 @@
         if (row.assetId == null) return;
         void goto(`/assets/${row.assetId}`);
     }
+
+    const rowActions: RowAction<DisplayRow>[] = [
+        {
+            id: 'view-asset',
+            icon: ExternalLink,
+            label: () => $_('brokers.lots.viewAsset') || 'View Asset',
+            onClick: (row) => goToAssetDetail(row),
+        },
+        {
+            id: 'analyze-lots',
+            icon: Layers,
+            label: () => $_('brokers.lots.analyze') || 'Analyze Lots',
+            onClick: (row) => {
+                if (row.assetId == null) return;
+                onAnalyze?.(row.assetId);
+            },
+        },
+    ];
 
     let columns = $derived.by<ColumnDef<DisplayRow>[]>(() => {
         const openStatusLabel = label('dashboard.openAtPeriodEnd', 'Open at period end');
@@ -277,6 +337,32 @@
                 cell: (row) => amountCell(row.endValue),
             },
             {
+                id: 'pnl-change-1d',
+                header: () => label('dashboard.pnlChange1d', 'Δ P&L vs yesterday'),
+                headerTooltip: () => label('dashboard.pnlChange1dTooltip', "Change in unrealized P&L vs yesterday, holding today's quantity constant."),
+                type: 'number',
+                width: 190,
+                minWidth: 170,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.gainLossChange1d ?? 0,
+                cell: (row) => signedAmountCell(row.gainLossChange1d),
+            },
+            {
+                id: 'pnl-change-1d-percent',
+                header: () => label('dashboard.pnlChange1dPercent', 'Δ P&L %'),
+                headerTooltip: () => label('dashboard.pnlChange1dPercentTooltip', "Δ P&L vs yesterday as a percentage of yesterday's unrealized P&L."),
+                type: 'number',
+                width: 120,
+                minWidth: 110,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.gainLossChange1dPercent ?? 0,
+                cell: (row) => percentChangeCell(row.gainLossChange1dPercent != null ? row.gainLossChange1dPercent / 100 : null),
+            },
+            {
                 id: 'status',
                 header: () => label('dashboard.status', 'Status'),
                 type: 'enum',
@@ -327,16 +413,16 @@
         storageKey="dashboard-performance"
         enableSelection={false}
         selectionMode="none"
-        enableActions={false}
+        enableActions={true}
         enablePagination={false}
         enableColumnVisibility={false}
         enableColumnFilters={true}
         enableSorting={true}
         enableColumnResize={true}
-        enableContextMenu={false}
+        enableContextMenu={true}
         tableLayout="fixed"
+        {rowActions}
         {getRowClass}
         emptyMessage={label('dashboard.noPeriodPnl', 'No period P&L data')}
-        onRowDoubleClick={goToAssetDetail}
     />
 </div>

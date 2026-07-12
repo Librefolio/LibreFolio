@@ -11,7 +11,8 @@
     import {_} from '$lib/i18n';
     import {onMount} from 'svelte';
     import {goto} from '$app/navigation';
-    import type {ColumnDef} from '$lib/components/table/types';
+    import {ExternalLink, Layers} from 'lucide-svelte';
+    import type {ColumnDef, RowAction} from '$lib/components/table/types';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
@@ -33,6 +34,8 @@
         nav_weight_percent?: string | (string | null)[] | null;
         gain_loss?: string | (string | null)[] | null;
         gain_loss_percent?: string | (string | null)[] | null;
+        gain_loss_change_1d?: string | (string | null)[] | null;
+        gain_loss_change_1d_percent?: string | (string | null)[] | null;
     }
 
     interface Props {
@@ -40,6 +43,7 @@
         navAmount: number;
         displayCurrency: string;
         brokers?: ReadonlyArray<BrokerLike>;
+        onAnalyze?: (assetId: number) => void;
     }
 
     interface DisplayRow {
@@ -54,12 +58,14 @@
         navWeight: number | null;
         unrealizedPnl: number | null;
         unrealizedPnlPercent: number | null;
+        gainLossChange1d: number | null;
+        gainLossChange1dPercent: number | null;
         quantity: number | null;
         price: number | null;
         wacPerUnit: number | null;
     }
 
-    let {holdings = [], navAmount = 0, displayCurrency = 'EUR', brokers = [], ..._legacyProps}: Props & Record<string, unknown> = $props();
+    let {holdings = [], navAmount = 0, displayCurrency = 'EUR', brokers = [], onAnalyze, ..._legacyProps}: Props & Record<string, unknown> = $props();
     void _legacyProps;
 
     onMount(async () => {
@@ -134,6 +140,8 @@
                     navWeight: safeNum(holding.nav_weight_percent) ?? (currentValue != null && navAmount > 0 ? (currentValue / navAmount) * 100 : null),
                     unrealizedPnl: safeNum(holding.gain_loss),
                     unrealizedPnlPercent: safeNum(holding.gain_loss_percent),
+                    gainLossChange1d: safeNum(holding.gain_loss_change_1d),
+                    gainLossChange1dPercent: safeNum(holding.gain_loss_change_1d_percent),
                     quantity: safeNum(holding.quantity),
                     price: safeNum(holding.current_price),
                     wacPerUnit: safeNum(holding.wac_per_unit),
@@ -248,6 +256,34 @@
                 cell: (row) => percentChangeCell(row.unrealizedPnlPercent),
             },
             {
+                id: 'pnl-change-1d',
+                header: () => $_('dashboard.pnlChange1d') || 'Δ P&L vs yesterday',
+                headerTooltip: () => $_('dashboard.pnlChange1dTooltip') || "Change in unrealized P&L vs yesterday, holding today's quantity constant.",
+                type: 'number',
+                align: 'right',
+                width: 190,
+                minWidth: 170,
+                maxWidth: 300,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => row.gainLossChange1d ?? 0,
+                cell: (row) => signedAmountCell(row.gainLossChange1d),
+            },
+            {
+                id: 'pnl-change-1d-percent',
+                header: () => $_('dashboard.pnlChange1dPercent') || 'Δ P&L %',
+                headerTooltip: () => $_('dashboard.pnlChange1dPercentTooltip') || "Δ P&L vs yesterday as a percentage of yesterday's unrealized P&L.",
+                type: 'number',
+                align: 'right',
+                width: 120,
+                minWidth: 110,
+                maxWidth: 190,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => row.gainLossChange1dPercent ?? 0,
+                cell: (row) => percentChangeCell(row.gainLossChange1dPercent != null ? row.gainLossChange1dPercent / 100 : null),
+            },
+            {
                 id: 'quantity',
                 header: () => $_('dashboard.quantity') || 'Quantity',
                 type: 'number',
@@ -296,6 +332,21 @@
     function goToAssetDetail(row: DisplayRow) {
         void goto(`/assets/${row.assetId}`);
     }
+
+    const rowActions: RowAction<DisplayRow>[] = [
+        {
+            id: 'view-asset',
+            icon: ExternalLink,
+            label: () => $_('brokers.lots.viewAsset') || 'View Asset',
+            onClick: (row) => goToAssetDetail(row),
+        },
+        {
+            id: 'analyze-lots',
+            icon: Layers,
+            label: () => $_('brokers.lots.analyze') || 'Analyze Lots',
+            onClick: (row) => onAnalyze?.(row.assetId),
+        },
+    ];
 </script>
 
 <div data-testid="exposure-table">
@@ -306,15 +357,15 @@
         storageKey="dashboard-holdings-v3"
         enableSelection={false}
         selectionMode="none"
-        enableActions={false}
+        enableActions={true}
         enablePagination={false}
         enableColumnVisibility={false}
         enableColumnFilters={false}
         enableSorting={true}
         enableColumnResize={true}
-        enableContextMenu={false}
+        enableContextMenu={true}
         tableLayout="fixed"
+        {rowActions}
         emptyMessage={tableEmptyMessage}
-        onRowDoubleClick={goToAssetDetail}
     />
 </div>

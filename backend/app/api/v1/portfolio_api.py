@@ -5,13 +5,15 @@ Provides read-only portfolio calculations on committed data:
 - POST /portfolio/wac           — WAC time series per (broker, asset)
 - POST /portfolio/report        — UNIFIED: summary+history+allocation+contribution+data_quality
 - GET  /portfolio/asset-history — WAC vs market price series for one asset
-- GET  /portfolio/lots          — FIFO open and closed lots for one (broker, asset)
+- GET  /portfolio/lots          — FIFO open and closed lots for one asset across brokers
 
 Legacy standalone endpoints (/summary, /history, /allocation-history) removed —
 all data is available via /report with include_* flags.
 """
 
 from datetime import date as date_type
+from typing import List, Optional
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +22,7 @@ from backend.app.db.models import Asset, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.portfolio import (
+    AssetHistoryPoint,
     FIFOLotsResponse,
     PortfolioReportQuery,
     PortfolioReportResponse,
@@ -132,23 +135,46 @@ async def get_portfolio_wac(
 
 
 @portfolio_router.get(
+    "/asset-history",
+    response_model=list[AssetHistoryPoint],
+    summary="Asset WAC vs market price history",
+    description="Time series of WAC (cost basis per unit) vs market price for a specific asset.",
+)
+async def get_asset_history(
+    asset_id: int = Query(..., description="Asset ID"),
+    broker_ids: Optional[List[int]] = Query(None, description="Broker IDs to include; omit for all accessible brokers"),
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> list[AssetHistoryPoint]:
+    """Return WAC vs market price series for a specific asset."""
+    service = PortfolioService(session)
+    return await service.get_asset_history(
+        user_id=current_user.id,
+        asset_id=asset_id,
+        broker_ids=broker_ids,
+    )
+
+
+@portfolio_router.get(
     "/lots",
     response_model=FIFOLotsResponse,
     summary="FIFO lots for an asset",
-    description="Open and closed FIFO lots for a specific asset in a specific broker.",
+    description="Open and closed FIFO lots for a specific asset across selected accessible brokers.",
 )
 async def get_fifo_lots(
-    broker_id: int = Query(..., description="Broker ID"),
+    broker_ids: Optional[List[int]] = Query(None, description="Broker IDs to include; omit for all accessible brokers"),
     asset_id: int = Query(..., description="Asset ID"),
+    as_of_date: Optional[date_type] = Query(None, description="Filter FIFO calculation to transactions up to this date; omit for all-time"),
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
 ) -> FIFOLotsResponse:
-    """Return FIFO open and closed lots for a (broker, asset) pair."""
+    """Return FIFO open and closed lots for an asset across brokers."""
     service = PortfolioService(session)
     return await service.get_lots(
         user_id=current_user.id,
-        broker_id=broker_id,
+        broker_ids=broker_ids,
         asset_id=asset_id,
+        as_of_date=as_of_date,
     )
 
 

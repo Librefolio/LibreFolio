@@ -13,7 +13,8 @@
   Pattern: Svelte 5 Runes, Tailwind CSS 4, dark mode, data-testid everywhere.
 -->
 <script lang="ts">
-    import {onMount} from 'svelte';
+    import {onMount, tick} from 'svelte';
+    import {page} from '$app/stores';
     import {_} from '$lib/i18n';
     import {RefreshCw, Brain, Briefcase, TrendingUp, ArrowRightLeft, Wallet} from 'lucide-svelte';
     import {copyAiExport} from '$lib/features/ai-export/aiExportClipboard';
@@ -21,6 +22,8 @@
 
     import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
+    import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
+    import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {createDateRangeController} from '$lib/stores/dateRangeController.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
@@ -30,6 +33,7 @@
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
+    import FIFOLotsPanel from '$lib/components/brokers/lots/FIFOLotsPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
@@ -63,10 +67,31 @@
     let aiExportLoading = $state(false);
     let aiExportDropdownOpen = $state(false);
     let aiExportTriggerEl = $state<HTMLElement | null>(null);
+    let aiExportPanelEl = $state<HTMLDivElement | null>(null);
+    let aiExportDropdownPosition = $state({left: 8, top: 8});
 
     /** Broker IDs selected in the filter (empty = all brokers). */
     let selectedBrokerIds = $state<number[]>([]);
     let allBrokers = $state<BrokerLike[]>([]);
+
+    /** FIFO lots analysis panel (Posizioni tab) — mirrors brokers/[id]/+page.svelte's pattern
+     *  but in runes syntax (this file is Svelte 5 runes throughout, unlike the legacy broker
+     *  detail page). Scope defaults to ALL accessible brokers when no broker filter is active
+     *  (activeBrokerIds undefined = "All Brokers"), so the panel analyzes the same asset across
+     *  every broker that holds it — see plan_ui_broker_holdings.md multi-broker evolution. */
+    let activeAssetId = $state<number | null>(null);
+    $effect(() => {
+        const paramAssetId = getAssetPanelAssetId($page.url.searchParams) ?? null;
+        if (paramAssetId !== activeAssetId) activeAssetId = paramAssetId;
+    });
+
+    function openAssetPanel(assetId: number) {
+        void goto(buildAssetPanelUrl($page.url, assetId), {replaceState: true, noScroll: true});
+    }
+
+    function closeAssetPanel() {
+        void goto(buildAssetPanelUrl($page.url, null), {replaceState: true, noScroll: true});
+    }
 
     /** Debounce timer for broker filter changes. */
     let reloadTimer = $state<ReturnType<typeof setTimeout> | null>(null);
@@ -93,6 +118,11 @@
     /** Broker filter dropdown open state. */
     let brokerFilterOpen = $state(false);
     let brokerFilterTriggerEl = $state<HTMLButtonElement | null>(null);
+    let brokerFilterPanelEl = $state<HTMLDivElement | null>(null);
+    let brokerFilterDropdownPosition = $state({left: 8, top: 8});
+
+    const DROPDOWN_VIEWPORT_MARGIN = 8;
+    const DROPDOWN_TRIGGER_GAP = 4;
 
     // =========================================================================
     // Derived
@@ -320,6 +350,67 @@
         }
     }
 
+    function clamp(value: number, min: number, max: number) {
+        return Math.min(Math.max(value, min), max);
+    }
+
+    function getFixedDropdownPosition(triggerEl: HTMLElement | null, panelEl: HTMLDivElement | null, horizontalAlign: 'start' | 'end') {
+        if (!triggerEl) return {left: DROPDOWN_VIEWPORT_MARGIN, top: DROPDOWN_VIEWPORT_MARGIN};
+
+        const triggerRect = triggerEl.getBoundingClientRect();
+        const panelRect = panelEl?.getBoundingClientRect();
+        const panelWidth = panelRect?.width ?? 224;
+        const panelHeight = panelRect?.height ?? 0;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        const minLeft = DROPDOWN_VIEWPORT_MARGIN;
+        const maxLeft = Math.max(minLeft, viewportWidth - panelWidth - DROPDOWN_VIEWPORT_MARGIN);
+        let left = horizontalAlign === 'end' ? triggerRect.right - panelWidth : triggerRect.left;
+        left = clamp(left, minLeft, maxLeft);
+
+        const minTop = DROPDOWN_VIEWPORT_MARGIN;
+        const maxTop = Math.max(minTop, viewportHeight - panelHeight - DROPDOWN_VIEWPORT_MARGIN);
+        let top = triggerRect.bottom + DROPDOWN_TRIGGER_GAP;
+        if (panelHeight > 0 && top + panelHeight > viewportHeight - DROPDOWN_VIEWPORT_MARGIN) {
+            top = triggerRect.top - panelHeight - DROPDOWN_TRIGGER_GAP;
+        }
+        top = clamp(top, minTop, maxTop);
+
+        return {left, top};
+    }
+
+    async function positionBrokerFilterDropdown() {
+        await tick();
+        if (!brokerFilterOpen) return;
+        brokerFilterDropdownPosition = getFixedDropdownPosition(brokerFilterTriggerEl, brokerFilterPanelEl, 'start');
+    }
+
+    async function positionAiExportDropdown() {
+        await tick();
+        if (!aiExportDropdownOpen) return;
+        aiExportDropdownPosition = getFixedDropdownPosition(aiExportTriggerEl, aiExportPanelEl, 'end');
+    }
+
+    function updateOpenDropdownPositions() {
+        if (brokerFilterOpen) {
+            brokerFilterDropdownPosition = getFixedDropdownPosition(brokerFilterTriggerEl, brokerFilterPanelEl, 'start');
+        }
+        if (aiExportDropdownOpen) {
+            aiExportDropdownPosition = getFixedDropdownPosition(aiExportTriggerEl, aiExportPanelEl, 'end');
+        }
+    }
+
+    function toggleBrokerFilterDropdown() {
+        brokerFilterOpen = !brokerFilterOpen;
+        if (brokerFilterOpen) void positionBrokerFilterDropdown();
+    }
+
+    function toggleAiExportDropdown() {
+        aiExportDropdownOpen = !aiExportDropdownOpen;
+        if (aiExportDropdownOpen) void positionAiExportDropdown();
+    }
+
     // Outside-click closes broker filter panel and AI export dropdown
     function handleDocumentClick(e: MouseEvent) {
         if (aiExportDropdownOpen) {
@@ -330,9 +421,32 @@
         }
         if (!brokerFilterOpen) return;
         const target = e.target as HTMLElement;
-        if (target.closest?.('[data-broker-filter-panel]') || target === brokerFilterTriggerEl) return;
+        if (target.closest?.('[data-broker-filter-panel]') || target.closest?.('[data-testid="broker-filter-trigger"]')) return;
         brokerFilterOpen = false;
     }
+
+    $effect(() => {
+        if (!brokerFilterOpen) return;
+        void positionBrokerFilterDropdown();
+    });
+
+    $effect(() => {
+        if (!aiExportDropdownOpen) return;
+        void positionAiExportDropdown();
+    });
+
+    $effect(() => {
+        if (!brokerFilterOpen && !aiExportDropdownOpen) return;
+
+        const handleViewportChange = () => updateOpenDropdownPositions();
+        window.addEventListener('resize', handleViewportChange);
+        window.addEventListener('scroll', handleViewportChange, true);
+
+        return () => {
+            window.removeEventListener('resize', handleViewportChange);
+            window.removeEventListener('scroll', handleViewportChange, true);
+        };
+    });
 
     // =========================================================================
     // Lifecycle
@@ -341,7 +455,7 @@
     onMount(() => {
         document.addEventListener('click', handleDocumentClick);
         void (async () => {
-            await ensureBrokersLoaded();
+            await Promise.all([ensureBrokersLoaded(), ensureAssetsLoaded()]);
             allBrokers = getAllBrokers();
             await loadAll();
         })();
@@ -352,10 +466,10 @@
 <div class="space-y-4" data-testid="dashboard-page">
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
-    <PageToolbar thresholds={{wide: 900, tablet: 660, tabletS: 480, compact: 340, labelHide: 340}} tabs={dashboardTabs} bind:activeTab testId="dashboard-controls" filterRowTestId="dashboard-filter-bar">
+    <PageToolbar thresholds={{wide: 900, tablet: 660, tabletS: 480, compact: 340, labelHide: 340}} tabs={dashboardTabs} bind:activeTab testId="dashboard-controls" filterRowTestId="dashboard-filter-bar" layoutDebugName="dashboard">
         {#snippet filters({isStacked})}
             <!-- Date range picker (wired to global store via the shared dateRangeController) -->
-            <DateRangePicker bind:activePreset={dateRangeCtl.activePreset} bind:start={dateRangeCtl.displayStart} bind:end={dateRangeCtl.end} compact={true} align="start" onchange={dateRangeCtl.onDateRangeChange} />
+            <DateRangePicker bind:activePreset={dateRangeCtl.activePreset} bind:start={dateRangeCtl.displayStart} bind:end={dateRangeCtl.end} compact={true} align="start" debugName="dashboard" onchange={dateRangeCtl.onDateRangeChange} />
 
             <!-- Currency override + Broker multi-select — share one justified row when stacked
                  (not each its own stacked full-width row); inline naturally otherwise, same as
@@ -385,7 +499,7 @@
                         bind:this={brokerFilterTriggerEl}
                         class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
                        {brokerFilterActive ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
-                        onclick={() => (brokerFilterOpen = !brokerFilterOpen)}
+                        onclick={toggleBrokerFilterDropdown}
                         data-testid="broker-filter-trigger"
                     >
                         {brokerFilterLabel}
@@ -395,7 +509,13 @@
                     </button>
 
                     {#if brokerFilterOpen}
-                        <div class="absolute left-0 z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" data-broker-filter-panel>
+                        <div
+                            bind:this={brokerFilterPanelEl}
+                            class="fixed z-50 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden"
+                            style:left={`${brokerFilterDropdownPosition.left}px`}
+                            style:top={`${brokerFilterDropdownPosition.top}px`}
+                            data-broker-filter-panel
+                        >
                             <!-- Select All / Deselect All -->
                             <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
                                 <button
@@ -449,7 +569,7 @@
                     class="flex items-center justify-center gap-2 {stretchActions
                         ? 'w-full'
                         : ''} px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
-                    onclick={() => (aiExportDropdownOpen = !aiExportDropdownOpen)}
+                    onclick={toggleAiExportDropdown}
                     disabled={aiExportLoading}
                     data-testid="ai-export-button"
                     title={$_('dashboard.aiExport')}
@@ -461,7 +581,13 @@
                 </button>
 
                 {#if aiExportDropdownOpen}
-                    <div class="absolute right-0 z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" data-ai-export-panel>
+                    <div
+                        bind:this={aiExportPanelEl}
+                        class="fixed z-50 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden"
+                        style:left={`${aiExportDropdownPosition.left}px`}
+                        style:top={`${aiExportDropdownPosition.top}px`}
+                        data-ai-export-panel
+                    >
                         <button type="button" class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" onclick={() => handleAiExport('full')} data-testid="ai-export-full">
                             <Brain size={14} class="text-purple-500" />
                             {$_('dashboard.aiExportFull')}
@@ -537,7 +663,19 @@
         </div>
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
-            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} />
+            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} />
+            <FIFOLotsPanel
+                open={activeAssetId != null}
+                assetId={activeAssetId}
+                brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)}
+                brokers={allBrokers}
+                dateFrom={dateRangeCtl.start}
+                dateTo={dateRangeCtl.end}
+                isAllPeriod={dateRangeCtl.activePreset === 'MAX'}
+                currency={activeAssetId != null ? (getAssetInfo(activeAssetId)?.currency ?? displayCurrency) : displayCurrency}
+                assetName={activeAssetId != null ? getAssetInfo(activeAssetId)?.display_name : null}
+                onClose={closeAssetPanel}
+            />
         </div>
     {:else if activeTab === 'transazioni'}
         <div data-testid="dashboard-transactions-tab">

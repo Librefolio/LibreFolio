@@ -11,16 +11,17 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
-    import {RotateCcw} from 'lucide-svelte';
+    import {ExternalLink, Layers, RotateCcw} from 'lucide-svelte';
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
+    import ContextMenu, {type ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {buildTooltipTheme, buildTooltipRow, buildTooltipHeader, buildTooltipDivider} from '$lib/components/charts/echartsTooltipHelpers';
+    import {buildTooltipTheme, buildTooltipRow, buildTooltipHeader, buildTooltipDivider, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {brokerStoreVersion, ensureBrokersLoaded, getBrokerInfo} from '$lib/stores/reference/brokerStore';
     import {ensurePluginIconsLoaded, getBrokerIconUrl} from '$lib/utils/broker/brokerHelpers';
-    import {attachTreemapZoomGuard, resetTreemapView, type TreemapZoomGuardHandle} from '$lib/components/charts/echartsTreemapZoomGuard';
+    import {attachTreemapZoomGuard, resetTreemapView, panTreemapBy, type TreemapZoomGuardHandle} from '$lib/components/charts/echartsTreemapZoomGuard';
 
     interface Holding {
         asset_id: number;
@@ -37,9 +38,10 @@
     interface Props {
         holdings: Holding[];
         displayCurrency?: string;
+        onAnalyze?: (assetId: number) => void;
     }
 
-    let {holdings = [], displayCurrency = 'EUR'}: Props = $props();
+    let {holdings = [], displayCurrency = 'EUR', onAnalyze}: Props = $props();
 
     let chartWrapper: HTMLDivElement | undefined = $state(undefined);
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
@@ -51,6 +53,23 @@
     let chartHeight: number = $state(0);
     let windowResizeHandler: (() => void) | null = null;
     let pendingResizeFrame: number | null = null;
+    let needsInitialLayoutStabilityPass = false;
+    /** True once the user has zoomed in beyond the default 1:1 fit — i.e. there is
+     *  actually something to pan. Gates the two-finger pan handler below so it never
+     *  bothers dispatching a guaranteed no-op at the default fit. Two-finger touch never
+     *  competes with native single-finger scroll, so — unlike an earlier single-finger
+     *  attempt — this no longer needs to toggle `touch-action` on the container at all;
+     *  a stray 1-finger swipe over the treemap always scrolls the page, zoomed or not. */
+    let isZoomedIn = $state(false);
+    /** Last guard-corrected root rect, kept in sync by attachTreemapZoomGuard's
+     *  onScaleChange — the only externally-reachable source of "where is the treemap's
+     *  content right now", needed to compute manual pan targets (see handleTouchPanMove
+     *  below). */
+    let lastKnownRect: {x: number; y: number; width: number; height: number} | null = null;
+    /** Tracks an in-progress manual two-finger pan drag (see the doc comment on
+     *  `handleTouchPanStart` below for why two fingers, not one). Null when not dragging. */
+    let touchPanState: {x: number; y: number} | null = null;
+    let contextMenu = $state<{x: number; y: number; assetId: number} | null>(null);
 
     const UPPER_LABEL_ICON_SIZE = 12;
 
@@ -116,8 +135,83 @@
         resizeObserver = null;
         zoomGuard?.dispose();
         zoomGuard = null;
+        if (chartContainer) {
+            chartContainer.removeEventListener('touchstart', handleTouchPanStart);
+            chartContainer.removeEventListener('touchmove', handleTouchPanMove);
+            chartContainer.removeEventListener('touchend', handleTouchPanEnd);
+            chartContainer.removeEventListener('touchcancel', handleTouchPanEnd);
+        }
         chartInstance?.dispose();
         chartInstance = null;
+    }
+
+    /** Manual TWO-finger drag-to-pan bridge for touch devices.
+     *
+     *  WHY TWO FINGERS, NOT ONE (verified by reading zrender's source, not guessed): on any
+     *  modern mobile browser (Pointer Events API support, `'onpointerdown' in window`),
+     *  zrender's `HandlerProxy` translates `pointerdown`/`pointerup` into the internal
+     *  mousedown/mouseup zrender relies on regardless of origin — but its `pointermove`
+     *  handler does `if (!isPointerFromTouch(event)) { ...translate to mousemove... }`, i.e.
+     *  touch-sourced pointer movement is explicitly EXCLUDED from ever reaching
+     *  `RoamController`'s pan tracking. That alone was fixable by tracking touch drags
+     *  ourselves — but a SECOND, unrelated and unfixable problem showed up with a
+     *  single-finger implementation: a browser decides "this touch gesture is native scroll"
+     *  vs "this touch gesture is handled by JS" once, at the START of the gesture, and will
+     *  NOT hand it back to native scrolling mid-gesture — so once a single-finger drag starts
+     *  panning a zoomed treemap, reaching the edge (nothing left to pan) could not seamlessly
+     *  continue as page scroll within that same continuous drag; the user would have to lift
+     *  and re-touch. Reserving ONE finger exclusively for scrolling (always, with zero
+     *  exceptions) and using TWO fingers for pan sidesteps the conflict entirely — a
+     *  single-finger drag is never intercepted at all, so it always scrolls the page
+     *  normally, edge or no edge.
+     *
+     *  Dispatches the exact same `treemapMove` action ECharts' desktop mouse-drag path
+     *  would have dispatched (see `panTreemapBy`), computed from the CENTROID of the two
+     *  touches — fully reusing ECharts' rendering + this file's zoom/pan guard for clamping.
+     *  Runs independently of whatever already drives pinch-to-zoom (untouched by this fix,
+     *  it was already working) — this only ever adjusts position, never scale, so the two
+     *  naturally compose on a real 2-finger gesture that both translates and pinches at once. */
+    function centroidOf(touches: TouchList): {x: number; y: number} {
+        let x = 0;
+        let y = 0;
+        for (let i = 0; i < touches.length; i++) {
+            x += touches[i].clientX;
+            y += touches[i].clientY;
+        }
+        return {x: x / touches.length, y: y / touches.length};
+    }
+
+    function handleTouchPanStart(e: TouchEvent) {
+        if (e.touches.length !== 2 || !isZoomedIn) {
+            touchPanState = null;
+            return;
+        }
+        touchPanState = centroidOf(e.touches);
+    }
+
+    function handleTouchPanMove(e: TouchEvent) {
+        if (e.touches.length !== 2) {
+            // Finger count changed mid-gesture (e.g. one lifted) — stop tracking rather than
+            // computing a bogus delta against a stale reference point.
+            touchPanState = null;
+            return;
+        }
+        if (!touchPanState || !chartInstance || !lastKnownRect) return;
+        const centroid = centroidOf(e.touches);
+        const dx = centroid.x - touchPanState.x;
+        const dy = centroid.y - touchPanState.y;
+        touchPanState = centroid;
+        // Two-finger gestures never compete with native single-finger scroll, so this
+        // preventDefault only ever suppresses the browser's own pinch-zoom-the-page
+        // gesture — it can't block page scroll, which is exactly the point.
+        e.preventDefault();
+        panTreemapBy(chartInstance, dx, dy, lastKnownRect);
+    }
+
+    function handleTouchPanEnd(e: TouchEvent) {
+        // Re-arm if exactly 2 touches remain (e.g. a 3rd finger lifted back to 2); otherwise
+        // stop — a drop to 0 or 1 remaining touch ends the pan gesture.
+        touchPanState = e.touches.length === 2 && isZoomedIn ? centroidOf(e.touches) : null;
     }
 
     $effect(() => {
@@ -414,13 +508,13 @@
         return isDark ? `rgb(${248}, ${113 - intensity * 40}, ${113 - intensity * 40})` : `rgb(${220 + intensity * 20}, ${38 + intensity * 20}, ${38 + intensity * 20})`;
     }
 
-    /** Double-click on an asset leaf node → asset detail page (desktop). Mobile long-press
-     *  navigation is already covered by ExposureTable/ContributionTable; the treemap's touch
-     *  gestures are reserved for pinch-zoom/pan, so no separate long-press handler here. */
-    function handleTreemapDblClick(params: any) {
+    function handleTreemapContextMenu(params: any) {
         const meta = params?.data?._meta;
         if (meta?.level === 'asset' && meta.assetId != null) {
-            void goto(`/assets/${meta.assetId}`);
+            const nativeEvent = params?.event?.event as MouseEvent | PointerEvent | undefined;
+            nativeEvent?.preventDefault();
+            if (nativeEvent?.clientX == null || nativeEvent?.clientY == null) return;
+            contextMenu = {x: nativeEvent.clientX, y: nativeEvent.clientY, assetId: meta.assetId};
         }
     }
 
@@ -455,8 +549,22 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer);
-            zoomGuard = attachTreemapZoomGuard(chartInstance, () => ({width: chartContainer?.clientWidth ?? 0, height: chartContainer?.clientHeight ?? 0}), {minScale: 0.9, maxScale: computeMaxZoomScale});
-            chartInstance.on('dblclick', handleTreemapDblClick);
+            needsInitialLayoutStabilityPass = true;
+            zoomGuard = attachTreemapZoomGuard(chartInstance, () => ({width: chartContainer?.clientWidth ?? 0, height: chartContainer?.clientHeight ?? 0}), {
+                minScale: 0.9,
+                maxScale: computeMaxZoomScale,
+                onScaleChange: (scale, rect) => {
+                    isZoomedIn = scale > 1.01;
+                    lastKnownRect = rect;
+                },
+            });
+            chartInstance.on('contextmenu', handleTreemapContextMenu);
+            // {passive: false} is required — we conditionally call preventDefault() in
+            // handleTouchPanMove, which a passive listener would silently ignore.
+            chartContainer.addEventListener('touchstart', handleTouchPanStart, {passive: true});
+            chartContainer.addEventListener('touchmove', handleTouchPanMove, {passive: false});
+            chartContainer.addEventListener('touchend', handleTouchPanEnd, {passive: true});
+            chartContainer.addEventListener('touchcancel', handleTouchPanEnd, {passive: true});
         }
 
         const theme = buildTooltipTheme(isDark);
@@ -467,19 +575,6 @@
             chartInstance.clear();
             return;
         }
-
-        // Restore full roam on desktop; pinch-zoom only on touch to avoid blocking page scroll.
-        // Bugfix: `'ontouchstart' in window || navigator.maxTouchPoints > 0` only detects
-        // touch CAPABILITY, not the device's actual primary input — a touchscreen laptop
-        // used with a mouse/trackpad also has maxTouchPoints > 0, so it was wrongly forced
-        // into 'scale' (pinch-zoom only, drag-to-pan disabled) even for mouse users,
-        // matching the report "click-and-hold-drag shows the tooltip but never pans".
-        // `(pointer: coarse)` reflects the PRIMARY pointer's precision (CSS Media Queries
-        // Level 4) — true only for devices whose main input is an imprecise pointer
-        // (phones/tablets); a laptop with both a precise mouse/trackpad AND a touchscreen
-        // correctly reports `pointer: fine` here (the touchscreen only shows up under the
-        // separate `any-pointer: coarse`, which we deliberately don't check).
-        const isTouchDevice = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
 
         chartInstance.setOption(
             {
@@ -540,7 +635,7 @@
                         bottom: 0,
                         width: '100%',
                         height: '100%',
-                        roam: isTouchDevice ? 'scale' : true, // mobile: pinch-zoom only; desktop: full pan+zoom
+                        roam: true,
                         // IMPORTANT: keep this declared scaleLimit permissive (NOT matching our
                         // real [1, 5] bound). ECharts resets its internal cumulative-zoom
                         // bookkeeping (controllerHost.zoom) to 1 on EVERY render (see
@@ -581,6 +676,10 @@
             },
             true,
         );
+        if (needsInitialLayoutStabilityPass) {
+            needsInitialLayoutStabilityPass = false;
+            scheduleFirstRenderStabilityFix(chartInstance, chartContainer);
+        }
     }
 
     /** Instantly restores the natural, un-zoomed full-container view — see
@@ -599,6 +698,23 @@
      perfectly inside card padding, no CSS aspect-ratio/max-height ambiguity. -->
 <div bind:this={chartWrapper} class="relative w-full">
     <div bind:this={chartContainer} style="width:{chartWidth}px;height:{chartHeight}px" data-testid="exposure-treemap"></div>
+    {#if contextMenu}
+        <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            items={[
+                {id: 'view-asset', label: $_('brokers.lots.viewAsset') || 'View Asset', icon: ExternalLink as unknown as ContextMenuItem['icon']},
+                {id: 'analyze-lots', label: $_('brokers.lots.analyze') || 'Analyze Lots', icon: Layers as unknown as ContextMenuItem['icon']},
+            ] satisfies ContextMenuItem[]}
+            onAction={(id) => {
+                if (!contextMenu) return;
+                if (id === 'view-asset') void goto(`/assets/${contextMenu.assetId}`);
+                else if (id === 'analyze-lots') onAnalyze?.(contextMenu.assetId);
+                contextMenu = null;
+            }}
+            onClose={() => (contextMenu = null)}
+        />
+    {/if}
     <button
         type="button"
         class="absolute top-1 right-1 p-1 rounded bg-white/80 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-600 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-slate-700 transition-colors"
