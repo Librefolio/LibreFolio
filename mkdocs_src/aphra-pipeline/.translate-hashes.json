@@ -733,7 +733,7 @@
     ]
   },
   "admin/index.en.md": {
-    "md5": "07501ee303927a655b4ac0f463aedb48",
+    "md5": "96c0783ff6fb90bb99369528a329c90f",
     "langs_done": [
       "es",
       "fr",
@@ -743,15 +743,15 @@
     "analysis_model": "stepfun/step-3.5-flash:free",
     "langs": {
       "it": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-11T08:27:49.981562+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-11T08:27:49.981562+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-11T08:27:49.981562+00:00",
         "stamped_by": "translate-stamp"
       }
     },
@@ -919,7 +919,7 @@
     }
   },
   "admin/tailscale_exposure.en.md": {
-    "md5": "dd1064b85f04f3ad7231a4b02a75f0b3",
+    "md5": "b033fd1b600cf05a50577aa40c64b3dd",
     "langs_done": [
       "es",
       "fr",
@@ -929,15 +929,15 @@
     "analysis_model": "stepfun/step-3.5-flash:free",
     "langs": {
       "it": {
-        "stamped_at": "2026-07-11T07:40:26.885329+00:00",
+        "stamped_at": "2026-07-11T08:27:49.981562+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
-        "stamped_at": "2026-07-11T07:40:26.885329+00:00",
+        "stamped_at": "2026-07-11T08:27:49.981562+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
-        "stamped_at": "2026-07-11T07:40:26.885329+00:00",
+        "stamped_at": "2026-07-11T08:27:49.981562+00:00",
         "stamped_by": "translate-stamp"
       }
     },
@@ -4216,7 +4216,7 @@
     }
   },
   "admin/docker_advanced.en.md": {
-    "md5": "ceacea88aebb8cc33ff7e8654def25aa",
+    "md5": "7a906ed2345a870a3a781add8e0fe228",
     "langs_done": [
       "es",
       "fr",
@@ -4236,7 +4236,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 202.7,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-11T08:12:41.826425+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -4249,7 +4249,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 312.1,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-11T08:12:41.826425+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -4262,7 +4262,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 249.7,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-11T08:12:41.826425+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6107,7 +6107,7 @@
     }
   },
   "admin/configuration.en.md": {
-    "md5": "48a77670ab9ecd68e583af4a5b979d34",
+    "md5": "859b2fee9085ad44f8b2521866a4f1bc",
     "langs_done": [
       "es",
       "fr",
@@ -6127,7 +6127,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 188.6,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-11T08:06:17.050472+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6140,7 +6140,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 134.7,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-11T08:06:17.050472+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6153,7 +6153,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 161.9,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-11T08:06:17.050472+00:00",
         "stamped_by": "translate-stamp"
       }
     }

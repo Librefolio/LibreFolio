@@ -147,7 +147,7 @@ plugins:
             Filesystem Structure: Struttura Filesystem
             Advanced Docker: Docker Avanzato
             Host Installation: Installazione su Host
-            Exposing with Tailscale: Esporre con Tailscale
+            Expose Securely: Esporre in Sicurezza
             "📚 Financial Theory": "📚 Teoria Finanziaria"
             "🏷️ Asset Types": "🏷️ Tipi di Asset"
             "🔄 Transaction Types": "🔄 Tipi di Transazione"
@@ -291,7 +291,7 @@ plugins:
             Filesystem Structure: Structure du Système de Fichiers
             Advanced Docker: Docker Avancé
             Host Installation: Installation sur l'Hôte
-            Exposing with Tailscale: Exposer avec Tailscale
+            Expose Securely: Exposer en Sécurité
             "📚 Financial Theory": "📚 Théorie Financière"
             "🏷️ Asset Types": "🏷️ Types d'Actifs"
             "🔄 Transaction Types": "🔄 Types de Transactions"
@@ -435,7 +435,7 @@ plugins:
             Filesystem Structure: Estructura del Sistema de Archivos
             Advanced Docker: Docker Avanzado
             Host Installation: Instalación en Host
-            Exposing with Tailscale: Exponer con Tailscale
+            Expose Securely: Exponer en Seguridad
             "📚 Financial Theory": "📚 Teoría Financiera"
             "🏷️ Asset Types": "🏷️ Tipos de Activos"
             "🔄 Transaction Types": "🔄 Tipos de Transacciones"
@@ -597,7 +597,7 @@ nav:
       - 🐳 Deployment & Exposure:
           - Host Installation: admin/host_installation.md
           - Advanced Docker: admin/docker_advanced.md
-          - Exposing with Tailscale: admin/tailscale_exposure.md
+          - Expose Securely: admin/tailscale_exposure.md
       - ⚙️ System Configuration:
           - Environment Variables: admin/configuration.md
           - Global Settings: admin/settings.md

@@ -1,4 +1,4 @@
-# 🌐 Exposer LibreFolio via Tailscale
+# 🌐 Exposer en Sécurité
 
 Exposer ses services auto-hébergés en toute sécurité sur Internet est l'un des défis les plus courants. Ce guide explique comment rendre accessible LibreFolio (ou tout autre service de votre réseau local) en s'appuyant sur [Tailscale](https://tailscale.com/), una solution de VPN mesh sécurisée, performante et gratuite pour un usage domestique.
 
