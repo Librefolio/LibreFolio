@@ -108,13 +108,27 @@ export function registerLayoutDebug(name: string, layout: ResponsiveLayout) {
     const w = window as unknown as {__lfLayouts?: Record<string, Record<string, unknown>>};
     w.__lfLayouts ??= {};
     const existing = w.__lfLayouts[name];
+    const target = layout as unknown as Record<string, unknown>;
     // Merge-safe: DateRangePicker (via attachLayoutDebugExtra, e.g. for pickerConfig) and
     // PageToolbar/the page itself (via this function, for thresholds/layoutMode) can run in
     // EITHER order depending on the page — Svelte doesn't guarantee which sibling/child
     // component's script runs first. Preserve whatever the other side already put on this same
     // registry entry instead of blindly overwriting it.
-    if (existing) Object.assign(layout as unknown as Record<string, unknown>, existing);
-    w.__lfLayouts[name] = layout as unknown as Record<string, unknown>;
+    //
+    // Only copy keys that DON'T already exist on the fresh `layout` — never blindly
+    // Object.assign the whole `existing` object onto it. `existing` can also be a STALE
+    // ResponsiveLayout from a previous mount of the same page (e.g. client-side back/forward
+    // navigation remounts the page and calls this again for the same `name`): its
+    // `layoutMode`/`showActionLabels`/`width` are getter-only accessors, and so are the fresh
+    // `layout`'s — writing one getter's value onto another throws "Cannot set property ... which
+    // has only a getter". Skipping keys already present on `target` avoids that entirely while
+    // still bringing over genuine extras (e.g. `pickerConfig`).
+    if (existing) {
+        for (const key of Object.keys(existing)) {
+            if (!(key in target)) target[key] = existing[key];
+        }
+    }
+    w.__lfLayouts[name] = target;
 }
 
 /**
