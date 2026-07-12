@@ -326,6 +326,241 @@ async def compute_wac_iterative(
     return result
 
 
+async def compute_wac_iterative_multi_broker(
+    session: AsyncSession,
+    broker_ids: list[int],
+    asset_id: int,
+    as_of_date: date_type,
+    asset_currency: str,
+    excluded_tx_ids: list[int] | None = None,
+    target_currency_override: str | None = None,
+) -> WACPreviewResultItem:
+    """Compute unified WAC (PMC) for one asset across multiple brokers.
+
+    Preparation layer: queries DB, handles FX conversion,
+    then delegates to compute_wac_from_txlist() for pure math.
+
+    Transactions from all brokers are treated as one unified position for WAC
+    purposes. This is valid for WAC because it depends on cumulative quantity
+    and cost, but it is NOT equivalent to FIFO lot tracking, which remains
+    strictly per-broker elsewhere in codebase.
+    """
+    excluded = set(excluded_tx_ids or [])
+
+    # 1. Query ALL transactions for this (broker set, asset) with date <= as_of_date and qty != 0
+    stmt = select(Transaction).where(
+        Transaction.broker_id.in_(broker_ids),
+        Transaction.asset_id == asset_id,
+        Transaction.date <= as_of_date,
+        Transaction.quantity.is_not(None),
+        Transaction.quantity != 0,
+    )
+    db_rows = list((await session.execute(stmt)).scalars().all())
+
+    # WAC cache check: fingerprint from transaction IDs + updated_at
+    import hashlib  # noqa: PLC0415
+
+    wac_h = hashlib.md5(usedforsecurity=False)
+    for row in db_rows:
+        wac_h.update(f"{row.id}:{row.updated_at.isoformat()}".encode())
+    wac_fp = wac_h.hexdigest()
+    excluded_key = tuple(sorted(excluded)) if excluded else ()
+    broker_ids_key = tuple(sorted(broker_ids))
+    wac_cache_key = (broker_ids_key, asset_id, as_of_date.isoformat(), asset_currency, target_currency_override, excluded_key, wac_fp)
+
+    cached_wac, wac_hit = _wac_cache.get(wac_cache_key)
+    if wac_hit:
+        return cached_wac
+
+    # 2. Build unified row tuples from DB rows (minus excluded)
+    # Tuple: (tx_id, type_str, date, quantity, amount, currency, cbo_amount, cbo_ccy, is_pending, cbm)
+    unified: list[tuple] = []
+
+    for row in db_rows:
+        if row.id in excluded:
+            continue
+        unified.append(
+            (
+                row.id,
+                row.type.value if hasattr(row.type, "value") else str(row.type),
+                row.date,
+                row.quantity,
+                row.amount,
+                row.currency,
+                row.cost_basis_override,
+                row.cost_basis_currency,
+                False,
+                None,
+            )
+        )
+
+    if not unified:
+        return WACPreviewResultItem(
+            wac=Currency(code=asset_currency, amount=Decimal("0")),
+            wac_qualifying_txs=[],
+            wac_missing_pairs=[],
+        )
+
+    # 3. Build WACInputTX list and determine target_currency
+    #    First pass: determine currencies for target_currency selection
+    pre_txs: list[WACInputTX] = []
+    for tid, ttype, dt, qty, _amount, ccy, _cbo_amt, cbo_ccy, is_pend, _cbm in unified:
+        if qty > 0:
+            orig_ccy = ccy if ttype == "BUY" else (cbo_ccy or asset_currency)
+        else:
+            orig_ccy = ccy or asset_currency
+        pre_txs.append(
+            WACInputTX(
+                tx_id=tid,
+                type=ttype,
+                date=dt,
+                quantity=qty,
+                unit_cost_converted=None,
+                original_currency=orig_ccy,
+                is_pending=is_pend,
+            )
+        )
+
+    target_currency = target_currency_override or determine_target_currency(pre_txs, asset_currency)
+
+    # 4. FX conversion for acquisitions with different currency
+    fx_requests: list[tuple[int, Currency, str, date_type]] = []  # (idx, cost_ccy, target, date)
+
+    for i, (_tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, _is_pend, _cbm) in enumerate(unified):
+        if qty <= 0:
+            continue
+        if ttype == "BUY":
+            tx_ccy = ccy or asset_currency
+            if tx_ccy != target_currency and amount:
+                cost = abs(amount)
+                fx_requests.append((i, Currency(code=tx_ccy, amount=cost), target_currency, dt))
+        elif cbo_amt is not None:
+            tx_ccy = cbo_ccy or asset_currency
+            if tx_ccy != target_currency:
+                cost = qty * cbo_amt
+                fx_requests.append((i, Currency(code=tx_ccy, amount=cost), target_currency, dt))
+
+    fx_converted: dict[int, Decimal] = {}
+    fx_staleness: dict[int, FxBackwardFillInfo] = {}
+    fx_rates: dict[int, Decimal] = {}  # unified_idx → derived FX rate
+    missing_pair_dates: dict[str, list[date_type]] = {}
+
+    if fx_requests:
+        bulk_input = [(amt, to_ccy, dt) for _, amt, to_ccy, dt in fx_requests]
+        fx_results, _fx_errors = await convert_bulk(session, bulk_input, raise_on_error=False)
+        for j, (unified_idx, amt_ccy, _to_ccy, _dt) in enumerate(fx_requests):
+            result = fx_results[j] if j < len(fx_results) else None
+            if result is None:
+                pair_key = f"{amt_ccy.code}/{_to_ccy}"
+                missing_pair_dates.setdefault(pair_key, []).append(_dt)
+            else:
+                converted, rate_date, _bf = result
+                fx_converted[unified_idx] = converted.amount
+                # Derive FX rate from conversion (linear)
+                if amt_ccy.amount and amt_ccy.amount != 0:
+                    fx_rates[unified_idx] = converted.amount / amt_ccy.amount
+                # Track staleness info for qualifying TX enrichment
+                tx_date = unified[unified_idx][2]  # date is at index 2
+                stale_days = (tx_date - rate_date).days if rate_date < tx_date else 0
+                fx_staleness[unified_idx] = FxBackwardFillInfo(fx_rate_date=rate_date, fx_days_back=stale_days)
+
+    if missing_pair_dates:
+        missing_pairs_out = [WACMissingPairInfo(pair=k, dates=sorted(set(v))) for k, v in missing_pair_dates.items()]
+        return WACPreviewResultItem(wac=None, wac_qualifying_txs=[], wac_missing_pairs=missing_pairs_out)
+
+    # 5. Build final WACInputTX list with converted costs
+    input_txs: list[WACInputTX] = []
+    # Track original unit costs (before FX) keyed by unified_idx
+    original_unit_costs: dict[int, tuple[Decimal, str]] = {}  # idx → (unit_cost, currency)
+    for i, (tid, ttype, dt, qty, amount, ccy, cbo_amt, cbo_ccy, is_pend, cbm) in enumerate(unified):
+        unit_cost: Decimal | None = None
+        orig_ccy = ccy or asset_currency
+
+        if qty > 0:
+            if ttype == "BUY":
+                if i in fx_converted:
+                    unit_cost = fx_converted[i] / qty
+                    # Original unit cost before FX
+                    original_unit_costs[i] = (abs(amount) / qty if amount else Decimal("0"), ccy or asset_currency)
+                elif amount:
+                    unit_cost = abs(amount) / qty
+                else:
+                    unit_cost = Decimal("0")
+                orig_ccy = ccy or asset_currency
+            elif cbo_amt is not None:
+                if i in fx_converted:
+                    unit_cost = fx_converted[i] / qty
+                    # Original unit cost before FX
+                    original_unit_costs[i] = (cbo_amt, cbo_ccy or asset_currency)
+                else:
+                    unit_cost = cbo_amt
+                orig_ccy = cbo_ccy or asset_currency
+            else:
+                unit_cost = None  # will be treated as zero cost (or add_at_wac if cbm == "auto")
+                orig_ccy = asset_currency
+        # For reductions, unit_cost stays None — compute_wac_from_txlist uses current WAC
+
+        input_txs.append(
+            WACInputTX(
+                tx_id=tid,
+                type=ttype,
+                date=dt,
+                quantity=qty,
+                unit_cost_converted=unit_cost,
+                original_currency=orig_ccy,
+                is_pending=is_pend,
+                cost_basis_mode=cbm,
+            )
+        )
+
+    # 6. Delegate to pure math function
+    calc_result = compute_wac_from_txlist(input_txs, target_currency)
+
+    # 7. Convert result to schema
+    # Build tx_id → fx_staleness lookup for qualifying TX enrichment
+    tx_fx_info: dict[int, FxBackwardFillInfo] = {}
+    tx_original_costs: dict[int, tuple[Decimal, str]] = {}  # tx_id → (original_unit_cost, original_ccy)
+    tx_fx_rates: dict[int, Decimal] = {}  # tx_id → fx_rate
+    for idx, info in fx_staleness.items():
+        tx_id = unified[idx][0]
+        tx_fx_info[tx_id] = info
+    for idx, (orig_cost, orig_ccy) in original_unit_costs.items():
+        tx_id = unified[idx][0]
+        tx_original_costs[tx_id] = (orig_cost, orig_ccy)
+    for idx, rate in fx_rates.items():
+        tx_id = unified[idx][0]
+        tx_fx_rates[tx_id] = rate
+
+    qualifying_txs = [
+        WACQualifyingTX(
+            tx_id=q.tx_id,
+            type=q.type,
+            date=q.date,
+            quantity=q.quantity,
+            unit_cost=q.unit_cost,
+            currency=q.currency,
+            effect=q.effect,
+            running_wac=q.running_wac,
+            fx_info=tx_fx_info.get(q.tx_id) if q.tx_id is not None else None,
+            original_unit_cost=tx_original_costs[q.tx_id][0] if q.tx_id is not None and q.tx_id in tx_original_costs else None,
+            original_currency=tx_original_costs[q.tx_id][1] if q.tx_id is not None and q.tx_id in tx_original_costs else None,
+            fx_rate_used=tx_fx_rates.get(q.tx_id) if q.tx_id is not None else None,
+        )
+        for q in calc_result.qualifying
+    ]
+
+    result = WACPreviewResultItem(
+        wac=Currency(code=target_currency, amount=calc_result.wac_amount) if calc_result.pool_qty >= 0 else None,
+        wac_qualifying_txs=qualifying_txs,
+        wac_missing_pairs=[],
+    )
+
+    # Store in WAC cache
+    _wac_cache.set(wac_cache_key, result)
+
+    return result
+
+
 # =============================================================================
 # HISTORY SERIES — Pure function (no I/O, fully testable)
 # =============================================================================
@@ -911,6 +1146,8 @@ class PortfolioService:
             gain_loss_pct = (gain_loss / ps.cost_basis) if gain_loss is not None and ps.cost_basis != 0 else None
 
             price_change_1d: Decimal | None = None
+            gain_loss_change_1d: Decimal | None = None
+            gain_loss_change_1d_percent: Decimal | None = None
             if ps.valuation_source == "MARKET_PRICE" and current_price is not None:
                 prev_price_data = await self._get_price_at_date(ps.asset_id, ps.date - timedelta(days=1))
                 if prev_price_data:
@@ -922,6 +1159,19 @@ class PortfolioService:
                         all_missing_pairs.extend(mp)
                     if prev_price_base is not None and prev_price_base != 0:
                         price_change_1d = ((current_price - prev_price_base) / prev_price_base).quantize(Decimal("0.0001"))
+                        # Bugfix: raw quoted prices (current_price/prev_price_base) are NOT
+                        # 1 unit == 1 currency unit for every asset — e.g. bonds are quoted
+                        # "per quote_base_quantity" (BTPs: quote_base_quantity=100, price=98.70
+                        # means 98.70 per 100 nominal). market_value/gain_loss above already go
+                        # through compute_holding_value() to apply that scaling; a naive
+                        # `(current_price - prev_price_base) * ps.quantity` here skipped it,
+                        # inflating the daily delta by quote_base_quantity× for such assets
+                        # (reported: a BTP position showed a +93.60% "1-day" P&L swing).
+                        # Reuse compute_holding_value for both legs so the scaling matches.
+                        gain_loss_change_1d = compute_holding_value(ps.quantity, current_price, asset.quote_base_quantity) - compute_holding_value(ps.quantity, prev_price_base, asset.quote_base_quantity)
+                        gain_loss_yesterday = gain_loss - gain_loss_change_1d if gain_loss is not None else None
+                        if gain_loss_yesterday is not None and abs(gain_loss_yesterday) > Decimal("0.01"):
+                            gain_loss_change_1d_percent = (gain_loss_change_1d / abs(gain_loss_yesterday) * 100).quantize(Decimal("0.01"))
 
             if ps.valuation_source == "MISSING":
                 missing_price_assets.append(
@@ -953,6 +1203,8 @@ class PortfolioService:
                     gain_loss=gain_loss,
                     gain_loss_percent=gain_loss_pct,
                     price_change_1d=price_change_1d,
+                    gain_loss_change_1d=gain_loss_change_1d,
+                    gain_loss_change_1d_percent=gain_loss_change_1d_percent,
                     allocation_percent=None,
                 )
             )
@@ -1954,7 +2206,7 @@ class PortfolioService:
         self,
         user_id: int,
         asset_id: int,
-        broker_id: int | None = None,
+        broker_ids: list[int] | None = None,
     ) -> list[AssetHistoryPoint]:
         """Return WAC vs market price series for a specific asset.
 
@@ -1964,12 +2216,10 @@ class PortfolioService:
         base_currency = await self._get_base_currency()
 
         # Determine which brokers the user has access to
-        accesses = await self._get_user_broker_access(user_id, [broker_id] if broker_id else None)
+        accesses = await self._get_user_broker_access(user_id, broker_ids or None)
         if not accesses:
             return []
-
-        # Use first accessible broker (or merge across brokers if multiple)
-        target_broker_id = accesses[0].broker_id
+        resolved_broker_ids = [access.broker_id for access in accesses]
 
         asset = await self._get_asset(asset_id)
         if not asset:
@@ -1981,37 +2231,115 @@ class PortfolioService:
         if not prices:
             return []
 
+        async def _build_asset_txns(selected_broker_ids: list[int]) -> list[Transaction]:
+            asset_txns: list[Transaction] = []
+            for selected_broker_id in selected_broker_ids:
+                txns = await self._get_transactions(selected_broker_id, tx_types=_HOLDING_TYPES)
+                asset_txns.extend(t for t in txns if t.asset_id == asset_id)
+            asset_txns.sort(key=lambda tx: (tx.date, tx.id))
+            return asset_txns
+
+        def _build_return_maps(asset_txns: list[Transaction], log_broker_id: int | None) -> tuple[dict[date_type, Decimal], dict[date_type, Decimal]]:
+            nav_snapshots: list[NAVSnapshot] = []
+            cash_flows: list[CashFlowInput] = []
+
+            quantity_held = Decimal("0")
+            tx_index = 0
+            for ph in prices:
+                while tx_index < len(asset_txns) and asset_txns[tx_index].date <= ph.date:
+                    tx = asset_txns[tx_index]
+                    quantity_held += tx.quantity
+                    tx_index += 1
+                nav_snapshots.append(NAVSnapshot(date=ph.date, nav=quantity_held * ph.close))
+
+            for tx in asset_txns:
+                if tx.type == TransactionType.BUY:
+                    cf_amount = -abs(tx.amount)
+                else:
+                    cf_amount = abs(tx.amount)
+                cash_flows.append(CashFlowInput(date=tx.date, amount=cf_amount))
+
+            roi_map: dict[date_type, Decimal] = {}
+            twrr_map: dict[date_type, Decimal] = {}
+            if asset_txns and nav_snapshots:
+                roi_series = calculate_simple_roi_series(nav_snapshots, cash_flows)
+                roi_map = {pt.date: pt.roi for pt in roi_series}
+                try:
+                    twrr_series = calculate_twrr_series(nav_snapshots, cash_flows)
+                except Exception:
+                    _logger.warning("Asset history TWRR calculation failed", broker_id=log_broker_id, asset_id=asset_id)
+                else:
+                    twrr_map = {pt.date: pt.twrr for pt in twrr_series}
+            return roi_map, twrr_map
+
         result: list[AssetHistoryPoint] = []
-        for ph in prices:
-            wac_result = await compute_wac_iterative(
-                session=self.db,
-                broker_id=target_broker_id,
-                asset_id=asset_id,
-                as_of_date=ph.date,
-                asset_currency=asset.currency or base_currency,
-            )
-            if wac_result.wac is None:
-                continue
 
-            wac_amount = wac_result.wac.amount
-            market_price = ph.close
+        for resolved_broker_id in resolved_broker_ids:
+            asset_txns = await _build_asset_txns([resolved_broker_id])
+            roi_map, twrr_map = _build_return_maps(asset_txns, resolved_broker_id)
 
-            result.append(AssetHistoryPoint(date=ph.date, wac=wac_amount, market_price=market_price))
+            for ph in prices:
+                wac_result = await compute_wac_iterative(
+                    session=self.db,
+                    broker_id=resolved_broker_id,
+                    asset_id=asset_id,
+                    as_of_date=ph.date,
+                    asset_currency=asset.currency or base_currency,
+                )
+                if wac_result.wac is None:
+                    continue
+
+                result.append(
+                    AssetHistoryPoint(
+                        date=ph.date,
+                        broker_id=resolved_broker_id,
+                        wac=wac_result.wac.amount,
+                        market_price=ph.close,
+                        roi=roi_map.get(ph.date),
+                        twrr=twrr_map.get(ph.date),
+                    )
+                )
+
+        if len(resolved_broker_ids) > 1:
+            combined_asset_txns = await _build_asset_txns(resolved_broker_ids)
+            roi_map, twrr_map = _build_return_maps(combined_asset_txns, None)
+
+            for ph in prices:
+                wac_result = await compute_wac_iterative_multi_broker(
+                    session=self.db,
+                    broker_ids=resolved_broker_ids,
+                    asset_id=asset_id,
+                    as_of_date=ph.date,
+                    asset_currency=asset.currency or base_currency,
+                )
+                if wac_result.wac is None:
+                    continue
+
+                result.append(
+                    AssetHistoryPoint(
+                        date=ph.date,
+                        broker_id=None,
+                        wac=wac_result.wac.amount,
+                        market_price=ph.close,
+                        roi=roi_map.get(ph.date),
+                        twrr=twrr_map.get(ph.date),
+                    )
+                )
 
         return result
 
     async def get_lots(
         self,
         user_id: int,
-        broker_id: int,
+        broker_ids: list[int] | None,
         asset_id: int,
+        as_of_date: date_type | None = None,
     ) -> FIFOLotsResponse:
-        """Return FIFO open and closed lots for a specific (broker, asset) pair.
+        """Return FIFO open and closed lots for one asset across accessible brokers.
 
         Enriches open lots with unrealized P&L using the latest market price.
         """
-        # Verify access
-        accesses = await self._get_user_broker_access(user_id, [broker_id])
+        accesses = await self._get_user_broker_access(user_id, broker_ids or None)
         if not accesses:
             return FIFOLotsResponse(
                 open_lots=[],
@@ -2020,77 +2348,87 @@ class PortfolioService:
                 total_unrealized_quantity=Decimal("0"),
             )
 
-        # Fetch BUY/SELL transactions
-        txns = await self._get_transactions(broker_id, tx_types=_HOLDING_TYPES)
-        asset_txns = [t for t in txns if t.asset_id == asset_id]
-
-        if not asset_txns:
-            return FIFOLotsResponse(
-                open_lots=[],
-                closed_lots=[],
-                total_realized_pnl=Decimal("0"),
-                total_unrealized_quantity=Decimal("0"),
-            )
-
-        # Build FIFO inputs
-        fifo_inputs: list[FIFOTransactionInput] = []
-
-        for tx in asset_txns:
-            if tx.quantity is None or tx.amount is None:
-                continue
-            qty = abs(tx.quantity)
-            # Price per unit in asset currency
-            price_per_unit = abs(tx.amount) / qty if qty else Decimal("0")
-            tx_type = "BUY" if tx.type == TransactionType.BUY else "SELL"
-            fifo_inputs.append(
-                FIFOTransactionInput(
-                    id=tx.id,
-                    type=tx_type,
-                    quantity=qty,
-                    price=price_per_unit,
-                    date=tx.date,
-                )
-            )
-
-        fifo_result = calculate_fifo_lots(fifo_inputs)
-
         # Get current price for unrealized P&L enrichment
         price_data = await self._get_latest_price(asset_id)
         current_price: Decimal | None = price_data[0] if price_data else None
 
         open_lot_schemas: list[OpenLotSchema] = []
-        for lot in fifo_result.open_lots:
-            unrealized: Decimal | None = None
-            if current_price is not None:
-                unrealized = (current_price - lot.buy_price) * lot.remaining_quantity
-            open_lot_schemas.append(
-                OpenLotSchema(
-                    buy_transaction_id=lot.buy_transaction_id,
-                    buy_date=lot.buy_date,
-                    buy_price=lot.buy_price,
-                    original_quantity=lot.original_quantity,
-                    remaining_quantity=lot.remaining_quantity,
-                    unrealized_pnl=unrealized,
-                )
-            )
+        closed_lot_schemas: list[ClosedLotSchema] = []
+        total_realized_pnl = Decimal("0")
+        total_unrealized_quantity = Decimal("0")
 
-        closed_lot_schemas: list[ClosedLotSchema] = [
-            ClosedLotSchema(
-                buy_transaction_id=lot.buy_transaction_id,
-                sell_transaction_id=lot.sell_transaction_id,
-                buy_date=lot.buy_date,
-                sell_date=lot.sell_date,
-                buy_price=lot.buy_price,
-                sell_price=lot.sell_price,
-                quantity=lot.quantity,
-                realized_pnl=lot.realized_pnl,
+        for access in accesses:
+            broker_id = access.broker_id
+
+            # Fetch BUY/SELL transactions
+            txns = await self._get_transactions(
+                broker_id,
+                tx_types=_HOLDING_TYPES,
+                date_to=as_of_date,
             )
-            for lot in fifo_result.closed_lots
-        ]
+            asset_txns = [t for t in txns if t.asset_id == asset_id]
+
+            if not asset_txns:
+                continue
+
+            # Build FIFO inputs
+            fifo_inputs: list[FIFOTransactionInput] = []
+
+            for tx in asset_txns:
+                if tx.quantity is None or tx.amount is None:
+                    continue
+                qty = abs(tx.quantity)
+                # Price per unit in asset currency
+                price_per_unit = abs(tx.amount) / qty if qty else Decimal("0")
+                tx_type = "BUY" if tx.type == TransactionType.BUY else "SELL"
+                fifo_inputs.append(
+                    FIFOTransactionInput(
+                        id=tx.id,
+                        type=tx_type,
+                        quantity=qty,
+                        price=price_per_unit,
+                        date=tx.date,
+                    )
+                )
+
+            fifo_result = calculate_fifo_lots(fifo_inputs)
+            total_realized_pnl += fifo_result.total_realized_pnl
+            total_unrealized_quantity += fifo_result.total_unrealized_quantity
+
+            for lot in fifo_result.open_lots:
+                unrealized: Decimal | None = None
+                if current_price is not None:
+                    unrealized = (current_price - lot.buy_price) * lot.remaining_quantity
+                open_lot_schemas.append(
+                    OpenLotSchema(
+                        buy_transaction_id=lot.buy_transaction_id,
+                        broker_id=broker_id,
+                        buy_date=lot.buy_date,
+                        buy_price=lot.buy_price,
+                        original_quantity=lot.original_quantity,
+                        remaining_quantity=lot.remaining_quantity,
+                        unrealized_pnl=unrealized,
+                    )
+                )
+
+            closed_lot_schemas.extend(
+                ClosedLotSchema(
+                    buy_transaction_id=lot.buy_transaction_id,
+                    broker_id=broker_id,
+                    sell_transaction_id=lot.sell_transaction_id,
+                    buy_date=lot.buy_date,
+                    sell_date=lot.sell_date,
+                    buy_price=lot.buy_price,
+                    sell_price=lot.sell_price,
+                    quantity=lot.quantity,
+                    realized_pnl=lot.realized_pnl,
+                )
+                for lot in fifo_result.closed_lots
+            )
 
         return FIFOLotsResponse(
             open_lots=open_lot_schemas,
             closed_lots=closed_lot_schemas,
-            total_realized_pnl=fifo_result.total_realized_pnl,
-            total_unrealized_quantity=fifo_result.total_unrealized_quantity,
+            total_realized_pnl=total_realized_pnl,
+            total_unrealized_quantity=total_unrealized_quantity,
         )

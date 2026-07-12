@@ -4,6 +4,7 @@
      */
     import {get} from 'svelte/store';
     import {onMount} from 'svelte';
+    import {page} from '$app/stores';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/app/navigationStore';
@@ -15,6 +16,7 @@
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import BrokerImportFilesModal from '$lib/components/brokers/BrokerImportFilesModal.svelte';
     import BrokerSharingPanel from '$lib/components/brokers/BrokerSharingPanel.svelte';
+    import FIFOLotsPanel from '$lib/components/brokers/lots/FIFOLotsPanel.svelte';
     import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
     import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
@@ -27,6 +29,9 @@
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
     import {fetchReport, invalidate, type AllocationHistoryDimensions, type PortfolioHistoryPoint, type PortfolioSummary, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getBrokerRole, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
+    import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
+    import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
+    import {goto} from '$app/navigation';
     import type {BrokerSummary} from '$lib/types';
     import {parseCurrencyAmount, safeCurrency, safeString} from '$lib/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
@@ -86,6 +91,24 @@
     let allBrokersForTable: BrokerLike[] = [];
     $: allBrokersForTable = ($brokerStoreVersion, getAllBrokers());
     let sharingHasChanges = false; // bound from BrokerSharingPanel (Info tab), for future use (e.g. unsaved-changes guard)
+
+    /** FIFO lots analysis panel (Posizioni tab) — state mirrors `?asset=<id>` in the URL so it's
+     *  bookmarkable/shareable and survives browser back/forward (see plan_ui_broker_holdings.md
+     *  §1ter/§2). Opened by a single click on a row/tile/bar via PositionsPanel's onAnalyze;
+     *  double-click still navigates to asset detail, unchanged. */
+    let activeAssetId: number | null = null;
+    $: {
+        const paramAssetId = getAssetPanelAssetId($page.url.searchParams);
+        if ((paramAssetId ?? null) !== activeAssetId) activeAssetId = paramAssetId ?? null;
+    }
+
+    function openAssetPanel(assetId: number) {
+        void goto(buildAssetPanelUrl($page.url, assetId), {replaceState: true, noScroll: true});
+    }
+
+    function closeAssetPanel() {
+        void goto(buildAssetPanelUrl($page.url, null), {replaceState: true, noScroll: true});
+    }
 
     const initialStart = getStart();
     const initialEnd = getEnd();
@@ -161,7 +184,7 @@
 
     onMount(() => {
         document.addEventListener('click', handleDocumentClick);
-        void Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded()]);
+        void Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded(), ensureAssetsLoaded()]);
         return () => document.removeEventListener('click', handleDocumentClick);
     });
 
@@ -364,9 +387,9 @@
              (previously the date-range picker only rendered inside the Panoramica tab's
              content, so it disappeared on Posizioni/Transazioni even though those tabs
              depend on the same date-scoped data). -->
-        <PageToolbar thresholds={{wide: 1000, tablet: 800, tabletS: 560, compact: 380, labelHide: 380}} tabs={brokerTabs} bind:activeTab testId="broker-controls" filterRowTestId="broker-overview-controls">
+        <PageToolbar thresholds={{wide: 1000, tablet: 800, tabletS: 560, compact: 380, labelHide: 380}} tabs={brokerTabs} bind:activeTab testId="broker-controls" filterRowTestId="broker-overview-controls" layoutDebugName="brokerDetail">
             {#snippet filters()}
-                <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} align="start" onchange={handleDateChange} />
+                <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} align="start" debugName="brokerDetail" onchange={handleDateChange} />
 
                 <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                     <span class="whitespace-nowrap">{$_('common.currency')}:</span>
@@ -496,7 +519,19 @@
             </div>
         {:else if activeTab === 'posizioni'}
             <div data-testid="broker-holdings">
-                <PositionsPanel summary={portfolioSummary} contribution={positionsContribution} loading={reportLoading && !portfolioSummary} {contributionLoading} assetsHref="/assets" brokers={panelBrokers} onRequestContribution={loadContribution} />
+                <PositionsPanel summary={portfolioSummary} contribution={positionsContribution} loading={reportLoading && !portfolioSummary} {contributionLoading} assetsHref="/assets" brokers={panelBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} />
+                <FIFOLotsPanel
+                    open={activeAssetId != null}
+                    assetId={activeAssetId}
+                    brokerIds={[broker.id]}
+                    brokers={panelBrokers}
+                    {dateFrom}
+                    {dateTo}
+                    isAllPeriod={isMaxPending}
+                    currency={activeAssetId != null ? (getAssetInfo(activeAssetId)?.currency ?? baseCurrency) : baseCurrency}
+                    assetName={activeAssetId != null ? getAssetInfo(activeAssetId)?.display_name : null}
+                    onClose={closeAssetPanel}
+                />
             </div>
         {:else if activeTab === 'transazioni'}
             <div class="space-y-4" data-testid="broker-transactions-tab">

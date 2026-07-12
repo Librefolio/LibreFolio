@@ -54,6 +54,12 @@ async function goToTransazioniTab(page: Page): Promise<void> {
     await expect(page.getByTestId('broker-transactions-tab')).toBeVisible({timeout: 5000});
 }
 
+/** Switch to the "Posizioni" tab — where the FIFO lots analysis panel lives. */
+async function goToPosizioniTab(page: Page): Promise<void> {
+    await page.getByTestId('broker-tab-posizioni').click();
+    await expect(page.getByTestId('broker-holdings')).toBeVisible({timeout: 5000});
+}
+
 test.describe('Broker Detail Page', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
@@ -199,5 +205,89 @@ test.describe('Broker Detail Page', () => {
 
         await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8000});
         await expect(page.getByTestId('file-preview-markdown-rendered')).toContainText('Modal reuse works.', {timeout: 8000});
+    });
+
+    test.describe('FIFO lots analysis panel (Posizioni tab)', () => {
+        /** Locates rows in the Esposizione/Tabella view of PositionsPanel — data-row-id is the
+         *  established convention for DataTable rows in this codebase (see transactions-table.spec.ts). */
+        async function firstHoldingRow(page: Page) {
+            await goToPosizioniTab(page);
+            return page.locator('[data-testid="broker-holdings"] tbody tr[data-row-id]').first();
+        }
+
+        test('clicking the "Analyze Lots" row action opens the FIFO lots panel', async ({page}) => {
+            const ok = await goToFirstBrokerDetail(page);
+            if (!ok) return;
+
+            const row = await firstHoldingRow(page);
+            if ((await row.count()) === 0) return; // no holdings for this broker — nothing to click
+
+            await row.getByTestId('row-action-analyze-lots').click();
+            await expect(page.getByTestId('fifo-lots-panel')).toBeVisible({timeout: 5000});
+            await expect(page.getByTestId('fifo-lots-panel-title')).toBeVisible();
+
+            // ?asset=<id> reflected in the URL (bookmarkable panel state).
+            await expect(page).toHaveURL(/[?&]asset=\d+/);
+        });
+
+        test('closing the panel clears the ?asset= query param', async ({page}) => {
+            const ok = await goToFirstBrokerDetail(page);
+            if (!ok) return;
+
+            const row = await firstHoldingRow(page);
+            if ((await row.count()) === 0) return;
+
+            await row.getByTestId('row-action-analyze-lots').click();
+            await expect(page.getByTestId('fifo-lots-panel')).toBeVisible({timeout: 5000});
+
+            await page.getByTestId('fifo-lots-panel-close').click();
+            await expect(page.getByTestId('fifo-lots-panel')).not.toBeVisible({timeout: 5000});
+            await expect(page).not.toHaveURL(/[?&]asset=\d+/);
+        });
+
+        test('clicking the "View Asset" row action navigates to asset detail', async ({page}) => {
+            const ok = await goToFirstBrokerDetail(page);
+            if (!ok) return;
+
+            const row = await firstHoldingRow(page);
+            if ((await row.count()) === 0) return;
+
+            await row.getByTestId('row-action-view-asset').click();
+            await expect(page).toHaveURL(/\/assets\/\d+/, {timeout: 5000});
+        });
+
+        test('right-clicking a holding row shows a context menu with both actions', async ({page}) => {
+            const ok = await goToFirstBrokerDetail(page);
+            if (!ok) return;
+
+            const row = await firstHoldingRow(page);
+            if ((await row.count()) === 0) return;
+
+            await row.click({button: 'right'});
+            await expect(page.getByTestId('context-menu')).toBeVisible({timeout: 5000});
+            await expect(page.getByTestId('context-menu-action-view-asset')).toBeVisible();
+            await expect(page.getByTestId('context-menu-action-analyze-lots')).toBeVisible();
+
+            await page.getByTestId('context-menu-action-analyze-lots').click();
+            await expect(page.getByTestId('fifo-lots-panel')).toBeVisible({timeout: 5000});
+        });
+
+        test('WAC/Price chart EUR|% toggle switches without breaking the panel', async ({page}) => {
+            const ok = await goToFirstBrokerDetail(page);
+            if (!ok) return;
+
+            const row = await firstHoldingRow(page);
+            if ((await row.count()) === 0) return;
+
+            await row.getByTestId('row-action-analyze-lots').click();
+            await expect(page.getByTestId('fifo-lots-panel')).toBeVisible({timeout: 5000});
+            await expect(page.getByTestId('asset-wac-price-chart')).toBeVisible({timeout: 5000});
+
+            await page.getByTestId('asset-wac-price-mode-percent').click();
+            await expect(page.getByTestId('asset-wac-price-chart')).toBeVisible();
+
+            await page.getByTestId('asset-wac-price-mode-eur').click();
+            await expect(page.getByTestId('asset-wac-price-chart')).toBeVisible();
+        });
     });
 });

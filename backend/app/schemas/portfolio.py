@@ -278,6 +278,8 @@ class PortfolioHolding(BaseModel):
     gain_loss: Optional[SafeDecimal] = Field(None, description="Unrealized P&L at report end date: current_value - cost_basis")
     gain_loss_percent: Optional[SafeDecimal] = None
     price_change_1d: Optional[SafeDecimal] = Field(None, description="Percentage price change vs previous day relative to report end date")
+    gain_loss_change_1d: Optional[SafeDecimal] = Field(None, description="Change in unrealized P&L vs previous day using current quantity and base-currency prices")
+    gain_loss_change_1d_percent: Optional[SafeDecimal] = Field(None, description="gain_loss_change_1d as percentage of previous day's unrealized P&L; None if prior unrealized P&L is ~0")
     allocation_percent: Optional[SafeDecimal] = Field(None, description="Weight vs total market value (excludes cash)")
     nav_weight_percent: Optional[SafeDecimal] = Field(None, description="Weight vs NAV at report end date (includes cash): current_value / NAV * 100")
 
@@ -437,12 +439,16 @@ class PortfolioHistoryPoint(BaseModel):
 class AssetHistoryPoint(BaseModel):
     """Single point in the WAC vs market price time series for an asset."""
 
+    model_config = ConfigDict(extra="forbid")
+
     date: date_type
+    broker_id: Optional[int] = Field(
+        None,
+        description="Broker this point belongs to; None means this is the combined/cumulative series across all requested brokers",
+    )
     wac: SafeDecimal
     market_price: SafeDecimal
     twrr: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return series point")
-    mwrr_annualized: Optional[SafeDecimal] = Field(None, description="Annualized MWRR at this point")
-    mwrr_cumulative: Optional[SafeDecimal] = Field(None, description="Cumulative MWRR at this point")
     roi: Optional[SafeDecimal] = Field(None, description="Simple ROI series point")
 
 
@@ -450,6 +456,7 @@ class OpenLotSchema(BaseModel):
     """Serializable representation of an open FIFO lot."""
 
     buy_transaction_id: int
+    broker_id: int
     buy_date: date_type
     buy_price: SafeDecimal
     original_quantity: SafeDecimal
@@ -461,6 +468,7 @@ class ClosedLotSchema(BaseModel):
     """Serializable representation of a closed FIFO lot."""
 
     buy_transaction_id: int
+    broker_id: int
     sell_transaction_id: int
     buy_date: date_type
     sell_date: date_type

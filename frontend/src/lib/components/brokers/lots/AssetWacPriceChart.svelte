@@ -1,0 +1,605 @@
+<script lang="ts">
+    import {onMount, tick} from 'svelte';
+    import * as echarts from 'echarts';
+    import {z} from 'zod';
+    import {schemas, zodiosApi} from '$lib/api';
+    import {_ as t} from '$lib/i18n';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
+    import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, scheduleFirstRenderStabilityFix, setupTooltipAutoHide, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
+    import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
+
+    type AssetHistoryPoint = z.infer<typeof schemas.AssetHistoryPoint>;
+    type ViewMode = 'eur' | 'percent';
+
+    interface Props {
+        assetId: number;
+        brokerIds: number[];
+        brokers: ReadonlyArray<BrokerLike>;
+        currency: string;
+    }
+
+    type ComponentProps = {
+        assetId: number;
+        brokerIds?: number[];
+        brokerId?: number;
+        brokers?: ReadonlyArray<BrokerLike>;
+        currency: string;
+        onRangeComputed?: (min: string, max: string) => void;
+        xAxisRange?: {min: string; max: string} | null;
+    };
+
+    interface ChartPoint {
+        date: string;
+        brokerId: number | null;
+        wac: number | null;
+        marketPrice: number | null;
+        roi: number | null;
+        twrr: number | null;
+    }
+
+    interface BrokerSeries {
+        brokerId: number | null;
+        name: string;
+        isCombined: boolean;
+        points: ChartPoint[];
+        hasWacData: boolean;
+        hasPercentData: boolean;
+    }
+
+    interface MarketPricePoint {
+        date: string;
+        value: number | null;
+    }
+
+    let {assetId, brokerIds = [], brokerId, brokers = [], currency, onRangeComputed, xAxisRange = null}: ComponentProps = $props();
+
+    const effectiveBrokerIds = $derived.by(() => (brokerIds.length > 0 ? brokerIds : brokerId != null ? [brokerId] : []));
+
+    let mode = $state<ViewMode>('eur');
+    let loading = $state(false);
+    let error = $state<string | null>(null);
+    let history = $state<AssetHistoryPoint[]>([]);
+    let chartContainer: HTMLDivElement | undefined = $state(undefined);
+    let chartInstance: echarts.ECharts | undefined = undefined;
+    let resizeObserver: ResizeObserver | null = null;
+    let darkModeObserver: MutationObserver | null = null;
+    let tooltipCleanup: (() => void) | null = null;
+    let isDark = $state(false);
+    let needsInitialLayoutStabilityPass = false;
+    let fetchVersion = 0;
+
+    function tr(key: string, fallback: string): string {
+        const translated = $t(key);
+        return !translated || translated === key ? fallback : translated;
+    }
+
+    function escapeHtml(value: string): string {
+        return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function parseNumber(value: string | null | undefined): number | null {
+        if (value == null) return null;
+        const parsed = Number.parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function normalizeZero(value: number): number {
+        return Object.is(value, -0) ? 0 : value;
+    }
+
+    function formatDate(value: string): string {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return value;
+        return date.toLocaleDateString($currentLanguage || undefined, {year: 'numeric', month: 'short', day: 'numeric'});
+    }
+
+    function formatShortDate(value: number | string): string {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value);
+        return date.toLocaleDateString($currentLanguage || undefined, {month: 'short', day: 'numeric'});
+    }
+
+    function formatPercent(value: number): string {
+        const normalized = normalizeZero(value);
+        const sign = normalized > 0 ? '+' : '';
+        return `${sign}${normalized.toFixed(2)}%`;
+    }
+
+    function formatAxisNumber(value: number): string {
+        const normalized = normalizeZero(value);
+        const abs = Math.abs(normalized);
+        if (abs >= 1000) {
+            return new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1}).format(normalized);
+        }
+        return normalized.toLocaleString(undefined, {minimumFractionDigits: abs < 10 && abs % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2});
+    }
+
+    function syncTheme() {
+        isDark = document.documentElement.classList.contains('dark');
+    }
+
+    async function loadHistory(nextAssetId: number, nextBrokerIds: number[], version: number) {
+        loading = true;
+        error = null;
+
+        try {
+            const response = await zodiosApi.get_asset_history_api_v1_portfolio_asset_history_get({
+                queries: {
+                    asset_id: nextAssetId,
+                    broker_ids: nextBrokerIds,
+                },
+            });
+
+            if (version !== fetchVersion) return;
+            history = (response as AssetHistoryPoint[]) ?? [];
+        } catch (err) {
+            if (version !== fetchVersion) return;
+            console.error('Failed to load asset history chart:', err);
+            history = [];
+            error = 'Failed to load chart';
+        } finally {
+            if (version === fetchVersion) loading = false;
+        }
+    }
+
+    function resolveBrokerName(brokerId: number): string {
+        return brokers.find((broker) => broker.id === brokerId)?.name ?? `Broker ${brokerId}`;
+    }
+
+    function sortDates(a: string, b: string): number {
+        return a.localeCompare(b);
+    }
+
+    function buildBrokerSeries(brokerId: number | null, points: ChartPoint[]): BrokerSeries {
+        const sortedPoints = [...points].sort((a, b) => sortDates(a.date, b.date));
+        return {
+            brokerId,
+            name: brokerId == null ? labels.combined : resolveBrokerName(brokerId),
+            isCombined: brokerId == null,
+            points: sortedPoints,
+            hasWacData: sortedPoints.some((point) => point.wac != null),
+            hasPercentData: sortedPoints.some((point) => point.roi != null || point.twrr != null),
+        };
+    }
+
+    function getSeriesColor(series: BrokerSeries): string {
+        if (series.isCombined || series.brokerId == null) {
+            return isDark ? '#94a3b8' : '#475569';
+        }
+
+        const colors = getBrokerColor(series.brokerId, brokers);
+        return isDark ? colors.vivid : colors.vividLight;
+    }
+
+    const labels = $derived.by(() => ({
+        wac: 'WAC',
+        marketPrice: 'Market Price',
+        roi: tr('dashboard.roi', 'ROI'),
+        twrr: tr('dashboard.twrr', 'TWRR'),
+        combined: tr('brokers.lots.combined', 'Combined'),
+        noData: tr('common.noData', 'No data'),
+    }));
+
+    const groupedChartData = $derived.by(() => {
+        const grouped = new Map<number | 'combined', ChartPoint[]>();
+
+        for (const point of history) {
+            const normalizedPoint: ChartPoint = {
+                date: point.date,
+                brokerId: point.broker_id ?? null,
+                wac: parseNumber(point.wac),
+                marketPrice: parseNumber(point.market_price),
+                roi: parseNumber(point.roi) != null ? parseNumber(point.roi)! * 100 : null,
+                twrr: parseNumber(point.twrr) != null ? parseNumber(point.twrr)! * 100 : null,
+            };
+            const key = normalizedPoint.brokerId ?? 'combined';
+            const existing = grouped.get(key);
+            if (existing) {
+                existing.push(normalizedPoint);
+            } else {
+                grouped.set(key, [normalizedPoint]);
+            }
+        }
+
+        const brokerOrder = new Map(effectiveBrokerIds.map((id, index) => [id, index]));
+        const realSeries = Array.from(grouped.entries())
+            .filter(([key]) => key !== 'combined')
+            .map(([key, points]) => buildBrokerSeries(key as number, points))
+            .sort((a, b) => {
+                const aOrder = brokerOrder.get(a.brokerId ?? -1) ?? Number.MAX_SAFE_INTEGER;
+                const bOrder = brokerOrder.get(b.brokerId ?? -1) ?? Number.MAX_SAFE_INTEGER;
+                return aOrder - bOrder || (a.brokerId ?? 0) - (b.brokerId ?? 0);
+            });
+
+        const combinedSeries = grouped.has('combined') ? buildBrokerSeries(null, grouped.get('combined') ?? []) : null;
+        const marketPriceSourceSeries = realSeries.length > 0 ? realSeries : combinedSeries ? [combinedSeries] : [];
+        const marketPriceByDate = new Map<string, number | null>();
+
+        for (const series of marketPriceSourceSeries) {
+            for (const point of series.points) {
+                if (!marketPriceByDate.has(point.date)) {
+                    marketPriceByDate.set(point.date, point.marketPrice);
+                    continue;
+                }
+                if (marketPriceByDate.get(point.date) == null && point.marketPrice != null) {
+                    marketPriceByDate.set(point.date, point.marketPrice);
+                }
+            }
+        }
+
+        const marketPricePoints: MarketPricePoint[] = Array.from(marketPriceByDate.entries())
+            .map(([date, value]) => ({date, value}))
+            .sort((a, b) => sortDates(a.date, b.date));
+
+        const hasEurData = realSeries.some((series) => series.hasWacData) || (combinedSeries?.hasWacData ?? false) || marketPricePoints.some((point) => point.value != null);
+        const hasPercentData = realSeries.some((series) => series.hasPercentData) || (combinedSeries?.hasPercentData ?? false);
+
+        return {
+            realSeries,
+            combinedSeries,
+            marketPricePoints,
+            hasEurData,
+            hasPercentData,
+            totalPointCount: history.length,
+        };
+    });
+
+    let hasEurData = $derived(groupedChartData.hasEurData);
+    let hasPercentData = $derived(groupedChartData.hasPercentData);
+    let showChart = $derived(!loading && !error && groupedChartData.totalPointCount > 0 && (mode === 'eur' ? hasEurData : hasPercentData));
+    let emptyMessage = $derived.by(() => {
+        if (error) return error;
+        if (loading) return '';
+        if (groupedChartData.totalPointCount === 0) return labels.noData;
+        if (mode === 'percent' && !hasPercentData) return 'No data yet';
+        if (mode === 'eur' && !hasEurData) return labels.noData;
+        return '';
+    });
+
+    function buildEurSeries(): echarts.SeriesOption[] {
+        const eurSeries: echarts.SeriesOption[] = [];
+
+        for (const series of groupedChartData.realSeries) {
+            if (!series.hasWacData) continue;
+            const color = getSeriesColor(series);
+            eurSeries.push({
+                name: `${labels.wac} — ${series.name}`,
+                type: 'line',
+                data: series.points.map((point) => namedPoint(point.date, point.wac)),
+                showSymbol: false,
+                symbol: 'circle',
+                connectNulls: false,
+                smooth: false,
+                lineStyle: {width: 2, color},
+                itemStyle: {color},
+            });
+        }
+
+        if (groupedChartData.combinedSeries?.hasWacData) {
+            const color = getSeriesColor(groupedChartData.combinedSeries);
+            eurSeries.push({
+                name: `${labels.wac} — ${groupedChartData.combinedSeries.name}`,
+                type: 'line',
+                data: groupedChartData.combinedSeries.points.map((point) => namedPoint(point.date, point.wac)),
+                showSymbol: false,
+                symbol: 'circle',
+                connectNulls: false,
+                smooth: false,
+                lineStyle: {width: 2.5, color, type: 'dashed'},
+                itemStyle: {color},
+            });
+        }
+
+        if (groupedChartData.marketPricePoints.some((point) => point.value != null)) {
+            eurSeries.push({
+                name: labels.marketPrice,
+                type: 'line',
+                data: groupedChartData.marketPricePoints.map((point) => namedPoint(point.date, point.value)),
+                showSymbol: false,
+                symbol: 'circle',
+                connectNulls: false,
+                smooth: false,
+                lineStyle: {width: 2.5, color: isDark ? '#4ade80' : '#16a34a'},
+                itemStyle: {color: isDark ? '#4ade80' : '#16a34a'},
+            });
+        }
+
+        return eurSeries;
+    }
+
+    function buildPercentSeries(): echarts.SeriesOption[] {
+        const percentSeries: echarts.SeriesOption[] = [];
+
+        for (const series of groupedChartData.realSeries) {
+            if (!series.hasPercentData) continue;
+            const color = getSeriesColor(series);
+            percentSeries.push(
+                {
+                    name: `${labels.roi} — ${series.name}`,
+                    type: 'line',
+                    data: series.points.map((point) => namedPoint(point.date, point.roi)),
+                    showSymbol: false,
+                    symbol: 'circle',
+                    connectNulls: false,
+                    smooth: false,
+                    lineStyle: {width: 2.5, color},
+                    itemStyle: {color},
+                },
+                {
+                    name: `${labels.twrr} — ${series.name}`,
+                    type: 'line',
+                    data: series.points.map((point) => namedPoint(point.date, point.twrr)),
+                    showSymbol: false,
+                    symbol: 'circle',
+                    connectNulls: false,
+                    smooth: false,
+                    lineStyle: {width: 2, color, type: 'dashed'},
+                    itemStyle: {color},
+                },
+            );
+        }
+
+        if (groupedChartData.combinedSeries?.hasPercentData) {
+            const color = getSeriesColor(groupedChartData.combinedSeries);
+            percentSeries.push(
+                {
+                    name: `${labels.roi} — ${groupedChartData.combinedSeries.name}`,
+                    type: 'line',
+                    data: groupedChartData.combinedSeries.points.map((point) => namedPoint(point.date, point.roi)),
+                    showSymbol: false,
+                    symbol: 'circle',
+                    connectNulls: false,
+                    smooth: false,
+                    lineStyle: {width: 2.5, color, type: 'dashed'},
+                    itemStyle: {color},
+                },
+                {
+                    name: `${labels.twrr} — ${groupedChartData.combinedSeries.name}`,
+                    type: 'line',
+                    data: groupedChartData.combinedSeries.points.map((point) => namedPoint(point.date, point.twrr)),
+                    showSymbol: false,
+                    symbol: 'circle',
+                    connectNulls: false,
+                    smooth: false,
+                    lineStyle: {width: 2, color, type: 'dotted'},
+                    itemStyle: {color},
+                },
+            );
+        }
+
+        return percentSeries;
+    }
+
+    function buildSeries(): echarts.SeriesOption[] {
+        return mode === 'eur' ? buildEurSeries() : buildPercentSeries();
+    }
+
+    function buildTooltip(params: any[]): string {
+        const theme = buildTooltipTheme(isDark);
+        const rows = params
+            .map((param) => {
+                const rawValue = Array.isArray(param.value) ? param.value[1] : param.value;
+                if (rawValue == null || rawValue === '') return null;
+
+                const value = Number(rawValue);
+                if (!Number.isFinite(value)) return null;
+
+                const formatted = mode === 'eur' ? formatCurrencyAmountPlain(value, currency) : formatPercent(value);
+                return buildTooltipRow(escapeHtml(String(param.seriesName ?? '')), escapeHtml(formatted), typeof param.color === 'string' ? param.color : undefined);
+            })
+            .filter((row): row is string => row != null);
+
+        if (rows.length === 0) return '';
+
+        const rawDate = params[0]?.axisValue ?? params[0]?.value?.[0] ?? '';
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatDate(String(rawDate))), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
+    }
+
+    function buildOption(): echarts.EChartsOption {
+        const theme = buildTooltipTheme(isDark);
+        const gridColors = buildGridColors(isDark);
+
+        return {
+            ...CHART_ANIMATION_CONFIG,
+            grid: {
+                top: 44,
+                right: 18,
+                bottom: 34,
+                left: 22,
+                containLabel: true,
+            },
+            legend: {
+                top: 4,
+                left: 'center',
+                itemWidth: 10,
+                itemHeight: 10,
+                textStyle: {
+                    color: gridColors.textColor,
+                    fontSize: 11,
+                },
+            },
+            tooltip: {
+                trigger: 'axis',
+                position: tooltipPositionSide,
+                backgroundColor: theme.bg,
+                borderColor: theme.border,
+                textStyle: {color: theme.textColor},
+                axisPointer: {
+                    type: 'line',
+                    lineStyle: {
+                        color: gridColors.gridColor,
+                        width: 1,
+                    },
+                },
+                formatter: (params: any) => buildTooltip(Array.isArray(params) ? params : [params]),
+            },
+            xAxis: {
+                type: 'time',
+                ...(xAxisRange ? {min: xAxisRange.min, max: xAxisRange.max} : {}),
+                axisLine: {
+                    lineStyle: {color: gridColors.gridColor},
+                },
+                axisTick: {show: false},
+                splitLine: {show: false},
+                axisLabel: {
+                    color: gridColors.textColor,
+                    hideOverlap: true,
+                    formatter: (value: number) => formatShortDate(value),
+                },
+            },
+            yAxis: {
+                type: 'value',
+                axisLine: {show: false},
+                axisTick: {show: false},
+                splitLine: {
+                    lineStyle: {
+                        color: gridColors.gridColor,
+                    },
+                },
+                axisLabel: {
+                    color: gridColors.textColor,
+                    formatter: (value: number) => (mode === 'eur' ? formatAxisNumber(value) : `${normalizeZero(value).toFixed(0)}%`),
+                },
+            },
+            series: buildSeries(),
+        };
+    }
+
+    function setupResizeObserver() {
+        if (!chartContainer || resizeObserver) return;
+        resizeObserver = new ResizeObserver(() => chartInstance?.resize());
+        resizeObserver.observe(chartContainer);
+    }
+
+    function renderChart() {
+        if (!chartContainer) return;
+
+        syncTheme();
+
+        if (chartInstance && chartInstance.getDom() !== chartContainer) {
+            tooltipCleanup?.();
+            resizeObserver?.disconnect();
+            resizeObserver = null;
+            chartInstance.dispose();
+            chartInstance = undefined;
+        }
+
+        if (!chartInstance) {
+            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            needsInitialLayoutStabilityPass = true;
+            setupResizeObserver();
+            tooltipCleanup?.();
+            tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
+        }
+
+        if (!showChart) {
+            chartInstance.clear();
+            return;
+        }
+
+        chartInstance.setOption(buildOption(), CHART_SET_OPTION_OPTS);
+        if (needsInitialLayoutStabilityPass) {
+            needsInitialLayoutStabilityPass = false;
+            scheduleFirstRenderStabilityFix(chartInstance, chartContainer);
+        }
+    }
+
+    onMount(() => {
+        syncTheme();
+        darkModeObserver = new MutationObserver(() => {
+            syncTheme();
+            renderChart();
+        });
+        darkModeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+
+        return () => {
+            tooltipCleanup?.();
+            darkModeObserver?.disconnect();
+            resizeObserver?.disconnect();
+            chartInstance?.dispose();
+        };
+    });
+
+    $effect(() => {
+        void assetId;
+        void effectiveBrokerIds.join(',');
+
+        fetchVersion += 1;
+        const version = fetchVersion;
+        history = [];
+        void loadHistory(assetId, [...effectiveBrokerIds], version);
+    });
+
+    $effect(() => {
+        void groupedChartData;
+        void mode;
+        void currency;
+        void labels;
+        void loading;
+        void error;
+        void showChart;
+        void $currentLanguage;
+        void brokers;
+        void xAxisRange;
+
+        if (!chartContainer) return;
+
+        tick().then(() => {
+            renderChart();
+        });
+    });
+
+    $effect(() => {
+        void groupedChartData;
+        void loading;
+        void error;
+        void onRangeComputed;
+
+        if (loading || error || groupedChartData.totalPointCount === 0) return;
+
+        let minDate: string | null = null;
+        let maxDate: string | null = null;
+
+        for (const point of history) {
+            if (!minDate || point.date < minDate) minDate = point.date;
+            if (!maxDate || point.date > maxDate) maxDate = point.date;
+        }
+
+        if (minDate && maxDate) {
+            onRangeComputed?.(minDate, maxDate);
+        }
+    });
+</script>
+
+<div class="rounded-lg border border-gray-200/80 bg-gray-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/30" data-testid="asset-wac-price-chart">
+    <div class="mb-3 flex justify-end">
+        <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs dark:border-slate-600">
+            <button type="button" class="px-2.5 py-1 transition-colors {mode === 'eur' ? 'bg-libre-green text-white' : 'text-gray-500 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-slate-700'}" onclick={() => (mode = 'eur')} aria-pressed={mode === 'eur'} data-testid="asset-wac-price-mode-eur">
+                EUR
+            </button>
+            <button
+                type="button"
+                class="px-2.5 py-1 transition-colors {mode === 'percent' ? 'bg-libre-green text-white' : 'text-gray-500 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                onclick={() => (mode = 'percent')}
+                aria-pressed={mode === 'percent'}
+                data-testid="asset-wac-price-mode-percent"
+            >
+                %
+            </button>
+        </div>
+    </div>
+
+    <div class="relative h-72 w-full">
+        {#if loading}
+            <div class="absolute inset-0 z-10 animate-pulse rounded bg-gray-100 dark:bg-slate-700"></div>
+        {:else if emptyMessage}
+            <div class="absolute inset-0 z-10 flex items-center justify-center text-center text-sm text-gray-400 dark:text-gray-500">
+                {emptyMessage}
+            </div>
+        {/if}
+
+        <div bind:this={chartContainer} class="h-full w-full" class:invisible={!showChart}></div>
+    </div>
+</div>

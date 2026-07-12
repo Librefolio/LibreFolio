@@ -529,6 +529,209 @@ class TestPortfolioReportEndpoint:
 
 
 # ---------------------------------------------------------------------------
+# TestAssetHistoryEndpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestAssetHistoryEndpoint:
+    async def test_unauthenticated(self, test_server):
+        """GET /portfolio/asset-history without auth → 401."""
+        print_section("Asset History: unauthenticated")
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{API_BASE}/portfolio/asset-history?asset_id=1", timeout=TIMEOUT)
+        assert resp.status_code == 401
+        print_success("401 as expected")
+
+    async def test_missing_asset_id(self, test_server):
+        """asset_id is required → 422 if missing."""
+        print_section("Asset History: missing asset_id")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            resp = await client.get(f"{API_BASE}/portfolio/asset-history", timeout=TIMEOUT)
+        assert resp.status_code == 422
+        print_success("422 as expected")
+
+    async def test_nonexistent_asset(self, test_server):
+        """Non-existent asset_id → empty array (no 500)."""
+        print_section("Asset History: nonexistent asset")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            resp = await client.get(
+                f"{API_BASE}/portfolio/asset-history?asset_id=999999",
+                timeout=TIMEOUT,
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, list)
+        print_success("Graceful empty response")
+
+    async def test_asset_history_populates_roi_twrr_and_omits_mwrr_fields(self, test_server):
+        """Asset history returns ROI/TWRR series and omits removed MWRR fields."""
+        print_section("Asset History: ROI/TWRR populated")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_broker(client)
+            asset_id = await create_asset(client)
+
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "2000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-01-02", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2025-02-15", "quantity": "-4", "cash": {"code": "EUR", "amount": "480"}},
+                ],
+            )
+
+            price_resp = await client.post(
+                f"{API_BASE}/assets/prices",
+                json=[
+                    {
+                        "asset_id": asset_id,
+                        "prices": [
+                            {"date": "2025-01-02", "close": "100.00", "currency": "EUR"},
+                            {"date": "2025-01-31", "close": "110.00", "currency": "EUR"},
+                            {"date": "2025-02-15", "close": "120.00", "currency": "EUR"},
+                        ],
+                    }
+                ],
+                timeout=TIMEOUT,
+            )
+            assert price_resp.status_code == 200, f"Price upsert failed: {price_resp.status_code}: {price_resp.text}"
+
+            resp = await client.get(
+                f"{API_BASE}/portfolio/asset-history?asset_id={asset_id}&broker_ids={broker_id}",
+                timeout=TIMEOUT,
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 3
+        assert all(point["broker_id"] == broker_id for point in data)
+        assert data[0]["roi"] is not None
+        assert data[1]["roi"] is not None
+        assert data[1]["twrr"] is not None
+        assert data[2]["roi"] is not None
+        assert data[2]["twrr"] is not None
+        assert all("mwrr_annualized" not in point for point in data)
+        assert all("mwrr_cumulative" not in point for point in data)
+        print_success("ROI/TWRR populated, removed MWRR fields absent")
+
+    async def test_asset_history_multiple_brokers_includes_combined_series(self, test_server):
+        """Repeated broker_ids returns per-broker rows plus one combined series."""
+        print_section("Asset History: multiple brokers combined series")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_1_id = await create_broker(client, f"History Broker 1 {uuid.uuid4().hex[:6]}")
+            broker_2_id = await create_broker(client, f"History Broker 2 {uuid.uuid4().hex[:6]}")
+            asset_id = await create_asset(client)
+
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_1_id, "type": "DEPOSIT", "date": "2025-04-01", "quantity": "0", "cash": {"code": "EUR", "amount": "2000"}},
+                    {"broker_id": broker_1_id, "asset_id": asset_id, "type": "BUY", "date": "2025-04-02", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_1_id, "asset_id": asset_id, "type": "SELL", "date": "2025-04-04", "quantity": "-2", "cash": {"code": "EUR", "amount": "240"}},
+                    {"broker_id": broker_2_id, "type": "DEPOSIT", "date": "2025-04-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1500"}},
+                    {"broker_id": broker_2_id, "asset_id": asset_id, "type": "BUY", "date": "2025-04-03", "quantity": "5", "cash": {"code": "EUR", "amount": "-550"}},
+                    {"broker_id": broker_2_id, "asset_id": asset_id, "type": "SELL", "date": "2025-04-05", "quantity": "-1", "cash": {"code": "EUR", "amount": "125"}},
+                ],
+            )
+
+            price_resp = await client.post(
+                f"{API_BASE}/assets/prices",
+                json=[
+                    {
+                        "asset_id": asset_id,
+                        "prices": [
+                            {"date": "2025-04-03", "close": "110.00", "currency": "EUR"},
+                            {"date": "2025-04-04", "close": "120.00", "currency": "EUR"},
+                            {"date": "2025-04-05", "close": "125.00", "currency": "EUR"},
+                        ],
+                    }
+                ],
+                timeout=TIMEOUT,
+            )
+            assert price_resp.status_code == 200, f"Price upsert failed: {price_resp.status_code}: {price_resp.text}"
+
+            resp = await client.get(
+                f"{API_BASE}/portfolio/asset-history?asset_id={asset_id}&broker_ids={broker_1_id}&broker_ids={broker_2_id}",
+                timeout=TIMEOUT,
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data
+
+        points_by_broker: dict[int | None, list[dict]] = {}
+        for point in data:
+            points_by_broker.setdefault(point["broker_id"], []).append(point)
+
+        assert broker_1_id in points_by_broker
+        assert broker_2_id in points_by_broker
+        assert None in points_by_broker
+        combined_dates = {point["date"] for point in points_by_broker[None]}
+        assert combined_dates
+        assert combined_dates.issubset({point["date"] for point in points_by_broker[broker_1_id]})
+        assert combined_dates.issubset({point["date"] for point in points_by_broker[broker_2_id]})
+        assert any(point["roi"] is not None for point in points_by_broker[None])
+        assert any(point["twrr"] is not None for point in points_by_broker[None])
+        print_success("Combined asset-history series tagged correctly")
+
+    async def test_asset_history_single_broker_has_no_combined_series(self, test_server):
+        """Single-broker responses must not include broker_id=None rows."""
+        print_section("Asset History: single broker has no combined series")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_broker(client, f"Single History Broker {uuid.uuid4().hex[:6]}")
+            asset_id = await create_asset(client)
+
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-05-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1200"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-05-02", "quantity": "6", "cash": {"code": "EUR", "amount": "-600"}},
+                ],
+            )
+
+            price_resp = await client.post(
+                f"{API_BASE}/assets/prices",
+                json=[
+                    {
+                        "asset_id": asset_id,
+                        "prices": [
+                            {"date": "2025-05-02", "close": "100.00", "currency": "EUR"},
+                            {"date": "2025-05-03", "close": "105.00", "currency": "EUR"},
+                        ],
+                    }
+                ],
+                timeout=TIMEOUT,
+            )
+            assert price_resp.status_code == 200, f"Price upsert failed: {price_resp.status_code}: {price_resp.text}"
+
+            explicit_resp = await client.get(
+                f"{API_BASE}/portfolio/asset-history?asset_id={asset_id}&broker_ids={broker_id}",
+                timeout=TIMEOUT,
+            )
+            implicit_resp = await client.get(
+                f"{API_BASE}/portfolio/asset-history?asset_id={asset_id}",
+                timeout=TIMEOUT,
+            )
+
+        assert explicit_resp.status_code == 200
+        assert implicit_resp.status_code == 200
+        explicit_data = explicit_resp.json()
+        implicit_data = implicit_resp.json()
+        assert explicit_data
+        assert implicit_data
+        assert all(point["broker_id"] == broker_id for point in explicit_data)
+        assert all(point["broker_id"] == broker_id for point in implicit_data)
+        assert all(point["broker_id"] is not None for point in explicit_data)
+        assert all(point["broker_id"] is not None for point in implicit_data)
+        print_success("Single-broker asset-history omits combined series")
+
+
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # TestFIFOLotsEndpoint
 # ---------------------------------------------------------------------------
@@ -540,29 +743,29 @@ class TestFIFOLotsEndpoint:
         """GET /portfolio/lots without auth → 401."""
         print_section("FIFO Lots: unauthenticated")
         async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{API_BASE}/portfolio/lots?broker_id=1&asset_id=1", timeout=TIMEOUT)
+            resp = await client.get(f"{API_BASE}/portfolio/lots?broker_ids=1&asset_id=1", timeout=TIMEOUT)
         assert resp.status_code == 401
         print_success("401 as expected")
 
     async def test_missing_required_params(self, test_server):
-        """broker_id and asset_id are required → 422 if missing."""
+        """asset_id required; broker_ids optional."""
         print_section("FIFO Lots: missing required params")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
 
-            # missing both
+            # missing asset_id and broker_ids
             resp = await client.get(f"{API_BASE}/portfolio/lots", timeout=TIMEOUT)
             assert resp.status_code == 422
 
             # missing asset_id
-            resp = await client.get(f"{API_BASE}/portfolio/lots?broker_id=1", timeout=TIMEOUT)
+            resp = await client.get(f"{API_BASE}/portfolio/lots?broker_ids=1", timeout=TIMEOUT)
             assert resp.status_code == 422
 
-            # missing broker_id
+            # missing broker_ids
             resp = await client.get(f"{API_BASE}/portfolio/lots?asset_id=1", timeout=TIMEOUT)
-            assert resp.status_code == 422
+            assert resp.status_code == 200
 
-        print_success("422 for all missing param combinations")
+        print_success("Missing asset_id rejected, missing broker_ids allowed")
 
     async def test_lots_response_structure(self, test_server):
         """Valid params → response has open_lots, closed_lots structure."""
@@ -573,7 +776,7 @@ class TestFIFOLotsEndpoint:
             asset_id = await create_asset(client)
 
             resp = await client.get(
-                f"{API_BASE}/portfolio/lots?broker_id={broker_id}&asset_id={asset_id}",
+                f"{API_BASE}/portfolio/lots?broker_ids={broker_id}&asset_id={asset_id}",
                 timeout=TIMEOUT,
             )
         assert resp.status_code == 200
@@ -592,7 +795,7 @@ class TestFIFOLotsEndpoint:
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             resp = await client.get(
-                f"{API_BASE}/portfolio/lots?broker_id=999999&asset_id=999999",
+                f"{API_BASE}/portfolio/lots?broker_ids=999999&asset_id=999999",
                 timeout=TIMEOUT,
             )
         assert resp.status_code == 200
@@ -600,3 +803,120 @@ class TestFIFOLotsEndpoint:
         assert data["open_lots"] == []
         assert data["closed_lots"] == []
         print_success("No access returns empty lots")
+
+    async def test_lots_multiple_brokers_same_asset(self, test_server):
+        """Repeated broker_ids returns tagged lots from both brokers."""
+        print_section("FIFO Lots: multiple brokers same asset")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_1_id = await create_broker(client)
+            broker_2_id = await create_broker(client)
+            asset_id = await create_asset(client)
+
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_1_id, "type": "DEPOSIT", "date": "2025-05-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                    {"broker_id": broker_1_id, "asset_id": asset_id, "type": "BUY", "date": "2025-05-02", "quantity": "5", "cash": {"code": "EUR", "amount": "-500"}},
+                    {"broker_id": broker_2_id, "type": "DEPOSIT", "date": "2025-05-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                    {"broker_id": broker_2_id, "asset_id": asset_id, "type": "BUY", "date": "2025-05-03", "quantity": "3", "cash": {"code": "EUR", "amount": "-330"}},
+                ],
+            )
+
+            resp = await client.get(
+                (f"{API_BASE}/portfolio/lots?asset_id={asset_id}" f"&broker_ids={broker_1_id}&broker_ids={broker_2_id}"),
+                timeout=TIMEOUT,
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["closed_lots"] == []
+        assert len(data["open_lots"]) == 2
+
+        open_lots_by_broker = {lot["broker_id"]: lot for lot in data["open_lots"]}
+        assert set(open_lots_by_broker) == {broker_1_id, broker_2_id}
+        assert open_lots_by_broker[broker_1_id]["remaining_quantity"] == "5.000000"
+        assert open_lots_by_broker[broker_2_id]["remaining_quantity"] == "3.000000"
+        assert data["total_unrealized_quantity"] == "8.000000"
+        print_success("Multi-broker lots tagged correctly")
+
+    async def test_lots_without_broker_ids_uses_all_accessible_brokers(self, test_server):
+        """Omitting broker_ids returns lots from all accessible brokers."""
+        print_section("FIFO Lots: all accessible brokers")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_1_id = await create_broker(client)
+            broker_2_id = await create_broker(client)
+            asset_id = await create_asset(client)
+
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_1_id, "type": "DEPOSIT", "date": "2025-06-01", "quantity": "0", "cash": {"code": "EUR", "amount": "2000"}},
+                    {"broker_id": broker_1_id, "asset_id": asset_id, "type": "BUY", "date": "2025-06-02", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_1_id, "asset_id": asset_id, "type": "SELL", "date": "2025-06-03", "quantity": "-4", "cash": {"code": "EUR", "amount": "480"}},
+                    {"broker_id": broker_2_id, "type": "DEPOSIT", "date": "2025-06-01", "quantity": "0", "cash": {"code": "EUR", "amount": "500"}},
+                    {"broker_id": broker_2_id, "asset_id": asset_id, "type": "BUY", "date": "2025-06-04", "quantity": "2", "cash": {"code": "EUR", "amount": "-220"}},
+                ],
+            )
+
+            resp = await client.get(
+                f"{API_BASE}/portfolio/lots?asset_id={asset_id}",
+                timeout=TIMEOUT,
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["closed_lots"]) == 1
+        assert {lot["broker_id"] for lot in data["open_lots"]} == {broker_1_id, broker_2_id}
+        assert data["closed_lots"][0]["broker_id"] == broker_1_id
+        assert data["closed_lots"][0]["quantity"] == "4.000000"
+        assert data["total_realized_pnl"] == "80.000000"
+        assert data["total_unrealized_quantity"] == "8.000000"
+        print_success("All accessible brokers included when broker_ids omitted")
+
+    async def test_lots_as_of_date_filters_future_transactions(self, test_server):
+        """as_of_date limits FIFO calculation to transactions on or before that date."""
+        print_section("FIFO Lots: as_of_date filters future tx")
+        first_buy_date = "2025-01-10"
+        second_buy_date = "2025-06-01"
+        cutoff_date = "2025-03-01"
+        assert first_buy_date < cutoff_date < second_buy_date
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_broker(client)
+            asset_id = await create_asset(client)
+
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "2000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": first_buy_date, "quantity": "5", "cash": {"code": "EUR", "amount": "-500"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": second_buy_date, "quantity": "3", "cash": {"code": "EUR", "amount": "-330"}},
+                ],
+            )
+
+            filtered_resp = await client.get(
+                f"{API_BASE}/portfolio/lots?asset_id={asset_id}&broker_ids={broker_id}&as_of_date={cutoff_date}",
+                timeout=TIMEOUT,
+            )
+            full_resp = await client.get(
+                f"{API_BASE}/portfolio/lots?asset_id={asset_id}&broker_ids={broker_id}",
+                timeout=TIMEOUT,
+            )
+
+        assert filtered_resp.status_code == 200
+        filtered_data = filtered_resp.json()
+        assert filtered_data["closed_lots"] == []
+        assert len(filtered_data["open_lots"]) == 1
+        assert filtered_data["open_lots"][0]["remaining_quantity"] == "5.000000"
+        assert filtered_data["total_unrealized_quantity"] == "5.000000"
+
+        assert full_resp.status_code == 200
+        full_data = full_resp.json()
+        assert full_data["closed_lots"] == []
+        assert len(full_data["open_lots"]) == 2
+        assert [lot["remaining_quantity"] for lot in full_data["open_lots"]] == ["5.000000", "3.000000"]
+        assert full_data["total_unrealized_quantity"] == "8.000000"
+        print_success("as_of_date excludes future lots, default remains unbounded")

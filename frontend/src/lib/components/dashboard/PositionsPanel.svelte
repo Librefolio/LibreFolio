@@ -42,9 +42,13 @@
         brokers?: ReadonlyArray<BrokerLike>;
         /** Callback to request contribution data fetch (lazy load). */
         onRequestContribution?: () => void;
+        /** Single click on a row/tile/bar → open the FIFO lots analysis panel for that asset
+         *  (double-click still navigates to asset detail, unchanged). Forwarded as-is to all
+         *  4 sub-views. */
+        onAnalyze?: (assetId: number) => void;
     }
 
-    let {summary = null, contribution = null, loading = false, contributionLoading = false, assetsHref = '/assets', brokers = [], onRequestContribution}: Props = $props();
+    let {summary = null, contribution = null, loading = false, contributionLoading = false, assetsHref = '/assets', brokers = [], onRequestContribution, onAnalyze}: Props = $props();
 
     // =========================================================================
     // Toggle state (persisted in localStorage)
@@ -179,14 +183,14 @@
     {:else}
         <div class="flex-1 {visualMode === 'table' ? 'overflow-x-auto' : ''}">
             {#if semanticMode === 'holdings' && visualMode === 'table'}
-                <ExposureTable {holdings} {navAmount} {displayCurrency} {brokers} />
+                <ExposureTable {holdings} {navAmount} {displayCurrency} {brokers} {onAnalyze} />
             {:else if semanticMode === 'holdings' && visualMode === 'map'}
-                <ExposureTreemap {holdings} {displayCurrency} />
+                <ExposureTreemap {holdings} {displayCurrency} {onAnalyze} />
             {:else if semanticMode === 'performance' && visualMode === 'table' && contribution}
-                <ContributionTable positions={contributionPositions} {displayCurrency} {brokers} />
+                <ContributionTable positions={contributionPositions} {holdings} {displayCurrency} {brokers} {onAnalyze} />
                 <OtherPeriodEffectsTable effects={otherEffects} {displayCurrency} />
             {:else if semanticMode === 'performance' && visualMode === 'map' && contribution}
-                <PerformanceChart positions={contributionPositions} {otherEffects} {displayCurrency} />
+                <PerformanceChart positions={contributionPositions} {otherEffects} {displayCurrency} {onAnalyze} />
             {/if}
         </div>
     {/if}

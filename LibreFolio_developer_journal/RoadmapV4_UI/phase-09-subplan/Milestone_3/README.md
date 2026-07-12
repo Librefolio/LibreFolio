@@ -18,7 +18,7 @@ Solo disegno UI e requisiti dati (riusa/manca) — **nessun piano implementativo
 | # | File | Descrizione | Supersede | Stato |
 |---|------|-------------|-----------|:-----:|
 | 1 | [`plan_ui_broker_overview.md`](./plan_ui_broker_overview.md) | Lista Globale Brokers (+ Broker Discovery) e shell a tab del Broker Detail + Tab Panoramica | [`../plan_ui_broker_overview.md`](../plan_ui_broker_overview.md) | ✅ disegno · ✅ [piano implementativo](./impl_plan_broker_overview.md) |
-| 2 | [`plan_ui_broker_holdings.md`](./plan_ui_broker_holdings.md) | Tab Posizioni (riuso `PositionsPanel`) + Modale Lotti FIFO (bubble timeline + WAC/prezzo) | [`../plan_ui_broker_holdings.md`](../plan_ui_broker_holdings.md) | ✅ disegno · ⏳ piano implementativo |
+| 2 | [`plan_ui_broker_holdings.md`](./plan_ui_broker_holdings.md) | Tab Posizioni (riuso `PositionsPanel`) + Pannello Inline Lotti FIFO multi-broker (bubble timeline + WAC/prezzo per-broker+combinato) | [`../plan_ui_broker_holdings.md`](../plan_ui_broker_holdings.md) | ✅ disegno raffinato · ✅ [piano implementativo](./impl_plan_broker_holdings.md) · ✅ implementato (2026-07-10) · ✅ evoluto multi-broker (2026-07-11, fleet — codice in working tree non ancora committato) |
 | 3 | [`plan_ui_broker_transactions.md`](./plan_ui_broker_transactions.md) | Tab Transazioni (riuso `<TransactionsTable>`) + File Importati | [`../plan_ui_broker_transactions.md`](../plan_ui_broker_transactions.md) | ✅ disegno · ✅ implementato (recap in-doc, nessun `impl_plan_*.md` separato — chiuso 2026-07-08, codice in working tree non ancora committato) |
 
 L'ordine riflette anche l'ordine di realizzazione consigliato: la Fase 1 introduce la shell a tab del
@@ -91,6 +91,12 @@ già e vengono solo riposizionati/riparametrizzati per lo scope di un singolo br
 
   Stato: ✅ disegno · ✅ studio raffinato · ✅ 7 piani implementativi · ⏳ implementazione (non ancora
   iniziata — solo documentazione fin qui, nessun file sorgente toccato).
+
+## Guide rapide
+
+| File | Descrizione |
+|------|-------------|
+| [`GUIDA-TOOLBAR-RESPONSIVE.md`](./GUIDA-TOOLBAR-RESPONSIVE.md) | ✅ Come tarare le soglie responsive (`PageToolbar`/`DateRangePicker`) — soglie per pagina, badge "jolly" auto-fit, tuning live da console browser (`window.__lfLayouts`), checklist per estendere il sistema a una nuova pagina |
 
 ## Piano principale
 
