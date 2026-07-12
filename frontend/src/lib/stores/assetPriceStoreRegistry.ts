@@ -11,31 +11,17 @@
  * @module stores/assetPriceStoreRegistry
  */
 
-import type {TimeSeriesPoint} from './core/TimeSeriesStore';
 import {TimeSeriesStore} from './core/TimeSeriesStore';
 import {zodiosApi} from '$lib/api';
+// AssetPricePoint/apiPricesToAssetPricePoints now live in assetPriceDerived.ts (a
+// Zodios/SvelteKit-free module, importable from a Web Worker) — re-exported here so
+// existing call sites of this file don't need to change their import path.
+import {apiPricesToAssetPricePoints, type AssetPricePoint} from '$lib/utils/assetPriceDerived';
+export {apiPricesToAssetPricePoints, type AssetPricePoint};
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-/**
- * Asset price time-series data point.
- * Derived from POST /assets/prices/query response.
- */
-export interface AssetPricePoint extends TimeSeriesPoint {
-    date: string;
-    close: number;
-    open: number | null;
-    high: number | null;
-    low: number | null;
-    volume: number | null;
-    currency: string | null;
-    originalClose: number | null;
-    backwardFillInfo: {
-        daysBack: number;
-    } | null;
-}
 
 // ============================================================================
 // REGISTRY
@@ -82,27 +68,6 @@ export function removeAssetPriceStore(assetId: number): void {
             stores.delete(key);
         }
     }
-}
-
-// ============================================================================
-// API MAPPING
-// ============================================================================
-
-/**
- * Convert API price points to AssetPricePoint format.
- */
-export function apiPricesToAssetPricePoints(prices: any[]): AssetPricePoint[] {
-    return prices.map((p) => ({
-        date: p.date,
-        close: Number(p.close ?? 0),
-        open: p.open != null ? Number(p.open) : null,
-        high: p.high != null ? Number(p.high) : null,
-        low: p.low != null ? Number(p.low) : null,
-        volume: p.volume != null ? Number(p.volume) : null,
-        currency: p.currency ?? null,
-        originalClose: p.original_close != null ? Number(p.original_close) : null,
-        backwardFillInfo: p.backward_fill_info ? {daysBack: p.backward_fill_info.days_back ?? 0} : null,
-    }));
 }
 
 // ============================================================================
