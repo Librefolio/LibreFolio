@@ -36,7 +36,7 @@
 <script lang="ts">
     import {type Snippet, untrack} from 'svelte';
     import TabBar, {type TabItem} from '$lib/components/ui/tabs/TabBar.svelte';
-    import {createResponsiveLayout, type LayoutMode, type LayoutThresholds} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {createResponsiveLayout, registerLayoutDebug, type LayoutMode, type LayoutThresholds} from '$lib/utils/layout/responsiveLayout.svelte';
 
     interface Props {
         /** Breakpoints for this page — deliberately per-page (not shared), same shape as createResponsiveLayout. */
@@ -55,15 +55,21 @@
         testId?: string;
         /** data-testid for the inner filter row (existing e2e tests target this specifically per page). */
         filterRowTestId?: string;
+        /** Registers the layout instance on window.__lfLayouts.<name> for live threshold tuning from the browser console (see registerLayoutDebug). Omit to skip registration. */
+        layoutDebugName?: string;
         class?: string;
     }
 
-    let {thresholds, filters, summary, actions, tabs, activeTab = $bindable(''), ontabchange, testId, filterRowTestId, class: className = ''}: Props = $props();
+    let {thresholds, filters, summary, actions, tabs, activeTab = $bindable(''), ontabchange, testId, filterRowTestId, layoutDebugName, class: className = ''}: Props = $props();
 
     let barRef = $state<HTMLDivElement | null>(null);
     // thresholds is a fixed per-page config, not meant to change reactively — untrack() avoids
     // the `state_referenced_locally` warning (same pattern used elsewhere for prop-seeded state).
     const layout = createResponsiveLayout(untrack(() => thresholds));
+
+    // layoutDebugName is a fixed per-page config too — untrack() for the same reason as thresholds above.
+    const debugName = untrack(() => layoutDebugName);
+    if (debugName) registerLayoutDebug(debugName, layout);
 
     $effect(() => {
         const el = barRef;

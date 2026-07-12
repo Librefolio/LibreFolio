@@ -532,6 +532,22 @@
             "editorDesc": "Peut modifier les transactions",
             "viewerDesc": "Lecture seule"
         },
+        "lots": {
+            "openLots": "Lots Ouverts",
+            "closedLots": "Lots Fermés",
+            "buyDate": "Date d'Achat",
+            "sellDate": "Date de Vente",
+            "sellPrice": "Prix de Vente",
+            "currentValue": "Valeur Actuelle",
+            "realizedPnl": "P&L Réalisé",
+            "noOpenLots": "Aucun lot ouvert",
+            "noClosedLots": "Aucun lot fermé",
+            "detailTitle": "Détail des Lots FIFO",
+            "loadFailed": "Échec du chargement des données de lots",
+            "combined": "Combiné",
+            "viewAsset": "Voir l'Actif",
+            "analyze": "Analyser les Lots"
+        },
         "createdInSystem": "Créé dans le Système"
     },
     "chart": {
@@ -540,7 +556,15 @@
             "fxStale": "Taux FX : {days}j",
             "percentNote": "% par rapport à la date de début",
             "upper": "Supérieure",
-            "lower": "Inférieure"
+            "lower": "Inférieure",
+            "weekRange": "Semaine {start} – {end}",
+            "monthLabel": "{month}",
+            "valueAt": "Valeur au {date}",
+            "eventsInPeriod": "Événements sur la période :"
+        },
+        "resolution": {
+            "weekly": "Hebdomadaire",
+            "monthly": "Mensuel"
         },
         "showPercentage": "Afficher le pourcentage",
         "showAbsolute": "Afficher l'absolu"
@@ -885,11 +909,15 @@
         "costsTooltip": "Commissions et taxes enregistrées dans la période sélectionnée.",
         "periodPnlTooltip": "Gain ou perte total attribuable uniquement à la période sélectionnée (variation non réalisée + réalisé + revenu − frais). Peut différer du gain total de la position.",
         "unrealizedPnlPercent": "P&L %",
+        "pnlChange1d": "Δ1",
+        "pnlChange1dTooltip": "Variation du P&L latent par rapport à hier, en conservant la quantité d'aujourd'hui constante.",
+        "pnlChange1dPercent": "Δ1%",
+        "pnlChange1dPercentTooltip": "Δ P&L par rapport à hier, exprimé en pourcentage du P&L latent d'hier.",
         "quantity": "Qté",
         "price": "Prix",
         "pmc": "PRU",
-        "holdingsTab": "Positions ouvertes",
-        "performanceTab": "Performance",
+        "holdingsTab": "Portefeuille",
+        "performanceTab": "Période",
         "otherPeriodEffects": "Autres effets de la période",
         "otherPeriodEffectsSubtitle": "Effets qui contribuent au P&L de la période mais ne sont pas liés à un actif spécifique",
         "openAtPeriodEnd": "Ouverte en fin de période",

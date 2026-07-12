@@ -21,6 +21,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
+    import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
 
     // =========================================================================
     // Types
@@ -53,6 +54,7 @@
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | null = null;
     let resizeObserver: ResizeObserver | null = null;
+    let needsInitialLayoutStabilityPass = false;
 
     // Diversified color palette — high chromatic distance between adjacent slices
     const PALETTE = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5'];
@@ -152,6 +154,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            needsInitialLayoutStabilityPass = true;
         }
 
         const isDark = document.documentElement.classList.contains('dark');
@@ -256,6 +259,7 @@
             tooltip: {
                 trigger: 'item',
                 formatter: '{b}: {c}%',
+                position: tooltipPositionAboveFinger,
                 backgroundColor: isDark ? '#1e293b' : '#fff',
                 borderColor: isDark ? '#334155' : '#e2e8f0',
                 textStyle: {color: isDark ? '#e2e8f0' : '#1e293b'},
@@ -295,7 +299,10 @@
         };
 
         chartInstance.setOption(option, CHART_SET_OPTION_OPTS);
-        chartInstance.resize();
+        if (needsInitialLayoutStabilityPass) {
+            needsInitialLayoutStabilityPass = false;
+            scheduleFirstRenderStabilityFix(chartInstance, chartContainer);
+        }
     }
 </script>
 

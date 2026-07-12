@@ -76,13 +76,6 @@
     const firstHistoryPoint = $derived(history.length > 0 ? history[0] : null);
     const prevHistoryPoint = $derived(history.length > 1 ? history[history.length - 2] : null);
 
-    const navDeltaDay = $derived.by(() => {
-        if (!lastHistoryPoint || !prevHistoryPoint) return null;
-        const last = parseFloat(lastHistoryPoint.nav_value.amount);
-        const prev = parseFloat(prevHistoryPoint.nav_value.amount);
-        return last - prev;
-    });
-
     const pnlDeltaDay = $derived.by(() => {
         if (!lastHistoryPoint || !prevHistoryPoint) return null;
         const last = parseFloat(lastHistoryPoint.total_pnl.amount);
@@ -94,6 +87,14 @@
         const prevNav = parseFloat(prevHistoryPoint.nav_value.amount);
         if (prevNav === 0 || pnlDeltaDay == null) return null;
         return ((pnlDeltaDay / prevNav) * 100).toFixed(2);
+    });
+    const periodPnlDeltaDayPct = $derived.by(() => {
+        if (!firstHistoryPoint || !prevHistoryPoint || firstHistoryPoint === prevHistoryPoint || pnlDeltaDay == null) return null;
+        const firstTotalPnl = parseFloat(firstHistoryPoint.total_pnl.amount);
+        const prevTotalPnl = parseFloat(prevHistoryPoint.total_pnl.amount);
+        const periodPnlYesterday = prevTotalPnl - firstTotalPnl;
+        if (!Number.isFinite(periodPnlYesterday) || Math.abs(periodPnlYesterday) < 0.01) return null;
+        return ((pnlDeltaDay / periodPnlYesterday) * 100).toFixed(2);
     });
 
     const cashContribAmt = $derived(lastHistoryPoint?.cash_from_contributed_capital != null ? parseFloat(lastHistoryPoint.cash_from_contributed_capital.amount) : null);
@@ -116,6 +117,18 @@
     const netDepositedPositive = $derived(netDepositedAmt >= 0);
 
     const navHeroAmt = $derived(summary ? parseFloat(summary.net_worth.amount) : 0);
+    const totalPnlCur = $derived(summary ? safeCurrency(summary.total_gain_loss) : null);
+    const totalPnlAmt = $derived.by(() => {
+        if (!totalPnlCur) return null;
+        const amount = parseFloat(totalPnlCur.amount);
+        return Number.isFinite(amount) ? amount : null;
+    });
+    const totalPnlDeltaPct = $derived.by(() => {
+        if (!prevHistoryPoint || pnlDeltaDay == null) return null;
+        const prevTotalPnl = parseFloat(prevHistoryPoint.total_pnl.amount);
+        if (!Number.isFinite(prevTotalPnl) || Math.abs(prevTotalPnl) < 0.01) return null;
+        return ((pnlDeltaDay / prevTotalPnl) * 100).toFixed(2);
+    });
     const nwBarMax = $derived(Math.max(navHeroAmt, marketValueStartAmt, marketValueAmt, purchaseCostAmt, purchaseCostStartAmt, cashAmt, cashStartAmt, totalDepositedAmt, totalWithdrawnAmt) || 1);
     const marketBarPct = $derived((marketValueAmt / nwBarMax) * 100);
     const purchaseCostBarPct = $derived((purchaseCostAmt / nwBarMax) * 100);
@@ -244,6 +257,9 @@
                 {#if pnlDeltaDay != null}
                     <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-pnl-delta-day">
                         <TweenedValue value={pnlDeltaDay} format={fmtMoney} />
+                        {#if periodPnlDeltaDayPct != null}
+                            <span> ({pnlDeltaDay >= 0 ? '+' : ''}{periodPnlDeltaDayPct}%)</span>
+                        {/if}
                     </p>
                 {/if}
                 <div class="flex flex-col gap-2 mt-1">
@@ -317,9 +333,12 @@
             <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 text-right tabular-nums" data-testid="kpi-value">
                 <TweenedValue value={navHeroAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: false})} />
             </p>
-            {#if navDeltaDay != null}
-                <p class="text-xs text-right tabular-nums transition-colors duration-300 {navDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-nav-delta-day">
-                    <TweenedValue value={navDeltaDay} format={fmtMoney} />
+            {#if totalPnlAmt != null}
+                <p class="text-xs text-right tabular-nums transition-colors duration-300 {totalPnlAmt >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-total-pnl-delta">
+                    <TweenedValue value={totalPnlAmt} format={fmtMoney} />
+                    {#if totalPnlDeltaPct != null}
+                        <span> ({pnlDeltaDay != null && pnlDeltaDay >= 0 ? '+' : ''}{totalPnlDeltaPct}%)</span>
+                    {/if}
                 </p>
             {/if}
             <div class="flex flex-col gap-2 mt-1">

@@ -35,7 +35,7 @@
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import {buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
-    import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {createResponsiveLayout, registerLayoutDebug} from '$lib/utils/layout/responsiveLayout.svelte';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
 
     // =========================================================================
@@ -118,9 +118,14 @@
 
     // Filter bar adaptive layout (shared helper)
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    const fxLayout = createResponsiveLayout({wide: 1120, tablet: 760, tabletS: 520, labelHide: 500});
+    // compact/labelHide starting value — tune live via
+    // window.__lfLayouts.fxList.thresholds.compact = <value>.
+    const fxLayout = createResponsiveLayout({wide: 1120, tablet: 760, tabletS: 520, compact: 320, labelHide: 320});
+    registerLayoutDebug('fxList', fxLayout);
     let layoutMode = $derived(fxLayout.layoutMode);
     let showActionLabels = $derived(fxLayout.showActionLabels);
+    // Compact is narrower-than-mobile — the filters zone should stack the same way in both.
+    let isStacked = $derived(layoutMode === 'mobile' || layoutMode === 'compact');
 
     // =========================================================================
     // Derived
@@ -737,16 +742,16 @@
     <div
         bind:this={filterBarRef}
         class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
-               {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'tablet-s' ? 'flex-row items-start justify-between' : 'flex-row items-center justify-between'}"
+               {isStacked ? 'flex-col items-center' : layoutMode === 'tablet-s' ? 'flex-row items-start justify-between' : 'flex-row items-center justify-between'}"
     >
         <!-- Filters block -->
         <div
             class="flex gap-3
-                    {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-center'}"
+                    {isStacked ? 'flex-col items-center' : layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-center'}"
         >
             <!-- DateRangePicker -->
             <div class="flex flex-1 self-stretch min-w-0" data-testid="fx-date-range-picker">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" onchange={handleDateRangeChange} />
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" debugName="fxList" onchange={handleDateRangeChange} />
             </div>
 
             <!-- Currency Filters — always grouped as a pair -->
@@ -790,10 +795,10 @@
             </div>
         </div>
 
-        <!-- Actions: 2×2 grid (wide+tablet), column (tablet-s), horizontal row (mobile) -->
+        <!-- Actions: 2×2 grid (wide+tablet+mobile), column (tablet-s), icon-only row (compact — the narrowest fallback, below the mobile 2×2). -->
         <div
             class="flex shrink-0 gap-1.5
-                    {layoutMode === 'mobile' ? 'flex-row justify-center' : layoutMode === 'tablet-s' ? 'flex-col' : 'grid grid-cols-2'}"
+                    {layoutMode === 'compact' ? 'flex-row justify-center flex-wrap' : layoutMode === 'tablet-s' ? 'flex-col' : 'grid grid-cols-2'}"
         >
             <!-- Top-left: Abs/% toggle in grid mode, ColumnVisibility in table mode -->
             {#if viewMode === 'list'}

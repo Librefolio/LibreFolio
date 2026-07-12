@@ -24,6 +24,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
+    import {scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
     import {_ as t} from '$lib/i18n';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
@@ -56,6 +57,26 @@
     let resizeObserver: ResizeObserver | null = null;
     let mapRegistered = $state(false);
     let mapError = $state<string | null>(null);
+    let needsInitialLayoutStabilityPass = false;
+    /** True once the user has zoomed in beyond the default "whole world" fit
+     *  (scaleLimit.min is 1) — i.e. there is actually something to pan. Gates the
+     *  two-finger pan handler below so it never bothers dispatching a guaranteed no-op
+     *  at the default zoom. Two-finger touch never competes with native single-finger
+     *  scroll, so — unlike an earlier single-finger attempt — this no longer needs to
+     *  toggle `touch-action` on the container at all; a stray 1-finger swipe over the
+     *  map always scrolls the page, zoomed or not. Kept in sync via the 'georoam' chart
+     *  event (fired on every zoom/pan), reading back the true cumulative zoom from
+     *  getOption() rather than the event payload's per-tick delta. */
+    let isZoomedIn = $state(false);
+    /** Tracks an in-progress manual two-finger pan drag (see the doc comment on
+     *  `handleTouchPanStart` below for why two fingers, not one). Null when not dragging. */
+    let touchPanState: {x: number; y: number} | null = null;
+
+    /** Stable series id so manually-dispatched `geoRoam` actions (see handleTouchPanMove)
+     *  target this exact series — matches what ECharts' own roam→action dispatch does
+     *  internally (`api.dispatchAction({seriesId: seriesModel.id, type: 'geoRoam', dx, dy})`
+     *  in zrender's roamHelper.js), just with an explicit id instead of an auto-assigned one. */
+    const GEO_SERIES_ID = 'geo-distribution-map';
 
     /** Percentage of value with no geographic classification (key "Unknown" or "Other" in data).
      *  "Other" is a provider placeholder for "rest of world" — treated as unclassified. */
@@ -109,8 +130,84 @@
     function cleanup() {
         resizeObserver?.disconnect();
         resizeObserver = null;
+        if (chartContainer) {
+            chartContainer.removeEventListener('touchstart', handleTouchPanStart);
+            chartContainer.removeEventListener('touchmove', handleTouchPanMove);
+            chartContainer.removeEventListener('touchend', handleTouchPanEnd);
+            chartContainer.removeEventListener('touchcancel', handleTouchPanEnd);
+        }
         chartInstance?.dispose();
         chartInstance = null;
+    }
+
+    /** Manual TWO-finger drag-to-pan bridge for touch devices.
+     *
+     *  WHY TWO FINGERS, NOT ONE (verified by reading zrender's source, not guessed): on any
+     *  modern mobile browser (Pointer Events API support, `'onpointerdown' in window`),
+     *  zrender's `HandlerProxy` translates `pointerdown`/`pointerup` into the internal
+     *  mousedown/mouseup zrender relies on regardless of origin — but its `pointermove`
+     *  handler does `if (!isPointerFromTouch(event)) { ...translate to mousemove... }`, i.e.
+     *  touch-sourced pointer movement is explicitly EXCLUDED from ever reaching
+     *  `RoamController`'s pan tracking. That alone was fixable by tracking touch drags
+     *  ourselves — but a SECOND, unrelated and unfixable problem showed up with a
+     *  single-finger implementation: a browser decides "this touch gesture is native scroll"
+     *  vs "this touch gesture is handled by JS" once, at the START of the gesture, and will
+     *  NOT hand it back to native scrolling mid-gesture — so once a single-finger drag starts
+     *  panning a zoomed map, reaching the edge (nothing left to pan) could not seamlessly
+     *  continue as page scroll within that same continuous drag; the user would have to lift
+     *  and re-touch. Reserving ONE finger exclusively for scrolling (always, with zero
+     *  exceptions) and using TWO fingers for pan sidesteps the conflict entirely — a
+     *  single-finger drag is never intercepted at all, so it always scrolls the page
+     *  normally, edge or no edge.
+     *
+     *  Dispatches the exact same `geoRoam` action ECharts' own desktop mouse-drag path would
+     *  have dispatched (`api.dispatchAction({seriesId, type:'geoRoam', dx, dy})`, per
+     *  zrender's roamHelper.js), computed from the CENTROID of the two touches — fully
+     *  reusing ECharts' own transform/render logic. Runs independently of whatever already
+     *  drives pinch-to-zoom (untouched by this fix, it was already working) — this only ever
+     *  adjusts position, never scale, so the two naturally compose on a real 2-finger
+     *  gesture that both translates and pinches at once. */
+    function centroidOf(touches: TouchList): {x: number; y: number} {
+        let x = 0;
+        let y = 0;
+        for (let i = 0; i < touches.length; i++) {
+            x += touches[i].clientX;
+            y += touches[i].clientY;
+        }
+        return {x: x / touches.length, y: y / touches.length};
+    }
+
+    function handleTouchPanStart(e: TouchEvent) {
+        if (e.touches.length !== 2 || !isZoomedIn) {
+            touchPanState = null;
+            return;
+        }
+        touchPanState = centroidOf(e.touches);
+    }
+
+    function handleTouchPanMove(e: TouchEvent) {
+        if (e.touches.length !== 2) {
+            // Finger count changed mid-gesture (e.g. one lifted) — stop tracking rather than
+            // computing a bogus delta against a stale reference point.
+            touchPanState = null;
+            return;
+        }
+        if (!touchPanState || !chartInstance) return;
+        const centroid = centroidOf(e.touches);
+        const dx = centroid.x - touchPanState.x;
+        const dy = centroid.y - touchPanState.y;
+        touchPanState = centroid;
+        // Two-finger gestures never compete with native single-finger scroll, so this
+        // preventDefault only ever suppresses the browser's own pinch-zoom-the-page
+        // gesture — it can't block page scroll, which is exactly the point.
+        e.preventDefault();
+        chartInstance.dispatchAction({type: 'geoRoam', seriesId: GEO_SERIES_ID, dx, dy});
+    }
+
+    function handleTouchPanEnd(e: TouchEvent) {
+        // Re-arm if exactly 2 touches remain (e.g. a 3rd finger lifted back to 2); otherwise
+        // stop — a drop to 0 or 1 remaining touch ends the pan gesture.
+        touchPanState = e.touches.length === 2 && isZoomedIn ? centroidOf(e.touches) : null;
     }
 
     // =========================================================================
@@ -155,6 +252,18 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            needsInitialLayoutStabilityPass = true;
+            chartInstance.on('georoam', () => {
+                const opt = chartInstance?.getOption() as {series?: Array<{zoom?: number}>} | undefined;
+                const zoom = opt?.series?.[0]?.zoom ?? 1;
+                isZoomedIn = zoom > 1.01;
+            });
+            // {passive: false} is required — we conditionally call preventDefault() in
+            // handleTouchPanMove, which a passive listener would silently ignore.
+            chartContainer.addEventListener('touchstart', handleTouchPanStart, {passive: true});
+            chartContainer.addEventListener('touchmove', handleTouchPanMove, {passive: false});
+            chartContainer.addEventListener('touchend', handleTouchPanEnd, {passive: true});
+            chartContainer.addEventListener('touchcancel', handleTouchPanEnd, {passive: true});
         }
 
         const isDark = document.documentElement.classList.contains('dark');
@@ -168,9 +277,6 @@
         }
 
         const maxValue = chartData.length > 0 ? Math.max(...chartData.map((d) => d.value)) : 100;
-
-        // Restore full roam on desktop; pinch-zoom only on touch to avoid blocking page scroll
-        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
         // Fixed label — show flag + translated country name + % + absolute amount on hover
         const labelFormatter = (params: any) => {
@@ -219,7 +325,8 @@
                     name: 'Distribution',
                     type: 'map',
                     map: 'world',
-                    roam: isTouchDevice ? 'scale' : true, // mobile: pinch-zoom only; desktop: full pan+zoom
+                    id: GEO_SERIES_ID,
+                    roam: true,
                     scaleLimit: {min: 1, max: 5},
                     emphasis: {
                         label: fixedLabelStyle,
@@ -243,7 +350,10 @@
         };
 
         chartInstance.setOption(option, CHART_SET_OPTION_OPTS);
-        chartInstance.resize();
+        if (needsInitialLayoutStabilityPass) {
+            needsInitialLayoutStabilityPass = false;
+            scheduleFirstRenderStabilityFix(chartInstance, chartContainer);
+        }
     }
 </script>
 

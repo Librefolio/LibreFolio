@@ -177,6 +177,69 @@ export function buildMainSeries(values: number[], staleDays: number[], baseColor
         }
     }
 
+    // ── Step 2b: Merge micro-segments to bound the series count ──
+    // A sufficiently volatile+long series can cross the baseline (or fresh/stale
+    // boundary) hundreds or thousands of times over its history (e.g. 20+ years of
+    // daily prices). Each segment becomes its own ECharts series in Step 3 below —
+    // ECharts' per-series setup cost means a series count in the thousands can make a
+    // single setOption() call take SECONDS even though the underlying data is small
+    // (observed: ~2800 segments over ~9700 points made setOption() take ~5s). Segments
+    // shorter than a few points are visually meaningless anyway (a sub-pixel sliver at
+    // almost any chart width), so merge them into the preceding segment — sacrificing
+    // exact per-point coloring for a handful of points in exchange for keeping the
+    // series count bounded. The merge threshold grows until the cap is satisfied,
+    // rather than using one fixed value, so it stays a no-op for the common case
+    // (a few dozen segments) and only kicks in for pathological cases.
+    //
+    // IMPORTANT: the merged block's color must be recomputed as a point-weighted
+    // majority vote across everything absorbed into it — NOT just inherited from
+    // whichever original segment happened to be first. A chain of several short
+    // segments merged in a row can easily accumulate more total points on the
+    // "other" color (e.g. several brief below-baseline dips merged together can
+    // outweigh the segment they were first merged into), and always keeping the
+    // first segment's color would silently mis-color a range the user can actually
+    // see (reported bug: a below-0% span rendered as green after merging).
+    const MAX_SEGMENTS = 150;
+    const mergeShortSegments = (minPoints: number): Segment[] => {
+        if (minPoints <= 1) return segments;
+        const merged: Segment[] = [];
+        let colorVotes: Map<string, number> | null = null;
+
+        for (const seg of segments) {
+            const segLength = seg.end - seg.start + 1;
+            const last = merged[merged.length - 1];
+            if (last && segLength < minPoints) {
+                if (!colorVotes) {
+                    colorVotes = new Map([[last.color, last.end - last.start + 1]]);
+                }
+                colorVotes.set(seg.color, (colorVotes.get(seg.color) ?? 0) + segLength);
+
+                let bestColor = last.color;
+                let bestCount = -1;
+                for (const [color, count] of colorVotes) {
+                    if (count > bestCount) {
+                        bestCount = count;
+                        bestColor = color;
+                    }
+                }
+
+                last.end = seg.end;
+                last.color = bestColor;
+                last.isStale = last.isStale || seg.isStale;
+                last.staleEnd = seg.staleEnd;
+            } else {
+                merged.push({...seg});
+                colorVotes = null;
+            }
+        }
+        return merged;
+    };
+
+    let effectiveSegments = segments;
+    for (let minPoints = 2; effectiveSegments.length > MAX_SEGMENTS && minPoints <= n; minPoints++) {
+        effectiveSegments = mergeShortSegments(minPoints);
+    }
+
     // ── Step 3: Create one ECharts series per segment ──
     // Each segment's data array has null everywhere except in its range.
     // Adjacent segments share a 1-point overlap so the line is visually continuous.
@@ -189,13 +252,14 @@ export function buildMainSeries(values: number[], staleDays: number[], baseColor
     //     1 point forward into the next segment's territory. This prevents a
     //     visible "flash" when transitioning from fresh to stale data.
     const result: any[] = [];
+    const segmentsToRender = effectiveSegments;
 
-    for (let sIdx = 0; sIdx < segments.length; sIdx++) {
-        const seg = segments[sIdx];
+    for (let sIdx = 0; sIdx < segmentsToRender.length; sIdx++) {
+        const seg = segmentsToRender[sIdx];
         const segData: (number | null)[] = new Array(n).fill(null);
 
-        const prevSeg = sIdx > 0 ? segments[sIdx - 1] : null;
-        const nextSeg = sIdx < segments.length - 1 ? segments[sIdx + 1] : null;
+        const prevSeg = sIdx > 0 ? segmentsToRender[sIdx - 1] : null;
+        const nextSeg = sIdx < segmentsToRender.length - 1 ? segmentsToRender[sIdx + 1] : null;
 
         // Start: extend backward if previous segment had a DIFFERENT color
         // (so the line arriving at this segment's first point carries this color)

@@ -532,6 +532,22 @@
             "editorDesc": "Can modify transactions",
             "viewerDesc": "Read only"
         },
+        "lots": {
+            "openLots": "Open Lots",
+            "closedLots": "Closed Lots",
+            "buyDate": "Buy Date",
+            "sellDate": "Sell Date",
+            "sellPrice": "Sell Price",
+            "currentValue": "Current Value",
+            "realizedPnl": "Realized P&L",
+            "noOpenLots": "No open lots",
+            "noClosedLots": "No closed lots",
+            "detailTitle": "FIFO Lot Detail",
+            "loadFailed": "Failed to load lot data",
+            "combined": "Combined",
+            "viewAsset": "View Asset",
+            "analyze": "Analyze Lots"
+        },
         "createdInSystem": "Created in System"
     },
     "chart": {
@@ -540,7 +556,15 @@
             "fxStale": "FX rate: {days}d old",
             "percentNote": "% relative to range start date",
             "upper": "Upper",
-            "lower": "Lower"
+            "lower": "Lower",
+            "weekRange": "Week {start} – {end}",
+            "monthLabel": "{month}",
+            "valueAt": "Value at {date}",
+            "eventsInPeriod": "Events in period:"
+        },
+        "resolution": {
+            "weekly": "Weekly",
+            "monthly": "Monthly"
         },
         "showPercentage": "Show percentage",
         "showAbsolute": "Show absolute"
@@ -885,11 +909,15 @@
         "costsTooltip": "Fees and taxes recorded in the selected period.",
         "periodPnlTooltip": "Total gain or loss attributable to the selected period only (unrealized change + realized + income − fees). May differ from the position's total lifetime gain.",
         "unrealizedPnlPercent": "P&L %",
+        "pnlChange1d": "Δ1",
+        "pnlChange1dTooltip": "Change in unrealized P&L versus yesterday, keeping today's quantity constant.",
+        "pnlChange1dPercent": "Δ1%",
+        "pnlChange1dPercentTooltip": "Δ P&L versus yesterday as a percentage of yesterday's unrealized P&L.",
         "quantity": "Qty",
         "price": "Price",
         "pmc": "Avg. Cost",
-        "holdingsTab": "Holdings",
-        "performanceTab": "Performance",
+        "holdingsTab": "Portfolio",
+        "performanceTab": "Period",
         "otherPeriodEffects": "Other Period Effects",
         "otherPeriodEffectsSubtitle": "Effects that contribute to period P&L but are not linked to a specific asset",
         "openAtPeriodEnd": "Open at period end",
