@@ -37,7 +37,7 @@
     import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-    import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {createResponsiveLayout, registerLayoutDebug} from '$lib/utils/layout/responsiveLayout.svelte';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
@@ -67,18 +67,6 @@
         deltas: Record<string, number | null>;
         loadingPrices: boolean;
     }
-
-    // Delta periods for table columns
-    const DELTA_PERIODS = [
-        {key: '1W', days: 7},
-        {key: '1M', days: 30},
-        {key: '3M', days: 91},
-        {key: '6M', days: 182},
-        {key: '1Y', days: 365},
-        {key: '2Y', days: 730},
-        {key: '3Y', days: 1095},
-        {key: '5Y', days: 1825},
-    ] as const;
 
     // =========================================================================
     // State
@@ -196,9 +184,17 @@
 
     // Filter bar adaptive layout (shared helper)
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    const layout = createResponsiveLayout({wide: 1340, tablet: 1060, tabletS: 500, labelHide: 460});
+    // compact: narrower-than-mobile fallback (icon-only actions row) — mobile itself now shows
+    // the same 2×2-grid-with-labels as wide/tablet (see actions-row class below). labelHide
+    // matches compact so labels hide exactly when the icon-only fallback kicks in, same pattern
+    // as dashboard/broker-detail (PageToolbar). Starting value — tune live via
+    // window.__lfLayouts.assetsList.thresholds.compact = <value> (see registerLayoutDebug).
+    const layout = createResponsiveLayout({wide: 1340, tablet: 1060, tabletS: 500, compact: 320, labelHide: 320});
+    registerLayoutDebug('assetsList', layout);
     let layoutMode = $derived(layout.layoutMode);
     let showActionLabels = $derived(layout.showActionLabels);
+    // Compact is narrower-than-mobile — the filters zone should stack the same way in both.
+    let isStacked = $derived(layoutMode === 'mobile' || layoutMode === 'compact');
 
     // Type filter dropdown
     let typeFilterOpen = $state(false);
@@ -321,34 +317,6 @@
     // =========================================================================
     // Helpers
     // =========================================================================
-
-    /**
-     * Compute Δ% for a given period from chartData.
-     * Pₙ = last data point, P_start = closest point <= (Pₙ - periodDays).
-     */
-    function computePeriodDelta(chartData: Array<{date: string; value: number}>, periodDays: number): number | null {
-        if (chartData.length === 0) return null;
-
-        const pn = chartData[chartData.length - 1];
-        if (!pn || pn.value === 0) return null;
-
-        const targetDate = new Date(pn.date);
-        targetDate.setDate(targetDate.getDate() - periodDays);
-        const targetStr = targetDate.toISOString().slice(0, 10);
-
-        // Backward-fill lookup: find closest point <= targetDate
-        let startPoint: {date: string; value: number} | null = null;
-        for (const point of chartData) {
-            if (point.date <= targetStr) {
-                startPoint = point;
-            } else {
-                break;
-            }
-        }
-
-        if (!startPoint || startPoint.value === 0) return null;
-        return ((pn.value - startPoint.value) / startPoint.value) * 100;
-    }
 
     // =========================================================================
     // Data Loading
@@ -922,20 +890,20 @@
     <div
         bind:this={filterBarRef}
         class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
-               {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'wide' ? 'flex-row items-center justify-between' : 'flex-row items-start justify-between'}"
+               {isStacked ? 'flex-col items-center' : layoutMode === 'wide' ? 'flex-row items-center justify-between' : 'flex-row items-start justify-between'}"
     >
         <!-- Filters block -->
         <div
             class="flex gap-3
-                    {layoutMode === 'mobile' ? 'flex-col items-center' : layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : 'flex-row items-center flex-1 flex-wrap'}"
+                    {isStacked ? 'flex-col items-center' : layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : 'flex-row items-center flex-1 flex-wrap'}"
         >
             <!-- DateRangePicker -->
             <div class="flex flex-1 self-stretch min-w-0" data-testid="assets-date-range">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" onchange={handleDateRangeChange} />
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" debugName="assetsList" onchange={handleDateRangeChange} />
             </div>
 
-            <!-- Filters 2×2 block (tablet+tablet-s) / inline (wide) / stacked (mobile) -->
-            <div class="flex gap-2 {layoutMode === 'wide' ? 'flex-row items-center flex-wrap' : layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-col'}">
+            <!-- Filters 2×2 block (tablet+tablet-s) / inline (wide) / stacked (mobile+compact) -->
+            <div class="flex gap-2 {layoutMode === 'wide' ? 'flex-row items-center flex-wrap' : isStacked ? 'flex-col items-center' : 'flex-col'}">
                 <!-- Row 1: Search + Active -->
                 <div class="flex items-center gap-2">
                     <!-- Search -->
@@ -1089,10 +1057,10 @@
             </div>
         </div>
 
-        <!-- Actions: 2×2 grid (wide+tablet), column (tablet-s), horizontal row (mobile) -->
+        <!-- Actions: 2×2 grid (wide+tablet+mobile), column (tablet-s), icon-only row (compact — the narrowest fallback, below the mobile 2×2). -->
         <div
             class="flex shrink-0 gap-1.5
-                    {layoutMode === 'mobile' ? 'flex-row justify-center' : layoutMode === 'tablet-s' ? 'flex-col' : 'grid grid-cols-2'}"
+                    {layoutMode === 'compact' ? 'flex-row justify-center flex-wrap' : layoutMode === 'tablet-s' ? 'flex-col' : 'grid grid-cols-2'}"
         >
             <!-- Top-left: ColumnVisibility in table mode, Abs/% toggle in grid mode -->
             {#if viewMode === 'list'}

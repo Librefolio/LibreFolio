@@ -20,6 +20,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {CHART_ANIMATION_CONFIG} from '$lib/components/charts/echartsAnimationConfig';
+    import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
     import {_ as t} from '$lib/i18n';
     import {sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
@@ -72,6 +73,7 @@
     // icon (and, previously, its translation via a since-removed name-based fallback)
     // would never be registered until some unrelated full rebuild (dark mode/resize).
     let lastRawTypeKeys = '';
+    let needsInitialLayoutStabilityPass = false;
 
     // Diversified color palette — high chromatic distance
     const PALETTE_LIGHT = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5', '#059669', '#ea580c', '#6366f1', '#0891b2', '#ca8a04', '#9333ea'];
@@ -131,6 +133,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            needsInitialLayoutStabilityPass = true;
         }
 
         const isDark = document.documentElement.classList.contains('dark');
@@ -322,6 +325,7 @@
             tooltip: {
                 trigger: 'item',
                 formatter: tooltipFormatter,
+                position: tooltipPositionAboveFinger,
                 backgroundColor: isDark ? '#1e293b' : '#fff',
                 borderColor: isDark ? '#334155' : '#e2e8f0',
                 textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
@@ -355,7 +359,10 @@
         chartInstance.setOption(option, {notMerge: false});
         chartFullyInitialized = true;
         lastDark = isDark;
-        chartInstance.resize();
+        if (needsInitialLayoutStabilityPass) {
+            needsInitialLayoutStabilityPass = false;
+            scheduleFirstRenderStabilityFix(chartInstance, chartContainer);
+        }
     }
 </script>
 

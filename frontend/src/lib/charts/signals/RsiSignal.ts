@@ -145,11 +145,60 @@ export class RsiSignal extends ChartSignal {
             }
         }
 
+        // Merge micro-segments to bound the series count (same rationale as the price
+        // line's baseline-color segmentation, see buildMainSeries): a sufficiently
+        // volatile+long series can cross the overbought/oversold thresholds hundreds of
+        // times, and buildOverlaySignalSeries() turns EACH segment into its own
+        // full-length ECharts series — a series count in the hundreds/thousands can make
+        // a single setOption() call take seconds. Segments shorter than a few points are
+        // visually meaningless anyway, so merge them into a neighbor — recomputing the
+        // merged zone as a point-weighted majority vote (not just "first segment wins")
+        // so a long run of one zone can't be silently mis-colored by a handful of brief
+        // crossings merged into it.
+        const MAX_RSI_SEGMENTS = 100;
+        const mergeShortZoneSegments = (minPoints: number): Segment[] => {
+            if (minPoints <= 1) return segments;
+            const merged: Segment[] = [];
+            let zoneVotes: Map<Zone, number> | null = null;
+
+            for (const seg of segments) {
+                const segLength = seg.endIdx - seg.startIdx + 1;
+                const last = merged[merged.length - 1];
+                if (last && segLength < minPoints) {
+                    if (!zoneVotes) {
+                        zoneVotes = new Map([[last.zone, last.endIdx - last.startIdx + 1]]);
+                    }
+                    zoneVotes.set(seg.zone, (zoneVotes.get(seg.zone) ?? 0) + segLength);
+
+                    let bestZone = last.zone;
+                    let bestCount = -1;
+                    for (const [zone, count] of zoneVotes) {
+                        if (count > bestCount) {
+                            bestCount = count;
+                            bestZone = zone;
+                        }
+                    }
+
+                    last.endIdx = seg.endIdx;
+                    last.zone = bestZone;
+                } else {
+                    merged.push({...seg});
+                    zoneVotes = null;
+                }
+            }
+            return merged;
+        };
+
+        let effectiveSegments = segments;
+        for (let minPoints = 2; effectiveSegments.length > MAX_RSI_SEGMENTS && minPoints <= allPoints.length; minPoints++) {
+            effectiveSegments = mergeShortZoneSegments(minPoints);
+        }
+
         const baseWidth = this.style.lineWidth;
         const color = this.style.color;
         const yAxis = (this.constructor as typeof ChartSignal).yAxisIndex;
 
-        return segments
+        return effectiveSegments
             .map((seg): RenderedSignal | null => {
                 const segData = allPoints.slice(seg.startIdx, seg.endIdx + 1);
                 if (segData.length === 0) return null;

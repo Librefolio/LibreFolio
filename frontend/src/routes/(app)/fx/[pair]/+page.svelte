@@ -45,7 +45,7 @@
     import {ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
-    import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {createResponsiveLayout, registerLayoutDebug} from '$lib/utils/layout/responsiveLayout.svelte';
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
@@ -134,7 +134,12 @@
 
     // Filter bar adaptive layout (shared utility — same as asset detail)
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    const layout = createResponsiveLayout({wide: 790, tablet: 620, tabletS: 520, labelHide: 430});
+    // compact/labelHide starting value — tune live via
+    // window.__lfLayouts.fxDetail.thresholds.compact = <value>.
+    const layout = createResponsiveLayout({wide: 790, tablet: 620, tabletS: 520, compact: 320, labelHide: 320});
+    registerLayoutDebug('fxDetail', layout);
+    // Compact is narrower-than-mobile — the filters zone should stack the same way in both.
+    let isStacked = $derived(layout.layoutMode === 'mobile' || layout.layoutMode === 'compact');
 
     // Chart settings (from store) — keyed by canonical slug (not URL direction)
     let settings = $derived(getSettingsForPair(data.canonicalSlug, 'fx'));
@@ -738,24 +743,24 @@
     <div
         bind:this={filterBarRef}
         class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
-               {layout.layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
+               {isStacked ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
         data-testid="fx-detail-filter-bar"
     >
         <!-- Filters block -->
-        <div class="flex gap-3 {layout.layoutMode === 'mobile' ? 'flex-col items-center' : layout.layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-start'}">
+        <div class="flex gap-3 {isStacked ? 'flex-col items-center' : layout.layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-start'}">
             <!-- DateRangePicker -->
             <div class="flex flex-1 self-stretch min-w-0">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" onchange={handleDateRangeChange} />
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" debugName="fxDetail" onchange={handleDateRangeChange} />
             </div>
 
             <!-- Pair Summary (rate + delta) -->
             <FxPriceSummary {lastRate} {deltaPercent} layoutMode={layout.layoutMode} />
         </div>
 
-        <!-- Actions: 2×2 grid (wide+tablet), 4×1 column (tablet-s), 1×4 row (mobile) -->
+        <!-- Actions: 2×2 grid (wide+tablet+mobile), 4×1 column (tablet-s), icon-only row (compact — the narrowest fallback, below the mobile 2×2). -->
         <div
             class="flex shrink-0 gap-1.5 self-center
-                    {layout.layoutMode === 'mobile' ? 'flex-row items-center justify-center' : layout.layoutMode === 'tablet-s' ? 'flex-col' : 'grid grid-cols-2 ml-auto'}"
+                    {layout.layoutMode === 'compact' ? 'flex-row items-center justify-center flex-wrap' : layout.layoutMode === 'tablet-s' ? 'flex-col' : 'grid grid-cols-2 ml-auto'}"
         >
             <!-- Row 1, Col 1: Abs/% segmented toggle -->
             <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
@@ -1021,7 +1026,7 @@
                 </button>
             </div>
             <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
-                💡 {layout.layoutMode === 'mobile' ? $t('fxDetail.editorTipMobile') : $t('fxDetail.editorTipDesktop')}
+                💡 {layout.layoutMode === 'mobile' || layout.layoutMode === 'compact' ? $t('fxDetail.editorTipMobile') : $t('fxDetail.editorTipDesktop')}
             </p>
             <div class="px-4 pb-4 pt-3">
                 <FxDataEditorSection

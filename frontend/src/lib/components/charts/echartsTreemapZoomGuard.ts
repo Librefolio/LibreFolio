@@ -35,6 +35,16 @@ export interface TreemapZoomGuardOptions {
      *  zoom stays meaningful even as holdings/period change without needing to re-attach
      *  the guard). */
     maxScale?: number | (() => number);
+    /** Called with the current TRUE (guard-corrected) cumulative scale AND rect on every
+     *  treemaprender/treemapmove event, including no-op ones. Lets callers drive UI that
+     *  depends on "is the user currently zoomed in" — e.g. toggling `touch-action` so a
+     *  single-finger drag pans the treemap only when there's actually something to pan
+     *  (scale > 1), and falls through to native page scroll at the default 1:1 fit (where
+     *  panning is a guaranteed no-op per the clamping below anyway). The rect is also the
+     *  only reliable way for external code to read the treemap's current root rect without
+     *  reaching into ECharts' internal `seriesModel.getData().tree.root.getLayout()` — used
+     *  to compute manual pan deltas (see the touch-drag bridge in ExposureTreemap.svelte). */
+    onScaleChange?: (scale: number, rect: {x: number; y: number; width: number; height: number}) => void;
 }
 
 export interface TreemapZoomGuardHandle {
@@ -95,6 +105,8 @@ export function attachTreemapZoomGuard(chart: ECharts, getContainerSize: () => {
             newY = (containerHeight - newHeight) / 2;
         }
 
+        options.onScaleChange?.(clampedScale, {x: newX, y: newY, width: newWidth, height: newHeight});
+
         const scaleChanged = Math.abs(newWidth - rect.width) > EPSILON || Math.abs(newHeight - rect.height) > EPSILON;
         const positionChanged = Math.abs(newX - rect.x) > EPSILON || Math.abs(newY - rect.y) > EPSILON;
         if (!scaleChanged && !positionChanged) return;
@@ -129,5 +141,39 @@ export function resetTreemapView(chart: ECharts): void {
     chart.dispatchAction({
         type: 'treemapRender',
         rootRect: {x: 0, y: 0, width, height},
+    });
+}
+
+/**
+ * Manually pan a treemap by a pixel delta, from a known current rect.
+ *
+ * WHY THIS EXISTS: ECharts' own `roam`-driven pan (`RoamController` → `_onPan` →
+ * dispatches this SAME `treemapMove` action internally) never fires on touch devices
+ * that support the Pointer Events API (virtually all modern mobile browsers). Verified
+ * by reading `zrender/lib/dom/HandlerProxy.js`: its `pointermove` handler only forwards
+ * to the internal `mousemove` (which `RoamController` listens to for drag/pan tracking)
+ * `if (!isPointerFromTouch(event))` — i.e. touch-sourced pointer movement is explicitly
+ * EXCLUDED from ever reaching the pan logic, regardless of `roam`/`touch-action` config.
+ * `pointerdown`/`pointerup` have no such exclusion, so a touch drag still registers as a
+ * "click", but the move-tracking that computes pan deltas never runs — matching the
+ * exact reported symptom ("only clicks work, pan does nothing, even when zoomed in").
+ *
+ * This function lets a caller's OWN touchmove listener (which — unlike zrender's
+ * internal bridge — DOES receive raw touch events fine) manually dispatch the exact
+ * same `treemapMove` action ECharts' desktop mouse-drag path would have dispatched,
+ * fully reusing ECharts' own rendering/transform logic (and this module's zoom+pan
+ * guard, which listens to the SAME `treemapmove` event and will clamp the result if it
+ * would go out of bounds) — no pan math is reimplemented beyond a plain offset.
+ *
+ * @param chart The ECharts instance hosting the treemap series.
+ * @param dx Pixel delta since the last move (positive = drag right).
+ * @param dy Pixel delta since the last move (positive = drag down).
+ * @param currentRect The treemap's current root rect — e.g. from `attachTreemapZoomGuard`'s
+ *   `onScaleChange` callback, which reports the guard-corrected rect on every render/move.
+ */
+export function panTreemapBy(chart: ECharts, dx: number, dy: number, currentRect: {x: number; y: number; width: number; height: number}): void {
+    chart.dispatchAction({
+        type: 'treemapMove',
+        rootRect: {x: currentRect.x + dx, y: currentRect.y + dy, width: currentRect.width, height: currentRect.height},
     });
 }

@@ -25,13 +25,16 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, PriceHistory, ProviderInputType, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import IssueCode
-from backend.app.services.portfolio_service import PortfolioService, _build_history_series, _HistoryTxRow
+from backend.app.services.portfolio_service import PortfolioService, _build_history_series, _HistoryTxRow, compute_wac_iterative_multi_broker
 from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.financial.valuation_utils import compute_holding_value
+from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_txlist
 
 # =============================================================================
 # FIXTURES
@@ -109,6 +112,97 @@ async def broker_with_access(session, test_user) -> tuple[Broker, BrokerUserAcce
     session.add(access)
     await session.flush()
     return broker, access
+
+
+# =============================================================================
+# TestComputeWacIterativeMultiBroker
+# =============================================================================
+
+
+class TestComputeWacIterativeMultiBroker:
+    @pytest.mark.asyncio
+    async def test_matches_manual_merged_txlist(self, session, broker_with_access, test_asset):
+        """Multi-broker WAC must match manual merged txlist math."""
+        broker_one, _ = broker_with_access
+        broker_two = Broker(name=f"PfBroker_{utcnow().timestamp()}_wac_two")
+        session.add(broker_two)
+        await session.flush()
+
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker_one.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.BUY,
+                    date=date(2025, 1, 10),
+                    quantity=Decimal("10"),
+                    amount=Decimal("-1000"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker_two.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.BUY,
+                    date=date(2025, 2, 1),
+                    quantity=Decimal("5"),
+                    amount=Decimal("-600"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker_one.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.SELL,
+                    date=date(2025, 3, 5),
+                    quantity=Decimal("-4"),
+                    amount=Decimal("520"),
+                    currency="EUR",
+                ),
+            ]
+        )
+        await session.flush()
+
+        service_result = await compute_wac_iterative_multi_broker(
+            session=session,
+            broker_ids=[broker_two.id, broker_one.id],
+            asset_id=test_asset.id,
+            as_of_date=date(2025, 3, 5),
+            asset_currency="EUR",
+        )
+
+        merged_rows = list(
+            (
+                await session.execute(
+                    select(Transaction).where(
+                        Transaction.broker_id.in_([broker_one.id, broker_two.id]),
+                        Transaction.asset_id == test_asset.id,
+                        Transaction.date <= date(2025, 3, 5),
+                        Transaction.quantity.is_not(None),
+                        Transaction.quantity != 0,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        manual_result = compute_wac_from_txlist(
+            [
+                WACInputTX(
+                    tx_id=row.id,
+                    type=row.type.value if hasattr(row.type, "value") else str(row.type),
+                    date=row.date,
+                    quantity=row.quantity,
+                    unit_cost_converted=abs(row.amount) / row.quantity if row.quantity > 0 and row.amount else Decimal("0"),
+                    original_currency=row.currency or test_asset.currency,
+                )
+                for row in merged_rows
+            ],
+            "EUR",
+        )
+
+        assert service_result.wac is not None
+        assert service_result.wac.code == manual_result.wac_currency == "EUR"
+        assert service_result.wac.amount == manual_result.wac_amount
+        assert [tx.tx_id for tx in service_result.wac_qualifying_txs] == [tx.tx_id for tx in manual_result.qualifying]
 
 
 # =============================================================================
@@ -277,7 +371,7 @@ class TestPortfolioServiceGetLots:
         service = PortfolioService(session)
         result = await service.get_lots(
             user_id=test_user.id,
-            broker_id=999999,
+            broker_ids=[999999],
             asset_id=999999,
         )
         assert result.open_lots == []
@@ -291,7 +385,7 @@ class TestPortfolioServiceGetLots:
         service = PortfolioService(session)
         result = await service.get_lots(
             user_id=test_user.id,
-            broker_id=broker.id,
+            broker_ids=[broker.id],
             asset_id=test_asset.id,
         )
         assert result.open_lots == []
@@ -316,7 +410,7 @@ class TestPortfolioServiceGetLots:
         service = PortfolioService(session)
         result = await service.get_lots(
             user_id=test_user.id,
-            broker_id=broker.id,
+            broker_ids=[broker.id],
             asset_id=test_asset.id,
         )
         assert len(result.open_lots) >= 1
@@ -337,7 +431,7 @@ class TestPortfolioServiceGetLots:
         service = PortfolioService(session)
         result = await service.get_lots(
             user_id=test_user.id,
-            broker_id=broker.id,
+            broker_ids=[broker.id],
             asset_id=test_asset.id,
         )
         open_by_qty = [lot for lot in result.open_lots if lot.remaining_quantity == Decimal("70")]
@@ -796,7 +890,7 @@ class TestNetDepositedCapital:
                 broker_id=broker.id,
                 type=TransactionType.BUY,
                 date=yesterday,
-                amount=Decimal("-500"),
+                amount=Decimal("-450"),
                 currency="EUR",
                 asset_id=test_asset.id,
                 quantity=Decimal("5"),
@@ -835,6 +929,100 @@ class TestNetDepositedCapital:
 
         assert len(summary.holdings) == 1
         assert summary.holdings[0].price_change_1d == Decimal("0.1000")
+        assert summary.holdings[0].gain_loss_change_1d == Decimal("50")
+        assert summary.holdings[0].gain_loss_change_1d_percent == Decimal("100.00")
+
+    @pytest.mark.asyncio
+    async def test_holding_gain_loss_change_1d_respects_quote_base_quantity(self, session, test_user, broker_with_access):
+        """Regression test for a real prod bug report: a BTP bond (quote_base_quantity=100,
+        i.e. quoted per 100 nominal) showed an absurd +93.60% "1-day" P&L swing on a stable
+        position. Root cause: gain_loss_change_1d used to do `(current_price - prev_price) *
+        quantity` directly, ignoring quote_base_quantity — unlike market_value/gain_loss,
+        which already go through compute_holding_value() for this exact scaling. This test
+        uses quantity=10000 (nominal) + quote_base_quantity=100, so a naive unscaled calc
+        would be 100x too large; a correctly-scaled calc must match compute_holding_value().
+        """
+        broker, _ = broker_with_access
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+
+        bond_asset = Asset(
+            display_name=f"TestBTP_{utcnow().timestamp()}",
+            asset_type=AssetType.BOND,
+            currency="EUR",
+            quote_base_quantity=100,
+        )
+        session.add(bond_asset)
+        await session.flush()
+
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=yesterday,
+                amount=Decimal("10000"),
+                currency="EUR",
+            )
+        )
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.BUY,
+                date=yesterday,
+                # 10000 nominal bought at an implied rate of 97.70 per 100 nominal.
+                amount=Decimal("-9770"),
+                currency="EUR",
+                asset_id=bond_asset.id,
+                quantity=Decimal("10000"),
+            )
+        )
+        session.add_all(
+            [
+                PriceHistory(
+                    asset_id=bond_asset.id,
+                    date=yesterday,
+                    open=Decimal("98.51"),
+                    high=Decimal("98.51"),
+                    low=Decimal("98.51"),
+                    close=Decimal("98.51"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+                PriceHistory(
+                    asset_id=bond_asset.id,
+                    date=today,
+                    open=Decimal("98.70"),
+                    high=Decimal("98.70"),
+                    low=Decimal("98.70"),
+                    close=Decimal("98.70"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        summary = await service.get_summary(user_id=test_user.id)
+
+        assert len(summary.holdings) == 1
+        holding = summary.holdings[0]
+
+        # market_value already applies quote_base_quantity scaling — use it as the
+        # independent source of truth for what "correctly scaled" looks like.
+        expected_change_1d = compute_holding_value(Decimal("10000"), Decimal("98.70"), 100) - compute_holding_value(Decimal("10000"), Decimal("98.51"), 100)
+        assert expected_change_1d == Decimal("19.00")  # sanity-check the fixture's own arithmetic
+        assert holding.gain_loss_change_1d == expected_change_1d
+
+        # A pre-fix implementation would have produced (98.70 - 98.51) * 10000 = 1900 —
+        # 100x too large. Explicitly guard against regressing to that.
+        assert holding.gain_loss_change_1d != Decimal("1900")
+
+        expected_gain_loss_yesterday = holding.gain_loss - expected_change_1d
+        expected_pct = (expected_change_1d / abs(expected_gain_loss_yesterday) * 100).quantize(Decimal("0.01"))
+        assert holding.gain_loss_change_1d_percent == expected_pct
 
 
 class TestPortfolioServiceDateAwareDashboardData:

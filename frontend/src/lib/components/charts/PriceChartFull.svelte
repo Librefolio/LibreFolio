@@ -10,16 +10,19 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {_ as t} from '$lib/i18n';
     import type {ChartType, ViewMode} from './ChartToolbar.svelte';
     import ChartToolbar from './ChartToolbar.svelte';
     import type {LineDataPoint} from './LineChart.svelte';
     import CandlestickChart from './CandlestickChart.svelte';
+    import ResolutionBadge from './ResolutionBadge.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
     import {buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
-    import {tooltipPositionSide} from './echartsTooltipHelpers';
+    import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
     import {ChartLine, ChartCandlestick} from 'lucide-svelte';
+    import {aggregateLineSeries, aggregateOHLCV, bucketEventMarkers, cascadeResolution, chooseInitialResolution, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
 
     // =========================================================================
     // Event Marker types and constants
@@ -52,6 +55,21 @@
         MATURITY_SETTLEMENT: 'roundRect',
         SPLIT: 'arrow',
     };
+
+    interface LogicalVisibleRange {
+        startDate: string;
+        endDate: string;
+    }
+
+    interface ResolvedDataCacheEntry {
+        lineData: LineDataPoint[];
+        candleData: LineDataPoint[];
+    }
+
+    interface BucketInfo {
+        bucketStart: string;
+        bucketEnd: string;
+    }
 
     // =========================================================================
     // Props
@@ -167,6 +185,14 @@
     let chartInstance: echarts.ECharts | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let chartOptionSet = false;
+    let needsInitialLayoutStabilityPass = false;
+    let resolution: ChartResolution = $state('daily');
+    let logicalRange: LogicalVisibleRange | null = $state(null);
+    let zoomDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let resolvedDataCache = new Map<ChartResolution, ResolvedDataCacheEntry>();
+    let lastRawDataRef: LineDataPoint[] | null = null;
+    let lastDisplayDataRef: LineDataPoint[] | null = null;
+    let lastRenderedResolution: ChartResolution | null = null;
 
     $effect(() => {
         chartType = externalChartType ?? initialChartType;
@@ -197,10 +223,26 @@
         observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
         return () => {
             observer.disconnect();
+            if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer);
             resizeObserver?.disconnect();
             chartInstance?.dispose();
             chartInstance = null;
         };
+    });
+
+    $effect(() => {
+        if (data !== lastRawDataRef) {
+            resolvedDataCache.clear();
+            resolution = 'daily';
+            logicalRange = null;
+            chartOptionSet = false;
+            lastRenderedResolution = null;
+            lastRawDataRef = data;
+            lastDisplayDataRef = displayData;
+        } else if (displayData !== lastDisplayDataRef) {
+            resolvedDataCache.clear();
+            lastDisplayDataRef = displayData;
+        }
     });
 
     $effect(() => {
@@ -212,6 +254,7 @@
             void showGradient;
             void viewMode;
             void displayData;
+            void resolution;
             void yAxisMode;
             void yAxisMin;
             void yAxisMax;
@@ -255,6 +298,220 @@
         }
     }
 
+    function clearZoomDebounce() {
+        if (zoomDebounceTimer) {
+            clearTimeout(zoomDebounceTimer);
+            zoomDebounceTimer = null;
+        }
+    }
+
+    function formatMonthLabel(date: string): string {
+        return new Intl.DateTimeFormat(undefined, {
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'UTC',
+        }).format(new Date(`${date}T00:00:00Z`));
+    }
+
+    function getBucketInfo(point: LineDataPoint, currentResolution: ChartResolution): BucketInfo {
+        if (currentResolution === 'daily') {
+            return {
+                bucketStart: point.date,
+                bucketEnd: point.date,
+            };
+        }
+
+        return {
+            bucketStart: typeof (point as any).bucketStart === 'string' ? (point as any).bucketStart : mapDateToBucket(point.date, currentResolution).bucketStart,
+            bucketEnd: typeof (point as any).bucketEnd === 'string' ? (point as any).bucketEnd : point.date,
+        };
+    }
+
+    function buildTooltipHeader(date: string, currentResolution: ChartResolution, bucketInfo?: BucketInfo): string {
+        if (currentResolution === 'daily') {
+            return `<strong>${date}</strong>`;
+        }
+
+        const info = bucketInfo ?? {bucketStart: date, bucketEnd: date};
+
+        if (currentResolution === 'weekly') {
+            return `<strong>${$t('chart.tooltip.weekRange', {values: {start: info.bucketStart, end: info.bucketEnd}})}</strong>`;
+        }
+
+        return `<strong>${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</strong><br/><span style="font-size:11px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: info.bucketEnd}})}</span>`;
+    }
+
+    function synthesizeDailyOHLC(points: LineDataPoint[]): LineDataPoint[] {
+        return points.map((point, index) => {
+            const close = point.close ?? point.value;
+            const prevClose = index > 0 ? (points[index - 1].close ?? points[index - 1].value) : close;
+            const open = point.open ?? prevClose;
+            const high = point.high ?? Math.max(open, close);
+            const low = point.low ?? Math.min(open, close);
+
+            return {
+                ...point,
+                open,
+                high,
+                low,
+                close,
+                value: close,
+            };
+        });
+    }
+
+    function getResolvedSeries(currentResolution: ChartResolution): ResolvedDataCacheEntry {
+        const cached = resolvedDataCache.get(currentResolution);
+        if (cached) return cached;
+
+        const synthesizedDailyData = synthesizeDailyOHLC(data);
+        const entry: ResolvedDataCacheEntry =
+            currentResolution === 'daily'
+                ? {
+                      lineData: displayData,
+                      candleData: synthesizedDailyData,
+                  }
+                : {
+                      lineData: aggregateLineSeries(displayData, currentResolution),
+                      candleData: aggregateOHLCV(synthesizedDailyData, currentResolution),
+                  };
+
+        resolvedDataCache.set(currentResolution, entry);
+        return entry;
+    }
+
+    function getVisibleDailyPoints(range: LogicalVisibleRange | null): LineDataPoint[] {
+        if (!range) return displayData;
+        return displayData.filter((point) => point.date >= range.startDate && point.date <= range.endDate);
+    }
+
+    function countBuckets(points: LineDataPoint[]): {dailyCount: number; weeklyCount: number; monthlyCount: number} {
+        const weeklyBuckets = new Set<string>();
+        const monthlyBuckets = new Set<string>();
+
+        for (const point of points) {
+            const weekly = mapDateToBucket(point.date, 'weekly');
+            const monthly = mapDateToBucket(point.date, 'monthly');
+            weeklyBuckets.add(`${weekly.bucketStart}|${weekly.bucketEnd}`);
+            monthlyBuckets.add(`${monthly.bucketStart}|${monthly.bucketEnd}`);
+        }
+
+        return {
+            dailyCount: points.length,
+            weeklyCount: weeklyBuckets.size,
+            monthlyCount: monthlyBuckets.size,
+        };
+    }
+
+    function resolveZoomIndex(value: unknown, dates: string[], fallback: number): number {
+        if (typeof value === 'number') {
+            return Math.min(Math.max(Math.round(value), 0), dates.length - 1);
+        }
+
+        if (typeof value === 'string') {
+            const index = dates.indexOf(value);
+            if (index >= 0) return index;
+        }
+
+        return fallback;
+    }
+
+    function getLogicalRangeFromChart(points: LineDataPoint[], currentResolution: ChartResolution): LogicalVisibleRange | null {
+        if (!chartInstance || points.length === 0) return null;
+
+        try {
+            const option = chartInstance.getOption() as any;
+            const zoom = option?.dataZoom?.[0];
+            if (!zoom) return null;
+
+            const dates = points.map((point) => point.date);
+            const lastIndex = dates.length - 1;
+            if (lastIndex < 0) return null;
+
+            let startIndex = 0;
+            let endIndex = lastIndex;
+
+            if (zoom.startValue !== undefined || zoom.endValue !== undefined) {
+                startIndex = resolveZoomIndex(zoom.startValue, dates, 0);
+                endIndex = resolveZoomIndex(zoom.endValue, dates, lastIndex);
+            } else if (lastIndex > 0) {
+                const start = typeof zoom.start === 'number' ? zoom.start : 0;
+                const end = typeof zoom.end === 'number' ? zoom.end : 100;
+                startIndex = Math.min(Math.max(Math.floor((start / 100) * lastIndex), 0), lastIndex);
+                endIndex = Math.min(Math.max(Math.ceil((end / 100) * lastIndex), 0), lastIndex);
+            }
+
+            if (startIndex > endIndex) [startIndex, endIndex] = [endIndex, startIndex];
+
+            const startBucket = getBucketInfo(points[startIndex], currentResolution);
+            const endBucket = getBucketInfo(points[endIndex], currentResolution);
+
+            return {
+                startDate: startBucket.bucketStart,
+                endDate: endBucket.bucketEnd,
+            };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function computeZoomWindow(points: LineDataPoint[], currentResolution: ChartResolution, range: LogicalVisibleRange | null): {start: number; end: number} {
+        const lastIndex = points.length - 1;
+        if (!range || lastIndex <= 0) return {start: 0, end: 100};
+
+        let startIndex = lastIndex;
+        let endIndex = 0;
+
+        for (let index = 0; index < points.length; index++) {
+            const bucket = getBucketInfo(points[index], currentResolution);
+            if (bucket.bucketEnd >= range.startDate) {
+                startIndex = index;
+                break;
+            }
+        }
+
+        for (let index = lastIndex; index >= 0; index--) {
+            const bucket = getBucketInfo(points[index], currentResolution);
+            if (bucket.bucketStart <= range.endDate) {
+                endIndex = index;
+                break;
+            }
+        }
+
+        if (endIndex < startIndex) {
+            endIndex = startIndex;
+        }
+
+        return {
+            start: (startIndex / lastIndex) * 100,
+            end: (endIndex / lastIndex) * 100,
+        };
+    }
+
+    function scheduleResolutionRecompute() {
+        clearZoomDebounce();
+        zoomDebounceTimer = setTimeout(() => {
+            if (!chartInstance || displayData.length === 0) return;
+
+            // Read the settled zoom range ONCE here (not on every dataZoom tick) — this is
+            // the only place getLogicalRangeFromChart()/getOption() runs for interactive
+            // zoom, now that the gesture has paused for 200ms.
+            const activeLineData = getResolvedSeries(resolution).lineData;
+            const nextRange = getLogicalRangeFromChart(activeLineData, resolution);
+            if (nextRange) {
+                logicalRange = nextRange;
+            }
+
+            const visiblePoints = getVisibleDailyPoints(logicalRange);
+            const counts = countBuckets(visiblePoints.length > 0 ? visiblePoints : displayData);
+            const nextResolution = cascadeResolution(resolution, counts, chartInstance.getWidth());
+
+            if (nextResolution !== resolution) {
+                resolution = nextResolution;
+            }
+        }, 200);
+    }
+
     // =========================================================================
     // Chart Rendering — Unified 2-grid layout
     // =========================================================================
@@ -290,6 +547,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            needsInitialLayoutStabilityPass = true;
 
             // Global dblclick handler for edit mode — scrolls editor to clicked date
             chartInstance.getZr().on('dblclick', (params: any) => {
@@ -299,8 +557,9 @@
                     const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
                     if (pointInGrid) {
                         const dateIdx = Math.round(pointInGrid[0]);
-                        if (dateIdx >= 0 && dateIdx < displayData.length) {
-                            const point = displayData[dateIdx];
+                        const activeLineData = getResolvedSeries(resolution).lineData;
+                        if (dateIdx >= 0 && dateIdx < activeLineData.length) {
+                            const point = activeLineData[dateIdx];
                             // Check if this date has an event marker
                             const hasEvent = eventMarkers.find((e) => e.date === point.date);
                             if (hasEvent && onEventDblClick) {
@@ -330,8 +589,9 @@
                     const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
                     if (pointInGrid) {
                         const dateIdx = Math.round(pointInGrid[0]);
-                        if (dateIdx >= 0 && dateIdx < displayData.length) {
-                            const point = displayData[dateIdx];
+                        const activeLineData = getResolvedSeries(resolution).lineData;
+                        if (dateIdx >= 0 && dateIdx < activeLineData.length) {
+                            const point = activeLineData[dateIdx];
                             handlePointClick(point.date, point.value);
                         }
                     }
@@ -351,8 +611,9 @@
                         const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
                         if (pointInGrid) {
                             const dateIdx = Math.round(pointInGrid[0]);
-                            if (dateIdx >= 0 && dateIdx < displayData.length) {
-                                const point = displayData[dateIdx];
+                            const activeLineData = getResolvedSeries(resolution).lineData;
+                            if (dateIdx >= 0 && dateIdx < activeLineData.length) {
+                                const point = activeLineData[dateIdx];
                                 // Convert back from % to absolute if needed
                                 if (viewMode === 'percentage' && data.length > 0) {
                                     const baseValue = data[0].value;
@@ -366,9 +627,17 @@
                 });
             });
 
-            // Recompute arrow rotations when zoom changes (aspect ratio shifts)
+            // Recompute arrow rotations when zoom changes (aspect ratio shifts).
+            // NOTE: do NOT read chartInstance.getOption() here — it deep-clones the entire
+            // chart option (documented ECharts behavior) and this handler fires on every
+            // single dataZoom tick during an interactive zoom/pan (up to ~60/sec), which
+            // caused severe stutter on charts with years of daily data. The logical-range
+            // read (which internally calls getOption()) is deferred to the debounced body
+            // of scheduleResolutionRecompute(), so it only runs once the gesture settles.
             chartInstance.on('dataZoom', () => {
-                if (chartInstance) updateArrowRotations(chartInstance);
+                if (!chartInstance) return;
+                updateArrowRotations(chartInstance);
+                scheduleResolutionRecompute();
             });
 
             // Long-press handler for mobile (1s hold = double-click equivalent)
@@ -405,8 +674,9 @@
                         const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
                         if (pointInGrid) {
                             const dateIdx = Math.round(pointInGrid[0]);
-                            if (dateIdx >= 0 && dateIdx < displayData.length) {
-                                const point = displayData[dateIdx];
+                            const activeLineData = getResolvedSeries(resolution).lineData;
+                            if (dateIdx >= 0 && dateIdx < activeLineData.length) {
+                                const point = activeLineData[dateIdx];
                                 navigator.vibrate?.(50);
                                 // Mirror dblclick behavior: event marker → onEventDblClick, else → onDblClick
                                 const hasEvent = eventMarkers.find((e) => e.date === point.date);
@@ -447,8 +717,9 @@
                             const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
                             if (pointInGrid) {
                                 const dateIdx = Math.round(pointInGrid[0]);
-                                if (dateIdx >= 0 && dateIdx < displayData.length) {
-                                    const point = displayData[dateIdx];
+                                const activeLineData = getResolvedSeries(resolution).lineData;
+                                if (dateIdx >= 0 && dateIdx < activeLineData.length) {
+                                    const point = activeLineData[dateIdx];
                                     handlePointClick(point.date, point.value);
                                     touchMeasureHandled = true; // suppress following synthetic click
                                 }
@@ -473,49 +744,57 @@
 
         const isDark = document.documentElement.classList.contains('dark');
         const isPercentage = viewMode === 'percentage';
-
         const baseColor = isDark ? COLORS.lineDark : COLORS.lineLight;
         const greenColor = isDark ? COLORS.greenDark : COLORS.greenLight;
         const redColor = isDark ? COLORS.redDark : COLORS.redLight;
 
-        const dates = displayData.map((d) => d.date);
-        const useBaselineColoring = colorByBaseline;
-        const baselineValue = isPercentage ? 0 : (displayData[0]?.value ?? 0);
-        const staleDaysArr = displayData.map((d) => d.staleDays ?? 0);
-        const mainSeriesName = mainSeriesLabel || currency || 'Value';
+        let activeResolution = resolution;
+        if (!chartOptionSet && chartInstance) {
+            const initialVisiblePoints = getVisibleDailyPoints(logicalRange);
+            const initialCounts = countBuckets(initialVisiblePoints.length > 0 ? initialVisiblePoints : displayData);
+            activeResolution = chooseInitialResolution(initialCounts, chartInstance.getWidth());
+            if (activeResolution !== resolution) {
+                resolution = activeResolution;
+            }
+        }
 
+        const {lineData: resolvedLineData} = getResolvedSeries(activeResolution);
+        const dates = resolvedLineData.map((point) => point.date);
+        const bucketInfoByDate = new Map(dates.map((date, index) => [date, getBucketInfo(resolvedLineData[index], activeResolution)]));
+        const useBaselineColoring = colorByBaseline;
+        const baselineValue = isPercentage ? 0 : (resolvedLineData[0]?.value ?? 0);
+        const staleDaysArr = resolvedLineData.map((point) => point.staleDays ?? 0);
+        const mainSeriesName = mainSeriesLabel || currency || 'Value';
         const series: any[] = [];
-        const values = displayData.map((d) => d.value);
+        const values = resolvedLineData.map((point) => point.value);
         const mainSeriesList = buildMainSeries(values, staleDaysArr, baseColor, greenColor, redColor, isDark, areaFill, 2, mainSeriesName, useBaselineColoring, baselineValue, showGradient);
         series.push(...mainSeriesList);
 
-        // Ghost series — original (unconverted) values — inserted right after main, before overlays
-        const hasOriginalValues = data.some((d) => d.originalValue !== undefined);
-        let ghostSeriesData: (number | null)[] = [];
+        const hasOriginalValues = data.some((point) => point.originalValue !== undefined);
         let ghostLabel = '';
-
         if (hasOriginalValues) {
-            const origCur = data.find((d) => d.originalCurrency)?.originalCurrency ?? '';
-            const origFlag = data.find((d) => d.originalCurrencyFlag)?.originalCurrencyFlag ?? '';
+            const origCur = data.find((point) => point.originalCurrency)?.originalCurrency ?? '';
+            const origFlag = data.find((point) => point.originalCurrencyFlag)?.originalCurrencyFlag ?? '';
             ghostLabel = mainSeriesLabel ? `💱 ${mainSeriesLabel} (${origFlag} ${origCur})`.trim() : `💱 ${origCur}`;
 
-            if (isPercentage) {
-                // % mode: normalize original values to their own p0
-                const firstOrigIdx = data.findIndex((d) => d.originalValue !== undefined);
-                const origP0 = firstOrigIdx >= 0 ? data[firstOrigIdx].originalValue! : 1;
-                ghostSeriesData = data.map((d) => {
-                    if (d.originalValue === undefined) return null;
-                    return origP0 !== 0 ? ((d.originalValue - origP0) / origP0) * 100 : 0;
-                });
-            } else {
-                // Abs mode: use raw original values on shared yAxis[0]
-                ghostSeriesData = data.map((d) => d.originalValue ?? null);
-            }
+            const dailyGhostPoints = data.flatMap((point) => {
+                if (point.originalValue === undefined) return [];
+                return [{...point, value: point.originalValue}];
+            });
+            const firstOriginalValue = dailyGhostPoints[0]?.value ?? 1;
+            const normalizedGhostPoints = isPercentage
+                ? dailyGhostPoints.map((point) => ({
+                      ...point,
+                      value: firstOriginalValue !== 0 ? ((point.value - firstOriginalValue) / firstOriginalValue) * 100 : 0,
+                  }))
+                : dailyGhostPoints;
+            const resolvedGhostPoints = activeResolution === 'daily' ? normalizedGhostPoints : aggregateLineSeries(normalizedGhostPoints, activeResolution);
+            const ghostLookup = new Map(resolvedGhostPoints.map((point) => [point.date, point.value]));
 
             series.push({
                 type: 'line',
                 name: ghostLabel,
-                data: ghostSeriesData,
+                data: dates.map((date) => ghostLookup.get(date) ?? null),
                 connectNulls: true,
                 smooth: false,
                 symbol: 'none',
@@ -538,15 +817,15 @@
             });
         }
 
-        // Overlay signals — uses shared helper
-        series.push(...buildOverlaySignalSeries(overlaySignals, dates, isDark, 0));
+        const resolvedOverlaySignals = activeResolution === 'daily' ? overlaySignals : overlaySignals.map((signal) => downsampleRenderedSignal(signal, activeResolution, dates)).filter((signal) => signal.data.length > 0);
 
-        // Baseline reference line
+        series.push(...buildOverlaySignalSeries(resolvedOverlaySignals, dates, isDark, 0));
+
         if (useBaselineColoring) {
             series.push({
                 type: 'line',
                 name: '__baseline__',
-                data: displayData.map(() => baselineValue),
+                data: resolvedLineData.map(() => baselineValue),
                 xAxisIndex: 0,
                 yAxisIndex: 0,
                 symbol: 'none',
@@ -561,54 +840,106 @@
             });
         }
 
-        // Event markers — scatter series grouped by event type and asset
-        if (eventMarkers && eventMarkers.length > 0) {
-            const dateIndexMap = new Map(dates.map((d, i) => [d, i]));
+        const formatEventEntry = (marker: EventMarker, eventColor: string, includeDate: boolean): string => {
+            const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${eventColor};margin-right:4px;"></span>`;
+            let html = includeDate ? `<span style="font-size:11px;opacity:0.8">${marker.date}</span><br/>${dot}${marker.type}` : `${dot}${marker.type}`;
 
-            // Build overlay data lookup: label → (date → value) for comparison event Y positioning
-            const overlayDataByLabel = new Map<string, Map<string, number>>();
-            if (overlaySignals) {
-                for (const signal of overlaySignals) {
-                    if (!signal.data.length) continue;
-                    const dateLookup = new Map(signal.data.map((d) => [d.date, d.value]));
-                    overlayDataByLabel.set(signal.label, dateLookup);
+            if (marker.value !== undefined) {
+                const isConverted = marker.originalValue !== undefined && marker.originalCurrency !== undefined;
+                const currBadge = marker.currency ? ` <span style="font-size:10px;opacity:0.7">(${marker.currencyFlag ?? ''} ${marker.currency})${isConverted ? ' 💱' : ''}</span>` : '';
+                html += `<br/>💰 ${marker.value.toFixed(4)}${currBadge}`;
+                if (isConverted) {
+                    const origBadge = ` <span style="font-size:10px;opacity:0.7">(${marker.originalCurrencyFlag ?? ''} ${marker.originalCurrency})</span>`;
+                    html += `<br/><span style="font-size:10px;opacity:0.7">orig. ${marker.originalValue!.toFixed(4)}${origBadge}</span>`;
+                    if (marker.fxRateDate) {
+                        const backfillHint = marker.fxDaysBack && marker.fxDaysBack > 0 ? ` (${marker.fxDaysBack}d back)` : '';
+                        html += `<br/><span style="font-size:10px;opacity:0.6">fx @ ${marker.fxRateDate}${backfillHint}</span>`;
+                    }
                 }
             }
 
-            // Group by composite key: main asset uses type, comparison uses "label::type"
+            if (marker.notes) {
+                html += `<br/>📝 ${marker.notes}`;
+            }
+
+            if (marker.assetLabel) {
+                const sigDot = marker.signalColor ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${marker.signalColor};margin-right:3px;"></span>` : '';
+                html += `<br/>🔗 ${sigDot}${marker.assetLabel}`;
+            }
+
+            return html;
+        };
+
+        if (eventMarkers && eventMarkers.length > 0) {
+            const dateIndexMap = new Map(dates.map((date, index) => [date, index]));
+            const overlayDataByLabel = new Map<string, Map<string, number>>();
+
+            for (const signal of resolvedOverlaySignals) {
+                if (!signal.data.length) continue;
+                overlayDataByLabel.set(signal.label, new Map(signal.data.map((point) => [point.date, point.value])));
+            }
+
             const grouped = new Map<string, {markers: EventMarker[]; color: string; label: string}>();
-            for (const m of eventMarkers) {
-                const isComparison = !!m.assetLabel;
-                const groupKey = isComparison ? `${m.assetLabel}::${m.type}` : m.type;
-                // Main events use the chart line color; comparison events use their signal color
-                const color = isComparison ? (m.signalColor ?? '#6b7280') : baseColor;
-                const seriesLabel = isComparison ? `${m.assetLabel} ${m.type}` : m.type;
+            for (const marker of eventMarkers) {
+                const isComparison = !!marker.assetLabel;
+                const groupKey = isComparison ? `${marker.assetLabel}::${marker.type}` : marker.type;
+                const color = isComparison ? (marker.signalColor ?? '#6b7280') : baseColor;
+                const seriesLabel = isComparison ? `${marker.assetLabel} ${marker.type}` : marker.type;
                 if (!grouped.has(groupKey)) {
                     grouped.set(groupKey, {markers: [], color, label: seriesLabel});
                 }
-                grouped.get(groupKey)!.markers.push(m);
+                grouped.get(groupKey)!.markers.push(marker);
             }
 
             for (const [, group] of grouped) {
                 const {markers, color: eventColor, label: seriesLabel} = group;
                 const eventType = markers[0].type;
                 const scatterData: any[] = [];
-                for (const m of markers) {
-                    const idx = dateIndexMap.get(m.date);
-                    if (idx === undefined) continue;
-                    // For comparison events, use Y from overlay data; for main events, use displayData
-                    let yValue: number;
-                    if (m.assetLabel) {
-                        const overlayLookup = overlayDataByLabel.get(m.assetLabel);
-                        yValue = overlayLookup?.get(m.date) ?? displayData[idx]?.value ?? 0;
-                    } else {
-                        yValue = displayData[idx]?.value ?? 0;
+
+                if (activeResolution === 'daily') {
+                    for (const marker of markers) {
+                        const index = dateIndexMap.get(marker.date);
+                        if (index === undefined) continue;
+
+                        let yValue: number;
+                        if (marker.assetLabel) {
+                            const overlayLookup = overlayDataByLabel.get(marker.assetLabel);
+                            yValue = overlayLookup?.get(marker.date) ?? resolvedLineData[index]?.value ?? 0;
+                        } else {
+                            yValue = resolvedLineData[index]?.value ?? 0;
+                        }
+
+                        scatterData.push({
+                            value: [marker.date, yValue],
+                            marker,
+                            bucketInfo: {bucketStart: marker.date, bucketEnd: marker.date},
+                            bucketValue: yValue,
+                        });
                     }
-                    scatterData.push({
-                        value: [m.date, yValue],
-                        marker: m,
-                    });
+                } else {
+                    const bucketedMarkers = bucketEventMarkers(markers, activeResolution);
+
+                    for (const [bucketDate, bucketEntries] of bucketedMarkers) {
+                        const index = dateIndexMap.get(bucketDate);
+                        if (index === undefined) continue;
+
+                        let yValue: number;
+                        if (bucketEntries[0]?.assetLabel) {
+                            const overlayLookup = overlayDataByLabel.get(bucketEntries[0].assetLabel);
+                            yValue = overlayLookup?.get(bucketDate) ?? resolvedLineData[index]?.value ?? 0;
+                        } else {
+                            yValue = resolvedLineData[index]?.value ?? 0;
+                        }
+
+                        scatterData.push({
+                            value: [bucketDate, yValue],
+                            markers: bucketEntries,
+                            bucketInfo: bucketInfoByDate.get(bucketDate) ?? mapDateToBucket(bucketDate, activeResolution),
+                            bucketValue: yValue,
+                        });
+                    }
                 }
+
                 if (scatterData.length === 0) continue;
 
                 series.push({
@@ -628,32 +959,26 @@
                     tooltip: {
                         trigger: 'item' as const,
                         formatter: (params: any) => {
-                            const m = params.data?.marker as EventMarker | undefined;
-                            if (!m) return '';
-                            const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${eventColor};margin-right:4px;"></span>`;
-                            let html = `<strong>${m.date}</strong>`;
-                            html += `<br/>${dot}${m.type}`;
-                            if (m.value !== undefined) {
-                                // E.8 — format mirror of price tooltip: value + (flag ISO3) + 💱 if converted
-                                const isConverted = m.originalValue !== undefined && m.originalCurrency !== undefined;
-                                const currBadge = m.currency ? ` <span style="font-size:10px;opacity:0.7">(${m.currencyFlag ?? ''} ${m.currency})${isConverted ? ' 💱' : ''}</span>` : '';
-                                html += `<br/>💰 ${m.value.toFixed(4)}${currBadge}`;
-                                if (isConverted) {
-                                    // Original value (pre-conversion), smaller + italic-grey, mirror of MeasurePanel suffix
-                                    const origBadge = ` <span style="font-size:10px;opacity:0.7">(${m.originalCurrencyFlag ?? ''} ${m.originalCurrency})</span>`;
-                                    html += `<br/><span style="font-size:10px;opacity:0.7">orig. ${m.originalValue!.toFixed(4)}${origBadge}</span>`;
-                                    if (m.fxRateDate) {
-                                        const bfillHint = m.fxDaysBack && m.fxDaysBack > 0 ? ` (${m.fxDaysBack}d back)` : '';
-                                        html += `<br/><span style="font-size:10px;opacity:0.6">fx @ ${m.fxRateDate}${bfillHint}</span>`;
-                                    }
-                                }
+                            const marker = params.data?.marker as EventMarker | undefined;
+                            const bucketMarkers = (params.data?.markers as EventMarker[] | undefined) ?? (marker ? [marker] : []);
+                            if (bucketMarkers.length === 0) return '';
+
+                            const bucketDate = params.data?.value?.[0] ?? bucketMarkers[bucketMarkers.length - 1]?.date;
+                            const bucketInfo = params.data?.bucketInfo as BucketInfo | undefined;
+                            let html = buildTooltipHeader(bucketDate, activeResolution, bucketInfo);
+
+                            if (params.data?.bucketValue !== undefined) {
+                                html += `<br/>💰 ${Number(params.data.bucketValue).toFixed(4)}`;
                             }
-                            if (m.notes) {
-                                html += `<br/>📝 ${m.notes}`;
+
+                            if (activeResolution === 'daily' && marker) {
+                                html += `<br/>${formatEventEntry(marker, eventColor, false)}`;
+                                return html;
                             }
-                            if (m.assetLabel) {
-                                const sigDot = m.signalColor ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${m.signalColor};margin-right:3px;"></span>` : '';
-                                html += `<br/>🔗 ${sigDot}${m.assetLabel}`;
+
+                            html += `<br/><span style="font-size:11px;opacity:0.8">${$t('chart.tooltip.eventsInPeriod')}</span>`;
+                            for (const bucketMarker of bucketMarkers) {
+                                html += `<br/>${formatEventEntry(bucketMarker, eventColor, true)}`;
                             }
                             return html;
                         },
@@ -666,36 +991,15 @@
             }
         }
 
-        // Check which overlay axes are active
-        // Y-axis configuration — uses shared helpers
-        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(overlaySignals, isDark, 0);
+        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(resolvedOverlaySignals, isDark, 0);
         const colors = getChartColors(isDark);
-
-        // Preserve zoom state across re-renders
-        let savedZoom: {start: number; end: number} | null = null;
-        if (chartOptionSet && chartInstance) {
-            try {
-                const opt = chartInstance.getOption() as any;
-                if (opt?.dataZoom?.[0]) {
-                    const dz = opt.dataZoom[0];
-                    if (typeof dz.start === 'number' && typeof dz.end === 'number') {
-                        savedZoom = {start: dz.start, end: dz.end};
-                    }
-                }
-            } catch (_) {}
-        }
-
-        // Pre-compute stale lookup map for O(1) tooltip access (instead of O(n) data.find per hover)
         const staleLookup = new Map<string, number>();
         const fxStaleLookup = new Map<string, number>();
-        const originalCurrencyLookup = new Map<string, string>();
-        const originalValueLookup = new Map<string, number>();
-        for (const d of data) {
-            if (d.staleDays && d.staleDays > 0) staleLookup.set(d.date, d.staleDays);
-            if (d.fxStaleDays && d.fxStaleDays > 0) fxStaleLookup.set(d.date, d.fxStaleDays);
-            if (d.originalCurrency) originalCurrencyLookup.set(d.date, d.originalCurrency);
-            if (d.originalValue !== undefined) originalValueLookup.set(d.date, d.originalValue);
+        for (const point of resolvedLineData) {
+            if (point.staleDays && point.staleDays > 0) staleLookup.set(point.date, point.staleDays);
+            if (point.fxStaleDays && point.fxStaleDays > 0) fxStaleLookup.set(point.date, point.fxStaleDays);
         }
+        const zoomWindow = computeZoomWindow(resolvedLineData, activeResolution, logicalRange);
 
         const option: echarts.EChartsOption = {
             animation: false,
@@ -711,7 +1015,7 @@
                 },
             ],
             yAxis: [buildPriceYAxis({mode: yAxisMode, min: yAxisMin, max: yAxisMax, isPercentage}, colors, {gridIndex: 0, showGridLines}), ...secondaryAxes],
-            dataZoom: [{...buildDataZoom([0])[0], start: savedZoom?.start ?? 0, end: savedZoom?.end ?? 100}],
+            dataZoom: [{...buildDataZoom([0])[0], start: zoomWindow.start, end: zoomWindow.end}],
             tooltip: {
                 trigger: 'axis',
                 backgroundColor: isDark ? '#1e293b' : '#ffffff',
@@ -722,25 +1026,24 @@
                 formatter: (params: any) => {
                     const items = Array.isArray(params) ? params : [params];
                     if (!items.length) return '';
-                    const date = items[0].axisValue || items[0].name;
-                    let html = `<strong>${date}</strong>`;
+                    const date = String(items[0].axisValue || items[0].name || '');
+                    let html = buildTooltipHeader(date, activeResolution, bucketInfoByDate.get(date));
                     const bandHelperNames = new Set<string>();
-                    for (const sig of overlaySignals) {
+                    for (const sig of resolvedOverlaySignals) {
                         if ((sig.seriesType ?? 'line') === 'band') {
                             bandHelperNames.add(`${sig.label} Lower`);
                             bandHelperNames.add(`${sig.label} Band`);
                         }
                     }
                     const signalAxisMap = new Map<string, number>();
-                    for (const sig of overlaySignals) {
+                    for (const sig of resolvedOverlaySignals) {
                         signalAxisMap.set(sig.label, sig.yAxisIndex ?? 0);
                     }
                     const shownNames = new Set<string>();
-                    const firstValue = displayData.length > 0 ? displayData[0].value : null;
-                    // Determine if FX conversion is active (for main label suffix)
+                    const firstValue = resolvedLineData.length > 0 ? resolvedLineData[0].value : null;
                     const conversionActive = hasOriginalValues && displayCurrencyProp && displayCurrencyFlag;
                     for (const p of items) {
-                        if (p.seriesName === 'Pending' || p.seriesName === '__baseline__' || p.seriesName === '__overview__') continue;
+                        if (p.seriesName === 'Pending' || p.seriesName === '__baseline__' || p.seriesName === '__overview__' || p.seriesType === 'scatter' || String(p.seriesName).startsWith('Events: ')) continue;
                         if (bandHelperNames.has(p.seriesName)) continue;
                         const rawVal = p.value;
                         const value = typeof rawVal === 'object' && rawVal?.value !== undefined ? rawVal.value : rawVal;
@@ -828,12 +1131,9 @@
                     }
                     const dataPoint = staleLookup.get(date);
                     if (dataPoint !== undefined) {
-                        // Show separate price stale and FX stale when applicable
                         const fxStale = fxStaleLookup.get(date);
                         if (fxStale !== undefined && fxStale > 0) {
-                            // Price staleness is the staleDays minus FX contribution
-                            // (staleDays = max(price_days_back, fx_days_back), but we show both separately)
-                            const priceDaysBack = dataPoint; // already the combined max
+                            const priceDaysBack = dataPoint;
                             const label = staleLabel ? staleLabel.replace('{days}', String(priceDaysBack)) : `Stale: ${priceDaysBack}d`;
                             html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${label}</span>`;
                             const fxLabel = fxStaleLabel ? fxStaleLabel.replace('{days}', String(fxStale)) : `FX rate: ${fxStale}d old`;
@@ -849,11 +1149,28 @@
             series,
         };
 
+        // Resolution switch: the number of data points/series changes drastically
+        // (daily <-> weekly/monthly). If a tooltip is currently showing (user hovering
+        // while zooming — the exact gesture that triggers a resolution switch), ECharts
+        // can crash inside its internal _showAxisTooltip trying to read stale
+        // series/dataIndex references once the series are replaced by this full rebuild.
+        // Hiding the tooltip first clears that internal state safely. Documented ECharts
+        // workaround for this exact class of crash (series/axis structure changing while
+        // an axis-trigger tooltip + mousewheel dataZoom are both active).
+        if (lastRenderedResolution !== null && lastRenderedResolution !== activeResolution) {
+            chartInstance.dispatchAction({type: 'hideTip'});
+        }
+
         chartInstance.setOption(option, true);
         chartOptionSet = true;
+        lastRenderedResolution = activeResolution;
 
         // Compute pixel-accurate arrow rotations after layout is established
         updateArrowRotations(chartInstance);
+        if (needsInitialLayoutStabilityPass) {
+            needsInitialLayoutStabilityPass = false;
+            scheduleFirstRenderStabilityFix(chartInstance, chartContainer, updateArrowRotations);
+        }
     }
 </script>
 
@@ -882,15 +1199,19 @@
                 >
             </div>
         {/if}
+        <div class="absolute top-2 left-28 z-10 pointer-events-none">
+            <ResolutionBadge {resolution} />
+        </div>
         {#if chartType === 'line'}
             <div bind:this={chartContainer} class="w-full" style="height: {chartHeight};" class:cursor-crosshair={measureMode}></div>
         {:else}
             <CandlestickChart
-                {data}
+                data={getResolvedSeries(resolution).candleData}
                 currency={currency || undefined}
                 height={chartHeight}
                 {showGridLines}
                 {overlaySignals}
+                {resolution}
                 {viewMode}
                 {measureMode}
                 {onMeasureClick}

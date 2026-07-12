@@ -46,7 +46,7 @@
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import type {ViewMode, ChartType} from '$lib/components/charts/ChartToolbar.svelte';
-    import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {createResponsiveLayout, registerLayoutDebug} from '$lib/utils/layout/responsiveLayout.svelte';
     import {ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
     import {getAssetTypeIconUrl, buildIdentifiersList} from '$lib/utils/assetTypes';
@@ -132,7 +132,12 @@
 
     // Filter bar layout
     let filterBarRef = $state<HTMLDivElement | null>(null);
-    const layout = createResponsiveLayout({wide: 1090, tablet: 870, tabletS: 570, labelHide: 380});
+    // compact/labelHide starting value — tune live via
+    // window.__lfLayouts.assetDetail.thresholds.compact = <value>.
+    const layout = createResponsiveLayout({wide: 1090, tablet: 870, tabletS: 570, compact: 320, labelHide: 320});
+    registerLayoutDebug('assetDetail', layout);
+    // Compact is narrower-than-mobile — the filters zone should stack the same way in both.
+    let isStacked = $derived(layout.layoutMode === 'mobile' || layout.layoutMode === 'compact');
 
     // Chart settings
     let settings = $derived(getSettingsForPair(`asset-${data.assetId}`, 'assets'));
@@ -1496,13 +1501,13 @@
     <div
         bind:this={filterBarRef}
         class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
-               {layout.layoutMode === 'mobile' ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
+               {isStacked ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
         data-testid="asset-detail-filter-bar"
     >
-        <!-- Filters block: wide+tablet = row (side by side), tablet-s = column (stacked), mobile = centered -->
-        <div class="flex gap-3 {layout.layoutMode === 'mobile' ? 'flex-col items-center' : layout.layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : 'flex-row items-center flex-1'}">
+        <!-- Filters block: wide+tablet = row (side by side), tablet-s = column (stacked), mobile+compact = centered -->
+        <div class="flex gap-3 {isStacked ? 'flex-col items-center' : layout.layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : 'flex-row items-center flex-1'}">
             <div class="flex flex-1 self-stretch min-w-0">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" onchange={handleDateRangeChange} />
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" debugName="assetDetail" onchange={handleDateRangeChange} />
             </div>
 
             {#if assetInfo}
@@ -1510,10 +1515,10 @@
             {/if}
         </div>
 
-        <!-- Actions: 2×2 grid (wide+tablet), 4×1 column (tablet-s), 1×4 row (mobile) -->
+        <!-- Actions: 2×2 grid (wide+tablet+mobile), 4×1 column (tablet-s), icon-only row (compact — the narrowest fallback, below the mobile 2×2). -->
         <div
             class="flex shrink-0 gap-1.5 self-center
-                    {layout.layoutMode === 'mobile' ? 'flex-row items-center justify-center' : layout.layoutMode === 'tablet-s' ? 'flex-col items-stretch' : 'grid grid-cols-2 ml-auto'}"
+                    {layout.layoutMode === 'compact' ? 'flex-row items-center justify-center flex-wrap' : layout.layoutMode === 'tablet-s' ? 'flex-col items-stretch' : 'grid grid-cols-2 ml-auto'}"
         >
             <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                 <button
@@ -1827,7 +1832,7 @@
                 >
             </div>
             <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
-                💡 {layout.layoutMode === 'mobile' ? $t('assetDetail.editorTipMobile') : $t('assetDetail.editorTipDesktop')}
+                💡 {layout.layoutMode === 'mobile' || layout.layoutMode === 'compact' ? $t('assetDetail.editorTipMobile') : $t('assetDetail.editorTipDesktop')}
             </p>
             <div class="px-4 py-4">
                 <AssetDataEditorSection

@@ -23,7 +23,6 @@ Environment Variables (see .env):
     LOG_LEVEL: Logging level (default: INFO)
     PORTFOLIO_BASE_CURRENCY: Base currency ISO 4217 (default: EUR)
     PREVIEW_CACHE_MAX_MB: Image preview cache size in MB (default: 50)
-    BACKEND_CORS_ORIGINS: CORS origins for frontend dev (default: localhost:3000, localhost:5173)
 """
 
 import os
@@ -102,9 +101,6 @@ class Settings(BaseSettings):
 
     # Portfolio
     PORTFOLIO_BASE_CURRENCY: str = "EUR"
-
-    # CORS
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
     # Image Preview Cache
     PREVIEW_CACHE_MAX_MB: int = 50

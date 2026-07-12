@@ -20,7 +20,8 @@
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
-    import {tooltipPositionSide} from './echartsTooltipHelpers';
+    import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
+    import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
 
     // =========================================================================
     // Types
@@ -123,6 +124,20 @@
     let resizeObserver: ResizeObserver | null = null;
     /** Guard: prevents ResizeObserver from calling resize() before first setOption() */
     let chartOptionSet = false;
+    let needsInitialLayoutStabilityPass = false;
+    let currentRenderedData: LineDataPoint[] = [];
+
+    const COMPACT_DENSITY_THRESHOLD = 1.3;
+    const COMPACT_RESIZE_EPSILON_PX = 4;
+    const COMPACT_GRID_LEFT_PX = 5;
+    const COMPACT_GRID_RIGHT_PX = 5;
+    const COMPACT_GRID_RIGHT_WITH_AXIS_PX = 45;
+
+    let lastSourceRef: LineDataPoint[] | null = null;
+    let aggregatedByResolution = new Map<ChartResolution, LineDataPoint[]>();
+    let lastMeasuredWidthPx = 0;
+    let lastChosenResolution: ChartResolution | null = null;
+    let lastWeeklyBucketCount = 0;
 
     // =========================================================================
     // Lifecycle
@@ -167,8 +182,91 @@
         resizeObserver?.disconnect();
         resizeObserver = null;
         chartOptionSet = false;
+        currentRenderedData = [];
         chartInstance?.dispose();
         chartInstance = null;
+    }
+
+    function countWeeklyBuckets(points: LineDataPoint[]): number {
+        const weeklyBuckets = new Set<string>();
+
+        for (const point of points) {
+            const {bucketStart, bucketEnd} = mapDateToBucket(point.date, 'weekly');
+            weeklyBuckets.add(`${bucketStart}|${bucketEnd}`);
+        }
+
+        return weeklyBuckets.size;
+    }
+
+    function ensureCompactCache() {
+        if (data === lastSourceRef) return;
+
+        lastSourceRef = data;
+        aggregatedByResolution = new Map<ChartResolution, LineDataPoint[]>([['daily', data]]);
+        lastMeasuredWidthPx = 0;
+        lastChosenResolution = null;
+        lastWeeklyBucketCount = countWeeklyBuckets(data);
+    }
+
+    function getCompactAggregatedData(resolution: ChartResolution): LineDataPoint[] {
+        ensureCompactCache();
+
+        if (resolution === 'daily') return data;
+
+        const cached = aggregatedByResolution.get(resolution);
+        if (cached) return cached;
+
+        const aggregated = aggregateLineSeries(data, resolution);
+        aggregatedByResolution.set(resolution, aggregated);
+        return aggregated;
+    }
+
+    function getCompactPlotWidthPx() {
+        const measuredWidth = chartContainer?.getBoundingClientRect().width || chartInstance?.getWidth() || 0;
+        const rightPadding = showMiniAxis ? COMPACT_GRID_RIGHT_WITH_AXIS_PX : COMPACT_GRID_RIGHT_PX;
+        return Math.max(measuredWidth - COMPACT_GRID_LEFT_PX - rightPadding, 0);
+    }
+
+    function chooseStaticResolution(dailyPointCount: number, plotWidthPx: number): ChartResolution {
+        const densityDaily = computeDensity(dailyPointCount, plotWidthPx);
+        if (densityDaily <= COMPACT_DENSITY_THRESHOLD) return 'daily';
+
+        const densityWeekly = computeDensity(lastWeeklyBucketCount, plotWidthPx);
+        if (densityWeekly <= COMPACT_DENSITY_THRESHOLD) return 'weekly';
+
+        return 'monthly';
+    }
+
+    function resizeChartOnly() {
+        try {
+            chartInstance?.resize();
+            if (chartInstance) updateArrowRotations(chartInstance);
+        } catch (_) {
+            /* ignore coord errors during resize */
+        }
+    }
+
+    function handleCompactResize() {
+        const plotWidthPx = getCompactPlotWidthPx();
+        if (plotWidthPx === 0) return;
+
+        if (lastMeasuredWidthPx > 0 && Math.abs(plotWidthPx - lastMeasuredWidthPx) < COMPACT_RESIZE_EPSILON_PX) {
+            lastMeasuredWidthPx = plotWidthPx;
+            resizeChartOnly();
+            return;
+        }
+
+        ensureCompactCache();
+        const targetResolution = chooseStaticResolution(data.length, plotWidthPx);
+        lastMeasuredWidthPx = plotWidthPx;
+
+        if (lastChosenResolution === targetResolution) {
+            resizeChartOnly();
+            return;
+        }
+
+        chartInstance?.resize();
+        renderChart();
     }
 
     // =========================================================================
@@ -187,11 +285,10 @@
         if (!resizeObserver) {
             resizeObserver = new ResizeObserver(() => {
                 if (chartOptionSet) {
-                    try {
-                        chartInstance?.resize();
-                        if (chartInstance) updateArrowRotations(chartInstance);
-                    } catch (_) {
-                        /* ignore coord errors during resize */
+                    if (compact) {
+                        handleCompactResize();
+                    } else {
+                        resizeChartOnly();
                     }
                 } else if (chartContainer && data.length > 0) {
                     // Chart not yet initialized (e.g. container was zero-size on first attempt).
@@ -208,11 +305,12 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            needsInitialLayoutStabilityPass = true;
 
             if (onPointClick) {
                 chartInstance.on('click', 'series.line', (params: any) => {
-                    if (params.dataIndex !== undefined && data[params.dataIndex]) {
-                        const point = data[params.dataIndex];
+                    if (params.dataIndex !== undefined && currentRenderedData[params.dataIndex]) {
+                        const point = currentRenderedData[params.dataIndex];
                         onPointClick!(point.date, point.value);
                     }
                 });
@@ -232,15 +330,35 @@
         const greenColor = isDark ? GREEN_DARK : GREEN_LIGHT;
         const redColor = isDark ? RED_DARK : RED_LIGHT;
 
+        let renderedData = data;
+        let activeOverlaySignals = overlaySignals;
+
+        if (compact) {
+            ensureCompactCache();
+            const plotWidthPx = getCompactPlotWidthPx();
+            const resolution = chooseStaticResolution(data.length, plotWidthPx);
+
+            lastMeasuredWidthPx = plotWidthPx;
+            lastChosenResolution = resolution;
+            renderedData = getCompactAggregatedData(resolution);
+
+            if (resolution !== 'daily') {
+                const bucketedDates = renderedData.map((point) => point.date);
+                activeOverlaySignals = overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, bucketedDates)).filter((signal) => signal.data.length > 0);
+            }
+        }
+
+        currentRenderedData = renderedData;
+
         // Build series data
-        const dates = data.map((d) => d.date);
+        const dates = renderedData.map((d) => d.date);
 
         // Determine if we need baseline coloring (green above baseline, red below)
         const useBaselineColoring = colorByBaseline && !compact;
-        const baselineValue = isPercentage ? 0 : (data[0]?.value ?? 0);
+        const baselineValue = isPercentage ? 0 : (renderedData[0]?.value ?? 0);
 
         // Build per-point stale data array
-        const staleDaysArr = data.map((d) => d.staleDays ?? 0);
+        const staleDaysArr = renderedData.map((d) => d.staleDays ?? 0);
 
         const series: any[] = [];
         // Tooltip needs a stable series name for the main data — we use this name
@@ -249,7 +367,7 @@
 
         // ── Unified main series: handles baseline coloring + stale gradient together ──
         {
-            const values = data.map((d) => d.value);
+            const values = renderedData.map((d) => d.value);
             const lineW = compact ? 1.5 : 2;
             const mainSeriesList = buildMainSeries(values, staleDaysArr, baseColor, greenColor, redColor, isDark, areaFill, lineW, mainSeriesName, useBaselineColoring, baselineValue, showGradient);
             series.push(...mainSeriesList);
@@ -282,8 +400,8 @@
         //   'line' (default) — standard overlay line
         //   'bar'            — vertical bars (e.g. MACD histogram) on secondary axis
         //   'band'           — confidence band (e.g. Bollinger): stacked area lower→upper + middle line
-        if (overlaySignals && overlaySignals.length > 0) {
-            for (const signal of overlaySignals) {
+        if (activeOverlaySignals && activeOverlaySignals.length > 0) {
+            for (const signal of activeOverlaySignals) {
                 if (!signal.data.length) continue;
 
                 const sType = signal.seriesType ?? 'line';
@@ -386,7 +504,7 @@
         // dimension:1, tuple data) crashes with "Cannot read properties of undefined
         // (reading 'coord')" during setOption/resize.
         if (useBaselineColoring) {
-            const baselineData = data.map(() => baselineValue);
+            const baselineData = renderedData.map(() => baselineValue);
             series.push({
                 type: 'line',
                 name: '__baseline__',
@@ -413,8 +531,8 @@
         // Check which overlay axes are active (have at least one signal with data).
         // In compact mode the axes are hidden but still auto-scaled so overlay
         // lines render at the correct proportions — no fixed min/max fallback.
-        const hasSecondaryAxis = overlaySignals.some((s) => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
-        const hasTertiaryAxis = overlaySignals.some((s) => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
+        const hasSecondaryAxis = activeOverlaySignals.some((s) => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
+        const hasTertiaryAxis = activeOverlaySignals.some((s) => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
 
         // Count how many extra axes need right-side space (only visible in non-compact)
         const extraAxesCount = (hasSecondaryAxis ? 1 : 0) + (hasTertiaryAxis ? 1 : 0);
@@ -437,7 +555,7 @@
 
         // Pre-compute stale lookup map for O(1) tooltip access (instead of O(n) data.find per hover)
         const staleLookup = new Map<string, number>();
-        for (const d of data) {
+        for (const d of renderedData) {
             if (d.staleDays && d.staleDays > 0) staleLookup.set(d.date, d.staleDays);
         }
 
@@ -594,7 +712,7 @@
 
                           // Build a set of band helper series names to skip in tooltip
                           const bandHelperNames = new Set<string>();
-                          for (const sig of overlaySignals) {
+                          for (const sig of activeOverlaySignals) {
                               if ((sig.seriesType ?? 'line') === 'band') {
                                   bandHelperNames.add(`${sig.label} Lower`);
                                   bandHelperNames.add(`${sig.label} Band`);
@@ -603,7 +721,7 @@
 
                           // Build yAxisIndex lookup for overlay signals by name
                           const signalAxisMap = new Map<string, number>();
-                          for (const sig of overlaySignals) {
+                          for (const sig of activeOverlaySignals) {
                               signalAxisMap.set(sig.label, sig.yAxisIndex ?? 0);
                           }
 
@@ -637,7 +755,7 @@
                               html += `<br/>${colorDot}${p.seriesName}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
 
                               // For band signals, also show upper/lower in the tooltip
-                              const bandSignal = overlaySignals.find((s) => s.label === p.seriesName && (s.seriesType ?? 'line') === 'band' && s.bandData);
+                              const bandSignal = activeOverlaySignals.find((s) => s.label === p.seriesName && (s.seriesType ?? 'line') === 'band' && s.bandData);
                               if (bandSignal?.bandData) {
                                   const dataIdx = bandSignal.data.findIndex((d) => d.date === date);
                                   if (dataIdx >= 0) {
@@ -685,6 +803,10 @@
 
         // Compute pixel-accurate arrow rotations after layout is established
         updateArrowRotations(chartInstance);
+        if (needsInitialLayoutStabilityPass) {
+            needsInitialLayoutStabilityPass = false;
+            scheduleFirstRenderStabilityFix(chartInstance, chartContainer, updateArrowRotations);
+        }
 
         // Restore zoom position if the user had zoomed/panned
         if (savedZoom && !compact) {

@@ -16,11 +16,13 @@
   Used by: FX list page, FX detail page, transaction filters, etc.
 -->
 <script lang="ts">
+    import {tick, untrack} from 'svelte';
     import {Calendar} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import type {CalendarHighlights} from './CalendarMonth.svelte';
     import CalendarMonth from './CalendarMonth.svelte';
     import {SimpleSelect} from '$lib/components/ui/select';
+    import {attachLayoutDebugExtra} from '$lib/utils/layout/responsiveLayout.svelte';
 
     // =========================================================================
     // Types
@@ -52,11 +54,39 @@
         allowFuture?: boolean;
         /** Root alignment: 'center' (default, unchanged) or 'start' (left-justified — for use inside a page toolbar where the whole block shouldn't float centered) */
         align?: 'center' | 'start';
+        /** Max width in px for the align='start' toolbar layout (default 672, i.e. Tailwind's max-w-2xl). Starting value only — becomes a live reactive knob internally (see debugName). */
+        maxWidth?: number;
+        /** Registers a live-tunable {maxWidth} config on window.__lfLayouts.<debugName>.pickerConfig for console tuning (e.g. window.__lfLayouts.dashboard.pickerConfig.maxWidth = 900) — no resize needed, recomputes immediately. Omit to skip registration. */
+        debugName?: string;
         /** Called when dates change */
         onchange?: (start: string, end: string) => void;
     }
 
-    let {start = $bindable(''), end = $bindable(''), activePreset = $bindable(null), showPresets = true, showCustomWindow = true, showDateFields = true, compact = false, stacked = false, usePortal = false, allowFuture = false, align = 'center', onchange}: Props = $props();
+    let {
+        start = $bindable(''),
+        end = $bindable(''),
+        activePreset = $bindable(null),
+        showPresets = true,
+        showCustomWindow = true,
+        showDateFields = true,
+        compact = false,
+        stacked = false,
+        usePortal = false,
+        allowFuture = false,
+        align = 'center',
+        maxWidth: initialMaxWidth = 672,
+        debugName,
+        onchange,
+    }: Props = $props();
+
+    // Reactive config — mutating pickerConfig.maxWidth (typically from the console debug
+    // registry) resizes the picker immediately: the style binding below re-renders, the browser
+    // reflows, and the existing ResizeObserver on presetRowRef picks up the new width on its own.
+    // untrack(): both are prop-seeded initial values, not meant to track the prop reactively
+    // afterward (same pattern used for thresholds/layoutDebugName in PageToolbar).
+    let pickerConfig = $state({maxWidth: untrack(() => initialMaxWidth)});
+    const debugNameSnapshot = untrack(() => debugName);
+    if (debugNameSnapshot) attachLayoutDebugExtra(debugNameSnapshot, {pickerConfig});
 
     // =========================================================================
     // State
@@ -552,9 +582,11 @@
         return {a, b};
     }
 
-    // Single synchronous pass — no async/tick() needed. A badge's width is intrinsic (its own
-    // text + padding), unaffected by which row/block wraps it, so isSingleRow and both jolly
-    // counts can be decided correctly in one shot from the CURRENT measurements.
+    // Single synchronous pass — no async/tick() needed for the CORE decision. A badge's width is
+    // intrinsic (its own text + padding), unaffected by which row/block wraps it, so isSingleRow
+    // and both jolly counts can be decided correctly in one shot from the CURRENT measurements
+    // in the vast majority of cases. A separate, narrowly-scoped verify+shed pass below (see
+    // verifyNoWrap) catches the rare cases where a small measurement margin makes this wrong.
     //
     // Bounded-retry note: flipping isSingleRow swaps the {#if}/{:else} DOM branch (Svelte
     // destroys the old row structure and creates the new one), which changes presetRowRef's
@@ -568,6 +600,11 @@
     // via requestAnimationFrame (bounded attempts) instead of abandoning the update entirely.
     let measureRetryCount = 0;
     const MAX_MEASURE_RETRIES = 5;
+
+    // Bumped every time measureAndFill reaches a tentative decision — lets a verifyNoWrap()
+    // chain detect it's been superseded by a newer recompute (e.g. another resize came in while
+    // it was still awaiting a tick()) and bail out instead of shedding against stale state.
+    let measureGeneration = 0;
 
     function measureAndFill() {
         if (align !== 'start' || !presetRowRef) return;
@@ -605,6 +642,70 @@
             extrasToShowDuration = greedyFillCount(availableWidth - coreBaseWidth, durationWidths);
             extrasToShowPeriod = greedyFillCount(availableWidth - trailingBaseWidth, periodWidths);
         }
+
+        measureGeneration++;
+        void verifyNoWrap(measureGeneration);
+    }
+
+    // =========================================================================
+    // Verify + shed — catches the rare case where the math above is wrong
+    // =========================================================================
+    // Reported bug (confirmed via user report): the picker rendered correctly at first, then
+    // broke after a window resize and STAYED broken (never self-corrected on further resizes).
+    // Root cause: the greedy-fill math above uses REAL measured widths (not estimates), but a
+    // small margin — e.g. the hidden measurement clone's minimal classes vs the real badge's
+    // full class list, or JOLLY_GAP_PX=4 not exactly matching gap-1's real computed pixel value
+    // — can still make it overestimate by one badge at some widths. Once that happens, native
+    // CSS flex-wrap silently splits the row into 2 visual lines — but presetRowRef's own WIDTH
+    // (dictated by its parent, unaffected by a wrap that only changes HEIGHT) never changes, so
+    // every future recompute re-reads the IDENTICAL inputs and reproduces the IDENTICAL wrong
+    // result: a stable-but-wrong fixed point that persists until a full page reload.
+    //
+    // Fix: after Svelte commits the tentative decision to the DOM (tick()), verify it actually
+    // rendered without an unwanted wrap — group each row's badges by their shared direct parent
+    // and check they all share the same rendered `top`. If not, shed the most-recently-relevant
+    // jolly badge and re-verify, bounded to the max possible extras (3 duration + 3 period = 6)
+    // so this can never loop forever. Runs on EVERY recompute (not just the first), so it also
+    // self-heals the "stays stuck forever" symptom — a subsequent resize's own verify pass will
+    // catch and correct the same mistake immediately instead of leaving it stuck.
+    function anyRowWrapped(container: HTMLElement): boolean {
+        const rows = new Map<Element, HTMLElement[]>();
+        for (const btn of container.querySelectorAll('button')) {
+            const parent = btn.parentElement;
+            if (!parent) continue;
+            const group = rows.get(parent) ?? [];
+            group.push(btn as HTMLElement);
+            rows.set(parent, group);
+        }
+        for (const group of rows.values()) {
+            if (group.length < 2) continue; // a lone badge can't "wrap" against itself
+            const firstTop = group[0].getBoundingClientRect().top;
+            if (group.some((b) => Math.abs(b.getBoundingClientRect().top - firstTop) > 1)) return true;
+        }
+        return false;
+    }
+
+    // Sheds one jolly from whichever pool currently shows more (balances the 2 pools instead of
+    // fully draining one before touching the other); ties prefer duration. Returns false once
+    // both pools are already at 0 (nothing left to shed — accept the wrap as a last resort).
+    function shedOneJolly(): boolean {
+        if (extrasToShowDuration === 0 && extrasToShowPeriod === 0) return false;
+        if (extrasToShowDuration >= extrasToShowPeriod) {
+            extrasToShowDuration--;
+        } else {
+            extrasToShowPeriod--;
+        }
+        return true;
+    }
+
+    async function verifyNoWrap(generation: number, attemptsLeft = 6) {
+        await tick();
+        if (generation !== measureGeneration) return; // superseded by a newer measureAndFill() run
+        if (align !== 'start' || !presetRowRef) return;
+        if (!anyRowWrapped(presetRowRef)) return; // verified — genuinely fits on one line each
+        if (attemptsLeft <= 0) return; // safety valve — never loop forever
+        if (!shedOneJolly()) return; // nothing left to shed
+        await verifyNoWrap(generation, attemptsLeft - 1);
     }
 
     // Debounced re-measure on container resize — a live window drag fires the native resize
@@ -838,7 +939,7 @@
     {/if}
 {/snippet}
 
-<div class="relative flex flex-col gap-1.5 {align === 'start' ? 'max-w-2xl grow self-stretch items-stretch' : 'items-center'}">
+<div class="relative flex flex-col gap-1.5 {align === 'start' ? 'grow self-stretch items-stretch' : 'items-center'}" style={align === 'start' ? `max-width: ${pickerConfig.maxWidth}px` : ''}>
     {#if showPresets}
         <!-- align='start': JS decides ONLY isSingleRow + jolly counts (see measureAndFill) —
              the actual spreading/"giustificato" look is native CSS justify-between, applied to

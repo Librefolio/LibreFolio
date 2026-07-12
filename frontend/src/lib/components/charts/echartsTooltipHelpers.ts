@@ -1,8 +1,10 @@
+import type {ECharts} from 'echarts';
+
 /**
  * echartsTooltipHelpers.ts — Shared tooltip and lifecycle utilities for ALL ECharts charts.
  *
  * Used by: GrowthChart, AllocationHistoryChart, LineChart, CandlestickChart, AllocationPieChart.
- * Provides consistent tooltip styling, HTML builders, and top-N grouping across the app.
+ * Provides consistent tooltip styling, first-render stability guards, and top-N grouping across the app.
  */
 
 // =============================================================================
@@ -209,6 +211,71 @@ export function tooltipPositionSide(point: [number, number], _params: unknown, _
     if (y < 0) y = 0;
 
     return [x, y];
+}
+
+/**
+ * Poll an element's bounding rect (position AND size) until it stops moving.
+ *
+ * A plain ResizeObserver only sees size changes, so it misses pure reflow shifts
+ * caused by content ABOVE the chart settling later.
+ */
+function pollStableRect(el: HTMLElement, onStable: () => void, maxFrames = 180): void {
+    let lastRect: DOMRect | null = null;
+    let stableFrames = 0;
+    let frame = 0;
+
+    function check() {
+        frame++;
+        const rect = el.getBoundingClientRect();
+        const same = lastRect !== null && rect.top === lastRect.top && rect.left === lastRect.left && rect.width === lastRect.width && rect.height === lastRect.height;
+        stableFrames = same ? stableFrames + 1 : 0;
+        lastRect = rect;
+
+        if (stableFrames >= 2 || frame >= maxFrames) {
+            onStable();
+            return;
+        }
+        requestAnimationFrame(check);
+    }
+
+    requestAnimationFrame(check);
+}
+
+/**
+ * On cold/mobile page load, surrounding layout can still be settling when ECharts
+ * performs its first render, so it caches stale internal dimensions. Position-aware
+ * tooltip functions then compute wildly wrong coordinates until a later resize.
+ *
+ * Run this ONLY once, immediately after the first full `setOption()` following
+ * `echarts.init()`. It deliberately avoids repeated intermediate `resize()` calls:
+ * each one forces a full internal ECharts re-render and can interrupt an already
+ * visible tap-triggered tooltip on mobile.
+ *
+ * Uses 3 non-magic-number signals:
+ *  1) immediate corrective resize right after first paint,
+ *  2) rect-stability polling via rAF for late reflows above the chart,
+ *  3) browser `load` + `document.fonts.ready` for cold-load resource/font settling.
+ */
+export function scheduleFirstRenderStabilityFix(chart: ECharts, container: HTMLElement, afterResize?: (chart: ECharts) => void): void {
+    const resizeOnce = () => {
+        if (chart.isDisposed()) return;
+        chart.resize();
+        afterResize?.(chart);
+    };
+
+    resizeOnce();
+
+    pollStableRect(container, resizeOnce);
+
+    if (document.readyState !== 'complete') {
+        window.addEventListener('load', resizeOnce, {once: true});
+    }
+
+    document.fonts?.ready
+        ?.then(() => {
+            resizeOnce();
+        })
+        .catch(() => {});
 }
 
 /**
