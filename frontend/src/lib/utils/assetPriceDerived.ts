@@ -9,10 +9,55 @@
  * the main thread long enough to delay click/navigation handling — see
  * `frontend/src/lib/workers/priceProcessing.worker.ts`).
  *
- * No Svelte/DOM dependency — safe to import from a Worker script.
+ * Also hosts `AssetPricePoint`/`apiPricesToAssetPricePoints` (moved here from
+ * `assetPriceStoreRegistry.ts`, which re-exports them for backward compatibility): that
+ * file imports the Zodios HTTP client for an unrelated function, and Vite's worker
+ * bundler cannot resolve that client's SvelteKit runtime dependencies (`$app/environment`
+ * and similar) outside the main app's build context. Keeping this module free of ANY
+ * such dependency is what lets the Worker import it directly.
+ *
+ * No Svelte/DOM/Zodios dependency — safe to import from a Worker script.
  *
  * @module utils/assetPriceDerived
  */
+
+import type {TimeSeriesPoint} from '$lib/stores/core/TimeSeriesStore';
+
+/**
+ * Asset price time-series data point.
+ * Derived from POST /assets/prices/query response.
+ */
+export interface AssetPricePoint extends TimeSeriesPoint {
+    date: string;
+    close: number;
+    open: number | null;
+    high: number | null;
+    low: number | null;
+    volume: number | null;
+    currency: string | null;
+    originalClose: number | null;
+    backwardFillInfo: {
+        daysBack: number;
+    } | null;
+}
+
+/**
+ * Convert raw (already Zod-validated) API price points to the internal
+ * AssetPricePoint cache format.
+ */
+export function apiPricesToAssetPricePoints(prices: any[]): AssetPricePoint[] {
+    return prices.map((p) => ({
+        date: p.date,
+        close: Number(p.close ?? 0),
+        open: p.open != null ? Number(p.open) : null,
+        high: p.high != null ? Number(p.high) : null,
+        low: p.low != null ? Number(p.low) : null,
+        volume: p.volume != null ? Number(p.volume) : null,
+        currency: p.currency ?? null,
+        originalClose: p.original_close != null ? Number(p.original_close) : null,
+        backwardFillInfo: p.backward_fill_info ? {daysBack: p.backward_fill_info.days_back ?? 0} : null,
+    }));
+}
 
 /** A single normalized price point, as consumed by computeDerivedPriceState(). */
 export interface RawPricePoint {

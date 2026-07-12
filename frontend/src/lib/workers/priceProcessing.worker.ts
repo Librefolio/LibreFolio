@@ -22,9 +22,14 @@
  */
 
 import {z} from 'zod';
-import {schemas} from '$lib/api';
-import {apiPricesToAssetPricePoints, type AssetPricePoint} from '$lib/stores/assetPriceStoreRegistry';
-import {computeDerivedPriceState, type DerivedPriceState} from '$lib/utils/assetPriceDerived';
+// Import the Zod schema DIRECTLY from the generated module (not the `$lib/api` barrel,
+// which also re-exports the Zodios HTTP client — pulling that into the worker's
+// dependency graph fails to bundle, since it transitively imports SvelteKit runtime
+// modules like `$app/environment` that only exist in the main app's build context, not
+// a Worker's). `generated.ts` itself has zero SvelteKit dependencies (only zod +
+// @zodios/core), so importing it directly is safe here.
+import {schemas} from '$lib/api/generated';
+import {apiPricesToAssetPricePoints, computeDerivedPriceState, type AssetPricePoint, type DerivedPriceState} from '$lib/utils/assetPriceDerived';
 import type {WorkerRequestMessage, WorkerResponseMessage} from './workerPool';
 
 /** One raw (unvalidated) bulk-query result item, as received over the wire. */
@@ -80,7 +85,6 @@ function processRequest(request: PriceProcessingRequest): PriceProcessingRespons
 
 self.onmessage = (event: MessageEvent<WorkerRequestMessage<PriceProcessingRequest>>) => {
     const {id, payload} = event.data;
-
 
     try {
         const result = processRequest(payload);

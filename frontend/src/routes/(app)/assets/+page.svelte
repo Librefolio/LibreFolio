@@ -43,7 +43,10 @@
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
-    import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
+    import {getAssetPriceStore, invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
+    import {computeDerivedPriceState, computePeriodDelta, DELTA_PERIODS} from '$lib/utils/assetPriceDerived';
+    import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
+    import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
 
     // =========================================================================
     // Types
@@ -416,33 +419,50 @@
         assets = assets.map((a) => ({...a, loadingPrices: needFetch.some((nf) => nf.id === a.id)}));
 
         try {
-            // Bulk query only assets with gaps
+            // Bulk query only assets with gaps — SAME single request as before (the
+            // backend runs one SQL query for all requested assets; splitting this into
+            // several smaller requests would lose that optimization, so it stays as one
+            // call). Use axiosInstance directly (bypassing Zodios' automatic response
+            // validation) so the raw, not-yet-validated body can be handed to the shared
+            // worker pool: validating + computing derived state for every asset in one
+            // synchronous main-thread block was what monopolized the thread long enough
+            // to delay click/navigation handling on large "ALL date range" loads.
             const queries = needFetch.map((a) => ({
                 asset_id: a.id,
                 date_range: {start: dateStart, end: dateEnd},
             }));
 
-            const response = (await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(queries)) as any;
-            const items = response.items ?? [];
+            const rawResponse = await axiosInstance.post('/api/v1/assets/prices/query', queries);
+            const rawItems: unknown[] = rawResponse.data?.items ?? [];
 
-            // Populate caches and result map
-            const resultMap = new Map<number, any[]>();
-            for (const result of items) {
-                const prices = result.prices ?? [];
-                resultMap.set(result.asset_id, prices);
-                // Populate cache for this asset
-                const asset = needFetch.find((a) => a.id === result.asset_id);
-                if (asset && prices.length > 0) {
+            const {results, invalidItemErrors} = await processPriceItemsInParallel(rawItems);
+            if (invalidItemErrors.length > 0) {
+                console.error('Some price-query items failed validation:', invalidItemErrors);
+            }
+
+            // Populate caches (cheap: just Map.set calls) and build a per-asset lookup
+            // of the already-computed derived UI state (last price, deltas, chart data).
+            const derivedByAssetId = new Map<number, ProcessedAssetResult>();
+            for (const result of results) {
+                derivedByAssetId.set(result.assetId, result);
+                const asset = needFetch.find((a) => a.id === result.assetId);
+                if (asset && result.mappedPoints.length > 0) {
                     const store = getAssetPriceStore(asset.id, asset.currency);
-                    store.merge(apiPricesToAssetPricePoints(prices));
+                    store.merge(result.mappedPoints);
                     store.markFetched(dateStart, dateEnd);
                 }
             }
 
             // Merge cached + fresh results
             assets = assets.map((asset) => {
-                const prices = cached.get(asset.id) ?? resultMap.get(asset.id) ?? [];
-                return buildAssetStateFromPrices(asset, prices);
+                if (cached.has(asset.id)) {
+                    return buildAssetStateFromPrices(asset, cached.get(asset.id) ?? []);
+                }
+                const processed = derivedByAssetId.get(asset.id);
+                if (processed) {
+                    return {...asset, ...processed.derived, loadingPrices: false};
+                }
+                return {...asset, loadingPrices: false, deltas: {}};
             });
             resolveMaxStartFromAssets();
         } catch (e: any) {
@@ -459,39 +479,17 @@
     }
 
     function buildAssetStateFromPrices(asset: AssetState, prices: any[]): AssetState {
-        if (prices.length > 0) {
-            const firstPrice = prices[0]?.close != null ? Number(prices[0].close) : null;
-            const lastPrice = prices[prices.length - 1]?.close != null ? Number(prices[prices.length - 1].close) : null;
-
-            let deltaAbs: number | null = null;
-            let deltaPercent: number | null = null;
-            if (firstPrice !== null && lastPrice !== null && firstPrice !== 0) {
-                deltaAbs = lastPrice - firstPrice;
-                deltaPercent = ((lastPrice - firstPrice) / firstPrice) * 100;
-            }
-
-            const chartData = prices.map((p: any) => ({
-                date: p.date,
-                value: Number(p.close ?? 0),
-                staleDays: p.backward_fill_info?.days_back ?? p.backwardFillInfo?.daysBack ?? 0,
-            }));
-
-            const deltas: Record<string, number | null> = {};
-            for (const period of DELTA_PERIODS) {
-                deltas[period.key] = computePeriodDelta(chartData, period.days);
-            }
-
-            return {
-                ...asset,
-                lastPrice,
-                deltaAbs,
-                deltaPercent,
-                chartData,
-                deltas,
-                loadingPrices: false,
-            };
+        // Empty prices: preserve whatever chart/delta data the asset already had (e.g. a
+        // stale-but-valid previous fetch) — only reset loadingPrices/deltas, matching the
+        // pre-extraction behavior exactly (do NOT wipe lastPrice/chartData to null/empty).
+        if (prices.length === 0) {
+            return {...asset, loadingPrices: false, deltas: {}};
         }
-        return {...asset, loadingPrices: false, deltas: {}};
+        return {
+            ...asset,
+            ...computeDerivedPriceState(prices),
+            loadingPrices: false,
+        };
     }
 
     function handleDateRangeChange(newStart: string, newEnd: string) {

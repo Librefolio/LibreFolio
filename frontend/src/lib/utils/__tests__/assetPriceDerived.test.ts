@@ -93,8 +93,14 @@ describe('computeDerivedPriceState', () => {
         expect(result.chartData[0].staleDays).toBe(3);
     });
 
+    it('falls back to legacy camelCase backwardFillInfo.daysBack when snake_case is absent', () => {
+        const prices = [{date: '2026-01-01', close: '100', backwardFillInfo: {daysBack: 5}}];
+        const result = computeDerivedPriceState(prices);
+        expect(result.chartData[0].staleDays).toBe(5);
+    });
+
     it('defaults staleDays to 0 for a malformed/unexpected backward_fill_info shape', () => {
-        const prices = [{date: '2026-01-01', close: '100', backward_fill_info: [] as unknown}];
+        const prices = [{date: '2026-01-01', close: '100', backward_fill_info: []}];
         const result = computeDerivedPriceState(prices);
         expect(result.chartData[0].staleDays).toBe(0);
     });
