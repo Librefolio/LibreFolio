@@ -15,7 +15,7 @@ La documentation est organisée en trois domaines principaux :
 ### 🐳 Déploiement & Exposition
 - 📦 **[Installation sur l'Hôte](host_installation.md)** : Configuration manuelle avec Python, Node.js et Pipenv directement sur la machine hôte.
 - 🐳 **[Docker Avancé](docker_advanced.md)** : Déploiement conteneurisé à l'aide de Docker Compose, liaisons de volumes et configuration de la propriété GID/UID de l'utilisateur.
-- 🌐 **[Exposer avec Tailscale](tailscale_exposure.md)** : Exposez en toute sécurité votre instance privée de LibreFolio sur Internet à l'aide de Tailscale.
+- 🌐 **[Exposer en Sécurité](tailscale_exposure.md)** : Exposez en toute sécurité votre instance privée de LibreFolio sur Internet.
 
 ### ⚙️ Configuration du Système
 - 📝 **[Variables d'Environnement](configuration.md)** : Liste complète des variables `.env` prises en charge (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) et ordre de priorité de résolution.

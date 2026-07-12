@@ -2,7 +2,7 @@
 
 LibreFolio utilizza un file `.env` per la configurazione, basato su `BaseSettings` di Pydantic. Ciò consente una facile gestione delle variabili d'ambiente sia per lo sviluppo locale che per le distribuzioni Docker.
 
-## 📄 File `.env`
+## 🔧 Guida Rapida: Inizializzare la Configurazione
 
 Il file `.env` si trova nella root del progetto. Viene fornito un file di esempio, `.env.example`. Per iniziare, è sufficiente copiarlo:
 
@@ -10,38 +10,25 @@ Il file `.env` si trova nella root del progetto. Viene fornito un file di esempi
 cp .env.example .env
 ```
 
-### 🔑 Variabili d'Ambiente Principali
+## ✏️ Opzioni di Configurazione (File `.env`)
 
-- **`PORT`**: La porta su cui verrà eseguito il server FastAPI.
- - Default: `6040`
+Queste variabili consentono di personalizzare il comportamento di LibreFolio all'interno del file `.env`. Sono le stesse variabili caricate per impostazione predefinita dal Docker Compose.
 
-- **`TEST_PORT`**: La porta su cui verrà eseguito il server di test quando la modalità test è abilitata.
- - Default: `6041`
+- **`PORT`** (Default: `6040`): La porta su cui verrà eseguito il server FastAPI in produzione.
+- **`TEST_PORT`** (Default: `6041`): La porta su cui verrà eseguito il server di test quando è abilitata la modalità test.
+- **`LIBREFOLIO_DATA_DIR`** (Default: `./backend/data/prod`): Il percorso della directory radice in cui sono memorizzati i dati persistenti (database SQLite, caricamenti, log, ecc.). I percorsi relativi vengono risolti in assoluti rispetto alla root del progetto, mentre in Docker viene sovrascritto a `/app/backend/data/prod-docker` in base ai volumi di Compose.
+- **`LOG_LEVEL`** (Default: `INFO`, Opzioni: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`): Il livello di logging principale dell'applicazione.
+- **`PORTFOLIO_BASE_CURRENCY`** (Default: `EUR`): La valuta di base predefinita per i calcoli dei portafogli (codice ISO 4217).
+- **`PREVIEW_CACHE_MAX_MB`** (Default: `50`): Dimensione massima (in MB) per la cache in-memory delle anteprime delle immagini. Le miniature in cache vengono espulse con algoritmo LRU al superamento del limite.
 
-- **`LIBREFOLIO_DATA_DIR`**: Il percorso della directory dove sono memorizzati i dati di produzione (database SQLite, log, upload).
- - Default: `./backend/data/prod`
+## 💻 Parametri di Sistema (Variabili d'Ambiente)
 
-- **`JWT_SECRET`**: La chiave segreta utilizzata per la firma dei JWT (JSON Web Tokens) per le sessioni utente.
+Queste variabili gestiscono l'integrazione di basso livello tra i moduli dell'applicazione, l'isolamento dei test e gli script della CLI di sviluppo. Di norma, l'utente non ha bisogno di modificarle direttamente, poiché il sistema (Docker Compose o lo script `dev.py`) le auto-assegna o le gestisce automaticamente.
 
-    !!! note "Importante"
-        Questa deve essere impostata su un valore stabile se si desidera evitare che i client perdano le sessioni al riavvio del server. (Nota che più worker uvicorn avviati sullo stesso host condividono lo spazio di memoria del processo padre, che contiene il segreto generato dinamicamente, quindi la persistenza della sessione è naturalmente mantenuta tra i worker senza una chiave statica). Tuttavia, per la massima sicurezza, la scelta consigliata è lasciarla vuota e permettere che venga ricalcolata dinamicamente a runtime.
-
-- **`LOG_LEVEL`**: Il livello di logging per l'applicazione.
- - Opzioni: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`
- - Default: `INFO`
-
-- **`PORTFOLIO_BASE_CURRENCY`**: La valuta di base predefinita per i calcoli del portafoglio.
- - Default: `EUR`
-
-- **`PREVIEW_CACHE_MAX_MB`**: Dimensione massima (in MB) per la cache in-memory delle anteprime delle immagini.
- - Default: `50`
- - Le miniature in cache vengono espulse utilizzando l'algoritmo LRU quando viene raggiunto il limite.
-
-- **`BACKEND_CORS_ORIGINS`**: Una lista JSON delle origini CORS consentite per lo sviluppo.
- - Default: `["http://localhost:3000", "http://localhost:5173"]`
-
-- **`LIBREFOLIO_TEST_MODE`**: Un flag per indicare se l'applicazione è in modalità test (forzando l'isolamento tramite il database di test).
- - Impostare a `1` per abilitare la modalità test.
+- **`HOST`** (Default: `0.0.0.0`): L'indirizzo di binding di rete per il server web FastAPI, iniettato automaticamente in Docker e nei comandi CLI.
+- **`JWT_SECRET`**: La chiave segreta per la firma e decrittografia delle sessioni utente (JSON Web Tokens). Questa variabile **non** fa parte della validazione Pydantic `Settings` e viene letta a runtime direttamente a livello di sistema operativo. Se lasciata vuota, l'applicazione auto-assegna una chiave casuale sicura a ogni avvio (`secrets.token_urlsafe(64)`). Quando si avvia il server in locale via `./dev.py server`, lo script genera e inietta automaticamente un segreto condiviso per garantire la persistenza della sessione tra i vari worker.
+- **`LIBREFOLIO_TEST_MODE`**: Flag per indicare se l'applicazione è in modalità test. Quando impostato a `1` o `true`, forza l'applicazione a isolarsi completamente reindirizzando la directory dei dati su `backend/data/test/`. Viene gestito automaticamente dai runner di test.
+- **`LIBREFOLIO_LOG_LEVEL`**: Override di priorità per il livello dei log. Se impostato, ha la precedenza assoluta e sovrascrive a runtime la proprietà `LOG_LEVEL` caricata da Pydantic (utilizzato da `./dev.py server --debug`).
 
 ## 🔝 Priorità di Risoluzione
 

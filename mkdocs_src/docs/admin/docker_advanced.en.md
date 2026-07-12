@@ -291,13 +291,15 @@ services:
 
     The first time you access LibreFolio in the browser, you'll see a registration page. Create your account directly — the first user automatically becomes the administrator. No CLI needed.
 
-### 🔒 2. Reverse Proxy
+### 🔒 2. Security and Exposure (Tailscale and Reverse Proxy)
 
-It is highly recommended to run LibreFolio behind a reverse proxy like **Nginx** or **Traefik**. This allows you to:
+It is highly recommended to expose LibreFolio securely using **Tailscale** (recommended and simplest choice) or behind a classic reverse proxy like **Nginx** or **Traefik**.
 
-- 🔐 Easily manage SSL/TLS certificates for HTTPS.
-- 🖥️ Serve multiple applications on the same server.
-- 🛡️ Add security headers and rate limiting.
+*   **Tailscale (Recommended)**: Allows you to expose LibreFolio securely with automatic HTTPS, without opening router ports or setting up public DNS records. See the detailed **[Tailscale Exposure Guide](tailscale_exposure.md)**.
+*   **Classic Reverse Proxy (Nginx/Traefik)**: Useful if you already have an existing web infrastructure or want to:
+    - 🔐 Manage custom SSL/TLS certificates for HTTPS.
+    - 🖥️ Serve multiple applications on the same server.
+    - 🛡️ Add custom security headers and rate limiting.
 
 ### 💾 3. Database Backup
 
@@ -312,16 +314,6 @@ No `docker cp` needed — the data directory is a bind mount accessible from the
 
 ### 🔑 4. Environment Variables
 
-All configuration is managed in the `.env` file (copied from `.env.example`). The Docker-specific overrides in the `environment:` block should not be changed:
+All configuration is managed in the `.env` file (copied from `.env.example`). The Docker-specific overrides in the `environment:` block should not be changed.
 
-| Variable | Default | Description | Where |
-|----------|---------|-------------|-------|
-| `PORT` | `6040` | Host port for production server | `.env` |
-| `TEST_PORT` | `6041` | Host port for test server | `.env` |
-| `UID` | `1000` | Container user UID (must match data directory owner) | `.env` |
-| `GID` | `1000` | Container user GID (must match data directory owner) | `.env` |
-| `LOG_LEVEL` | `INFO` | Logging verbosity — see **[Log Level Reference →](filesystem.md#logs)** | `.env` |
-| `PORTFOLIO_BASE_CURRENCY` | `EUR` | Base currency for portfolio calculations | `.env` |
-| `PREVIEW_CACHE_MAX_MB` | `50` | Max in-memory image preview cache (MB) | `.env` |
-| `LIBREFOLIO_DATA_DIR` | `/app/backend/data/prod-docker` | Container path for data (do not change) | `docker-compose.yml` |
-| `HOST` | `0.0.0.0` | Container bind address (do not change) | `docker-compose.yml` |
+For a complete list of all configurable environment variables (including those in the `.env` file and system parameters managed by Docker/CLI) and to understand how each one affects the application's behavior, see the detailed **[Configuration Guide](configuration.md)**.

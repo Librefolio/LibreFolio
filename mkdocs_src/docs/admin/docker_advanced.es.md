@@ -291,13 +291,15 @@ services:
 
     La primera vez que acceda a LibreFolio en el navegador, verá una página de registro. Cree su cuenta directamente; el primer usuario se convierte automáticamente en el administrador. No se necesita la CLI.
 
-### 🔒 2. Proxy Inverso
+### 🔒 2. Seguridad y Exposición (Tailscale y Proxy Inverso)
 
-Se recomienda encarecidamente ejecutar LibreFolio detrás de un proxy inverso como **Nginx** o **Traefik**. Esto le permite:
+Se recomienda encarecidamente exponer LibreFolio de forma segura utilizando **Tailscale** (la opción recomendada y más sencilla) o detrás de un proxy inverso clásico como **Nginx** o **Traefik**.
 
-- 🔐 Gestionar fácilmente certificados SSL/TLS para HTTPS.
-- 🖥️ Servir múltiples aplicaciones en el mismo servidor.
-- 🛡️ Añadir cabeceras de seguridad y limitación de solicitudes (rate limiting).
+*   **Tailscale (Opción Recomendada)**: Permite exponer LibreFolio de forma segura con HTTPS automático, sin abrir puertos en el router ni configurar registros DNS públicos. Consulte la guía detallada de **[Exposición con Tailscale](tailscale_exposure.md)**.
+*   **Proxy Inverso Clásico (Nginx/Traefik)**: Útil si ya tiene una infraestructura web existente o desea:
+    - 🔐 Gestionar certificados SSL/TLS personalizados para HTTPS.
+    - 🖥️ Servir múltiples aplicaciones en el mismo servidor.
+    - 🛡️ Añadir cabeceras de seguridad y limitación de solicitudes (rate limiting).
 
 ### 💾 3. Copia de Seguridad de la Base de Datos
 
@@ -312,16 +314,6 @@ No es necesario usar `docker cp`; el directorio de datos es un montaje de enlace
 
 ### 🔑 4. Variables de Entorno
 
-Toda la configuración se gestiona en el archivo `.env` (copiado de `.env.example`). Las sobrescrituras específicas de Docker en el bloque `environment:` no deben cambiarse:
+Toda la configuración se gestiona en el archivo `.env` (copiado de `.env.example`). Las sobrescrituras específicas de Docker en el bloque `environment:` no deben cambiarse.
 
-| Variable | Predeterminado | Descripción | Dónde |
-|----------|---------|-------------|-------|
-| `PORT` | `6040` | Puerto del host para el servidor de producción | `.env` |
-| `TEST_PORT` | `6041` | Puerto del host para el servidor de prueba | `.env` |
-| `UID` | `1000` | UID del usuario del contenedor (debe coincidir con el dueño del directorio de datos) | `.env` |
-| `GID` | `1000` | GID del usuario del contenedor (debe coincidir con el dueño del directorio de datos) | `.env` |
-| `LOG_LEVEL` | `INFO` | Verbosidad del log — ver **[Referencia de Niveles de Log →](filesystem.md#logs)** | `.env` |
-| `PORTFOLIO_BASE_CURRENCY` | `EUR` | Moneda base para los cálculos de la cartera | `.env` |
-| `PREVIEW_CACHE_MAX_MB` | `50` | Caché máxima en memoria para previsualización de imágenes (MB) | `.env` |
-| `LIBREFOLIO_DATA_DIR` | `/app/backend/data/prod-docker` | Ruta del contenedor para los datos (no cambiar) | `docker-compose.yml` |
-| `HOST` | `0.0.0.0` | Dirección de enlace del contenedor (no cambiar) | `docker-compose.yml` |
+Para obtener una lista completa de todas las variables de entorno configurables (incluidas las del archivo `.env` y los parámetros del sistema gestionados por Docker/CLI) y comprender cómo afecta cada una al comportamiento de la aplicación, consulte la guía detallada de **[Configuración](configuration.md)**.
