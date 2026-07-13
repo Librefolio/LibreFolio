@@ -7,6 +7,9 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
+    import {buildDataZoom} from '$lib/components/charts/chartCoreHelpers';
+    import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
+    import {attachDataZoomSync, type DataZoomSyncHandle} from '$lib/components/charts/echartsDataZoomSync';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
@@ -24,6 +27,13 @@
         currency: string;
         onLotClick?: (buyTransactionId: number) => void;
         xAxisRange?: {min: string; max: string} | null;
+        /** Cross-chart zoom/pan sync (e.g. with FIFOLotsPanel's WAC/price chart) — fired
+         *  whenever THIS chart's own dataZoom changes (user or programmatic). */
+        onZoomChange?: (start: number, end: number) => void;
+        /** Cross-chart zoom/pan sync — apply an externally-sourced zoom window (e.g. from
+         *  the linked WAC/price chart) onto this chart. */
+        externalZoomStart?: number | null;
+        externalZoomEnd?: number | null;
     }
 
     interface BaseLotPoint {
@@ -70,15 +80,26 @@
         };
     }
 
-    let {openLots = [], closedLots = [], brokers = [], currency, onLotClick, xAxisRange = null}: Props = $props();
+    let {openLots = [], closedLots = [], brokers = [], currency, onLotClick, xAxisRange = null, onZoomChange, externalZoomStart = null, externalZoomEnd = null}: Props = $props();
 
+    let wrapperEl: HTMLDivElement | undefined = $state(undefined);
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
     let resizeObserver: ResizeObserver | null = null;
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
+    let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
+    let dataZoomSyncHandle: DataZoomSyncHandle | null = null;
     let isDark = $state(false);
     let returnMode: ReturnMode = $state('raw');
+    // "Row → bubble" pulse (mirror of onLotClick's "bubble → row" direction) — set by the
+    // exported pulseLot(), rendered as a temporary effectScatter ripple, then auto-cleared.
+    // `size` matches the underlying bubble's OWN rendered symbolSize (same bubbleSize()
+    // calculation as the real series) so the ripple appears to emanate from exactly the
+    // bubble it targets, not a mismatched fixed-size dot.
+    let pulseTarget = $state<{buyDate: string; value: number; size: number} | null>(null);
+    let pulseTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    const PULSE_DURATION_MS = 1800;
 
     function syncTheme() {
         isDark = document.documentElement.classList.contains('dark');
@@ -542,7 +563,25 @@
                     emphasis: {disabled: true},
                     z: 4,
                 },
+                ...(pulseTarget
+                    ? [
+                          {
+                              name: '__lot-pulse',
+                              type: 'effectScatter' as const,
+                              silent: true,
+                              tooltip: {show: false},
+                              data: [{name: '__lot-pulse', value: [pulseTarget.buyDate, pulseTarget.value]}],
+                              symbolSize: pulseTarget.size,
+                              showEffectOn: 'render' as const,
+                              rippleEffect: {period: 3, scale: 3.2, brushType: 'stroke' as const, color: 'rgba(147, 51, 234, 0.6)'},
+                              itemStyle: {color: 'rgba(147, 51, 234, 0.35)'},
+                              emphasis: {disabled: true},
+                              z: 5,
+                          },
+                      ]
+                    : []),
             ],
+            dataZoom: buildDataZoom([0]),
         };
     }
 
@@ -561,6 +600,10 @@
             tooltipCleanup?.();
             resizeObserver?.disconnect();
             resizeObserver = null;
+            dataZoomTouchPanHandle?.dispose();
+            dataZoomTouchPanHandle = null;
+            dataZoomSyncHandle?.dispose();
+            dataZoomSyncHandle = null;
             chartInstance.dispose();
             chartInstance = undefined;
         }
@@ -570,6 +613,8 @@
             setupResizeObserver();
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
+            dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
+            dataZoomSyncHandle = attachDataZoomSync(chartInstance, (start, end) => onZoomChange?.(start, end));
             chartInstance.on('dblclick', (params: any) => {
                 const meta = params.data?.meta as LotPoint | undefined;
                 if (!meta) return;
@@ -598,8 +643,41 @@
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
             resizeObserver?.disconnect();
+            dataZoomTouchPanHandle?.dispose();
+            dataZoomTouchPanHandle = null;
+            dataZoomSyncHandle?.dispose();
+            dataZoomSyncHandle = null;
             chartInstance?.dispose();
+            if (pulseTimeoutId != null) clearTimeout(pulseTimeoutId);
         };
+    });
+
+    /** "Row → bubble" — scroll the chart into view and ripple-pulse the matching bubble.
+     *  Mirror of onLotClick's "bubble → row" direction (called from FIFOLotsPanel on
+     *  double-click/long-press of an open/closed lot row). */
+    export function pulseLot(buyTransactionId: number): void {
+        const point = [...chartModel.open, ...chartModel.closed].find((p) => p.buyTransactionId === buyTransactionId);
+        if (!point) return;
+
+        wrapperEl?.scrollIntoView({behavior: 'smooth', block: 'center'});
+
+        // Match the underlying bubble's OWN rendered size (same calculation as the real
+        // foreground series: remainingQuantity for open lots, quantity for closed lots).
+        const size = point.kind === 'open' ? bubbleSize(point.remainingQuantity, chartModel.maxQuantity) : bubbleSize(point.quantity, chartModel.maxQuantity);
+
+        if (pulseTimeoutId != null) clearTimeout(pulseTimeoutId);
+        pulseTarget = {buyDate: point.buyDate, value: getDisplayGainPercent(point, returnMode), size};
+        pulseTimeoutId = setTimeout(() => {
+            pulseTarget = null;
+            pulseTimeoutId = null;
+        }, PULSE_DURATION_MS);
+    }
+
+    $effect(() => {
+        const start = externalZoomStart;
+        const end = externalZoomEnd;
+        if (start == null || end == null) return;
+        dataZoomSyncHandle?.applyExternal(start, end);
     });
 
     $effect(() => {
@@ -612,6 +690,7 @@
         void chartModel;
         void $currentLanguage;
         void returnMode;
+        void pulseTarget;
 
         if (!chartContainer) return;
 
@@ -621,7 +700,7 @@
     });
 </script>
 
-<div class="w-full rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 flex flex-col gap-3">
+<div bind:this={wrapperEl} class="w-full rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 flex flex-col gap-3">
     <div class="flex items-center justify-between gap-3">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
             {returnMode === 'annualized' ? $t('measure.table.annualized') || 'Δ%/yr' : $t('dashboard.unrealizedPnlPercent') || 'P&L %'}

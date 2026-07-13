@@ -27,6 +27,7 @@
     import {signalLabelToHtml} from '$lib/charts/signalLabel';
     import {buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
+    import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
     import {downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
 
     // =========================================================================
@@ -115,6 +116,7 @@
     let chartContainer: HTMLDivElement;
     let chartInstance: echarts.ECharts | null = null;
     let resizeObserver: ResizeObserver | null = null;
+    let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let chartOptionSet = false;
     let needsInitialLayoutStabilityPass = false;
     let lastRenderedResolution: ChartResolution | null = null;
@@ -157,6 +159,8 @@
         resizeObserver = null;
         chartOptionSet = false;
         lastRenderedResolution = null;
+        dataZoomTouchPanHandle?.dispose();
+        dataZoomTouchPanHandle = null;
         chartInstance?.dispose();
         chartInstance = null;
     }
@@ -227,6 +231,7 @@
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
             needsInitialLayoutStabilityPass = true;
+            dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
             chartInstance.on('dataZoom', () => {
                 if (chartInstance) updateArrowRotations(chartInstance);
             });

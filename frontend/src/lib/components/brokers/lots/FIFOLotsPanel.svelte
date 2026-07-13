@@ -9,9 +9,13 @@
   AssetWacPriceChart fetches its own data (GET /portfolio/asset-history) and renders one WAC line
   per broker + a combined line when brokerIds.length > 1.
 
-  "Goto & Pulse": a bubble click resolves whether the lot is open or closed (buy_transaction_id is
-  a DB-global primary key, never collides across brokers) and calls navigateToRowId() on the
-  matching table.
+  "Goto & Pulse" (bidirectional):
+   - Bubble → row: a bubble double-click resolves whether the lot is open or closed
+     (buy_transaction_id is a DB-global primary key, never collides across brokers) and
+     calls navigateToRowId() on the matching table.
+   - Row → bubble: double-click (desktop) or long-press (mobile) a table row calls
+     BubbleLotTimeline's pulseLot(), which scrolls the chart into view and ripple-pulses
+     the matching bubble.
 -->
 <script lang="ts">
     import {tick} from 'svelte';
@@ -53,14 +57,32 @@
     let closedLots = $state<ClosedLotSchema[]>([]);
     let assetHistoryRange = $state<DateRange | null>(null);
     let panelEl: HTMLDivElement | undefined = $state(undefined);
+    // AssetWacPriceChart's OWN internal fetch state (starts true — it fetches
+    // immediately on mount, see its own `$effect` watching assetId/brokerIds).
+    let wacLoading = $state(true);
+    let sharedZoomStart = $state<number | null>(null);
+    let sharedZoomEnd = $state<number | null>(null);
 
     let openLotsTableRef: OpenLotsTable | undefined = $state(undefined);
     let closedLotsTableRef: ClosedLotsTable | undefined = $state(undefined);
+    let bubbleTimelineRef: BubbleLotTimeline | undefined = $state(undefined);
 
     let fetchVersion = 0;
     let scrollRequestVersion = 0;
     let previousScrollOpen = false;
     let previousScrollAssetId: number | null = null;
+
+    /** Both charts (WAC/price + bubble timeline) only become visible together once BOTH
+     *  the lots fetch AND AssetWacPriceChart's own history fetch have settled. Prevents
+     *  the bubble chart from rendering first (against a narrower lots-only x-axis range)
+     *  and then visibly re-flowing once the WAC chart's wider asset-history range arrives
+     *  a moment later. */
+    let chartsReady = $derived(!loading && !wacLoading);
+
+    function handleZoomChange(start: number, end: number) {
+        sharedZoomStart = start;
+        sharedZoomEnd = end;
+    }
 
     let lotsRange = $derived.by((): DateRange | null => {
         let min: string | null = null;
@@ -173,6 +195,16 @@
 
         if (!shouldScroll) return;
 
+        // Re-arm the shared "both charts ready" gate (and any stale zoom/range state left
+        // over from a previous asset) BEFORE AssetWacPriceChart's own effects have a
+        // chance to run for this (re)opening — see the `chartsReady` doc comment above
+        // for why this matters (avoids a stale wacLoading=false letting chartsReady flip
+        // true prematurely for the new asset).
+        wacLoading = true;
+        assetHistoryRange = null;
+        sharedZoomStart = null;
+        sharedZoomEnd = null;
+
         const requestVersion = ++scrollRequestVersion;
         void scrollPanelIntoViewWhenStable(requestVersion);
     });
@@ -190,6 +222,12 @@
         if (open_) {
             openLotsTableRef?.navigateToRowId(String(open_.buy_transaction_id));
         }
+    }
+
+    /** "Row → bubble" — the reverse direction: double-click/long-press a row → scroll to the
+     *  chart and ripple-pulse the matching bubble. */
+    function handleRowDoubleClick(buyTransactionId: number) {
+        bubbleTimelineRef?.pulseLot(buyTransactionId);
     }
 </script>
 
@@ -220,20 +258,47 @@
         </div>
 
         <div class="p-4 space-y-4">
-            <AssetWacPriceChart {assetId} brokerIds={realBrokerIds} {brokers} {currency} onRangeComputed={(min, max) => (assetHistoryRange = {min, max})} xAxisRange={sharedXAxisRange} />
+            <div class="relative">
+                {#if !chartsReady}
+                    <div class="absolute inset-0 z-10 flex flex-col gap-4" aria-hidden="true" data-testid="fifo-lots-panel-loading">
+                        <div class="rounded-lg border border-gray-200/80 bg-gray-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/30">
+                            <div class="mb-3 h-5 w-40 animate-pulse rounded bg-gray-200 dark:bg-slate-700"></div>
+                            <div class="h-72 w-full animate-pulse rounded bg-gray-200 dark:bg-slate-700"></div>
+                        </div>
+                        <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                            <div class="mx-auto mb-3 h-5 w-24 animate-pulse rounded bg-gray-200 dark:bg-slate-700"></div>
+                            <div class="h-80 w-full animate-pulse rounded bg-gray-100 dark:bg-slate-700"></div>
+                        </div>
+                    </div>
+                {/if}
+                <div class="flex flex-col gap-4" class:invisible={!chartsReady}>
+                    <AssetWacPriceChart
+                        {assetId}
+                        brokerIds={realBrokerIds}
+                        {brokers}
+                        {currency}
+                        onRangeComputed={(min, max) => (assetHistoryRange = {min, max})}
+                        onLoadingChange={(v) => (wacLoading = v)}
+                        onZoomChange={handleZoomChange}
+                        externalZoomStart={sharedZoomStart}
+                        externalZoomEnd={sharedZoomEnd}
+                        xAxisRange={sharedXAxisRange}
+                    />
 
-            {#if loading}
-                <div class="py-8 text-center text-gray-400 dark:text-gray-500 text-sm" data-testid="fifo-lots-panel-loading">{$_('common.loading')}</div>
-            {:else if error}
-                <div class="py-8 text-center text-red-500 dark:text-red-400 text-sm" data-testid="fifo-lots-panel-error">{error}</div>
-            {:else}
-                <BubbleLotTimeline {openLots} {closedLots} {currency} {brokers} xAxisRange={sharedXAxisRange} onLotClick={handleLotClick} />
+                    {#if error}
+                        <div class="py-8 text-center text-red-500 dark:text-red-400 text-sm" data-testid="fifo-lots-panel-error">{error}</div>
+                    {:else}
+                        <BubbleLotTimeline bind:this={bubbleTimelineRef} {openLots} {closedLots} {currency} {brokers} xAxisRange={sharedXAxisRange} onLotClick={handleLotClick} onZoomChange={handleZoomChange} externalZoomStart={sharedZoomStart} externalZoomEnd={sharedZoomEnd} />
+                    {/if}
+                </div>
+            </div>
 
+            {#if !loading && !error}
                 <div data-testid="fifo-open-lots-section">
-                    <OpenLotsTable bind:this={openLotsTableRef} lots={openLots} {currency} {brokers} />
+                    <OpenLotsTable bind:this={openLotsTableRef} lots={openLots} {currency} {brokers} onRowDoubleClick={handleRowDoubleClick} />
                 </div>
                 <div data-testid="fifo-closed-lots-section">
-                    <ClosedLotsTable bind:this={closedLotsTableRef} lots={closedLots} {currency} {brokers} />
+                    <ClosedLotsTable bind:this={closedLotsTableRef} lots={closedLots} {currency} {brokers} onRowDoubleClick={handleRowDoubleClick} />
                 </div>
             {/if}
         </div>

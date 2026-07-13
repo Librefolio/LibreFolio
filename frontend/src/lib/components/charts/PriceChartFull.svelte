@@ -20,6 +20,7 @@
     import {buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
     import {buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
+    import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
     import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
     import {ChartLine, ChartCandlestick} from 'lucide-svelte';
     import {aggregateLineSeries, aggregateOHLCV, bucketEventMarkers, cascadeResolution, chooseInitialResolution, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
@@ -184,6 +185,7 @@
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | null = null;
     let resizeObserver: ResizeObserver | null = null;
+    let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let chartOptionSet = false;
     let needsInitialLayoutStabilityPass = false;
     let resolution: ChartResolution = $state('daily');
@@ -225,6 +227,8 @@
             observer.disconnect();
             if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer);
             resizeObserver?.disconnect();
+            dataZoomTouchPanHandle?.dispose();
+            dataZoomTouchPanHandle = null;
             chartInstance?.dispose();
             chartInstance = null;
         };
@@ -525,6 +529,8 @@
             chartInstance = null;
             resizeObserver?.disconnect();
             resizeObserver = null;
+            dataZoomTouchPanHandle?.dispose();
+            dataZoomTouchPanHandle = null;
             chartOptionSet = false;
         }
 
@@ -559,6 +565,7 @@
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
             needsInitialLayoutStabilityPass = true;
+            dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
 
             // Global dblclick handler for edit mode — scrolls editor to clicked date
             chartInstance.getZr().on('dblclick', (params: any) => {

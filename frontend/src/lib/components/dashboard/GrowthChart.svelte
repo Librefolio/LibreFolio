@@ -28,6 +28,8 @@
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {PortfolioHistoryPoint} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {buildTooltipTheme, buildTooltipHeader, buildTooltipRow, buildTooltipDivider, tooltipPositionSide, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
+    import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
+    import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
 
     // =========================================================================
     // Props
@@ -50,6 +52,7 @@
     let currentResolution: ChartResolution = $state('daily');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
+    let dataZoomTouchPanHandle: {dispose: () => void} | null = null;
     /** Tracks last viewMode used for full init — dark mode or viewMode switch requires full re-init */
     let lastRenderedMode: 'eur' | 'pct' | null = null;
     let lastRenderedDark: boolean | null = null;
@@ -74,16 +77,6 @@
         capitalBaseline: {light: '#6b7280', dark: '#9ca3af'}, // Capital baseline — grey dashed
         invested: {light: '#2563eb', dark: '#60a5fa'}, // TWRR (% mode)
         pctCash: {light: '#9caf9c', dark: '#94a3b8'}, // ROI (% mode)
-    };
-
-    const INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG = {
-        // Keep native single-finger page scroll intact. ECharts still preserves
-        // its built-in two-finger pinch zoom path, while desktop wheel zoom
-        // remains enabled without drag-based pan capture.
-        zoomOnMouseWheel: true,
-        moveOnMouseMove: false,
-        moveOnMouseWheel: false,
-        preventDefaultMouseMove: false,
     };
 
     type SeriesPoint = ReturnType<typeof namedPoint> & {
@@ -587,6 +580,8 @@
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
             resizeObserver?.disconnect();
+            dataZoomTouchPanHandle?.dispose();
+            dataZoomTouchPanHandle = null;
             chartInstance?.dispose();
         };
     });
@@ -634,6 +629,8 @@
 
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
             dataZoomCleanup?.();
+            dataZoomTouchPanHandle?.dispose();
+            dataZoomTouchPanHandle = null;
             chartInstance.dispose();
             chartInstance = undefined;
             lastRenderedMode = null;
@@ -646,6 +643,7 @@
             // Setup mobile tooltip auto-hide
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
+            dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
             dataZoomCleanup?.();
             const zoomInstance = chartInstance;
             const onDataZoom = () => scheduleResolutionSync();

@@ -16,6 +16,7 @@
     import * as echarts from 'echarts';
     import {CHART_ANIMATION_CONFIG, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
+    import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {aggregateLineSeries, cascadeResolution, chooseInitialResolution, mapDateToBucket, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
@@ -82,6 +83,7 @@
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
+    let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
@@ -146,6 +148,8 @@
             disconnectVisibilityObservers();
             darkModeObserver?.disconnect();
             resizeObserver?.disconnect();
+            dataZoomTouchPanHandle?.dispose();
+            dataZoomTouchPanHandle = null;
             chartInstance?.dispose();
         };
     });
@@ -660,6 +664,8 @@
         invalidateTemporalCacheIfNeeded();
 
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
+            dataZoomTouchPanHandle?.dispose();
+            dataZoomTouchPanHandle = null;
             chartInstance.dispose();
             chartInstance = undefined;
         }
@@ -669,6 +675,7 @@
             needsInitialLayoutStabilityPass = true;
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
+            dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
         }
 
         const fullRange = logicalRange ?? getFullLogicalRangeFromData();

@@ -1,6 +1,7 @@
 <!--
   OpenLotsTable — residual FIFO lots still held for broker detail inline panel.
-  Uses generic DataTable and forwards navigateToRowId for bubble → row pulse.
+  Uses generic DataTable and forwards navigateToRowId for bubble → row pulse, and
+  onRowDoubleClick (double-click/long-press) for the reverse row → bubble pulse.
 -->
 <script lang="ts">
     import {tick, untrack} from 'svelte';
@@ -23,10 +24,13 @@
         lots: ReadonlyArray<OpenLotSchema>;
         currency: string;
         brokers?: ReadonlyArray<BrokerLike>;
+        /** "Row → bubble" — fired on double-click (desktop) or long-press (mobile) of a row. */
+        onRowDoubleClick?: (buyTransactionId: number) => void;
     }
 
     interface DisplayRow {
         rowId: string;
+        buyTransactionId: number;
         brokerId: number;
         brokerName: string;
         broker: BrokerLike | null;
@@ -40,7 +44,7 @@
         unrealizedPnlPercent: number | null;
     }
 
-    let {lots = [], currency, brokers = []}: Props = $props();
+    let {lots = [], currency, brokers = [], onRowDoubleClick}: Props = $props();
 
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
     let expanded = $state(untrack(() => lots.length > 0));
@@ -114,6 +118,7 @@
 
             return {
                 rowId: String(lot.buy_transaction_id),
+                buyTransactionId: lot.buy_transaction_id,
                 brokerId: lot.broker_id,
                 brokerName: broker?.name ?? `#${lot.broker_id}`,
                 broker,
@@ -262,6 +267,7 @@
                 enableContextMenu={false}
                 tableLayout="fixed"
                 {emptyMessage}
+                onRowDoubleClick={(row) => onRowDoubleClick?.(row.buyTransactionId)}
             />
         </div>
     {/if}

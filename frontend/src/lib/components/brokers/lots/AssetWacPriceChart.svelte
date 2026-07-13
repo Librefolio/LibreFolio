@@ -7,6 +7,9 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, scheduleFirstRenderStabilityFix, setupTooltipAutoHide, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
+    import {buildDataZoom} from '$lib/components/charts/chartCoreHelpers';
+    import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
+    import {attachDataZoomSync, type DataZoomSyncHandle} from '$lib/components/charts/echartsDataZoomSync';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
 
@@ -30,6 +33,18 @@
         currency: string;
         onRangeComputed?: (min: string, max: string) => void;
         xAxisRange?: {min: string; max: string} | null;
+        /** Fired whenever this chart's own internal loading state changes (true at fetch
+         *  start, false at fetch end regardless of success/failure). Lets a parent (e.g.
+         *  FIFOLotsPanel) gate a combined skeleton that covers both this chart and a
+         *  sibling chart, so they only ever appear together once both are ready. */
+        onLoadingChange?: (loading: boolean) => void;
+        /** Cross-chart zoom/pan sync (e.g. with FIFOLotsPanel's bubble-lot chart) — fired
+         *  whenever THIS chart's own dataZoom changes (user or programmatic). */
+        onZoomChange?: (start: number, end: number) => void;
+        /** Cross-chart zoom/pan sync — apply an externally-sourced zoom window (e.g. from
+         *  the linked bubble-lot chart) onto this chart. */
+        externalZoomStart?: number | null;
+        externalZoomEnd?: number | null;
     };
 
     interface ChartPoint {
@@ -55,7 +70,7 @@
         value: number | null;
     }
 
-    let {assetId, brokerIds = [], brokerId, brokers = [], currency, onRangeComputed, xAxisRange = null}: ComponentProps = $props();
+    let {assetId, brokerIds = [], brokerId, brokers = [], currency, onRangeComputed, xAxisRange = null, onLoadingChange, onZoomChange, externalZoomStart = null, externalZoomEnd = null}: ComponentProps = $props();
 
     const effectiveBrokerIds = $derived.by(() => (brokerIds.length > 0 ? brokerIds : brokerId != null ? [brokerId] : []));
 
@@ -68,6 +83,8 @@
     let resizeObserver: ResizeObserver | null = null;
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
+    let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
+    let dataZoomSyncHandle: DataZoomSyncHandle | null = null;
     let isDark = $state(false);
     let needsInitialLayoutStabilityPass = false;
     let fetchVersion = 0;
@@ -87,13 +104,26 @@
         return Number.isFinite(parsed) ? parsed : null;
     }
 
+    /**
+     * WAC is a REQUIRED (non-optional) backend field — it's never `null`, it's `0`
+     * whenever the position pool is empty (before the first purchase, OR after a full
+     * sell-off) — see compute_wac_from_txlist's `elif new_qty == 0: wac = 0` sentinel
+     * (backend/app/utils/financial/wac_utils.py). A WAC of exactly 0 therefore always
+     * means "not currently holding any units", NOT a genuine zero cost basis — treat it
+     * as a gap (null) so the line doesn't draw a flat, meaningless segment along the
+     * x-axis for periods before/without any holding.
+     */
+    function nullifyZeroWac(value: number | null): number | null {
+        return value === 0 ? null : value;
+    }
+
     function normalizeZero(value: number): number {
         return Object.is(value, -0) ? 0 : value;
     }
 
-    function formatDate(value: string): string {
+    function formatDate(value: number | string): string {
         const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return value;
+        if (Number.isNaN(date.getTime())) return String(value);
         return date.toLocaleDateString($currentLanguage || undefined, {year: 'numeric', month: 'short', day: 'numeric'});
     }
 
@@ -118,7 +148,21 @@
         return normalized.toLocaleString(undefined, {minimumFractionDigits: abs < 10 && abs % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2});
     }
 
-    function parseDateToUtcMs(value: string): number | null {
+    /**
+     * Parse a date to UTC-midnight milliseconds. Accepts either an ISO date string
+     * ('2024-06-15') or a NUMERIC timestamp — the latter is what ECharts' tooltip
+     * `axisValue` provides for a `type: 'time'` xAxis (never a stringified number: passing
+     * a numeric-looking STRING to `Date.parse`/`new Date()` fails to parse — it is NOT
+     * the same as passing a genuine `number` — which previously caused the tooltip to
+     * show the raw timestamp digits instead of a formatted date).
+     */
+    function parseDateToUtcMs(value: string | number): number | null {
+        if (typeof value === 'number') {
+            if (!Number.isFinite(value)) return null;
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? null : Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+        }
+
         const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         if (dateOnlyMatch) {
             const [, year, month, day] = dateOnlyMatch;
@@ -131,7 +175,7 @@
         return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
     }
 
-    function elapsedDaysBetween(start: string, end: string): number | null {
+    function elapsedDaysBetween(start: string, end: string | number): number | null {
         const startMs = parseDateToUtcMs(start);
         const endMs = parseDateToUtcMs(end);
         if (startMs == null || endMs == null || endMs < startMs) return null;
@@ -144,6 +188,7 @@
 
     async function loadHistory(nextAssetId: number, nextBrokerIds: number[], version: number) {
         loading = true;
+        onLoadingChange?.(true);
         error = null;
 
         try {
@@ -162,6 +207,13 @@
             history = [];
             error = 'Failed to load chart';
         } finally {
+            // Notifying onLoadingChange(false) here (before the reactive effect below has a
+            // chance to run) would race ahead of onRangeComputed — a parent gating a SHARED
+            // "both ready" reveal on wacLoading turning false could reveal the chart(s) in the
+            // brief window before assetHistoryRange updates, defeating the whole point of the
+            // gate. Only `loading` itself is set synchronously here; the "done" notification to
+            // the parent is deferred to the merged effect below, which guarantees
+            // onRangeComputed (when applicable) always runs first.
             if (version === fetchVersion) loading = false;
         }
     }
@@ -214,7 +266,7 @@
             const normalizedPoint: ChartPoint = {
                 date: point.date,
                 brokerId: point.broker_id ?? null,
-                wac: parseNumber(point.wac),
+                wac: nullifyZeroWac(parseNumber(point.wac)),
                 marketPrice: parseNumber(point.market_price),
                 roi: parseNumber(point.roi) != null ? parseNumber(point.roi)! * 100 : null,
                 twrr: parseNumber(point.twrr) != null ? parseNumber(point.twrr)! * 100 : null,
@@ -410,7 +462,12 @@
 
     function buildTooltip(params: any[]): string {
         const theme = buildTooltipTheme(isDark);
-        const rawDate = String(params[0]?.axisValue ?? params[0]?.value?.[0] ?? '');
+        // Keep the RAW type — for a `type: 'time'` xAxis, `axisValue` is a NUMERIC
+        // timestamp; stringifying it before parsing (the previous bug) made
+        // `new Date(...)`/`Date.parse(...)` fail silently, showing the raw digits
+        // instead of a formatted date. `value?.[0]` (the fallback) is the original ISO
+        // date string from the series data — parseDateToUtcMs/formatDate handle both.
+        const rawDate: number | string = params[0]?.axisValue ?? params[0]?.value?.[0] ?? '';
         const elapsedDays = chartStartDate ? elapsedDaysBetween(chartStartDate, rawDate) : null;
         const rows = params
             .map((param) => {
@@ -431,7 +488,7 @@
 
         if (rows.length === 0) return '';
 
-        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatDate(String(rawDate))), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatDate(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
     }
 
     function buildOption(): echarts.EChartsOption {
@@ -488,6 +545,12 @@
             },
             yAxis: {
                 type: 'value',
+                // scale:true → fit the ACTUAL data range (min/max, with padding) instead of
+                // ECharts' default of always forcing 0 into the range (getNeedCrossZero()
+                // returns !option.scale — see LineChart.svelte's yAxisMode for the same
+                // pattern). A forced 0 baseline compressed the visually-interesting WAC/price
+                // variation into a thin band whenever those values sit far from 0.
+                scale: true,
                 axisLine: {show: false},
                 axisTick: {show: false},
                 splitLine: {
@@ -501,6 +564,7 @@
                 },
             },
             series: buildSeries(),
+            dataZoom: buildDataZoom([0]),
         };
     }
 
@@ -519,6 +583,10 @@
             tooltipCleanup?.();
             resizeObserver?.disconnect();
             resizeObserver = null;
+            dataZoomTouchPanHandle?.dispose();
+            dataZoomTouchPanHandle = null;
+            dataZoomSyncHandle?.dispose();
+            dataZoomSyncHandle = null;
             chartInstance.dispose();
             chartInstance = undefined;
         }
@@ -529,6 +597,8 @@
             setupResizeObserver();
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
+            dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
+            dataZoomSyncHandle = attachDataZoomSync(chartInstance, (start, end) => onZoomChange?.(start, end));
         }
 
         if (!showChart) {
@@ -555,6 +625,10 @@
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
             resizeObserver?.disconnect();
+            dataZoomTouchPanHandle?.dispose();
+            dataZoomTouchPanHandle = null;
+            dataZoomSyncHandle?.dispose();
+            dataZoomSyncHandle = null;
             chartInstance?.dispose();
         };
     });
@@ -599,20 +673,36 @@
         void loading;
         void error;
         void onRangeComputed;
+        void onLoadingChange;
 
-        if (loading || error || groupedChartData.totalPointCount === 0) return;
+        if (loading) return; // still fetching — loadHistory() already notified onLoadingChange(true) synchronously.
 
-        let minDate: string | null = null;
-        let maxDate: string | null = null;
+        if (!error && groupedChartData.totalPointCount > 0) {
+            let minDate: string | null = null;
+            let maxDate: string | null = null;
 
-        for (const point of history) {
-            if (!minDate || point.date < minDate) minDate = point.date;
-            if (!maxDate || point.date > maxDate) maxDate = point.date;
+            for (const point of history) {
+                if (!minDate || point.date < minDate) minDate = point.date;
+                if (!maxDate || point.date > maxDate) maxDate = point.date;
+            }
+
+            if (minDate && maxDate) {
+                onRangeComputed?.(minDate, maxDate);
+            }
         }
 
-        if (minDate && maxDate) {
-            onRangeComputed?.(minDate, maxDate);
-        }
+        // Fetch has settled (success, error, or empty) — notify the parent AFTER any
+        // onRangeComputed call above, in the SAME synchronous pass, so a parent gating a
+        // shared "both charts ready" reveal on this signal never reveals before the range
+        // has already been reported for this asset.
+        onLoadingChange?.(false);
+    });
+
+    $effect(() => {
+        const start = externalZoomStart;
+        const end = externalZoomEnd;
+        if (start == null || end == null) return;
+        dataZoomSyncHandle?.applyExternal(start, end);
     });
 </script>
 
