@@ -1507,14 +1507,14 @@
     <!-- denseRow:     [ datepicker  price-summary ─── actions-2×2 ]  1 row, picker 2-row     -->
     <!-- stackFilters: [ datepicker       ] [ actions ]  filters+summary stacked, actions     -->
     <!--               [ price-summary    ] [ 2×2     ]  stay BESIDE (2×2)                    -->
-    <!-- mobile:       [ datepicker       ] [ actions ]  same as stackFilters, EXCEPT inside   -->
-    <!--               [ price-summary    ] [ 4×1 or  ]  the narrow "actionsColumn" sub-band   -->
-    <!--                                    [ 2×2      ]  where actions become a 4×1 column    -->
-    <!-- iconOnly:     [ datepicker       ]  everything stacked, actions 1×4 icon-only row     -->
-    <!--               [ price-summary    ]                                                    -->
-    <!--               [ actions ──── 1×4 ]                                                    -->
+    <!-- oneColumn:    [ datepicker       ]  whole bar now ONE column — actions moved BELOW,  -->
+    <!--               [ price-summary    ]  still a labeled 2×2 grid (only position changed) -->
+    <!--               [ actions ── 2×2   ]                                                   -->
+    <!-- iconOnly:     [ datepicker       ]  everything stacked, actions icon-only centered   -->
+    <!--               [ price-summary    ]  row                                              -->
+    <!--               [ actions ─ icons  ]                                                   -->
     <!-- ======================================================================= -->
-    <PageToolbar thresholds={{oneRow: 1090, denseRow: 870, stackFilters: 570, actionsColumn: 445, iconOnly: 330, labelHide: 330}} filterRowTestId="asset-detail-filter-bar" layoutDebugName="assetDetail" bind:layoutMode={pageLayoutMode}>
+    <PageToolbar thresholds={{oneRow: 1090, denseRow: 870, stackFilters: 570, oneColumn: 445, iconOnly: 330, labelHide: 330}} filterRowTestId="asset-detail-filter-bar" layoutDebugName="assetDetail" bind:layoutMode={pageLayoutMode}>
         {#snippet filters()}
             <div class="flex flex-1 self-stretch min-w-0">
                 <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" layoutMode={pageLayoutMode} debugName="assetDetail" onchange={handleDateRangeChange} />
@@ -1840,7 +1840,7 @@
                 >
             </div>
             <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
-                💡 {pageLayoutMode === 'mobile' || pageLayoutMode === 'iconOnly' ? $t('assetDetail.editorTipMobile') : $t('assetDetail.editorTipDesktop')}
+                💡 {pageLayoutMode === 'oneColumn' || pageLayoutMode === 'iconOnly' ? $t('assetDetail.editorTipMobile') : $t('assetDetail.editorTipDesktop')}
             </p>
             <div class="px-4 py-4">
                 <AssetDataEditorSection

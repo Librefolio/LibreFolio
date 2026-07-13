@@ -889,15 +889,15 @@
                       [ search active type currency ×  |     ]
          stackFilters: [ datepicker                     | col  ]
                       [ search active type currency ×  | btns ]
-         mobile:       [ datepicker ][ search ][ active type × ][ currency ][ btns ] -->
-    <PageToolbar thresholds={{oneRow: 1340, denseRow: 1060, stackFilters: 500, actionsColumn: 410, iconOnly: 330, labelHide: 330}} testId="assets-controls" filterRowTestId="assets-filter-bar" layoutDebugName="assetsList">
+         oneColumn:    [ datepicker ] [ search active type × ] [ currency ] [ 2×2 btns, now BELOW ] -->
+    <PageToolbar thresholds={{oneRow: 1340, denseRow: 1060, stackFilters: 500, oneColumn: 410, iconOnly: 330, labelHide: 330}} testId="assets-controls" filterRowTestId="assets-filter-bar" layoutDebugName="assetsList">
         {#snippet filters({layoutMode, filtersStacked})}
             <!-- DateRangePicker -->
             <div class="flex flex-1 self-stretch min-w-0" data-testid="assets-date-range">
                 <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" {layoutMode} debugName="assetsList" onchange={handleDateRangeChange} />
             </div>
 
-            <!-- Filters 2×2 block (denseRow+stackFilters) / inline (oneRow) / stacked (mobile+iconOnly) -->
+            <!-- Filters 2×2 block (denseRow+stackFilters) / inline (oneRow) / stacked (oneColumn+iconOnly) -->
             <div class="flex gap-2 {layoutMode === 'oneRow' ? 'flex-row items-center flex-wrap' : filtersStacked ? 'flex-col items-center' : 'flex-col'}">
                 <!-- Row 1: Search + Active -->
                 <div class="flex items-center gap-2">

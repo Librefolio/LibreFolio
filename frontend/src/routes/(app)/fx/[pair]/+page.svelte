@@ -743,14 +743,14 @@
     <!-- denseRow:     [ datepicker  pair-info ─── actions-2×2 ]  1 row, picker 2-row       -->
     <!-- stackFilters: [ datepicker       ] [ actions ]  filters+summary stacked, actions   -->
     <!--               [ pair-info        ] [ 2×2     ]  stay BESIDE (2×2)                  -->
-    <!-- mobile:       [ datepicker       ] [ actions ]  same as stackFilters, EXCEPT inside -->
-    <!--               [ pair-info        ] [ 4×1 or  ]  the narrow "actionsColumn" sub-band -->
-    <!--                                    [ 2×2      ]  where actions become a 4×1 column  -->
-    <!-- iconOnly:     [ datepicker       ]  everything stacked, actions 1×4 icon-only row   -->
-    <!--               [ pair-info        ]                                                  -->
-    <!--               [ actions ──── 1×4 ]                                                  -->
+    <!-- oneColumn:    [ datepicker       ]  whole bar now ONE column — actions moved       -->
+    <!--               [ pair-info        ]  BELOW, still a labeled 2×2 grid (only          -->
+    <!--               [ actions ── 2×2   ]  position changed)                              -->
+    <!-- iconOnly:     [ datepicker       ]  everything stacked, actions icon-only centered -->
+    <!--               [ pair-info        ]  row                                            -->
+    <!--               [ actions ─ icons  ]                                                 -->
     <!-- ======================================================================= -->
-    <PageToolbar thresholds={{oneRow: 790, denseRow: 620, stackFilters: 520, actionsColumn: 420, iconOnly: 330, labelHide: 330}} filterRowTestId="fx-detail-filter-bar" layoutDebugName="fxDetail" bind:layoutMode={pageLayoutMode}>
+    <PageToolbar thresholds={{oneRow: 790, denseRow: 620, stackFilters: 520, oneColumn: 420, iconOnly: 330, labelHide: 330}} filterRowTestId="fx-detail-filter-bar" layoutDebugName="fxDetail" bind:layoutMode={pageLayoutMode}>
         {#snippet filters()}
             <div class="flex flex-1 self-stretch min-w-0">
                 <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" layoutMode={pageLayoutMode} debugName="fxDetail" onchange={handleDateRangeChange} />
@@ -1027,7 +1027,7 @@
                 </button>
             </div>
             <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
-                💡 {pageLayoutMode === 'mobile' || pageLayoutMode === 'iconOnly' ? $t('fxDetail.editorTipMobile') : $t('fxDetail.editorTipDesktop')}
+                💡 {pageLayoutMode === 'oneColumn' || pageLayoutMode === 'iconOnly' ? $t('fxDetail.editorTipMobile') : $t('fxDetail.editorTipDesktop')}
             </p>
             <div class="px-4 pb-4 pt-3">
                 <FxDataEditorSection

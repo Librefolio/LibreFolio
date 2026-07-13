@@ -7,6 +7,7 @@
  */
 
 import type {RenderedSignal} from '$lib/charts/signals';
+import type {ECharts} from 'echarts';
 import {buildBandSeries, buildBarSeries, COLORS, hexToRgba} from './lineChartHelpers';
 
 // =============================================================================
@@ -258,13 +259,22 @@ export function buildOverlaySignalSeries(overlaySignals: RenderedSignal[], dates
 
 /**
  * Build inside-type dataZoom config for synchronised zoom across multiple x-axes.
+ *
+ * moveOnMouseMove drives DESKTOP mouse-drag pan only — this is safe unconditionally
+ * (genuine mouse pointer events never compete with native page scroll, since desktop
+ * page-scroll uses the wheel, handled independently via zoomOnMouseWheel above).
+ *
+ * Touch-drag pan is intentionally NOT enabled here (moveOnMouseMove also nominally
+ * covers touch, but per zrender's HandlerProxy.js, touch-sourced pointer movement is
+ * unreliable for RoamController-driven pan on modern mobile browsers — verified while
+ * building the treemap's zoom guard, see echartsTreemapZoomGuard.ts's doc comment).
+ * Mobile pan is instead provided by attachDataZoomTouchPan()'s manual two-finger
+ * bridge (one finger is ALWAYS reserved for native page scroll, never intercepted —
+ * same "two fingers, not one" rationale as the treemap's touch-pan bridge).
  */
 export const INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG = {
-    // Keep native single-finger page scroll intact. ECharts still handles
-    // two-finger pinch zoom via its dedicated pinch path, while desktop wheel
-    // zoom remains enabled without re-enabling drag-based pan capture.
     zoomOnMouseWheel: true,
-    moveOnMouseMove: false,
+    moveOnMouseMove: true,
     moveOnMouseWheel: false,
     preventDefaultMouseMove: false,
 };
@@ -278,6 +288,22 @@ export function buildDataZoom(xAxisIndices: number[]): any[] {
             ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG,
         },
     ];
+}
+
+/**
+ * Read the current dataZoom window (start/end percentages, 0-100) from a chart's
+ * first dataZoom component. Returns null if the chart has no dataZoom configured yet
+ * (e.g. called before the first `setOption`).
+ *
+ * Shared by echartsDataZoomTouchPan.ts (touch-drag pan) and any cross-chart dataZoom
+ * sync bridge (e.g. FIFOLotsPanel's WAC chart ↔ bubble chart zoom/pan sync) so both
+ * read/compare the SAME percentage-based window representation.
+ */
+export function getChartZoomWindow(chart: ECharts): {start: number; end: number} | null {
+    const opt = chart.getOption() as {dataZoom?: Array<{start?: number; end?: number}>};
+    const dz = opt?.dataZoom?.[0];
+    if (!dz) return null;
+    return {start: dz.start ?? 0, end: dz.end ?? 100};
 }
 
 // =============================================================================

@@ -121,6 +121,12 @@
     // assets) — see the {#snippet filters}/{#snippet actions} below. Tune live via
     // window.__lfLayouts.fxList.thresholds.<field>.
 
+    /** Mirrors the DateRangePicker's own effective 2-row max-width, so the Currency Filters row
+     *  below it can be capped to the SAME pixel value when filtersStacked. MUST start
+     *  non-undefined (matches DateRangePicker's own maxWidthTwoRow default, 390) — Svelte
+     *  forbids bind:key={undefined} when the child prop has a declared fallback. */
+    let pickerMaxWidth = $state<number>(390);
+
     // =========================================================================
     // Derived
     // =========================================================================
@@ -731,23 +737,25 @@
          denseRow:     [ datepicker  currency ─── actions-2×2 ]  1 row, picker 2-row
          stackFilters: [ datepicker                     | 2×2  ]  filters+summary stacked,
                        [ currency-filters               | btns ]  actions stay BESIDE (2×2)
-         mobile:       [ datepicker       ]  same as stackFilters, EXCEPT inside the narrow
-                       [ currency-filters ]  "actionsColumn" sub-band where actions become
-                       [ actions-4×1 or 2×2 ]  a 4×1 column
-         iconOnly:     [ datepicker       ]  everything stacked, actions 1×4 icon-only row
+         oneColumn:    [ datepicker       ]  whole bar now ONE column — actions moved BELOW,
+                       [ currency-filters ]  still a labeled 2×2 grid (only position changed)
+                       [ actions ── 2×2   ]
+         iconOnly:     [ datepicker       ]  everything stacked, actions icon-only centered row
                        [ currency-filters ]
-                       [ actions ──── 1×4 ] -->
-    <PageToolbar thresholds={{oneRow: 1120, denseRow: 760, stackFilters: 520, actionsColumn: 420, iconOnly: 330, labelHide: 330}} testId="fx-controls" filterRowTestId="fx-filter-bar" layoutDebugName="fxList">
+                       [ actions ─ icons  ] -->
+    <PageToolbar thresholds={{oneRow: 1120, denseRow: 760, stackFilters: 520, oneColumn: 420, iconOnly: 330, labelHide: 330}} testId="fx-controls" filterRowTestId="fx-filter-bar" layoutDebugName="fxList">
         {#snippet filters({layoutMode, filtersStacked})}
             <!-- DateRangePicker -->
             <div class="flex flex-1 self-stretch min-w-0" data-testid="fx-date-range-picker">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" {layoutMode} debugName="fxList" onchange={handleDateRangeChange} />
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" {layoutMode} debugName="fxList" onchange={handleDateRangeChange} bind:effectiveMaxWidth={pickerMaxWidth} />
             </div>
 
             <!-- Currency Filters — always grouped as a pair. shrink-0: never wrapped/squeezed by
                  CSS — the DateRangePicker (above) is the only zone that gives up space when the
-                 row is tight (it sheds jolly badges via its own verify+shed loop). -->
-            <div class="flex items-center gap-3 shrink-0 {filtersStacked ? 'w-full justify-center' : ''}">
+                 row is tight (it sheds jolly badges via its own verify+shed loop). Capped to
+                 pickerMaxWidth so this row's right edge lines up with the picker's instead of
+                 the wider column. -->
+            <div class="flex items-center gap-3 shrink-0 {filtersStacked ? 'w-full justify-center' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
                 <div class="w-28 sm:w-40" data-testid="fx-currency-filter">
                     <CurrencySearchSelect
                         allowedCurrencies={allowedForFilter1}
