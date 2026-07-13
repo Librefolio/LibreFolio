@@ -22,7 +22,7 @@
     import type {CalendarHighlights} from './CalendarMonth.svelte';
     import CalendarMonth from './CalendarMonth.svelte';
     import {SimpleSelect} from '$lib/components/ui/select';
-    import {attachLayoutDebugExtra} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {attachLayoutDebugExtra, type LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
 
     // =========================================================================
     // Types
@@ -54,9 +54,27 @@
         allowFuture?: boolean;
         /** Root alignment: 'center' (default, unchanged) or 'start' (left-justified — for use inside a page toolbar where the whole block shouldn't float centered) */
         align?: 'center' | 'start';
-        /** Max width in px for the align='start' toolbar layout (default 672, i.e. Tailwind's max-w-2xl). Starting value only — becomes a live reactive knob internally (see debugName). */
+        /** Max width in px for the align='start' toolbar layout WHEN the picker is in 1-row mode
+         *  (default 740 — user-tuned value, was Tailwind's max-w-2xl/672 originally). Starting
+         *  value only — becomes a live reactive knob internally (see debugName). Ignored when
+         *  the picker is in 2-row mode (see `maxWidthTwoRow` below). */
         maxWidth?: number;
-        /** Registers a live-tunable {maxWidth} config on window.__lfLayouts.<debugName>.pickerConfig for console tuning (e.g. window.__lfLayouts.dashboard.pickerConfig.maxWidth = 900) — no resize needed, recomputes immediately. Omit to skip registration. */
+        /** Max width in px for the align='start' toolbar layout WHEN the picker is in 2-row mode
+         *  (Round 10.1 — default 390, user-tuned). A single shared `maxWidth` looked fine for 1
+         *  row but produced an ugly, overly-wide 2-row layout (each row much wider than its own
+         *  content needs, huge `justify-between` gaps) — the 2 row-modes need their own,
+         *  independently tunable cap. Only applies when `isSingleRow` is false (i.e. `layoutMode`
+         *  is anything other than `'oneRow'`, or no `layoutMode` prop is used AND the internal
+         *  content itself doesn't fit in `maxWidth`'s single-row budget). */
+        maxWidthTwoRow?: number;
+        /** Current PageToolbar layoutMode (Round 10) — when provided, DIRECTLY controls whether
+         *  the picker renders 1 row or 2 internal rows: 'oneRow' → 1 row, everything else → 2 rows.
+         *  This is a deterministic, threshold-driven decision (via the page's `oneRow` threshold
+         *  in PageToolbar), NOT autonomous content measurement — the whole point is giving the
+         *  page/thresholds full control over the whole row, per explicit user request. Omit to
+         *  default to 1-row (matches the pre-Round-10 default when no toolbar context exists). */
+        layoutMode?: LayoutMode;
+        /** Registers a live-tunable {maxWidth, maxWidthTwoRow} config on window.__lfLayouts.<debugName>.pickerConfig for console tuning (e.g. window.__lfLayouts.dashboard.pickerConfig.maxWidthTwoRow = 420) — no resize needed, recomputes immediately. Omit to skip registration. */
         debugName?: string;
         /** Called when dates change */
         onchange?: (start: string, end: string) => void;
@@ -74,17 +92,19 @@
         usePortal = false,
         allowFuture = false,
         align = 'center',
-        maxWidth: initialMaxWidth = 672,
+        maxWidth: initialMaxWidth = 740,
+        maxWidthTwoRow: initialMaxWidthTwoRow = 390,
+        layoutMode,
         debugName,
         onchange,
     }: Props = $props();
 
-    // Reactive config — mutating pickerConfig.maxWidth (typically from the console debug
-    // registry) resizes the picker immediately: the style binding below re-renders, the browser
-    // reflows, and the existing ResizeObserver on presetRowRef picks up the new width on its own.
-    // untrack(): both are prop-seeded initial values, not meant to track the prop reactively
-    // afterward (same pattern used for thresholds/layoutDebugName in PageToolbar).
-    let pickerConfig = $state({maxWidth: untrack(() => initialMaxWidth)});
+    // Reactive config — mutating pickerConfig.maxWidth/maxWidthTwoRow (typically from the console
+    // debug registry) resizes the picker immediately: the style binding below re-renders, the
+    // browser reflows, and the existing ResizeObserver on presetRowRef picks up the new width on
+    // its own. untrack(): both are prop-seeded initial values, not meant to track the prop
+    // reactively afterward (same pattern used for thresholds/layoutDebugName in PageToolbar).
+    let pickerConfig = $state({maxWidth: untrack(() => initialMaxWidth), maxWidthTwoRow: untrack(() => initialMaxWidthTwoRow)});
     const debugNameSnapshot = untrack(() => debugName);
     if (debugNameSnapshot) attachLayoutDebugExtra(debugNameSnapshot, {pickerConfig});
 
@@ -207,13 +227,16 @@
 
     // Shared by YTD/WTD/MTD/QTD: a "start of period" that's very recent (e.g. YTD on Jan 2nd,
     // WTD on a Monday) would otherwise produce a near-empty 1-2 day chart — enforce a minimum
-    // 14-day window by falling back to "14 days ago" whenever the period start is more recent
-    // than that.
-    function withMinWindow(periodStart: string): string {
+    // window by falling back to "N days ago" whenever the period start is more recent than
+    // that. Default 14 days for YTD/MTD/QTD; WTD uses its own smaller 6-day floor (see call
+    // site below) since a week-to-date range is by definition never more than 6 days old — a
+    // 14-day floor would ALWAYS override it, making WTD collapse into a fixed "last 14 days"
+    // preset that can never show its real (shorter) range.
+    function withMinWindow(periodStart: string, minDays = 14): string {
         const minDate = new Date();
-        minDate.setDate(minDate.getDate() - 14);
-        const min14 = minDate.toISOString().slice(0, 10);
-        return periodStart < min14 ? periodStart : min14;
+        minDate.setDate(minDate.getDate() - minDays);
+        const floor = minDate.toISOString().slice(0, 10);
+        return periodStart < floor ? periodStart : floor;
     }
 
     function computeStartDate(preset: QuickPreset): string {
@@ -237,7 +260,9 @@
                 const diffToMonday = day === 0 ? 6 : day - 1;
                 const monday = new Date(now);
                 monday.setDate(now.getDate() - diffToMonday);
-                return withMinWindow(monday.toISOString().slice(0, 10));
+                // 6-day floor (not the shared 14-day one) — WTD spans at most 6 days by
+                // definition, so the default floor would always win and hide the real range.
+                return withMinWindow(monday.toISOString().slice(0, 10), 6);
             }
             case 'MTD': {
                 const now = new Date();
@@ -527,7 +552,13 @@
     let durationMeasureRefs: (HTMLButtonElement | null)[] = $state([]);
     let periodMeasureRefs: (HTMLButtonElement | null)[] = $state([]);
 
-    let isSingleRow = $state(true);
+    let isSingleRow = $derived(!layoutMode || layoutMode === 'oneRow');
+    // Round 10.1: the picker's own max-width cap is different for 1-row vs 2-row — a single
+    // shared cap looked fine on 1 row but made 2-row layouts look stretched/empty (each row much
+    // wider than its own content, huge justify-between gaps). Switches automatically whenever
+    // `isSingleRow` flips (e.g. crossing the `oneRow` PageToolbar threshold), no extra wiring
+    // needed — the existing ResizeObserver on presetRowRef picks up the new width on its own.
+    let effectiveMaxWidth = $derived(isSingleRow ? pickerConfig.maxWidth : pickerConfig.maxWidthTwoRow);
     let extrasToShowDuration = $state(0);
     let extrasToShowPeriod = $state(0);
 
@@ -582,13 +613,21 @@
         return {a, b};
     }
 
-    // Single synchronous pass — no async/tick() needed for the CORE decision. A badge's width is
-    // intrinsic (its own text + padding), unaffected by which row/block wraps it, so isSingleRow
-    // and both jolly counts can be decided correctly in one shot from the CURRENT measurements
-    // in the vast majority of cases. A separate, narrowly-scoped verify+shed pass below (see
-    // verifyNoWrap) catches the rare cases where a small measurement margin makes this wrong.
+    // Single synchronous pass — no async/tick() needed for the jolly-fill count. A badge's width
+    // is intrinsic (its own text + padding), unaffected by which row/block wraps it, so both
+    // jolly counts can be decided correctly in one shot from the CURRENT measurements in the
+    // vast majority of cases. A separate, narrowly-scoped verify+shed pass below (see
+    // verifyNoWrap) catches the rare cases where a small measurement margin makes the COUNT
+    // (not the row split — that's fixed by `isSingleRow`/`layoutMode`, see below) wrong.
     //
-    // Bounded-retry note: flipping isSingleRow swaps the {#if}/{:else} DOM branch (Svelte
+    // Round 10: `isSingleRow` is no longer decided here from a width-fit computation — it's a
+    // direct, deterministic function of the externally-provided `layoutMode` prop (see its
+    // $derived declaration above), driven by the page's own `oneRow` PageToolbar threshold. This
+    // was a deliberate architecture change (explicit user request): thresholds should have full
+    // control over the whole row, not an autonomous content-measurement decision. Only the JOLLY
+    // COUNT within whichever row-count is already fixed still comes from real measurement.
+    //
+    // Bounded-retry note: `layoutMode` changing swaps the {#if}/{:else} DOM branch (Svelte
     // destroys the old row structure and creates the new one), which changes presetRowRef's
     // OWN height (1 line ↔ 2 lines) — that alone re-fires the ResizeObserver almost
     // immediately. If THAT follow-up run reads coreBadgeRefs/trailingBadgeRefs before Svelte
@@ -630,15 +669,13 @@
         // between EVERY pair (not a single fixed gap at one seam).
         const coreBaseWidth = sumWidths(coreWidths);
         const trailingBaseWidth = sumWidths([...trailingWidths, customWidth]);
-        const baseWidth = coreBaseWidth + JOLLY_GAP_PX + trailingBaseWidth;
 
-        if (baseWidth <= availableWidth) {
-            isSingleRow = true;
+        if (isSingleRow) {
+            const baseWidth = coreBaseWidth + JOLLY_GAP_PX + trailingBaseWidth;
             const {a, b} = greedyFillShared(availableWidth - baseWidth, durationWidths, periodWidths);
             extrasToShowDuration = a;
             extrasToShowPeriod = b;
         } else {
-            isSingleRow = false;
             extrasToShowDuration = greedyFillCount(availableWidth - coreBaseWidth, durationWidths);
             extrasToShowPeriod = greedyFillCount(availableWidth - trailingBaseWidth, periodWidths);
         }
@@ -648,26 +685,24 @@
     }
 
     // =========================================================================
-    // Verify + shed — catches the rare case where the math above is wrong
+    // Verify + shed — catches the rare case where the jolly-count math above is wrong
     // =========================================================================
-    // Reported bug (confirmed via user report): the picker rendered correctly at first, then
-    // broke after a window resize and STAYED broken (never self-corrected on further resizes).
-    // Root cause: the greedy-fill math above uses REAL measured widths (not estimates), but a
-    // small margin — e.g. the hidden measurement clone's minimal classes vs the real badge's
-    // full class list, or JOLLY_GAP_PX=4 not exactly matching gap-1's real computed pixel value
-    // — can still make it overestimate by one badge at some widths. Once that happens, native
-    // CSS flex-wrap silently splits the row into 2 visual lines — but presetRowRef's own WIDTH
-    // (dictated by its parent, unaffected by a wrap that only changes HEIGHT) never changes, so
-    // every future recompute re-reads the IDENTICAL inputs and reproduces the IDENTICAL wrong
-    // result: a stable-but-wrong fixed point that persists until a full page reload.
+    // Reported bug (confirmed via user report, Round 8): the picker rendered correctly at
+    // first, then broke after a window resize and STAYED broken (never self-corrected on
+    // further resizes). Root cause at the time: the greedy-fill math used REAL measured widths
+    // (not estimates), but a small margin — e.g. the hidden measurement clone's minimal classes
+    // vs the real badge's full class list, or JOLLY_GAP_PX=4 not exactly matching gap-1's real
+    // computed pixel value — could still make it overestimate by one badge at some widths.
     //
-    // Fix: after Svelte commits the tentative decision to the DOM (tick()), verify it actually
-    // rendered without an unwanted wrap — group each row's badges by their shared direct parent
-    // and check they all share the same rendered `top`. If not, shed the most-recently-relevant
-    // jolly badge and re-verify, bounded to the max possible extras (3 duration + 3 period = 6)
-    // so this can never loop forever. Runs on EVERY recompute (not just the first), so it also
-    // self-heals the "stays stuck forever" symptom — a subsequent resize's own verify pass will
-    // catch and correct the same mistake immediately instead of leaving it stuck.
+    // Since Round 10, `isSingleRow` itself can no longer be "wrong" (it's a direct function of
+    // `layoutMode`, not a measurement) — but the JOLLY COUNT within a given, already-fixed row
+    // can still be off by one from the same measurement-margin issue, which is what this verify
+    // pass continues to guard against: after Svelte commits the tentative decision to the DOM
+    // (tick()), verify it actually rendered without an unwanted wrap — group each row's badges
+    // by their shared direct parent and check they all share the same rendered `top`. If not,
+    // shed the most-recently-relevant jolly badge and re-verify, bounded to the max possible
+    // extras (3 duration + 3 period = 6) so this can never loop forever. Runs on EVERY recompute
+    // (not just the first), so it also self-heals rather than getting stuck.
     function anyRowWrapped(container: HTMLElement): boolean {
         const rows = new Map<Element, HTMLElement[]>();
         for (const btn of container.querySelectorAll('button')) {
@@ -733,13 +768,16 @@
     });
 
     // Re-measure when Row 2's base content changes width for reasons the row's OWN size doesn't
-    // reflect: toggling the custom-window editor, or a locale switch resizing translated labels
-    // (Tutti/Personalizzato). Discrete, infrequent events — no debounce needed, immediate via rAF.
+    // reflect: toggling the custom-window editor, a locale switch resizing translated labels
+    // (Tutti/Personalizzato), or the externally-provided `layoutMode` changing (Round 10 — e.g.
+    // a live console threshold edit crossing the `oneRow` boundary, with no resize event at
+    // all). Discrete, infrequent events — no debounce needed, immediate via rAF.
     $effect(() => {
         if (align !== 'start' || !presetRowRef) return;
         void customEditing;
         void $_('common.custom');
         void $_('datePicker.presets.max');
+        void layoutMode;
         const raf = requestAnimationFrame(() => {
             measureRetryCount = 0; // fresh retry budget for this new trigger
             measureAndFill();
@@ -939,7 +977,7 @@
     {/if}
 {/snippet}
 
-<div class="relative flex flex-col gap-1.5 {align === 'start' ? 'grow self-stretch items-stretch' : 'items-center'}" style={align === 'start' ? `max-width: ${pickerConfig.maxWidth}px` : ''}>
+<div class="relative flex flex-col gap-1.5 {align === 'start' ? 'grow self-stretch items-stretch' : 'items-center'}" style={align === 'start' ? `max-width: ${effectiveMaxWidth}px` : ''}>
     {#if showPresets}
         <!-- align='start': JS decides ONLY isSingleRow + jolly counts (see measureAndFill) —
              the actual spreading/"giustificato" look is native CSS justify-between, applied to

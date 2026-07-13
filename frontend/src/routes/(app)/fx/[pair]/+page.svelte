@@ -424,6 +424,23 @@
         isMaxPending = false;
     }
 
+    /**
+     * Counterpart to resolveMaxStartFromChartData(): re-arm "All" resolution
+     * before a forced full reload. Once isMaxPending resolves, dateStart
+     * freezes at whatever the earliest stored date was AT THAT TIME — a sync
+     * "Tutti" that later reaches further into the past would silently not
+     * show, because the query itself never asks for it again (it keeps using
+     * the frozen, narrower dateStart). Widening dateStart back to the anchor
+     * and re-arming isMaxPending lets resolveMaxStartFromChartData() pick up
+     * the new true earliest date once the fresh (wide) query returns.
+     */
+    function rearmMaxPendingBeforeReload() {
+        if (activePreset !== 'MAX') return;
+        isMaxPending = true;
+        dateStart = resolveDateSentinel('min');
+        displayDateStart = 'min';
+    }
+
     async function loadChartData() {
         error = null;
 
@@ -535,6 +552,7 @@
     // =========================================================================
 
     async function handleRefresh() {
+        rearmMaxPendingBeforeReload();
         const store = getFxStore(data.canonicalSlug);
         store.invalidateRange(dateStart, dateEnd);
         await loadChartData();

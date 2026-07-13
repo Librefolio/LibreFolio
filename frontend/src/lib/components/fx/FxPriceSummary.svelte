@@ -23,7 +23,7 @@
 </script>
 
 {#if lastRate !== null}
-    <div class="flex items-center gap-3 {layoutMode === 'wide' ? 'px-3' : 'justify-center'}">
+    <div class="flex items-center gap-3 {layoutMode === 'oneRow' ? 'px-3' : 'justify-center'}">
         <!-- Left half: rate -->
         <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
             {lastRate.toFixed(4)}

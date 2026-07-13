@@ -294,6 +294,23 @@
         isMaxPending = false;
     }
 
+    /**
+     * Counterpart to resolveMaxStartFromPairs(): re-arm "All" resolution
+     * before a forced full reload. Once isMaxPending resolves, dateStart
+     * freezes at whatever the earliest stored date was AT THAT TIME — a sync
+     * "Tutti" that later reaches further into the past would silently not
+     * show, because fetchAllPairData() keeps querying the frozen, narrower
+     * dateStart. Widening dateStart back to the anchor and re-arming
+     * isMaxPending lets resolveMaxStartFromPairs() pick up the new true
+     * earliest date once the fresh (wide) query returns.
+     */
+    function rearmMaxPendingBeforeReload() {
+        if (activePreset !== 'MAX') return;
+        isMaxPending = true;
+        dateStart = resolveDateSentinel('min');
+        displayDateStart = 'min';
+    }
+
     async function fetchAllPairData() {
         if (pairs.length === 0) return;
 
@@ -450,6 +467,7 @@
         refreshing = true;
         try {
             invalidateAllFxStores();
+            rearmMaxPendingBeforeReload();
             pairs = pairs.map((p) => ({...p, data: [], loading: true}));
             await fetchAllPairData();
         } finally {
@@ -665,6 +683,7 @@
         // Don't close modal — let user see the results, they close manually
         // But refresh data in background
         invalidateAllFxStores();
+        rearmMaxPendingBeforeReload();
         pairs = pairs.map((p) => ({...p, data: [], loading: true}));
         await fetchAllPairData();
     }
