@@ -55,9 +55,9 @@
     let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, layoutMode, livePriceConversionFailed = false, fxPairUrl}: Props = $props();
 </script>
 
-<div class="flex flex-wrap {layoutMode === 'wide' ? 'flex-row items-center gap-4 px-3' : 'flex-col items-center gap-2'}">
+<div class="flex flex-wrap {layoutMode === 'oneRow' ? 'flex-row items-center gap-4 px-3' : 'flex-col items-center gap-2'}">
     {#if lastPrice !== null}
-        <div class="flex items-center gap-2 {layoutMode === 'wide' ? '' : 'justify-center w-full'}">
+        <div class="flex items-center gap-2 {layoutMode === 'oneRow' ? '' : 'justify-center w-full'}">
             <div class="flex items-center gap-1.5">
                 <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
                     {lastPrice.toFixed(2)}

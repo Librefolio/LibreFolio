@@ -362,6 +362,23 @@
         isMaxPending = false;
     }
 
+    /**
+     * Counterpart to resolveMaxStartFromAssets(): re-arm "All" resolution
+     * before a forced full reload. Once isMaxPending resolves, dateStart
+     * freezes at whatever the earliest stored date was AT THAT TIME — a sync
+     * "Tutti" that later reaches further into the past would silently not
+     * show, because fetchAllPriceData() keeps querying the frozen, narrower
+     * dateStart. Widening dateStart back to the anchor and re-arming
+     * isMaxPending lets resolveMaxStartFromAssets() pick up the new true
+     * earliest date once the fresh (wide) query returns.
+     */
+    function rearmMaxPendingBeforeReload() {
+        if (activePreset !== 'MAX') return;
+        isMaxPending = true;
+        dateStart = resolveDateSentinel('min');
+        displayDateStart = 'min';
+    }
+
     async function fetchAllPriceData() {
         if (assets.length === 0) return;
 
@@ -564,6 +581,7 @@
                 );
             }
             invalidateAssetPriceStore(asset.id);
+            rearmMaxPendingBeforeReload();
             await fetchAllPriceData();
         } catch (e: any) {
             toasts.error(
@@ -586,6 +604,7 @@
 
     async function handleRefreshAsset(asset: any) {
         invalidateAssetPriceStore(asset.id);
+        rearmMaxPendingBeforeReload();
         await fetchAllPriceData();
     }
 
@@ -633,6 +652,7 @@
 
     async function handleBulkRefreshAssets() {
         for (const a of assets) invalidateAssetPriceStore(a.id);
+        rearmMaxPendingBeforeReload();
         await fetchAllPriceData();
         assetTableComponent?.getTableRef()?.clearSelection();
         selectedAssetRows = [];
@@ -1075,6 +1095,7 @@
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 onclick={() => {
                     for (const a of assets) invalidateAssetPriceStore(a.id);
+                    rearmMaxPendingBeforeReload();
                     fetchAllPriceData();
                 }}
             >
@@ -1226,6 +1247,7 @@
     }}
     onsynced={() => {
         for (const a of assets) invalidateAssetPriceStore(a.id);
+        rearmMaxPendingBeforeReload();
         fetchAllPriceData();
     }}
 />

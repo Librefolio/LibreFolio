@@ -404,10 +404,15 @@
              content, so it disappeared on Posizioni/Transazioni even though those tabs
              depend on the same date-scoped data). -->
         <PageToolbar thresholds={{oneRow: 1000, denseRow: 800, stackFilters: 560, actionsColumn: 470, iconOnly: 330, labelHide: 330}} tabs={brokerTabs} {activeTab} ontabchange={handleTabChange} testId="broker-controls" filterRowTestId="broker-overview-controls" layoutDebugName="brokerDetail">
-            {#snippet filters({layoutMode})}
+            {#snippet filters({layoutMode, filtersStacked})}
                 <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} align="start" {layoutMode} debugName="brokerDetail" onchange={handleDateChange} />
 
-                <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                <!-- Single-item row — no second control to spread against, so just center it
+                     once it's stretched to the DateRangePicker's width (stackFilters/mobile/
+                     iconOnly — see filtersStacked in PageToolbar). Un-stretched otherwise, this
+                     justify-center is a no-op (natural content width, already centered visually
+                     by the parent's items-center in row mode). -->
+                <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 {filtersStacked ? 'w-full' : ''}">
                     <span class="whitespace-nowrap">{$_('common.currency')}:</span>
                     <div class="w-28">
                         <CurrencySearchSelect
