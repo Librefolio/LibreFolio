@@ -31,7 +31,7 @@ from abc import ABC, abstractmethod
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
-from typing import AsyncGenerator, Dict, List, Optional
+from typing import AsyncGenerator, Dict, List, Literal, Optional
 
 import structlog
 from sqlalchemy import and_, delete, func, or_, select
@@ -117,6 +117,9 @@ _asset_current_cache = get_ttl_cache("asset_current_fetch", maxsize=300, ttl=120
 _asset_metadata_cache = get_ttl_cache("asset_metadata_fetch", maxsize=200, ttl=1800)  # 30 min
 _search_result_cache = get_ttl_cache("search_results", maxsize=5000, ttl=86400)  # 24h — individual items
 _search_query_cache = get_ttl_cache("search_queries", maxsize=500, ttl=900)  # 15 min — query→results
+
+AssetHistoryStartDate = date_type | Literal["min"]
+ASSET_HISTORY_MIN_FALLBACK = date_type(1900, 1, 1)
 
 
 def _provider_params_hash(provider_params: Optional[dict]) -> str:
@@ -465,7 +468,7 @@ class AssetSourceProvider(ABC):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None,
-        start_date: date_type,
+        start_date: AssetHistoryStartDate,
         end_date: date_type,
     ) -> FAHistoricalData:
         """
@@ -492,7 +495,9 @@ class AssetSourceProvider(ABC):
             identifier: Asset identifier
             identifier_type: Type of identifier
             provider_params: Provider-specific config
-            start_date: Start date (inclusive)
+            start_date: Start date (inclusive) or literal "min" for provider-defined full history.
+                Implementations MUST handle "min" explicitly instead of assuming the core
+                resolved it to a concrete fallback date.
             end_date: End date (inclusive)
 
         Returns:
@@ -2325,38 +2330,41 @@ class AssetSourceManager:
                         cache_key = (provider_code, identifier, str(prep["identifier_type"]), params_hash)
 
                         # 1. Fetch historical data (with core cache)
-                        if prov.supports_history and start < today:
+                        history_requested = start == "min" or start < today
+                        if prov.supports_history and history_requested:
                             try:
                                 history_end = min(end, today - timedelta(days=1)) if end >= today else end
-                                if start <= history_end:
-                                    # Check history cache (smart range)
-                                    cached_entry, cache_ok = _asset_history_cache.get(cache_key)
-                                    fetch_start, fetch_end = start, history_end
+                                if start == "min" or start <= history_end:
                                     cached_dates = {}
+                                    fetch_start: AssetHistoryStartDate | None = start
+                                    fetch_end = history_end
 
-                                    if cache_ok and cached_entry:
-                                        cached_dates = cached_entry.get("dates", {})
-                                        cached_events = cached_entry.get("events", [])
-                                        # Determine if we have a gap
-                                        if cached_dates:
-                                            # Check if requested range is fully covered
-                                            needed_dates = set()
-                                            d = start
-                                            while d <= history_end:
-                                                d_iso = d.isoformat()
-                                                if d_iso not in cached_dates:
-                                                    needed_dates.add(d)
-                                                d += timedelta(days=1)
-                                            if not needed_dates:
-                                                # Full cache hit — use cached data
-                                                prices_data = list(cached_dates.values())
-                                                events_data = cached_events
-                                                logger.debug(f"History cache HIT for asset {asset_id} ({len(prices_data)} points)")
-                                                fetch_start = None  # skip fetch
-                                            else:
-                                                # Partial gap — fetch the missing range
-                                                fetch_start = min(needed_dates)
-                                                fetch_end = max(needed_dates)
+                                    if start != "min":
+                                        # Check history cache (smart range)
+                                        cached_entry, cache_ok = _asset_history_cache.get(cache_key)
+                                        if cache_ok and cached_entry:
+                                            cached_dates = cached_entry.get("dates", {})
+                                            cached_events = cached_entry.get("events", [])
+                                            # Determine if we have a gap
+                                            if cached_dates:
+                                                # Check if requested range is fully covered
+                                                needed_dates = set()
+                                                d = start
+                                                while d <= history_end:
+                                                    d_iso = d.isoformat()
+                                                    if d_iso not in cached_dates:
+                                                        needed_dates.add(d)
+                                                    d += timedelta(days=1)
+                                                if not needed_dates:
+                                                    # Full cache hit — use cached data
+                                                    prices_data = list(cached_dates.values())
+                                                    events_data = cached_events
+                                                    logger.debug(f"History cache HIT for asset {asset_id} ({len(prices_data)} points)")
+                                                    fetch_start = None  # skip fetch
+                                                else:
+                                                    # Partial gap — fetch the missing range
+                                                    fetch_start = min(needed_dates)
+                                                    fetch_end = max(needed_dates)
 
                                     if fetch_start is not None:
                                         hist_data = await _run_provider_in_thread(
@@ -2365,6 +2373,8 @@ class AssetSourceManager:
                                         )
                                         if hist_data and hist_data.prices:
                                             fetched_points = [p.model_dump() for p in hist_data.prices]
+                                            if start == "min":
+                                                cached_dates = {}
                                             # Merge into cached_dates
                                             for p in fetched_points:
                                                 d_iso = p["date"].isoformat() if hasattr(p["date"], "isoformat") else str(p["date"])
@@ -2378,9 +2388,7 @@ class AssetSourceManager:
                                         _asset_history_cache.set(cache_key, {"dates": cached_dates, "events": events_data})
 
                                         # Build prices_data from full cached_dates for requested range
-                                        prices_data = []
-                                        for _d_iso, p in cached_dates.items():
-                                            prices_data.append(p)
+                                        prices_data = list(cached_dates.values())
 
                             except Exception as hist_e:
                                 logger.warning(f"History fetch failed for asset {asset_id}: {hist_e}")
@@ -2644,7 +2652,7 @@ class AssetSourceManager:
                 # instead of a vague "Sync (partial): 20↓ 0Δ".
                 message = errors[0]
             elif fetched_count > 0:
-                has_history = prov.supports_history and start < date_type.today()
+                has_history = prov.supports_history and (start == "min" or start < date_type.today())
                 if has_history and fetched_count == 1:
                     status = SyncStatus.PARTIAL
                     message = "Current value only, history unavailable"

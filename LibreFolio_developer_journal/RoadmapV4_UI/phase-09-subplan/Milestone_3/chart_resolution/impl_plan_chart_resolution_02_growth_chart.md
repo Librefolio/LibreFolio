@@ -1,5 +1,8 @@
 # Piano Implementativo: Chart Resolution 02 — GrowthChart (Milestone_3)
 
+> **Stato: ✅ implementato** — `GrowthChart.svelte` usa il contratto condiviso `[00]`, resize+resolution
+> già corretto (pattern di riferimento usato per correggere l'analogo bug in `PriceChartFull`, vedi `[01]`).
+
 > **Deriva da**: [`study_chart_dynamic_resolution.md`](./study_chart_dynamic_resolution.md) — sezioni [3. Risoluzione iniziale](./study_chart_dynamic_resolution.md#3-risoluzione-iniziale-al-primo-rendering), [4. Switch senza animazione](./study_chart_dynamic_resolution.md#4-switch-di-risoluzione-senza-animazione), [7. Debounce dataZoom](./study_chart_dynamic_resolution.md#7-debounce-sugli-eventi-datazoom), [11.1 Linee/NAV fine-periodo](./study_chart_dynamic_resolution.md#111-linee-prezzo-nav-e-serie-cumulative), [14. Tooltip bucket-aware](./study_chart_dynamic_resolution.md#14-tooltip-bucket-aware), [18. Badge](./study_chart_dynamic_resolution.md#18-badge-di-aggregazione), [19. Flusso apertura](./study_chart_dynamic_resolution.md#19-flusso-completo-allapertura), [20. Flusso zoom/pan/resize](./study_chart_dynamic_resolution.md#20-flusso-completo-durante-zoompanresize).
 >
 > **Prerequisito vincolante**: [`impl_plan_chart_resolution_00_foundation.md`](./impl_plan_chart_resolution_00_foundation.md) — contratto condiviso `timeSeriesAggregation.ts`, soglie isteresi `1.30 / 0.80`, debounce `200ms`, cache locale keyed by resolution.

@@ -25,26 +25,75 @@
         items: ContextMenuItem[];
         onAction: (id: string) => void;
         onClose: () => void;
+        anchorEl?: HTMLElement | null;
     }
 
-    let {x, y, items, onAction, onClose}: Props = $props();
+    let {x, y, items, onAction, onClose, anchorEl = null}: Props = $props();
 
     let menuEl: HTMLDivElement | undefined = $state();
     let measured = $state(false);
     let flipX = $state(false);
     let flipY = $state(false);
+    let currentX = $state(0);
+    let currentY = $state(0);
 
-    let adjustedX = $derived(flipX ? Math.max(0, x - (menuEl?.offsetWidth ?? 0)) : x);
-    let adjustedY = $derived(flipY ? Math.max(0, y - (menuEl?.offsetHeight ?? 0)) : y);
+    let adjustedX = $derived(flipX ? Math.max(0, currentX - (menuEl?.offsetWidth ?? 0)) : currentX);
+    let adjustedY = $derived(flipY ? Math.max(0, currentY - (menuEl?.offsetHeight ?? 0)) : currentY);
 
     onMount(() => {
         if (!menuEl) return;
-        const rect = menuEl.getBoundingClientRect();
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        flipX = x + rect.width > vw;
-        flipY = y + rect.height > vh;
-        measured = true;
+        currentX = x;
+        currentY = y;
+        let anchorOffsetX = 0;
+        let anchorOffsetY = 0;
+        let pendingAnchorFrame: number | null = null;
+
+        function updateViewportPlacement(nextX = currentX, nextY = currentY) {
+            if (!menuEl) return;
+            const rect = menuEl.getBoundingClientRect();
+            flipX = nextX + rect.width > window.innerWidth;
+            flipY = nextY + rect.height > window.innerHeight;
+            measured = true;
+        }
+
+        function scheduleAnchorSync() {
+            if (!anchorEl || pendingAnchorFrame != null) return;
+            pendingAnchorFrame = requestAnimationFrame(() => {
+                pendingAnchorFrame = null;
+                syncToAnchor();
+            });
+        }
+
+        function syncToAnchor() {
+            if (!anchorEl) {
+                updateViewportPlacement();
+                return;
+            }
+            if (!anchorEl.isConnected) {
+                onClose();
+                return;
+            }
+            const rect = anchorEl.getBoundingClientRect();
+            const fullyOffscreen = rect.bottom <= 0 || rect.top >= window.innerHeight || rect.right <= 0 || rect.left >= window.innerWidth;
+            if (rect.width <= 0 || rect.height <= 0 || fullyOffscreen) {
+                onClose();
+                return;
+            }
+            const nextX = rect.left + anchorOffsetX;
+            const nextY = rect.top + anchorOffsetY;
+            currentX = nextX;
+            currentY = nextY;
+            updateViewportPlacement(nextX, nextY);
+        }
+
+        if (anchorEl) {
+            const anchorRect = anchorEl.getBoundingClientRect();
+            anchorOffsetX = x - anchorRect.left;
+            anchorOffsetY = y - anchorRect.top;
+            syncToAnchor();
+        } else {
+            updateViewportPlacement();
+        }
 
         // Close on click outside
         function handlePointerDown(e: PointerEvent) {
@@ -59,11 +108,29 @@
                 onClose();
             }
         }
+        function handleScroll() {
+            scheduleAnchorSync();
+        }
+        function handleResize() {
+            if (anchorEl) scheduleAnchorSync();
+            else updateViewportPlacement();
+        }
         window.addEventListener('pointerdown', handlePointerDown, true);
         window.addEventListener('keydown', handleKeyDown, true);
+        if (anchorEl) {
+            window.addEventListener('scroll', handleScroll, true);
+            window.addEventListener('resize', handleResize);
+        }
         return () => {
             window.removeEventListener('pointerdown', handlePointerDown, true);
             window.removeEventListener('keydown', handleKeyDown, true);
+            if (anchorEl) {
+                window.removeEventListener('scroll', handleScroll, true);
+                window.removeEventListener('resize', handleResize);
+            }
+            if (pendingAnchorFrame != null) {
+                cancelAnimationFrame(pendingAnchorFrame);
+            }
         };
     });
 </script>

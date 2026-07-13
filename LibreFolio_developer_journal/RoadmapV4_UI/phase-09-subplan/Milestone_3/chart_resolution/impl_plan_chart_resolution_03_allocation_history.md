@@ -1,5 +1,7 @@
 # Piano Implementativo: Risoluzione dinamica `AllocationHistoryChart` (Milestone_3)
 
+> **Stato: ✅ implementato** — `AllocationHistoryChart.svelte` usa il contratto condiviso `[00]`.
+
 > **Deriva da**: [`./study_chart_dynamic_resolution.md`](./study_chart_dynamic_resolution.md) — sez. 3 _Risoluzione iniziale al primo rendering_ (`:366-398`), sez. 4 _Switch di risoluzione senza animazione_ (`:402-420`), sez. 7 _Debounce sugli eventi dataZoom_ (`:527-553`), sez. 11.3 _AllocationHistoryChart_ (`:735-752`), sez. 14 _Tooltip bucket-aware_ (`:915-950`), sez. 18 _Badge di aggregazione_ (`:1140-1175`), sez. 19 _Flusso completo all’apertura_ (`:1178-1202`), sez. 20 _Flusso completo durante zoom/pan/resize_ (`:1206-1228`).
 > **Prerequisito condiviso**: [`./impl_plan_chart_resolution_00_foundation.md`](./impl_plan_chart_resolution_00_foundation.md) (`[00]`, contratto shared `ChartResolution` / `aggregateLineSeries()` / `computeDensity()` / `chooseResolution()` già fissato, da usare senza ridefinizioni).
 > **Integrazione correlata**: [`./impl_plan_chart_resolution_05_badge_i18n.md`](./impl_plan_chart_resolution_05_badge_i18n.md) (`[05]`, badge top-left visibile solo in weekly/monthly).

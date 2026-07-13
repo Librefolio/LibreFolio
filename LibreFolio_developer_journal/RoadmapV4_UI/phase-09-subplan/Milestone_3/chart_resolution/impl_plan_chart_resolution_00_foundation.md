@@ -1,5 +1,9 @@
 # Piano Implementativo: Fondazione `timeSeriesAggregation.ts` (Milestone_3 — Step 0)
 
+> **Stato: ✅ implementato** — `frontend/src/lib/components/charts/timeSeriesAggregation.ts` esiste con
+> test dedicati (`timeSeriesAggregation.test.ts`, 22 test). Contratto condiviso in uso dai 6 documenti
+> fratelli, tutti implementati (vedi rispettivi header di stato).
+
 > **Deriva da**: [`./study_chart_dynamic_resolution.md`](./study_chart_dynamic_resolution.md), con riferimento operativo prioritario alle sezioni **1-12**, **17**, **19-21** della parte raffinata (righe 256-1481).
 > **Documento fondativo**: questo file fissa il contratto tecnico condiviso per i 5 documenti fratelli scritti in parallelo: [`./impl_plan_chart_resolution_01_price_candlestick.md`](./impl_plan_chart_resolution_01_price_candlestick.md) · [`./impl_plan_chart_resolution_02_growth_chart.md`](./impl_plan_chart_resolution_02_growth_chart.md) · [`./impl_plan_chart_resolution_03_allocation_history.md`](./impl_plan_chart_resolution_03_allocation_history.md) · [`./impl_plan_chart_resolution_04_signals_overlay.md`](./impl_plan_chart_resolution_04_signals_overlay.md) · [`./impl_plan_chart_resolution_05_badge_i18n.md`](./impl_plan_chart_resolution_05_badge_i18n.md).
 > **Ambito**: solo progettazione del nuovo modulo condiviso `frontend/src/lib/components/charts/timeSeriesAggregation.ts`. Nessun codice sorgente viene toccato in questo task.

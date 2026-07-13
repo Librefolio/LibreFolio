@@ -13,7 +13,7 @@ from decimal import Decimal
 import httpx
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx import FXRateProvider, FXServiceError
+from backend.app.services.fx import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError
 from backend.app.services.provider_registry import FXProviderRegistry, register_provider
 
 logger = get_logger(__name__)
@@ -150,7 +150,7 @@ class ECBProvider(FXRateProvider):
             logger.error(f"Failed to parse ECB response: {e}")
             raise FXServiceError(f"Invalid ECB response format: {e}") from e
 
-    async def fetch_rates(self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+    async def fetch_rates(self, date_range: tuple[FXProviderStartDate, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from ECB API for given date range and currencies.
 
@@ -173,6 +173,7 @@ class ECBProvider(FXRateProvider):
             raise ValueError(f"ECB provider only supports EUR as base currency, got {base_currency}")
 
         start_date, end_date = date_range
+        request_start = FX_HISTORY_MIN_FALLBACK if start_date == "min" else start_date
         results = {}
 
         # Filter valid currencies (skip base)
@@ -187,7 +188,7 @@ class ECBProvider(FXRateProvider):
             url = f"{self.BASE_URL}/{self.DATASET}/{self.FREQUENCY}.{currency}.{self.REFERENCE_AREA}.{self.SERIES}.A"
             params = {
                 "format": "jsondata",
-                "startPeriod": start_date.isoformat(),
+                "startPeriod": request_start.isoformat(),
                 "endPeriod": end_date.isoformat(),
             }
 
@@ -197,7 +198,7 @@ class ECBProvider(FXRateProvider):
                     response.raise_for_status()
 
                     if not response.text:
-                        logger.debug(f"No FX rates available for {currency} ({start_date} to {end_date}). " f"This is normal for weekends/holidays when ECB doesn't publish rates.")
+                        logger.debug(f"No FX rates available for {currency} ({request_start} to {end_date}). " f"This is normal for weekends/holidays when ECB doesn't publish rates.")
                         return currency, []
 
                     # Parse JSON response from ECB API

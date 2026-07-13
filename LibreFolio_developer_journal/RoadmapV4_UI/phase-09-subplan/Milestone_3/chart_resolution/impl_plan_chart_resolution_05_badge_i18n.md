@@ -1,5 +1,8 @@
 # Piano Implementativo: Chart Resolution 05 — Badge shared + i18n `chart.*` (Milestone_3)
 
+> **Stato: ✅ implementato** — `frontend/src/lib/components/charts/ResolutionBadge.svelte` esiste ed è
+> riusato dai 3 consumer (`[01]`/`[02]`/`[03]`), chiavi i18n `chart.*` presenti nelle 4 lingue.
+
 > **Deriva da**: [`./study_chart_dynamic_resolution.md`](./study_chart_dynamic_resolution.md) — sez. [14. Tooltip bucket-aware](./study_chart_dynamic_resolution.md#14-tooltip-bucket-aware) (`:915-949`) e sez. [18. Badge di aggregazione](./study_chart_dynamic_resolution.md#18-badge-di-aggregazione) (`:1140-1175`).
 > **Prerequisito minimo condiviso**: [`./impl_plan_chart_resolution_00_foundation.md`](./impl_plan_chart_resolution_00_foundation.md) (`[00]`, union canonica `ChartResolution = 'daily' | 'weekly' | 'monthly'`, fissata a `:45-63`).
 > **Consumer che devono riusare questo contratto senza reinventarlo**: [`./impl_plan_chart_resolution_01_price_candlestick.md`](./impl_plan_chart_resolution_01_price_candlestick.md) · [`./impl_plan_chart_resolution_02_growth_chart.md`](./impl_plan_chart_resolution_02_growth_chart.md) · [`./impl_plan_chart_resolution_03_allocation_history.md`](./impl_plan_chart_resolution_03_allocation_history.md).

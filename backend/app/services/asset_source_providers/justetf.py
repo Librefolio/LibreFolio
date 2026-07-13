@@ -24,7 +24,7 @@ from backend.app.schemas.assets import (
     FASectorArea,
 )
 from backend.app.schemas.common import Currency as CurrencyAmount
-from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
+from backend.app.services.asset_source import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.sector_fin_utils import validate_sector
@@ -313,7 +313,7 @@ class JustETFProvider(AssetSourceProvider):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None,
-        start_date: date,
+        start_date: AssetHistoryStartDate,
         end_date: date,
     ) -> FAHistoricalData:
         """
@@ -329,6 +329,7 @@ class JustETFProvider(AssetSourceProvider):
 
         try:
             currency = self._get_currency(provider_params)
+            effective_start = ASSET_HISTORY_MIN_FALLBACK if start_date == "min" else start_date
             # add_current appends today's gettex quote — only valid for EUR (gettex = EUR exchange)
             add_current = end_date >= date.today() and currency == "EUR"
 
@@ -346,7 +347,7 @@ class JustETFProvider(AssetSourceProvider):
 
             # Filter by date range
             df["date_only"] = pd.to_datetime(df["date"]).dt.date
-            df = df[(df["date_only"] >= start_date) & (df["date_only"] <= end_date)]
+            df = df[(df["date_only"] >= effective_start) & (df["date_only"] <= end_date)]
 
             prices: List[FAPricePoint] = []
             for row in df.itertuples():

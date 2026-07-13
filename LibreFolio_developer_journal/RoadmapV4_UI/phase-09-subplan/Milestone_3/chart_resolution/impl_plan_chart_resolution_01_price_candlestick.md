@@ -1,5 +1,10 @@
 # Piano Implementativo: Risoluzione dinamica condivisa in `PriceChartFull` + `CandlestickChart` (Milestone_3)
 
+> **Stato: ✅ implementato** — `PriceChartFull.svelte`/`CandlestickChart.svelte` usano il contratto
+> condiviso `[00]`; risoluzione ricalcolata su dataZoom/pan/resize (bug di resize-only risolto in un round
+> successivo, vedi `plan.md` sessione — `scheduleResolutionRecompute()` mancante nel branch resize di
+> `PriceChartFull`, ora allineato a `GrowthChart`/`AllocationHistoryChart`).
+
 > **Deriva da**: [`./study_chart_dynamic_resolution.md`](./study_chart_dynamic_resolution.md) — sezioni
 > [3](./study_chart_dynamic_resolution.md#3-risoluzione-iniziale-al-primo-rendering),
 > [4](./study_chart_dynamic_resolution.md#4-switch-di-risoluzione-senza-animazione),

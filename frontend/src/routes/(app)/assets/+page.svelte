@@ -37,7 +37,7 @@
     import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-    import {createResponsiveLayout, registerLayoutDebug} from '$lib/utils/layout/responsiveLayout.svelte';
+    import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
@@ -144,6 +144,7 @@
      */
     let urlDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
     let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
+    let syncDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
 
     /** True when the date range ends today (or later) → show live prices from providers */
     let isHeadToday = $derived(dateEnd >= new Date().toISOString().slice(0, 10));
@@ -185,19 +186,9 @@
     // Debounce timer
     let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
-    // Filter bar adaptive layout (shared helper)
-    let filterBarRef = $state<HTMLDivElement | null>(null);
-    // compact: narrower-than-mobile fallback (icon-only actions row) — mobile itself now shows
-    // the same 2×2-grid-with-labels as wide/tablet (see actions-row class below). labelHide
-    // matches compact so labels hide exactly when the icon-only fallback kicks in, same pattern
-    // as dashboard/broker-detail (PageToolbar). Starting value — tune live via
-    // window.__lfLayouts.assetsList.thresholds.compact = <value> (see registerLayoutDebug).
-    const layout = createResponsiveLayout({wide: 1340, tablet: 1060, tabletS: 500, compact: 320, labelHide: 320});
-    registerLayoutDebug('assetsList', layout);
-    let layoutMode = $derived(layout.layoutMode);
-    let showActionLabels = $derived(layout.showActionLabels);
-    // Compact is narrower-than-mobile — the filters zone should stack the same way in both.
-    let isStacked = $derived(layoutMode === 'mobile' || layoutMode === 'compact');
+    // Filter bar adaptive layout is now owned by PageToolbar (shared with dashboard/broker-detail)
+    // — see the {#snippet filters}/{#snippet actions} below for layoutMode/filtersStacked/
+    // showActionLabels usage. Tune live via window.__lfLayouts.assetsList.thresholds.<field>.
 
     // Type filter dropdown
     let typeFilterOpen = $state(false);
@@ -283,14 +274,6 @@
         fetchLivePrices();
         const id = setInterval(fetchLivePrices, 30_000);
         return () => clearInterval(id);
-    });
-
-    // ResizeObserver for adaptive filter bar layout
-    $effect(() => {
-        const el = filterBarRef;
-        if (!el) return;
-        layout.attach(el);
-        return () => layout.detach();
     });
 
     // Close type filter dropdown on outside click
@@ -559,7 +542,7 @@
             const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
                 {
                     asset_id: asset.id,
-                    date_range: {start: dateStart, end: dateEnd},
+                    date_range: {start: syncDateStart, end: dateEnd},
                 },
             ]);
             const r = (response as any)?.results?.[0];
@@ -878,30 +861,24 @@
         </div>
     </div>
 
-    <!-- Filter Bar: Proposta D responsive layout
-         wide:     [ datepicker | search active type currency × | 2×2 ]
-         tablet:   [ datepicker                     | 2×2 ]
-                   [ search active type currency ×  |     ]
-         tablet-s: [ datepicker                     | col  ]
-                   [ search active type currency ×  | btns ]
-         mobile:   [ datepicker ][ search ][ active type × ][ currency ][ btns ] -->
-    <div
-        bind:this={filterBarRef}
-        class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
-               {isStacked ? 'flex-col items-center' : layoutMode === 'wide' ? 'flex-row items-center justify-between' : 'flex-row items-start justify-between'}"
-    >
-        <!-- Filters block -->
-        <div
-            class="flex gap-3
-                    {isStacked ? 'flex-col items-center' : layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : 'flex-row items-center flex-1 flex-wrap'}"
-        >
+    <!-- Filter Bar — shared PageToolbar (same component as dashboard/broker-detail), so
+         responsive/wrap fixes made there (jolly badge shedding, currency/broker no-wrap, ...)
+         auto-propagate here instead of being hand-copied per page.
+         oneRow:       [ datepicker | search active type currency × | 2×2 ]
+         denseRow:     [ datepicker                     | 2×2 ]
+                      [ search active type currency ×  |     ]
+         stackFilters: [ datepicker                     | col  ]
+                      [ search active type currency ×  | btns ]
+         mobile:       [ datepicker ][ search ][ active type × ][ currency ][ btns ] -->
+    <PageToolbar thresholds={{oneRow: 1340, denseRow: 1060, stackFilters: 500, actionsColumn: 410, iconOnly: 330, labelHide: 330}} testId="assets-controls" filterRowTestId="assets-filter-bar" layoutDebugName="assetsList">
+        {#snippet filters({layoutMode, filtersStacked})}
             <!-- DateRangePicker -->
             <div class="flex flex-1 self-stretch min-w-0" data-testid="assets-date-range">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" debugName="assetsList" onchange={handleDateRangeChange} />
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" {layoutMode} debugName="assetsList" onchange={handleDateRangeChange} />
             </div>
 
-            <!-- Filters 2×2 block (tablet+tablet-s) / inline (wide) / stacked (mobile+compact) -->
-            <div class="flex gap-2 {layoutMode === 'wide' ? 'flex-row items-center flex-wrap' : isStacked ? 'flex-col items-center' : 'flex-col'}">
+            <!-- Filters 2×2 block (denseRow+stackFilters) / inline (oneRow) / stacked (mobile+iconOnly) -->
+            <div class="flex gap-2 {layoutMode === 'oneRow' ? 'flex-row items-center flex-wrap' : filtersStacked ? 'flex-col items-center' : 'flex-col'}">
                 <!-- Row 1: Search + Active -->
                 <div class="flex items-center gap-2">
                     <!-- Search -->
@@ -1053,13 +1030,9 @@
                     {/if}
                 </div>
             </div>
-        </div>
+        {/snippet}
 
-        <!-- Actions: 2×2 grid (wide+tablet+mobile), column (tablet-s), icon-only row (compact — the narrowest fallback, below the mobile 2×2). -->
-        <div
-            class="flex shrink-0 gap-1.5
-                    {layoutMode === 'compact' ? 'flex-row justify-center flex-wrap' : layoutMode === 'tablet-s' ? 'flex-col' : 'grid grid-cols-2'}"
-        >
+        {#snippet actions({showActionLabels})}
             <!-- Top-left: ColumnVisibility in table mode, Abs/% toggle in grid mode -->
             {#if viewMode === 'list'}
                 <ColumnVisibilityToggle tableRef={assetTableComponent?.getTableRef()} showLabel={showActionLabels} />
@@ -1108,8 +1081,8 @@
                 <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
                 {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
             </button>
-        </div>
-    </div>
+        {/snippet}
+    </PageToolbar>
 
     <!-- Content -->
     {#if loading}
@@ -1247,7 +1220,7 @@
     assets={syncModalAssets}
     bind:open={syncModalOpen}
     {dateEnd}
-    {dateStart}
+    dateStart={syncDateStart}
     onclose={() => {
         syncModalOpen = false;
     }}

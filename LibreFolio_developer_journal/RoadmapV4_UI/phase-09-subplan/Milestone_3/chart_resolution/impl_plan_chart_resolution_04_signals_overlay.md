@@ -1,5 +1,8 @@
 # Piano Implementativo: Downsample output segnali overlay (Milestone_3 — Step 4)
 
+> **Stato: ✅ implementato** — 9 tipi di segnale presenti in `frontend/src/lib/charts/signals/`
+> (Bollinger, EMA, MACD, RSI, ecc.), dispatcher downsample integrato nei consumer `[01]`.
+
 > **Deriva da**: [`./study_chart_dynamic_resolution.md`](./study_chart_dynamic_resolution.md) — sezioni
 > [16](./study_chart_dynamic_resolution.md#16-segnali-overlay),
 > [16.1](./study_chart_dynamic_resolution.md#161-ema--rsi--macd--segnali-linea),

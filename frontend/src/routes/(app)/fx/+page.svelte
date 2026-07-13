@@ -35,7 +35,7 @@
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import {buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
-    import {createResponsiveLayout, registerLayoutDebug} from '$lib/utils/layout/responsiveLayout.svelte';
+    import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
 
     // =========================================================================
@@ -83,6 +83,7 @@
      */
     let urlDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
     let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
+    let syncDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
 
     let globalViewMode = $state<'absolute' | 'percentage'>('absolute');
     let refreshing = $state(false);
@@ -116,16 +117,9 @@
     // Asset list for cross-domain signal selection (loaded lazily)
     let availableAssetsList = $state<Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>>([]);
 
-    // Filter bar adaptive layout (shared helper)
-    let filterBarRef = $state<HTMLDivElement | null>(null);
-    // compact/labelHide starting value — tune live via
-    // window.__lfLayouts.fxList.thresholds.compact = <value>.
-    const fxLayout = createResponsiveLayout({wide: 1120, tablet: 760, tabletS: 520, compact: 320, labelHide: 320});
-    registerLayoutDebug('fxList', fxLayout);
-    let layoutMode = $derived(fxLayout.layoutMode);
-    let showActionLabels = $derived(fxLayout.showActionLabels);
-    // Compact is narrower-than-mobile — the filters zone should stack the same way in both.
-    let isStacked = $derived(layoutMode === 'mobile' || layoutMode === 'compact');
+    // Filter bar adaptive layout is now owned by PageToolbar (shared with dashboard/broker-detail/
+    // assets) — see the {#snippet filters}/{#snippet actions} below. Tune live via
+    // window.__lfLayouts.fxList.thresholds.<field>.
 
     // =========================================================================
     // Derived
@@ -226,24 +220,6 @@
         await loadPairSources();
         // Load asset list for cross-domain signal selection
         loadAssetList();
-    });
-
-    // ResizeObserver for adaptive filter bar layout.
-    // Measures the filter bar itself — its width is always 100% of the parent
-    // (block-level flex), so layout changes only affect height, not width.
-    //
-    // contentRect.width = CSS box-width − padding(32px) − border(2px) = box − 34px
-    //
-    // User-tuned thresholds (CSS box → contentRect):
-    //   wide  ≈ 970px box → 936 contentRect
-    //   tablet ≈ 635px box → 601 contentRect
-    //   labels ≈ 720px box → 686 contentRect
-    // ResizeObserver for adaptive filter bar layout
-    $effect(() => {
-        const el = filterBarRef;
-        if (!el) return;
-        fxLayout.attach(el);
-        return () => fxLayout.detach();
     });
 
     // =========================================================================
@@ -658,7 +634,7 @@
         try {
             const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
                 pairs: [slug],
-                start: dateStart,
+                start: syncDateStart,
                 end: dateEnd,
             });
             const r = (response as any)?.results?.[0];
@@ -730,32 +706,29 @@
         </div>
     </div>
 
-    <!-- Filter Bar: 100% programmatic layout — NO flex-wrap, NO CSS-driven wrapping.
-         wide:     [ datepicker  currency ─── actions-2×2 ]  all in one row
-         tablet:   [ datepicker       ] [ actions-2×2 ]      filters stacked, actions grid right
-                   [ currency-filters ] [             ]
-         tablet-s: [ datepicker                     | col  ]
-                   [ currency-filters               | btns ]
-         mobile:   [ datepicker       ]  all stacked centered
-                   [ currency-filters ]
-                   [ actions-row      ] -->
-    <div
-        bind:this={filterBarRef}
-        class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
-               {isStacked ? 'flex-col items-center' : layoutMode === 'tablet-s' ? 'flex-row items-start justify-between' : 'flex-row items-center justify-between'}"
-    >
-        <!-- Filters block -->
-        <div
-            class="flex gap-3
-                    {isStacked ? 'flex-col items-center' : layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : layoutMode === 'wide' ? 'flex-row items-center flex-1' : 'flex-col items-center'}"
-        >
+    <!-- Filter Bar — shared PageToolbar (same component as dashboard/broker-detail/assets),
+         so responsive/wrap fixes made there auto-propagate here too.
+         oneRow:       [ datepicker  currency ─── actions-2×2 ]  1 row, picker 1-row
+         denseRow:     [ datepicker  currency ─── actions-2×2 ]  1 row, picker 2-row
+         stackFilters: [ datepicker                     | 2×2  ]  filters+summary stacked,
+                       [ currency-filters               | btns ]  actions stay BESIDE (2×2)
+         mobile:       [ datepicker       ]  same as stackFilters, EXCEPT inside the narrow
+                       [ currency-filters ]  "actionsColumn" sub-band where actions become
+                       [ actions-4×1 or 2×2 ]  a 4×1 column
+         iconOnly:     [ datepicker       ]  everything stacked, actions 1×4 icon-only row
+                       [ currency-filters ]
+                       [ actions ──── 1×4 ] -->
+    <PageToolbar thresholds={{oneRow: 1120, denseRow: 760, stackFilters: 520, actionsColumn: 420, iconOnly: 330, labelHide: 330}} testId="fx-controls" filterRowTestId="fx-filter-bar" layoutDebugName="fxList">
+        {#snippet filters({layoutMode, filtersStacked})}
             <!-- DateRangePicker -->
             <div class="flex flex-1 self-stretch min-w-0" data-testid="fx-date-range-picker">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" debugName="fxList" onchange={handleDateRangeChange} />
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" {layoutMode} debugName="fxList" onchange={handleDateRangeChange} />
             </div>
 
-            <!-- Currency Filters — always grouped as a pair -->
-            <div class="flex items-center gap-3">
+            <!-- Currency Filters — always grouped as a pair. shrink-0: never wrapped/squeezed by
+                 CSS — the DateRangePicker (above) is the only zone that gives up space when the
+                 row is tight (it sheds jolly badges via its own verify+shed loop). -->
+            <div class="flex items-center gap-3 shrink-0 {filtersStacked ? 'w-full justify-center' : ''}">
                 <div class="w-28 sm:w-40" data-testid="fx-currency-filter">
                     <CurrencySearchSelect
                         allowedCurrencies={allowedForFilter1}
@@ -793,13 +766,9 @@
                     <X size={16} />
                 </button>
             </div>
-        </div>
+        {/snippet}
 
-        <!-- Actions: 2×2 grid (wide+tablet+mobile), column (tablet-s), icon-only row (compact — the narrowest fallback, below the mobile 2×2). -->
-        <div
-            class="flex shrink-0 gap-1.5
-                    {layoutMode === 'compact' ? 'flex-row justify-center flex-wrap' : layoutMode === 'tablet-s' ? 'flex-col' : 'grid grid-cols-2'}"
-        >
+        {#snippet actions({showActionLabels})}
             <!-- Top-left: Abs/% toggle in grid mode, ColumnVisibility in table mode -->
             {#if viewMode === 'list'}
                 <ColumnVisibilityToggle tableRef={fxTableComponent?.getTableRef()} showLabel={showActionLabels} />
@@ -848,8 +817,8 @@
                 <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
                 {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
             </button>
-        </div>
-    </div>
+        {/snippet}
+    </PageToolbar>
 
     <!-- Content -->
     {#if loading}
@@ -959,7 +928,7 @@
 <FxPairAddModal bind:open={addModalOpen} {dateEnd} {dateStart} onclose={() => (addModalOpen = false)} oncreated={handlePairCreated} />
 
 <!-- Sync Modal -->
-<FxSyncModal bind:open={syncModalOpen} {dateEnd} {dateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} />
+<FxSyncModal bind:open={syncModalOpen} {dateEnd} dateStart={syncDateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} />
 
 <!-- Chart Settings Modal (global or per-card depending on settingsTargetSlug) -->
 <ChartSettingsModal

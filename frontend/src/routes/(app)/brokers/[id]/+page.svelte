@@ -31,6 +31,7 @@
     import {ensureBrokersLoaded, getAllBrokers, getBrokerRole, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
     import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
+    import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {goto} from '$app/navigation';
     import type {BrokerSummary} from '$lib/types';
     import {parseCurrencyAmount, safeCurrency, safeString} from '$lib/types';
@@ -85,7 +86,15 @@
     let txCurrentPage = 1;
     let txTableComponent: TransactionsTable | undefined;
 
-    let activeTab = 'panoramica';
+    const BROKER_TAB_IDS = ['panoramica', 'posizioni', 'transazioni', 'info'] as const;
+    type BrokerTabId = (typeof BROKER_TAB_IDS)[number];
+    const DEFAULT_BROKER_TAB: BrokerTabId = 'panoramica';
+
+    function isBrokerTabId(tabId: string): tabId is BrokerTabId {
+        return BROKER_TAB_IDS.includes(tabId as BrokerTabId);
+    }
+
+    let activeTab: BrokerTabId = DEFAULT_BROKER_TAB;
     let brokerTabs = [];
     let panelBrokers: BrokerLike[] = [];
     let allBrokersForTable: BrokerLike[] = [];
@@ -101,6 +110,7 @@
         const paramAssetId = getAssetPanelAssetId($page.url.searchParams);
         if ((paramAssetId ?? null) !== activeAssetId) activeAssetId = paramAssetId ?? null;
     }
+    $: activeTab = getResolvedTabParam($page.url.searchParams, BROKER_TAB_IDS, DEFAULT_BROKER_TAB);
 
     function openAssetPanel(assetId: number) {
         void goto(buildAssetPanelUrl($page.url, assetId), {replaceState: true, noScroll: true});
@@ -108,6 +118,12 @@
 
     function closeAssetPanel() {
         void goto(buildAssetPanelUrl($page.url, null), {replaceState: true, noScroll: true});
+    }
+
+    function handleTabChange(tabId: string) {
+        if (!isBrokerTabId(tabId)) return;
+        activeTab = tabId;
+        void goto(buildTabUrl($page.url, tabId), {replaceState: true, noScroll: true});
     }
 
     const initialStart = getStart();
@@ -387,9 +403,9 @@
              (previously the date-range picker only rendered inside the Panoramica tab's
              content, so it disappeared on Posizioni/Transazioni even though those tabs
              depend on the same date-scoped data). -->
-        <PageToolbar thresholds={{wide: 1000, tablet: 800, tabletS: 560, compact: 380, labelHide: 380}} tabs={brokerTabs} bind:activeTab testId="broker-controls" filterRowTestId="broker-overview-controls" layoutDebugName="brokerDetail">
-            {#snippet filters()}
-                <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} align="start" debugName="brokerDetail" onchange={handleDateChange} />
+        <PageToolbar thresholds={{oneRow: 1000, denseRow: 800, stackFilters: 560, actionsColumn: 470, iconOnly: 330, labelHide: 330}} tabs={brokerTabs} {activeTab} ontabchange={handleTabChange} testId="broker-controls" filterRowTestId="broker-overview-controls" layoutDebugName="brokerDetail">
+            {#snippet filters({layoutMode})}
+                <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} align="start" {layoutMode} debugName="brokerDetail" onchange={handleDateChange} />
 
                 <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                     <span class="whitespace-nowrap">{$_('common.currency')}:</span>
@@ -420,7 +436,7 @@
                     </button>
                 {/if}
                 <button
-                    on:click={() => (activeTab = 'info')}
+                    on:click={() => handleTabChange('info')}
                     class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                     data-testid="broker-share-button"
                     title={$_('brokers.sharing.title')}

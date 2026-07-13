@@ -259,14 +259,23 @@ export function buildOverlaySignalSeries(overlaySignals: RenderedSignal[], dates
 /**
  * Build inside-type dataZoom config for synchronised zoom across multiple x-axes.
  */
+export const INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG = {
+    // Keep native single-finger page scroll intact. ECharts still handles
+    // two-finger pinch zoom via its dedicated pinch path, while desktop wheel
+    // zoom remains enabled without re-enabling drag-based pan capture.
+    zoomOnMouseWheel: true,
+    moveOnMouseMove: false,
+    moveOnMouseWheel: false,
+    preventDefaultMouseMove: false,
+};
+
 export function buildDataZoom(xAxisIndices: number[]): any[] {
     return [
         {
             type: 'inside',
             xAxisIndex: xAxisIndices,
             filterMode: 'filter',
-            zoomOnMouseWheel: true,
-            moveOnMouseMove: true,
+            ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG,
         },
     ];
 }

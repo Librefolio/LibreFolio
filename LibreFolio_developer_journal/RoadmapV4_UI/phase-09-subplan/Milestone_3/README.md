@@ -31,11 +31,12 @@ la Fase 1 sarà implementata.
 
 ## Gap principali emersi (riepilogo trasversale)
 
-- **`GET /portfolio/asset-history` — regressione da ripristinare, non gap da progettare.** Verificato con
+- **`GET /portfolio/asset-history` — ✅ regressione ripristinata.** Verificato con
   `git log`: la route esisteva ed era funzionante (test inclusi), è stata rimossa per errore nel commit
   `3184a969` insieme a un cleanup di endpoint legacy realmente superseduti — ma questo endpoint non lo era
   (il servizio `get_asset_history()` è rimasto orfano e il docstring del file la elenca ancora come
-  disponibile). Dettagli in Fase 2.
+  disponibile). **Ripristinato** (commit `1a734008`), confermato presente in
+  `backend/app/api/v1/portfolio_api.py:137-151`.
 - **Broker Discovery — confermato in scope, semplificato.** `GET /brokers` guadagna un parametro opt-in
   `include_inaccessible` (default `False`, sia per performance sia per correttezza: non deve inquinare i
   selettori broker esistenti) che aggiunge solo `{id, name, icon_url}` dei broker non posseduti. Nessun
@@ -89,8 +90,9 @@ già e vengono solo riposizionati/riparametrizzati per lo scope di un singolo br
      — `PriceChartCompact`/`LineChart` (ramo compact) nelle card `AssetCard`/`FxCard` di `/assets` e `/fx`;
      caso **statico** (nessun `dataZoom`, ricalcolo su cambio dati/larghezza, niente isteresi/badge pill).
 
-  Stato: ✅ disegno · ✅ studio raffinato · ✅ 7 piani implementativi · ⏳ implementazione (non ancora
-  iniziata — solo documentazione fin qui, nessun file sorgente toccato).
+  Stato: ✅ disegno · ✅ studio raffinato · ✅ 7 piani implementativi · ✅ **implementato** (verificato sui
+  sorgenti: `timeSeriesAggregation.ts`, `ResolutionBadge.svelte`, 9 tipi di segnale, `PriceChartCompact`/
+  `LineChart` rami compact tutti presenti — header di stato aggiornati in ciascun `impl_plan_*.md`).
 
 ## Guide rapide
 

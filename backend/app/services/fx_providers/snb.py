@@ -40,7 +40,7 @@ from decimal import Decimal
 import httpx
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx import FXRateProvider, FXServiceError
+from backend.app.services.fx import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError
 from backend.app.services.provider_registry import FXProviderRegistry, register_provider
 
 logger = get_logger(__name__)
@@ -207,7 +207,7 @@ class SNBProvider(FXRateProvider):
 
     async def fetch_rates(
         self,
-        date_range: tuple[date, date],
+        date_range: tuple[FXProviderStartDate, date],
         currencies: list[str],
         base_currency: str | None = None,
     ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
@@ -232,6 +232,7 @@ class SNBProvider(FXRateProvider):
         assert self._iso_to_d1 is not None and self._d1_to_iso is not None
 
         start_date, end_date = date_range
+        request_start = FX_HISTORY_MIN_FALLBACK if start_date == "min" else start_date
         results: dict[str, list[tuple[date, str, str, Decimal]]] = {}
 
         # Resolve which D1 codes we need
@@ -255,7 +256,7 @@ class SNBProvider(FXRateProvider):
         dim_sel = f"D0(M0),D1({d1_sel})"
 
         # fromDate/toDate use YYYY-MM format for monthly data
-        from_date = f"{start_date.year}-{start_date.month:02d}"
+        from_date = f"{request_start.year}-{request_start.month:02d}"
         to_date = f"{end_date.year}-{end_date.month:02d}"
 
         url = f"{self.BASE_URL}/{self.DATASET}/data/json/en"
@@ -278,7 +279,7 @@ class SNBProvider(FXRateProvider):
             raise FXServiceError(f"Unexpected SNB response: {e}") from e
 
         # Parse JSON timeseries
-        results = self._parse_json(data, start_date, end_date)
+        results = self._parse_json(data, request_start, end_date)
         return results
 
     def _parse_json(

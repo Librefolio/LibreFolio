@@ -8,6 +8,7 @@
   - Table stays period-based only (no holdings snapshot semantics mixed in).
 -->
 <script lang="ts">
+    import {onMount} from 'svelte';
     import {goto} from '$app/navigation';
     import {ExternalLink, Layers} from 'lucide-svelte';
     import {_} from '$lib/i18n';
@@ -18,6 +19,8 @@
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
 
     type NumericLike = string | (string | null)[] | null;
     type PositionStatus = 'open_at_period_end' | 'closed_by_period_end';
@@ -57,6 +60,16 @@
     }
 
     let {positions = [], holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze}: Props = $props();
+
+    let tableWrapperEl: HTMLDivElement | undefined = $state(undefined);
+
+    // Cells are rendered as raw HTML strings (see the 'name' column below), so `use:` actions
+    // can't attach to them directly — scan the wrapper for overflow-marquee candidates instead,
+    // re-attaching automatically whenever rows are re-rendered (sort/filter/data refresh).
+    onMount(() => {
+        if (!tableWrapperEl) return;
+        return attachOverflowMarqueeToDescendants(tableWrapperEl);
+    });
 
     function safeNum(v: NumericLike | undefined): number | null {
         const s = Array.isArray(v) ? (v[0] ?? null) : v;
@@ -247,7 +260,7 @@
                         : `<div class="w-5 h-5 rounded-full bg-libre-green/10 flex items-center justify-center shrink-0 text-[10px] text-libre-green font-bold">${escapeHtml((row.assetName ?? '?')[0]?.toUpperCase() ?? '?')}</div>`;
                     return {
                         type: 'html',
-                        html: `<div class="flex items-center gap-1.5 min-w-0"><span class="shrink-0">${iconHtml}</span><span class="truncate font-medium text-gray-700 dark:text-gray-200">${name}</span></div>`,
+                        html: `<div class="flex items-center gap-1.5 min-w-0"><span class="shrink-0">${iconHtml}</span><span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-gray-700 dark:text-gray-200" title="${name}">${name}</span></div>`,
                     };
                 },
             },
@@ -405,7 +418,7 @@
     });
 </script>
 
-<div data-testid="contribution-table">
+<div data-testid="contribution-table" bind:this={tableWrapperEl}>
     <DataTable
         data={displayRows}
         {columns}

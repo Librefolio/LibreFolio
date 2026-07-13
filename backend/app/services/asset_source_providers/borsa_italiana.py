@@ -23,7 +23,7 @@ from backend.app.schemas.assets import (
     FAPricePoint,
     FASectorArea,
 )
-from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
+from backend.app.services.asset_source import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 
 try:
@@ -312,7 +312,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None,
-        start_date: date,
+        start_date: AssetHistoryStartDate,
         end_date: date,
     ) -> FAHistoricalData:
         """Fetch historical OHLCV data from Borsa Italiana."""
@@ -324,7 +324,8 @@ class BorsaItalianaProvider(AssetSourceProvider):
             )
 
         try:
-            periodo = _select_period(start_date, end_date)
+            effective_start = ASSET_HISTORY_MIN_FALLBACK if start_date == "min" else start_date
+            periodo = _select_period(effective_start, end_date)
             risultato = ottieni_storico(
                 identifier,
                 periodo=periodo,
@@ -334,7 +335,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
             prices: List[FAPricePoint] = []
             for punto in risultato.punti:
                 # Filter to requested date range
-                if punto.data < start_date or punto.data > end_date:
+                if punto.data < effective_start or punto.data > end_date:
                     continue
                 prices.append(
                     FAPricePoint(

@@ -7,6 +7,8 @@
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
     import {Crown, ExternalLink, Eye, Pencil, Share2, Trash2, Wallet} from 'lucide-svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
 
     type BrokerBreakdownCard = {
         broker_id: number;
@@ -102,7 +104,7 @@
                                 {#if broker.user_role === 'OWNER'}<Crown size={11} />{:else if broker.user_role === 'EDITOR'}<Pencil size={11} />{:else}<Eye size={11} />{/if}
                             </span>
                         {/if}
-                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 truncate">{broker.name}</h3>
+                        <h3 use:scrollOnOverflow class="{overflowScrollTextClass} text-lg font-semibold text-gray-800 dark:text-gray-100" title={broker.name}>{broker.name}</h3>
                     </div>
                     {#if broker.description}
                         <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">{broker.description}</p>

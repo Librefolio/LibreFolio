@@ -41,7 +41,7 @@ from backend.app.schemas.assets import (
     FASectorArea,
 )
 from backend.app.schemas.common import Currency as CurrencyAmount
-from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
+from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 from backend.app.utils.sector_fin_utils import validate_sector
 
@@ -275,7 +275,7 @@ class YahooFinanceProvider(AssetSourceProvider):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None,
-        start_date: date,
+        start_date: AssetHistoryStartDate,
         end_date: date,
     ) -> FAHistoricalData:
         """
@@ -312,17 +312,22 @@ class YahooFinanceProvider(AssetSourceProvider):
         try:
             # The core executes this method in a dedicated thread,
             # so sync yfinance calls are safe — no asyncio.to_thread needed.
-            _start = start_date.isoformat()
             _end = (end_date + timedelta(days=1)).isoformat()
 
             t = yf.Ticker(identifier)
 
             # Wrap history fetch in retry for transient network errors
             # (e.g., curl 56, NoneType from empty responses).
-            hist = _yf_with_retry(
-                lambda: t.history(start=_start, end=_end),
-                label=f"history({identifier})",
-            )
+            if start_date == "min":
+                hist = _yf_with_retry(
+                    lambda: t.history(period="max"),
+                    label=f"history-max({identifier})",
+                )
+            else:
+                hist = _yf_with_retry(
+                    lambda: t.history(start=start_date.isoformat(), end=_end),
+                    label=f"history({identifier})",
+                )
 
             # Defensive: handle None or non-DataFrame return (yfinance edge-case)
             if hist is None or not hasattr(hist, "empty"):
@@ -377,6 +382,11 @@ class YahooFinanceProvider(AssetSourceProvider):
                 else:
                     date_utc = idx.date()
 
+                if start_date != "min" and date_utc < start_date:
+                    continue
+                if date_utc > end_date:
+                    continue
+
                 # Skip rows where Close is NaN — this happens on the current trading day
                 # when markets are still open, or on data quality gaps returned by yfinance.
                 # Close is required (non-optional in FAPricePoint), so NaN rows are unusable.
@@ -413,7 +423,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                     for idx, amount in dividends.items():
                         if pd.notna(amount) and amount > 0:
                             div_date = idx.tz_convert("UTC").date() if hasattr(idx, "tz_convert") else idx.date()
-                            if start_date <= div_date <= end_date:
+                            if (start_date == "min" or start_date <= div_date) and div_date <= end_date:
                                 events.append(
                                     FAAssetEventPoint(
                                         date=div_date,
@@ -434,7 +444,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                     for idx, ratio in splits.items():
                         if pd.notna(ratio) and ratio != 0 and ratio != 1:
                             split_date = idx.tz_convert("UTC").date() if hasattr(idx, "tz_convert") else idx.date()
-                            if start_date <= split_date <= end_date:
+                            if (start_date == "min" or start_date <= split_date) and split_date <= end_date:
                                 events.append(
                                     FAAssetEventPoint(
                                         date=split_date,

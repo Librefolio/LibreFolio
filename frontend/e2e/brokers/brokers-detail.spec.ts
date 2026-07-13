@@ -283,10 +283,10 @@ test.describe('Broker Detail Page', () => {
             await expect(page.getByTestId('fifo-lots-panel')).toBeVisible({timeout: 5000});
             await expect(page.getByTestId('asset-wac-price-chart')).toBeVisible({timeout: 5000});
 
-            await page.getByTestId('asset-wac-price-mode-percent').click();
+            await page.getByTestId('wac-toggle-percentage').click();
             await expect(page.getByTestId('asset-wac-price-chart')).toBeVisible();
 
-            await page.getByTestId('asset-wac-price-mode-eur').click();
+            await page.getByTestId('wac-toggle-absolute').click();
             await expect(page.getByTestId('asset-wac-price-chart')).toBeVisible();
         });
     });

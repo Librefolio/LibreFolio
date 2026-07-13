@@ -24,6 +24,7 @@
     import {ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
     import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
+    import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {createDateRangeController} from '$lib/stores/dateRangeController.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
@@ -161,12 +162,30 @@
 
     /** Tab navigation — mirrors the broker detail page's structure (no "Info" tab
      *  here: there's no portfolio-wide metadata/sharing concept at this level). */
-    let activeTab = $state('panoramica');
+    const DASHBOARD_TAB_IDS = ['panoramica', 'posizioni', 'transazioni'] as const;
+    type DashboardTabId = (typeof DASHBOARD_TAB_IDS)[number];
+    const DEFAULT_DASHBOARD_TAB: DashboardTabId = 'panoramica';
+
+    function isDashboardTabId(tabId: string): tabId is DashboardTabId {
+        return DASHBOARD_TAB_IDS.includes(tabId as DashboardTabId);
+    }
+
+    let activeTab = $state<DashboardTabId>(DEFAULT_DASHBOARD_TAB);
     const dashboardTabs = $derived([
         {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'dashboard-tab-panoramica'},
         {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'dashboard-tab-posizioni'},
         {id: 'transazioni', label: $_('transactions.title'), icon: ArrowRightLeft, testId: 'dashboard-tab-transazioni'},
     ]);
+
+    $effect(() => {
+        activeTab = getResolvedTabParam($page.url.searchParams, DASHBOARD_TAB_IDS, DEFAULT_DASHBOARD_TAB);
+    });
+
+    function handleTabChange(tabId: string) {
+        if (!isDashboardTabId(tabId)) return;
+        activeTab = tabId;
+        void goto(buildTabUrl($page.url, tabId), {replaceState: true, noScroll: true});
+    }
 
     /** FxPairAddModal state for CTA-driven pair creation */
     let showFxPairAddModal = $state(false);
@@ -466,16 +485,17 @@
 <div class="space-y-4" data-testid="dashboard-page">
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
-    <PageToolbar thresholds={{wide: 900, tablet: 660, tabletS: 480, compact: 340, labelHide: 340}} tabs={dashboardTabs} bind:activeTab testId="dashboard-controls" filterRowTestId="dashboard-filter-bar" layoutDebugName="dashboard">
-        {#snippet filters({isStacked})}
+    <PageToolbar thresholds={{oneRow: 1000, denseRow: 810, stackFilters: 430, actionsColumn: 365, iconOnly: 330, labelHide: 330}} tabs={dashboardTabs} {activeTab} ontabchange={handleTabChange} testId="dashboard-controls" filterRowTestId="dashboard-filter-bar" layoutDebugName="dashboard">
+        {#snippet filters({layoutMode, filtersStacked})}
             <!-- Date range picker (wired to global store via the shared dateRangeController) -->
-            <DateRangePicker bind:activePreset={dateRangeCtl.activePreset} bind:start={dateRangeCtl.displayStart} bind:end={dateRangeCtl.end} compact={true} align="start" debugName="dashboard" onchange={dateRangeCtl.onDateRangeChange} />
+            <DateRangePicker bind:activePreset={dateRangeCtl.activePreset} bind:start={dateRangeCtl.displayStart} bind:end={dateRangeCtl.end} compact={true} align="start" {layoutMode} debugName="dashboard" onchange={dateRangeCtl.onDateRangeChange} />
 
-            <!-- Currency override + Broker multi-select — share one justified row when stacked
-                 (not each its own stacked full-width row); inline naturally otherwise, same as
-                 before (unconditional w-full here would fight DateRangePicker for row space
-                 in wide/tablet mode). -->
-            <div class="flex items-center gap-3 {isStacked ? 'w-full justify-between' : ''}">
+            <!-- Currency override + Broker multi-select — share one justified row when the
+                 filters+summary zone stacks (stackFilters/mobile/iconOnly — see filtersStacked
+                 in PageToolbar), not each its own stacked full-width row; inline naturally
+                 otherwise, same as before (unconditional w-full here would fight
+                 DateRangePicker for row space in oneRow/denseRow mode). -->
+            <div class="flex items-center gap-3 {filtersStacked ? 'w-full justify-between' : ''}">
                 <!-- Currency override selector -->
                 <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                     <span class="whitespace-nowrap">{$_('common.currency')}:</span>

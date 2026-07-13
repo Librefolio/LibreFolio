@@ -19,6 +19,8 @@
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
 
     interface Holding {
         asset_id: number;
@@ -68,8 +70,18 @@
     let {holdings = [], navAmount = 0, displayCurrency = 'EUR', brokers = [], onAnalyze, ..._legacyProps}: Props & Record<string, unknown> = $props();
     void _legacyProps;
 
+    let tableWrapperEl: HTMLDivElement | undefined = $state(undefined);
+
     onMount(async () => {
         await ensureAssetsLoaded();
+    });
+
+    // Cells are rendered as raw HTML strings (see the 'name' column below), so `use:` actions
+    // can't attach to them directly — scan the wrapper for overflow-marquee candidates instead,
+    // re-attaching automatically whenever rows are re-rendered (sort/filter/data refresh).
+    onMount(() => {
+        if (!tableWrapperEl) return;
+        return attachOverflowMarqueeToDescendants(tableWrapperEl);
     });
 
     function safeNum(v: string | (string | null)[] | null | undefined): number | null {
@@ -169,7 +181,7 @@
                 const typeIconHtml = typeIconSrc ? `<img src="${escapeHtml(typeIconSrc)}" alt="${escapeHtml(row.assetType)}" class="w-4 h-4 rounded object-contain shrink-0" onerror="this.style.display='none'" />` : '';
                 return {
                     type: 'html',
-                    html: `<div class="flex items-center gap-1.5 min-w-0">${typeIconHtml}<span class="truncate font-medium text-gray-700 dark:text-gray-200">${name}</span></div>`,
+                    html: `<div class="flex items-center gap-1.5 min-w-0">${typeIconHtml}<span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-gray-700 dark:text-gray-200" title="${name}">${name}</span></div>`,
                 };
             },
         };
@@ -349,7 +361,7 @@
     ];
 </script>
 
-<div data-testid="exposure-table">
+<div data-testid="exposure-table" bind:this={tableWrapperEl}>
     <DataTable
         data={rows}
         {columns}

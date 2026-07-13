@@ -16,8 +16,9 @@
 <script lang="ts">
     import {tick} from 'svelte';
     import {slide} from 'svelte/transition';
+    import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
-    import {X} from 'lucide-svelte';
+    import {ExternalLink, X} from 'lucide-svelte';
     import {zodiosApi, schemas} from '$lib/api';
     import type {z} from 'zod';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
@@ -57,6 +58,7 @@
     let closedLotsTableRef: ClosedLotsTable | undefined = $state(undefined);
 
     let fetchVersion = 0;
+    let scrollRequestVersion = 0;
     let previousScrollOpen = false;
     let previousScrollAssetId: number | null = null;
 
@@ -118,6 +120,42 @@
         }
     }
 
+    function waitForStableRect(el: HTMLElement, maxFrames = 180): Promise<void> {
+        return new Promise((resolve) => {
+            let lastRect: DOMRect | null = null;
+            let stableFrames = 0;
+            let frame = 0;
+
+            function check() {
+                frame++;
+                const rect = el.getBoundingClientRect();
+                const same = lastRect !== null && rect.top === lastRect.top && rect.left === lastRect.left && rect.width === lastRect.width && rect.height === lastRect.height;
+                stableFrames = same ? stableFrames + 1 : 0;
+                lastRect = rect;
+
+                if (stableFrames >= 2 || frame >= maxFrames) {
+                    resolve();
+                    return;
+                }
+                requestAnimationFrame(check);
+            }
+
+            requestAnimationFrame(check);
+        });
+    }
+
+    async function scrollPanelIntoViewWhenStable(requestVersion: number) {
+        await tick();
+
+        const el = panelEl;
+        if (!el || requestVersion !== scrollRequestVersion || !(open && assetId != null)) return;
+
+        await waitForStableRect(el);
+        if (!panelEl || requestVersion !== scrollRequestVersion || !(open && assetId != null)) return;
+
+        panelEl.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }
+
     // Re-fetch whenever the panel opens for a (new) asset — or the broker scope changes (e.g.
     // Dashboard's broker filter). Closing doesn't clear data eagerly — reopening the same asset
     // shows stale-then-fresh, same pattern as other lazy-loaded tabs on this page (e.g. Transazioni).
@@ -135,10 +173,8 @@
 
         if (!shouldScroll) return;
 
-        void (async () => {
-            await tick();
-            panelEl?.scrollIntoView({behavior: 'smooth', block: 'start'});
-        })();
+        const requestVersion = ++scrollRequestVersion;
+        void scrollPanelIntoViewWhenStable(requestVersion);
     });
 
     /** Bubble click → resolve open vs closed lot → "Goto & Pulse" on the matching table.
@@ -159,13 +195,28 @@
 
 {#if open && assetId != null}
     <div bind:this={panelEl} class="mt-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden" data-testid="fifo-lots-panel" transition:slide={{duration: 200}}>
-        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
-            <h3 class="font-semibold text-gray-700 dark:text-gray-200" data-testid="fifo-lots-panel-title">
-                {$_('brokers.lots.detailTitle')}{assetName ? ` — ${assetName}` : ''}
+        <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-100 dark:border-slate-700">
+            <h3 class="min-w-0 font-semibold text-gray-700 dark:text-gray-200" data-testid="fifo-lots-panel-title">
+                {$_('brokers.lots.detailTitle')}
+                {#if assetName}
+                    —
+                    {assetName}
+                {/if}
             </h3>
-            <button class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-200 dark:hover:bg-slate-700 transition-colors" onclick={onClose} data-testid="fifo-lots-panel-close" title={$_('common.close')}>
-                <X size={18} />
-            </button>
+            <div class="flex shrink-0 items-center gap-1">
+                <button
+                    aria-label={$_('brokers.lots.viewAsset')}
+                    class="p-1.5 rounded-lg text-gray-400 hover:text-libre-green hover:bg-gray-100 dark:hover:text-emerald-400 dark:hover:bg-slate-700 transition-colors"
+                    onclick={() => goto(`/assets/${assetId}`)}
+                    data-testid="fifo-lots-panel-asset-link"
+                    title={$_('brokers.lots.viewAsset')}
+                >
+                    <ExternalLink size={16} />
+                </button>
+                <button class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-200 dark:hover:bg-slate-700 transition-colors" onclick={onClose} data-testid="fifo-lots-panel-close" title={$_('common.close')}>
+                    <X size={18} />
+                </button>
+            </div>
         </div>
 
         <div class="p-4 space-y-4">

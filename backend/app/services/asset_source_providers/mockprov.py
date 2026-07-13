@@ -23,7 +23,7 @@ from backend.app.schemas.assets import (
     FAPricePoint,
     FASectorArea,
 )
-from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
+from backend.app.services.asset_source import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 
 
@@ -89,7 +89,7 @@ class MockProvider(AssetSourceProvider):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None,
-        start_date: date,
+        start_date: AssetHistoryStartDate,
         end_date: date,
     ) -> FAHistoricalData:
         """
@@ -98,7 +98,7 @@ class MockProvider(AssetSourceProvider):
         Returns daily prices of 100.0 for the entire date range.
         """
         prices = []
-        current = start_date
+        current = ASSET_HISTORY_MIN_FALLBACK if start_date == "min" else start_date
 
         while current <= end_date:
             prices.append(
