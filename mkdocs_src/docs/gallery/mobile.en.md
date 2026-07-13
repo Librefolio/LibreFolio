@@ -46,6 +46,12 @@ Your portfolio at a glance — key stats, allocation charts, and a clean empty s
   <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-history" data-title="📊 Allocation by Sector (Historical)" alt="📊 Allocation by Sector (Historical)">
   <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-now" data-title="📊 Allocation by Geography (Current)" alt="📊 Allocation by Geography (Current)">
   <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-history" data-title="📊 Allocation by Geography (Historical)" alt="📊 Allocation by Geography (Historical)">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Positions — Holdings / Table" alt="📋 Positions — Holdings / Table">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Positions — Holdings / Map" alt="🗺️ Positions — Holdings / Map">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Positions — Performance / Table" alt="📈 Positions — Performance / Table">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Positions — Performance / Map" alt="📊 Positions — Performance / Map">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="transactions-tab" data-title="💸 Transactions Tab" alt="💸 Transactions Tab">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-panel" data-title="🔬 FIFO Lots Analysis" alt="🔬 FIFO Lots Analysis">
   <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="empty-state" data-title="🌱 New Portfolio (empty state)" alt="🌱 New Portfolio (empty state)">
 </div>
 
@@ -123,7 +129,8 @@ When deleting a transaction that is part of a linked pair, you can choose to rem
 Import transactions from your broker's export files — quick modal or full wizard.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-mobile-2" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Quick modal" alt="Import Modal">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="transactions-tab" data-title="💸 Broker transactions tab" alt="Broker Transactions Tab">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-modal" data-title="📥 Quick modal" alt="Import Modal">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step1" data-title="🧙 Step 1: Upload" alt="Import Wizard Step 1">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Step 2: Parser" alt="Import Wizard Step 2">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step3" data-title="🧠 Step 3: Analysis" alt="Import Wizard Step 3">
@@ -294,6 +301,33 @@ Manage co-ownership and access roles with the sharing modal, optimized for mobil
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Broker Sharing Modal">
+</div>
+
+### 📊 Broker Positions
+
+Touch-friendly Holdings and Performance toggles switch between table and map views on mobile.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-8" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Holdings / Table" alt="Broker Positions — Holdings Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Holdings / Map" alt="Broker Positions — Holdings Map">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Performance / Table" alt="Broker Positions — Performance Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Performance / Map" alt="Broker Positions — Performance Map">
+</div>
+
+### ℹ️ Broker Info
+
+Metadata and inline sharing controls stay accessible in the Info tab, optimized for touch.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="info-tab" alt="Broker Info Tab">
+</div>
+
+### 🔬 FIFO Lots Analysis
+
+Bubble timeline, WAC-price chart, and open/closed lots tables remain readable on smaller screens.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="brokers" data-name="fifo-lots-panel" alt="Broker FIFO Lots Analysis">
 </div>
 
 ---

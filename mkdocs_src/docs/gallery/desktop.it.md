@@ -5,7 +5,7 @@ Scopri l'interfaccia desktop completa di LibreFolio. Gli screenshot si adattano 
 !!! tip "Tema e Lingua"
 
     Usa l'**interruttore del tema** nell'intestazione (☀️/🌙) per passare dalla modalità chiara a quella scura.
-    Usa l'**interruttore della lingua** (🇬🇧) nell'intestazione per visualizzare gli screenshot in diverse lingue.
+    Usa il **selettore della lingua** (🇬🇧) nell'intestazione per visualizzare gli screenshot in diverse lingue.
 
 ---
 
@@ -13,18 +13,18 @@ Scopri l'interfaccia desktop completa di LibreFolio. Gli screenshot si adattano 
 
 ### 🔑 Pagina di Login
 
-La pagina di accesso accogliente con il nostro caratteristico sfondo animato.
+La pagina di login di benvenuto con il nostro caratteristico sfondo animato.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page">
+ <img class="gallery-img" data-category="auth" data-name="01-login" alt="Pagina di Login">
 </div>
 
 ### 📝 Registrazione - Modulo Vuoto
 
-I nuovi utenti possono creare facilmente un account.
+I nuovi utenti possono creare un account in modo semplice.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Register Modal">
+ <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Modale di Registrazione">
 </div>
 
 ### 🔒 Registrazione - Con Forza della Password
@@ -32,7 +32,7 @@ I nuovi utenti possono creare facilmente un account.
 Il feedback in tempo reale sulla forza della password aiuta gli utenti a creare password sicure.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Register with Password Strength">
+ <img class="gallery-img" data-category="auth" data-name="03-register-filled" alt="Registrazione con Forza della Password">
 </div>
 
 ---
@@ -42,15 +42,21 @@ Il feedback in tempo reale sulla forza della password aiuta gli utenti a creare 
 Il tuo portafoglio a colpo d'occhio: statistiche chiave, grafici di allocazione e uno stato vuoto pulito per i nuovi utenti.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-0" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Vista Principale (Assoluta)" alt="📈 Main View (Absolute)">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📈 Vista Principale (Percentuale)" alt="📈 Main View (Percentage)">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Allocazione per Tipo (Attuale)" alt="📊 Allocation by Type (Current)">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-history" data-title="📊 Allocazione per Tipo (Storica)" alt="📊 Allocation by Type (Historical)">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-now" data-title="📊 Allocazione per Settore (Attuale)" alt="📊 Allocation by Sector (Current)">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-history" data-title="📊 Allocazione per Settore (Storica)" alt="📊 Allocation by Sector (Historical)">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-now" data-title="📊 Allocazione per Geografia (Attuale)" alt="📊 Allocation by Geography (Current)">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-history" data-title="📊 Allocazione per Geografia (Storica)" alt="📊 Allocation by Geography (Historical)">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="empty-state" data-title="🌱 Nuovo Portafoglio (stato vuoto)" alt="🌱 New Portfolio (empty state)">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Vista Principale (Assoluta)" alt="📈 Vista Principale (Assoluta)">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📈 Vista Principale (Percentuale)" alt="📈 Vista Principale (Percentuale)">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Allocazione per Tipo (Attuale)" alt="📊 Allocazione per Tipo (Attuale)">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-history" data-title="📊 Allocazione per Tipo (Storica)" alt="📊 Allocazione per Tipo (Storica)">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-now" data-title="📊 Allocazione per Settore (Attuale)" alt="📊 Allocazione per Settore (Attuale)">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-history" data-title="📊 Allocazione per Settore (Storica)" alt="📊 Allocazione per Settore (Storica)">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-now" data-title="📊 Allocazione per Geografia (Attuale)" alt="📊 Allocazione per Geografia (Attuale)">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-history" data-title="📊 Allocazione per Geografia (Storica)" alt="📊 Allocazione per Geografia (Storica)">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Posizioni — Posizioni / Tabella" alt="📋 Posizioni — Posizioni / Tabella">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Posizioni — Posizioni / Mappa" alt="🗺️ Posizioni — Posizioni / Mappa">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Posizioni — Performance / Tabella" alt="📈 Posizioni — Performance / Tabella">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Posizioni — Performance / Mappa" alt="📊 Posizioni — Performance / Mappa">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="transactions-tab" data-title="💸 Tab Transazioni" alt="💸 Tab Transazioni">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-panel" data-title="🔬 Analisi Lotti FIFO" alt="🔬 Analisi Lotti FIFO">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="empty-state" data-title="🌱 Nuovo Portafoglio (stato vuoto)" alt="🌱 Nuovo Portafoglio (stato vuoto)">
 </div>
 
 ---
@@ -59,25 +65,25 @@ Il tuo portafoglio a colpo d'occhio: statistiche chiave, grafici di allocazione 
 
 ### 📋 Lista Transazioni
 
-Tutte le operazioni finanziarie registrate in una vista tabellare filtrabile e ordinabile.
+Tutte le tue operazioni finanziarie registrate in una vista tabellare filtrabile e ordinabile.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="transactions" data-name="list" alt="Transaction List">
+ <img class="gallery-img" data-category="transactions" data-name="list" alt="Lista Transazioni">
 </div>
 
 ### ➕ Aggiungi / Modifica Transazione
 
-Registra qualsiasi operazione — acquisto, vendita, dividendo, deposito, trasferimento, conversione valutaria — con ricerca dell'asset e gestione automatica del segno. Il modulo si adatta al tipo selezionato.
+Registra qualsiasi operazione — acquisto, vendita, dividendo, deposito, trasferimento, conversione FX — con ricerca asset e gestione automatica dei segni. Il modulo si adatta al tipo selezionato.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-1" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="transactions" data-name="form-modal" data-title="📈 Acquisto" alt="Transaction Form — BUY">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-sell" data-title="📉 Vendita" alt="Transaction Form — SELL">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-dividend" data-title="💰 Dividendo" alt="Transaction Form — DIVIDEND">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-deposit" data-title="🏦 Deposito" alt="Transaction Form — DEPOSIT">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-adjustment" data-title="🔧 Rettifica (frazionamento / spin-off)" alt="Transaction Form — Adjustment">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-transfer" data-title="🔀 Trasferimento Asset" alt="Transaction Form — TRANSFER">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fxconversion" data-title="💱 Conversione valutaria" alt="Transaction Form — FX Conversion">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-cash-transfer" data-title="🏧 Trasferimento Contanti (bonifico)" alt="Transaction Form — Cash Transfer">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="transactions" data-name="form-modal" data-title="📈 Acquisto" alt="Modulo Transazione — ACQUISTO">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-sell" data-title="📉 Vendita" alt="Modulo Transazione — VENDITA">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-dividend" data-title="💰 Dividendo" alt="Modulo Transazione — DIVIDENDO">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-deposit" data-title="🏦 Deposito" alt="Modulo Transazione — DEPOSITO">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-adjustment" data-title="🔧 Rettifica (stock split / spin-off)" alt="Modulo Transazione — Rettifica">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-transfer" data-title="🔀 Trasferimento Asset" alt="Modulo Transazione — TRASFERIMENTO">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fxconversion" data-title="💱 Conversione FX" alt="Modulo Transazione — Conversione FX">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-cash-transfer" data-title="🏧 Trasferimento di liquidità (bonifico)" alt="Modulo Transazione — Trasferimento di liquidità">
 </div>
 
 ### 🔗 Selettore Transazioni
@@ -85,57 +91,58 @@ Registra qualsiasi operazione — acquisto, vendita, dividendo, deposito, trasfe
 Cerca e collega una transazione esistente per creare operazioni accoppiate (es. trade FX, trasferimenti).
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="transactions" data-name="picker-modal" alt="Transaction Picker Modal">
+ <img class="gallery-img" data-category="transactions" data-name="picker-modal" alt="Modale Selettore Transazioni">
 </div>
 
 ### ✂️ Conferma Frazionamento
 
-Quando si collegano transazioni con quantità non corrispondenti, il sistema propone un frazionamento — permettendo l'anteprima del risultato prima della conferma.
+Quando si collegano transazioni con quantità non corrispondenti, il sistema propone un frazionamento, permettendo di visualizzare l'anteprima del risultato prima di confermare.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="transactions" data-name="action-modal" alt="Transaction Split Modal">
+ <img class="gallery-img" data-category="transactions" data-name="action-modal" alt="Modale Frazionamento Transazione">
 </div>
 
-### 🔀 Merge / Promuovi
+### 🔀 Unisci / Promuovi
 
 Unisci operazioni correlate (es. due esecuzioni parziali dello stesso ordine) in un'unica transazione consolidata.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="transactions" data-name="promote-merge-modal" alt="Promote Merge Modal">
+ <img class="gallery-img" data-category="transactions" data-name="promote-merge-modal" alt="Modale Promuovi Unisci">
 </div>
 
 ### 🗑️ Elimina Coppia Collegata
 
-Quando elimini una transazione che fa parte di una coppia collegata (trade FX, trasferimento), puoi scegliere di rimuovere solo una parte dell'operazione o entrambe.
+Quando elimini una transazione che fa parte di una coppia collegata (trade FX, trasferimento), puoi scegliere se rimuovere solo una parte della coppia o entrambe.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="transactions" data-name="bulk-delete-pair-modal" alt="Delete Linked Pair Modal">
+ <img class="gallery-img" data-category="transactions" data-name="bulk-delete-pair-modal" alt="Modale Elimina Coppia Collegata">
 </div>
 
 ---
 
 ### 📥 Importazione
 
-Importa transazioni dai file di esportazione del tuo broker — tramite la modale rapida o la procedura guidata completa passo dopo passo.
+Importa le transazioni dai file di export del tuo broker — tramite la modale rapida o il Wizard completo passo dopo passo.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-2" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Modale di importazione rapida" alt="Import Modal">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step1" data-title="🧙 Wizard — Step 1: Caricamento" alt="Import Wizard Step 1">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Wizard — Step 2: Configurazione Parser" alt="Import Wizard Step 2">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step3" data-title="🧠 Wizard — Step 3: Analisi" alt="Import Wizard Step 3">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step4-resolution" data-title="🔍 Wizard — Step 4: Risoluzione Asset" alt="Import Wizard Asset Resolution">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-duplicate" data-title="⚠️ Rilevamento Duplicati" alt="Import Wizard Duplicate Detection">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Staging Bulk" alt="Import Bulk Staging">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="transactions-tab" data-title="💸 Tab transazioni Broker" alt="Tab Transazioni Broker">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-modal" data-title="📥 Modale importazione rapida" alt="Modale Importazione">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step1" data-title="🧙 Wizard — Passo 1: Caricamento" alt="Wizard Importazione Passo 1">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Wizard — Passo 2: Config Parser" alt="Wizard Importazione Passo 2">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step3" data-title="🧠 Wizard — Passo 3: Analisi" alt="Wizard Importazione Passo 3">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step4-resolution" data-title="🔍 Wizard — Passo 4: Risoluzione Asset" alt="Wizard Importazione Risoluzione Asset">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-duplicate" data-title="⚠️ Rilevamento Duplicati" alt="Wizard Importazione Rilevamento Duplicati">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Area di Staging Bulk" alt="Importazione Area di Staging Bulk">
 </div>
 
 ## ⚙️ Impostazioni
 
 ### 🎛️ Preferenze Utente
 
-Personalizza lingua, valuta e tema a tuo piacimento.
+Personalizza lingua, valuta e tema secondo i tuoi gusti.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences">
+ <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="Preferenze Utente">
 </div>
 
 ### 🛡️ Impostazioni Globali (Admin)
@@ -143,15 +150,15 @@ Personalizza lingua, valuta e tema a tuo piacimento.
 Gli amministratori possono configurare le impostazioni a livello di sistema.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings">
+ <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Impostazioni Globali">
 </div>
 
 ### 🕐 Market Data Scheduler — Configurazione
 
-Configura il demone di sincronizzazione automatica dei dati di mercato: frequenza di aggiornamento, orari di sincronizzazione storica e giorni attivi.
+Configura il demone di sincronizzazione automatica dei dati di mercato: frequenza di aggiornamento, tempi di sincronizzazione storica e giorni attivi.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="scheduler-config" alt="Scheduler Config Modal">
+ <img class="gallery-img" data-category="settings" data-name="scheduler-config" alt="Modale Configurazione Scheduler">
 </div>
 
 ### 📜 Market Data Scheduler — Log
@@ -159,15 +166,15 @@ Configura il demone di sincronizzazione automatica dei dati di mercato: frequenz
 Visualizza la cronologia delle esecuzioni dello scheduler, con durata, stato e dettagli per singolo asset.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="scheduler-log" alt="Scheduler Log Modal">
+ <img class="gallery-img" data-category="settings" data-name="scheduler-log" alt="Modale Log Scheduler">
 </div>
 
 ### ℹ️ Informazioni
 
-Informazioni di sistema e dettagli sulla versione.
+Informazioni di sistema e dettagli della versione.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="about" alt="About">
+ <img class="gallery-img" data-category="settings" data-name="about" alt="Informazioni">
 </div>
 
 ### 🔐 Cambio Password
@@ -175,7 +182,7 @@ Informazioni di sistema e dettagli sulla versione.
 Cambia in modo sicuro la tua password con validazione della forza.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Password Change Modal">
+ <img class="gallery-img" data-category="settings" data-name="password-modal" alt="Modale Cambio Password">
 </div>
 
 ### 👤 Profilo
@@ -183,7 +190,7 @@ Cambia in modo sicuro la tua password con validazione della forza.
 Gestisci le informazioni del tuo profilo, l'avatar e le impostazioni dell'account.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile Tab">
+ <img class="gallery-img" data-category="settings" data-name="profile" alt="Tab Profilo">
 </div>
 
 ---
@@ -195,7 +202,7 @@ Gestisci le informazioni del tuo profilo, l'avatar e le impostazioni dell'accoun
 Carica e gestisci immagini, loghi e altri file statici.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="files" data-name="static-tab" alt="Static Files Tab">
+ <img class="gallery-img" data-category="files" data-name="static-tab" alt="Tab File Statici">
 </div>
 
 ### 🗂️ Risorse Statiche - Vista Griglia
@@ -203,27 +210,27 @@ Carica e gestisci immagini, loghi e altri file statici.
 Sfoglia i file visivamente con anteprime delle immagini in layout a griglia.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View">
+ <img class="gallery-img" data-category="files" data-name="static-grid" alt="Vista Griglia File Statici">
 </div>
 
 ### 📋 Report Broker (BRIM)
 
-Importa e gestisci i report delle transazioni del broker.
+Importa e gestisci i report delle transazioni dei broker.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="files" data-name="brim-tab" alt="BRIM Tab">
+ <img class="gallery-img" data-category="files" data-name="brim-tab" alt="Tab BRIM">
 </div>
 
 ### 👁️ Anteprima File
 
-Visualizza l'anteprima di qualsiasi file statico direttamente nel browser: griglia CSV, PDF, immagini, markdown (renderizzato + raw) e testo semplice.
+Anteprima di qualsiasi file statico direttamente nel browser: griglia CSV, PDF, immagine, markdown (renderizzato + raw) e testo semplice.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-3" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="files" data-name="preview-modal-csv" data-title="📋 Report CSV Broker" alt="CSV File Preview">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="files" data-name="preview-modal-image" data-title="🖼️ Immagine" alt="Image File Preview">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="files" data-name="preview-modal-pdf" data-title="📄 Documento PDF" alt="PDF File Preview">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="files" data-name="preview-modal-markdown" data-title="📝 Markdown (renderizzato)" alt="Markdown File Preview">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="files" data-name="preview-modal-text" data-title="🗒️ Testo semplice" alt="Text File Preview">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="files" data-name="preview-modal-csv" data-title="📋 Report CSV Broker" alt="Anteprima File CSV">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="files" data-name="preview-modal-image" data-title="🖼️ Immagine" alt="Anteprima File Immagine">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="files" data-name="preview-modal-pdf" data-title="📄 Documento PDF" alt="Anteprima File PDF">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="files" data-name="preview-modal-markdown" data-title="📝 Markdown (renderizzato)" alt="Anteprima File Markdown">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="files" data-name="preview-modal-text" data-title="🗒️ Testo semplice" alt="Anteprima File di Testo">
 </div>
 
 ---
@@ -235,15 +242,15 @@ Visualizza l'anteprima di qualsiasi file statico direttamente nel browser: grigl
 Ritaglia, ruota, zooma e ribalta le immagini prima del caricamento. Supporta preset per avatar e icone.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Image Edit Modal">
+ <img class="gallery-img" data-category="media" data-name="image-edit-modal" alt="Modale Editor Immagini">
 </div>
 
 ### 🎨 Selettore Asset
 
-Scegli un file esistente, inserisci un URL o carica una nuova immagine per le icone dei broker e gli avatar degli utenti.
+Scegli un file esistente, inserisci un URL o carica una nuova immagine per le icone dei broker e gli avatar utente.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="media" data-name="asset-picker-modal" alt="Asset Picker Modal">
+ <img class="gallery-img" data-category="media" data-name="asset-picker-modal" alt="Modale Selettore Asset">
 </div>
 
 ### 📤 Caricamento File
@@ -251,7 +258,7 @@ Scegli un file esistente, inserisci un URL o carica una nuova immagine per le ic
 Trascina e rilascia o sfoglia per caricare i file. Le immagini aprono l'editor di ritaglio, gli altri file possono essere rinominati.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="media" data-name="file-uploader-empty" alt="File Uploader">
+ <img class="gallery-img" data-category="media" data-name="file-uploader-empty" alt="Caricamento File">
 </div>
 
 ---
@@ -260,10 +267,10 @@ Trascina e rilascia o sfoglia per caricare i file. Le immagini aprono l'editor d
 
 ### 📋 Lista Broker
 
-Tutti i tuoi conti di intermediazione in un'unica vista.
+Tutti i tuoi conti di brokerage in un'unica vista.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="brokers" data-name="list" alt="Broker List">
+ <img class="gallery-img" data-category="brokers" data-name="list" alt="Lista Broker">
 </div>
 
 ### 🔍 Dettaglio Broker
@@ -271,23 +278,50 @@ Tutti i tuoi conti di intermediazione in un'unica vista.
 Vista dettagliata di un singolo broker con saldi di cassa e transazioni.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="brokers" data-name="detail" alt="Broker Detail">
+ <img class="gallery-img" data-category="brokers" data-name="detail" alt="Dettaglio Broker">
 </div>
 
 ### ✏️ Modifica Broker
 
-Modifica i dettagli del broker: nome, icona, valuta di base e configurazione.
+Modifica i dettagli del broker: nome, icona, valuta base e configurazione.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Broker Edit Modal">
+ <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Modale Modifica Broker">
 </div>
 
 ### 🤝 Condivisione Broker
 
-Gestisci la comproprietà e i ruoli di accesso con un grafico a semicerchio che mostra la distribuzione della proprietà.
+Gestisci la co-proprietà e i ruoli di accesso con un grafico a semi-ciambella che mostra la distribuzione della proprietà.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Broker Sharing Modal">
+ <img class="gallery-img" data-category="brokers" data-name="sharing-modal" alt="Modale Condivisione Broker">
+</div>
+
+### 📊 Posizioni Broker
+
+Passa tra Posizioni e Performance, quindi confronta i dati in vista tabellare o a mappa.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-desktop-10" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Posizioni / Tabella" alt="Posizioni Broker — Tabella Posizioni">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Posizioni / Mappa" alt="Posizioni Broker — Mappa Posizioni">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Performance / Tabella" alt="Posizioni Broker — Tabella Performance">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Performance / Mappa" alt="Posizioni Broker — Mappa Performance">
+</div>
+
+### ℹ️ Info Broker
+
+I metadati del broker e il pannello di condivisione inline convivono nella tab Info dedicata.
+
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="brokers" data-name="info-tab" alt="Tab Info Broker">
+</div>
+
+### 🔬 Analisi Lotti FIFO
+
+Ispeziona la timeline a bolle, il grafico del prezzo PMC e le tabelle dei lotti aperti/chiusi per un singolo asset.
+
+<div class="screenshot-container">
+ <img class="gallery-img" data-category="brokers" data-name="fifo-lots-panel" alt="Analisi Lotti FIFO Broker">
 </div>
 
 ---
@@ -299,8 +333,8 @@ Gestisci la comproprietà e i ruoli di accesso con un grafico a semicerchio che 
 Tutti i tuoi strumenti finanziari tracciati — azioni, ETF, obbligazioni, crypto — in un'unica vista.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-4" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="list" data-title="🔲 Vista Griglia" alt="Asset List Page (Grid)">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="list-table" data-title="📋 Vista Tabella" alt="Asset List Page (Table)">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="list" data-title="🔲 Vista griglia" alt="Pagina Lista Asset (Griglia)">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="list-table" data-title="📋 Vista tabella" alt="Pagina Lista Asset (Tabella)">
 </div>
 
 ### 🔎 Lista Asset Filtrata
@@ -308,62 +342,62 @@ Tutti i tuoi strumenti finanziari tracciati — azioni, ETF, obbligazioni, crypt
 Filtra gli asset per nome, tipo o testo di ricerca.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="assets" data-name="list-filtered" alt="Asset List Filtered">
+ <img class="gallery-img" data-category="assets" data-name="list-filtered" alt="Lista Asset Filtrata">
 </div>
 
 ### 📈 Grafico di Dettaglio
 
-Grafico dei prezzi interattivo a dimensione intera con selettore di intervallo di date e interruttore di valuta. Passa tra la vista a linee e quella a candele.
+Grafico dei prezzi interattivo a dimensione intera con selettore di intervallo di date e interruttore della valuta. Passa tra la vista a linee e quella a candele.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-5" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="detail-chart" data-title="📈 Grafico a linee" alt="Asset Detail Chart — Line">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-chart-candlestick" data-title="🕯️ Grafico a candele" alt="Asset Detail Chart — Candlestick">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="detail-chart" data-title="📈 Grafico a linee" alt="Grafico Dettaglio Asset — Linee">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-chart-candlestick" data-title="🕯️ Grafico a candele" alt="Grafico Dettaglio Asset — Candele">
 </div>
 
 ### 📡 Overlay Segnali
 
-Indicatori tecnici (EMA, RSI, MACD, Bollinger) sovrapposti al grafico dei prezzi — ciascuno in un sotto-pannello dedicato.
+Indicatori tecnici (EMA, RSI, MACD, Bollinger) sovrapposti al grafico dei prezzi — ognuno in un sotto-pannello dedicato.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-6" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="detail-signals" data-title="📊 Pannello Segnali (vuoto)" alt="Asset Detail Signals Panel">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-signals-ema" data-title="📈 EMA attivo" alt="Asset Detail Signals — EMA">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-signals-rsi" data-title="📉 RSI attivo" alt="Asset Detail Signals — RSI">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-signals-macd" data-title="📊 MACD attivo" alt="Asset Detail Signals — MACD">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-signals-bollinger" data-title="🎯 Bande di Bollinger attive" alt="Asset Detail Signals — Bollinger Bands">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="detail-signals" data-title="📊 Pannello segnali (vuoto)" alt="Pannello Segnali Dettaglio Asset">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-signals-ema" data-title="📈 EMA attivo" alt="Segnali Dettaglio Asset — EMA">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-signals-rsi" data-title="📉 RSI attivo" alt="Segnali Dettaglio Asset — RSI">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-signals-macd" data-title="📊 MACD attivo" alt="Segnali Dettaglio Asset — MACD">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-signals-bollinger" data-title="🎯 Bande di Bollinger attive" alt="Segnali Dettaglio Asset — Bande di Bollinger">
 </div>
 
-### 📏 Pannello Misure
+### 📏 Pannello Misurazioni
 
-Strumento di misura click-to-click per differenze di prezzo, variazioni percentuali e rendimenti annualizzati.
+Strumento di misurazione click-to-click per differenze di prezzo, variazioni percentuali e rendimenti annualizzati.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-7" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="detail-measures" data-title="📏 Pannello aperto (nessuna misura)" alt="Asset Detail Measures Panel">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-measures-active" data-title="📐 Misura attiva" alt="Asset Detail Measures Active">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="detail-measures" data-title="📏 Pannello aperto (senza misure)" alt="Pannello Misurazioni Dettaglio Asset">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-measures-active" data-title="📐 Misurazione attiva" alt="Misure Dettaglio Asset Attive">
 </div>
 
 ### 🗂️ Classificazione e Metadati
 
-Grafico a torta della distribuzione settoriale e mappa mondiale della distribuzione geografica per asset con metadati ricchi.
+Grafico a torta della distribuzione per settore e mappa mondiale dell'allocazione geografica per gli asset con metadati ricchi.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Asset Detail Classification">
+ <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Classificazione Dettaglio Asset">
 </div>
 
 ### ✏️ Editor Dati
 
-Editor dati inline per visualizzare e modificare i singoli punti dati dei prezzi.
+Editor di dati inline per visualizzare e modificare i singoli punti dati dei prezzi.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="assets" data-name="detail-editor" alt="Asset Data Editor">
+ <img class="gallery-img" data-category="assets" data-name="detail-editor" alt="Editor Dati Asset">
 </div>
 
 ### ➕ Crea Asset
 
-Crea un nuovo asset con nome, tipo, valuta, identificativi, provider e classificazione. Quando viene attivato dal Wizard di Importazione, il modulo si apre precompilato con ticker, ISIN e nome estratti.
+Crea un nuovo asset con nome, tipo, valuta, identificativi, provider e classificazione. Quando attivato dal Wizard di Importazione, il modulo si apre precompilato con ticker, ISIN e nome estratti.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-8" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="create-modal" data-title="➕ Creazione manuale" alt="Create Asset Modal">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Dal Wizard di Importazione (precompilato)" alt="Create Asset from Import Wizard">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="create-modal" data-title="➕ Creazione manuale" alt="Modale Crea Asset">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Dal Wizard di Importazione (precompilato)" alt="Crea Asset dal Wizard di Importazione">
 </div>
 
 ---
@@ -375,24 +409,24 @@ Crea un nuovo asset con nome, tipo, valuta, identificativi, provider e classific
 Tutte le coppie di valute configurate con mini-grafici che mostrano i trend recenti.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-9" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="fx" data-name="list" data-title="🔲 Vista Griglia" alt="FX List Page (Grid)">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="fx" data-name="list-table" data-title="📋 Vista Tabella" alt="FX List Page (Table)">
+ <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="fx" data-name="list" data-title="🔲 Vista griglia" alt="Pagina Lista FX (Griglia)">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="fx" data-name="list-table" data-title="📋 Vista tabella" alt="Pagina Lista FX (Tabella)">
 </div>
 
 ### 🔎 Lista FX Filtrata
 
-Coppie di valute filtrate per valuta di base.
+Coppie di valute filtrate per valuta base.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="list-filtered" alt="FX List Filtered">
+ <img class="gallery-img" data-category="fx" data-name="list-filtered" alt="Lista FX Filtrata">
 </div>
 
-### ➕ Aggiungi Coppia — Percorsi Diretti
+### ➕ Aggiungi Coppia — Rotte Dirette
 
-Aggiungi una nuova coppia di valute con percorsi provider diretti (es. USD/CHF via FED).
+Aggiungi una nuova coppia di valute con rotte provider dirette (es. USD/CHF via FED).
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="add-pair-routes" alt="Add Pair - Direct Routes">
+ <img class="gallery-img" data-category="fx" data-name="add-pair-routes" alt="Aggiungi Coppia - Rotte Dirette">
 </div>
 
 ### 🔗 Aggiungi Coppia — Catena
@@ -400,15 +434,15 @@ Aggiungi una nuova coppia di valute con percorsi provider diretti (es. USD/CHF v
 Aggiungi una coppia utilizzando una catena di conversione attraverso una valuta intermedia (es. NOK/CHF via EUR).
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Add Pair - Chain">
+ <img class="gallery-img" data-category="fx" data-name="add-pair-chain" alt="Aggiungi Coppia - Catena">
 </div>
 
 ### 🔧 Configurazione Provider
 
-Configura la priorità del provider e i percorsi di conversione per una coppia di valute.
+Configura la priorità del provider e le rotte di conversione per una coppia di valute.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Provider Config Modal">
+ <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Modale Configurazione Provider">
 </div>
 
 ---
@@ -462,10 +496,10 @@ Configura la priorità del provider e i percorsi di conversione per una coppia d
 
 ### 🔄 Sincronizza Tutto
 
-Sincronizza tutte le coppie configurate dai loro provider con monitoraggio dell'avanzamento.
+Sincronizza tutte le coppie configurate dai rispettivi provider con tracciamento dell'avanzamento.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Sync All Progress">
+ <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Avanzamento Sincronizza Tutto">
 </div>
 
 ### 📈 Grafico di Dettaglio
@@ -473,31 +507,31 @@ Sincronizza tutte le coppie configurate dai loro provider con monitoraggio dell'
 Grafico interattivo a dimensione intera per una coppia di valute con interruttore linee/candele.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="FX Detail Chart">
+ <img class="gallery-img" data-category="fx" data-name="detail-chart" alt="Grafico Dettaglio FX">
 </div>
 
 ### 📡 Overlay Segnali
 
-Pannello di segnali di indicatori tecnici (EMA, MACD, RSI, Bollinger) sovrapposto al grafico.
+Pannello dei segnali degli indicatori tecnici (EMA, MACD, RSI, Bollinger) sovrapposto al grafico.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="detail-signals" alt="Detail Signals Overlay">
+ <img class="gallery-img" data-category="fx" data-name="detail-signals" alt="Overlay Segnali Dettaglio">
 </div>
 
-### 📏 Pannello Misure
+### 📏 Pannello Misurazioni
 
-Strumento di misura click-to-click con delta, percentuale e rendimento annualizzato.
+Strumento di misurazione click-to-click con delta, percentuale e rendimento annualizzato.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="detail-measures" alt="Detail Measures Panel">
+ <img class="gallery-img" data-category="fx" data-name="detail-measures" alt="Pannello Misurazioni Dettaglio">
 </div>
 
 ### ✏️ Editor Dati
 
-Editor dati inline per visualizzare e modificare i singoli valori dei tassi.
+Editor di dati inline per visualizzare e modificare i singoli valori dei tassi.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="Data Editor">
+ <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="Editor Dati">
 </div>
 
 ### 📄 Importazione CSV
@@ -505,7 +539,7 @@ Editor dati inline per visualizzare e modificare i singoli valori dei tassi.
 Modale per l'importazione dei dati dei tassi da file CSV con anteprima e validazione.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="CSV Import Modal">
+ <img class="gallery-img" data-category="fx" data-name="detail-csv-import" alt="Modale Importazione CSV">
 </div>
 
 ### ⚙️ Impostazioni Grafico
@@ -513,5 +547,5 @@ Modale per l'importazione dei dati dei tassi da file CSV con anteprima e validaz
 Impostazioni globali e per singolo grafico per l'estetica e la configurazione dell'overlay dei segnali.
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Chart Settings Modal">
+ <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Modale Impostazioni Grafico">
 </div>
