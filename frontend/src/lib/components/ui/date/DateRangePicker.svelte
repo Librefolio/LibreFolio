@@ -76,6 +76,11 @@
         layoutMode?: LayoutMode;
         /** Registers a live-tunable {maxWidth, maxWidthTwoRow} config on window.__lfLayouts.<debugName>.pickerConfig for console tuning (e.g. window.__lfLayouts.dashboard.pickerConfig.maxWidthTwoRow = 420) — no resize needed, recomputes immediately. Omit to skip registration. */
         debugName?: string;
+        /** Optional read-out of the picker's OWN currently-applied max-width (740/maxWidth in
+         *  1-row mode, 390/maxWidthTwoRow in 2-row mode) — lets a page mirror this exact value
+         *  onto its own "Center" content (e.g. currency/broker row) so both stay pixel-aligned
+         *  when `filtersStacked`, including while live-tuning `pickerConfig` from the console. */
+        effectiveMaxWidth?: number;
         /** Called when dates change */
         onchange?: (start: string, end: string) => void;
     }
@@ -96,6 +101,12 @@
         maxWidthTwoRow: initialMaxWidthTwoRow = 390,
         layoutMode,
         debugName,
+        // Non-undefined fallback (390 = maxWidthTwoRow default) is REQUIRED: Svelte 5 forbids
+        // `bind:key={undefined}` when `key` has ANY declared fallback (even `undefined` itself)
+        // — the parent's bound variable must never START as undefined, or it crashes at mount
+        // with props_invalid_value. Matches PageToolbar's layoutMode/isStacked/showActionLabels
+        // pattern, which all use real (non-undefined) fallbacks for the same reason.
+        effectiveMaxWidth: effectiveMaxWidthOut = $bindable(390),
         onchange,
     }: Props = $props();
 
@@ -559,6 +570,12 @@
     // `isSingleRow` flips (e.g. crossing the `oneRow` PageToolbar threshold), no extra wiring
     // needed — the existing ResizeObserver on presetRowRef picks up the new width on its own.
     let effectiveMaxWidth = $derived(isSingleRow ? pickerConfig.maxWidth : pickerConfig.maxWidthTwoRow);
+    // Mirror onto the optional bindable prop — same one-way-export pattern as PageToolbar's
+    // layoutMode/isStacked/showActionLabels (see PageToolbar.svelte). Lets a page apply this
+    // EXACT value to its own "Center" content so both stay pixel-aligned, including live.
+    $effect(() => {
+        effectiveMaxWidthOut = effectiveMaxWidth;
+    });
     let extrasToShowDuration = $state(0);
     let extrasToShowPeriod = $state(0);
 

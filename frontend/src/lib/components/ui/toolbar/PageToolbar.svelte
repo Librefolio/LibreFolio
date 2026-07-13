@@ -2,10 +2,10 @@
   PageToolbar — Unified page-level toolbar shell: Filters · optional Summary · optional Actions · optional Tabs.
 
   Owns the responsive ResizeObserver (via createResponsiveLayout) and the
-  "justified" stacking/alignment across the 5 breakpoints (oneRow/denseRow/
-  stackFilters/mobile/iconOnly — layoutMode values match their triggering
-  threshold name 1:1, except "mobile" which has no single dedicated
-  threshold), so pages stop re-implementing the same layoutMode conditional
+  "justified" stacking/alignment across the 5 tiers (oneRow/denseRow/
+  stackFilters/oneColumn/iconOnly — layoutMode values match their triggering
+  threshold name 1:1, every tier has its own dedicated threshold, no
+  exceptions), so pages stop re-implementing the same layoutMode conditional
   Tailwind classes. This component owns LAYOUT ONLY — content for each zone,
   and any signal wiring (onchange, data fetching, etc.), stays with the page
   and is supplied via snippets.
@@ -23,24 +23,32 @@
   - summary (optional)  — contextual info (e.g. AssetPriceSummary, FxPriceSummary).
                            Receives {layoutMode, isStacked, filtersStacked}.
   - actions (optional)  — action buttons. Receives {layoutMode, showActionLabels,
-                           stretchActions, actionsStacked}. showActionLabels is false only in
-                           the narrowest "iconOnly" fallback (icon-only row), if defined.
-                           actionsStacked is true only in the narrow "actionsColumn" sub-band
-                           (see responsiveLayout.svelte.ts) — a 4×1 column instead of 2×2 grid.
+                           stretchActions, actionsStacked}. showActionLabels is false only in the
+                           narrowest "iconOnly" tier (icon-only row). actionsStacked is true ONLY
+                           in "stackFilters" — Actions render as a 4×1 vertical column (still
+                           WITH labels, still BESIDE Filters+Summary) instead of the normal 2×2
+                           grid. "oneColumn" goes back to a 2×2 grid, just moved BELOW
+                           Filters+Summary (see isStacked below).
   - tabs (optional)     — pass `tabs` + bind:activeTab to render a TabBar row
                            below the filter row. Omitted entirely (no
                            placeholder) when `tabs` isn't passed.
 
-  isStacked/filtersStacked/stretchActions/actionsStacked are the semantic flags pages should
-  read instead of comparing raw layoutMode strings (e.g. `layoutMode === 'mobile'`) — when a
+  isStacked/filtersStacked/stretchActions/actionsStacked are the semantic flags pages should read
+  instead of comparing raw layoutMode strings (e.g. `layoutMode === 'oneColumn'`) — when a
   layoutMode's meaning changes, only this component needs updating.
 
-  Round 10.2: `isStacked` (whole bar incl. Actions moves below Filters+Summary) and
+  Round 10.2/11: `isStacked` (whole bar incl. Actions moves below Filters+Summary) and
   `filtersStacked` (ONLY Filters+Summary stack — Center moves below the DateRangePicker,
-  Actions stay beside) are now DIFFERENT flags — `isStacked` used to also fire for "mobile",
-  which pushed Actions below the filters column a whole tier too early (bug report: "in
-  modalità mobile mi aspettavo i bottoni ancora accanto"). Now: `filtersStacked` covers
-  stackFilters + mobile + iconOnly; `isStacked` covers iconOnly ONLY.
+  Actions stay beside) are DIFFERENT flags, firing at DIFFERENT tiers — `isStacked` used to
+  also fire a whole tier too early (bug report: "in modalità mobile mi aspettavo i bottoni
+  ancora accanto"). Now: `filtersStacked` covers stackFilters + oneColumn + iconOnly;
+  `isStacked` covers oneColumn + iconOnly (Actions move below starting at "oneColumn" — a
+  deliberate, named tier of its own — but only lose their labels/switch to icon-only one tier
+  further down, at "iconOnly"). Round 11.2: `actionsStacked` (4×1 vertical column, ONLY
+  "stackFilters") restored — the original design always wanted a vertical column of Actions
+  beside Filters+Summary at this tier (per the user's own ASCII sketch), not a 2×2 grid;
+  Round 11 mistakenly generalized it to "2×2 everywhere except iconOnly" based on the sketch's
+  PROSE description, missing that the sketch itself showed 4 stacked rows.
 -->
 <script lang="ts">
     import {type Snippet, untrack} from 'svelte';
@@ -112,19 +120,25 @@
     let showActionLabels = $derived(layout.showActionLabels);
 
     // Centralized semantics for what each layoutMode MEANS — pages consume these instead of
-    // comparing raw layoutMode strings, so a future redefinition (like Round 4 repurposing
-    // "mobile") only needs a change HERE, not in every page that reads layoutMode.
-    /** True everywhere except the narrowest "iconOnly" fallback — action buttons stretch to fill their grid cell/row. */
+    // comparing raw layoutMode strings, so a future redefinition only needs a change HERE, not
+    // in every page that reads layoutMode.
+    /** True everywhere except the narrowest "iconOnly" tier — action buttons stretch to fill their grid cell/row. */
     let stretchActions = $derived(layoutMode !== 'iconOnly');
-    /** True ONLY in "iconOnly" — the WHOLE bar (filters+summary AND actions) stacks in one column. */
-    let isStacked = $derived(layoutMode === 'iconOnly');
-    /** True in "stackFilters", "mobile" and "iconOnly" — the filters+summary zone stacks into a
-     *  column (Center moves below the DateRangePicker, "justified" full-width) — but Actions stay
-     *  BESIDE that column unless `isStacked` is ALSO true (iconOnly only). */
-    let filtersStacked = $derived(layoutMode === 'stackFilters' || layoutMode === 'mobile' || layoutMode === 'iconOnly');
-    /** True only in the narrow "actionsColumn" sub-band inside "mobile" (Round 10) — actions
-     *  render as a 4×1 vertical column instead of the normal 2×2 grid. See responsiveLayout.svelte.ts. */
-    let actionsStacked = $derived(layout.actionsStacked);
+    /** True ONLY in "stackFilters" — Actions render as a 4×1 VERTICAL column (still WITH labels,
+     *  still BESIDE the Filters+Summary column, see isStacked below) instead of the normal 2×2
+     *  grid. Matches the original ASCII sketch for this tier (4 stacked action rows next to the
+     *  Picker+Centro column) — restored after being mistakenly dropped/generalized to "always
+     *  2×2" in Round 11 (the prose said 2×2, the sketch actually showed 4×1). */
+    let actionsStacked = $derived(layoutMode === 'stackFilters');
+    /** True in "oneColumn" and "iconOnly" — the WHOLE bar (filters+summary AND actions) stacks
+     *  in one column. Actions keep their 2×2-with-labels look through "oneColumn"; only
+     *  "iconOnly" additionally drops labels (see showActionLabels/stretchActions). */
+    let isStacked = $derived(layoutMode === 'oneColumn' || layoutMode === 'iconOnly');
+    /** True in "stackFilters", "oneColumn" and "iconOnly" (i.e. whenever `isStacked` is true,
+     *  plus "stackFilters" itself) — the filters+summary zone stacks into a column (Center moves
+     *  below the DateRangePicker, "justified" full-width) — but Actions stay BESIDE that column
+     *  unless `isStacked` is ALSO true (oneColumn/iconOnly). */
+    let filtersStacked = $derived(isStacked || layoutMode === 'stackFilters');
 
     // Mirror the (synchronous, $derived) values above onto the optional bindable props, for
     // pages that need layoutMode/isStacked/showActionLabels OUTSIDE the filters/summary/actions
@@ -152,19 +166,20 @@
              `shrink-0` from the page so CSS never wraps THEM to a new line instead. With
              flex-wrap here, the picker (flex-grow) would greedily claim the whole line first,
              pushing its sibling(s) to a whole new line rather than shrinking itself. -->
-        <div class="flex gap-3 {isStacked ? 'flex-col items-stretch' : filtersStacked ? 'flex-col items-start flex-1' : 'flex-row items-center flex-1 flex-nowrap'}">
+        <div class="flex gap-3 {layoutMode === 'iconOnly' ? 'flex-col items-stretch' : filtersStacked ? 'flex-col items-start flex-1' : 'flex-row items-center flex-1 flex-nowrap'}">
             {@render filters({layoutMode, isStacked, filtersStacked})}
             {#if summary}
                 {@render summary({layoutMode, isStacked, filtersStacked})}
             {/if}
         </div>
 
-        <!-- Zone C: actions — 2×2 grid with labels (oneRow/denseRow/stackFilters/most of
-             mobile), 4×1 column with labels (ONLY the narrow "actionsColumn" sub-band inside
-             mobile — Round 10), icon-only row (iconOnly — the narrowest fallback, for when even
-             the 2×2-with-labels grid doesn't fit). `*:w-full` forces every direct child (plain
-             button or a dropdown-trigger wrapper div) to stretch to its full cell/row width —
-             a safety net so pages don't need to remember w-full on each action individually. -->
+        <!-- Zone C: actions — 4×1 vertical column with labels (ONLY "stackFilters", BESIDE the
+             filters+summary column — see actionsStacked), 2×2 grid with labels (oneRow/denseRow
+             BESIDE it, oneColumn BELOW it — see isStacked on the outer bar above), icon-only
+             centered wrapping row (iconOnly — the narrowest tier, for when even a labeled column
+             no longer fits). `*:w-full` forces every direct child (plain button or a
+             dropdown-trigger wrapper div) to stretch to its full cell/row width — a safety net
+             so pages don't need to remember w-full on each action individually. -->
         {#if actions}
             <div class="flex shrink-0 gap-1.5 {!stretchActions ? 'flex-row justify-center flex-wrap' : actionsStacked ? 'flex-col items-stretch *:w-full' : 'grid grid-cols-2 *:w-full'}">
                 {@render actions({layoutMode, showActionLabels, stretchActions, actionsStacked})}

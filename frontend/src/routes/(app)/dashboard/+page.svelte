@@ -120,6 +120,13 @@
     let brokerFilterOpen = $state(false);
     let brokerFilterTriggerEl = $state<HTMLButtonElement | null>(null);
     let brokerFilterPanelEl = $state<HTMLDivElement | null>(null);
+
+    /** Mirrors the DateRangePicker's own effective 2-row max-width, so the Currency+Broker row
+     *  below it can be capped to the SAME pixel value when filtersStacked — otherwise it
+     *  stretches to the full (wider) filters column instead of matching the picker's box.
+     *  MUST start non-undefined (matches DateRangePicker's own maxWidthTwoRow default, 390) —
+     *  Svelte forbids bind:key={undefined} when the child prop has a declared fallback. */
+    let pickerMaxWidth = $state<number>(390);
     let brokerFilterDropdownPosition = $state({left: 8, top: 8});
 
     const DROPDOWN_VIEWPORT_MARGIN = 8;
@@ -485,17 +492,19 @@
 <div class="space-y-4" data-testid="dashboard-page">
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
-    <PageToolbar thresholds={{oneRow: 1000, denseRow: 810, stackFilters: 430, actionsColumn: 365, iconOnly: 330, labelHide: 330}} tabs={dashboardTabs} {activeTab} ontabchange={handleTabChange} testId="dashboard-controls" filterRowTestId="dashboard-filter-bar" layoutDebugName="dashboard">
+    <PageToolbar thresholds={{oneRow: 1000, denseRow: 810, stackFilters: 430, oneColumn: 365, iconOnly: 330, labelHide: 330}} tabs={dashboardTabs} {activeTab} ontabchange={handleTabChange} testId="dashboard-controls" filterRowTestId="dashboard-filter-bar" layoutDebugName="dashboard">
         {#snippet filters({layoutMode, filtersStacked})}
             <!-- Date range picker (wired to global store via the shared dateRangeController) -->
-            <DateRangePicker bind:activePreset={dateRangeCtl.activePreset} bind:start={dateRangeCtl.displayStart} bind:end={dateRangeCtl.end} compact={true} align="start" {layoutMode} debugName="dashboard" onchange={dateRangeCtl.onDateRangeChange} />
+            <DateRangePicker bind:activePreset={dateRangeCtl.activePreset} bind:start={dateRangeCtl.displayStart} bind:end={dateRangeCtl.end} compact={true} align="start" {layoutMode} debugName="dashboard" onchange={dateRangeCtl.onDateRangeChange} bind:effectiveMaxWidth={pickerMaxWidth} />
 
             <!-- Currency override + Broker multi-select — share one justified row when the
-                 filters+summary zone stacks (stackFilters/mobile/iconOnly — see filtersStacked
+                 filters+summary zone stacks (stackFilters/oneColumn/iconOnly — see filtersStacked
                  in PageToolbar), not each its own stacked full-width row; inline naturally
                  otherwise, same as before (unconditional w-full here would fight
-                 DateRangePicker for row space in oneRow/denseRow mode). -->
-            <div class="flex items-center gap-3 {filtersStacked ? 'w-full justify-between' : ''}">
+                 DateRangePicker for row space in oneRow/denseRow mode). Capped to
+                 pickerMaxWidth (mirrors the picker's own 2-row max-width) so this row's right
+                 edge lines up with the picker's instead of stretching to the wider column. -->
+            <div class="flex items-center gap-3 {filtersStacked ? 'w-full justify-between' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
                 <!-- Currency override selector -->
                 <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                     <span class="whitespace-nowrap">{$_('common.currency')}:</span>
