@@ -13,6 +13,58 @@
   <a href="https://www.buymeacoffee.com/librefolio" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me a Coffee" height="40"></a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/Librefolio/LibreFolio/actions/workflows/release.yml"><img src="https://github.com/Librefolio/LibreFolio/actions/workflows/release.yml/badge.svg" alt="Build Status"></a>
+  <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3"></a>
+  <a href="https://github.com/orgs/Librefolio/packages/container/package/librefolio"><img src="https://img.shields.io/badge/container-ghcr.io-blue?logo=github" alt="Docker Registry"></a>
+  <a href="https://github.com/Librefolio/LibreFolio/stargazers"><img src="https://img.shields.io/github/stars/Librefolio/LibreFolio.svg" alt="GitHub stars"></a>
+</p>
+
+---
+
+Bring all your investments into one private, secure dashboard. Track stocks, ETFs, crypto, bonds, and loans across multiple brokers — with automated pricing, FX conversion, and technical analysis tools.
+
+Your data stays on your server. No third-party cloud. No tracking.
+
+📚 **Full Documentation**: [https://librefolio.github.io/LibreFolio/](https://librefolio.github.io/LibreFolio/)
+
+---
+
+## 🖼️ Gallery
+
+<p align="center">
+  <img src="https://librefolio.github.io/LibreFolio/gallery/desktop/en/light/dashboard/main.png" alt="LibreFolio Dashboard" width="100%">
+</p>
+
+<details>
+<summary>📸 <strong>More Screenshots</strong></summary>
+
+### Asset Management
+<p align="center">
+  <img src="https://librefolio.github.io/LibreFolio/gallery/desktop/en/light/assets/list.png" alt="Asset List" width="100%">
+</p>
+
+### Transactions Log & Imports
+<p align="center">
+  <img src="https://librefolio.github.io/LibreFolio/gallery/desktop/en/light/transactions/list.png" alt="Transactions List" width="100%">
+</p>
+
+### Forex conversion graph & routes
+<p align="center">
+  <img src="https://librefolio.github.io/LibreFolio/gallery/desktop/en/light/fx/list.png" alt="Forex Pairs and Rates" width="100%">
+</p>
+
+</details>
+
+## 🤔 Why LibreFolio?
+
+LibreFolio is built to solve common issues found in existing portfolio tracking tools:
+
+- **🔒 Verifiable Security & Privacy**: Your financial data belongs to you. Since LibreFolio is fully open-source, its code is auditable by anyone, ensuring complete transparency with no hidden tracking, telemetries, or silent data collection.
+- **🧮 Open & Transparent Calculations**: Traditional trackers use black-box formulas. LibreFolio calculates cost basis (FIFO and WAC) and ROI (TWRR and MWRR) at runtime with completely open-source, verifiable formulas.
+- **🏦 Broad Broker & Data Integration**: Easily import statement files from a wide range of [supported brokers](https://librefolio.github.io/LibreFolio/user/transactions/import/) and keep your assets updated with price quotes from various [market data providers](https://librefolio.github.io/LibreFolio/user/assets/providers/) and [forex rates sources](https://librefolio.github.io/LibreFolio/user/fx/providers/).
+- **🤖 AI-Assisted Portfolio Analysis**: Export your anonymized portfolio data to leverage AI models for custom performance analysis, risk assessments, and allocation insights. This is a core focus area of our roadmap and will be continuously enhanced.
+
 ---
 
 > ### 📢 Stay Updated on LibreFolio Progress
@@ -27,13 +79,6 @@
 > *You will receive an automatic notification directly on GitHub whenever a new version is released!*
 
 ---
-
-Bring all your investments into one private, secure dashboard. Track stocks, ETFs, crypto, bonds, and loans across multiple brokers — with automated pricing, FX conversion, and technical analysis tools.
-
-Your data stays on your server. No third-party cloud. No tracking.
-
-📚 **Full Documentation**: [https://librefolio.github.io/LibreFolio/](https://librefolio.github.io/LibreFolio/)
-
 ## 🚀 Quick Start
 
 <details>
@@ -125,9 +170,9 @@ LibreFolio values **every form of contribution equally** — code, ideas, and do
 ### 💡 High-Impact Contributions
 
 - **New Plugins** — LibreFolio uses a [Registry & Plugin System](https://librefolio.github.io/LibreFolio/developer/architecture/patterns/registry_pattern/) with three plugin types:
-  - 📥 **[BRIM Plugins](https://librefolio.github.io/LibreFolio/developer/architecture/patterns/brim_plugin_guide/)** — Import from a new broker (CSV/Excel)
-  - 📈 **[Asset Plugins](https://librefolio.github.io/LibreFolio/developer/architecture/patterns/asset_plugin_guide/)** — Fetch prices from a new data source
-  - 💱 **[FX Plugins](https://librefolio.github.io/LibreFolio/developer/architecture/patterns/fx_plugin_guide/)** — Add a new exchange rate provider
+  - 📥 **[BRIM Plugins](https://librefolio.github.io/LibreFolio/developer/architecture/patterns/brim_plugin_guide/)** — Import from a new broker (CSV/Excel). See [🏦 Supported Brokers](https://librefolio.github.io/LibreFolio/user/transactions/import/) for the list of already supported brokers.
+  - 📈 **[Asset Plugins](https://librefolio.github.io/LibreFolio/developer/architecture/patterns/asset_plugin_guide/)** — Fetch prices from a new data source. See [📈 Supported Asset Providers](https://librefolio.github.io/LibreFolio/user/assets/providers/) for existing providers.
+  - 💱 **[FX Plugins](https://librefolio.github.io/LibreFolio/developer/architecture/patterns/fx_plugin_guide/)** — Add a new exchange rate provider. See [💱 Supported Forex Providers](https://librefolio.github.io/LibreFolio/user/fx/providers/) for existing providers.
 - **Chart Signal Plugins** — New technical indicators and chart overlays
 - **UI/UX Ideas** — Aesthetic improvements and design suggestions
 - **Bug Reports** — Finding and reporting issues on [GitHub Issues](https://github.com/Librefolio/LibreFolio/issues)
