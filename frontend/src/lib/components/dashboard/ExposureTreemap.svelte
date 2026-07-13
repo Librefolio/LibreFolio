@@ -69,7 +69,7 @@
     /** Tracks an in-progress manual two-finger pan drag (see the doc comment on
      *  `handleTouchPanStart` below for why two fingers, not one). Null when not dragging. */
     let touchPanState: {x: number; y: number} | null = null;
-    let contextMenu = $state<{x: number; y: number; assetId: number} | null>(null);
+    let contextMenu = $state<{x: number; y: number; assetId: number; anchorEl: HTMLElement | null} | null>(null);
 
     const UPPER_LABEL_ICON_SIZE = 12;
 
@@ -514,8 +514,21 @@
             const nativeEvent = params?.event?.event as MouseEvent | PointerEvent | undefined;
             nativeEvent?.preventDefault();
             if (nativeEvent?.clientX == null || nativeEvent?.clientY == null) return;
-            contextMenu = {x: nativeEvent.clientX, y: nativeEvent.clientY, assetId: meta.assetId};
+            const anchorEl = nativeEvent.currentTarget instanceof HTMLElement ? nativeEvent.currentTarget : nativeEvent.target instanceof HTMLElement ? nativeEvent.target : (chartContainer ?? null);
+            contextMenu = {x: nativeEvent.clientX, y: nativeEvent.clientY, assetId: meta.assetId, anchorEl};
         }
+    }
+
+    /** GeographyMap shares same app-level touch handlers, but this nested fixed-size
+     *  treemap still blocked native 1-finger page scroll on touch devices. Explicitly
+     *  telling browser "vertical pan belongs to page" on chart host + ECharts' injected
+     *  DOM fixes gesture arbitration without touching roam/zoom guard logic. */
+    function applyTouchScrollHint() {
+        if (!chartContainer) return;
+        chartContainer.style.touchAction = 'pan-y';
+        chartContainer.querySelectorAll<HTMLElement>('*').forEach((el) => {
+            el.style.touchAction = 'pan-y';
+        });
     }
 
     /** Centered ABOVE the tap/click point (clearing the finger and the hovered box
@@ -546,6 +559,7 @@
     function renderChart() {
         if (!chartContainer || chartWidth <= 0 || chartHeight <= 0) return;
         const isDark = document.documentElement.classList.contains('dark');
+        applyTouchScrollHint();
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer);
@@ -702,6 +716,7 @@
         <ContextMenu
             x={contextMenu.x}
             y={contextMenu.y}
+            anchorEl={contextMenu.anchorEl}
             items={[
                 {id: 'view-asset', label: $_('brokers.lots.viewAsset') || 'View Asset', icon: ExternalLink as unknown as ContextMenuItem['icon']},
                 {id: 'analyze-lots', label: $_('brokers.lots.analyze') || 'Analyze Lots', icon: Layers as unknown as ContextMenuItem['icon']},

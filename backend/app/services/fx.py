@@ -8,6 +8,7 @@ import time
 from abc import ABC, abstractmethod
 from datetime import date
 from decimal import Decimal
+from typing import Literal
 
 from sqlalchemy import and_, func, or_
 from sqlalchemy import delete as sql_delete
@@ -19,8 +20,8 @@ from sqlmodel import select
 from backend.app.db.models import FxConversionRoute, FxRate
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
-from backend.app.schemas.common import Currency, DateRangeModel
-from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncLegDetail, FXSyncPairResult, SyncStatus
+from backend.app.schemas.common import Currency
+from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncLegDetail, FXSyncPairResult, SyncDateRangeModel, SyncStatus
 from backend.app.services.provider_registry import FXProviderRegistry
 from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.decimal_utils import truncate_fx_rate
@@ -30,6 +31,15 @@ logger = get_logger(__name__)
 # Cache for FX provider fetch responses — TTL 5min since FX rates update daily.
 # Prevents provider rate-limiting if user triggers repeated syncs.
 _fx_fetch_cache = get_ttl_cache("fx_provider_responses", maxsize=200, ttl=300)
+FXProviderStartDate = date | Literal["min"]
+FX_HISTORY_MIN_FALLBACK = date(1900, 1, 1)
+
+
+def _is_date_within_sync_range(target_date: date, start_date: FXProviderStartDate, end_date: date) -> bool:
+    """Return True when target_date falls inside requested sync range."""
+    if start_date == "min":
+        return target_date <= end_date
+    return start_date <= target_date <= end_date
 
 
 # ============================================================================
@@ -261,7 +271,7 @@ class FXRateProvider(ABC):
         pass
 
     @abstractmethod
-    async def fetch_rates(self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+    async def fetch_rates(self, date_range: tuple[FXProviderStartDate, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from provider API for given date range and currencies.
 
@@ -768,7 +778,7 @@ async def _count_actual_changes(
 async def sync_pairs_bulk(
     session,  # AsyncSession — used only for reading route config
     pairs: list[str],  # ["EUR-USD", "CHF-CNY"]
-    date_range: tuple[date, date],
+    date_range: tuple[FXProviderStartDate, date],
 ) -> "FXSyncBulkResponse":
     """
     Sync multiple FX pairs using the 3-phase pipeline:
@@ -1030,7 +1040,7 @@ async def sync_pairs_bulk(
         for key, rate in leg_rates.items():
             if key[0] == norm_b and key[1] == norm_q:
                 d = key[2]
-                if start_date <= d <= end_date:
+                if _is_date_within_sync_range(d, start_date, end_date):
                     computed_rates.append((d, norm_b, norm_q, truncate_fx_rate(rate)))
 
         if computed_rates:
@@ -1099,7 +1109,7 @@ async def sync_pairs_bulk(
         source = "CHAIN:" + "+".join(providers_used)
 
         # Collect all dates from leg_rates
-        all_dates = sorted({key[2] for key in leg_rates.keys() if start_date <= key[2] <= end_date})
+        all_dates = sorted({key[2] for key in leg_rates.keys() if _is_date_within_sync_range(key[2], start_date, end_date)})
 
         computed_rates = []
         for d in all_dates:
@@ -1149,7 +1159,7 @@ async def sync_pairs_bulk(
             norm_q = max(fc, tc)
             leg_key_prefix = (norm_b, norm_q)
             # Count dates this leg has in the requested range
-            leg_date_count = sum(1 for key in leg_rates.keys() if key[0] == leg_key_prefix[0] and key[1] == leg_key_prefix[1] and start_date <= key[2] <= end_date)
+            leg_date_count = sum(1 for key in leg_rates.keys() if key[0] == leg_key_prefix[0] and key[1] == leg_key_prefix[1] and _is_date_within_sync_range(key[2], start_date, end_date))
             # Check if this leg had errors
             leg_err_key = (norm_b, norm_q, prov)
             leg_error = leg_errors.get(leg_err_key)
@@ -1202,7 +1212,7 @@ async def sync_pairs_bulk(
     return FXSyncBulkResponse(
         results=result_list,
         success_count=success_count,
-        date_range=DateRangeModel(start=start_date, end=end_date),
+        date_range=SyncDateRangeModel(start=start_date, end=end_date),
         total_points_changed=total_changed,
     )
 

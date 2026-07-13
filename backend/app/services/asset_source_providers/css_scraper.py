@@ -30,7 +30,7 @@ except ImportError:
     SCRAPER_AVAILABLE = False
 
 from backend.app.schemas.assets import FACurrentValue, FAHistoricalData
-from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
+from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 
 logger = get_logger(__name__)
@@ -237,7 +237,7 @@ class CSSScraperProvider(AssetSourceProvider):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: Dict | None,
-        start_date: date,
+        start_date: AssetHistoryStartDate,
         end_date: date,
     ) -> FAHistoricalData:
         """

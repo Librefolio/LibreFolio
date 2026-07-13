@@ -97,7 +97,7 @@
     let tooltipCleanup: (() => void) | null = null;
     let isDark = $state(false);
     let needsInitialLayoutStabilityPass = false;
-    let contextMenu = $state<{x: number; y: number; assetId: number} | null>(null);
+    let contextMenu = $state<{x: number; y: number; assetId: number; anchorEl: HTMLElement | null} | null>(null);
 
     // Narrow layout: label+bar side-by-side leaves almost no room for the bar itself
     // (fixed-width category label + right-side net label eat most of a narrow
@@ -944,7 +944,8 @@
             const nativeEvent = params?.event?.event as MouseEvent | PointerEvent | undefined;
             nativeEvent?.preventDefault();
             if (nativeEvent?.clientX == null || nativeEvent?.clientY == null) return;
-            contextMenu = {x: nativeEvent.clientX, y: nativeEvent.clientY, assetId: row.assetId};
+            const anchorEl = nativeEvent.currentTarget instanceof HTMLElement ? nativeEvent.currentTarget : nativeEvent.target instanceof HTMLElement ? nativeEvent.target : (chartContainer ?? null);
+            contextMenu = {x: nativeEvent.clientX, y: nativeEvent.clientY, assetId: row.assetId, anchorEl};
         }
     }
 
@@ -1070,6 +1071,7 @@
         <ContextMenu
             x={contextMenu.x}
             y={contextMenu.y}
+            anchorEl={contextMenu.anchorEl}
             items={[
                 {id: 'view-asset', label: $t('brokers.lots.viewAsset') || 'View Asset', icon: ExternalLink as unknown as ContextMenuItem['icon']},
                 {id: 'analyze-lots', label: $t('brokers.lots.analyze') || 'Analyze Lots', icon: Layers as unknown as ContextMenuItem['icon']},

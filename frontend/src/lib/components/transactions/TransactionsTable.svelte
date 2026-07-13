@@ -21,7 +21,7 @@
 -->
 <script lang="ts">
     import {_ as t, locale} from '$lib/i18n';
-    import {untrack} from 'svelte';
+    import {untrack, onMount} from 'svelte';
     import {goto} from '$app/navigation';
     import {Eye, Pencil, Copy, Trash2, Unlink} from 'lucide-svelte';
 
@@ -44,6 +44,8 @@
     import TxTooltipCell from './cells/TxTooltipCell.svelte';
     import TxLinksCell from './cells/TxLinksCell.svelte';
     import TxTypeIconCell from './cells/TxTypeIconCell.svelte';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
 
     // Sentinel keep-imports (used in reactive expressions but not statically referenced).
     void $currencyStoreVersion;
@@ -147,6 +149,16 @@
 
     /** Exposed DataTable ref for ColumnVisibilityToggle / external selection control. */
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
+    let tableWrapperEl: HTMLDivElement | undefined = $state(undefined);
+
+    // Several cells (asset name, tags, description, ...) are rendered as raw HTML strings, so
+    // `use:` actions can't attach to them directly — scan the wrapper for overflow-marquee
+    // candidates instead, re-attaching automatically whenever rows are re-rendered
+    // (sort/filter/pagination/refresh).
+    onMount(() => {
+        if (!tableWrapperEl) return;
+        return attachOverflowMarqueeToDescendants(tableWrapperEl);
+    });
 
     /** Track active column filters so we can pre-filter displayRows before
      *  the pair-never-split paginator. Initialized from `initialFilters`. */
@@ -759,7 +771,7 @@
                 const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" width="20" height="20" loading="lazy" class="inline-block mr-1 align-middle" onerror="this.style.display='none'" />` : '';
                 return {
                     type: 'html',
-                    html: `<span role="link" tabindex="0" data-asset-navigate="${d.tx.asset_id}" class="inline-flex items-center gap-1 cursor-pointer group" data-testid="tx-asset-link-${d.tx.asset_id}">${iconHtml}<span>${name}</span><span class="opacity-0 group-hover:opacity-60 transition-opacity text-gray-400 dark:text-gray-500 text-[10px] ml-0.5">↗</span></span>`,
+                    html: `<span role="link" tabindex="0" data-asset-navigate="${d.tx.asset_id}" class="inline-flex items-center gap-1 min-w-0 cursor-pointer group" data-testid="tx-asset-link-${d.tx.asset_id}">${iconHtml}<span class="min-w-0 ${overflowScrollTextClass}">${name}</span><span class="shrink-0 opacity-0 group-hover:opacity-60 transition-opacity text-gray-400 dark:text-gray-500 text-[10px] ml-0.5">↗</span></span>`,
                 };
             },
         },
@@ -975,7 +987,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="tx-table-wrap" data-testid="tx-table" use:captureClick>
+<div class="tx-table-wrap" data-testid="tx-table" use:captureClick bind:this={tableWrapperEl}>
     <DataTable
         bind:this={tableRef}
         data={visibleRows}

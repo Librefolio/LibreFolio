@@ -16,7 +16,7 @@ from decimal import Decimal
 import httpx
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx import FXRateProvider, FXServiceError
+from backend.app.services.fx import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError
 from backend.app.services.provider_registry import FXProviderRegistry, register_provider
 
 logger = get_logger(__name__)
@@ -142,7 +142,7 @@ class FEDProvider(FXRateProvider):
         currencies = ["USD"] + list(self.CURRENCY_SERIES.keys())
         return sorted(currencies)
 
-    async def fetch_rates(self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+    async def fetch_rates(self, date_range: tuple[FXProviderStartDate, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from FRED API for given date range and currencies.
 
@@ -166,6 +166,7 @@ class FEDProvider(FXRateProvider):
             raise ValueError(f"FED provider only supports USD as base currency, got {base_currency}")
 
         start_date, end_date = date_range
+        request_start = FX_HISTORY_MIN_FALLBACK if start_date == "min" else start_date
         results = {}
 
         # Filter valid currencies
@@ -184,7 +185,7 @@ class FEDProvider(FXRateProvider):
 
             params = {
                 "id": series_id,
-                "cosd": start_date.isoformat(),
+                "cosd": request_start.isoformat(),
                 "coed": end_date.isoformat(),
             }
 
@@ -193,7 +194,7 @@ class FEDProvider(FXRateProvider):
                     response = await client.get(self.BASE_URL, params=params)
                     response.raise_for_status()
 
-                    observations = self._parse_csv(response.text, currency, start_date, end_date)
+                    observations = self._parse_csv(response.text, currency, request_start, end_date)
                     return currency, observations
 
             except httpx.HTTPError as e:

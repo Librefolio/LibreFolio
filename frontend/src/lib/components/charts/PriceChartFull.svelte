@@ -534,6 +534,17 @@
                     try {
                         chartInstance?.resize();
                         if (chartInstance) updateArrowRotations(chartInstance);
+                        // Bugfix: resizing the container (e.g. rotating a device, or
+                        // shrinking a browser window to a narrow/mobile width) changes
+                        // plotWidthPx, which can push the density past the weekly/monthly
+                        // threshold — but chartInstance.resize() only redraws the EXISTING
+                        // resolution's data at the new pixel size, it never re-evaluates
+                        // which resolution should be active. Without this, a chart loaded
+                        // at a wide viewport (daily/weekly) never re-checks whether a
+                        // narrower resize now needs a coarser resolution. Matches the same
+                        // resize -> resolution-recheck pairing already used in
+                        // GrowthChart.svelte/AllocationHistoryChart.svelte.
+                        scheduleResolutionRecompute();
                     } catch (_) {}
                 } else if (chartContainer && data.length > 0) {
                     renderChart();

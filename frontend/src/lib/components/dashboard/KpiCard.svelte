@@ -20,6 +20,9 @@
   Pattern: Svelte 5 Runes, Tailwind CSS 4, dark mode.
 -->
 <script lang="ts">
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+
     interface Props {
         label: string;
         value: string;
@@ -45,7 +48,7 @@
     {/if}
 
     <!-- Label -->
-    <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500 truncate">
+    <p use:scrollOnOverflow class="{overflowScrollTextClass} text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500" title={label}>
         {label}
     </p>
 
@@ -57,7 +60,7 @@
         {/if}
     {:else}
         <!-- Primary value (reduced opacity when refreshing for stale-while-revalidate) -->
-        <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 truncate transition-opacity duration-300" class:opacity-50={refreshing} data-testid="kpi-value">
+        <p use:scrollOnOverflow class="{overflowScrollTextClass} text-2xl font-bold text-gray-800 dark:text-gray-100 transition-opacity duration-300" class:opacity-50={refreshing} data-testid="kpi-value" title={value}>
             {value}
         </p>
 
@@ -70,7 +73,7 @@
 
         <!-- Sub-label (e.g. TWRR / MWRR breakdown) -->
         {#if subLabel}
-            <p class="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5 transition-opacity duration-300" class:opacity-50={refreshing} data-testid="kpi-sublabel">
+            <p use:scrollOnOverflow class="{overflowScrollTextClass} text-xs text-gray-400 dark:text-gray-500 mt-0.5 transition-opacity duration-300" class:opacity-50={refreshing} data-testid="kpi-sublabel" title={subLabel}>
                 {subLabel}
             </p>
         {/if}

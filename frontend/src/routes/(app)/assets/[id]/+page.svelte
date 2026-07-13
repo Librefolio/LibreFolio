@@ -46,7 +46,8 @@
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import type {ViewMode, ChartType} from '$lib/components/charts/ChartToolbar.svelte';
-    import {createResponsiveLayout, registerLayoutDebug} from '$lib/utils/layout/responsiveLayout.svelte';
+    import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
+    import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
     import {getAssetTypeIconUrl, buildIdentifiersList} from '$lib/utils/assetTypes';
@@ -60,6 +61,8 @@
     import {fetchCurrentPrices} from '$lib/services/livePriceService';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
 
     // =========================================================================
     // Page data
@@ -118,7 +121,7 @@
      */
     let urlDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
     let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
-
+    let syncDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
     let viewMode: ViewMode = $state('percentage');
     let chartType: ChartType = $state('line');
     let displayCurrency = $state('');
@@ -130,14 +133,10 @@
     let showDataEditor = $state(false);
     let showMetadata = $state(false);
 
-    // Filter bar layout
-    let filterBarRef = $state<HTMLDivElement | null>(null);
-    // compact/labelHide starting value — tune live via
-    // window.__lfLayouts.assetDetail.thresholds.compact = <value>.
-    const layout = createResponsiveLayout({wide: 1090, tablet: 870, tabletS: 570, compact: 320, labelHide: 320});
-    registerLayoutDebug('assetDetail', layout);
-    // Compact is narrower-than-mobile — the filters zone should stack the same way in both.
-    let isStacked = $derived(layout.layoutMode === 'mobile' || layout.layoutMode === 'compact');
+    // Filter bar layout is now owned by PageToolbar (shared with dashboard/broker-detail/assets
+    // list) — layoutMode is bound out (see bind:layoutMode below) for the one usage elsewhere on
+    // this page (editor tip text). Tune live via window.__lfLayouts.assetDetail.thresholds.<field>.
+    let pageLayoutMode = $state<LayoutMode>('denseRow');
 
     // Chart settings
     let settings = $derived(getSettingsForPair(`asset-${data.assetId}`, 'assets'));
@@ -738,13 +737,6 @@
         }
     });
 
-    $effect(() => {
-        const el = filterBarRef;
-        if (!el) return;
-        layout.attach(el);
-        return () => layout.detach();
-    });
-
     // Live current price polling — only when chart head date includes today
     // Re-runs when displayCurrency or assetInfo changes (to reconvert)
     $effect(() => {
@@ -1249,7 +1241,7 @@
             const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
                 {
                     asset_id: assetId,
-                    date_range: {start: dateStart, end: dateEnd},
+                    date_range: {start: syncDateStart, end: dateEnd},
                 },
             ]);
             const r = (response as any)?.results?.[0];
@@ -1440,7 +1432,7 @@
                 <div class="flex items-center gap-3">
                     <AssetIcon iconUrl={assetInfo.icon_url} assetType={assetInfo.asset_type} altText={assetInfo.display_name} size="md" />
                     <span class="w-2.5 h-2.5 rounded-full shrink-0 {assetInfo.active !== false ? 'bg-green-500' : 'bg-red-400'}" data-testid="asset-status-dot" title={assetInfo.active !== false ? $t('common.active') : $t('assets.status.archived')}></span>
-                    <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100 truncate max-w-[15ch] sm:max-w-[30ch] lg:max-w-none" title={assetInfo.display_name}>{assetInfo.display_name}</h2>
+                    <h2 use:scrollOnOverflow class="{overflowScrollTextClass} text-xl font-bold text-gray-800 dark:text-gray-100 max-w-[15ch] sm:max-w-[30ch] lg:max-w-none" title={assetInfo.display_name}>{assetInfo.display_name}</h2>
                 </div>
 
                 <div class="flex items-center gap-2 flex-wrap ml-0 sm:ml-0">
@@ -1465,8 +1457,8 @@
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"> ✏️ Manual </span>
                     {/if}
 
-                    {#if userUrl}
-                        <a href={userUrl} target="_blank" rel="noopener noreferrer" class="inline-flex items-center p-1 rounded text-gray-400 hover:text-libre-green transition-colors" title={userUrl}>
+                    {#if userUrl || providerExternalUrl}
+                        <a href={userUrl || providerExternalUrl} target="_blank" rel="noopener noreferrer" class="inline-flex items-center p-1 rounded text-gray-400 hover:text-libre-green transition-colors" title={userUrl || providerExternalUrl}>
                             <ExternalLink size={14} />
                         </a>
                     {/if}
@@ -1489,37 +1481,33 @@
     <DataQualityBanner issues={assetDetailIssues} mode="flat" onaction={handleBannerAction} />
 
     <!-- ======================================================================= -->
-    <!-- Filter bar -->
-    <!-- wide:     [ datepicker  price-summary ─── actions-2×2 ]                        -->
-    <!-- tablet:   [ datepicker  price-summary ] [ actions-2×2 ]  side by side           -->
-    <!-- tablet-s: [ datepicker       ] [ actions ]  filters stacked, actions column     -->
-    <!--           [ price-summary    ] [ 4×1    ]  to the right                         -->
-    <!-- mobile:   [ datepicker       ]  all stacked, actions 1×4 row                   -->
-    <!--           [ price-summary    ]                                                  -->
-    <!--           [ actions ──── 1×4 ]                                                  -->
+    <!-- Filter bar — shared PageToolbar (same component as dashboard/broker-detail/assets
+         list), so responsive/wrap fixes made there auto-propagate here too. -->
+    <!-- oneRow:       [ datepicker  price-summary ─── actions-2×2 ]  1 row, picker 1-row     -->
+    <!-- denseRow:     [ datepicker  price-summary ─── actions-2×2 ]  1 row, picker 2-row     -->
+    <!-- stackFilters: [ datepicker       ] [ actions ]  filters+summary stacked, actions     -->
+    <!--               [ price-summary    ] [ 2×2     ]  stay BESIDE (2×2)                    -->
+    <!-- mobile:       [ datepicker       ] [ actions ]  same as stackFilters, EXCEPT inside   -->
+    <!--               [ price-summary    ] [ 4×1 or  ]  the narrow "actionsColumn" sub-band   -->
+    <!--                                    [ 2×2      ]  where actions become a 4×1 column    -->
+    <!-- iconOnly:     [ datepicker       ]  everything stacked, actions 1×4 icon-only row     -->
+    <!--               [ price-summary    ]                                                    -->
+    <!--               [ actions ──── 1×4 ]                                                    -->
     <!-- ======================================================================= -->
-    <div
-        bind:this={filterBarRef}
-        class="flex gap-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700
-               {isStacked ? 'flex-col items-center' : 'flex-row items-start justify-between'}"
-        data-testid="asset-detail-filter-bar"
-    >
-        <!-- Filters block: wide+tablet = row (side by side), tablet-s = column (stacked), mobile+compact = centered -->
-        <div class="flex gap-3 {isStacked ? 'flex-col items-center' : layout.layoutMode === 'tablet-s' ? 'flex-col items-start flex-1' : 'flex-row items-center flex-1'}">
+    <PageToolbar thresholds={{oneRow: 1090, denseRow: 870, stackFilters: 570, actionsColumn: 445, iconOnly: 330, labelHide: 330}} filterRowTestId="asset-detail-filter-bar" layoutDebugName="assetDetail" bind:layoutMode={pageLayoutMode}>
+        {#snippet filters()}
             <div class="flex flex-1 self-stretch min-w-0">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" debugName="assetDetail" onchange={handleDateRangeChange} />
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" layoutMode={pageLayoutMode} debugName="assetDetail" onchange={handleDateRangeChange} />
             </div>
+        {/snippet}
 
+        {#snippet summary({layoutMode})}
             {#if assetInfo}
-                <AssetPriceSummary {lastPrice} {deltaPercent} {deltaAbs} bind:displayCurrency assetCurrency={assetInfo.currency} layoutMode={layout.layoutMode} {livePriceConversionFailed} fxPairUrl={mainFxPairUrl} />
+                <AssetPriceSummary {lastPrice} {deltaPercent} {deltaAbs} bind:displayCurrency assetCurrency={assetInfo.currency} {layoutMode} {livePriceConversionFailed} fxPairUrl={mainFxPairUrl} />
             {/if}
-        </div>
+        {/snippet}
 
-        <!-- Actions: 2×2 grid (wide+tablet+mobile), 4×1 column (tablet-s), icon-only row (compact — the narrowest fallback, below the mobile 2×2). -->
-        <div
-            class="flex shrink-0 gap-1.5 self-center
-                    {layout.layoutMode === 'compact' ? 'flex-row items-center justify-center flex-wrap' : layout.layoutMode === 'tablet-s' ? 'flex-col items-stretch' : 'grid grid-cols-2 ml-auto'}"
-        >
+        {#snippet actions({showActionLabels})}
             <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                 <button
                     class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
@@ -1543,7 +1531,7 @@
                 }}
             >
                 <Pencil size={14} />
-                {#if layout.showActionLabels}<span>{$t('common.edit')}</span>{/if}
+                {#if showActionLabels}<span>{$t('common.edit')}</span>{/if}
             </button>
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors
@@ -1554,7 +1542,7 @@
                 title={isManualOnly ? $t('assetDetail.syncDisabledManual') : ''}
             >
                 <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
-                {#if layout.showActionLabels}<span>{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
+                {#if showActionLabels}<span>{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
             </button>
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
@@ -1563,10 +1551,10 @@
                 onclick={handleRefresh}
             >
                 <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
-                {#if layout.showActionLabels}<span>{$t('common.refresh')}</span>{/if}
+                {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
             </button>
-        </div>
-    </div>
+        {/snippet}
+    </PageToolbar>
 
     <!-- ======================================================================= -->
     <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
@@ -1832,7 +1820,7 @@
                 >
             </div>
             <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
-                💡 {layout.layoutMode === 'mobile' || layout.layoutMode === 'compact' ? $t('assetDetail.editorTipMobile') : $t('assetDetail.editorTipDesktop')}
+                💡 {pageLayoutMode === 'mobile' || pageLayoutMode === 'iconOnly' ? $t('assetDetail.editorTipMobile') : $t('assetDetail.editorTipDesktop')}
             </p>
             <div class="px-4 py-4">
                 <AssetDataEditorSection
@@ -2078,6 +2066,6 @@
 
     <!-- Page Sync Modal (sync all assets + FX pairs) -->
     {#if assetInfo}
-        <PageSyncModal bind:open={showPageSyncModal} {dateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
+        <PageSyncModal bind:open={showPageSyncModal} dateStart={syncDateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
     {/if}
 </div>

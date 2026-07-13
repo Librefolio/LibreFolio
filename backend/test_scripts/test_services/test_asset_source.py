@@ -15,6 +15,7 @@ import sys
 import time
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
@@ -46,11 +47,14 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
 from backend.app.schemas.provider import FAProviderAssignmentItem
-from backend.app.schemas.refresh import FARefreshItem
+from backend.app.schemas.refresh import FARefreshItem, FXSyncPairRequest
 from backend.app.services.asset_source import AssetSourceManager, AssetSourceProvider
+from backend.app.services.asset_source_providers import borsa_italiana as borsa_provider_module
+from backend.app.services.asset_source_providers import yahoo_finance as yahoo_provider_module
 from backend.app.services.asset_source_providers.scheduled_investment import (
     calculate_day_count_fraction,
 )
+from backend.app.services.fx_providers.mockfx import MOCKFX_FIXED_RATE, MockFXProvider
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import (
     print_info,
@@ -164,6 +168,143 @@ def test_act365_calculation():
 
         assert result == expected, f"Mismatch: {result} != {expected} for period {start} to {end}"
         print_success(f"✓ ACT/365 OK for {start} to {end} -> {result}")
+
+
+def test_refresh_schemas_accept_min_start():
+    """Sync schemas accept the 'min' sentinel for provider-driven full history sync."""
+    fa_req = FARefreshItem(asset_id=1, date_range={"start": "min", "end": date(2025, 1, 31)})
+    fx_req = FXSyncPairRequest(pairs=["USD-EUR"], start="min", end=date(2025, 1, 31))
+
+    assert fa_req.date_range.start == "min"
+    assert fa_req.date_range.end == date(2025, 1, 31)
+    assert fx_req.start == "min"
+    assert fx_req.pairs == ["EUR-USD"]
+
+
+@pytest.mark.asyncio
+async def test_yfinance_history_uses_native_max_for_min_start(monkeypatch):
+    """Yahoo provider must forward the 'min' sentinel as period='max'."""
+    pd = pytest.importorskip("pandas")
+    provider = yahoo_provider_module.YahooFinanceProvider()
+    calls: dict[str, dict] = {}
+
+    history_index = pd.DatetimeIndex(["2025-01-01", "2025-01-02"], tz="UTC")
+    history_df = pd.DataFrame(
+        {
+            "Open": [100.0, 101.0],
+            "High": [101.0, 102.0],
+            "Low": [99.0, 100.0],
+            "Close": [100.5, 101.5],
+            "Volume": [10, 20],
+        },
+        index=history_index,
+    )
+
+    class DummyTicker:
+        info = {"currency": "USD"}
+        dividends = pd.Series(dtype=float)
+        splits = pd.Series(dtype=float)
+
+        def history(self, **kwargs):
+            calls["history_kwargs"] = kwargs
+            return history_df
+
+    monkeypatch.setattr(yahoo_provider_module, "YFINANCE_AVAILABLE", True)
+    monkeypatch.setattr(yahoo_provider_module, "pd", pd)
+    monkeypatch.setattr(yahoo_provider_module, "yf", SimpleNamespace(Ticker=lambda _symbol: DummyTicker()))
+
+    result = await provider.get_history_value("AAPL", IdentifierType.TICKER, None, "min", date(2025, 1, 2))
+
+    assert calls["history_kwargs"] == {"period": "max"}
+    assert [p.date for p in result.prices] == [date(2025, 1, 1), date(2025, 1, 2)]
+
+
+@pytest.mark.asyncio
+async def test_borsa_history_uses_remote_fallback_for_min_start(monkeypatch):
+    """Borsa provider must translate 'min' to a provider-local MAX-range fetch."""
+    provider = borsa_provider_module.BorsaItalianaProvider()
+    calls: dict[str, str] = {}
+
+    punti = [
+        SimpleNamespace(data=date(1899, 12, 31), apertura=Decimal("90"), massimo=Decimal("91"), minimo=Decimal("89"), chiusura=Decimal("90"), ultimo=Decimal("90"), volume=None),
+        SimpleNamespace(data=date(1900, 1, 1), apertura=Decimal("100"), massimo=Decimal("101"), minimo=Decimal("99"), chiusura=Decimal("100"), ultimo=Decimal("100"), volume=None),
+        SimpleNamespace(data=date(2025, 1, 2), apertura=Decimal("110"), massimo=Decimal("111"), minimo=Decimal("109"), chiusura=Decimal("110"), ultimo=Decimal("110"), volume=None),
+    ]
+
+    def fake_ottieni_storico(identifier, periodo, sessione):
+        calls["identifier"] = identifier
+        calls["periodo"] = periodo
+        return SimpleNamespace(punti=punti)
+
+    monkeypatch.setattr(borsa_provider_module, "BORSA_ITALIANA_AVAILABLE", True)
+    monkeypatch.setattr(borsa_provider_module, "_get_session", lambda: object())
+    monkeypatch.setattr(borsa_provider_module, "ottieni_storico", fake_ottieni_storico)
+
+    result = await provider.get_history_value("IT0003128367", IdentifierType.ISIN, None, "min", date(2025, 1, 2))
+
+    assert calls["periodo"] == "MAX"
+    assert [p.date for p in result.prices] == [date(1900, 1, 1), date(2025, 1, 2)]
+
+
+@pytest.mark.asyncio
+async def test_mockfx_provider_accepts_min_start():
+    """Mock FX provider keeps sentinel path working for small historical ranges."""
+    provider = MockFXProvider()
+
+    result = await provider.fetch_rates(("min", date(1900, 1, 3)), ["USD"])
+
+    assert "USD" in result
+    assert len(result["USD"]) == 3
+    assert all(row[3] == MOCKFX_FIXED_RATE for row in result["USD"])
+
+
+@pytest.mark.asyncio
+async def test_bulk_refresh_prices_with_min_start_does_not_crash():
+    """Regression test: end-to-end bulk_refresh_prices() with start='min' must not raise
+    TypeError comparing str vs date. A prior fix guarded the history-window comparisons in
+    the fetch loop but missed the post-fetch `has_history` status computation, which did
+    `start < date.today()` unconditionally — crashing with "'<' not supported between
+    instances of 'str' and 'datetime.date'" whenever a real fetch succeeded with the "min"
+    sentinel still unresolved (mockprov.supports_history is True, so this path is reached).
+    """
+    AssetProviderRegistry.auto_discover()
+    timestamp = int(time.time() * 1000)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        test_asset = Asset(
+            display_name=f"MinStartRefresh Test {timestamp}",
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            active=True,
+        )
+        session.add(test_asset)
+        await session.commit()
+        await session.refresh(test_asset)
+
+        item = FAProviderAssignmentItem(
+            asset_id=test_asset.id,
+            provider_code="mockprov",
+            identifier="MOCK_MIN_START",
+            identifier_type=ProviderInputType.AUTO_GENERATED,
+            provider_params={},
+        )
+        results = await AssetSourceManager.bulk_assign_providers([item], session)
+        assert results[0].success
+
+        sync_response = await AssetSourceManager.bulk_refresh_prices(
+            requests=[
+                FARefreshItem(
+                    asset_id=test_asset.id,
+                    date_range={"start": "min", "end": date(2025, 1, 10)},
+                )
+            ],
+            session=session,
+        )
+
+        sync_result = sync_response.results[0]
+        assert not sync_result.errors, f"Sync with start='min' should not error: {sync_result.errors}"
+        assert sync_result.status in ("ok", "partial"), f"Unexpected status: {sync_result.status}"
+        print_success("✓ bulk_refresh_prices() with start='min' completed without a str/date comparison crash")
 
 
 # ============================================================================

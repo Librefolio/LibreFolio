@@ -59,7 +59,7 @@ from backend.app.schemas.assets import (
 from backend.app.schemas.common import Currency
 from backend.app.schemas.prices import FAAssetEventPoint
 from backend.app.schemas.provider import FAProviderKind
-from backend.app.services.asset_source import AssetSourceError, AssetSourceProvider
+from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 from backend.app.utils.cache_utils import get_ttl_cache
 
@@ -791,7 +791,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         identifier: str,
         identifier_type: IdentifierType,
         provider_params: dict,
-        start_date: date_type,
+        start_date: AssetHistoryStartDate,
         end_date: date_type,
     ) -> FAHistoricalData:
         """
@@ -809,6 +809,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             # Destructure cached tuple (values, auto_events)
             cached, cached_auto_events = _generate_schedule_values(schedule)
             maturity_date = max(cached.keys()) if cached else None
+            effective_start = min(cached.keys()) if start_date == "min" and cached else start_date
 
             # Check for MATURITY_SETTLEMENT in cached events
             settlement_evt = next((e for e in cached_auto_events if e.type == "MATURITY_SETTLEMENT"), None)
@@ -818,14 +819,14 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
             # Emit cached values that fall within the requested range
             for d in sorted(cached.keys()):
-                if start_date <= d <= end_date:
+                if effective_start <= d <= end_date:
                     prices.append(FAPricePoint(date=d, close=cached[d], currency=currency))
 
             # Handle post-maturity range with late interest maturation dates
             late_auto_events: list[FAAssetEventPoint] = []
             if maturity_date and end_date > maturity_date and schedule.late_interest:
                 li = schedule.late_interest
-                late_start = max(maturity_date + timedelta(days=1), start_date)
+                late_start = max(maturity_date + timedelta(days=1), effective_start)
                 late_mat_dates = _compute_maturation_dates(
                     maturity_date + timedelta(days=1),
                     end_date,

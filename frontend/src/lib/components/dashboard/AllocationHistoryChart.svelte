@@ -15,6 +15,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {CHART_ANIMATION_CONFIG, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
+    import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {aggregateLineSeries, cascadeResolution, chooseInitialResolution, mapDateToBucket, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
@@ -84,6 +85,9 @@
     let resizeObserver: ResizeObserver | null = null;
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
+    let visibilityObservers: MutationObserver[] = [];
+    let visibilityObserved = false;
+    let lastKnownVisibility: boolean | null = null;
     let currentResolution: ChartResolution = $state('daily');
     let logicalRange: LogicalRange | null = $state(null);
 
@@ -139,6 +143,7 @@
         return () => {
             if (resolutionCheckTimer) clearTimeout(resolutionCheckTimer);
             tooltipCleanup?.();
+            disconnectVisibilityObservers();
             darkModeObserver?.disconnect();
             resizeObserver?.disconnect();
             chartInstance?.dispose();
@@ -152,6 +157,7 @@
         void $currentLanguage;
         if (chartContainer) {
             tick().then(() => {
+                setupVisibilityObservers();
                 if (!resizeObserver && chartContainer) {
                     resizeObserver = new ResizeObserver(() => {
                         chartInstance?.resize();
@@ -159,10 +165,52 @@
                     });
                     resizeObserver.observe(chartContainer);
                 }
+                syncVisibilityState();
                 renderChart();
             });
         }
     });
+
+    function disconnectVisibilityObservers() {
+        for (const observer of visibilityObservers) observer.disconnect();
+        visibilityObservers = [];
+        visibilityObserved = false;
+    }
+
+    function isChartVisible(container: HTMLElement): boolean {
+        if (!container.isConnected || container.getClientRects().length === 0) return false;
+        const style = getComputedStyle(container);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+    }
+
+    function syncVisibilityState() {
+        if (!chartContainer) return;
+        const visible = isChartVisible(chartContainer);
+        if (visible === lastKnownVisibility) return;
+        lastKnownVisibility = visible;
+
+        if (!visible) {
+            chartInstance?.dispatchAction({type: 'hideTip'});
+            return;
+        }
+
+        if (chartInstance) {
+            chartInstance.resize();
+        }
+        renderChart({skipAnimation: true});
+    }
+
+    function setupVisibilityObservers() {
+        if (!chartContainer || visibilityObserved) return;
+        let ancestor = chartContainer.parentElement;
+        while (ancestor) {
+            const observer = new MutationObserver(() => syncVisibilityState());
+            observer.observe(ancestor, {attributes: true, attributeFilter: ['class', 'style', 'hidden']});
+            visibilityObservers.push(observer);
+            ancestor = ancestor.parentElement;
+        }
+        visibilityObserved = true;
+    }
 
     /** Localize category label. Temporal resolution pipeline stays fully separate. */
     function localizeName(rawName: string): string {
@@ -413,11 +461,12 @@
     }
 
     function buildDataZoomOption(dataset: AggregatedAllocationDataset, range: LogicalRange | null): Record<string, unknown>[] {
+        const baseDataZoom = {type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG};
         const visibleRows = getRowsIntersectingRange(dataset.rows, range);
-        if (visibleRows.length === 0) return [{type: 'inside', start: 0, end: 100}];
+        if (visibleRows.length === 0) return [{...baseDataZoom, start: 0, end: 100}];
         return [
             {
-                type: 'inside',
+                ...baseDataZoom,
                 startValue: visibleRows[0].date,
                 endValue: visibleRows[visibleRows.length - 1].date,
             },
@@ -606,6 +655,7 @@
 
     function renderChart(options: {skipAnimation?: boolean} = {}) {
         if (!chartContainer || loading || data.length === 0) return;
+        if (!isChartVisible(chartContainer)) return;
 
         invalidateTemporalCacheIfNeeded();
 

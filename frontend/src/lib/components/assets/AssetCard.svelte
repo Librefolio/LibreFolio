@@ -18,6 +18,8 @@
     import type {RenderedSignal} from '$lib/charts/signals';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
 
     // =========================================================================
     // Props
@@ -179,7 +181,7 @@
         <div class="flex items-center gap-2">
             <AssetIcon altText={asset.display_name} assetType={asset.asset_type} iconUrl={asset.icon_url} size="sm" />
             <div class="flex-1 min-w-0">
-                <span class="font-semibold text-gray-800 dark:text-gray-100 truncate block">{asset.display_name}</span>
+                <span use:scrollOnOverflow class="{overflowScrollTextClass} font-semibold text-gray-800 dark:text-gray-100" title={asset.display_name}>{asset.display_name}</span>
             </div>
             <div class="flex items-center gap-1.5 shrink-0">
                 {#if asset.asset_type}

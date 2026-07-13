@@ -30,9 +30,9 @@ from __future__ import annotations
 
 from datetime import date
 from enum import StrEnum
-from typing import List, Optional
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.app.schemas.common import BaseBulkResponse, Currency, DateRangeModel
 from backend.app.schemas.prices import FAPricePoint
@@ -60,6 +60,33 @@ FXSyncStatus = SyncStatus
 # ============================================================================
 
 
+SyncStartDate = date | Literal["min"]
+
+
+class SyncDateRangeModel(BaseModel):
+    """Sync date range with required end and sentinel-aware start."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    start: SyncStartDate = Field(..., description="Start date (inclusive) or 'min' for provider-defined full history")
+    end: date = Field(..., description="End date (inclusive)")
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_date_range_model(cls, value):
+        """Accept existing concrete DateRangeModel instances from internal callers/tests."""
+        if isinstance(value, DateRangeModel):
+            return {"start": value.start, "end": value.end}
+        return value
+
+    @model_validator(mode="after")
+    def validate_end_after_start(self) -> SyncDateRangeModel:
+        """Ensure end >= start when start is concrete."""
+        if isinstance(self.start, date) and self.end < self.start:
+            raise ValueError(f"end date ({self.end}) must be >= start date ({self.start})")
+        return self
+
+
 class FARefreshItem(BaseModel):
     """Single asset refresh request.
 
@@ -69,7 +96,7 @@ class FARefreshItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
-    date_range: DateRangeModel = Field(..., description="Date range for refresh")
+    date_range: SyncDateRangeModel = Field(..., description="Date range for refresh")
 
 
 class FARefreshResult(BaseModel):
@@ -113,7 +140,7 @@ CHANGED_POINTS_PAYLOAD_CAP: int = 500
 class FABulkRefreshResponse(BaseBulkResponse[FARefreshResult]):
     """Response for bulk asset price refresh."""
 
-    date_range: Optional[DateRangeModel] = Field(None, description="Requested date range")
+    date_range: Optional[SyncDateRangeModel] = Field(None, description="Requested date range")
     total_points_changed: int = Field(0, ge=0, description="Sum of points_changed across all assets")
 
 
@@ -132,7 +159,7 @@ class FXSyncPairRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     pairs: List[str] = Field(..., min_length=1, description="Pair slugs, e.g. ['EUR-USD', 'CHF-CNY']")
-    start: date = Field(..., description="Start date (inclusive)")
+    start: SyncStartDate = Field(..., description="Start date (inclusive) or 'min' for provider-defined full history")
     end: date = Field(..., description="End date (inclusive)")
 
     @field_validator("pairs", mode="before")
@@ -214,5 +241,5 @@ class FXSyncBulkResponse(BaseBulkResponse[FXSyncPairResult]):
     - total_points_changed: aggregate across all pairs
     """
 
-    date_range: DateRangeModel = Field(..., description="Requested date range")
+    date_range: SyncDateRangeModel = Field(..., description="Requested date range")
     total_points_changed: int = Field(0, ge=0, description="Sum of points_changed across all pairs")

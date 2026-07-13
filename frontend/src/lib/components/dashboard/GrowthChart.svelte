@@ -76,6 +76,16 @@
         pctCash: {light: '#9caf9c', dark: '#94a3b8'}, // ROI (% mode)
     };
 
+    const INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG = {
+        // Keep native single-finger page scroll intact. ECharts still preserves
+        // its built-in two-finger pinch zoom path, while desktop wheel zoom
+        // remains enabled without drag-based pan capture.
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: false,
+        moveOnMouseWheel: false,
+        preventDefaultMouseMove: false,
+    };
+
     type SeriesPoint = ReturnType<typeof namedPoint> & {
         bucketStart: string;
         bucketEnd: string;
@@ -522,7 +532,7 @@
                           animationDurationUpdate: 0,
                       }
                     : CHART_ANIMATION_CONFIG),
-                dataZoom: [{type: 'inside', start: zoomWindow.start, end: zoomWindow.end}],
+                dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],
                 series,
             },
             CHART_SERIES_UPDATE_OPTS,
@@ -763,7 +773,7 @@
                 itemWidth: 14,
                 itemHeight: 8,
             },
-            dataZoom: [{type: 'inside', start: zoomWindow.start, end: zoomWindow.end}],
+            dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],
             xAxis: {
                 type: 'time',
                 axisLabel: {color: textColor, fontSize: 14, rotate: 0},

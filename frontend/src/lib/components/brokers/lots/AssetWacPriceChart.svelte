@@ -11,7 +11,9 @@
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
 
     type AssetHistoryPoint = z.infer<typeof schemas.AssetHistoryPoint>;
-    type ViewMode = 'eur' | 'percent';
+    type DisplayMode = 'absolute' | 'percentage';
+
+    const DAY_MS = 24 * 60 * 60 * 1000;
 
     interface Props {
         assetId: number;
@@ -57,7 +59,7 @@
 
     const effectiveBrokerIds = $derived.by(() => (brokerIds.length > 0 ? brokerIds : brokerId != null ? [brokerId] : []));
 
-    let mode = $state<ViewMode>('eur');
+    let displayMode = $state<DisplayMode>('absolute');
     let loading = $state(false);
     let error = $state<string | null>(null);
     let history = $state<AssetHistoryPoint[]>([]);
@@ -114,6 +116,26 @@
             return new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1}).format(normalized);
         }
         return normalized.toLocaleString(undefined, {minimumFractionDigits: abs < 10 && abs % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2});
+    }
+
+    function parseDateToUtcMs(value: string): number | null {
+        const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (dateOnlyMatch) {
+            const [, year, month, day] = dateOnlyMatch;
+            return Date.UTC(Number(year), Number(month) - 1, Number(day));
+        }
+
+        const parsed = Date.parse(value);
+        if (!Number.isFinite(parsed)) return null;
+        const date = new Date(parsed);
+        return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    }
+
+    function elapsedDaysBetween(start: string, end: string): number | null {
+        const startMs = parseDateToUtcMs(start);
+        const endMs = parseDateToUtcMs(end);
+        if (startMs == null || endMs == null || endMs < startMs) return null;
+        return Math.floor((endMs - startMs) / DAY_MS);
     }
 
     function syncTheme() {
@@ -178,6 +200,9 @@
         marketPrice: 'Market Price',
         roi: tr('dashboard.roi', 'ROI'),
         twrr: tr('dashboard.twrr', 'TWRR'),
+        abs: tr('dashboard.abs', 'Abs'),
+        pct: tr('dashboard.pct', '%'),
+        days: tr('datePicker.granularity.days', 'Days'),
         combined: tr('brokers.lots.combined', 'Combined'),
         noData: tr('common.noData', 'No data'),
     }));
@@ -248,13 +273,20 @@
 
     let hasEurData = $derived(groupedChartData.hasEurData);
     let hasPercentData = $derived(groupedChartData.hasPercentData);
-    let showChart = $derived(!loading && !error && groupedChartData.totalPointCount > 0 && (mode === 'eur' ? hasEurData : hasPercentData));
+    let chartStartDate = $derived.by(() => {
+        let minDate: string | null = null;
+        for (const point of history) {
+            if (minDate == null || point.date < minDate) minDate = point.date;
+        }
+        return minDate;
+    });
+    let showChart = $derived(!loading && !error && groupedChartData.totalPointCount > 0 && (displayMode === 'absolute' ? hasEurData : hasPercentData));
     let emptyMessage = $derived.by(() => {
         if (error) return error;
         if (loading) return '';
         if (groupedChartData.totalPointCount === 0) return labels.noData;
-        if (mode === 'percent' && !hasPercentData) return 'No data yet';
-        if (mode === 'eur' && !hasEurData) return labels.noData;
+        if (displayMode === 'percentage' && !hasPercentData) return 'No data yet';
+        if (displayMode === 'absolute' && !hasEurData) return labels.noData;
         return '';
     });
 
@@ -373,11 +405,13 @@
     }
 
     function buildSeries(): echarts.SeriesOption[] {
-        return mode === 'eur' ? buildEurSeries() : buildPercentSeries();
+        return displayMode === 'absolute' ? buildEurSeries() : buildPercentSeries();
     }
 
     function buildTooltip(params: any[]): string {
         const theme = buildTooltipTheme(isDark);
+        const rawDate = String(params[0]?.axisValue ?? params[0]?.value?.[0] ?? '');
+        const elapsedDays = chartStartDate ? elapsedDaysBetween(chartStartDate, rawDate) : null;
         const rows = params
             .map((param) => {
                 const rawValue = Array.isArray(param.value) ? param.value[1] : param.value;
@@ -386,14 +420,17 @@
                 const value = Number(rawValue);
                 if (!Number.isFinite(value)) return null;
 
-                const formatted = mode === 'eur' ? formatCurrencyAmountPlain(value, currency) : formatPercent(value);
+                const formatted = displayMode === 'absolute' ? formatCurrencyAmountPlain(value, currency) : formatPercent(value);
                 return buildTooltipRow(escapeHtml(String(param.seriesName ?? '')), escapeHtml(formatted), typeof param.color === 'string' ? param.color : undefined);
             })
             .filter((row): row is string => row != null);
 
+        if (elapsedDays != null) {
+            rows.unshift(buildTooltipRow(escapeHtml(labels.days), escapeHtml(String(elapsedDays))));
+        }
+
         if (rows.length === 0) return '';
 
-        const rawDate = params[0]?.axisValue ?? params[0]?.value?.[0] ?? '';
         return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatDate(String(rawDate))), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
     }
 
@@ -460,7 +497,7 @@
                 },
                 axisLabel: {
                     color: gridColors.textColor,
-                    formatter: (value: number) => (mode === 'eur' ? formatAxisNumber(value) : `${normalizeZero(value).toFixed(0)}%`),
+                    formatter: (value: number) => (displayMode === 'absolute' ? formatAxisNumber(value) : `${normalizeZero(value).toFixed(0)}%`),
                 },
             },
             series: buildSeries(),
@@ -533,8 +570,14 @@
     });
 
     $effect(() => {
+        if (displayMode === 'percentage' && !hasPercentData && hasEurData) {
+            displayMode = 'absolute';
+        }
+    });
+
+    $effect(() => {
         void groupedChartData;
-        void mode;
+        void displayMode;
         void currency;
         void labels;
         void loading;
@@ -574,19 +617,33 @@
 </script>
 
 <div class="rounded-lg border border-gray-200/80 bg-gray-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/30" data-testid="asset-wac-price-chart">
-    <div class="mb-3 flex justify-end">
-        <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs dark:border-slate-600">
-            <button type="button" class="px-2.5 py-1 transition-colors {mode === 'eur' ? 'bg-libre-green text-white' : 'text-gray-500 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-slate-700'}" onclick={() => (mode = 'eur')} aria-pressed={mode === 'eur'} data-testid="asset-wac-price-mode-eur">
-                EUR
+    <div class="mb-3 flex items-center justify-between gap-3">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+            {displayMode === 'absolute' ? `${labels.wac} / ${labels.marketPrice}` : `${labels.roi} / ${labels.twrr}`}
+        </h3>
+
+        <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
+            <button
+                type="button"
+                class="px-3 py-1 transition-colors {displayMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                onclick={() => (displayMode = 'absolute')}
+                aria-pressed={displayMode === 'absolute'}
+                data-testid="wac-toggle-absolute"
+            >
+                {labels.abs}
             </button>
             <button
                 type="button"
-                class="px-2.5 py-1 transition-colors {mode === 'percent' ? 'bg-libre-green text-white' : 'text-gray-500 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                onclick={() => (mode = 'percent')}
-                aria-pressed={mode === 'percent'}
-                data-testid="asset-wac-price-mode-percent"
+                class="px-3 py-1 transition-colors border-l border-gray-200 dark:border-slate-600 {displayMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'} {!hasPercentData
+                    ? 'cursor-not-allowed opacity-50'
+                    : ''}"
+                onclick={() => hasPercentData && (displayMode = 'percentage')}
+                aria-pressed={displayMode === 'percentage'}
+                disabled={!hasPercentData}
+                title={!hasPercentData ? labels.noData : ''}
+                data-testid="wac-toggle-percentage"
             >
-                %
+                {labels.pct}
             </button>
         </div>
     </div>

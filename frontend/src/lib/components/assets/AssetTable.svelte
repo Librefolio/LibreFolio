@@ -7,6 +7,7 @@
 -->
 <script lang="ts">
     import {goto} from '$app/navigation';
+    import {onMount} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
@@ -17,6 +18,8 @@
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
 
     // =========================================================================
     // Types
@@ -59,6 +62,15 @@
 
     /** Exposed DataTable ref for ColumnVisibilityToggle */
     let tableRef: DataTable<AssetRow> | undefined = $state(undefined);
+    let tableWrapperEl: HTMLDivElement | undefined = $state(undefined);
+
+    // Cells are rendered as raw HTML strings (see the 'name' column below), so `use:` actions
+    // can't attach to them directly — scan the wrapper for overflow-marquee candidates instead,
+    // re-attaching automatically whenever rows are re-rendered (sort/filter/pagination/refresh).
+    onMount(() => {
+        if (!tableWrapperEl) return;
+        return attachOverflowMarqueeToDescendants(tableWrapperEl);
+    });
 
     export function getTableRef() {
         return tableRef;
@@ -125,7 +137,7 @@
                     const activeDot = row.active ? '<span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>' : '<span class="w-2 h-2 rounded-full bg-red-400 shrink-0"></span>';
                     return {
                         type: 'html',
-                        html: `<div class="flex items-center gap-2">${icon}<span class="font-medium text-gray-800 dark:text-gray-100">${row.display_name}</span>${activeDot}</div>`,
+                        html: `<div class="flex items-center gap-2 min-w-0">${icon}<span class="min-w-0 flex-1 font-medium text-gray-800 dark:text-gray-100 ${overflowScrollTextClass}">${row.display_name}</span>${activeDot}</div>`,
                     };
                 },
                 type: 'text',
@@ -216,60 +228,62 @@
     );
 </script>
 
-<DataTable
-    bind:this={tableRef}
-    {columns}
-    {data}
-    defaultPageSize={25}
-    emptyMessage={$t('assets.empty.noAssets')}
-    enableActions={true}
-    enableColumnFilters={true}
-    enablePagination={true}
-    enableSorting={true}
-    getRowId={(row) => String(row.id)}
-    isLoading={loading}
-    onRowClick={(row) => goto(`/assets/${row.id}${dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : ''}`)}
-    getRowHref={(row) => `/assets/${row.id}${dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : ''}`}
-    onSelectionChange={(ids) => onselectionchange?.(data.filter((row) => ids.includes(String(row.id))))}
-    rowActions={[
-        {
-            id: 'sync',
-            label: 'Sync',
-            icon: RotateCw,
-            onClick: async (row) => {
-                const rid = String(row.id);
-                syncingRowIds = new Set([...syncingRowIds, rid]);
-                try {
-                    await onsync?.(row);
-                } finally {
-                    syncingRowIds = new Set([...syncingRowIds].filter((id) => id !== rid));
-                }
+<div bind:this={tableWrapperEl}>
+    <DataTable
+        bind:this={tableRef}
+        {columns}
+        {data}
+        defaultPageSize={25}
+        emptyMessage={$t('assets.empty.noAssets')}
+        enableActions={true}
+        enableColumnFilters={true}
+        enablePagination={true}
+        enableSorting={true}
+        getRowId={(row) => String(row.id)}
+        isLoading={loading}
+        onRowClick={(row) => goto(`/assets/${row.id}${dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : ''}`)}
+        getRowHref={(row) => `/assets/${row.id}${dateStart && dateEnd ? `?start=${dateStart}&end=${dateEnd}` : ''}`}
+        onSelectionChange={(ids) => onselectionchange?.(data.filter((row) => ids.includes(String(row.id))))}
+        rowActions={[
+            {
+                id: 'sync',
+                label: 'Sync',
+                icon: RotateCw,
+                onClick: async (row) => {
+                    const rid = String(row.id);
+                    syncingRowIds = new Set([...syncingRowIds, rid]);
+                    try {
+                        await onsync?.(row);
+                    } finally {
+                        syncingRowIds = new Set([...syncingRowIds].filter((id) => id !== rid));
+                    }
+                },
+                disabled: (row) => !row.provider_code,
+                iconClass: (row) => (syncingRowIds.has(String(row.id)) ? 'animate-spin' : ''),
             },
-            disabled: (row) => !row.provider_code,
-            iconClass: (row) => (syncingRowIds.has(String(row.id)) ? 'animate-spin' : ''),
-        },
-        {
-            id: 'refresh',
-            label: () => $t('common.refresh'),
-            icon: RefreshCw,
-            onClick: async (row) => {
-                const rid = String(row.id);
-                refreshingRowIds = new Set([...refreshingRowIds, rid]);
-                try {
-                    await onrefresh?.(row);
-                } finally {
-                    refreshingRowIds = new Set([...refreshingRowIds].filter((id) => id !== rid));
-                }
+            {
+                id: 'refresh',
+                label: () => $t('common.refresh'),
+                icon: RefreshCw,
+                onClick: async (row) => {
+                    const rid = String(row.id);
+                    refreshingRowIds = new Set([...refreshingRowIds, rid]);
+                    try {
+                        await onrefresh?.(row);
+                    } finally {
+                        refreshingRowIds = new Set([...refreshingRowIds].filter((id) => id !== rid));
+                    }
+                },
+                iconClass: (row) => (refreshingRowIds.has(String(row.id)) ? 'animate-spin' : ''),
             },
-            iconClass: (row) => (refreshingRowIds.has(String(row.id)) ? 'animate-spin' : ''),
-        },
-        {
-            id: 'delete',
-            label: () => $t('common.delete'),
-            icon: Trash2,
-            onClick: (row) => ondelete?.(row),
-            variant: 'danger',
-        },
-    ]}
-    storageKey="assetsTable"
-/>
+            {
+                id: 'delete',
+                label: () => $t('common.delete'),
+                icon: Trash2,
+                onClick: (row) => ondelete?.(row),
+                variant: 'danger',
+            },
+        ]}
+        storageKey="assetsTable"
+    />
+</div>

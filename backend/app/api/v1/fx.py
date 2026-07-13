@@ -174,7 +174,7 @@ async def sync_rates(
         FXSyncBulkResponse with per-pair results and summary
     """
     # Validate date range
-    if body.start > body.end:
+    if isinstance(body.start, date) and body.start > body.end:
         raise HTTPException(status_code=400, detail="Start date must be before or equal to end date")
     if body.end > date.today():
         raise HTTPException(status_code=400, detail="End date cannot be in the future")

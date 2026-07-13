@@ -249,12 +249,33 @@
 </section>
 
 <style>
+    @keyframes tinted-lot-highlight-pulse {
+        0%,
+        100% {
+            background: var(--lot-highlight-base) !important;
+        }
+        50% {
+            background: var(--lot-highlight-peak) !important;
+        }
+    }
+
     :global {
         .closed-lots-table-wrap tr.lot-row-tinted > td {
             background: color-mix(in srgb, var(--broker-vivid-light, transparent) 30%, white);
         }
         .dark .closed-lots-table-wrap tr.lot-row-tinted > td {
             background: color-mix(in srgb, var(--broker-vivid, transparent) 15%, #0f0f18);
+        }
+        .closed-lots-table-wrap tr.lot-row-tinted.highlighted > td {
+            --lot-highlight-base: #f3e8ff;
+            --lot-highlight-peak: #e9d5ff;
+            background: var(--lot-highlight-base) !important;
+            animation: tinted-lot-highlight-pulse 0.6s ease-in-out 3;
+        }
+        .dark .closed-lots-table-wrap tr.lot-row-tinted.highlighted > td {
+            --lot-highlight-base: rgba(147, 51, 234, 0.25);
+            --lot-highlight-peak: rgba(147, 51, 234, 0.4);
+            background: var(--lot-highlight-base) !important;
         }
         .closed-lots-table-wrap tr.lot-row-tinted:hover > td {
             background: color-mix(in srgb, var(--broker-vivid-light, transparent) 75%, white);

@@ -12,6 +12,10 @@
 
     type OpenLotSchema = z.infer<typeof schemas.OpenLotSchema>;
     type ClosedLotSchema = z.infer<typeof schemas.ClosedLotSchema>;
+    type ReturnMode = 'raw' | 'annualized';
+
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const MIN_ANNUALIZED_HOLDING_DAYS = 30;
 
     interface Props {
         openLots: ReadonlyArray<OpenLotSchema>;
@@ -27,6 +31,8 @@
         brokerId: number;
         buyDate: string;
         gainPercent: number;
+        annualizedGainPercent: number | null;
+        holdingDays: number;
         buyPrice: number;
         pnlAmount: number;
         costBasis: number;
@@ -72,6 +78,7 @@
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
     let isDark = $state(false);
+    let returnMode: ReturnMode = $state('raw');
 
     function syncTheme() {
         isDark = document.documentElement.classList.contains('dark');
@@ -123,10 +130,53 @@
         return date.toLocaleDateString($currentLanguage || undefined, {month: 'short', day: 'numeric'});
     }
 
+    function parseDateToUtcMs(value: string): number | null {
+        const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (dateOnlyMatch) {
+            const [, year, month, day] = dateOnlyMatch;
+            return Date.UTC(Number(year), Number(month) - 1, Number(day));
+        }
+
+        const parsed = Date.parse(value);
+        if (!Number.isFinite(parsed)) return null;
+        const date = new Date(parsed);
+        return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    }
+
+    function holdingDaysBetween(start: string, end: string): number {
+        const startMs = parseDateToUtcMs(start);
+        const endMs = parseDateToUtcMs(end);
+        if (startMs == null || endMs == null || endMs <= startMs) return 0;
+        return Math.floor((endMs - startMs) / DAY_MS);
+    }
+
+    function annualizeGainPercent(gainPercent: number, holdingDays: number): number | null {
+        if (holdingDays < MIN_ANNUALIZED_HOLDING_DAYS || holdingDays <= 0) return null;
+        const cumulativeRate = gainPercent / 100;
+        if (cumulativeRate <= -1) return -100;
+
+        const annualized = (Math.pow(1 + cumulativeRate, 365 / holdingDays) - 1) * 100;
+        return Number.isFinite(annualized) ? normalizeZero(annualized) : null;
+    }
+
+    function getDisplayGainPercent(point: LotPoint, mode: ReturnMode): number {
+        if (mode === 'annualized' && point.annualizedGainPercent != null) return point.annualizedGainPercent;
+        return point.gainPercent;
+    }
+
+    function usesAnnualizedFallback(point: LotPoint, mode: ReturnMode): boolean {
+        return mode === 'annualized' && point.annualizedGainPercent == null;
+    }
+
     function pnlColor(value: number, themeDark: boolean): string {
         if (value > 0) return themeDark ? '#4ade80' : '#16a34a';
         if (value < 0) return themeDark ? '#f87171' : '#dc2626';
         return themeDark ? '#60a5fa' : '#2563eb';
+    }
+
+    function statusLegendColor(kind: 'open' | 'closed', themeDark: boolean): string {
+        if (kind === 'open') return themeDark ? '#60a5fa' : '#3b82f6';
+        return themeDark ? '#fbbf24' : '#f59e0b';
     }
 
     function lotBrokerName(brokerId: number): string {
@@ -163,6 +213,7 @@
         const costBasis = buyPrice * originalQuantity;
         const heldRatio = originalQuantity > 0 ? clamp(remainingQuantity / originalQuantity, 0, 1) : 0;
         const gainPercent = costBasis > 0 ? normalizeZero((pnlAmount / costBasis) * 100) : 0;
+        const holdingDays = holdingDaysBetween(lot.buy_date, new Date().toISOString());
 
         return {
             kind: 'open',
@@ -170,6 +221,8 @@
             brokerId: lot.broker_id,
             buyDate: lot.buy_date,
             gainPercent,
+            annualizedGainPercent: annualizeGainPercent(gainPercent, holdingDays),
+            holdingDays,
             buyPrice,
             pnlAmount,
             costBasis,
@@ -186,6 +239,7 @@
         const pnlAmount = parseNumber(lot.realized_pnl);
         const costBasis = buyPrice * quantity;
         const gainPercent = costBasis > 0 ? normalizeZero((pnlAmount / costBasis) * 100) : 0;
+        const holdingDays = holdingDaysBetween(lot.buy_date, lot.sell_date);
 
         return {
             kind: 'closed',
@@ -193,6 +247,8 @@
             brokerId: lot.broker_id,
             buyDate: lot.buy_date,
             gainPercent,
+            annualizedGainPercent: annualizeGainPercent(gainPercent, holdingDays),
+            holdingDays,
             buyPrice,
             pnlAmount,
             costBasis,
@@ -206,7 +262,7 @@
         const open = openLots.map(buildOpenLotPoint).sort((a, b) => a.buyDate.localeCompare(b.buyDate));
         const closed = closedLots.map(buildClosedLotPoint).sort((a, b) => a.buyDate.localeCompare(b.buyDate));
         const all = [...open, ...closed];
-        const gains = all.map((point) => point.gainPercent);
+        const gains = all.map((point) => getDisplayGainPercent(point, returnMode));
         const rawMin = gains.length > 0 ? Math.min(...gains) : -5;
         const rawMax = gains.length > 0 ? Math.max(...gains) : 5;
         const spread = rawMax - rawMin;
@@ -244,9 +300,10 @@
     function buildOpenBackdropData(themeDark: boolean): ScatterPointDatum[] {
         return chartModel.open.map((point) => {
             const color = lotBrokerColor(point.brokerId, themeDark);
+            const displayGainPercent = getDisplayGainPercent(point, returnMode);
             return {
                 name: `open-original-${point.buyTransactionId}`,
-                value: [point.buyDate, point.gainPercent],
+                value: [point.buyDate, displayGainPercent],
                 meta: point,
                 symbolSize: bubbleSize(point.originalQuantity, chartModel.maxQuantity),
                 itemStyle: {
@@ -263,9 +320,10 @@
     function buildOpenSeriesData(themeDark: boolean): ScatterPointDatum[] {
         return chartModel.open.map((point) => {
             const color = lotBrokerColor(point.brokerId, themeDark);
+            const displayGainPercent = getDisplayGainPercent(point, returnMode);
             return {
                 name: `open-${point.buyTransactionId}`,
-                value: [point.buyDate, point.gainPercent],
+                value: [point.buyDate, displayGainPercent],
                 meta: point,
                 symbolSize: bubbleSize(point.remainingQuantity, chartModel.maxQuantity),
                 itemStyle: {
@@ -283,9 +341,10 @@
     function buildClosedSeriesData(themeDark: boolean): ScatterPointDatum[] {
         return chartModel.closed.map((point) => {
             const color = lotBrokerColor(point.brokerId, themeDark);
+            const displayGainPercent = getDisplayGainPercent(point, returnMode);
             return {
                 name: `closed-${point.buyTransactionId}-${point.sellDate}`,
-                value: [point.buyDate, point.gainPercent],
+                value: [point.buyDate, displayGainPercent],
                 meta: point,
                 symbolSize: bubbleSize(point.quantity, chartModel.maxQuantity),
                 itemStyle: {
@@ -299,16 +358,19 @@
     }
 
     function buildZeroDotData(themeDark: boolean): ScatterPointDatum[] {
-        return [...chartModel.open, ...chartModel.closed].map((point) => ({
-            name: `__zero-dot-${point.kind}-${point.buyTransactionId}-${point.buyDate}`,
-            value: [point.buyDate, point.gainPercent],
-            meta: point,
-            symbolSize: 5,
-            itemStyle: {
-                color: pnlColor(point.gainPercent, themeDark),
-                opacity: 1,
-            },
-        }));
+        return [...chartModel.open, ...chartModel.closed].map((point) => {
+            const displayGainPercent = getDisplayGainPercent(point, returnMode);
+            return {
+                name: `__zero-dot-${point.kind}-${point.buyTransactionId}-${point.buyDate}`,
+                value: [point.buyDate, displayGainPercent],
+                meta: point,
+                symbolSize: 5,
+                itemStyle: {
+                    color: pnlColor(displayGainPercent, themeDark),
+                    opacity: 1,
+                },
+            };
+        });
     }
 
     function buildZeroConnectorSeries(themeDark: boolean): echarts.LineSeriesOption[] {
@@ -319,7 +381,7 @@
             tooltip: {show: false},
             data: [
                 [point.buyDate, 0],
-                [point.buyDate, point.gainPercent],
+                [point.buyDate, getDisplayGainPercent(point, returnMode)],
             ],
             showSymbol: false,
             connectNulls: false,
@@ -327,7 +389,7 @@
             lineStyle: {
                 type: 'dashed',
                 width: 1,
-                color: pnlColor(point.gainPercent, themeDark),
+                color: pnlColor(getDisplayGainPercent(point, returnMode), themeDark),
             },
             z: 1.1,
         }));
@@ -335,7 +397,9 @@
 
     function buildTooltip(meta: LotPoint, themeDark: boolean): string {
         const theme = buildTooltipTheme(themeDark);
-        const pointColor = pnlColor(meta.gainPercent, themeDark);
+        const displayGainPercent = getDisplayGainPercent(meta, returnMode);
+        const annualizedFallback = usesAnnualizedFallback(meta, returnMode);
+        const pointColor = pnlColor(displayGainPercent, themeDark);
         let html = buildTooltipHeader(escapeHtml(formatDate(meta.buyDate)), theme.textColor);
         html += buildTooltipRow(escapeHtml($t('common.broker') || 'Broker'), escapeHtml(lotBrokerName(meta.brokerId)));
         html += buildTooltipRow(escapeHtml($t('dashboard.status') || 'Status'), escapeHtml(meta.kind === 'open' ? $t('dashboard.openPositions') || 'Open' : $t('dashboard.closedPositions') || 'Closed'), pointColor);
@@ -344,16 +408,20 @@
             html += buildTooltipRow(escapeHtml($t('dashboard.quantity') || 'Qty'), escapeHtml(formatQuantity(meta.originalQuantity)));
             html += buildTooltipRow(escapeHtml($t('common.remaining') || 'Remaining'), escapeHtml(`${formatQuantity(meta.remainingQuantity)} (${formatPercent(meta.heldRatio * 100, 1)})`));
             html += buildTooltipRow(escapeHtml($t('dashboard.price') || 'Price'), escapeHtml(formatCurrencyAmountPlain(meta.buyPrice, currency)));
+            html += buildTooltipRow(escapeHtml($t('datePicker.granularity.days') || 'Days'), escapeHtml(String(meta.holdingDays)));
             html += buildTooltipDivider(theme.border);
             html += buildTooltipRow(escapeHtml($t('dashboard.unrealizedPnl') || 'Unrealized P&L'), `<span style="color:${pointColor}">${escapeHtml(formatCurrencyAmountPlain(meta.pnlAmount, currency, {showSign: true}))}</span>`);
         } else {
             html += buildTooltipRow(escapeHtml($t('dashboard.quantity') || 'Qty'), escapeHtml(formatQuantity(meta.quantity)));
             html += buildTooltipRow(escapeHtml($t('dashboard.price') || 'Price'), escapeHtml(`${formatCurrencyAmountPlain(meta.buyPrice, currency)} → ${formatCurrencyAmountPlain(meta.sellPrice, currency)}`));
+            html += buildTooltipRow(escapeHtml($t('datePicker.granularity.days') || 'Days'), escapeHtml(String(meta.holdingDays)));
             html += buildTooltipDivider(theme.border);
             html += buildTooltipRow(escapeHtml($t('dashboard.realized') || 'Realized'), `<span style="color:${pointColor}">${escapeHtml(formatCurrencyAmountPlain(meta.pnlAmount, currency, {showSign: true}))}</span>`);
         }
 
-        html += buildTooltipRow(escapeHtml($t('dashboard.unrealizedPnlPercent') || 'P&L %'), `<span style="color:${pointColor}">${escapeHtml(formatPercent(meta.gainPercent))}</span>`);
+        const percentLabel = returnMode === 'annualized' ? $t('measure.table.annualized') || 'Δ%/yr' : $t('dashboard.unrealizedPnlPercent') || 'P&L %';
+        const percentValue = annualizedFallback ? `${formatPercent(meta.gainPercent)} • <${MIN_ANNUALIZED_HOLDING_DAYS}d` : formatPercent(displayGainPercent);
+        html += buildTooltipRow(escapeHtml(percentLabel), `<span style="color:${pointColor}">${escapeHtml(percentValue)}</span>`);
         return `<div style="font-size:11px;color:${theme.textColor}">${html}</div>`;
     }
 
@@ -362,20 +430,23 @@
         const gridColors = buildGridColors(themeDark);
         const openLabel = $t('dashboard.openPositions') || 'Open';
         const closedLabel = $t('dashboard.closedPositions') || 'Closed';
+        const openLegendColor = statusLegendColor('open', themeDark);
+        const closedLegendColor = statusLegendColor('closed', themeDark);
 
         return {
             ...CHART_ANIMATION_CONFIG,
             animationDurationUpdate: 500,
             grid: {
-                top: 44,
+                top: 18,
                 right: 18,
-                bottom: 34,
+                bottom: 58,
                 left: 22,
                 containLabel: true,
             },
             legend: {
-                top: 4,
+                bottom: 0,
                 left: 'center',
+                data: [openLabel, closedLabel],
                 itemWidth: 10,
                 itemHeight: 10,
                 selectedMode: false,
@@ -440,6 +511,8 @@
                 {
                     name: openLabel,
                     type: 'scatter',
+                    color: openLegendColor,
+                    itemStyle: {color: openLegendColor},
                     data: buildOpenSeriesData(themeDark),
                     symbol: 'circle',
                     emphasis: {
@@ -450,6 +523,8 @@
                 {
                     name: closedLabel,
                     type: 'scatter',
+                    color: closedLegendColor,
+                    itemStyle: {color: closedLegendColor},
                     data: buildClosedSeriesData(themeDark),
                     symbol: 'circle',
                     emphasis: {
@@ -536,6 +611,7 @@
         void xAxisRange;
         void chartModel;
         void $currentLanguage;
+        void returnMode;
 
         if (!chartContainer) return;
 
@@ -545,7 +621,26 @@
     });
 </script>
 
-<div class="w-full">
+<div class="w-full rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 flex flex-col gap-3">
+    <div class="flex items-center justify-between gap-3">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+            {returnMode === 'annualized' ? $t('measure.table.annualized') || 'Δ%/yr' : $t('dashboard.unrealizedPnlPercent') || 'P&L %'}
+        </h3>
+
+        <div class="flex rounded-lg overflow-hidden border border-gray-200 dark:border-slate-600 text-xs font-medium">
+            <button class="px-3 py-1 transition-colors {returnMode === 'raw' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" onclick={() => (returnMode = 'raw')} data-testid="bubble-toggle-raw">
+                {$t('measure.table.deltaPct') || 'Δ %'}
+            </button>
+            <button
+                class="px-3 py-1 transition-colors border-l border-gray-200 dark:border-slate-600 {returnMode === 'annualized' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                onclick={() => (returnMode = 'annualized')}
+                data-testid="bubble-toggle-annualized"
+            >
+                {$t('measure.table.annualized') || 'Δ%/yr'}
+            </button>
+        </div>
+    </div>
+
     <div data-testid="bubble-lot-timeline" class="relative h-80 w-full">
         <div bind:this={chartContainer} class="h-full w-full"></div>
         {#if !chartModel.hasData}
@@ -556,7 +651,7 @@
     </div>
 
     {#if brokerLegendItems.length >= 2}
-        <div data-testid="bubble-broker-legend" class="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-gray-600 dark:text-gray-300">
+        <div data-testid="bubble-broker-legend" class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-gray-600 dark:text-gray-300">
             {#each brokerLegendItems as broker (broker.brokerId)}
                 <span class="inline-flex items-center gap-1.5">
                     <span class="inline-block h-2.5 w-2.5 rounded-full" style={`background-color: ${lotBrokerColor(broker.brokerId, isDark)}`}></span>

@@ -14,7 +14,7 @@ from decimal import Decimal
 import httpx
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx import FXRateProvider, FXServiceError
+from backend.app.services.fx import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError
 from backend.app.services.provider_registry import FXProviderRegistry, register_provider
 
 logger = get_logger(__name__)
@@ -122,7 +122,7 @@ class BOEProvider(FXRateProvider):
         currencies = ["GBP"] + list(self.CURRENCY_SERIES.keys())
         return sorted(currencies)
 
-    async def fetch_rates(self, date_range: tuple[date, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
+    async def fetch_rates(self, date_range: tuple[FXProviderStartDate, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """
         Fetch FX rates from BOE API for given date range and currencies.
 
@@ -145,6 +145,7 @@ class BOEProvider(FXRateProvider):
             raise ValueError(f"BOE provider only supports GBP as base currency, got {base_currency}")
 
         start_date, end_date = date_range
+        request_start = FX_HISTORY_MIN_FALLBACK if start_date == "min" else start_date
         results = {}
 
         # Filter valid currencies
@@ -162,7 +163,7 @@ class BOEProvider(FXRateProvider):
             series_code = self.CURRENCY_SERIES[currency]
 
             params = {
-                "Datefrom": start_date.strftime("%d/%b/%Y"),
+                "Datefrom": request_start.strftime("%d/%b/%Y"),
                 "Dateto": end_date.strftime("%d/%b/%Y"),
                 "SeriesCodes": series_code,
                 "CSVF": "TN",

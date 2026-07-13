@@ -20,7 +20,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx import FXRateProvider, FXServiceError
+from backend.app.services.fx import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError
 from backend.app.services.provider_registry import FXProviderRegistry, register_provider
 
 logger = get_logger(__name__)
@@ -67,12 +67,14 @@ class MockFXProvider(FXRateProvider):
 
     async def fetch_rates(
         self,
-        date_range: tuple[date, date],
+        date_range: tuple[FXProviderStartDate, date],
         currencies: list[str],
         base_currency: str | None = None,
     ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
         """Return the fixed rate MOCKFX_FIXED_RATE for every date/currency."""
         start, end = date_range
+        if start == "min":
+            start = FX_HISTORY_MIN_FALLBACK
         base = base_currency or self.base_currency
         result: dict[str, list[tuple[date, str, str, Decimal]]] = {}
 
@@ -132,7 +134,7 @@ class MockFXFailProvider(FXRateProvider):
 
     async def fetch_rates(
         self,
-        date_range: tuple[date, date],
+        date_range: tuple[FXProviderStartDate, date],
         currencies: list[str],
         base_currency: str | None = None,
     ) -> dict[str, list[tuple[date, str, str, Decimal]]]:

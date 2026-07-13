@@ -13,6 +13,8 @@
     import {_} from '$lib/i18n';
     import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {onMount} from 'svelte';
 
     // Use the holding type from portfolioStore's re-exported type
@@ -122,7 +124,7 @@
                             <td class="py-2 pr-3">
                                 <div class="flex items-center gap-1.5 min-w-0">
                                     {@html assetIconHtml(holding)}
-                                    <span class="truncate max-w-[120px] text-gray-700 dark:text-gray-200 font-medium">{holding.asset_name}</span>
+                                    <span use:scrollOnOverflow class="{overflowScrollTextClass} max-w-[120px] text-gray-700 dark:text-gray-200 font-medium" title={holding.asset_name}>{holding.asset_name}</span>
                                 </div>
                             </td>
                             <!-- Current price -->
