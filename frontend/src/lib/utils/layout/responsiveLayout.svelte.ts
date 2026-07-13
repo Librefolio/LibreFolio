@@ -21,25 +21,26 @@ export interface LayoutThresholds {
      *  inline to an internal 2-row block) even though the outer row stays side-by-side. */
     denseRow: number; // e.g., FX: 700,  Asset: 920
     /** Below this: Center moves BELOW the DateRangePicker (both stack into one "justified" —
-     *  start-aligned, full-width — column). Actions stay a 2×2 grid (beside the stacked column). */
+     *  start-aligned, full-width — column). Actions stay a 2×2 grid, but BESIDE that column
+     *  (whole bar is still a row: `[Picker+Centro column] ─── [Azioni 2×2]`). */
     stackFilters: number; // e.g., FX: 530,  Asset: 500
+    /** Below this: the WHOLE bar becomes a single column — Picker, Centro AND Azioni now stack
+     *  one under the other (previously the unnamed "mobile" gap; Round 11 gives it its own name
+     *  + dedicated threshold since Azioni moving here is a first-class layout decision, not an
+     *  afterthought). Azioni stay a 2×2 grid WITH labels here — only their position changes
+     *  (from beside to below); `iconOnly` below is what strips labels/switches to icon-only. */
+    oneColumn: number; // e.g., dashboard: 365, brokerDetail: 470
     /** Below this width the textual labels on action buttons hide (icon-only). Independent axis
      *  from everything else here — usually (but not necessarily) equal to `iconOnly`. */
     labelHide: number; // Both: 460
-    /** Optional 5th, narrower-than-mobile breakpoint. Only used when explicitly provided —
-     *  omitting it (existing callers, e.g. assets/fx) preserves the classic 4-mode behavior
-     *  unchanged. Meant for callers (e.g. PageToolbar) that need an ultra-narrow fallback state
-     *  (icon-only row) below their normal "mobile" treatment. */
-    iconOnly?: number;
-    /** Optional — only meaningful strictly BETWEEN `stackFilters` and `iconOnly` (i.e. within
-     *  what `layoutMode` calls "mobile"). Above this value (down to `stackFilters`): actions
-     *  render as a 4×1 vertical column instead of a 2×2 grid. Below this value (down to
-     *  `iconOnly`): actions revert to the 2×2 grid — a narrow "column" sub-band, not a whole new
-     *  tier. Omit to skip the column state entirely (actions stay 2×2 all the way to `iconOnly`). */
-    actionsColumn?: number;
+    /** Narrowest tier: same single-column structure as `oneColumn`, but Azioni (and Tabs, if
+     *  any) additionally lose their text labels and reflow from a 2×2 grid into a single
+     *  centered, wrapping icon-only row — the last-resort fallback when even a labeled 2×2 grid
+     *  no longer fits. */
+    iconOnly: number; // Both: 330
 }
 
-export type LayoutMode = 'oneRow' | 'denseRow' | 'stackFilters' | 'mobile' | 'iconOnly';
+export type LayoutMode = 'oneRow' | 'denseRow' | 'stackFilters' | 'oneColumn' | 'iconOnly';
 
 /**
  * Creates a ResizeObserver-based responsive layout tracker.
@@ -47,7 +48,7 @@ export type LayoutMode = 'oneRow' | 'denseRow' | 'stackFilters' | 'mobile' | 'ic
  *
  * @example
  * ```svelte
- * const layout = createResponsiveLayout({oneRow: 1030, denseRow: 700, stackFilters: 530, labelHide: 460});
+ * const layout = createResponsiveLayout({oneRow: 1030, denseRow: 700, stackFilters: 530, oneColumn: 460, labelHide: 400, iconOnly: 400});
  * $effect(() => {
  *     const el = filterBarRef;
  *     if (!el) return;
@@ -65,29 +66,33 @@ export function createResponsiveLayout(initialThresholds: LayoutThresholds) {
     let width = $state(initialThresholds.denseRow);
     let observer: ResizeObserver | null = null;
 
-    // Round 10.2: layoutMode values now match the threshold names exactly (one threshold, one
-    // matching mode name) — no more "two vocabularies" to keep in sync. 'mobile' is the only
-    // exception: it has no single dedicated threshold of its own (it's simply the range between
-    // `stackFilters` and `iconOnly`), so it keeps its original name.
+    // Round 10.2: layoutMode values match the threshold names exactly (one threshold, one
+    // matching mode name) — no more "two vocabularies" to keep in sync. Round 11: the former
+    // unnamed "mobile" gap (between stackFilters and iconOnly) is now itself a named, thresholded
+    // tier ("oneColumn") — every tier has its own dedicated threshold, no exceptions, no nullable
+    // checks needed below.
     let layoutMode = $derived.by((): LayoutMode => {
         const w = width;
         if (w >= thresholds.oneRow) return 'oneRow';
         if (w >= thresholds.denseRow) return 'denseRow';
         if (w >= thresholds.stackFilters) return 'stackFilters';
-        if (thresholds.iconOnly != null && w < thresholds.iconOnly) return 'iconOnly';
-        return 'mobile';
+        if (w >= thresholds.oneColumn) return 'oneColumn';
+        return 'iconOnly';
     });
     let showActionLabels = $derived(width >= thresholds.labelHide);
 
-    // Actions become a 4×1 column ONLY in a narrow sub-band strictly inside "mobile" (between
-    // stackFilters and iconOnly) — never in oneRow/denseRow/stackFilters (always 2×2 there) nor
-    // once width drops below actionsColumn (back to 2×2, "true mobile"). Omitting actionsColumn
-    // keeps the pre-Round-10 behavior: always 2×2 up to iconOnly.
-    let actionsStacked = $derived(layoutMode === 'mobile' && thresholds.actionsColumn != null && width >= thresholds.actionsColumn);
-
     function attach(el: HTMLElement) {
         detach(); // cleanup previous
-        observer = new ResizeObserver(([entry]) => {
+        observer = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            // Round 11.1: back to CONTENT-BOX (contentRect), reverting the Round 10.3 border-box
+            // attempt — confirmed by direct user measurement that border-box was the wrong
+            // choice: user debugs by reading the INTERIOR width (excludes the bar's own `p-4` =
+            // 32px horizontal padding), not the full border-box size, so comparing thresholds
+            // against border-box made every breakpoint appear to fire ~32px "late" relative to
+            // what the user actually reads/resizes to. contentRect is also the ResizeObserver
+            // default (no `box` option needed), simpler and more broadly supported than
+            // borderBoxSize.
             width = entry.contentRect.width;
         });
         observer.observe(el);
@@ -106,9 +111,6 @@ export function createResponsiveLayout(initialThresholds: LayoutThresholds) {
         },
         get showActionLabels() {
             return showActionLabels;
-        },
-        get actionsStacked() {
-            return actionsStacked;
         },
         get width() {
             return width;

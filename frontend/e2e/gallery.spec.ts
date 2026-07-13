@@ -252,6 +252,20 @@ test.describe('Gallery Screenshots', () => {
                 const rawMockData = JSON.parse(fs.readFileSync(mockDataPath, 'utf8'));
                 const adjustedMockData = shiftDatesToToday(rawMockData);
                 await page.route('**/api/v1/portfolio/report', async (route) => {
+                    const postData = route.request().postDataJSON?.() as {include_positions_contribution?: boolean} | undefined;
+                    if (postData?.include_positions_contribution) {
+                        const liveResponse = await route.fetch();
+                        const liveData = await liveResponse.json();
+                        await route.fulfill({
+                            status: liveResponse.status(),
+                            contentType: 'application/json',
+                            body: JSON.stringify({
+                                ...adjustedMockData,
+                                positions_contribution: liveData.positions_contribution ?? null,
+                            }),
+                        });
+                        return;
+                    }
                     await route.fulfill({
                         status: 200,
                         contentType: 'application/json',
@@ -271,6 +285,81 @@ test.describe('Gallery Screenshots', () => {
             await maxBtn.click();
         } else if (await y2Btn.isVisible({timeout: 500}).catch(() => false)) {
             await y2Btn.click();
+        }
+    }
+
+    const POSITIONS_SCREENSHOT_VARIANTS = [
+        {
+            semantic: 'holdings',
+            visual: 'table',
+            name: 'positions-holdings-table',
+        },
+        {
+            semantic: 'holdings',
+            visual: 'map',
+            name: 'positions-holdings-map',
+        },
+        {
+            semantic: 'performance',
+            visual: 'table',
+            name: 'positions-performance-table',
+        },
+        {
+            semantic: 'performance',
+            visual: 'map',
+            name: 'positions-performance-map',
+        },
+    ] as const;
+
+    async function openBrokerCardByName(page: Page, brokerName: string) {
+        const brokerCard = page.locator('[data-testid^="broker-card-"]').filter({hasText: brokerName}).first();
+        await expect(brokerCard).toBeVisible({timeout: 5_000});
+        await brokerCard.scrollIntoViewIfNeeded();
+        await brokerCard.click();
+        await page.waitForLoadState('networkidle', {timeout: 20_000});
+    }
+
+    async function setPositionsView(page: Page, semantic: 'holdings' | 'performance', visual: 'table' | 'map') {
+        const semanticButton = page.getByTestId(`positions-toggle-${semantic}`);
+        await expect(semanticButton).toBeVisible({timeout: 5_000});
+        await semanticButton.scrollIntoViewIfNeeded();
+        await semanticButton.click({timeout: 5_000});
+        if (semantic === 'performance') {
+            await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
+            await page.waitForTimeout(700);
+        } else {
+            await page.waitForTimeout(300);
+        }
+
+        const visualButton = page.getByTestId(`positions-toggle-${visual}`);
+        await expect(visualButton).toBeVisible({timeout: 5_000});
+        await visualButton.scrollIntoViewIfNeeded();
+        await visualButton.click({timeout: 5_000}).catch(async () => {
+            await visualButton.click({timeout: 5_000, force: true});
+        });
+        if (semantic === 'performance') {
+            await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
+            await page.waitForTimeout(700);
+        } else {
+            await page.waitForTimeout(500);
+        }
+    }
+
+    async function screenshotPositionsVariants(
+        page: Page,
+        viewport: 'desktop' | 'mobile',
+        lang: Language,
+        theme: Theme,
+        category: string,
+    ) {
+        const positionsPanel = page.getByTestId('positions-panel');
+        await expect(positionsPanel).toBeVisible({timeout: 5_000});
+        await positionsPanel.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(300);
+
+        for (const variant of POSITIONS_SCREENSHOT_VARIANTS) {
+            await setPositionsView(page, variant.semantic, variant.visual);
+            await screenshot(page, viewport, lang, theme, category, variant.name);
         }
     }
 
@@ -407,6 +496,108 @@ test.describe('Gallery Screenshots', () => {
 
                 // Scroll back to top so next iteration starts clean
                 await page.evaluate(() => window.scrollTo(0, 0));
+            });
+        });
+
+        test('dashboard positions tab - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectMaxDateRange(page);
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await freezeAnimations(page);
+
+                await page.getByTestId('dashboard-tab-posizioni').click();
+                await expect(page.getByTestId('dashboard-positions-tab')).toBeVisible({timeout: 5_000});
+                await screenshotPositionsVariants(page, viewport, lang, theme, 'dashboard');
+            });
+        });
+
+        test('dashboard fifo lots panel - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            // Deliberately NOT using setupDashboardMockReport here: that fixture is a static,
+            // pre-captured snapshot whose holdings[].asset_id values don't reliably correspond
+            // to real FIFO lots in a freshly-populated test DB. The other dashboard tests only
+            // show aggregate data (growth/allocation), so the mock's staleness doesn't matter
+            // there — but "analyze lots" drills into one specific real asset, so we need the
+            // live (unmocked) report, exactly like the broker detail equivalent test does.
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                let panelReady = false;
+
+                for (let attempt = 1; attempt <= 2 && !panelReady; attempt++) {
+                    await page.goto('/dashboard');
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
+                    await selectMaxDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
+                    await freezeAnimations(page);
+
+                    await page.getByTestId('dashboard-tab-posizioni').click();
+                    await expect(page.getByTestId('dashboard-positions-tab')).toBeVisible({timeout: 5_000});
+                    await setPositionsView(page, 'holdings', 'table');
+
+                    const analyzeLotsButton = page.getByTestId('positions-panel').getByTestId('row-action-analyze-lots').first();
+                    await expect(analyzeLotsButton).toBeVisible({timeout: 5_000});
+                    await analyzeLotsButton.scrollIntoViewIfNeeded();
+                    await analyzeLotsButton.click();
+
+                    await expect(page.getByTestId('fifo-lots-panel')).toBeVisible({timeout: 5_000});
+                    const panelLoading = page.getByTestId('fifo-lots-panel-loading');
+                    if (await panelLoading.isVisible({timeout: 1_000}).catch(() => false)) {
+                        await panelLoading.waitFor({state: 'hidden', timeout: 15_000}).catch(() => {});
+                    }
+
+                    if (await page.getByTestId('login-page').isVisible({timeout: 1_000}).catch(() => false)) {
+                        if (attempt === 2) {
+                            throw new Error('Dashboard FIFO lots panel redirected to login page during capture.');
+                        }
+                        await login(page, TEST_ADMIN);
+                        continue;
+                    }
+
+                    const wacChartVisible = await page.getByTestId('asset-wac-price-chart').isVisible({timeout: 10_000}).catch(() => false);
+                    const bubbleTimelineVisible = await page.getByTestId('bubble-lot-timeline').isVisible({timeout: 10_000}).catch(() => false);
+                    if (!wacChartVisible || !bubbleTimelineVisible) {
+                        if (attempt === 2) {
+                            await expect(page.getByTestId('asset-wac-price-chart')).toBeVisible({timeout: 10_000});
+                            await expect(page.getByTestId('bubble-lot-timeline')).toBeVisible({timeout: 10_000});
+                        }
+                        continue;
+                    }
+
+                    panelReady = true;
+                    // The panel opens below the positions table and can be taller than the
+                    // viewport — scroll its top edge into view so the Bubble Timeline / WAC
+                    // chart (not just the header) are actually captured in the screenshot.
+                    await page.getByTestId('fifo-lots-panel').evaluate((el) => el.scrollIntoView({block: 'start'}));
+                    await page.waitForTimeout(800);
+                    await screenshot(page, viewport, lang, theme, 'dashboard', 'fifo-lots-panel');
+
+                    await page.getByTestId('fifo-lots-panel-close').click();
+                    await expect(page.getByTestId('fifo-lots-panel')).toBeHidden({timeout: 5_000});
+                }
+            });
+        });
+
+        test('dashboard transactions tab - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectMaxDateRange(page);
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await freezeAnimations(page);
+
+                await page.getByTestId('dashboard-tab-transazioni').click();
+                await expect(page.getByTestId('dashboard-transactions-tab')).toBeVisible({timeout: 5_000});
+                await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
+                await page.waitForTimeout(500);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'transactions-tab');
             });
         });
 
@@ -1149,6 +1340,113 @@ test.describe('Gallery Screenshots', () => {
             }
         });
 
+        test('broker sharing modal', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/brokers');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await waitForSplashGone(page);
+                    await freezeAnimations(page);
+                    await page.locator('[data-testid^="broker-card-"]').first().waitFor({state: 'visible', timeout: 10_000});
+
+                    const coinbaseCard = page.locator('[data-testid^="broker-card-"]').filter({hasText: 'Coinbase'}).first();
+                    await expect(coinbaseCard).toBeVisible({timeout: 5_000});
+
+                    const shareButton = coinbaseCard.locator('[data-testid^="broker-share-"]').first();
+                    await expect(shareButton).toBeVisible({timeout: 5_000});
+                    await shareButton.click();
+                    await expect(page.getByTestId('broker-sharing-modal')).toBeVisible({timeout: 5_000});
+                    await page.waitForTimeout(500);
+
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'sharing-modal');
+
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
+                }
+            }
+        });
+
+        test('broker info tab - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/brokers');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+                    await waitForNetworkSettled(page);
+
+                    await openBrokerCardByName(page, 'Coinbase');
+                    await page.getByTestId('broker-tab-info').click();
+                    await expect(page.getByTestId('broker-info-tab')).toBeVisible({timeout: 5_000});
+                    await expect(page.getByTestId('broker-metadata')).toBeVisible({timeout: 5_000});
+                    await expect(page.getByTestId('broker-sharing-section')).toBeVisible({timeout: 5_000});
+                    await page.waitForTimeout(500);
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'info-tab');
+                }
+            }
+        });
+
+        test('broker positions tab - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/brokers');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+                    await waitForNetworkSettled(page);
+
+                    await openBrokerCardByName(page, 'Coinbase');
+                    await page.getByTestId('broker-tab-posizioni').click();
+                    await expect(page.getByTestId('broker-holdings')).toBeVisible({timeout: 5_000});
+                    await screenshotPositionsVariants(page, viewport, lang, theme, 'brokers');
+                }
+            }
+        });
+
+        test('broker fifo lots panel - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                for (const theme of THEMES) {
+                    await navigateTo(page, '/brokers');
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+                    await waitForNetworkSettled(page);
+
+                    await openBrokerCardByName(page, 'Coinbase');
+                    await page.getByTestId('broker-tab-posizioni').click();
+                    await expect(page.getByTestId('broker-holdings')).toBeVisible({timeout: 5_000});
+                    await setPositionsView(page, 'holdings', 'table');
+
+                    const analyzeLotsButton = page.getByTestId('row-action-analyze-lots').first();
+                    await expect(analyzeLotsButton).toBeVisible({timeout: 5_000});
+                    await analyzeLotsButton.scrollIntoViewIfNeeded();
+                    await analyzeLotsButton.click();
+
+                    await expect(page.getByTestId('fifo-lots-panel')).toBeVisible({timeout: 5_000});
+                    await expect(page.getByTestId('asset-wac-price-chart')).toBeVisible({timeout: 10_000});
+                    await expect(page.getByTestId('bubble-lot-timeline')).toBeVisible({timeout: 10_000});
+                    // Scroll the panel's top edge into view — it opens below the positions
+                    // table and can be taller than the viewport (see also the analogous fix
+                    // in the "dashboard fifo lots panel" test).
+                    await page.getByTestId('fifo-lots-panel').evaluate((el) => el.scrollIntoView({block: 'start'}));
+                    await page.waitForTimeout(800);
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'fifo-lots-panel');
+
+                    await page.getByTestId('fifo-lots-panel-close').click();
+                    await expect(page.getByTestId('fifo-lots-panel')).toBeHidden({timeout: 5_000});
+                }
+            }
+        });
+
         test('import modal - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
 
@@ -1172,6 +1470,8 @@ test.describe('Gallery Screenshots', () => {
                     // Switch to the Transazioni tab, where the import/new-tx buttons live
                     await page.getByTestId('broker-tab-transazioni').click();
                     await expect(page.getByTestId('broker-transactions-tab')).toBeVisible({timeout: 5000});
+                    await page.waitForTimeout(500);
+                    await screenshot(page, viewport, lang, theme, 'brokers', 'transactions-tab');
 
                     // Scroll to and click the import history button
                     const importBtn = page.getByTestId('broker-show-import-history');
@@ -1580,44 +1880,6 @@ test.describe('Gallery Screenshots', () => {
             }
         });
 
-        test('broker sharing modal', async ({page}, testInfo) => {
-            const viewport = getViewport(testInfo);
-
-            for (const lang of SUPPORTED_LANGUAGES) {
-                for (const theme of THEMES) {
-                    // Navigate to brokers page
-                    await navigateTo(page, '/brokers');
-                    await page.waitForLoadState('networkidle', {timeout: 20_000});
-                    await page.waitForTimeout(300);
-                    await setLanguage(page, lang);
-                    await setTheme(page, theme);
-                    await freezeAnimations(page);
-
-                    // Click Coinbase broker (5th card, index 4) for rich multi-user demo
-                    const brokerCards = page.locator('[data-testid^="broker-card-"]');
-                    const coinbaseCard = brokerCards.nth(0); // Coinbase is the 5th broker
-                    if (await coinbaseCard.isVisible({timeout: 3000}).catch(() => false)) {
-                        await coinbaseCard.click();
-                        await expect(page.getByTestId('broker-detail-page')).toBeVisible({timeout: 5000});
-                        await page.waitForTimeout(300);
-
-                        // Click Share button (only visible for OWNER)
-                        const shareBtn = page.getByTestId('broker-share-button');
-                        if (await shareBtn.isVisible({timeout: 2000}).catch(() => false)) {
-                            await shareBtn.click();
-                            await expect(page.getByTestId('broker-sharing-modal')).toBeVisible({timeout: 3000});
-                            await page.waitForTimeout(500); // Wait for chart to render
-
-                            await screenshot(page, viewport, lang, theme, 'brokers', 'sharing-modal');
-
-                            // Close modal
-                            await page.keyboard.press('Escape');
-                            await page.waitForTimeout(200);
-                        }
-                    }
-                }
-            }
-        });
     });
 
     test.describe('FX', () => {

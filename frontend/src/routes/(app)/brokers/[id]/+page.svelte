@@ -139,6 +139,12 @@
 
     let canEdit = false;
     $: canEdit = broker ? ['OWNER', 'EDITOR'].includes(safeString(broker.user_role) || '') : false;
+
+    /** Mirrors the DateRangePicker's own effective 2-row max-width, so the single-item Center
+     *  row below it can be capped to the SAME pixel value when filtersStacked. MUST start
+     *  non-undefined (matches DateRangePicker's own maxWidthTwoRow default, 390) — Svelte
+     *  forbids bind:key={undefined} when the child prop has a declared fallback. */
+    let pickerMaxWidth: number = 390;
     $: panelBrokers = broker
         ? [
               {
@@ -403,16 +409,17 @@
              (previously the date-range picker only rendered inside the Panoramica tab's
              content, so it disappeared on Posizioni/Transazioni even though those tabs
              depend on the same date-scoped data). -->
-        <PageToolbar thresholds={{oneRow: 1000, denseRow: 800, stackFilters: 560, actionsColumn: 470, iconOnly: 330, labelHide: 330}} tabs={brokerTabs} {activeTab} ontabchange={handleTabChange} testId="broker-controls" filterRowTestId="broker-overview-controls" layoutDebugName="brokerDetail">
+        <PageToolbar thresholds={{oneRow: 1000, denseRow: 800, stackFilters: 560, oneColumn: 470, iconOnly: 330, labelHide: 330}} tabs={brokerTabs} {activeTab} ontabchange={handleTabChange} testId="broker-controls" filterRowTestId="broker-overview-controls" layoutDebugName="brokerDetail">
             {#snippet filters({layoutMode, filtersStacked})}
-                <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} align="start" {layoutMode} debugName="brokerDetail" onchange={handleDateChange} />
+                <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} align="start" {layoutMode} debugName="brokerDetail" onchange={handleDateChange} bind:effectiveMaxWidth={pickerMaxWidth} />
 
                 <!-- Single-item row — no second control to spread against, so just center it
-                     once it's stretched to the DateRangePicker's width (stackFilters/mobile/
+                     once it's stretched to the DateRangePicker's width (stackFilters/oneColumn/
                      iconOnly — see filtersStacked in PageToolbar). Un-stretched otherwise, this
                      justify-center is a no-op (natural content width, already centered visually
-                     by the parent's items-center in row mode). -->
-                <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 {filtersStacked ? 'w-full' : ''}">
+                     by the parent's items-center in row mode). Capped to pickerMaxWidth so this
+                     row's right edge lines up with the picker's instead of the wider column. -->
+                <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 {filtersStacked ? 'w-full' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
                     <span class="whitespace-nowrap">{$_('common.currency')}:</span>
                     <div class="w-28">
                         <CurrencySearchSelect
