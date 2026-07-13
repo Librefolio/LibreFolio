@@ -54,21 +54,40 @@ LibreFolio can be installed as a **Progressive Web App (PWA)** on your device. T
 
 ## 🌐 HTTP vs HTTPS
 
-| Setup | PWA Install | Auto-prompt |
-|-------|-------------|-------------|
-| `https://` (Tailscale, reverse proxy) | ✅ Full support | ✅ Chrome shows banner |
-| `http://localhost` | ✅ Works | ✅ Works |
-| `http://192.168.x.x` (LAN) | ⚠️ Manual only | ❌ No auto-prompt |
+<table style="width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem;">
+  <thead>
+    <tr style="background-color: #f3f4f6;">
+      <th style="width: 45%; padding: 10px; border: 1px solid #e5e7eb; text-align: left; font-weight: bold;">Setup</th>
+      <th style="width: 25%; padding: 10px; border: 1px solid #e5e7eb; text-align: left; font-weight: bold;">PWA Install</th>
+      <th style="width: 30%; padding: 10px; border: 1px solid #e5e7eb; text-align: left; font-weight: bold;">Auto-prompt</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding: 10px; border: 1px solid #e5e7eb; white-space: nowrap;"><code>https://</code> (Tailscale, reverse proxy)</td>
+      <td style="padding: 10px; border: 1px solid #e5e7eb;">✅ Full support</td>
+      <td style="padding: 10px; border: 1px solid #e5e7eb;">✅ Chrome shows the banner</td>
+    </tr>
+    <tr>
+      <td style="padding: 10px; border: 1px solid #e5e7eb; white-space: nowrap;"><code>http://localhost</code></td>
+      <td style="padding: 10px; border: 1px solid #e5e7eb;">✅ Works</td>
+      <td style="padding: 10px; border: 1px solid #e5e7eb;">✅ Works</td>
+    </tr>
+    <tr>
+      <td style="padding: 10px; border: 1px solid #e5e7eb; white-space: nowrap; background-color: rgba(244, 67, 54, 0.04);"><code>http://192.168.x.x</code> (LAN)</td>
+      <td style="padding: 10px; border: 1px solid #e5e7eb; background-color: rgba(244, 67, 54, 0.04);">❌ Not available (HTTPS required)</td>
+      <td style="padding: 10px; border: 1px solid #e5e7eb; background-color: rgba(244, 67, 54, 0.04);">❌ No auto-prompt</td>
+    </tr>
+  </tbody>
+</table>
 
-!!! info "Self-hosted on LAN"
+!!! warning "HTTPS Connection Requirement for PWA"
 
-    If you access LibreFolio via HTTP on your local network (e.g., `http://192.168.1.100:6040`), the automatic install prompt won't appear. You can still install manually:
+    To install LibreFolio as a PWA, **modern browsers strictly require a secure HTTPS connection** (except when accessing it through `localhost` or `127.0.0.1` for local development).
 
-    - **Android**: Browser menu → "Add to Home screen"
-    - **iOS**: Share → "Add to Home Screen"
-    - **Desktop**: Not available on HTTP (use Tailscale for HTTPS)
+    If you open LibreFolio over plain HTTP on your local network (for example, `http://192.168.1.100:6040`), PWA installation will not be available and the app cannot run in standalone mode.
 
-    For full PWA support, expose your instance via [Tailscale](../admin/tailscale_exposure.md) (free, easy HTTPS).
+    You can choose any method you prefer to enable HTTPS on your instance, but we strongly recommend our simple, free guide: **[Tailscale Exposure Guide](../admin/tailscale_exposure.md)**. It gives you a secure HTTPS URL without configuring SSL certificates or opening router ports.
 
 ---
 

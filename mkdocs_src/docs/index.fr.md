@@ -179,7 +179,7 @@ description: Libre à comprendre, libre d'agir. LibreFolio regroupe tous vos inv
   })();
   </script>
   </div>
-  </section>
+  </div>
  </section>
 
  <!-- Deep Dive 1: Dashboard -->

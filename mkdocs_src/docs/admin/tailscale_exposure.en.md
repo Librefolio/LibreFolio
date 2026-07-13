@@ -221,41 +221,41 @@ graph LR
 
 ---
 
-## 🔑 Abilitare il Funnel e le ACL sulla Console
+## 🔑 Enabling Funnel and ACLs on the Console
 
-*Configurazione una tantum necessaria per il Livello 3 e il Livello 4*
+*One-time configuration required for Level 3 and Level 4*
 
-Prima di poter utilizzare Tailscale Funnel (sia sul server locale al Livello 3, sia all'interno dei container Docker al Livello 4), è necessario abilitare il Funnel e definire le regole di accesso (ACL) a livello globale per tutta la tua Tailnet. Questa operazione si esegue una sola volta direttamente sulla console amministrativa di Tailscale.
+Before you can use Tailscale Funnel (either on the local server in Level 3 or inside Docker containers in Level 4), you must enable Funnel and define the global access control rules (ACLs) for your entire Tailnet. This is a one-time setup performed directly in the Tailscale admin console.
 
-### 1. Abilitare HTTPS e Funnel sul Pannello di Controllo
+### 1. Enable HTTPS and Funnel on the Control Panel
 
-1. Visita la scheda [Access Controls](https://login.tailscale.com/admin/acls) della console di amministrazione Tailscale.
-2. Clicca sul pulsante **Add node attribute** per generare le autorizzazioni.
+1. Visit the [Access Controls](https://login.tailscale.com/admin/acls) page in the Tailscale admin console.
+2. Click the **Add node attribute** button to create the required authorization.
 
-![Aggiungi Node Attribute](../static/tailscale-guide/TailscaleNodeAttribute.png)
+![Add Node Attribute](../static/tailscale-guide/TailscaleNodeAttribute.png)
 
-3. Configura le seguenti opzioni della schermata:
-    * **Targets**: Inserisci il tag o gruppo che desideri autorizzare ad attivare il Funnel. Un *Target* definisce a quali nodi si applica la regola. **Noi suggeriamo di inserire `tag:external_access`** (per associarlo selettivamente ai container Docker) oppure `autogroup:member` (se desideri consentire l'esposizione a tutti i dispositivi registrati col tuo account personale).
-    * **Attributes**: Inserisci `funnel`.
-    * **Note**: Inserisci un testo per tenere traccia delle tue motivazioni.
-    * **IP Pools, App, Capability, ecc.**: Questi campi aggiuntivi non ci interessano per questa esposizione, lasciali vuoti o ai valori predefiniti.
+3. Configure the following options in the form:
+    * **Targets**: Enter the tag or group you want to authorize for Funnel activation. A *Target* defines which nodes the rule applies to. **We suggest using `tag:external_access`** (to selectively associate it with Docker containers) or `autogroup:member` (if you want to allow exposure for all devices registered under your personal account).
+    * **Attributes**: Enter `funnel`.
+    * **Note**: Enter some text to record the reason for this rule.
+    * **IP Pools, App, Capability, etc.**: These extra fields are not needed for this exposure setup, so leave them empty or at their default values.
 
-*Nota bene: La configurazione delle ACL definisce le policy di sicurezza globali per l'abilitazione del Funnel. Essa è indipendente dalle chiavi di autenticazione (Auth Key), che servono esclusivamente per registrare inizialmente un nuovo dispositivo/container alla rete.*
+*Important: ACL configuration defines the global security policies required to enable Funnel. It is independent from authentication keys (Auth Keys), which are used only to register a new device or container on the network for the first time.*
 
-In alternativa, se preferisci modificare direttamente la configurazione JSON delle ACL, puoi utilizzare la seguente configurazione funzionante (aggiornata per supportare sia i tuoi dispositivi che il tag `tag:external_access` dei container):
+Alternatively, if you prefer to edit the ACL JSON configuration directly, you can use the following working example (updated to support both your own devices and the containers tagged with `tag:external_access`):
 
-??? example "Visualizza la configurazione ACL JSON completa per abilitare il Funnel"
+??? example "View the complete ACL JSON configuration to enable Funnel"
 
     ```json
     {
-      // Dichiarazione dei tag autorizzati
+      // Declaration of authorized tags
       "tagOwners": {
         "tag:external_access": ["autogroup:admin"]
       },
 
-      // Regole di accesso standard
+      // Standard access rules
       "acls": [
-        // Consente a tutti i nodi della tua rete privata di comunicare
+        // Allows all nodes in your private network to communicate
         {"action": "accept", "src": ["*"], "dst": ["*:*"]}
       ],
 
@@ -268,7 +268,7 @@ In alternativa, se preferisci modificare direttamente la configurazione JSON del
         }
       ],
 
-      // Abilitazione del Funnel su determinati nodi o tag
+      // Enabling Funnel on specific nodes or tags
       "nodeAttrs": [
         {
           "target": ["autogroup:member"],
@@ -284,13 +284,13 @@ In alternativa, se preferisci modificare direttamente la configurazione JSON del
 
 ---
 
-### 🥈 Level 3: Public Exposure via Tailscale Funnel (No VPN on Client)
+## 🥈 Level 3: Public Exposure via Tailscale Funnel (No VPN on Client)
 
-!!! warning "Prerequisito Fondamentale"
+!!! warning "Fundamental Prerequisite"
 
-    Prima di procedere, assicurati di aver completato la [configurazione una tantum del Funnel e delle ACL sulla console](#abilitare-il-funnel-e-le-acl-sulla-console).
+    Before proceeding, make sure you have completed the [one-time Funnel and ACL configuration on the console](#enabling-funnel-and-acls-on-the-console).
 
-**Tailscale Funnel** consente di esporre pubblicamente un servizio a Internet. Chiunque potrà accedere al tuo LibreFolio tramite un URL HTTPS protetto fornito da MagicDNS, **senza dover installare o attivare Tailscale** sul proprio smartphone o PC. Questo è essenziale per poter installare LibreFolio come PWA su dispositivi mobili ed avere l'auto-prompt (per approfondimenti, consulta la guida [📱 Installa come App (PWA)](../user/pwa.md)).
+**Tailscale Funnel** lets you expose a service publicly on the internet. Anyone can access your LibreFolio instance through a secure HTTPS URL provided by MagicDNS, **without needing to install or activate Tailscale** on their smartphone or PC. This is essential if you want to install LibreFolio as a PWA on mobile devices and get the automatic install prompt (for more details, see the guide [📱 Install as App (PWA)](../user/pwa.md)).
 
 ```mermaid
 graph LR
@@ -298,10 +298,10 @@ graph LR
     Funnel -->|WireGuard Tunneling| Server["🖥️ Local Server (tailscaled)<br>(100.a.b.c)"]
     subgraph LAN ["Local LAN Network"]
         Server -->|Local forwarding| LibreFolio["📊 LibreFolio (Port 6040)"]
-        Server -.->|"<font color='red'><b>Cannot expose</b></font>"| Altro["🔌 Other Local Services (Different ports)"]
+        Server -.->|"<font color='red'><b>Cannot expose</b></font>"| Other["🔌 Other Local Services (Different ports)"]
     end
     style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
-    style Altro fill:#f8d7da,stroke:#dc3545,stroke-width:2px;
+    style Other fill:#f8d7da,stroke:#dc3545,stroke-width:2px;
     linkStyle 3 stroke:#dc3545,stroke-width:2px;
 ```
 
@@ -357,11 +357,11 @@ To give access to this node you can edit the tailnet policy file, or visit:
 
 ---
 
-### 🥇 Level 4: Advanced Multi-Funnel Exposure via Docker (Sidecars)
+## 🥇 Level 4: Advanced Multi-Funnel Exposure via Docker (Sidecars)
 
-!!! warning "Prerequisito Fondamentale"
+!!! warning "Fundamental Prerequisite"
 
-    Prima di procedere con la configurazione dei container, assicurati di aver completato la [configurazione una tantum del Funnel e delle ACL sulla console](#abilitare-il-funnel-e-le-acl-sulla-console).
+    Before proceeding with the container configuration, make sure you have completed the [one-time Funnel and ACL configuration on the console](#enabling-funnel-and-acls-on-the-console).
 
 To overcome the limit of one Funnel per host node, we can run multiple parallel Tailscale nodes inside Docker containers. Each container will register as an independent node on your Tailnet, obtaining its own dedicated MagicDNS URL.
 
@@ -387,12 +387,12 @@ graph LR
     
     subgraph LAN ["Local LAN Network (192.168.1.0/24)"]
         subgraph Host2 ["Server 2 (e.g. Mini PC - 192.168.1.10)"]
-            TSC3 -->|socat: TCP/8080| Servizio3["🔌 Service 3<br>(192.168.1.10:80)"]
-            TSC4 -->|socat: TCP/9000| Servizio4["🔌 Service 4<br>(192.168.1.10:80)"]
+            TSC3 -->|socat: TCP/8080| Service3["🔌 Service 3<br>(192.168.1.10:80)"]
+            TSC4 -->|socat: TCP/9000| Service4["🔌 Service 4<br>(192.168.1.10:80)"]
         end
         subgraph Host1 ["Server 1 (e.g. NAS - 192.168.1.20)"]
             TSC1 -->|socat: TCP/6040| LibreFolio["📊 LibreFolio<br>(192.168.1.20:6040)"]
-            TSC2 -->|socat: TCP/80| Servizio1["🔌 Service 1<br>(192.168.1.20:80)"]
+            TSC2 -->|socat: TCP/80| Service1["🔌 Service 1<br>(192.168.1.20:80)"]
         end
     end
     style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;

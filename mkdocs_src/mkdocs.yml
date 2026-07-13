@@ -3,6 +3,9 @@ site_url: https://librefolio.github.io/LibreFolio/
 repo_url: https://github.com/Librefolio/LibreFolio
 repo_name: Librefolio/LibreFolio
 
+exclude_docs: |
+  POC_UX/**
+
 theme:
   name: material
   custom_dir: overrides
@@ -126,6 +129,7 @@ plugins:
             "💸 Transactions": "💸 Transazioni"
             Transaction Form: Modulo Transazione
             "📥 Import from Broker": "📥 Importa da Broker"
+            How to Import: Come Importare
             Interactive Brokers (IBKR): Interactive Brokers (IBKR)
             Degiro: Degiro
             eToro: eToro
@@ -207,7 +211,6 @@ plugins:
             "🖼️ Gallery": "🖼️ Galleria"
             Desktop: Desktop
             Mobile: Mobile
-            POC UX: POC UX
             "❤️ Community": "❤️ Comunità"
             "Support the Project": "Supporta il Progetto"
             "Credits & Legal": "Crediti & Note Legali"
@@ -269,6 +272,7 @@ plugins:
             "💸 Transactions": "💸 Transactions"
             Transaction Form: Formulaire de Transaction
             "📥 Import from Broker": "📥 Importer depuis le Courtier"
+            How to Import: Comment Importer
             Interactive Brokers (IBKR): Interactive Brokers (IBKR)
             Degiro: Degiro
             eToro: eToro
@@ -351,7 +355,6 @@ plugins:
             "🖼️ Gallery": "🖼️ Galerie"
             Desktop: Bureau
             Mobile: Mobile
-            POC UX: POC UX
             "❤️ Community": "❤️ Communauté"
             "Support the Project": "Soutenir le Projet"
             "Credits & Legal": "Crédits & Mentions Légales"
@@ -413,6 +416,7 @@ plugins:
             "💸 Transactions": "💸 Transacciones"
             Transaction Form: Formulario de Transacción
             "📥 Import from Broker": "📥 Importar desde el Bróker"
+            How to Import: Cómo Importar
             Interactive Brokers (IBKR): Interactive Brokers (IBKR)
             Degiro: Degiro
             eToro: eToro
@@ -495,7 +499,6 @@ plugins:
             "🖼️ Gallery": "🖼️ Galería"
             Desktop: Escritorio
             Mobile: Móvil
-            POC UX: POC UX
             "❤️ Community": "❤️ Comunidad"
             "Support the Project": "Apoyar el Proyecto"
             "Credits & Legal": "Créditos & Aviso Legal"
@@ -537,6 +540,7 @@ nav:
           - Transaction Form: user/transactions/form.md
           - 📥 Import from Broker:
               - Overview: user/transactions/import/index.md
+              - How to Import: user/transactions/import/how-to.md
               - Interactive Brokers (IBKR): user/transactions/import/ibkr.md
               - Degiro: user/transactions/import/degiro.md
               - eToro: user/transactions/import/etoro.md
@@ -806,7 +810,6 @@ nav:
       - FAQ: community/faq.md
       - Support the Project: community/contribute.md
       - Credits & Legal: community/credits-legal.md
-  - POC UX: POC_UX/index.md
 
 hooks:
   - hooks/absolute_hreflang.py
