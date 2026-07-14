@@ -139,6 +139,19 @@ def get_test_database_path() -> str:
     return get_database_path(test_mode=True)
 
 
+def get_server_port_for_db(db_path: str) -> int:
+    """Pick the port whose server would actually hold a lock on `db_path`.
+
+    SQLite locks are per-file: the PROD server (port 6040) only ever opens the
+    PROD db file, and the TEST server (port 6041) only ever opens the TEST db
+    file. Resolves both to absolute paths so callers can pass any spelling
+    (relative, absolute, from --path or --test) of the target db.
+    """
+    resolved = (get_project_root() / db_path).resolve()
+    test_resolved = (get_project_root() / get_test_database_path()).resolve()
+    return get_test_server_port() if resolved == test_resolved else get_server_port()
+
+
 def path_to_url(db_path: str) -> str:
     """Convert SQLite file path to database URL."""
     if not db_path:
@@ -162,18 +175,22 @@ def is_port_in_use(port: int) -> bool:
         return s.connect_ex(('localhost', port)) == 0
 
 
-def check_server_running(action: str = "this operation", strict: bool = True) -> bool:
+def check_server_running(action: str = "this operation", strict: bool = True, port: int | None = None) -> bool:
     """
-    Check if server is running on configured port.
+    Check if a server is running on the relevant port for this DB operation.
 
     Args:
         action: Description of the action being performed
         strict: If True, exit on conflict. If False, warn and ask.
+        port: Port to check. Defaults to the PROD server port — pass the TEST
+            server port explicitly when the operation targets the test database
+            (SQLite locks are per-file, so only the server actually holding that
+            file matters, not whichever server happens to be running).
 
     Returns:
         True if can continue, False if should abort
     """
-    port = get_server_port()
+    port = port if port is not None else get_server_port()
 
     if not is_port_in_use(port):
         return True
