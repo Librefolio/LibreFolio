@@ -856,21 +856,23 @@ class AssetSourceManager:
                         #
                         # #R4-3 (2026-04-23): previously we scoped by
                         # ``source_plugin_key == a.provider_code``, but
-                        # ``bulk_upsert_prices`` hardcodes
+                        # ``bulk_upsert_prices`` unconditionally hardcoded
                         # ``source_plugin_key="MANUAL"`` for every inserted row
-                        # (see L1333), so the DELETE matched **zero** rows and
+                        # (fixed 2026-07-14 — see its ``source_plugin_key`` param,
+                        # L1207), so the DELETE matched **zero** rows and
                         # old stale points from a previous schedule survived the
                         # regen. The user observed weekly points (new regen) and
                         # daily leftovers (pre-existing rows) mixed in the same
                         # series, producing a misleading "flat line" chart.
                         #
-                        # Semantically correct: an asset bound to a parametric
-                        # provider derives its *entire* price series from the
-                        # provider_params. A change of params invalidates the
-                        # whole series, mirroring the R3-3 currency-change
-                        # wipe policy. Manually imported points (if any) are
-                        # also wiped — the user must re-import after the param
-                        # change if needed (same responsibility model as R3-3).
+                        # Semantically correct REGARDLESS of the above fix: an
+                        # asset bound to a parametric provider derives its
+                        # *entire* price series from the provider_params. A
+                        # change of params invalidates the whole series,
+                        # mirroring the R3-3 currency-change wipe policy.
+                        # Manually imported points (if any) are also wiped —
+                        # the user must re-import after the param change if
+                        # needed (same responsibility model as R3-3).
                         deleted_rows_result = await session.execute(
                             delete(PriceHistory).where(
                                 PriceHistory.asset_id == a.asset_id,
@@ -1204,13 +1206,24 @@ class AssetSourceManager:
     # ========================================================================
 
     @staticmethod
-    async def bulk_upsert_prices(data: List[FAUpsert], session: AsyncSession) -> dict:
+    async def bulk_upsert_prices(data: List[FAUpsert], session: AsyncSession, source_plugin_key: str = "MANUAL") -> dict:
         """
         Bulk upsert prices manually (PRIMARY bulk method).
 
         Args:
             data: List of FAUpsert (asset_id + prices)
             session: Database session
+            source_plugin_key: Provenance tag written on every upserted row.
+                Defaults to ``"MANUAL"`` (the Data Editor / manual-entry use
+                case — see ``price_router`` in ``api/v1/assets.py``, under
+                "MANUAL PRICE MANAGEMENT ENDPOINTS"). The scheduler's
+                provider-driven history sync (``bulk_refresh_prices`` →
+                ``_persist_single``) passes the real ``provider_code`` (e.g.
+                ``"yfinance"``) instead — previously this was always
+                hardcoded to "MANUAL" regardless of caller, silently losing
+                provenance for scheduler-synced rows (same root cause already
+                flagged in the R4-3 comment below for a different downstream
+                symptom — stale points surviving a provider-param regen wipe).
 
         Returns:
             {inserted_count, updated_count, results: [{asset_id, count, message}, ...]}
@@ -1298,6 +1311,10 @@ class AssetSourceManager:
                     return None  # SET NULL
                 return new_val  # write
 
+            # Integrity guard errors accumulated across all dates (surfaced via
+            # the same `results[].message` the currency-mismatch check uses).
+            rejected_dates: list[str] = []
+
             for date_key, price in valid_inputs.items():
                 existing = existing_rows.get(date_key)
                 # Sentinel merge for auxiliary OHLC fields (open/high/low) + volume
@@ -1305,6 +1322,22 @@ class AssetSourceManager:
                 merged_high = _merge_field(price.high, existing.high if existing else None)
                 merged_low = _merge_field(price.low, existing.low if existing else None)
                 merged_volume = _merge_field(price.volume, existing.volume if existing else None)
+
+                # Data-integrity guard: close must lie within [low, high] on the
+                # FINAL merged row (post F.4 merge, not just the raw input) —
+                # this is what actually gets persisted. Skip (don't persist)
+                # rather than hard-reject the whole batch: a real corrupted row
+                # was found in production data where close from one fetch
+                # persisted alongside open/high/low merged in from a different,
+                # inconsistent fetch for the same date (close=63560.94 with
+                # high=8692.20 — mathematically impossible for a real candle).
+                # Checking post-merge (not the raw FAPricePoint) is required
+                # because a partial upsert (open/high/low omitted → preserved
+                # from the existing row) can only be validated once merged.
+                if merged_low is not None and merged_high is not None:
+                    if merged_low > merged_high or not (merged_low <= price.close <= merged_high):
+                        rejected_dates.append(f"{date_key.isoformat()} (close={price.close}, low={merged_low}, high={merged_high})")
+                        continue
 
                 price_obj = PriceHistory(
                     asset_id=asset_id,
@@ -1315,14 +1348,22 @@ class AssetSourceManager:
                     close=truncate_priceHistory(price.close, "close"),
                     volume=merged_volume,
                     currency=price.currency or default_currency,
-                    source_plugin_key="MANUAL",
-                    fetched_at=None,
+                    source_plugin_key=source_plugin_key,
+                    # Only provider-driven writes get a real fetched_at — it feeds
+                    # _compute_price_fingerprint()'s COUNT+MAX(fetched_at) cache-
+                    # invalidation proxy (portfolio_engine.py). Manual entries keep
+                    # fetched_at=None (no "fetch" happened), matching prior behavior.
+                    fetched_at=utcnow() if source_plugin_key != "MANUAL" else None,
                 )
                 price_objects.append(price_obj)
 
             # Delete existing prices for these dates (MERGE = fetch + delete + insert)
-            if dates_to_upsert:
-                delete_stmt = delete(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(dates_to_upsert)))
+            # Only accepted dates — a date rejected by the integrity guard above
+            # must NOT be deleted (that would drop the row entirely instead of
+            # preserving it, since it's excluded from price_objects below).
+            accepted_dates = [p.date for p in price_objects]
+            if accepted_dates:
+                delete_stmt = delete(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(accepted_dates)))
                 await session.execute(delete_stmt)
 
             # Bulk insert new prices
@@ -1332,8 +1373,12 @@ class AssetSourceManager:
             # Count as inserted
             total_inserted += len(price_objects)
 
-            # I.2 — after hard-reject validation all inputs were accepted
+            # I.2 — currency-mismatch was hard-rejected earlier (whole call raises).
+            # OHLC-integrity rejections (this function's own guard, soft-skip per date)
+            # are reported in `msg` below instead.
             msg = f"Upserted {len(price_objects)} prices"
+            if rejected_dates:
+                msg += f"; rejected {len(rejected_dates)} date(s) with impossible OHLC (close outside [low, high]): " + ", ".join(rejected_dates[:5]) + (f" (+ {len(rejected_dates) - 5} more)" if len(rejected_dates) > 5 else "")
 
             results.append(
                 {
@@ -2600,9 +2645,21 @@ class AssetSourceManager:
                             new_count, changed_count, changed_items_delta = fetched_count, 0, list(price_items)  # Fallback
 
                         try:
-                            await AssetSourceManager.bulk_upsert_prices([upsert_obj], persist_session)
+                            # Pass the real provider_code so upserted rows are correctly
+                            # tagged (see bulk_upsert_prices docstring) instead of the
+                            # previous hardcoded "MANUAL", which mislabeled every
+                            # scheduler-synced row and left fetched_at always NULL —
+                            # silently defeating the portfolio engine's cache-invalidation
+                            # fingerprint (COUNT + MAX(fetched_at)) for same-date revisions.
+                            upsert_result = await AssetSourceManager.bulk_upsert_prices([upsert_obj], persist_session, source_plugin_key=provider_code)
                             inserted_count = new_count
                             updated_count = changed_count
+                            # Surface OHLC-integrity rejections (bad provider data,
+                            # e.g. close outside [low, high]) as a visible warning
+                            # instead of a silent undercount in inserted/updated.
+                            for r in upsert_result.get("results", []):
+                                if "rejected" in (r.get("message") or ""):
+                                    errors.append(r["message"])
                         except Exception as e:
                             errors.append(f"DB upsert failed: {str(e)}")
                             # If the upsert failed, no delta is reliable.

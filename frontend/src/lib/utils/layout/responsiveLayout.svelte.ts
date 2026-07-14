@@ -7,7 +7,12 @@
  *
  * Thresholds are stored reactively (see `thresholds` on the returned instance) so they can be
  * tuned live from the browser console via `registerLayoutDebug` below — mutating a field (e.g.
- * `instance.thresholds.iconOnly = 300`) recomputes layoutMode immediately, no resize needed.
+ * `instance.thresholds.stackFilters = 300`) recomputes layoutMode immediately, no resize needed.
+ *
+ * ⚠️ Round 12.1: `thresholds.oneColumn` is the one exception — it's currently INERT (see the
+ * comment on its declaration below and on the `layoutMode` derivation) because `oneColumn` is
+ * the narrowest tier today, with nothing left below it to bound. Left in place on purpose for a
+ * possible future narrower sub-tier, not dead code to clean up.
  */
 
 export interface LayoutThresholds {
@@ -28,19 +33,41 @@ export interface LayoutThresholds {
      *  one under the other (previously the unnamed "mobile" gap; Round 11 gives it its own name
      *  + dedicated threshold since Azioni moving here is a first-class layout decision, not an
      *  afterthought). Azioni stay a 2×2 grid WITH labels here — only their position changes
-     *  (from beside to below); `iconOnly` below is what strips labels/switches to icon-only. */
+     *  (from beside to below). This is now the NARROWEST tier (Round 12 removed the separate
+     *  `iconOnly` tier below it — labels never disappear on their own anymore; see
+     *  `labelHideActions`/`labelHideTabs`, the only remaining independent axes for that).
+     *
+     *  ⚠️ Round 12.1: this NUMBER currently has NO effect on `layoutMode` — since `oneColumn` is
+     *  the narrowest tier (nothing left below it to bound), the derivation below falls through
+     *  to `'oneColumn'` unconditionally once width drops under `stackFilters`, without ever
+     *  comparing against this value. Confirmed by live tuning: crossing it produces no visible
+     *  change, by design, not a bug. Kept (not removed) so a future narrower sub-tier can reuse
+     *  this exact threshold slot without another rename/migration across all 6 pages. */
     oneColumn: number; // e.g., dashboard: 365, brokerDetail: 470
-    /** Below this width the textual labels on action buttons hide (icon-only). Independent axis
-     *  from everything else here — usually (but not necessarily) equal to `iconOnly`. */
-    labelHide: number; // Both: 460
-    /** Narrowest tier: same single-column structure as `oneColumn`, but Azioni (and Tabs, if
-     *  any) additionally lose their text labels and reflow from a 2×2 grid into a single
-     *  centered, wrapping icon-only row — the last-resort fallback when even a labeled 2×2 grid
-     *  no longer fits. */
-    iconOnly: number; // Both: 330
+    /** Below this width the textual labels on action buttons hide entirely. Independent axis
+     *  from the tier system above — tuned per-page. Split from a single shared `labelHide`
+     *  (Round 13) after live tuning showed Actions and Tabs need different values — this one
+     *  is the Actions half; see `labelHideTabs` for the Tab half. No longer tied to a matching
+     *  `iconOnly` layout tier (removed in Round 12; labels shrink via `labelShrink.ts` before
+     *  ever reaching this threshold, see TabBar.svelte/PageToolbar.svelte). */
+    labelHideActions: number; // Both: 250
+    /** Below this width the textual labels on Tab buttons hide entirely — the Tab half of the
+     *  Round 13 `labelHide` split (see `labelHideActions` above for the Actions half). Same
+     *  independent-axis rationale, tuned separately because Tab labels and Action labels don't
+     *  need to disappear at the same width in practice. */
+    labelHideTabs: number; // Both: 370
+    /** Optional (Round 13) — independent of the tier system AND of `labelHideActions`/
+     *  `labelHideTabs` above. Below this width, a page can hide one or more of its OWN "extra"
+     *  decorative labels (e.g. dashboard's "Valuta:" text prefix in front of the currency
+     *  selector) while keeping the actual control itself — read via `showExtraLabels` in the
+     *  `filters`/`summary` snippet. Optional and per-page opt-in: omit it entirely on pages that
+     *  don't have such an extra label to shed (their `showExtraLabels` then defaults to always
+     *  `true`, i.e. today's unaffected behavior). Not part of the `LayoutMode` tier system on
+     *  purpose — nothing structural changes at this width, only this one label's visibility. */
+    noExtraLabel?: number; // e.g., dashboard: 300
 }
 
-export type LayoutMode = 'oneRow' | 'denseRow' | 'stackFilters' | 'oneColumn' | 'iconOnly';
+export type LayoutMode = 'oneRow' | 'denseRow' | 'stackFilters' | 'oneColumn';
 
 /**
  * Creates a ResizeObserver-based responsive layout tracker.
@@ -48,7 +75,7 @@ export type LayoutMode = 'oneRow' | 'denseRow' | 'stackFilters' | 'oneColumn' | 
  *
  * @example
  * ```svelte
- * const layout = createResponsiveLayout({oneRow: 1030, denseRow: 700, stackFilters: 530, oneColumn: 460, labelHide: 400, iconOnly: 400});
+ * const layout = createResponsiveLayout({oneRow: 1030, denseRow: 700, stackFilters: 530, oneColumn: 460, labelHideActions: 250, labelHideTabs: 370});
  * $effect(() => {
  *     const el = filterBarRef;
  *     if (!el) return;
@@ -70,16 +97,30 @@ export function createResponsiveLayout(initialThresholds: LayoutThresholds) {
     // matching mode name) — no more "two vocabularies" to keep in sync. Round 11: the former
     // unnamed "mobile" gap (between stackFilters and iconOnly) is now itself a named, thresholded
     // tier ("oneColumn") — every tier has its own dedicated threshold, no exceptions, no nullable
-    // checks needed below.
+    // checks needed below. Round 12: the separate `iconOnly` tier below `oneColumn` was removed
+    // entirely (labels never auto-hide via a layout tier anymore — see `labelHideActions`/
+    // `labelHideTabs`/`labelShrink.ts` for how narrow labels are now handled instead) —
+    // `oneColumn` is the narrowest tier, a plain fallback below `stackFilters`.
     let layoutMode = $derived.by((): LayoutMode => {
         const w = width;
         if (w >= thresholds.oneRow) return 'oneRow';
         if (w >= thresholds.denseRow) return 'denseRow';
         if (w >= thresholds.stackFilters) return 'stackFilters';
-        if (w >= thresholds.oneColumn) return 'oneColumn';
-        return 'iconOnly';
+        // Round 12.1: `thresholds.oneColumn` is intentionally NEVER read here — with `iconOnly`
+        // gone, there's no narrower tier left to bound it against, so once width drops under
+        // `stackFilters` we're unconditionally in 'oneColumn' regardless of its numeric value.
+        // Confirmed by the user's own live tuning (moving the threshold produces no change).
+        // The field stays in LayoutThresholds/all 6 pages' config anyway — not dead code to
+        // delete, just a currently-inert knob reserved for a possible future narrower sub-tier.
+        return 'oneColumn';
     });
-    let showActionLabels = $derived(width >= thresholds.labelHide);
+    // Round 13: split from a single shared `labelHide` — Actions and Tabs labels don't need to
+    // disappear at the same width in practice (live-tuned: 250 for Actions, 370 for Tabs).
+    let showActionLabels = $derived(width >= thresholds.labelHideActions);
+    let showTabLabels = $derived(width >= thresholds.labelHideTabs);
+    // Round 13: independent, OPTIONAL, per-page axis — defaults to always-shown when a page
+    // doesn't configure it (the 5 pages without an "extra" decorative label to shed today).
+    let showExtraLabels = $derived(thresholds.noExtraLabel == null || width >= thresholds.noExtraLabel);
 
     function attach(el: HTMLElement) {
         detach(); // cleanup previous
@@ -112,6 +153,12 @@ export function createResponsiveLayout(initialThresholds: LayoutThresholds) {
         get showActionLabels() {
             return showActionLabels;
         },
+        get showTabLabels() {
+            return showTabLabels;
+        },
+        get showExtraLabels() {
+            return showExtraLabels;
+        },
         get width() {
             return width;
         },
@@ -128,12 +175,14 @@ export type ResponsiveLayout = ReturnType<typeof createResponsiveLayout>;
  * Registers a layout instance on `window.__lfLayouts.<name>` for live threshold tuning from the
  * browser console, e.g.:
  *
- *   window.__lfLayouts.dashboard.thresholds.iconOnly = 300
- *   window.__lfLayouts.assetsList.thresholds.stackFilters = 550
+ *   window.__lfLayouts.dashboard.thresholds.stackFilters = 550
+ *   window.__lfLayouts.assetsList.thresholds.denseRow = 900
  *
  * Recomputes layoutMode immediately (no resize needed) since thresholds are read reactively.
  * Always available — not gated behind a debug flag — since this is a harmless numeric knob and
  * the whole point is tuning breakpoints live on a local prod build without rebuilding.
+ * (`thresholds.oneColumn` is the one exception, currently inert — see its declaration in
+ * `LayoutThresholds` above.)
  */
 export function registerLayoutDebug(name: string, layout: ResponsiveLayout) {
     if (typeof window === 'undefined') return;

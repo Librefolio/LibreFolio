@@ -65,7 +65,14 @@
          *  content needs, huge `justify-between` gaps) — the 2 row-modes need their own,
          *  independently tunable cap. Only applies when `isSingleRow` is false (i.e. `layoutMode`
          *  is anything other than `'oneRow'`, or no `layoutMode` prop is used AND the internal
-         *  content itself doesn't fit in `maxWidth`'s single-row budget). */
+         *  content itself doesn't fit in `maxWidth`'s single-row budget).
+         *  ⚠️ Round 13 invariant: MUST be >= the page's own `thresholds.oneColumn` value — the
+         *  narrowest tier (`oneColumn`) can still present a container as wide as that threshold
+         *  (it's the unconditional fallback below `stackFilters`, not its own banded tier — see
+         *  responsiveLayout.svelte.ts), so a smaller `maxWidthTwoRow` artificially caps the picker
+         *  (and the "Centro" content mirroring it via `effectiveMaxWidth`) narrower than the space
+         *  actually available, wasting it. Pages with `oneColumn` > 390 (the default) MUST pass an
+         *  explicit `maxWidthTwoRow` >= that threshold (see the 5 pages that do this today). */
         maxWidthTwoRow?: number;
         /** Current PageToolbar layoutMode (Round 10) — when provided, DIRECTLY controls whether
          *  the picker renders 1 row or 2 internal rows: 'oneRow' → 1 row, everything else → 2 rows.

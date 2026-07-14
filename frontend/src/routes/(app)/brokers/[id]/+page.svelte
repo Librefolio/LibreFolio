@@ -409,34 +409,52 @@
              (previously the date-range picker only rendered inside the Panoramica tab's
              content, so it disappeared on Posizioni/Transazioni even though those tabs
              depend on the same date-scoped data). -->
-        <PageToolbar thresholds={{oneRow: 1000, denseRow: 800, stackFilters: 560, oneColumn: 470, iconOnly: 330, labelHide: 330}} tabs={brokerTabs} {activeTab} ontabchange={handleTabChange} testId="broker-controls" filterRowTestId="broker-overview-controls" layoutDebugName="brokerDetail">
+        <PageToolbar
+            thresholds={{oneRow: 1000, denseRow: 800, stackFilters: 470, oneColumn: 430, labelHideActions: 270, labelHideTabs: 370}}
+            tabs={brokerTabs}
+            {activeTab}
+            ontabchange={handleTabChange}
+            testId="broker-controls"
+            filterRowTestId="broker-overview-controls"
+            layoutDebugName="brokerDetail"
+        >
             {#snippet filters({layoutMode, filtersStacked})}
-                <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} align="start" {layoutMode} debugName="brokerDetail" onchange={handleDateChange} bind:effectiveMaxWidth={pickerMaxWidth} />
+                <DateRangePicker bind:activePreset bind:start={displayDateFrom} bind:end={dateTo} compact={true} align="start" maxWidthTwoRow={470} {layoutMode} debugName="brokerDetail" onchange={handleDateChange} bind:effectiveMaxWidth={pickerMaxWidth} />
 
                 <!-- Single-item row — no second control to spread against, so just center it
-                     once it's stretched to the DateRangePicker's width (stackFilters/oneColumn/
-                     iconOnly — see filtersStacked in PageToolbar). Un-stretched otherwise, this
-                     justify-center is a no-op (natural content width, already centered visually
-                     by the parent's items-center in row mode). Capped to pickerMaxWidth so this
-                     row's right edge lines up with the picker's instead of the wider column. -->
-                <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 {filtersStacked ? 'w-full' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
-                    <span class="whitespace-nowrap">{$_('common.currency')}:</span>
-                    <div class="w-28">
-                        <CurrencySearchSelect
-                            bind:value={targetCurrency}
-                            compact={true}
-                            dropdownPosition="bottom"
-                            placeholder={baseCurrency}
-                            onchange={() => {
-                                targetCurrencyManuallySet = true;
-                                void loadOverview();
-                            }}
-                        />
+                     once it's stretched to the DateRangePicker's width (stackFilters/oneColumn —
+                     see filtersStacked in PageToolbar). Un-stretched otherwise, this
+                     justify-around is a no-op (natural content width, already centered visually
+                     by the parent's items-center in row mode) — same visual result as
+                     justify-center for a single item, kept as justify-around for consistency:
+                     it's the standard justification for every capped Centro row (Round 13),
+                     regardless of how many elements it holds. Capped to pickerMaxWidth so this
+                     row's right edge lines up with the picker's instead of the wider column.
+                     Round 13 bugfix: label + selector MUST share one wrapper div — they're a
+                     single semantic unit ("Valuta: [selector]"), not two independent items to
+                     spread apart. Without the wrapper, justify-around treats them as 2 separate
+                     flex children and splits them apart with a wide gap in between (same mistake
+                     dashboard's equivalent row never had — compare its currency-override block). -->
+                <div class="flex items-center justify-around gap-1.5 text-xs text-gray-500 dark:text-gray-400 {filtersStacked ? 'w-full' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
+                    <div class="flex items-center gap-1.5">
+                        <span class="whitespace-nowrap">{$_('common.currency')}:</span>
+                        <div class="w-28">
+                            <CurrencySearchSelect
+                                bind:value={targetCurrency}
+                                compact={true}
+                                dropdownPosition="bottom"
+                                placeholder={baseCurrency}
+                                onchange={() => {
+                                    targetCurrencyManuallySet = true;
+                                    void loadOverview();
+                                }}
+                            />
+                        </div>
                     </div>
                 </div>
             {/snippet}
 
-            {#snippet actions({showActionLabels, stretchActions})}
+            {#snippet actions({showActionLabels})}
                 {#if canEdit}
                     <button
                         on:click={handleEdit}
@@ -468,11 +486,9 @@
                 </button>
 
                 <!-- AI Export — reuses the same copyAiExport() utility as the dashboard, scoped to this single broker. -->
-                <div class="relative {stretchActions ? 'w-full' : ''}">
+                <div class="relative w-full">
                     <button
-                        class="flex items-center justify-center gap-1.5 {stretchActions
-                            ? 'w-full'
-                            : ''} px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50"
+                        class="flex items-center justify-center gap-1.5 w-full px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50"
                         on:click={() => (aiExportDropdownOpen = !aiExportDropdownOpen)}
                         disabled={aiExportLoading}
                         data-testid="ai-export-button"

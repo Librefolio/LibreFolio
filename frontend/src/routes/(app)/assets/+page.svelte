@@ -13,7 +13,7 @@
      *
      * Svelte 5 runes throughout.
      */
-    import {onMount} from 'svelte';
+    import {onMount, tick} from 'svelte';
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi, axiosInstance} from '$lib/api';
@@ -38,6 +38,7 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
+    import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
@@ -135,6 +136,12 @@
     // DateRangePicker, so it's intentionally NOT a pure $derived of dateStart/isMaxPending.
     let displayDateStart = $state(initialIsMaxPending ? 'min' : resolveDateSentinel(getStart()));
     let activePreset: any = $state(initialIsMaxPending ? 'MAX' : null);
+    /** Mirrors the DateRangePicker's own effective 2-row max-width, so the Center filters block
+     *  below it can be capped to the SAME pixel value when filtersStacked (matches the
+     *  established dashboard/brokerDetail/fxList "giustificata" pattern). MUST start
+     *  non-undefined (390 = DateRangePicker's own maxWidthTwoRow default) — Svelte forbids
+     *  bind:key={undefined} when the child prop has a declared fallback. */
+    let pickerMaxWidth = $state<number>(390);
 
     /**
      * Sentinel-aware values for building URLs (own history + cross-page nav
@@ -190,9 +197,15 @@
     // — see the {#snippet filters}/{#snippet actions} below for layoutMode/filtersStacked/
     // showActionLabels usage. Tune live via window.__lfLayouts.assetsList.thresholds.<field>.
 
-    // Type filter dropdown
+    // Type filter dropdown. Round 14 bugfix: the panel is `position:fixed` (computed via
+    // getFixedDropdownPosition) instead of `absolute` — PageToolbar's own card wrapper has
+    // `overflow-hidden`, which was clipping this panel whenever it would visually overflow the
+    // card's rounded-corner bounds. Same technique dashboard's broker-filter/AI-export
+    // dropdowns already use.
     let typeFilterOpen = $state(false);
     let typeFilterTriggerEl = $state<HTMLButtonElement | null>(null);
+    let typeFilterPanelEl = $state<HTMLDivElement | null>(null);
+    let typeFilterDropdownPosition = $state({left: 8, top: 8});
 
     // Chart settings modal (D4)
     let settingsModalOpen = $state(false);
@@ -289,6 +302,37 @@
 
         window.addEventListener('click', handleClick, true);
         return () => window.removeEventListener('click', handleClick, true);
+    });
+
+    async function positionTypeFilterDropdown() {
+        await tick();
+        if (!typeFilterOpen) return;
+        typeFilterDropdownPosition = getFixedDropdownPosition(typeFilterTriggerEl, typeFilterPanelEl, 'start');
+    }
+
+    function toggleTypeFilterDropdown() {
+        typeFilterOpen = !typeFilterOpen;
+        if (typeFilterOpen) void positionTypeFilterDropdown();
+    }
+
+    // Recompute the fixed position while open (initial open + any resize/scroll) — same
+    // pattern as dashboard's broker-filter/AI-export dropdowns.
+    $effect(() => {
+        if (!typeFilterOpen) return;
+        void positionTypeFilterDropdown();
+    });
+
+    $effect(() => {
+        if (!typeFilterOpen) return;
+
+        const handleViewportChange = () => void positionTypeFilterDropdown();
+        window.addEventListener('resize', handleViewportChange);
+        window.addEventListener('scroll', handleViewportChange, true);
+
+        return () => {
+            window.removeEventListener('resize', handleViewportChange);
+            window.removeEventListener('scroll', handleViewportChange, true);
+        };
     });
 
     // Debounced search
@@ -825,8 +869,11 @@
 </script>
 
 <div class="space-y-6" data-testid="assets-page">
-    <!-- Header: Title left, ViewModeToggle + Add Asset right -->
-    <div class="flex items-center justify-between">
+    <!-- Header: Title left, ViewModeToggle + Add Asset right. Round 14.1 bugfix: `lg:` is a
+         VIEWPORT breakpoint (1024px) — wraps unconditionally below that width regardless of
+         whether the actual header row has room. Plain `flex-wrap` reacts to the row's OWN
+         available width instead (see fx/+page.svelte's equivalent header for the full note). -->
+    <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
                 {$t('common.assets')}
@@ -836,7 +883,7 @@
             </h2>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$t('assets.subtitle')}</p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2 justify-end">
             {#if viewMode === 'list' && selectedAssetRows.length > 0}
                 <DataTableToolbar
                     selectedCount={selectedAssetRows.length}
@@ -890,19 +937,33 @@
          stackFilters: [ datepicker                     | col  ]
                       [ search active type currency ×  | btns ]
          oneColumn:    [ datepicker ] [ search active type × ] [ currency ] [ 2×2 btns, now BELOW ] -->
-    <PageToolbar thresholds={{oneRow: 1340, denseRow: 1060, stackFilters: 500, oneColumn: 410, iconOnly: 330, labelHide: 330}} testId="assets-controls" filterRowTestId="assets-filter-bar" layoutDebugName="assetsList">
+    <PageToolbar thresholds={{oneRow: 1340, denseRow: 850, stackFilters: 440, oneColumn: 400, labelHideActions: 250, labelHideTabs: 370}} testId="assets-controls" filterRowTestId="assets-filter-bar" layoutDebugName="assetsList">
         {#snippet filters({layoutMode, filtersStacked})}
-            <!-- DateRangePicker -->
-            <div class="flex flex-1 self-stretch min-w-0" data-testid="assets-date-range">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" {layoutMode} debugName="assetsList" onchange={handleDateRangeChange} />
+            <!-- DateRangePicker. Round 14 bugfix: this wrapper is `contents` (exits the box
+                 model — data-testid stays queryable, it's just a DOM attribute) rather than
+                 `flex flex-1 ...` — DateRangePicker's own root ALREADY self-applies
+                 `grow`+`self-stretch`+`max-width:{effectiveMaxWidth}px` when `align="start"`
+                 (see DateRangePicker.svelte). An extra `flex-1` wrapper with NO cap of its own
+                 grows past the picker's actual (capped) rendered width, leaving an invisible
+                 gap that pushed the Center content sibling further right than intended
+                 (denseRow bug report — most visible there since the picker's own 2-row content
+                 doesn't grow to fill space the way oneRow's jolly-badge-fill does). -->
+            <div class="contents" data-testid="assets-date-range">
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" maxWidthTwoRow={410} {layoutMode} debugName="assetsList" onchange={handleDateRangeChange} bind:effectiveMaxWidth={pickerMaxWidth} />
             </div>
 
-            <!-- Filters 2×2 block (denseRow+stackFilters) / inline (oneRow) / stacked (oneColumn+iconOnly) -->
-            <div class="flex gap-2 {layoutMode === 'oneRow' ? 'flex-row items-center flex-wrap' : filtersStacked ? 'flex-col items-center' : 'flex-col'}">
+            <!-- Filters 2×2 block, BESIDE the picker (denseRow only) / inline (oneRow) /
+                 stacked+justified BELOW the picker (stackFilters+oneColumn — start-aligned,
+                 capped to the picker's own width via pickerMaxWidth, matching the
+                 dashboard/brokerDetail/fxList "giustificata" pattern). Round 13: each ROW
+                 individually needs its own w-full+justify-around too — the OUTER wrapper's cap
+                 alone doesn't distribute space to children that don't ALSO stretch to it. -->
+            <div class="flex gap-2 {layoutMode === 'oneRow' ? 'flex-row items-center flex-wrap' : filtersStacked ? 'flex-col items-start w-full' : 'flex-col'}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
                 <!-- Row 1: Search + Active -->
-                <div class="flex items-center gap-2">
-                    <!-- Search -->
-                    <div class="relative w-44">
+                <div class="flex items-center gap-2 {filtersStacked ? 'w-full justify-around' : ''}">
+                    <!-- Search — Round 14: min-w bumped (was a flat w-44/176px that felt too
+                         cramped) so it stays comfortably readable even under pressure. -->
+                    <div class="relative w-44 min-w-[160px]">
                         <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
                         <input
                             class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-1 focus:ring-libre-green focus:border-libre-green"
@@ -942,26 +1003,26 @@
                 </div>
 
                 <!-- Row 2: Type multi-select + Currency dropdown + Reset -->
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 {filtersStacked ? 'w-full justify-around' : ''}">
                     <!-- Type multi-checkbox dropdown (D9) -->
-                    <div class="relative">
+                    <div class="relative min-w-0">
                         <button
                             bind:this={typeFilterTriggerEl}
-                            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
+                            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors min-w-0
                                    {filterTypes.size > 0
                                 ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700'
                                 : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
                             data-testid="assets-type-filter"
-                            onclick={() => {
-                                typeFilterOpen = !typeFilterOpen;
-                            }}
+                            onclick={toggleTypeFilterDropdown}
                         >
-                            {#if filterTypes.size > 0}
-                                {$t('common.type')} ({filterTypes.size})
-                            {:else}
-                                {$t('assets.allTypes')}
-                            {/if}
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <span class="truncate">
+                                {#if filterTypes.size > 0}
+                                    {$t('common.type')} ({filterTypes.size})
+                                {:else}
+                                    {$t('assets.allTypes')}
+                                {/if}
+                            </span>
+                            <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
                             </svg>
                         </button>
@@ -969,7 +1030,10 @@
                         {#if typeFilterOpen}
                             <!-- svelte-ignore a11y_interactive_supports_focus -->
                             <div
-                                class="absolute z-50 mt-1 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden"
+                                bind:this={typeFilterPanelEl}
+                                class="fixed z-50 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden"
+                                style:left={`${typeFilterDropdownPosition.left}px`}
+                                style:top={`${typeFilterDropdownPosition.top}px`}
                                 onclick={(e) => e.stopPropagation()}
                                 onkeydown={(e) => {
                                     if (e.key === 'Escape') typeFilterOpen = false;
@@ -1026,8 +1090,10 @@
                         {/if}
                     </div>
 
-                    <!-- Currency Filter (D10 — CurrencySearchSelect, adds to Set) -->
-                    <div class="w-36">
+                    <!-- Currency Filter (D10 — CurrencySearchSelect, adds to Set). Round 14:
+                         explicit min-w floor so it can shrink a bit under pressure (its own
+                         label already truncates internally) without disappearing. -->
+                    <div class="w-36 min-w-[96px]">
                         <CurrencySearchSelect
                             allowedCurrencies={configuredCurrencies}
                             includeAll={true}

@@ -17,13 +17,22 @@
         deltaPercent: number | null;
         /** Current responsive layout mode */
         layoutMode: LayoutMode;
+        /** True when the Filters+Summary zone is stacked below the DateRangePicker
+         *  (stackFilters/oneColumn) — drives "giustificata" alignment (start-aligned, never
+         *  centered) instead of the beside-the-picker centered look used at oneRow/denseRow. */
+        filtersStacked: boolean;
+        /** Mirrors the DateRangePicker's own effective max-width (see PageToolbar's
+         *  `effectiveMaxWidth`/`pickerMaxWidth` pattern) — applied as this component's own
+         *  max-width when `filtersStacked`, so it lines up pixel-perfect with the picker above
+         *  it instead of stretching to the wider outer column. */
+        maxWidth?: number;
     }
 
-    let {lastRate, deltaPercent, layoutMode}: Props = $props();
+    let {lastRate, deltaPercent, layoutMode, filtersStacked, maxWidth}: Props = $props();
 </script>
 
 {#if lastRate !== null}
-    <div class="flex items-center gap-3 {layoutMode === 'oneRow' ? 'px-3' : 'justify-center'}">
+    <div class="flex items-center gap-3 {layoutMode === 'oneRow' ? 'px-3' : filtersStacked ? 'justify-around w-full' : 'justify-center'}" style={filtersStacked && maxWidth ? `max-width: ${maxWidth}px` : ''}>
         <!-- Left half: rate -->
         <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
             {lastRate.toFixed(4)}
