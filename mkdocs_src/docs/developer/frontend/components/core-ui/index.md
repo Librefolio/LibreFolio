@@ -16,6 +16,11 @@ graph TD
         CAL --> DRP["DateRangePicker"]
     end
 
+    subgraph "Toolbar"
+        PT["PageToolbar"] --> DRP
+        PT --> TB["TabBar"]
+    end
+
     subgraph "Datapoint Editor"
         DIM --> CSE["CsvEditor"]
         DE["DataEditor"] --> SDP
@@ -26,6 +31,7 @@ graph TD
     CM -.->|used by| DEL["Delete Dialogs"]
     DRP -.->|used by| CT["Chart Toolbar"]
     DE -.->|used by| FX["FX Data Editor"]
+    PT -.->|used by| PAGES["Dashboard · Broker Detail · Assets · FX"]
 
     style MB fill:#f3e5f5,stroke:#7b1fa2
     style CM fill:#f3e5f5,stroke:#7b1fa2
@@ -35,6 +41,8 @@ graph TD
     style DE fill:#e8f5e9,stroke:#2e7d32
     style DIM fill:#e8f5e9,stroke:#2e7d32
     style CSE fill:#e8f5e9,stroke:#2e7d32
+    style PT fill:#fff3e0,stroke:#e65100
+    style TB fill:#fff3e0,stroke:#e65100
 ```
 
 ## 📑 Sub-sections
@@ -44,5 +52,6 @@ graph TD
 | **[Modals](modals.md)** | ModalBase, ConfirmModal | Foundation for all modal dialogs |
 | **[Feedback](feedback.md)** | ToastContainer, InfoBanner, LoadingSpinner, Tooltip | Notifications and user feedback |
 | **[Pickers](datePickers.md)** | CalendarMonth, SingleDatePicker, DateRangePicker | Date selection components |
+| **[Toolbar & Responsive Layout](toolbar.md)** | PageToolbar, TabBar, `responsiveLayout.svelte.ts` | Container-width-driven responsive page toolbar shell |
 | **[Atoms](atoms.md)** | ThemeToggle, DocsLink, AnimatedBackground, OrderableList, PasswordInput, PasswordStrength | Small standalone UI primitives |
 | **[Datapoint Editor](data-editor.md)** | DataEditor, CsvEditor, DataImportModal | Inline editing and CSV import for financial datapoints |

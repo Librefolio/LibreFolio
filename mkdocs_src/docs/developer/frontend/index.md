@@ -39,7 +39,9 @@ frontend/src/
 │   │   └── ui/       # Generic UI atoms
 │   │       ├── input/    # PasswordInput, PasswordStrength
 │   │       ├── media/    # ImageCropper, ImageEditModal, AssetPickerModal, FileEditModal
-│   │       └── select/   # BaseDropdown, SimpleSelect, SearchSelect
+│   │       ├── select/   # BaseDropdown, SimpleSelect, SearchSelect
+│   │       ├── tabs/     # TabBar (used standalone and by PageToolbar)
+│   │       └── toolbar/  # PageToolbar — shared responsive shell (see Toolbar & Responsive Layout)
 │   ├── i18n/         # Internationalization (EN, IT, FR, ES)
 │   ├── stores/       # Store Client System (State Management)
 │   │   ├── app/          # Auth, Theme, Settings, DateRange
@@ -49,6 +51,7 @@ frontend/src/
 │   │   └── registries/   # AssetPriceStoreRegistry, FxStoreRegistry
 │   ├── types/        # TypeScript type definitions
 │   └── utils/        # Utilities (imageCrop, upload, urlFilters)
+│       └── layout/       # responsiveLayout.svelte.ts, labelShrink.ts, dropdownPosition.ts
 ├── e2e/              # Playwright E2E tests (7 suites, 109+ tests)
 └── static/           # Static assets
 ```
@@ -127,6 +130,7 @@ Frontend tasks are managed via `dev.py front`:
 | Topic                                    | Description                                        |
 |------------------------------------------|----------------------------------------------------|
 | [DataTable](components/core-ui/data-table.md) | Advanced table with sorting, filtering, pagination |
+| [Toolbar & Responsive Layout](components/core-ui/toolbar.md) | `PageToolbar` shell, threshold-driven tiers, per-page tuning |
 | [FX Chain Algorithm](fx-chain-algorithm.md) | DFS + graphology for multi-step FX routes       |
 | [Authentication](components/features/auth.md) | LoginCard, RegisterCard, ForgotPasswordCard        |
 | [Settings](components/features/settings.md)   | User preferences, profile, and global settings     |
