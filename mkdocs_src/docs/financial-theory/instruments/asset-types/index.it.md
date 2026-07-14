@@ -10,7 +10,7 @@ LibreFolio supporta un'ampia gamma di classi di asset per coprire un portafoglio
 | ![](../../../static/icons/asset-types/etf.png){: width="32" } | **ETF** | `ETF` | Exchange Traded Funds. Panieri di titoli che vengono scambiati come azioni. | [📖](etfs.md) |
 | ![](../../../static/icons/asset-types/bond.png){: width="32" } | **Bond** | `BOND` | Titoli a reddito fisso che rappresentano un prestito a un emittente (governativo o societario). | [📖](bonds.md) |
 | ![](../../../static/icons/asset-types/crypto.png){: width="32" } | **Crypto** | `CRYPTO` | Valute digitali e token (Bitcoin, Ethereum, ecc.). | [📖](crypto.md) |
-| ![](../../../static/icons/asset-types/crowdfunding.png){: width="32" } | **P2P / Crowdfunding** | `CROWDFUNDING` | Prestiti peer-to-peer o crowdfunding immobiliare. Spesso valutati tramite pagamenti di interessi programmati. | [📖](real-estate.md) |
+| ![](../../../static/icons/asset-types/crowdfunding.png){: width="32" } | **P2P / Crowdfunding** | `CROWDFUND` | Prestiti peer-to-peer o crowdfunding immobiliare. Spesso valutati tramite pagamenti di interessi programmati. | [📖](real-estate.md) |
 | ![](../../../static/icons/asset-types/fund.png){: width="32" } | **Fondi Comuni** | `FUND` | Fondi di investimento gestiti professionalmente. | [📖](mutual-fund.md) |
 | ![](../../../static/icons/asset-types/hold.png){: width="32" } | **Commodities** | `HOLD` | Asset fisici come Oro, Argento o Diamanti detenuti come riserva di valore a lungo termine. | [📖](commodities.md) |
 | ![](../../../static/icons/asset-types/other.png){: width="32" } | **Altro** | `OTHER` | Qualsiasi altra classe di asset (es. Arte, Private Equity, Collezionabili). | [📖](other.md) |

@@ -20,7 +20,7 @@ Où $\mathrm{MV}(t) = \sum_{(a,b) \in S} q(a,b,t) \cdot p(a,t) \cdot \mathrm{fx}
 
 ---
 
-## 🔗 Chaîne de prix de valorisation
+## 🔗 Chaîne de prix de valorisation {: #valuation-price-chain }
 
 Le prix $p(a,t)$ suit une priorité stricte :
 

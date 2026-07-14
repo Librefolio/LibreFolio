@@ -37,22 +37,69 @@ Easy account creation with password strength feedback.
 
 Your portfolio at a glance — key stats, allocation charts, and a clean empty state for new users.
 
-<div class="lf-screenshot-carousel lf-mobile-carousel" data-carousel="carousel-mobile-0" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Main View (Absolute)" alt="📈 Main View (Absolute)">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📈 Main View (Percentage)" alt="📈 Main View (Percentage)">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Allocation by Type (Current)" alt="📊 Allocation by Type (Current)">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-history" data-title="📊 Allocation by Type (Historical)" alt="📊 Allocation by Type (Historical)">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-now" data-title="📊 Allocation by Sector (Current)" alt="📊 Allocation by Sector (Current)">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-history" data-title="📊 Allocation by Sector (Historical)" alt="📊 Allocation by Sector (Historical)">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-now" data-title="📊 Allocation by Geography (Current)" alt="📊 Allocation by Geography (Current)">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-history" data-title="📊 Allocation by Geography (Historical)" alt="📊 Allocation by Geography (Historical)">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Positions — Holdings / Table" alt="📋 Positions — Holdings / Table">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Positions — Holdings / Map" alt="🗺️ Positions — Holdings / Map">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Positions — Performance / Table" alt="📈 Positions — Performance / Table">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Positions — Performance / Map" alt="📊 Positions — Performance / Map">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="transactions-tab" data-title="💸 Transactions Tab" alt="💸 Transactions Tab">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-panel" data-title="🔬 FIFO Lots Analysis" alt="🔬 FIFO Lots Analysis">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="empty-state" data-title="🌱 New Portfolio (empty state)" alt="🌱 New Portfolio (empty state)">
+### 📌 KPI Overview
+
+Period P&L, returns, and net worth — the first thing you see when you land on the dashboard.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="dashboard" data-name="kpi-top" alt="KPI Overview">
+</div>
+
+### 📈 Portfolio Growth
+
+Track your portfolio's growth over time, in absolute or percentage terms.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-9" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Absolute" alt="Growth Chart — Absolute">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📊 Percentage" alt="Growth Chart — Percentage">
+</div>
+
+### 📊 Asset Allocation
+
+Breakdown by type, sector, and geography — current snapshot or historical evolution.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-10" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="allocation-type-now" data-title="📊 By Type (Current)" alt="Allocation by Type — Current">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-history" data-title="📊 By Type (Historical)" alt="Allocation by Type — Historical">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-now" data-title="📊 By Sector (Current)" alt="Allocation by Sector — Current">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-history" data-title="📊 By Sector (Historical)" alt="Allocation by Sector — Historical">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-now" data-title="📊 By Geography (Current)" alt="Allocation by Geography — Current">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-history" data-title="📊 By Geography (Historical)" alt="Allocation by Geography — Historical">
+</div>
+
+### 📋 Positions
+
+Switch between Holdings and Performance, then compare data in table or map views — aggregated across your whole portfolio.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-11" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Holdings / Table" alt="Positions — Holdings Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Holdings / Map" alt="Positions — Holdings Map">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Performance / Table" alt="Positions — Performance Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Performance / Map" alt="Positions — Performance Map">
+</div>
+
+### 💸 Transactions Tab
+
+Recent transactions right on the dashboard, no need to navigate away.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="dashboard" data-name="transactions-tab" alt="Dashboard Transactions Tab">
+</div>
+
+### 🔬 FIFO Lots Analysis
+
+Inspect the bubble timeline, WAC-price chart, and open/closed lots tables for a single asset.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-panel" alt="Dashboard FIFO Lots Analysis">
+</div>
+
+### 🌱 Empty State
+
+A clean, encouraging empty state greets new users with no data yet.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="dashboard" data-name="empty-state" alt="New Portfolio (empty state)">
 </div>
 
 ### ☰ Navigation Menu

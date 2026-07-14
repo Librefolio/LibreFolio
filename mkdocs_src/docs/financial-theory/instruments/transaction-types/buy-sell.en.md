@@ -40,6 +40,8 @@ $$
 \text{Capital Gain} = (P_{sell} \times Q) - (P_{buy} \times Q) - \text{Fees}
 $$
 
+<div id="fifo-matching"></div>
+
 !!! info "FIFO Matching"
 
     LibreFolio computes lot matching at **runtime** — it's not persisted in the database. This allows for flexible what-if analysis and potential future support for other matching methods (LIFO, specific identification).

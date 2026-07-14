@@ -40,6 +40,8 @@ $$
 \text{Capital Gain} = (P_{sell} \times Q) - (P_{buy} \times Q) - \text{Fees}
 $$
 
+<div id="fifo-matching"></div>
+
 !!! info "Emparejamiento FIFO"
 
     LibreFolio calcula el emparejamiento de lotes en **tiempo de ejecución** — no se persiste en la base de datos. Esto permite realizar análisis hipotéticos flexibles y el posible soporte futuro de otros métodos de emparejamiento (LIFO, identificación específica).

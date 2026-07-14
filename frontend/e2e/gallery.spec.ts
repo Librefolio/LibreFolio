@@ -324,12 +324,6 @@ test.describe('Gallery Screenshots', () => {
         await expect(semanticButton).toBeVisible({timeout: 5_000});
         await semanticButton.scrollIntoViewIfNeeded();
         await semanticButton.click({timeout: 5_000});
-        if (semantic === 'performance') {
-            await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
-            await page.waitForTimeout(700);
-        } else {
-            await page.waitForTimeout(300);
-        }
 
         const visualButton = page.getByTestId(`positions-toggle-${visual}`);
         await expect(visualButton).toBeVisible({timeout: 5_000});
@@ -337,12 +331,17 @@ test.describe('Gallery Screenshots', () => {
         await visualButton.click({timeout: 5_000}).catch(async () => {
             await visualButton.click({timeout: 5_000, force: true});
         });
-        if (semantic === 'performance') {
-            await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
-            await page.waitForTimeout(700);
-        } else {
-            await page.waitForTimeout(500);
-        }
+
+        // Wait for the ACTUAL content root, not networkidle+fixed-sleep. PositionsPanel
+        // shows an animate-pulse skeleton while `loading`/`contributionLoading` is true
+        // and only swaps to real content once data has arrived — that swap is the true
+        // "loaded" signal. The previous networkidle+700ms wasn't always enough for the
+        // on-demand `performance` contribution fetch (bug: mobile positions-performance-table
+        // gallery screenshot captured the loading skeleton instead of real rows).
+        const contentTestId =
+            semantic === 'holdings' ? (visual === 'table' ? 'exposure-table' : 'exposure-treemap') : visual === 'table' ? 'contribution-table' : 'performance-chart';
+        await expect(page.getByTestId(contentTestId)).toBeVisible({timeout: 15_000});
+        await page.waitForTimeout(400); // settle for chart redraw (treemap/performance-chart use ECharts)
     }
 
     async function screenshotPositionsVariants(
@@ -379,6 +378,20 @@ test.describe('Gallery Screenshots', () => {
                 await selectMaxDateRange(page);
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
+
+                // Top-of-dashboard screenshot (scroll=0): KPI cards with real portfolio
+                // data — previously only captured empty (dashboard-empty-state test uses
+                // TEST_EMPTY). Wait for the KPI row to swap out of its loading skeleton,
+                // then give the svelte/motion `tweened()` counters (900ms JS-driven
+                // count-up, NOT a CSS animation — freezeAnimations() can't freeze it)
+                // time to settle so numbers aren't captured mid-animation.
+                const kpiRow = page.getByTestId('kpi-row');
+                if (await kpiRow.isVisible({timeout: 5_000}).catch(() => false)) {
+                    await expect(kpiRow.getByTestId('kpi-value').first()).toBeVisible({timeout: 10_000});
+                    await page.waitForTimeout(1_000);
+                }
+                await page.evaluate(() => window.scrollTo(0, 0));
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'kpi-top');
 
                 // Scroll to the growth chart so it is visible and positioned nicely
                 const growthChart = page.getByTestId('growth-chart');
@@ -539,7 +552,17 @@ test.describe('Gallery Screenshots', () => {
                     await expect(page.getByTestId('dashboard-positions-tab')).toBeVisible({timeout: 5_000});
                     await setPositionsView(page, 'holdings', 'table');
 
-                    const analyzeLotsButton = page.getByTestId('positions-panel').getByTestId('row-action-analyze-lots').first();
+                    // Target "Apple Inc." specifically instead of `.first()` (highest
+                    // current value). Holdings sort by value desc (ExposureTable.svelte),
+                    // which currently puts "RE Loan Milano" first — but that asset has
+                    // exactly ONE PriceHistory row ever (see populate_mock_data.py
+                    // populate_price_history() loan_price_points), so its WAC/Market
+                    // chart renders empty. Apple has the richest lot history in the mock
+                    // dataset (buys across 3 brokers/currencies + a partial sell +
+                    // dividend + 3-year price history) — a proper FIFO/WAC demo.
+                    const positionsPanel = page.getByTestId('positions-panel');
+                    const appleRow = positionsPanel.locator('tr[data-row-id]').filter({hasText: 'Apple'}).first();
+                    const analyzeLotsButton = appleRow.getByTestId('row-action-analyze-lots');
                     await expect(analyzeLotsButton).toBeVisible({timeout: 5_000});
                     await analyzeLotsButton.scrollIntoViewIfNeeded();
                     await analyzeLotsButton.click();
