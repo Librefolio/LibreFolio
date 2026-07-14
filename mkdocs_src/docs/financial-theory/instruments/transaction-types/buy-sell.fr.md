@@ -40,6 +40,8 @@ $$
 \text{Plus-value} = (P_{sell} \times Q) - (P_{buy} \times Q) - \text{Frais}
 $$
 
+<div id="fifo-matching"></div>
+
 !!! info "Appariement FIFO"
 
     LibreFolio calcule l'appariement des lots à l'**exécution** — celui-ci n'est pas persisté dans la base de données. Cela permet des analyses de scénarios flexibles et un support futur potentiel pour d'autres méthodes d'appariement (LIFO, identification spécifique).

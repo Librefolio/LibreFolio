@@ -978,5 +978,124 @@
     word-break: break-word;
 }
 
+/* --- KPI Card Crop for User Manual --- */
+.kpi-card-crop-container {
+    display: block;
+    width: 100%;
+    max-width: 315px; /* Exact width of the card in the screenshot */
+    height: 310px; /* Exact height to capture all content of the KPI card */
+    overflow: hidden;
+    position: relative;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    border: 1px solid var(--md-default-fg-color--lightest);
+    margin: 1.5rem auto;
+}
+
+.kpi-card-crop-container img {
+    position: absolute !important;
+    top: -265px !important; /* Vertical offset to align the cards vertically */
+    max-width: none !important;
+    width: 1280px !important; /* Map to Playwright's default desktop viewport width */
+    height: auto !important;
+}
+
+/* Card-specific horizontal offsets based on 1280px viewport layout */
+/* Card 1: Net Worth (Rightmost column) */
+.kpi-card-crop-container.card-net-worth img {
+    left: -941px !important;
+}
+
+/* Card 2: Period P&L (Leftmost column) */
+.kpi-card-crop-container.card-period-pnl img {
+    left: -280px !important;
+}
+
+/* Card 3: Returns (Middle column) */
+.kpi-card-crop-container.card-returns img {
+    left: -610px !important;
+}
+
+/* Align cropped container nicely in Markdown */
+.kpi-crop-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    justify-content: center;
+    margin: 1.5rem 0;
+}
+
+/* --- Growth Chart Crop & Carousel Override --- */
+div.lf-screenshot-carousel-item.chart-crop-container {
+    display: block !important;
+    width: 100% !important;
+    max-width: 580px !important;
+    height: 420px !important;
+    max-height: none !important;
+    overflow: hidden !important;
+    position: relative !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15) !important;
+    border: 1px solid var(--md-default-fg-color--lightest) !important;
+    margin: 1.5rem auto !important;
+    object-fit: none !important;
+}
+
+div.lf-screenshot-carousel-item.chart-crop-container:not(.is-active) {
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+}
+
+div.lf-screenshot-carousel-item.chart-crop-container img.gallery-img {
+    position: absolute !important;
+    top: -290px !important; /* Offset past header toolbar and KPI cards row */
+    left: -280px !important; /* Offset past sidebar (256px) and content padding (24px) */
+    max-width: none !important;
+    width: 1280px !important;
+    height: auto !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    filter: none !important;
+}
+
+/* --- Allocation Panel Crop & Carousel Override --- */
+div.lf-screenshot-carousel-item.alloc-crop-container {
+    display: block !important;
+    width: 100% !important;
+    max-width: 380px !important; /* Width of allocation panel in 1280px layout */
+    height: 420px !important; /* Height of the allocation container, matching growth chart */
+    max-height: none !important;
+    overflow: hidden !important;
+    position: relative !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15) !important;
+    border: 1px solid var(--md-default-fg-color--lightest) !important;
+    margin: 1.5rem auto !important;
+    object-fit: none !important;
+}
+
+div.lf-screenshot-carousel-item.alloc-crop-container:not(.is-active) {
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+}
+
+div.lf-screenshot-carousel-item.alloc-crop-container img.gallery-img {
+    position: absolute !important;
+    top: -290px !important; /* Shifted 40px up, matching growth chart */
+    left: -880px !important; /* Offset past sidebar + content padding + growth chart (580px) + gap (20px) */
+    max-width: none !important;
+    width: 1280px !important;
+    height: auto !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    filter: none !important;
+}
+
+
+
 
 

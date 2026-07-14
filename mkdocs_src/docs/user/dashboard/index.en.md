@@ -8,25 +8,45 @@ The Dashboard is your **portfolio's command center** — a single screen that te
   <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Allocation" alt="Dashboard — Allocation">
 </div>
 
----
+## 🗂️ Tabbed Layout
 
-## 🗂️ Layout
+The Dashboard interface is organized into three primary tabs, allowing you to switch between different levels of detail:
 
-| Section | Location | Contents |
-|---------|----------|---------|
-| **[KPI Cards](kpi-cards.md)** | Top row | [Net Worth](kpi-cards.md#card-1-net-worth) · [Period P&L](kpi-cards.md#card-2-period-pl) · [Returns](kpi-cards.md#card-3-returns) |
-| **[Growth Chart](charts.md#portfolio-growth-chart)** | Middle left | Absolute stacked area + percentage return series |
-| **[Allocation Panel](charts.md#allocation-panel)** | Middle right + bottom | Type / Sector / Geography — current and historical |
+1. **Overview** (default): Key metrics, cash balances, and visual charts of your portfolio.
+2. **[Positions & Analysis](positions.md)**: Open holdings, weights, and detailed tax lot (FIFO) analysis.
+3. **Transactions**: Recent operations list with a read-only detail viewer.
 
 ---
 
-## 🎛️ Date Range & Broker Filter
+## 📈 Overview Tab
 
-At the top of the dashboard you can select:
+The Overview tab is the default landing page. It is structured into the following sections:
 
-- **Time range** — presets from 1 week to All-Time, or a custom range via the date picker
-- **Broker filter** — show all brokers or focus on one or more
-- **Target currency** — converts all values into a single currency
+| Section | Description |
+|---------|-------------|
+| **[KPI Cards](kpi-cards.md)** | Summary of Net Worth, Period P&L, and rate-of-return metrics. |
+| **Cash Balances** | Liquid balances grouped by currency across the active broker scope. |
+| **[Growth Chart](charts.md#portfolio-growth-chart)** | Stacked area chart showing asset cost, cash, and returns over time. |
+| **[Allocation Panel](charts.md#allocation-panel)** | Donut and historical stacked charts grouped by Type, Sector, and Geography. |
+
+### 🪙 Cash Balances
+
+Directly below the KPI cards, the **Cash Balances** panel displays your total liquid cash aggregated by currency. For example, if you hold USD in broker A and EUR in broker B, both balances will be displayed side-by-side. 
+
+When you apply a broker filter, the cash balances automatically update to reflect only the cash held within the selected brokers.
+
+---
+
+## 🎛️ Date Range, Filters & AI Export
+
+At the top right of the dashboard, you have several controls to customize your view:
+
+- **Time range** — presets from 1 week to All-Time (MAX), or a custom range via the date picker.
+- **Broker filter** — filter all metrics to one or more specific brokers.
+- **Target currency** — converts all assets and cash balances dynamically into a single selected currency for aggregate viewing.
+- **AI Export** (:material-brain:) — Click this button to copy a text-based summary of your current portfolio state to the clipboard, optimized for pasting into LLMs (e.g., Gemini). You can choose between:
+    - **Full Export**: Includes all KPI values, positions, weights, and allocations.
+    - **Data Only**: A compact JSON/text representation of your holdings and balances.
 
 !!! tip "Scope matters"
 
@@ -44,6 +64,7 @@ If any prices or FX rates are missing on the end date, a banner appears at the t
 
 - 💰 **[KPI Cards](kpi-cards.md)** — Net Worth, Period P&L, and Returns explained
 - 📊 **[Charts](charts.md)** — Growth Chart and Allocation Panel explained
+- 🔍 **[Positions & Analysis](positions.md)** — Open positions, table vs. map views, and detailed FIFO tax lot analysis.
 
 ## 🔗 Related theory
 

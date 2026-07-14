@@ -10,7 +10,7 @@ LibreFolio prend en charge un large éventail de classes d'actifs afin de couvri
 | ![](../../../static/icons/asset-types/etf.png){: width="32" } | **ETF** | `ETF` | Exchange Traded Funds. Paniers de titres qui s'échangent comme des actions. | [📖](etfs.md) |
 | ![](../../../static/icons/asset-types/bond.png){: width="32" } | **Bond** | `BOND` | Titres à revenu fixe représentant un prêt à un emprunteur (gouvernemental ou d'entreprise). | [📖](bonds.md) |
 | ![](../../../static/icons/asset-types/crypto.png){: width="32" } | **Crypto** | `CRYPTO` | Monnaies numériques et jetons (Bitcoin, Ethereum, etc.). | [📖](crypto.md) |
-| ![](../../../static/icons/asset-types/crowdfunding.png){: width="32" } | **P2P / Crowdfunding** | `CROWDFUNDING` | Prêts entre particuliers ou financement participatif immobilier. Souvent valorisés via des paiements d'intérêts programmés. | [📖](real-estate.md) |
+| ![](../../../static/icons/asset-types/crowdfunding.png){: width="32" } | **P2P / Crowdfunding** | `CROWDFUND` | Prêts entre particuliers ou financement participatif immobilier. Souvent valorisés via des paiements d'intérêts programmés. | [📖](real-estate.md) |
 | ![](../../../static/icons/asset-types/fund.png){: width="32" } | **Fonds commun de placement** | `FUND` | Fonds d'investissement gérés professionnellement. | [📖](mutual-fund.md) |
 | ![](../../../static/icons/asset-types/hold.png){: width="32" } | **Matières premières** | `HOLD` | Actifs physiques comme l'or, l'argent ou les diamants détenus pour leur valeur à long terme. | [📖](commodities.md) |
 | ![](../../../static/icons/asset-types/other.png){: width="32" } | **Autre** | `OTHER` | Toute autre classe d'actifs (ex: Art, Private Equity, Objets de collection). | [📖](other.md) |

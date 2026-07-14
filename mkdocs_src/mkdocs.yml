@@ -84,6 +84,8 @@ plugins:
             Install as App (PWA): Installa come App (PWA)
             "🏦 Brokers": "🏦 Broker"
             Broker Sharing: Condivisione Broker
+            Import Statement (BRIM): Importazione Estratto Conto (BRIM)
+            Configuration & Info: Configurazione & Info
             "📁 Files": "📁 File"
             "💱 FX Rates": "💱 Tassi di Cambio"
             Adding a Pair: Aggiungere una Coppia
@@ -142,6 +144,7 @@ plugins:
             Trading212: Trading212
             Generic CSV: CSV Generico
             "📊 Dashboard": "📊 Dashboard"
+            Positions & Analysis: Posizioni & Analisi
             "⚙️ Settings": "⚙️ Impostazioni"
             User Preferences: Preferenze Utente
             About: Informazioni
@@ -228,6 +231,8 @@ plugins:
             Install as App (PWA): Installer comme App (PWA)
             "🏦 Brokers": "🏦 Courtiers"
             Broker Sharing: Partage de Courtier
+            Import Statement (BRIM): Importer un Relevé (BRIM)
+            Configuration & Info: Configuration & Info
             "📁 Files": "📁 Fichiers"
             "💱 FX Rates": "💱 Taux de Change"
             Adding a Pair: Ajouter une Paire
@@ -285,6 +290,7 @@ plugins:
             Trading212: Trading212
             Generic CSV: CSV Générique
             "📊 Dashboard": "📊 Tableau de Bord"
+            Positions & Analysis: Positions & Analyse
             "⚙️ Settings": "⚙️ Paramètres"
             User Preferences: Préférences Utilisateur
             About: À propos
@@ -372,6 +378,8 @@ plugins:
             Install as App (PWA): Instalar como App (PWA)
             "🏦 Brokers": "🏦 Brokers"
             Broker Sharing: Compartir Broker
+            Import Statement (BRIM): Importar Extracto (BRIM)
+            Configuration & Info: Configuración e Info
             "📁 Files": "📁 Archivos"
             "💱 FX Rates": "💱 Tipos de Cambio"
             Adding a Pair: Añadir un Par
@@ -429,6 +437,7 @@ plugins:
             Trading212: Trading212
             Generic CSV: CSV Genérico
             "📊 Dashboard": "📊 Panel Principal"
+            Positions & Analysis: Posiciones y Análisis
             "⚙️ Settings": "⚙️ Configuración"
             User Preferences: Preferencias de Usuario
             About: Acerca de
@@ -532,8 +541,11 @@ nav:
           - Overview: user/dashboard/index.md
           - KPI Cards: user/dashboard/kpi-cards.md
           - Charts: user/dashboard/charts.md
+          - Positions & Analysis: user/dashboard/positions.md
       - 🏦 Brokers:
           - Overview: user/brokers/index.md
+          - Import Statement (BRIM): user/brokers/import.md
+          - Configuration & Info: user/brokers/info.md
           - Broker Sharing: user/brokers/sharing.md
       - 💸 Transactions:
           - Overview: user/transactions/index.md
@@ -763,6 +775,7 @@ nav:
                       - Modals: developer/frontend/components/core-ui/modals.md
                       - Feedback: developer/frontend/components/core-ui/feedback.md
                       - Date Pickers: developer/frontend/components/core-ui/datePickers.md
+                      - Toolbar & Responsive Layout: developer/frontend/components/core-ui/toolbar.md
                       - Atoms: developer/frontend/components/core-ui/atoms.md
                       - Datapoint Editor: developer/frontend/components/core-ui/data-editor.md
                       - DataTable: developer/frontend/components/core-ui/data-table.md

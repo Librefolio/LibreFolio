@@ -8,7 +8,7 @@
 
 | Property | Detail |
 |----------|--------|
-| **Code in LibreFolio** | `CROWDFUNDING` |
+| **Code in LibreFolio** | `CROWDFUND` |
 | **Pricing** | Not exchange-traded — value is typically the invested principal |
 | **Currency** | Denominated in the platform's operating currency |
 | **Income** | Periodic interest payments (monthly, quarterly, or at maturity) |

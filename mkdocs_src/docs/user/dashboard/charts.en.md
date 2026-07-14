@@ -10,9 +10,13 @@ The chart section sits below the KPI cards and gives you a **historical and stru
 
 The growth chart shows how your portfolio evolved in value over the selected period. Use the **Abs / %** toggle in the top-right corner to switch between two views.
 
-<div class="lf-screenshot-carousel" data-carousel="carousel-growth" data-carousel-interval="5000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Absolute Mode" alt="Growth Chart — Absolute Mode">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📈 Percentage Mode" alt="Growth Chart — Percentage Mode">
+<div class="lf-screenshot-carousel" data-carousel="carousel-growth" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
+  <div class="lf-screenshot-carousel-item is-active chart-crop-container" data-title="📈 Absolute Mode" alt="Growth Chart — Absolute Mode">
+     <img class="gallery-img" data-category="dashboard" data-name="main" alt="Growth Chart — Absolute Mode">
+  </div>
+  <div class="lf-screenshot-carousel-item chart-crop-container" data-title="📈 Percentage Mode" alt="Growth Chart — Percentage Mode">
+     <img class="gallery-img" data-category="dashboard" data-name="main-pct" alt="Growth Chart — Percentage Mode">
+  </div>
 </div>
 
 ### ABS mode — absolute values
@@ -68,13 +72,25 @@ The gap between MWRR and TWRR is the [Timing Effect](../../financial-theory/tech
 
 The allocation panel shows how your portfolio is distributed at the current point in time and how it evolved historically.
 
-<div class="lf-screenshot-carousel" data-carousel="carousel-alloc" data-carousel-interval="5000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="allocation-type-now" data-title="By Type (Current)" alt="Allocation by Type — Current">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-now" data-title="By Sector (Current)" alt="Allocation by Sector — Current">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-now" data-title="By Geography (Current)" alt="Allocation by Geography — Current">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-history" data-title="By Type (Historical)" alt="Allocation History by Type">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-sector-history" data-title="By Sector (Historical)" alt="Allocation History by Sector">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-geo-history" data-title="By Geography (Historical)" alt="Allocation History by Geography">
+<div class="lf-screenshot-carousel" data-carousel="carousel-alloc" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
+  <div class="lf-screenshot-carousel-item is-active alloc-crop-container" data-title="By Type (Current)" alt="Allocation by Type — Current">
+     <img class="gallery-img" data-category="dashboard" data-name="allocation-type-now" alt="Allocation by Type — Current">
+  </div>
+  <div class="lf-screenshot-carousel-item alloc-crop-container" data-title="By Sector (Current)" alt="Allocation by Sector — Current">
+     <img class="gallery-img" data-category="dashboard" data-name="allocation-sector-now" alt="Allocation by Sector — Current">
+  </div>
+  <div class="lf-screenshot-carousel-item alloc-crop-container" data-title="By Geography (Current)" alt="Allocation by Geography — Current">
+     <img class="gallery-img" data-category="dashboard" data-name="allocation-geo-now" alt="Allocation by Geography — Current">
+  </div>
+  <div class="lf-screenshot-carousel-item alloc-crop-container" data-title="By Type (Historical)" alt="Allocation History by Type">
+     <img class="gallery-img" data-category="dashboard" data-name="allocation-type-history" alt="Allocation History by Type">
+  </div>
+  <div class="lf-screenshot-carousel-item alloc-crop-container" data-title="By Sector (Historical)" alt="Allocation History by Sector">
+     <img class="gallery-img" data-category="dashboard" data-name="allocation-sector-history" alt="Allocation History by Sector">
+  </div>
+  <div class="lf-screenshot-carousel-item alloc-crop-container" data-title="By Geography (Historical)" alt="Allocation History by Geography">
+     <img class="gallery-img" data-category="dashboard" data-name="allocation-geo-history" alt="Allocation History by Geography">
+  </div>
 </div>
 
 ### Three dimensions

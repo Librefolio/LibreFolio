@@ -20,7 +20,7 @@ Donde $\mathrm{MV}(t) = \sum_{(a,b) \in S} q(a,b,t) \cdot p(a,t) \cdot \mathrm{f
 
 ---
 
-## 🔗 Cadena de Precios de Valoración
+## 🔗 Cadena de Precios de Valoración {: #valuation-price-chain }
 
 El precio $p(a,t)$ sigue una prioridad estricta:
 

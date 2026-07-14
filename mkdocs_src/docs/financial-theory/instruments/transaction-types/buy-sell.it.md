@@ -40,6 +40,8 @@ $$
 \text{Plusvalenza} = (P_{sell} \times Q) - (P_{buy} \times Q) - \text{Fees}
 $$
 
+<div id="fifo-matching"></div>
+
 !!! info "Associazione FIFO"
 
     LibreFolio calcola l'associazione dei lotti al **runtime** — non viene persistita nel database. Ciò consente analisi ipotetiche flessibili e il potenziale supporto futuro per altri metodi di associazione (LIFO, identificazione specifica).

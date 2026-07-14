@@ -8,7 +8,7 @@ Les plateformes de **P2P / Crowdfunding** permettent aux investisseurs de partic
 
 | Propriété | Détail |
 |----------|--------|
-| **Code dans LibreFolio** | `CROWDFUNDING` |
+| **Code dans LibreFolio** | `CROWDFUND` |
 | **Valorisation** | Non coté en bourse — la valeur est généralement le capital investi |
 | **Devise** | Libellé dans la devise d'exploitation de la plateforme |
 | **Revenus** | Paiements d'intérêts périodiques (mensuels, trimestriels ou à l'échéance) |
