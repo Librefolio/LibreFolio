@@ -980,96 +980,102 @@ test.describe('Gallery Screenshots', () => {
             }
         });
 
-        test('transaction form modal variants - all languages and themes', async ({page}, testInfo) => {
-            // Heaviest gallery test: 7 types × 4 langs × 2 themes = 56 sub-flows.
-            // Navigate + open the Add-transaction form ONCE for the whole test;
-            // lang/theme switch via header selectors (no page reload) and only
-            // the form modal closes/reopens between the 8 lang×theme combos —
-            // down from 8 full page navigations previously. The remaining cost
-            // is the 56 type-switch cycles themselves (combobox + waitForNetworkSettled
-            // + screenshot each) — dominant cost is 2×waitForLoadState('networkidle',
-            // {timeout:10_000}) per cycle when network stays busy under the gallery's
-            // full parallel run (all 72 gallery.spec.ts tests + browser workers = CPU
-            // count, see dev.py cmd_mkdocs_gallery). Previously measured end-to-end:
-            // ~21.5 min. This refactor removes 7 of 8 full navigations but does NOT
-            // touch the networkidle waits in the type-switch loop — timeout kept with
-            // a conservative margin until that is optimized separately.
-            test.setTimeout(1_380_000); // 23 minutes (was 25; see note above)
-            const viewport = getViewport(testInfo);
-            const typesToShoot: Array<{type: string; name: string}> = [
-                {type: 'SELL', name: 'form-modal-sell'},
-                {type: 'DIVIDEND', name: 'form-modal-dividend'},
-                {type: 'DEPOSIT', name: 'form-modal-deposit'},
-                {type: 'ADJUSTMENT', name: 'form-modal-adjustment'},
-                {type: 'TRANSFER', name: 'form-modal-transfer'},
-                {type: 'FX_CONVERSION', name: 'form-modal-fxconversion'},
-                {type: 'CASH_TRANSFER', name: 'form-modal-cash-transfer'},
-            ];
+        const TX_FORM_VARIANT_TYPES: Array<{type: string; name: string}> = [
+            {type: 'SELL', name: 'form-modal-sell'},
+            {type: 'DIVIDEND', name: 'form-modal-dividend'},
+            {type: 'DEPOSIT', name: 'form-modal-deposit'},
+            {type: 'ADJUSTMENT', name: 'form-modal-adjustment'},
+            {type: 'TRANSFER', name: 'form-modal-transfer'},
+            {type: 'FX_CONVERSION', name: 'form-modal-fxconversion'},
+            {type: 'CASH_TRANSFER', name: 'form-modal-cash-transfer'},
+        ];
 
-            // Navigate ONCE for the whole test. lang/theme switch via the header
-            // selectors below — no reload needed. Only the form modal itself must
-            // close/reopen between combos (its backdrop covers the header while open).
-            await navigateTo(page, '/transactions');
-            await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+        /**
+         * Select a transaction type in the form's type combobox and wait for the
+         * reactive re-render to land — NOT for network. `setType()` only mutates
+         * local Svelte state (draft.type) and TransactionTypeSearchSelect issues
+         * zero fetch calls, so a type switch never touches the network. The type
+         * icon's `src` is keyed by type code, so waiting for it to change from its
+         * previous value is a precise, language-agnostic, network-independent
+         * completion signal — resolves in ~10-50ms instead of racing a 10s
+         * networkidle timeout under parallel CI load.
+         */
+        async function selectTransactionType(page: Page, type: string) {
+            const typeCombobox = page.locator('[data-testid="tx-form-type"] [role="combobox"]');
+            if (!(await typeCombobox.isVisible({timeout: 2_000}).catch(() => false))) return;
+            const icon = typeCombobox.locator('img');
+            const prevSrc = await icon.getAttribute('src').catch(() => null);
+            await typeCombobox.click();
+            const option = page.locator(`[data-testid="search-select-option-${type}"]`);
+            if (!(await option.isVisible({timeout: 2_000}).catch(() => false))) return;
+            await option.click();
+            if (prevSrc != null) {
+                await expect(icon).not.toHaveAttribute('src', prevSrc, {timeout: 3_000});
+            } else {
+                await icon.waitFor({state: 'attached', timeout: 3_000}).catch(() => {});
+            }
+        }
 
-            for (const lang of SUPPORTED_LANGUAGES) {
-                await setLanguage(page, lang);
-                for (const theme of THEMES) {
+        /** Close the form modal, then the TransactionBulkModal that hosts it (tx-add-button
+         *  opens a bulk modal wrapping the form) — both must be gone before the next
+         *  lang/theme switch, since their backdrop covers the header selectors. */
+        async function closeTxFormAndBulkModal(page: Page, formModal: ReturnType<Page['getByTestId']>) {
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(200);
+            const discardBtn = page.getByTestId('confirm-modal-confirm');
+            if (await discardBtn.isVisible({timeout: 500}).catch(() => false)) {
+                await discardBtn.click();
+                await page.waitForTimeout(200);
+            }
+            await expect(formModal).not.toBeVisible({timeout: 3_000});
+
+            const bulkModal = page.getByTestId('tx-bulk-modal');
+            if (await bulkModal.isVisible({timeout: 500}).catch(() => false)) {
+                await page.getByTestId('tx-bulk-close').click();
+                await page.waitForTimeout(200);
+                const bulkDiscardBtn = page.getByTestId('confirm-modal-confirm');
+                if (await bulkDiscardBtn.isVisible({timeout: 500}).catch(() => false)) {
+                    await bulkDiscardBtn.click();
+                    await page.waitForTimeout(200);
+                }
+                await expect(bulkModal).not.toBeVisible({timeout: 3_000});
+            }
+        }
+
+        // Generate one test PER (lang, theme) combo instead of looping inside a
+        // single test — this is what actually lets Playwright's worker pool run
+        // combos in parallel (viewport parallelism already existed via the
+        // desktop/mobile `--project` split). Each combo still opens the Add form
+        // ONCE and cycles all 7 types inside it (no re-entering per screenshot).
+        for (const lang of SUPPORTED_LANGUAGES) {
+            for (const theme of THEMES) {
+                test(`transaction form modal variants - ${lang} - ${theme}`, async ({page}, testInfo) => {
+                    const viewport = getViewport(testInfo);
+
+                    await navigateTo(page, '/transactions');
+                    await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
-                    // Open Add form once per lang/theme combo
+                    // Open Add form ONCE for this combo
                     await page.getByTestId('tx-add-button').click();
                     const formModal = page.getByTestId('tx-form-modal');
                     await expect(formModal).toBeVisible({timeout: 8_000});
                     await waitForNetworkSettled(page);
                     await page.waitForTimeout(200);
 
-                    // Cycle through each type inside the same open modal
-                    for (const {type, name} of typesToShoot) {
-                        const typeCombobox = page.locator('[data-testid="tx-form-type"] [role="combobox"]');
-                        if (await typeCombobox.isVisible({timeout: 2_000}).catch(() => false)) {
-                            await typeCombobox.click();
-                            await page.waitForTimeout(300);
-                            const option = page.locator(`[data-testid="search-select-option-${type}"]`);
-                            if (await option.isVisible({timeout: 2_000}).catch(() => false)) {
-                                await option.click();
-                                await waitForNetworkSettled(page);
-                                await page.waitForTimeout(300);
-                            }
-                        }
+                    // Cycle through each type inside the same open modal — no
+                    // close/reopen between screenshots.
+                    for (const {type, name} of TX_FORM_VARIANT_TYPES) {
+                        await selectTransactionType(page, type);
                         await freezeAnimations(page);
                         await screenshot(page, viewport, lang, theme, 'transactions', name);
                     }
 
-                    // Close form once at the end — must fully close before the
-                    // next lang/theme switch (header is behind the modal backdrop).
-                    await page.keyboard.press('Escape');
-                    await page.waitForTimeout(200);
-                    const discardBtn = page.getByTestId('confirm-modal-confirm');
-                    if (await discardBtn.isVisible({timeout: 500}).catch(() => false)) {
-                        await discardBtn.click();
-                        await page.waitForTimeout(200);
-                    }
-                    await expect(formModal).not.toBeVisible({timeout: 3_000});
-
-                    // tx-add-button opens a TransactionBulkModal that HOSTS the
-                    // FormModal — closing the inner form above leaves the bulk
-                    // modal's backdrop open, which covers the header (blocking
-                    // the next setLanguage/setTheme click). Close it too.
-                    const bulkModal = page.getByTestId('tx-bulk-modal');
-                    if (await bulkModal.isVisible({timeout: 500}).catch(() => false)) {
-                        await page.getByTestId('tx-bulk-close').click();
-                        await page.waitForTimeout(200);
-                        const bulkDiscardBtn = page.getByTestId('confirm-modal-confirm');
-                        if (await bulkDiscardBtn.isVisible({timeout: 500}).catch(() => false)) {
-                            await bulkDiscardBtn.click();
-                            await page.waitForTimeout(200);
-                        }
-                        await expect(bulkModal).not.toBeVisible({timeout: 3_000});
-                    }
-                }
+                    await closeTxFormAndBulkModal(page, formModal);
+                });
             }
-        });
+        }
 
         test('transaction picker modal - all languages and themes', async ({page}, testInfo) => {
             // Heavier than the default 3-min budget: nested modal navigation × 4 langs × 2 themes.
