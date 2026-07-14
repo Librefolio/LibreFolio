@@ -253,8 +253,8 @@ class TestGetOperations:
 
         result = await service.get_all(user_id=test_user.id)
 
-        assert isinstance(result, list)
-        assert len(result) >= 1
+        assert isinstance(result.items, list)
+        assert len(result.items) >= 1
 
     @pytest.mark.asyncio
     async def test_get_all_ordered(self, session, test_user):
@@ -272,7 +272,7 @@ class TestGetOperations:
         result = await service.get_all(user_id=test_user.id)
 
         # Extract names and check they are sorted
-        names = [b.name for b in result]
+        names = [b.name for b in result.items]
         assert names == sorted(names)
 
     @pytest.mark.asyncio

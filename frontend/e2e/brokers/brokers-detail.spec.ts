@@ -98,6 +98,8 @@ test.describe('Broker Detail Page', () => {
         const ok = await goToFirstBrokerDetail(page);
         if (!ok) return;
 
+        // broker-holdings lives on the "Posizioni" tab, not the default "Panoramica" one.
+        await goToPosizioniTab(page);
         await expect(page.getByTestId('broker-holdings')).toBeVisible({timeout: 5000});
     });
 

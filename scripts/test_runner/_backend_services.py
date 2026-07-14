@@ -3,9 +3,9 @@ Backend service tests: FX conversion, asset source, provider registry, transacti
 """
 
 
+from . import _common
 from ._backend_db import db_create
 from ._common import (
-    _RESUME_MODE,
     _build_pytest_cmd,
     _get_category_tests_for_all,
     _run_test_suite,
@@ -328,7 +328,7 @@ def services_all(verbose: bool = False) -> bool:
         header_msg=None,
         summary_title="Backend Services Test Summary",
         success_msg="All backend services tests passed! 🎉",
-            resume=_RESUME_MODE,
+            resume=_common._RESUME_MODE,
         )
 
 

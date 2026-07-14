@@ -1,7 +1,8 @@
 """Frontend user E2E tests: multi-user isolation, broker sharing."""
 
-from ._common import _RESUME_MODE, _run_test_suite, print_header, print_section
-from ._frontend_common import _ensure_frontend_build, _ensure_db_populated, _ensure_test_users, _run_playwright
+from . import _common
+from ._common import _run_test_suite, print_header, print_section
+from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright
 
 
 def front_multi_user(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -35,13 +36,13 @@ def front_user_all(verbose: bool = False, ui: bool = False, headed: bool = False
         header_msg=None,
         summary_title="Frontend User Test Summary",
         success_msg="All frontend user tests passed! 🎉",
-        resume=_RESUME_MODE,
+        resume=_common._RESUME_MODE,
     )
 
 
 def populate_registry(registry: dict) -> None:
     """Register all frontend user test entries."""
-    from ._common import make_category, add_test
+    from ._common import add_test, make_category
     cat = make_category(
         help_text="Frontend user E2E tests (multi-user isolation, broker sharing)",
         description="""Frontend User Tests\n\nOptions: --ui, --headed, --debug""")

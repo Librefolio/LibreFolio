@@ -2,8 +2,9 @@
 
 import subprocess
 
-from ._common import _RESUME_MODE, PROJECT_ROOT, _run_test_suite, Colors, print_section, print_success, print_error
-from ._frontend_common import _ensure_frontend_build, _ensure_db_populated, _ensure_test_users, _run_playwright
+from . import _common
+from ._common import PROJECT_ROOT, Colors, _run_test_suite, print_error, print_section, print_success
+from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright
 
 
 def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -122,13 +123,13 @@ def front_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debu
         header_msg="All FX Tests (Unit + E2E)",
         summary_title="FX Test Summary",
         success_msg="All FX tests passed! 🎉",
-        resume=_RESUME_MODE,
+        resume=_common._RESUME_MODE,
     )
 
 
 def populate_registry(registry: dict) -> None:
     """Register all frontend FX test entries."""
-    from ._common import make_category, add_test
+    from ._common import add_test, make_category
     cat = make_category(
         help_text="Frontend FX E2E & unit tests",
         description="""Frontend FX Tests\n\nOptions: --ui, --headed, --debug""")

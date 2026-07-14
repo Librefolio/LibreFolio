@@ -3,11 +3,16 @@ Backend schema validation tests: computed fields, common, assets, transactions, 
 """
 
 
+from . import _common
 from ._common import (
-    _RESUME_MODE,
-    _run_test_suite, _get_category_tests_for_all, _build_pytest_cmd, run_command,
-    print_section, print_info,
-    make_category, add_test,
+    _build_pytest_cmd,
+    _get_category_tests_for_all,
+    _run_test_suite,
+    add_test,
+    make_category,
+    print_info,
+    print_section,
+    run_command,
 )
 
 
@@ -67,7 +72,7 @@ def schemas_all(verbose: bool = False) -> bool:
         info_msgs=["Testing Pydantic schema validation rules"],
         summary_title="Schema Tests Summary",
         success_msg="All schema tests passed! 🎉",
-            resume=_RESUME_MODE,
+            resume=_common._RESUME_MODE,
         )
 
 

@@ -10,10 +10,10 @@ test.describe('Portfolio broker icons', () => {
             await route.fulfill({status: 200, contentType: 'application/json', body: '[]'});
         });
 
-        await page.route('**/api/v1/brokers', async (route) => {
+        await page.route(/\/api\/v1\/brokers(\?.*)?$/, async (route) => {
             const response = await route.fetch();
-            const brokers = (await response.json()) as Array<Record<string, unknown>>;
-            const patched = brokers.map((broker) =>
+            const brokers = (await response.json()) as {items: Array<Record<string, unknown>>; inaccessible?: unknown[]};
+            const patchedItems = brokers.items.map((broker) =>
                 broker.name === 'Recrowd'
                     ? {
                           ...broker,
@@ -23,7 +23,7 @@ test.describe('Portfolio broker icons', () => {
                       }
                     : broker,
             );
-            await route.fulfill({response, json: patched});
+            await route.fulfill({response, json: {...brokers, items: patchedItems}});
         });
 
         await login(page, TEST_USER);
@@ -32,6 +32,9 @@ test.describe('Portfolio broker icons', () => {
     test('dashboard positions broker cell uses shared broker icon data instead of falling back to briefcase', async ({page}) => {
         await page.goto('/dashboard');
         await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 15_000});
+
+        // positions-panel lives on the "Posizioni" tab, not the default "Panoramica" one.
+        await page.getByTestId('dashboard-tab-posizioni').click();
         await expect(page.getByTestId('positions-panel')).toBeVisible({timeout: 10_000});
 
         await page.getByTestId('positions-toggle-holdings').click();

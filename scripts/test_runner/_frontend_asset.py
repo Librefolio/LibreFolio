@@ -1,7 +1,9 @@
 """Frontend Asset E2E & unit tests: list, detail, modal, data editor, classification."""
 
 import subprocess
-from ._common import _RESUME_MODE, _run_test_suite, print_section, print_success, print_error, Colors
+
+from . import _common
+from ._common import Colors, _run_test_suite, print_error, print_section, print_success
 from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright
 
 
@@ -104,7 +106,7 @@ def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = Fals
         header_msg="All Asset Tests (Unit + E2E)",
         summary_title="Asset Test Summary",
         success_msg="All Asset tests passed! 🎉",
-        resume=_RESUME_MODE,
+        resume=_common._RESUME_MODE,
     )
 
 

@@ -93,10 +93,11 @@ test.describe('Asset Modal', () => {
         await page.getByTestId('asset-detail-edit-btn').click();
         await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
 
-        // Display name should be pre-filled (not empty)
+        // Display name should be pre-filled (not empty). populateFromEditData() runs
+        // inside an $effect after mount, so use a retrying assertion instead of a
+        // one-shot inputValue() read (avoids a race with the effect's async timing).
         const nameInput = page.getByTestId('asset-modal-display-name');
-        const value = await nameInput.inputValue();
-        expect(value.length).toBeGreaterThan(0);
+        await expect(nameInput).not.toHaveValue('', {timeout: 3000});
 
         // Close
         await page.getByTestId('asset-modal-cancel').click();
@@ -173,10 +174,10 @@ test.describe('Asset Modal', () => {
 
         const form = page.getByTestId('asset-modal-form');
 
-        // Should have display name pre-filled
+        // Should have display name pre-filled. Use a retrying assertion since
+        // populateFromEditData() runs inside an $effect after mount (see S5 above).
         const nameInput = page.getByTestId('asset-modal-display-name');
-        const value = await nameInput.inputValue();
-        expect(value.length).toBeGreaterThan(0);
+        await expect(nameInput).not.toHaveValue('', {timeout: 3000});
 
         // Should have currency selector (combobox or select with currency code)
         const hasCurrency = await form
