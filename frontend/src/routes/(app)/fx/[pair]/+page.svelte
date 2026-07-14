@@ -138,6 +138,12 @@
     // — layoutMode is bound out (see bind:layoutMode below) for the one usage elsewhere on this
     // page (editor tip text). Tune live via window.__lfLayouts.fxDetail.thresholds.<field>.
     let pageLayoutMode = $state<LayoutMode>('denseRow');
+    /** Mirrors the DateRangePicker's own effective 2-row max-width, passed down into
+     *  FxPriceSummary so its Center content can be capped to the SAME pixel value when
+     *  filtersStacked (matches the established dashboard/brokerDetail/fxList "giustificata"
+     *  pattern). MUST start non-undefined (390 = DateRangePicker's own maxWidthTwoRow default)
+     *  — Svelte forbids bind:key={undefined} when the child prop has a declared fallback. */
+    let pickerMaxWidth = $state<number>(390);
 
     // Chart settings (from store) — keyed by canonical slug (not URL direction)
     let settings = $derived(getSettingsForPair(data.canonicalSlug, 'fx'));
@@ -741,25 +747,28 @@
          so responsive/wrap fixes made there auto-propagate here too. -->
     <!-- oneRow:       [ datepicker  pair-info ─── actions-2×2 ]  1 row, picker 1-row       -->
     <!-- denseRow:     [ datepicker  pair-info ─── actions-2×2 ]  1 row, picker 2-row       -->
-    <!-- stackFilters: [ datepicker       ] [ actions ]  filters+summary stacked, actions   -->
-    <!--               [ pair-info        ] [ 2×2     ]  stay BESIDE (2×2)                  -->
+    <!-- stackFilters: [ datepicker       ] [ actions ]  filters+summary stacked+justified  -->
+    <!--               [ pair-info        ] [ 4×1     ]  (start-aligned, capped to picker's -->
+    <!--                                                  width), actions stay BESIDE       -->
+    <!--                                                  (4×1 column)                      -->
     <!-- oneColumn:    [ datepicker       ]  whole bar now ONE column — actions moved       -->
     <!--               [ pair-info        ]  BELOW, still a labeled 2×2 grid (only          -->
-    <!--               [ actions ── 2×2   ]  position changed)                              -->
-    <!-- iconOnly:     [ datepicker       ]  everything stacked, actions icon-only centered -->
-    <!--               [ pair-info        ]  row                                            -->
-    <!--               [ actions ─ icons  ]                                                 -->
+    <!--               [ actions ── 2×2   ]  position changed — narrowest tier, Round 12    -->
+    <!--                                    removed iconOnly)                              -->
     <!-- ======================================================================= -->
-    <PageToolbar thresholds={{oneRow: 790, denseRow: 620, stackFilters: 520, oneColumn: 420, iconOnly: 330, labelHide: 330}} filterRowTestId="fx-detail-filter-bar" layoutDebugName="fxDetail" bind:layoutMode={pageLayoutMode}>
+    <PageToolbar thresholds={{oneRow: 870, denseRow: 650, stackFilters: 400, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}} filterRowTestId="fx-detail-filter-bar" layoutDebugName="fxDetail" bind:layoutMode={pageLayoutMode}>
         {#snippet filters()}
-            <div class="flex flex-1 self-stretch min-w-0">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" layoutMode={pageLayoutMode} debugName="fxDetail" onchange={handleDateRangeChange} />
+            <!-- Round 14 bugfix (pre-emptive — identical latent pattern to assetsList/fxList,
+                 not explicitly reported for this page): `contents` (not `flex flex-1 ...`) —
+                 see assets/+page.svelte's equivalent wrapper for the full explanation. -->
+            <div class="contents">
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" maxWidthTwoRow={420} layoutMode={pageLayoutMode} debugName="fxDetail" onchange={handleDateRangeChange} bind:effectiveMaxWidth={pickerMaxWidth} />
             </div>
         {/snippet}
 
-        {#snippet summary({layoutMode})}
+        {#snippet summary({layoutMode, filtersStacked})}
             <!-- Pair Summary (rate + delta) -->
-            <FxPriceSummary {lastRate} {deltaPercent} {layoutMode} />
+            <FxPriceSummary {lastRate} {deltaPercent} {layoutMode} {filtersStacked} maxWidth={pickerMaxWidth} />
         {/snippet}
 
         {#snippet actions({showActionLabels})}
@@ -1027,7 +1036,7 @@
                 </button>
             </div>
             <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
-                💡 {pageLayoutMode === 'oneColumn' || pageLayoutMode === 'iconOnly' ? $t('fxDetail.editorTipMobile') : $t('fxDetail.editorTipDesktop')}
+                💡 {pageLayoutMode === 'oneColumn' ? $t('fxDetail.editorTipMobile') : $t('fxDetail.editorTipDesktop')}
             </p>
             <div class="px-4 pb-4 pt-3">
                 <FxDataEditorSection

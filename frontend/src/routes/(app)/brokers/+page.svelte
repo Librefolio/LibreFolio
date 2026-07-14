@@ -265,13 +265,17 @@
 </script>
 
 <div class="space-y-6" data-testid="brokers-page">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <!-- Header: Title left, controls right. Round 14.1 bugfix: `lg:` is a VIEWPORT breakpoint
+         (1024px) — wraps unconditionally below that width regardless of whether the actual
+         header row has room. Plain `flex-wrap` reacts to the row's OWN available width instead
+         (see fx/+page.svelte's equivalent header for the full note). -->
+    <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <h2 class="text-lg font-semibold text-gray-700">{$_('brokers.title')}</h2>
             <p class="text-gray-500 text-sm">{$_('brokers.subtitle')}</p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+        <div class="flex flex-wrap items-center gap-2 justify-end">
             <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                 <span class="whitespace-nowrap">{$_('common.currency')}:</span>
                 <div class="w-28">

@@ -35,6 +35,15 @@
         assetCurrency: string;
         /** Current responsive layout mode */
         layoutMode: LayoutMode;
+        /** True when the Filters+Summary zone is stacked below the DateRangePicker
+         *  (stackFilters/oneColumn) — drives "giustificata" alignment (start-aligned, never
+         *  centered) instead of the beside-the-picker centered look used at oneRow/denseRow. */
+        filtersStacked: boolean;
+        /** Mirrors the DateRangePicker's own effective max-width (see PageToolbar's
+         *  `effectiveMaxWidth`/`pickerMaxWidth` pattern) — applied as this component's own
+         *  max-width when `filtersStacked`, so it lines up pixel-perfect with the picker above
+         *  it instead of stretching to the wider outer column. */
+        maxWidth?: number;
         /**
          * True when live price FX conversion failed (pair exists but rate unavailable
          * for today specifically). Surfaced as a small warning icon + tooltip next
@@ -52,12 +61,12 @@
         fxPairUrl?: string;
     }
 
-    let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, layoutMode, livePriceConversionFailed = false, fxPairUrl}: Props = $props();
+    let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, layoutMode, filtersStacked, maxWidth, livePriceConversionFailed = false, fxPairUrl}: Props = $props();
 </script>
 
-<div class="flex flex-wrap {layoutMode === 'oneRow' ? 'flex-row items-center gap-4 px-3' : 'flex-col items-center gap-2'}">
+<div class="flex flex-wrap {layoutMode === 'oneRow' ? 'flex-row items-center gap-4 px-3' : filtersStacked ? 'flex-col items-start gap-2 w-full' : 'flex-col items-center gap-2'}" style={filtersStacked && maxWidth ? `max-width: ${maxWidth}px` : ''}>
     {#if lastPrice !== null}
-        <div class="flex items-center gap-2 {layoutMode === 'oneRow' ? '' : 'justify-center w-full'}">
+        <div class="flex items-center gap-2 {layoutMode === 'oneRow' ? '' : filtersStacked ? 'justify-around w-full' : 'justify-center w-full'}">
             <div class="flex items-center gap-1.5">
                 <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
                     {lastPrice.toFixed(2)}
@@ -86,12 +95,19 @@
         </div>
     {/if}
 
-    <div class="flex items-center gap-2">
-        <span class="text-[10px] uppercase font-semibold text-gray-400 dark:text-gray-500 tracking-wider">
-            {$t('assetDetail.displayCurrency')}
-        </span>
-        <div class="w-28 sm:w-32">
-            <CurrencySearchSelect bind:value={displayCurrency} compact={true} originalCurrency={assetCurrency} placeholder={$t('assetDetail.displayCurrency')} />
+    <div class="flex items-center gap-2 {filtersStacked ? 'justify-around w-full' : ''}">
+        <!-- Round 13 bugfix: label + selector share one wrapper — a single semantic unit
+             ("Converti in: [selector]"), not two independent items to spread apart under
+             justify-around (same mistake found and fixed in brokers/[id]'s equivalent row). The
+             optional FX-pair-link icon stays a separate sibling (a distinct supplementary
+             action, not part of the currency-selection control itself). -->
+        <div class="flex items-center gap-1.5">
+            <span class="text-[10px] uppercase font-semibold text-gray-400 dark:text-gray-500 tracking-wider">
+                {$t('assetDetail.displayCurrency')}
+            </span>
+            <div class="w-32 sm:w-36">
+                <CurrencySearchSelect bind:value={displayCurrency} compact={true} originalCurrency={assetCurrency} placeholder={$t('assetDetail.displayCurrency')} />
+            </div>
         </div>
         {#if fxPairUrl}
             <!--

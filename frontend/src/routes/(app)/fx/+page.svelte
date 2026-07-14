@@ -696,8 +696,13 @@
 </script>
 
 <div class="space-y-6" data-testid="fx-page">
-    <!-- Header: Title left, ViewModeToggle + Add Pair right -->
-    <div class="flex items-center justify-between">
+    <!-- Header: Title left, ViewModeToggle + Add Pair right. Round 14.1 bugfix: `lg:` is a
+         VIEWPORT breakpoint (1024px) — wraps unconditionally below that width regardless of
+         whether the actual header row has room, the opposite of what "wrap only when space is
+         short" means. Plain `flex-wrap` reacts to the row's OWN available width instead (same
+         philosophy as PageToolbar's own container-driven tiers, just via native CSS here since
+         no JS threshold tuning is needed for a simple 2-block header). -->
+    <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
                 {$_('fx.title')}
@@ -707,7 +712,7 @@
             </h2>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('fx.subtitle')}</p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2 justify-end">
             {#if viewMode === 'list' && selectedFxRows.length > 0}
                 <DataTableToolbar
                     selectedCount={selectedFxRows.length}
@@ -735,28 +740,29 @@
          so responsive/wrap fixes made there auto-propagate here too.
          oneRow:       [ datepicker  currency ─── actions-2×2 ]  1 row, picker 1-row
          denseRow:     [ datepicker  currency ─── actions-2×2 ]  1 row, picker 2-row
-         stackFilters: [ datepicker                     | 2×2  ]  filters+summary stacked,
-                       [ currency-filters               | btns ]  actions stay BESIDE (2×2)
+         stackFilters: [ datepicker                     | 4×1  ]  filters+summary stacked,
+                       [ currency-filters               | btns ]  actions stay BESIDE (4×1 column)
          oneColumn:    [ datepicker       ]  whole bar now ONE column — actions moved BELOW,
                        [ currency-filters ]  still a labeled 2×2 grid (only position changed)
-                       [ actions ── 2×2   ]
-         iconOnly:     [ datepicker       ]  everything stacked, actions icon-only centered row
-                       [ currency-filters ]
-                       [ actions ─ icons  ] -->
-    <PageToolbar thresholds={{oneRow: 1120, denseRow: 760, stackFilters: 520, oneColumn: 420, iconOnly: 330, labelHide: 330}} testId="fx-controls" filterRowTestId="fx-filter-bar" layoutDebugName="fxList">
+                       [ actions ── 2×2   ]  (narrowest tier — Round 12 removed iconOnly) -->
+    <PageToolbar thresholds={{oneRow: 1120, denseRow: 930, stackFilters: 440, oneColumn: 400, labelHideActions: 260, labelHideTabs: 370}} testId="fx-controls" filterRowTestId="fx-filter-bar" layoutDebugName="fxList">
         {#snippet filters({layoutMode, filtersStacked})}
-            <!-- DateRangePicker -->
-            <div class="flex flex-1 self-stretch min-w-0" data-testid="fx-date-range-picker">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" {layoutMode} debugName="fxList" onchange={handleDateRangeChange} bind:effectiveMaxWidth={pickerMaxWidth} />
+            <!-- DateRangePicker. Round 14 bugfix: `contents` (not `flex flex-1 ...`) — see
+                 assets/+page.svelte's equivalent wrapper for the full explanation. -->
+            <div class="contents" data-testid="fx-date-range-picker">
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" maxWidthTwoRow={420} {layoutMode} debugName="fxList" onchange={handleDateRangeChange} bind:effectiveMaxWidth={pickerMaxWidth} />
             </div>
 
             <!-- Currency Filters — always grouped as a pair. shrink-0: never wrapped/squeezed by
                  CSS — the DateRangePicker (above) is the only zone that gives up space when the
                  row is tight (it sheds jolly badges via its own verify+shed loop). Capped to
                  pickerMaxWidth so this row's right edge lines up with the picker's instead of
-                 the wider column. -->
-            <div class="flex items-center gap-3 shrink-0 {filtersStacked ? 'w-full justify-center' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
-                <div class="w-28 sm:w-40" data-testid="fx-currency-filter">
+                 the wider column. Round 14: when filtersStacked, the 2 selects grow (flex-1)
+                 to fill the capped width evenly instead of staying at their fixed w-28/w-40 and
+                 leaving the extra space as empty justify-around gaps — wide components read
+                 better than empty space between small fixed-width controls. -->
+            <div class="flex items-center gap-3 shrink-0 {filtersStacked ? 'w-full justify-around' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
+                <div class={filtersStacked ? 'flex-1 min-w-0' : 'w-28 sm:w-40'} data-testid="fx-currency-filter">
                     <CurrencySearchSelect
                         allowedCurrencies={allowedForFilter1}
                         bind:value={filterCurrency1}
@@ -776,7 +782,7 @@
                         placeholder={$_('fx.filter.filterCurrency')}
                     />
                 </div>
-                <div class="w-28 sm:w-40 transition-opacity {filterCurrency1 ? '' : 'opacity-50'}" data-testid="fx-currency-filter">
+                <div class="{filtersStacked ? 'flex-1 min-w-0' : 'w-28 sm:w-40'} transition-opacity {filterCurrency1 ? '' : 'opacity-50'}" data-testid="fx-currency-filter">
                     <CurrencySearchSelect allowedCurrencies={allowedForFilter2} bind:value={filterCurrency2} disabled={!filterCurrency1} includeAll={true} maxVisibleItems={6} placeholder={$_('fx.filter.secondCurrency')} />
                 </div>
                 <!-- Reset filters button -->

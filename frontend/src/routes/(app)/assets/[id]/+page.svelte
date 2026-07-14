@@ -137,6 +137,12 @@
     // list) — layoutMode is bound out (see bind:layoutMode below) for the one usage elsewhere on
     // this page (editor tip text). Tune live via window.__lfLayouts.assetDetail.thresholds.<field>.
     let pageLayoutMode = $state<LayoutMode>('denseRow');
+    /** Mirrors the DateRangePicker's own effective 2-row max-width, passed down into
+     *  AssetPriceSummary so its Center content can be capped to the SAME pixel value when
+     *  filtersStacked (matches the established dashboard/brokerDetail/fxList "giustificata"
+     *  pattern). MUST start non-undefined (390 = DateRangePicker's own maxWidthTwoRow default)
+     *  — Svelte forbids bind:key={undefined} when the child prop has a declared fallback. */
+    let pickerMaxWidth = $state<number>(390);
 
     // Chart settings
     let settings = $derived(getSettingsForPair(`asset-${data.assetId}`, 'assets'));
@@ -1505,25 +1511,28 @@
          list), so responsive/wrap fixes made there auto-propagate here too. -->
     <!-- oneRow:       [ datepicker  price-summary ─── actions-2×2 ]  1 row, picker 1-row     -->
     <!-- denseRow:     [ datepicker  price-summary ─── actions-2×2 ]  1 row, picker 2-row     -->
-    <!-- stackFilters: [ datepicker       ] [ actions ]  filters+summary stacked, actions     -->
-    <!--               [ price-summary    ] [ 2×2     ]  stay BESIDE (2×2)                    -->
+    <!-- stackFilters: [ datepicker       ] [ actions ]  filters+summary stacked+justified     -->
+    <!--               [ price-summary    ] [ 4×1     ]  (start-aligned, capped to picker's     -->
+    <!--                                                  width via pickerMaxWidth), actions    -->
+    <!--                                                  stay BESIDE (4×1 column)               -->
     <!-- oneColumn:    [ datepicker       ]  whole bar now ONE column — actions moved BELOW,  -->
     <!--               [ price-summary    ]  still a labeled 2×2 grid (only position changed) -->
-    <!--               [ actions ── 2×2   ]                                                   -->
-    <!-- iconOnly:     [ datepicker       ]  everything stacked, actions icon-only centered   -->
-    <!--               [ price-summary    ]  row                                              -->
-    <!--               [ actions ─ icons  ]                                                   -->
+    <!--               [ actions ── 2×2   ]  (narrowest tier — Round 12 removed iconOnly)     -->
     <!-- ======================================================================= -->
-    <PageToolbar thresholds={{oneRow: 1090, denseRow: 870, stackFilters: 570, oneColumn: 445, iconOnly: 330, labelHide: 330}} filterRowTestId="asset-detail-filter-bar" layoutDebugName="assetDetail" bind:layoutMode={pageLayoutMode}>
+    <PageToolbar thresholds={{oneRow: 1215, denseRow: 780, stackFilters: 400, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}} filterRowTestId="asset-detail-filter-bar" layoutDebugName="assetDetail" bind:layoutMode={pageLayoutMode}>
         {#snippet filters()}
-            <div class="flex flex-1 self-stretch min-w-0">
-                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" layoutMode={pageLayoutMode} debugName="assetDetail" onchange={handleDateRangeChange} />
+            <!-- Round 14 bugfix: `contents` (not `flex flex-1 ...`) — see assets/+page.svelte's
+                 equivalent wrapper for the full explanation (DateRangePicker self-applies
+                 grow+max-width when align="start"; an extra flex-1 wrapper with no cap grows
+                 past the picker's own capped width, pushing the summary sibling too far right). -->
+            <div class="contents">
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" maxWidthTwoRow={445} layoutMode={pageLayoutMode} debugName="assetDetail" onchange={handleDateRangeChange} bind:effectiveMaxWidth={pickerMaxWidth} />
             </div>
         {/snippet}
 
-        {#snippet summary({layoutMode})}
+        {#snippet summary({layoutMode, filtersStacked})}
             {#if assetInfo}
-                <AssetPriceSummary {lastPrice} {deltaPercent} {deltaAbs} bind:displayCurrency assetCurrency={assetInfo.currency} {layoutMode} {livePriceConversionFailed} fxPairUrl={mainFxPairUrl} />
+                <AssetPriceSummary {lastPrice} {deltaPercent} {deltaAbs} bind:displayCurrency assetCurrency={assetInfo.currency} {layoutMode} {filtersStacked} maxWidth={pickerMaxWidth} {livePriceConversionFailed} fxPairUrl={mainFxPairUrl} />
             {/if}
         {/snippet}
 
@@ -1840,7 +1849,7 @@
                 >
             </div>
             <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
-                💡 {pageLayoutMode === 'oneColumn' || pageLayoutMode === 'iconOnly' ? $t('assetDetail.editorTipMobile') : $t('assetDetail.editorTipDesktop')}
+                💡 {pageLayoutMode === 'oneColumn' ? $t('assetDetail.editorTipMobile') : $t('assetDetail.editorTipDesktop')}
             </p>
             <div class="px-4 py-4">
                 <AssetDataEditorSection

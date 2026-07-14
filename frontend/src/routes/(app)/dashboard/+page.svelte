@@ -28,6 +28,7 @@
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {createDateRangeController} from '$lib/stores/dateRangeController.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
+    import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
@@ -128,9 +129,6 @@
      *  Svelte forbids bind:key={undefined} when the child prop has a declared fallback. */
     let pickerMaxWidth = $state<number>(390);
     let brokerFilterDropdownPosition = $state({left: 8, top: 8});
-
-    const DROPDOWN_VIEWPORT_MARGIN = 8;
-    const DROPDOWN_TRIGGER_GAP = 4;
 
     // =========================================================================
     // Derived
@@ -376,36 +374,6 @@
         }
     }
 
-    function clamp(value: number, min: number, max: number) {
-        return Math.min(Math.max(value, min), max);
-    }
-
-    function getFixedDropdownPosition(triggerEl: HTMLElement | null, panelEl: HTMLDivElement | null, horizontalAlign: 'start' | 'end') {
-        if (!triggerEl) return {left: DROPDOWN_VIEWPORT_MARGIN, top: DROPDOWN_VIEWPORT_MARGIN};
-
-        const triggerRect = triggerEl.getBoundingClientRect();
-        const panelRect = panelEl?.getBoundingClientRect();
-        const panelWidth = panelRect?.width ?? 224;
-        const panelHeight = panelRect?.height ?? 0;
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-
-        const minLeft = DROPDOWN_VIEWPORT_MARGIN;
-        const maxLeft = Math.max(minLeft, viewportWidth - panelWidth - DROPDOWN_VIEWPORT_MARGIN);
-        let left = horizontalAlign === 'end' ? triggerRect.right - panelWidth : triggerRect.left;
-        left = clamp(left, minLeft, maxLeft);
-
-        const minTop = DROPDOWN_VIEWPORT_MARGIN;
-        const maxTop = Math.max(minTop, viewportHeight - panelHeight - DROPDOWN_VIEWPORT_MARGIN);
-        let top = triggerRect.bottom + DROPDOWN_TRIGGER_GAP;
-        if (panelHeight > 0 && top + panelHeight > viewportHeight - DROPDOWN_VIEWPORT_MARGIN) {
-            top = triggerRect.top - panelHeight - DROPDOWN_TRIGGER_GAP;
-        }
-        top = clamp(top, minTop, maxTop);
-
-        return {left, top};
-    }
-
     async function positionBrokerFilterDropdown() {
         await tick();
         if (!brokerFilterOpen) return;
@@ -492,22 +460,34 @@
 <div class="space-y-4" data-testid="dashboard-page">
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
-    <PageToolbar thresholds={{oneRow: 1000, denseRow: 810, stackFilters: 430, oneColumn: 365, iconOnly: 330, labelHide: 330}} tabs={dashboardTabs} {activeTab} ontabchange={handleTabChange} testId="dashboard-controls" filterRowTestId="dashboard-filter-bar" layoutDebugName="dashboard">
-        {#snippet filters({layoutMode, filtersStacked})}
+    <PageToolbar
+        thresholds={{oneRow: 1000, denseRow: 810, stackFilters: 430, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 370}}
+        tabs={dashboardTabs}
+        {activeTab}
+        ontabchange={handleTabChange}
+        testId="dashboard-controls"
+        filterRowTestId="dashboard-filter-bar"
+        layoutDebugName="dashboard"
+    >
+        {#snippet filters({layoutMode, filtersStacked, showExtraLabels})}
             <!-- Date range picker (wired to global store via the shared dateRangeController) -->
             <DateRangePicker bind:activePreset={dateRangeCtl.activePreset} bind:start={dateRangeCtl.displayStart} bind:end={dateRangeCtl.end} compact={true} align="start" {layoutMode} debugName="dashboard" onchange={dateRangeCtl.onDateRangeChange} bind:effectiveMaxWidth={pickerMaxWidth} />
 
             <!-- Currency override + Broker multi-select — share one justified row when the
-                 filters+summary zone stacks (stackFilters/oneColumn/iconOnly — see filtersStacked
+                 filters+summary zone stacks (stackFilters/oneColumn — see filtersStacked
                  in PageToolbar), not each its own stacked full-width row; inline naturally
                  otherwise, same as before (unconditional w-full here would fight
                  DateRangePicker for row space in oneRow/denseRow mode). Capped to
                  pickerMaxWidth (mirrors the picker's own 2-row max-width) so this row's right
                  edge lines up with the picker's instead of stretching to the wider column. -->
-            <div class="flex items-center gap-3 {filtersStacked ? 'w-full justify-between' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
+            <div class="flex items-center gap-3 {filtersStacked ? 'w-full justify-around' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
                 <!-- Currency override selector -->
                 <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    <span class="whitespace-nowrap">{$_('common.currency')}:</span>
+                    <!-- Round 13: "Valuta:" is an extra/decorative label — the select itself
+                         (flag + code) already conveys enough at very narrow widths, so it hides
+                         first via the independent noExtraLabel threshold, well before labelHide*
+                         would ever strip anything else on this row. -->
+                    {#if showExtraLabels}<span class="whitespace-nowrap">{$_('common.currency')}:</span>{/if}
                     <div class="w-28">
                         <CurrencySearchSelect
                             bind:value={targetCurrency}
@@ -590,14 +570,12 @@
             </div>
         {/snippet}
 
-        {#snippet actions({showActionLabels, stretchActions})}
+        {#snippet actions({showActionLabels})}
             <!-- AI Export -->
-            <div class="relative {stretchActions ? 'w-full' : ''}">
+            <div class="relative w-full">
                 <button
                     bind:this={aiExportTriggerEl}
-                    class="flex items-center justify-center gap-2 {stretchActions
-                        ? 'w-full'
-                        : ''} px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+                    class="flex items-center justify-center gap-2 w-full px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
                     onclick={toggleAiExportDropdown}
                     disabled={aiExportLoading}
                     data-testid="ai-export-button"

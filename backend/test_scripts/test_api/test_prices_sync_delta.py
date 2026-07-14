@@ -142,8 +142,19 @@ async def _overwrite_close(
     target_date: date,
     new_close: Decimal,
 ) -> None:
-    """Manually overwrite one day's close so the next sync detects a change."""
-    payload = FAUpsert(asset_id=asset_id, prices=[FAPricePoint(date=target_date, close=new_close)])
+    """Manually overwrite one day's price so the next sync detects a change.
+
+    Writes a fully self-consistent flat candle (open=high=low=close=new_close)
+    instead of close-only. mockprov's fixture data is itself a flat candle
+    (open=high=low=close=100.00, see mockprov.py get_history_value) — merging
+    a close-only update via F.4 sentinel rules would preserve the OLD
+    open/high/low (100.00) while writing the NEW close (999.99), producing an
+    internally-impossible row (close outside [low, high]) that
+    bulk_upsert_prices' OHLC-integrity guard now rejects (added after a real
+    corrupted row was found in production: close=63560.94 with high=8692.20).
+    A real price change moves the whole candle, not just one field.
+    """
+    payload = FAUpsert(asset_id=asset_id, prices=[FAPricePoint(date=target_date, open=new_close, high=new_close, low=new_close, close=new_close)])
     resp = await client.post(
         f"{API_BASE}/assets/prices",
         json=[payload.model_dump(mode="json")],
