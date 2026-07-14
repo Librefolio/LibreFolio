@@ -72,18 +72,26 @@ def _ctxn(
     return ClassifiedTransaction(tx=tx, classification=classification, share=Decimal(share), paired_tx=paired)
 
 
+# Market price for asset 100 = its BUY unit cost, so market_value == open_cost_basis
+# (no unrealized gain/loss). The engine no longer falls back to WAC for valuation
+# (MARKET_PRICE → LAST_BUY_PRICE → MISSING), so a price is required for NAV to be
+# complete; these cash-decomposition tests are about the cash formula, not valuation.
+_PRICE_MAP_100 = {100: [(date(2025, 1, 1), Decimal("100"), "EUR")]}
+
+
 def _builder(txs, ecfs, **overrides) -> DailyStateBuilder:
-    """Build with WAC series providing cost basis for asset 100."""
+    """Build with cost basis for asset 100 provided implicitly by its BUY tx (WAC is
+    computed inline by the builder — no external wac_series needed anymore)."""
     defaults = {
         "classified_txs": txs,
         "in_transit_intervals": [],
         "external_cash_flows": ecfs,
         "price_map": {},
         "quote_base_map": {},
-        "wac_series": {},
         "fx_rate_map": {},
         "asset_classifications": {},
         "asset_types": {},
+        "asset_currencies": {},
         "target_currency": "EUR",
         "date_from": date(2025, 1, 1),
         "date_to": date(2025, 1, 1),
@@ -95,8 +103,8 @@ def _builder(txs, ecfs, **overrides) -> DailyStateBuilder:
 def _last_state(txs, ecfs, **kwargs):
     """Build states and return the last one for single-day assertions."""
     builder = _builder(txs, ecfs, **kwargs)
-    states = builder.build()
-    return states[-1]
+    result = builder.build()
+    return result.daily_states[-1]
 
 
 def _assert_invariants(state):
@@ -130,9 +138,8 @@ class TestExampleA:
         ]
         ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
         # WAC: BUY 10 units at 100 → WAC = 100 per unit
-        wac = {(100, 10): [(date(2025, 1, 1), Decimal("100"), "EUR")]}
 
-        state = _last_state(txs, ecfs, wac_series=wac)
+        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 
         assert state.cumulative_external_cash_flow == Decimal("1000")  # capital_baseline
         assert state.cash_value == Decimal("0")
@@ -158,9 +165,8 @@ class TestExampleB:
             _ctxn(_tx(id=3, dt="2025-01-01", type="INTEREST", amount="100")),
         ]
         ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
-        wac = {(100, 10): [(date(2025, 1, 1), Decimal("100"), "EUR")]}
 
-        state = _last_state(txs, ecfs, wac_series=wac)
+        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 
         assert state.cumulative_external_cash_flow == Decimal("1000")
         assert state.cash_value == Decimal("100")  # interest received
@@ -190,9 +196,8 @@ class TestExampleC:
         ]
         ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
         # After BUY 10 at 100, then SELL 1: WAC still 100, qty=9 → cost_basis=900
-        wac = {(100, 10): [(date(2025, 1, 1), Decimal("100"), "EUR")]}
 
-        state = _last_state(txs, ecfs, wac_series=wac)
+        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 
         assert state.cumulative_external_cash_flow == Decimal("1000")
         assert state.cash_value == Decimal("120")  # -1000 + 120 = 120? No: 1000-1000+120=120
@@ -223,9 +228,8 @@ class TestExampleD:
             _ctxn(_tx(id=3, dt="2025-01-01", type="SELL", amount="80", quantity="-1", asset_id=100)),
         ]
         ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
-        wac = {(100, 10): [(date(2025, 1, 1), Decimal("100"), "EUR")]}
 
-        state = _last_state(txs, ecfs, wac_series=wac)
+        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 
         assert state.cumulative_external_cash_flow == Decimal("1000")
         assert state.cash_value == Decimal("80")  # 1000-1000+80=80
@@ -258,9 +262,8 @@ class TestExampleE:
             _ctxn(_tx(id=4, dt="2025-01-01", type="INTEREST", amount="10")),
         ]
         ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
-        wac = {(100, 10): [(date(2025, 1, 1), Decimal("100"), "EUR")]}
 
-        state = _last_state(txs, ecfs, wac_series=wac)
+        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 
         assert state.cumulative_external_cash_flow == Decimal("1000")
         assert state.cash_value == Decimal("110")  # 1000-1000+100+10=110
@@ -300,9 +303,8 @@ class TestExampleF:
             (date(2025, 1, 1), Decimal("1000"), "EUR"),
             (date(2025, 1, 1), Decimal("-100"), "EUR"),
         ]
-        wac = {(100, 10): [(date(2025, 1, 1), Decimal("100"), "EUR")]}
 
-        state = _last_state(txs, ecfs, wac_series=wac)
+        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 
         assert state.cumulative_external_cash_flow == Decimal("900")  # 1000 - 100
         assert state.cash_value == Decimal("0")  # 1000-1000+100-100=0
@@ -352,9 +354,8 @@ class TestEdgeCases:
             _ctxn(_tx(id=4, dt="2025-01-01", type="FEE", amount="-10")),
         ]
         ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
-        wac = {(100, 10): [(date(2025, 1, 1), Decimal("100"), "EUR")]}
 
-        state = _last_state(txs, ecfs, wac_series=wac)
+        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 
         assert state.cash_value == Decimal("40")  # 1000-1000+50-10=40
         # capital_baseline(1000) - book_asset_like(1000) = 0

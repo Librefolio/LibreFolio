@@ -5,9 +5,14 @@ import {TEST_ADMIN, TEST_USER, TEST_USER_2} from '../fixtures/test-users';
 /**
  * Broker Sharing E2E Tests
  *
- * Tests for BrokerSharingModal component:
+ * Tests for the broker access-sharing feature (BrokerSharingPanel, the shared UI —
+ * donut chart, add/edit/remove users, save — reused in two shells):
+ * - BrokerSharingModal: wraps the panel with modal chrome, used from the broker list page
+ * - Detail page "Info" tab: embeds the panel directly, no modal chrome
+ *
+ * Covers:
  * - Share button visibility (always visible; read-only unless OWNER)
- * - Modal open/close
+ * - Modal open/close (list page only)
  * - Ownership chart, add/edit/remove users
  * - Save flow
  * - Role-based access checks
@@ -28,10 +33,22 @@ async function goToFirstBrokerDetail(page: Page) {
     await expect(page.getByTestId('broker-detail-page')).toBeVisible({timeout: 10000});
 }
 
-// Helper: Open sharing modal (assumes already on broker detail as OWNER)
+// Helper: Open sharing panel (assumes already on broker detail as OWNER).
+// On the detail page this is an inline panel in the "Info" tab, NOT a modal —
+// BrokerSharingModal only wraps BrokerSharingPanel on the broker list page.
 async function openSharingModal(page: Page) {
     const shareBtn = page.getByTestId('broker-share-button');
     await expect(shareBtn).toBeVisible({timeout: 5000});
+    await shareBtn.click();
+    await expect(page.getByTestId('broker-sharing-panel')).toBeVisible({timeout: 5000});
+}
+
+// Helper: Open the real BrokerSharingModal from the broker list page (grid share icon).
+async function openSharingModalFromList(page: Page) {
+    await navigateTo(page, '/brokers');
+    await expect(page.getByTestId('brokers-page')).toBeVisible({timeout: 10000});
+    const shareBtn = page.locator('[data-testid^="broker-share-"]').first();
+    await expect(shareBtn).toBeVisible({timeout: 10000});
     await shareBtn.click();
     await expect(page.getByTestId('broker-sharing-modal')).toBeVisible({timeout: 5000});
 }
@@ -61,30 +78,42 @@ test.describe('Broker Sharing', () => {
             await expect(page.getByTestId('broker-edit-button')).not.toBeVisible({timeout: 2000});
             // Opening it must be read-only: no "add user" control for a non-OWNER
             await shareBtn.click();
-            await expect(page.getByTestId('broker-sharing-modal')).toBeVisible({timeout: 5000});
+            await expect(page.getByTestId('broker-sharing-panel')).toBeVisible({timeout: 5000});
             await expect(page.getByTestId('sharing-add-user-btn')).not.toBeVisible({timeout: 2000});
         });
 
-        test('S3: share button opens BrokerSharingModal', async ({page}) => {
+        test('S3: share button opens the sharing panel (Info tab)', async ({page}) => {
             await login(page, TEST_ADMIN);
             await goToFirstBrokerDetail(page);
             await openSharingModal(page);
-            // Modal is visible (openSharingModal asserts this)
+            // Panel is visible (openSharingModal asserts this)
         });
     });
 
-    test.describe('BrokerSharingModal Content', () => {
+    // BrokerSharingModal (the actual modal, with close/Escape/confirm-discard chrome) is
+    // only used from the broker list page's share icon — the detail page's "Info" tab
+    // embeds BrokerSharingPanel inline, without modal chrome (see openSharingModal above).
+    test.describe('BrokerSharingModal (List Page)', () => {
+        test('S9: close modal with Escape key', async ({page}) => {
+            await login(page, TEST_ADMIN);
+            await openSharingModalFromList(page);
+            await page.getByTestId('broker-sharing-modal').press('Escape');
+            await expect(page.getByTestId('broker-sharing-modal')).not.toBeVisible({timeout: 3000});
+        });
+    });
+
+    test.describe('BrokerSharingPanel Content', () => {
         test.beforeEach(async ({page}) => {
             await login(page, TEST_ADMIN);
             await goToFirstBrokerDetail(page);
             await openSharingModal(page);
         });
 
-        test('S4: modal shows ownership chart section', async ({page}) => {
+        test('S4: panel shows ownership chart section', async ({page}) => {
             await expect(page.getByTestId('ownership-chart-section')).toBeVisible();
         });
 
-        test('S5: modal shows at least the current OWNER in badge list', async ({page}) => {
+        test('S5: panel shows at least the current OWNER in badge list', async ({page}) => {
             // Should see at least one access-entry badge (the OWNER)
             const entries = page.locator('[data-testid^="access-entry-"]');
             await expect(entries.first()).toBeVisible({timeout: 5000});
@@ -105,11 +134,6 @@ test.describe('Broker Sharing', () => {
             await expect(saveBtn).toBeDisabled();
         });
 
-        test('S9: close modal with Escape key', async ({page}) => {
-            await page.getByTestId('broker-sharing-modal').press('Escape');
-            await expect(page.getByTestId('broker-sharing-modal')).not.toBeVisible({timeout: 3000});
-        });
-
         test('S10: three role columns are visible (Owners, Editors, Viewers)', async ({page}) => {
             await expect(page.getByTestId('sharing-owners-column')).toBeVisible({timeout: 3000});
             await expect(page.getByTestId('sharing-editors-column')).toBeVisible({timeout: 3000});
@@ -117,7 +141,7 @@ test.describe('Broker Sharing', () => {
         });
     });
 
-    test.describe('BrokerSharingModal - Add User Flow', () => {
+    test.describe('BrokerSharingPanel - Add User Flow', () => {
         test.beforeEach(async ({page}) => {
             await login(page, TEST_ADMIN);
             await goToFirstBrokerDetail(page);
@@ -149,7 +173,7 @@ test.describe('Broker Sharing', () => {
         });
     });
 
-    test.describe('BrokerSharingModal - Edit User', () => {
+    test.describe('BrokerSharingPanel - Edit User', () => {
         test('S13: clicking edit on a badge opens edit modal', async ({page}) => {
             await login(page, TEST_ADMIN);
             await goToFirstBrokerDetail(page);
@@ -183,14 +207,14 @@ test.describe('Broker Sharing', () => {
                 await expect(page.getByTestId('broker-edit-button')).toBeVisible({timeout: 2000});
                 // Opening it must be read-only: no "add user" control for a non-OWNER
                 await shareBtn.click();
-                await expect(page.getByTestId('broker-sharing-modal')).toBeVisible({timeout: 5000});
+                await expect(page.getByTestId('broker-sharing-panel')).toBeVisible({timeout: 5000});
                 await expect(page.getByTestId('sharing-add-user-btn')).not.toBeVisible({timeout: 2000});
             }
         });
     });
 
     test.describe('Dark Mode', () => {
-        test('S15: sharing modal renders in dark mode', async ({page}) => {
+        test('S15: sharing panel renders in dark mode', async ({page}) => {
             await login(page, TEST_ADMIN);
 
             // Enable dark mode via settings
@@ -202,11 +226,11 @@ test.describe('Broker Sharing', () => {
                 await page.waitForTimeout(300);
             }
 
-            // Navigate to broker detail and open sharing modal
+            // Navigate to broker detail and open the sharing panel (Info tab)
             await goToFirstBrokerDetail(page);
             await openSharingModal(page);
 
-            // Verify modal content is visible in dark mode
+            // Verify panel content is visible in dark mode
             await expect(page.getByTestId('ownership-chart-section')).toBeVisible();
             // Verify dark class on html
             const isDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));

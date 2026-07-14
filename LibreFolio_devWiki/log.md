@@ -1089,3 +1089,12 @@ Low:
 Not repaired this pass (deferred, low priority, unrelated to the requested ingest scope): the 2 orphan sources and the 17 unlisted feature pages.
 
 Next recommended: a dedicated dedup pass on `sources/phase07-part4-round3.md` / `sources/phase07-part4-round5.md`; ingest Milestone 3 (Broker UI v2) once it completes.
+
+## [2026-07-13] file | Full test suite green-up session
+Ran `./dev.py test --fresh-run all` / `--resume all` to green the entire suite (14/14
+categories). Filed three new problem pages for the cross-cutting infra/contract bugs found
+along the way, and corrected the pre-existing [[problems/test-transaction-implied-constructor-mismatch]]
+page (its proposed "signature-only" fix was verified empirically to not work — the WAC-as-price
+fallback was actually removed, not renamed).
+Filed: [[problems/pytest-exit-swallows-failures]], [[problems/resume-mode-stale-import]],
+[[problems/brlistresponse-contract-drift]].

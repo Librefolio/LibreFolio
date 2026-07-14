@@ -7,13 +7,17 @@ import inspect
 import re
 from pathlib import Path
 
+from . import _common
 from ._common import (
-    _RESUME_MODE,
-    PROJECT_ROOT, _run_test_suite, _build_pytest_cmd, run_command,
-    print_section, print_info,
-    make_category, add_test,
+    PROJECT_ROOT,
+    _build_pytest_cmd,
+    _run_test_suite,
+    add_test,
+    make_category,
+    print_info,
+    print_section,
+    run_command,
 )
-
 
 # ── Provider discovery for dynamic CLI help & filtering ─────────────────
 
@@ -252,7 +256,7 @@ def external_all(verbose: bool = False,
             "⚠️  WARNING: Requires internet connection for FX/Asset providers",
             "⚠️  WARNING: May be slow",
             ],
-            resume=_RESUME_MODE,
+            resume=_common._RESUME_MODE,
         )
 
 

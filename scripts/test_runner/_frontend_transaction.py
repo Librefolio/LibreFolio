@@ -2,7 +2,8 @@
 
 import subprocess
 
-from ._common import _RESUME_MODE, PROJECT_ROOT, Colors, _run_test_suite, print_error, print_section, print_success
+from . import _common
+from ._common import PROJECT_ROOT, Colors, _run_test_suite, print_error, print_section, print_success
 from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright
 
 
@@ -328,7 +329,7 @@ def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool 
         header_msg="All Transaction Tests (E2E)",
         summary_title="Transaction Test Summary",
         success_msg="All Transaction tests passed! 🎉",
-        resume=_RESUME_MODE,
+        resume=_common._RESUME_MODE,
     )
 
 

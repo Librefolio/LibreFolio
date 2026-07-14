@@ -2,8 +2,8 @@
 Backend API endpoint tests and E2E tests.
 """
 
+from . import _common
 from ._common import (
-    _RESUME_MODE,
     _build_pytest_cmd,
     _get_category_tests_for_all,
     _run_test_suite,
@@ -472,7 +472,7 @@ def api_test(verbose: bool = False) -> bool:
             "Note: Server will be automatically started/stopped by tests",
         ],
         combine_coverage=True,
-        resume=_RESUME_MODE,
+        resume=_common._RESUME_MODE,
     )
 
 
@@ -499,7 +499,7 @@ def e2e_test(verbose: bool = False) -> bool:
             "Note: Server will be automatically started/stopped by tests",
         ],
         combine_coverage=True,
-        resume=_RESUME_MODE,
+        resume=_common._RESUME_MODE,
     )
 
 

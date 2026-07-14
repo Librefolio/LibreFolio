@@ -264,9 +264,9 @@ test.describe('NR-D — Promote false-positive guard (Bug D)', () => {
     async function findTwoBrokerIds(page: import('@playwright/test').Page): Promise<[number, number] | null> {
         const resp = await page.request.get(`${API}/brokers`);
         if (!resp.ok()) return null;
-        const data = (await resp.json()) as Array<{id: number; name: string; user_role: string | null}>;
+        const data = (await resp.json()) as {items: Array<{id: number; name: string; user_role: string | null}>};
         // Need 2 distinct brokers with OWNER or EDITOR access
-        const editable = data.filter((b) => b.user_role === 'OWNER' || b.user_role === 'EDITOR');
+        const editable = data.items.filter((b) => b.user_role === 'OWNER' || b.user_role === 'EDITOR');
         if (editable.length < 2) return null;
         return [editable[0].id, editable[1].id];
     }

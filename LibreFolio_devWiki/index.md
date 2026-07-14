@@ -404,6 +404,10 @@ The following pages were automatically recovered by the lint pass:
 
 ### Problems
 - [[problems/pydantic-422-preemption]]
+- [[problems/test-transaction-implied-constructor-mismatch]]
+- [[problems/pytest-exit-swallows-failures]]
+- [[problems/resume-mode-stale-import]]
+- [[problems/brlistresponse-contract-drift]]
 
 ### Decisions
 - [[decisions/blur-detection-format-string-comparison]]

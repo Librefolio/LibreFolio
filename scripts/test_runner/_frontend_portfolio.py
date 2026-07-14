@@ -1,6 +1,7 @@
 """Frontend Portfolio E2E tests: dashboard banners, broker icons, asset detail, FX detail."""
 
-from ._common import _run_test_suite, print_section, _RESUME_MODE
+from . import _common
+from ._common import _run_test_suite, print_section
 from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright
 
 
@@ -34,7 +35,7 @@ def front_portfolio_all(verbose: bool = False, ui: bool = False, headed: bool = 
         header_msg="All Portfolio Frontend Tests",
         summary_title="Portfolio Frontend Test Summary",
         success_msg="All Portfolio frontend tests passed! 🎉",
-        resume=_RESUME_MODE,
+        resume=_common._RESUME_MODE,
     )
 
 

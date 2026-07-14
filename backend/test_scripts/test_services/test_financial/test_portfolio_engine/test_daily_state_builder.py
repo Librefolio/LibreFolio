@@ -65,7 +65,7 @@ def _builder(**overrides) -> DailyStateBuilder:
         "external_cash_flows": [],
         "price_map": {},
         "quote_base_map": {},
-        "wac_series": {},
+        "asset_currencies": {},
         "fx_rate_map": {},
         "asset_classifications": {},
         "asset_types": {},
@@ -93,7 +93,7 @@ class TestCashLedger:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 2),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         assert len(states) == 2
         assert states[0].cash_value == Decimal("1000")
@@ -110,7 +110,7 @@ class TestCashLedger:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 3),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         assert states[0].cash_value == Decimal("1000")  # day 1: deposit
         assert states[1].cash_value == Decimal("600")  # day 2: after buy
@@ -129,7 +129,7 @@ class TestCashLedger:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 1),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         assert states[0].cash_value == Decimal("1020")  # 1000 - 10 + 50 - 20
 
@@ -141,7 +141,7 @@ class TestCashLedger:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 1),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         assert states[0].cash_value == Decimal("500")
 
@@ -164,7 +164,7 @@ class TestQuantityLedger:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 2),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         assert states[0].market_value == Decimal("1000")  # 10 * 100
         assert states[1].market_value == Decimal("700")  # 7 * 100
@@ -184,7 +184,7 @@ class TestQuantityLedger:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 2),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         assert states[0].market_value == Decimal("500")  # 10 * 50
         assert states[1].market_value == Decimal("250")  # 5 * 50
@@ -208,7 +208,7 @@ class TestNAVFormula:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 1),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         s = states[0]
         assert s.cash_value == Decimal("500")  # 1000 - 500
@@ -231,13 +231,12 @@ class TestBookValueFormula:
             classified_txs=txs,
             price_map={100: [(date(2025, 1, 1), Decimal("60"), "EUR")]},
             quote_base_map={100: None},
-            wac_series={(100, 10): [(date(2025, 1, 1), Decimal("50"), "EUR")]},
             asset_types={100: "ETF"},
             asset_classifications={100: None},
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 1),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         s = states[0]
         assert s.open_cost_basis == Decimal("500")  # WAC 50 * qty 10
@@ -264,7 +263,7 @@ class TestMarketValueWithQuoteBase:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 1),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         assert states[0].market_value == Decimal("204")
 
@@ -285,7 +284,7 @@ class TestMissingPrices:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 1),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         assert states[0].market_value == Decimal("0")
         assert 200 in states[0].missing_price_asset_ids
@@ -309,7 +308,7 @@ class TestStalePriceDetection:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 1),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         assert 100 in states[0].stale_price_asset_ids
         assert states[0].market_value == Decimal("100")  # still valued, just flagged
@@ -341,7 +340,7 @@ class TestInTransitCash:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 4),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         # Day 1: cash -3000, no in-transit yet (departure date itself)
         assert states[0].in_transit_cash_value == Decimal("0")
@@ -364,7 +363,7 @@ class TestAllocationLiquidity:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 1),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         s = states[0]
         assert s.by_type.get("Liquidity") == Decimal("5000")
@@ -384,7 +383,7 @@ class TestExternalCashFlow:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 2),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         assert states[0].external_cash_flow == Decimal("1000")
         assert states[1].external_cash_flow == Decimal("0")
@@ -404,7 +403,7 @@ class TestFXConversion:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 1),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         assert states[0].cash_value == Decimal("900")  # 1000 * 0.9
 
@@ -419,7 +418,7 @@ class TestFXConversion:
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 1),
         )
-        states = builder.build()
+        states = builder.build().daily_states
 
         # USD couldn't be converted → cash=0
         assert states[0].cash_value == Decimal("0")
