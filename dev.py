@@ -51,6 +51,7 @@ from scripts.cli_base import (
     get_database_path,
     get_server_host,
     get_server_port,
+    get_server_port_for_db,
     get_test_database_path,
     get_test_server_port,
     pipenv_prefix,
@@ -363,10 +364,10 @@ def cmd_db_current(args):
 
 def cmd_db_migrate(args):
     """Create a new migration."""
-    if not check_server_running("creating migrations", strict=True):
+    db_path = args.path or get_database_path()
+    if not check_server_running("creating migrations", strict=True, port=get_server_port_for_db(db_path)):
         return 1
 
-    db_path = args.path or get_database_path()
     message = args.message
 
     print(Colors.success(f"Creating migration: {message}"))
@@ -380,10 +381,10 @@ def cmd_db_migrate(args):
 
 def cmd_db_upgrade(args):
     """Apply pending migrations."""
-    if not check_server_running("applying migrations", strict=True):
+    db_path = args.path or get_database_path()
+    if not check_server_running("applying migrations", strict=True, port=get_server_port_for_db(db_path)):
         return 1
 
-    db_path = args.path or get_database_path()
     print(Colors.success(f"Upgrading database: {db_path}"))
 
     env = {"DATABASE_URL": f"sqlite:///{PROJECT_ROOT / db_path}"} if db_path else {}
@@ -395,10 +396,10 @@ def cmd_db_upgrade(args):
 
 def cmd_db_downgrade(args):
     """Rollback one migration."""
-    if not check_server_running("rolling back migrations", strict=True):
+    db_path = args.path or get_database_path()
+    if not check_server_running("rolling back migrations", strict=True, port=get_server_port_for_db(db_path)):
         return 1
 
-    db_path = args.path or get_database_path()
     print(Colors.success(f"Downgrading database: {db_path}"))
 
     env = {"DATABASE_URL": f"sqlite:///{PROJECT_ROOT / db_path}"} if db_path else {}
@@ -410,14 +411,14 @@ def cmd_db_downgrade(args):
 
 def cmd_db_create_clean(args):
     """Delete database and recreate with latest migration."""
-    if not check_server_running("recreating database", strict=True):
-        return 1
-
     test_mode = getattr(args, 'test', False)
     if test_mode:
         db_path = Path(get_test_database_path())
     else:
         db_path = Path(get_database_path())
+
+    if not check_server_running("recreating database", strict=True, port=get_server_port_for_db(str(db_path))):
+        return 1
 
     full_path = PROJECT_ROOT / db_path
 
