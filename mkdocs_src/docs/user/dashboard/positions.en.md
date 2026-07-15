@@ -17,21 +17,30 @@ The **Positions** tab of the dashboard allows you to inspect open holdings, anal
 
 The **Positions** tab provides a detailed breakdown of all the financial instruments currently held in your portfolio (Stocks, ETFs, Bonds, Cryptocurrencies, etc.). 
 
-### 📊 Layout Options & Metric Comparison
+The Positions tab allows you to switch between two primary metric modes using the view toggle, each focusing on a different aspect of your holdings:
 
-#### 📋 Metric View: Holdings vs. Performance
+#### 📋 Holdings View
 
-| View Mode | Metric Column | Visual Meaning & Purpose |
-|:---|:---|:---|
-| **📋 Holdings** | **Quantity** | Current shares, units, or coins held in your portfolio. |
-| | **Market Price** | Live asset price retrieved from the connected data provider. |
-| | **Market Value** | Total value at current market prices (\(\text{Price} \times \text{Quantity}\)). |
-| | **Average Price (WAC)** | The Weighted Average Cost paid to acquire the current open position. |
-| | **Weight** | Proportional share of this asset relative to the total portfolio value. |
-| **📈 Performance**| **Total Value** | Current value of the holdings (matches Market Value). |
-| | **Unrealized P&L** | Paper gain or loss calculated as \(\text{Market Value} - \text{Book Value}\). |
-| | **ROI %** | Rate of return relative to the cost basis of the position. |
-| | **Total P&L** | Cumulative absolute returns (includes past closed sales & dividends). |
+The **Holdings** view focuses on bookkeeping, quantities, and current asset valuation. It helps you monitor your current portfolio exposure and baseline metrics.
+
+| Metric | Description |
+|:---|:---|
+| **Quantity** | Current shares, units, or coins held in your portfolio. |
+| **Market Price** | Live asset price retrieved from the connected data provider. |
+| **Market Value** | Total value at current market prices (\(\text{Price} \times \text{Quantity}\)). |
+| **Average Price (WAC)** | The Weighted Average Cost paid to acquire the current open position. |
+| **Weight** | Proportional share of this asset relative to the total portfolio value. |
+
+#### 📈 Performance View
+
+The **Performance** view focuses on absolute and relative returns. It helps you analyze the profitability of your open positions, factoring in historical transactions and income.
+
+| Metric | Description |
+|:---|:---|
+| **Total Value** | Current value of the holdings (matches Market Value). |
+| **Unrealized P&L** | Paper gain or loss calculated as \(\text{Market Value} - \text{Book Value}\). |
+| **ROI %** | Rate of return relative to the cost basis of the position. |
+| **Total P&L** | Cumulative absolute returns (includes past closed sales & dividends). |
 
 #### 🗺️ Visual Style: Table vs. Map
 
@@ -42,7 +51,7 @@ The **Positions** tab provides a detailed breakdown of all the financial instrum
 
 ---
 
-## 🔬 FIFO Lots Analysis
+## 🔬 FIFO Lots Analysis {: #fifo-lots-analysis }
 
 When you click on a position in either Table or Map view, a **FIFO Lots Analysis** panel slides out from the right side of the screen. This panel provides a deep-dive tax and lot matching history for that specific asset.
 

@@ -39,6 +39,7 @@ Once you select a broker from the list, the interface is split into four primary
 ## 📈 Overview Tab
 
 The **Overview** tab acts as a local dashboard for the selected broker. It contains the same elements as the main **[Dashboard Overview](../dashboard/index.md)** but scoped exclusively to this broker account:
+
 - **Local KPI Cards**: Net Worth, Period P&L, and Returns specific to this broker. (See **[Dashboard KPI Cards](../dashboard/kpi-cards.md)** for calculation details).
 - **Cash Balances Panel**: Liquid cash held in this broker account, broken down by currency.
 - **Growth Chart**: Historical growth of this account value (see **[Portfolio Growth Chart](../dashboard/charts.md#portfolio-growth-chart)**).

@@ -79,6 +79,7 @@ This is the reconciliation phase. The wizard performs two core checks:
 #### 🗂️ Asset Resolution
 
 If the statement contains ticker symbols or ISINs that are not in your library, the wizard flags them. You can:
+
 - Map them to an existing asset in your database.
 - Create them **on-the-fly** directly inside the wizard.
 

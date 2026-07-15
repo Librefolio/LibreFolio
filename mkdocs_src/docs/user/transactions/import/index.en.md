@@ -115,7 +115,7 @@ LibreFolio supports importing statement files from the following brokers:
 
 ---
 
-## 🗂️ Asset Mapping
+## 🗂️ Asset Mapping {: #asset-mapping }
 
 During the preview step, LibreFolio attempts to **auto-match** each asset name from your report to an asset already in your library.
 
@@ -125,7 +125,7 @@ During the preview step, LibreFolio attempts to **auto-match** each asset name f
 
 ---
 
-## ♻️ Duplicate Detection
+## ♻️ Duplicate Detection {: #duplicate-detection }
 
 BRIM checks for **duplicate transactions** based on date, type, asset, quantity, and amount. Duplicate rows are flagged in the preview — you can choose to skip or force-import them.
 

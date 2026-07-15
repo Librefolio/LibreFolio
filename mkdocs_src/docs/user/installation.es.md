@@ -161,7 +161,7 @@ Si no puede acceder a LibreFolio desde otros dispositivos de la red local, es po
 #### 🌐 Acceso remoto
 Para acceder a LibreFolio de forma segura cuando está fuera de casa (fuera de la red local), es libre de configurar la solución que prefiera (como un proxy inverso con certificado SSL).
 
-Sin embargo, para la máxima simplicidad y seguridad sin abrir puertos en su enrutador, **recomendamos usar Tailscale**. Puede encontrar todos los detalles y la guía paso a paso en la página [Exposición con Tailscale](../admin/tailscale_exposure.md).
+Sin embargo, para la máxima simplicidad y seguridad sin abrir puertos en su enrutador, **recomendamos usar Tailscale**. Puede encontrar todos los detalles y la guía paso a paso en la página [Exposición con Tailscale](../admin/service_exposure.md).
 
 ---
 

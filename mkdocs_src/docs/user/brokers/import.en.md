@@ -1,4 +1,4 @@
-# 📥 Importing Transactions (BRIM)
+# 📥 Broker Transactions
 
 The **Transactions** tab is the control center for modifying the broker's ledger. It lists all recorded financial operations (buys, sells, dividends, deposits, withdrawals, transfers, and FX conversions) scoped to this broker.
 
@@ -13,6 +13,7 @@ From this tab, you can perform manual transactions or launch bulk statement impo
 ## ➕ Manual Transactions
 
 Click the **Add Transaction** (`Plus` icon) button to open the single transaction modal wizard. This lets you manually record:
+
 - **Buy / Sell**: Trade assets, specifying date, price, quantity, and currency.
 - **Dividend / Income**: Income received from asset holdings.
 - **Deposit / Withdrawal**: External cash inflows or outflows to/from the broker cash balance.
@@ -56,6 +57,7 @@ The wizard progresses through the following steps:
 ## 📑 Import History
 
 Click the **Show Import History** (`FileText` icon) button to view a complete ledger of previous import tasks. It displays:
+
 - Uploaded filename and size.
 - Processed rows and total committed transactions.
 - Upload timestamp.
