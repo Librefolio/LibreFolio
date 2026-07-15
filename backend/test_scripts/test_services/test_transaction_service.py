@@ -26,10 +26,11 @@ setup_test_database()
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetType, Broker, Transaction, TransactionType
+from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import (
+    PairFieldConstraint,
     TXCreateItem,
     TXQueryParams,
     TXTransferPromoteRequest,
@@ -37,6 +38,7 @@ from backend.app.schemas.transactions import (
 )
 from backend.app.services.transaction_service import (
     TransactionService,
+    _parse_lenient,
 )
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._tx_test_helpers import create_bulk, delete_bulk, update_bulk
@@ -121,6 +123,233 @@ async def test_asset(session) -> Asset:
     session.add(asset)
     await session.flush()
     return asset
+
+
+@pytest_asyncio.fixture
+async def test_user(session) -> User:
+    """Create a test user for access-control tests."""
+    user = User(
+        username=f"testuser_{utcnow().timestamp()}",
+        email=f"test_{utcnow().timestamp()}@test.com",
+        hashed_password="fakehash",
+        is_active=True,
+        is_superuser=False,
+        created_at=utcnow(),
+        updated_at=utcnow(),
+    )
+    session.add(user)
+    await session.flush()
+    return user
+
+
+# ============================================================================
+# HELPER METHODS
+# ============================================================================
+
+
+class TestServiceHelpers:
+    """Direct coverage for small helper methods."""
+
+    @pytest.mark.asyncio
+    async def test_parse_lenient_collects_valid_rows_and_field_errors(self):
+        parsed, issues = _parse_lenient(
+            [
+                {
+                    "broker_id": 1,
+                    "type": TransactionType.DEPOSIT,
+                    "date": date.today(),
+                    "cash": {"code": "EUR", "amount": "100"},
+                },
+                {
+                    "type": TransactionType.DEPOSIT,
+                    "date": date.today(),
+                    "cash": {"code": "EUR", "amount": "100"},
+                },
+            ],
+            TXCreateItem,
+            "create",
+        )
+
+        assert len(parsed) == 1
+        assert parsed[0][0] == 0
+        assert parsed[0][1].broker_id == 1
+        assert len(issues) == 1
+        assert issues[0].operation == "create"
+        assert issues[0].index == 1
+        assert issues[0].field == "broker_id"
+        assert issues[0].code == "missing"
+
+    @pytest.mark.asyncio
+    async def test_parse_lenient_unpacks_multiple_business_rule_errors(self):
+        parsed, issues = _parse_lenient(
+            [
+                {
+                    "broker_id": 1,
+                    "type": TransactionType.BUY,
+                    "date": date.today(),
+                    "cash": {"code": "EUR", "amount": "100"},
+                }
+            ],
+            TXCreateItem,
+            "create",
+        )
+
+        assert parsed == []
+        assert len(issues) >= 2
+        assert all(issue.operation == "create" for issue in issues)
+        assert all(issue.index == 0 for issue in issues)
+        assert all(issue.field is None for issue in issues)
+        assert all(issue.code for issue in issues)
+
+    @pytest.mark.asyncio
+    async def test_check_broker_access_or_raise_returns_matching_role(self, session, test_broker, test_user):
+        service = TransactionService(session)
+        session.add(
+            BrokerUserAccess(
+                broker_id=test_broker.id,
+                user_id=test_user.id,
+                role=UserRole.EDITOR,
+                created_at=utcnow(),
+                updated_at=utcnow(),
+            )
+        )
+        await session.flush()
+
+        role = await service._check_broker_access_or_raise(test_broker.id, test_user.id)
+
+        assert role == UserRole.EDITOR
+
+    def test_check_promote_constraints_accepts_supported_relations(self):
+        tx_a = Transaction(
+            broker_id=1,
+            asset_id=10,
+            type=TransactionType.TRANSFER,
+            date=date.today(),
+            amount=Decimal("-100"),
+            currency="EUR",
+            quantity=Decimal("-5"),
+        )
+        tx_b = Transaction(
+            broker_id=2,
+            asset_id=10,
+            type=TransactionType.TRANSFER,
+            date=date.today(),
+            amount=Decimal("100"),
+            currency="USD",
+            quantity=Decimal("5"),
+        )
+
+        result = TransactionService._check_promote_constraints(
+            tx_a,
+            tx_b,
+            [
+                PairFieldConstraint(field="broker_id", relation="different"),
+                PairFieldConstraint(field="asset_id", relation="equal"),
+                PairFieldConstraint(field="cash_currency", relation="different"),
+                PairFieldConstraint(field="cash_amount", relation="opposite"),
+                PairFieldConstraint(field="quantity", relation="opposite"),
+            ],
+        )
+
+        assert result is True
+
+    @pytest.mark.parametrize(
+        ("tx_a", "tx_b", "constraint"),
+        [
+            (
+                Transaction(broker_id=1, asset_id=10, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("10"), currency="EUR"),
+                Transaction(broker_id=2, asset_id=10, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("10"), currency="EUR"),
+                PairFieldConstraint(field="broker_id", relation="equal"),
+            ),
+            (
+                Transaction(broker_id=1, asset_id=10, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("10"), currency="EUR"),
+                Transaction(broker_id=1, asset_id=10, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("10"), currency="EUR"),
+                PairFieldConstraint(field="broker_id", relation="different"),
+            ),
+            (
+                Transaction(broker_id=1, asset_id=10, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("10"), currency="EUR"),
+                Transaction(broker_id=2, asset_id=11, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("10"), currency="EUR"),
+                PairFieldConstraint(field="asset_id", relation="equal"),
+            ),
+            (
+                Transaction(broker_id=1, asset_id=10, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("10"), currency="EUR"),
+                Transaction(broker_id=2, asset_id=10, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("10"), currency="EUR"),
+                PairFieldConstraint(field="asset_id", relation="different"),
+            ),
+            (
+                Transaction(broker_id=1, asset_id=10, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("10"), currency="EUR"),
+                Transaction(broker_id=2, asset_id=10, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("10"), currency="USD"),
+                PairFieldConstraint(field="cash_currency", relation="equal"),
+            ),
+            (
+                Transaction(broker_id=1, asset_id=10, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("10"), currency="EUR"),
+                Transaction(broker_id=2, asset_id=10, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("10"), currency="EUR"),
+                PairFieldConstraint(field="cash_currency", relation="different"),
+            ),
+            (
+                Transaction(broker_id=1, asset_id=10, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("10"), currency="EUR"),
+                Transaction(broker_id=2, asset_id=10, type=TransactionType.DEPOSIT, date=date.today(), amount=Decimal("20"), currency="USD"),
+                PairFieldConstraint(field="cash_amount", relation="opposite"),
+            ),
+            (
+                Transaction(broker_id=1, asset_id=10, type=TransactionType.TRANSFER, date=date.today(), quantity=Decimal("3")),
+                Transaction(broker_id=2, asset_id=10, type=TransactionType.TRANSFER, date=date.today(), quantity=Decimal("4")),
+                PairFieldConstraint(field="quantity", relation="opposite"),
+            ),
+        ],
+    )
+    def test_check_promote_constraints_rejects_mismatches(self, tx_a, tx_b, constraint):
+        assert TransactionService._check_promote_constraints(tx_a, tx_b, [constraint]) is False
+
+    def test_check_promote_constraints_skips_missing_opposite_values(self):
+        tx_a = Transaction(
+            broker_id=1,
+            asset_id=10,
+            type=TransactionType.TRANSFER,
+            date=date.today(),
+            amount=Decimal("0"),
+            quantity=Decimal("0"),
+        )
+        tx_b = Transaction(
+            broker_id=2,
+            asset_id=10,
+            type=TransactionType.TRANSFER,
+            date=date.today(),
+            amount=Decimal("0"),
+            quantity=Decimal("0"),
+        )
+        tx_a.amount = None
+        tx_b.quantity = None
+
+        result = TransactionService._check_promote_constraints(
+            tx_a,
+            tx_b,
+            [
+                PairFieldConstraint(field="cash_amount", relation="opposite"),
+                PairFieldConstraint(field="quantity", relation="opposite"),
+            ],
+        )
+
+        assert result is True
+
+    def test_resolve_source_broker_from_link_prefers_partner_then_self_fallback(self):
+        service = TransactionService(None)
+        self_tx = Transaction(id=10, broker_id=100, type=TransactionType.TRANSFER, date=date.today())
+        partner_tx = Transaction(id=11, broker_id=200, type=TransactionType.TRANSFER, date=date.today())
+
+        paired_source = service._resolve_source_broker_from_link(
+            "pair",
+            self_tx.id,
+            {"pair": [(0, self_tx), (1, partner_tx)]},
+        )
+        fallback_source = service._resolve_source_broker_from_link(
+            "solo",
+            self_tx.id,
+            {"solo": [(0, self_tx)]},
+        )
+
+        assert paired_source == partner_tx.broker_id
+        assert fallback_source == self_tx.broker_id
 
 
 # ============================================================================
@@ -749,6 +978,14 @@ class TestQueryBidirectionalLink:
 
 class TestGetById:
     """Test get_by_id functionality."""
+
+    @pytest.mark.asyncio
+    async def test_get_by_ids_empty_returns_empty_list(self, session):
+        service = TransactionService(session)
+
+        result = await service.get_by_ids([])
+
+        assert result == []
 
     @pytest.mark.asyncio
     async def test_get_by_id_exists(self, session, test_broker):

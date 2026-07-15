@@ -429,3 +429,57 @@ class TestSetUserActive:
         )
         assert success is False
         assert "not found" in err_msg
+
+
+class TestSetUserAdmin:
+    """Tests for user_service.set_user_admin()."""
+
+    @pytest.mark.asyncio
+    async def test_promote_user_to_admin(self, session: AsyncSession):
+        """Should promote a regular user to admin."""
+        unique_id = uuid.uuid4().hex[:8]
+        user, error = await user_service.create_user(
+            session=session,
+            username=f"promote_{unique_id}",
+            email=f"promote_{unique_id}@example.com",
+            password="AdminPass123!",
+            is_superuser=False,
+        )
+        assert error is None
+        assert user.is_superuser is False
+
+        success, err_msg = await user_service.set_user_admin(
+            session=session,
+            username=f"promote_{unique_id}",
+            is_admin=True,
+        )
+        assert success is True
+        assert err_msg is None
+
+        updated_user = await user_service.get_user_by_username(session, f"promote_{unique_id}")
+        assert updated_user.is_superuser is True
+
+    @pytest.mark.asyncio
+    async def test_demote_user_from_admin(self, session: AsyncSession):
+        """Should demote an admin user."""
+        unique_id = uuid.uuid4().hex[:8]
+        user, error = await user_service.create_user(
+            session=session,
+            username=f"demote_{unique_id}",
+            email=f"demote_{unique_id}@example.com",
+            password="AdminPass123!",
+            is_superuser=True,
+        )
+        assert error is None
+        assert user.is_superuser is True
+
+        success, err_msg = await user_service.set_user_admin(
+            session=session,
+            username=f"demote_{unique_id}",
+            is_admin=False,
+        )
+        assert success is True
+        assert err_msg is None
+
+        updated_user = await user_service.get_user_by_username(session, f"demote_{unique_id}")
+        assert updated_user.is_superuser is False

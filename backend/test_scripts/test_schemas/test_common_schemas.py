@@ -22,7 +22,14 @@ from decimal import Decimal
 
 import pytest
 
-from backend.app.schemas.common import CRYPTO_CURRENCIES, Currency, DateRangeModel, OldNew
+from backend.app.schemas.common import (
+    CRYPTO_CURRENCIES,
+    Currency,
+    DateRangeModel,
+    OldNew,
+    OpenDateRangeModel,
+    _decimal_fixed_point,
+)
 
 # ============================================================================
 # CURRENCY CREATION TESTS
@@ -270,6 +277,12 @@ class TestComparison:
         assert a < b
         assert not b < a
 
+    def test_less_than_non_currency_error(self):
+        """Less than rejects non-Currency values."""
+        usd = Currency(code="USD", amount=Decimal("50"))
+        with pytest.raises(TypeError, match="Cannot compare Currency and int"):
+            usd < 1  # noqa: B015 — intentional: comparison should raise
+
     def test_less_than_or_equal(self):
         """Less than or equal comparison."""
         a = Currency(code="USD", amount=Decimal("50"))
@@ -285,6 +298,19 @@ class TestComparison:
         b = Currency(code="USD", amount=Decimal("50"))
         assert a > b
         assert not b > a
+
+    def test_greater_than_different_currencies_error(self):
+        """Greater than rejects different currencies."""
+        usd = Currency(code="USD", amount=Decimal("100"))
+        eur = Currency(code="EUR", amount=Decimal("50"))
+        with pytest.raises(ValueError, match="Cannot compare USD and EUR"):
+            usd > eur  # noqa: B015 — intentional: comparison should raise
+
+    def test_greater_than_non_currency_error(self):
+        """Greater than rejects non-Currency values."""
+        usd = Currency(code="USD", amount=Decimal("100"))
+        with pytest.raises(TypeError, match="Cannot compare Currency and int"):
+            usd > 1  # noqa: B015 — intentional: comparison should raise
 
     def test_greater_than_or_equal(self):
         """Greater than or equal comparison."""
@@ -381,6 +407,23 @@ class TestUtilityMethods:
 
 
 # ============================================================================
+# SAFEDECIMAL SERIALIZATION HELPERS
+# ============================================================================
+
+
+class TestSafeDecimalHelpers:
+    """Test helper functions used by SafeDecimal serialization."""
+
+    def test_decimal_fixed_point_formats_scientific_notation(self):
+        """Decimals should serialize without scientific notation."""
+        assert _decimal_fixed_point(Decimal("1.29E+5")) == "129000"
+
+    def test_decimal_fixed_point_handles_non_decimal(self):
+        """Non-Decimal values should be stringified as-is."""
+        assert _decimal_fixed_point(42) == "42"
+
+
+# ============================================================================
 # OLDNEW TESTS
 # ============================================================================
 
@@ -443,6 +486,31 @@ class TestDateRangeModel:
         except (ValueError, TypeError):
             # If it fails, end is required - that's also valid
             pass
+
+
+# ============================================================================
+# OPEN DATERANGEMODEL TESTS
+# ============================================================================
+
+
+class TestOpenDateRangeModel:
+    """Test OpenDateRangeModel validation and resolution helpers."""
+
+    def test_concrete_bounds_resolve_to_dates(self):
+        dr = OpenDateRangeModel(start=date(2025, 1, 1), end=date(2025, 12, 31))
+        assert dr.resolved_start() == date(2025, 1, 1)
+        assert dr.resolved_end() == date(2025, 12, 31)
+        assert dr.has_sentinels() is False
+
+    def test_sentinel_bounds_are_allowed(self):
+        dr = OpenDateRangeModel(start="min", end="max")
+        assert dr.resolved_start() is None
+        assert dr.resolved_end() is None
+        assert dr.has_sentinels() is True
+
+    def test_invalid_concrete_bounds_fail(self):
+        with pytest.raises(ValueError, match="must be >= start date"):
+            OpenDateRangeModel(start=date(2025, 12, 31), end=date(2025, 1, 1))
 
 
 if __name__ == "__main__":

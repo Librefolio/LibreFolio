@@ -20,12 +20,15 @@ These tests do NOT require a database connection.
 
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from typing import List, Set
 
 import pytest
 
 from backend.app.config import PROJECT_ROOT
+from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import (
     BRIMExtractedAssetInfo,
     BRIMParseOutput,
@@ -35,6 +38,17 @@ from backend.app.schemas.brim import (
 )
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim_providers.broker_coinbase import CoinbaseBrokerProvider, _parse_coinbase_amount, _parse_coinbase_datetime
+from backend.app.services.brim_providers.broker_degiro import DegiroBrokerProvider, _extract_quantity_from_description, _parse_degiro_date
+from backend.app.services.brim_providers.broker_directa import DirectaBrokerProvider, _parse_directa_date, _parse_directa_number
+from backend.app.services.brim_providers.broker_etoro import EtoroBrokerProvider, _parse_etoro_date, _parse_etoro_number
+from backend.app.services.brim_providers.broker_finpension import FinpensionBrokerProvider, _parse_finpension_date, _parse_finpension_number
+from backend.app.services.brim_providers.broker_freetrade import FreetradeBrokerProvider, _parse_freetrade_datetime, _parse_freetrade_number
+from backend.app.services.brim_providers.broker_generic_csv import parse_decimal
+from backend.app.services.brim_providers.broker_ibkr import IBKRBrokerProvider, _parse_ibkr_date, _parse_ibkr_number
+from backend.app.services.brim_providers.broker_revolut import RevolutBrokerProvider, _parse_revolut_amount, _parse_revolut_datetime, _parse_revolut_quantity
+from backend.app.services.brim_providers.broker_schwab import SchwabBrokerProvider, _parse_schwab_amount, _parse_schwab_date
+from backend.app.services.brim_providers.broker_trading212 import Trading212BrokerProvider, _parse_trading212_datetime, _parse_trading212_number
 from backend.app.services.provider_registry import BRIMProviderRegistry
 
 # =============================================================================
@@ -42,6 +56,17 @@ from backend.app.services.provider_registry import BRIMProviderRegistry
 # =============================================================================
 
 SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+DEGIRO_SAMPLE = SAMPLE_DIR / "degiro-export.csv"
+DIRECTA_SAMPLE = SAMPLE_DIR / "directa-export.csv"
+FINPENSION_SAMPLE = SAMPLE_DIR / "finpension-export.csv"
+IBKR_SAMPLE = SAMPLE_DIR / "ibkr-trades-export.csv"
+IBKR_DEFAULT_CURRENCY_SAMPLE = SAMPLE_DIR / "ibkr-default-currency-export.csv"
+# TODO: coinbase-export-sell.csv, freetrade-export-sell.csv and
+# ibkr-default-currency-export.csv (used below by TestBrokerParserCoverageHelpers)
+# are hand-crafted synthetic fixtures, not real broker exports — column schema
+# matches the sibling real-export samples, but the row values were not verified
+# against an actual account export. Replace with a real (anonymized) export row
+# for each as soon as one becomes available.
 
 _BASELINE_COLUMN_KEYS = {
     "date",
@@ -444,6 +469,175 @@ class TestGenericCSVPlugin:
     def test_generic_has_no_test_file_pattern(self):
         plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
         assert plugin.test_file_pattern is None
+
+
+class TestBrokerParserCoverageHelpers:
+    """Targeted helper and parser happy-path coverage for broker-specific plugins."""
+
+    COINBASE_SELL_SAMPLE = SAMPLE_DIR / "coinbase-export-sell.csv"
+    FREETRADE_SELL_SAMPLE = SAMPLE_DIR / "freetrade-export-sell.csv"
+    IBKR_DEFAULT_CURRENCY_SAMPLE = SAMPLE_DIR / "ibkr-default-currency-export.csv"
+    # NOTE: the 3 samples above are synthetic (hand-crafted to match the real
+    # export column schema), not captured from a real broker account. See
+    # TODO at their SAMPLE_DIR definitions above — swap in a real row when available.
+
+    @pytest.mark.parametrize(
+        ("provider", "sample_name"),
+        [
+            (CoinbaseBrokerProvider(), "coinbase-export.csv"),
+            (DegiroBrokerProvider(), "degiro-export.csv"),
+            (DirectaBrokerProvider(), "directa-export.csv"),
+            (EtoroBrokerProvider(), "etoro-export.csv"),
+            (FinpensionBrokerProvider(), "finpension-export.csv"),
+            (FreetradeBrokerProvider(), "freetrade-export.csv"),
+            (IBKRBrokerProvider(), "ibkr-trades-export.csv"),
+            (RevolutBrokerProvider(), "revolut-invest-export.csv"),
+            (SchwabBrokerProvider(), "schwab-export.csv"),
+            (Trading212BrokerProvider(), "trading212-export.csv"),
+        ],
+        ids=["coinbase", "degiro", "directa", "etoro", "finpension", "freetrade", "ibkr", "revolut", "schwab", "trading212"],
+    )
+    def test_broker_specific_can_parse_true_and_reject_non_csv(self, provider: BRIMProvider, sample_name: str):
+        assert provider.can_parse(SAMPLE_DIR / sample_name)
+        assert not provider.can_parse(SAMPLE_DIR / "README.md")
+
+    @pytest.mark.parametrize(
+        ("parser", "value", "expected"),
+        [
+            (_parse_coinbase_datetime, "2025-01-17", date(2025, 1, 17)),
+            (_parse_degiro_date, "17-12-2022", date(2022, 12, 17)),
+            (_parse_directa_date, "30-12-2024", date(2024, 12, 30)),
+            (_parse_etoro_date, "17/01/2025", date(2025, 1, 17)),
+            (_parse_finpension_date, "2023-07-11", date(2023, 7, 11)),
+            (_parse_freetrade_datetime, "2024-03-28", date(2024, 3, 28)),
+            (_parse_ibkr_date, '"20230522"', date(2023, 5, 22)),
+            (_parse_revolut_datetime, "2019-12-02", date(2019, 12, 2)),
+            (_parse_schwab_date, "03/24/2025 as of 03/25/2025", date(2025, 3, 24)),
+            (_parse_trading212_datetime, "2023-12-27 12:05:25", date(2023, 12, 27)),
+        ],
+        ids=["coinbase", "degiro", "directa", "etoro", "finpension", "freetrade", "ibkr", "revolut", "schwab", "trading212"],
+    )
+    def test_date_helpers_accept_supported_alternate_formats(self, parser, value: str, expected: date):
+        assert parser(value) == expected
+
+    @pytest.mark.parametrize(
+        "parser",
+        [
+            _parse_degiro_date,
+            _parse_directa_date,
+            _parse_finpension_date,
+            _parse_ibkr_date,
+        ],
+        ids=["degiro", "directa", "finpension", "ibkr"],
+    )
+    def test_targeted_date_helpers_return_none_for_blank_values(self, parser):
+        assert parser("") is None
+
+    @pytest.mark.parametrize(
+        ("parser", "value", "expected"),
+        [
+            (_parse_coinbase_amount, "€1,234.56", Decimal("1234.56")),
+            (_parse_directa_number, "-431,04", Decimal("-431.04")),
+            (_parse_etoro_number, "1.234,56", Decimal("1234.56")),
+            (_parse_finpension_number, "-0.821800", Decimal("-0.821800")),
+            (_parse_freetrade_number, "250.50", Decimal("250.50")),
+            (_parse_ibkr_number, '"-5"', Decimal("-5")),
+            (_parse_revolut_quantity, "0,76672417", Decimal("0.76672417")),
+            (_parse_schwab_amount, '"$1,259.59"', Decimal("1259.59")),
+            (_parse_trading212_number, "€1,234.56", Decimal("1234.56")),
+        ],
+        ids=["coinbase", "directa", "etoro", "finpension", "freetrade", "ibkr", "revolut-qty", "schwab", "trading212"],
+    )
+    def test_number_helpers_accept_supported_formats(self, parser, value: str, expected: Decimal):
+        assert parser(value) == expected
+
+    @pytest.mark.parametrize(
+        "parser",
+        [
+            _parse_directa_number,
+            _parse_finpension_number,
+            _parse_ibkr_number,
+        ],
+        ids=["directa", "finpension", "ibkr"],
+    )
+    def test_targeted_number_helpers_return_none_for_blank_values(self, parser):
+        assert parser("") is None
+
+    def test_revolut_amount_helper_parses_negative_euro_amount(self):
+        assert _parse_revolut_amount("-€30,50") == (Decimal("-30.50"), "EUR")
+
+    def test_degiro_extract_quantity_handles_product_name_format(self):
+        assert _extract_quantity_from_description("Compra 6 ISHARES MSCI WOR A@49,785 EUR") == Decimal("6")
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("123.45", Decimal("123.45")),
+            ("123,45", Decimal("123.45")),
+            ("1,234.56", Decimal("1234.56")),
+            ("1.234,56", Decimal("1234.56")),
+            ("(123.45)", Decimal("-123.45")),
+        ],
+    )
+    def test_generic_parse_decimal_handles_supported_formats(self, value: str, expected: Decimal):
+        assert parse_decimal(value) == expected
+
+    def test_coinbase_parse_sell_sample_creates_sell_and_fee_transactions(self):
+        # TODO: COINBASE_SELL_SAMPLE is a synthetic fixture (see note above) —
+        # replace with a real anonymized export row when available.
+        out = CoinbaseBrokerProvider().parse(self.COINBASE_SELL_SAMPLE, broker_id=42)
+
+        assert [tx.type for tx in out.transactions] == [TransactionType.SELL, TransactionType.FEE]
+        sell_tx, fee_tx = out.transactions
+        assert sell_tx.broker_id == 42
+        assert sell_tx.date == date(2025, 2, 1)
+        assert sell_tx.quantity == Decimal("-0.01000000")
+        assert sell_tx.cash is not None and sell_tx.cash.amount == Decimal("995.00")
+        assert fee_tx.cash is not None and fee_tx.cash.amount == Decimal("-5.00")
+        assert sell_tx.asset_id in out.extracted_assets
+        assert out.extracted_assets[sell_tx.asset_id].extracted_symbol == "BTC"
+
+    def test_freetrade_parse_sell_sample_creates_negative_quantity(self):
+        # TODO: FREETRADE_SELL_SAMPLE is a synthetic fixture (see note above) —
+        # replace with a real anonymized export row when available.
+        out = FreetradeBrokerProvider().parse(self.FREETRADE_SELL_SAMPLE, broker_id=7)
+
+        assert len(out.transactions) == 1
+        tx = out.transactions[0]
+        assert tx.type == TransactionType.SELL
+        assert tx.broker_id == 7
+        assert tx.date == date(2024, 4, 20)
+        assert tx.quantity == Decimal("-2.00000000")
+        assert tx.cash is not None and tx.cash.amount == Decimal("250.50")
+        assert tx.asset_id in out.extracted_assets
+        assert out.extracted_assets[tx.asset_id].extracted_isin == "US17275R1023"
+
+    def test_finpension_parse_sample_covers_asset_and_cash_transactions(self):
+        out = FinpensionBrokerProvider().parse(FINPENSION_SAMPLE, broker_id=7)
+
+        deposit = next(tx for tx in out.transactions if tx.type == TransactionType.DEPOSIT)
+        dividend = next(tx for tx in out.transactions if tx.type == TransactionType.DIVIDEND)
+
+        assert deposit.broker_id == 7
+        assert deposit.asset_id is None
+        assert deposit.cash is not None and deposit.cash.code == "CHF"
+        assert dividend.asset_id in out.extracted_assets
+        assert dividend.quantity == Decimal("0")
+        assert out.extracted_assets[dividend.asset_id].extracted_isin is not None
+
+    def test_ibkr_parse_sample_defaults_currency_and_normalizes_sell_quantity(self):
+        # TODO: IBKR_DEFAULT_CURRENCY_SAMPLE is a synthetic fixture (see note above) —
+        # replace with a real anonymized export row when available.
+        out = IBKRBrokerProvider().parse(self.IBKR_DEFAULT_CURRENCY_SAMPLE, broker_id=11)
+
+        sell_tx = next(tx for tx in out.transactions if tx.type == TransactionType.SELL)
+        fee_tx = next(tx for tx in out.transactions if tx.type == TransactionType.FEE)
+
+        assert sell_tx.broker_id == 11
+        assert sell_tx.quantity == Decimal("-5")
+        assert sell_tx.cash is not None and sell_tx.cash.code == "USD" and sell_tx.cash.amount == Decimal("950")
+        assert fee_tx.cash is not None and fee_tx.cash.code == "USD" and fee_tx.cash.amount == Decimal("-1")
+        assert sell_tx.asset_id in out.extracted_assets
 
 
 if __name__ == "__main__":

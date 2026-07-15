@@ -15,10 +15,12 @@ import io
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
+from backend.app.api.v1 import uploads as uploads_api
 from backend.app.config import get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
@@ -117,6 +119,18 @@ def read_sample_xls_bytes() -> bytes:
     return sample_path.read_bytes()
 
 
+class _DirectUploadFile:
+    """Minimal UploadFile test double for direct endpoint unit tests."""
+
+    def __init__(self, filename: str, content: bytes, content_type: str):
+        self.filename = filename
+        self.content_type = content_type
+        self._content = content
+
+    async def read(self) -> bytes:
+        return self._content
+
+
 # ============================================================================
 # FIXTURES
 # ============================================================================
@@ -129,6 +143,129 @@ def test_server():
         if not server_manager.start_server():
             pytest.fail("Failed to start test server")
         yield server_manager
+
+
+# ============================================================================
+# DIRECT ENDPOINT UNIT TESTS
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_upload_file_direct_happy_path(monkeypatch):
+    """UPLOAD-U1: Direct upload_file() call returns save_upload result."""
+    captured: dict[str, object] = {}
+    expected = uploads_api.UploadFileInfo(
+        id="direct-upload-id",
+        original_name="direct.txt",
+        mime_type="text/plain",
+        size_bytes=11,
+        uploaded_at=datetime.now(),
+        uploaded_by_user_id=42,
+        description="Direct path",
+        url="/api/v1/uploads/file/direct-upload-id",
+    )
+
+    async def fake_get_max_upload_mb(_session) -> int:
+        return 5
+
+    def fake_save_upload(**kwargs):
+        captured.update(kwargs)
+        return expected
+
+    monkeypatch.setattr(uploads_api, "get_max_upload_mb", fake_get_max_upload_mb)
+    monkeypatch.setattr(uploads_api, "save_upload", fake_save_upload)
+
+    response = await uploads_api.upload_file(
+        file=_DirectUploadFile("direct.txt", b"hello world", "text/plain"),
+        description="Direct path",
+        current_user=SimpleNamespace(id=42),
+        session=object(),
+    )
+
+    assert response.file == expected
+    assert captured["original_filename"] == "direct.txt"
+    assert captured["description"] == "Direct path"
+    assert captured["mime_type"] == "text/plain"
+
+
+@pytest.mark.asyncio
+async def test_get_upload_file_preview_direct_uses_info_mime_fallback(monkeypatch):
+    """UPLOAD-U2: Direct preview call falls back to stored info MIME."""
+    info = uploads_api.UploadFileInfo(
+        id="preview-id",
+        original_name="notes.md",
+        mime_type="text/markdown",
+        size_bytes=12,
+        uploaded_at=datetime.now(),
+        uploaded_by_user_id=7,
+        description=None,
+        url="/api/v1/uploads/file/preview-id",
+    )
+    captured: dict[str, object] = {}
+
+    def fake_build_preview_response(file_path, filename, mime_type, size_bytes, links, sheet_name=None):
+        captured.update(
+            {
+                "file_path": file_path,
+                "filename": filename,
+                "mime_type": mime_type,
+                "size_bytes": size_bytes,
+                "sheet_name": sheet_name,
+                "source_url": links.source_url,
+            }
+        )
+        return uploads_api.FilePreviewResponse(
+            preview_type="markdown",
+            filename=filename,
+            mime_type=mime_type,
+            size_bytes=size_bytes,
+            source_url=links.source_url,
+            download_url=links.download_url,
+            preview_url=links.preview_url,
+            text_content="# Title\n",
+            total_lines=1,
+        )
+
+    monkeypatch.setattr(uploads_api, "get_upload_info", lambda _file_id: info)
+    monkeypatch.setattr(uploads_api, "get_upload_path", lambda _file_id: Path(__file__))
+    monkeypatch.setattr(uploads_api, "get_upload_mime_type", lambda _file_id: None)
+    monkeypatch.setattr(uploads_api, "build_preview_response", fake_build_preview_response)
+
+    response = await uploads_api.get_upload_file_preview(
+        file_id="preview-id",
+        sheet_name="Sheet1",
+        _current_user=SimpleNamespace(id=7),
+    )
+
+    assert response.preview_type == "markdown"
+    assert captured["mime_type"] == "text/markdown"
+    assert captured["sheet_name"] == "Sheet1"
+    assert str(captured["file_path"]).endswith("test_uploads_api.py")
+
+
+@pytest.mark.asyncio
+async def test_serve_plugin_static_direct_returns_file_response():
+    """UPLOAD-U3: Direct plugin static call resolves existing asset."""
+    candidate = None
+    for provider_type, base_dir in uploads_api.PLUGIN_STATIC_DIRS.items():
+        for asset_path in sorted(base_dir.rglob("*")):
+            if asset_path.is_file():
+                candidate = (provider_type, asset_path, asset_path.relative_to(base_dir).as_posix())
+                break
+        if candidate:
+            break
+
+    assert candidate is not None, "Expected at least one plugin static asset in repository"
+    provider_type, asset_path, rel_path = candidate
+
+    response = await uploads_api.serve_plugin_static(
+        provider_type=provider_type,
+        path=rel_path,
+        _current_user=SimpleNamespace(id=1),
+    )
+
+    assert Path(response.path) == asset_path.resolve()
+    assert response.media_type
 
 
 # ============================================================================
@@ -414,6 +551,29 @@ class TestStructuredPreview:
 
             print_success("✓ Legacy XLS preview returned table payload")
 
+    @pytest.mark.asyncio
+    async def test_preview_falls_back_to_metadata_mime(self, test_server, monkeypatch):
+        """UPLOAD-005G: Preview uses metadata MIME when lookup returns None."""
+        print_section("UPLOAD-005G: Preview MIME fallback")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            files = {"file": ("fallback.md", BytesIO(b"# Title\nBody\n"), "text/markdown")}
+            upload_resp = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
+            file_id = upload_resp.json()["file"]["id"]
+
+            monkeypatch.setattr(uploads_api, "get_upload_mime_type", lambda _file_id: None)
+
+            response = await client.get(f"{API_BASE}/uploads/{file_id}/preview", timeout=TIMEOUT)
+
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["preview_type"] == "markdown"
+            assert data["text_content"].startswith("# Title")
+
+            print_success("✓ Preview used metadata MIME fallback")
+
 
 # ============================================================================
 # DOWNLOAD TESTS
@@ -507,6 +667,36 @@ class TestDelete:
 
 class TestPluginStatic:
     """Tests for GET /uploads/plugin/{type}/{path}."""
+
+    @pytest.mark.asyncio
+    async def test_plugin_static_serves_existing_asset(self, test_server):
+        """UPLOAD-010: Serve real plugin asset from static directory."""
+        print_section("UPLOAD-010: Plugin static serves existing asset")
+
+        candidate = None
+        for provider_type, base_dir in uploads_api.PLUGIN_STATIC_DIRS.items():
+            for asset_path in sorted(base_dir.rglob("*")):
+                if asset_path.is_file():
+                    candidate = (provider_type, asset_path, asset_path.relative_to(base_dir).as_posix())
+                    break
+            if candidate:
+                break
+
+        assert candidate is not None, "Expected at least one plugin static asset in repository"
+        provider_type, asset_path, rel_path = candidate
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+            response = await client.get(
+                f"{API_BASE}/uploads/plugin/{provider_type}/{rel_path}",
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, response.text
+            assert response.content == asset_path.read_bytes()
+            assert response.headers.get("content-type")
+
+            print_success("✓ Served existing plugin asset")
 
     @pytest.mark.asyncio
     async def test_plugin_static_not_found(self, test_server):

@@ -258,6 +258,65 @@ class TestUserSettings:
             print_success("✓ User settings updated successfully")
 
     @pytest.mark.asyncio
+    async def test_update_user_settings_creates_with_all_fields(self, test_server):
+        """SET-003b: PUT /settings/user creates settings with provided values."""
+        print_section("SET-003b: PUT /settings/user - Create with all fields")
+
+        async with httpx.AsyncClient() as client:
+            from uuid import uuid4  # noqa: PLC0415 — test-only local import
+
+            username, email, session, _ = await get_or_create_test_user(client, f"settings_create_{uuid4().hex[:8]}")
+            assert session is not None, "Failed to create test user"
+
+            payload = {
+                "language": "fr",
+                "base_currency": "USD",
+                "theme": "dark",
+                "avatar_url": "https://example.com/settings-avatar.png",
+            }
+
+            resp = await client.put(f"{API_BASE}/settings/user", json=payload, timeout=TIMEOUT)
+
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            assert resp.json() == payload
+
+            get_resp = await client.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
+            assert get_resp.status_code == 200
+            assert get_resp.json() == payload
+
+            print_success("✓ User settings created with expected values")
+
+    @pytest.mark.asyncio
+    async def test_update_user_settings_updates_existing_record(self, test_server):
+        """SET-003c: PUT /settings/user updates existing settings and preserves omitted fields."""
+        print_section("SET-003c: PUT /settings/user - Update existing record")
+
+        async with httpx.AsyncClient() as client:
+            from uuid import uuid4  # noqa: PLC0415 — test-only local import
+
+            username, email, session, _ = await get_or_create_test_user(client, f"settings_update_{uuid4().hex[:8]}")
+            assert session is not None, "Failed to create test user"
+
+            initial_resp = await client.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
+            assert initial_resp.status_code == 200, f"Expected 200, got {initial_resp.status_code}"
+
+            resp = await client.put(
+                f"{API_BASE}/settings/user",
+                json={"theme": "auto", "avatar_url": "https://example.com/updated-avatar.png"},
+                timeout=TIMEOUT,
+            )
+
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            assert resp.json() == {
+                "language": "en",
+                "base_currency": "EUR",
+                "theme": "auto",
+                "avatar_url": "https://example.com/updated-avatar.png",
+            }
+
+            print_success("✓ Existing user settings updated and partial fields preserved")
+
+    @pytest.mark.asyncio
     async def test_update_user_settings_invalid(self, test_server):
         """SET-004: Update user settings with invalid values → validation error."""
         print_section("SET-004: PUT /settings/user - Invalid Values")

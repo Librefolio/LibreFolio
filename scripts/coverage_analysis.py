@@ -514,6 +514,7 @@ def register_subparser(subparsers):
     )
     p.add_argument(
         "--category", "-c",
+        dest="cov_category",
         choices=[c.lower() for c in CATEGORY_ORDER],
         default=None,
         help="Filter by fine-grained category",

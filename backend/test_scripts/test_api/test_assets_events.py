@@ -678,3 +678,73 @@ async def test_bulk_upsert_events_currency_mismatch_returns_400(test_server):
         body = resp.text.upper()
         assert "EUR" in body or "USD" in body or "MISMATCH" in body or "CURRENCY" in body, f"Error body should mention the currency mismatch: {resp.text}"
         print_success("Currency-mismatched event correctly rejected with HTTP 400")
+
+
+@pytest.mark.asyncio
+async def test_get_events_by_ids_groups_multiple_assets(test_server):
+    """Test 10: GET /assets/events groups queried IDs by asset."""
+    print_section("Test 10: GET /assets/events by ids")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        created_asset_ids = []
+        for prefix, amount in (("GE1", "1.10"), ("GE2", "2.20")):
+            create_item = FAAssetCreateItem(display_name=f"Events By Id {unique_id(prefix)}", currency="USD")
+            create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
+            assert create_resp.status_code == 201, create_resp.text
+            asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+            created_asset_ids.append((asset_id, Decimal(amount)))
+
+            upsert_resp = await client.post(
+                f"{API_BASE}/assets/events",
+                json=[
+                    {
+                        "asset_id": asset_id,
+                        "events": [
+                            {
+                                "date": date.today().isoformat(),
+                                "type": "DIVIDEND",
+                                "value": {"code": "USD", "amount": amount},
+                                "notes": f"event-{prefix}",
+                            }
+                        ],
+                    }
+                ],
+                timeout=TIMEOUT,
+            )
+            assert upsert_resp.status_code == 200, upsert_resp.text
+
+        query_resp = await client.post(
+            f"{API_BASE}/assets/events/query",
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "date_range": {"start": date.today().isoformat(), "end": date.today().isoformat()},
+                }
+                for asset_id, _amount in created_asset_ids
+            ],
+            timeout=TIMEOUT,
+        )
+        assert query_resp.status_code == 200, query_resp.text
+        query_items = query_resp.json()["items"]
+        event_ids = [item["events"][0]["id"] for item in query_items]
+        expected_by_asset = dict(created_asset_ids)
+
+        by_ids_resp = await client.get(
+            f"{API_BASE}/assets/events",
+            params=[("ids", str(event_id)) for event_id in event_ids],
+            timeout=TIMEOUT,
+        )
+        assert by_ids_resp.status_code == 200, by_ids_resp.text
+        body = by_ids_resp.json()
+        assert len(body["items"]) == 2
+
+        grouped = {item["asset_id"]: item["events"][0] for item in body["items"]}
+        assert set(grouped) == set(expected_by_asset)
+        for asset_id, amount in expected_by_asset.items():
+            event = grouped[asset_id]
+            assert event["id"] in event_ids
+            assert event["is_auto"] is False
+            assert Decimal(event["value"]["amount"]) == amount
+        print_success("✓ GET /assets/events returned grouped manual events")

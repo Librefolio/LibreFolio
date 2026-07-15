@@ -11,6 +11,7 @@ Tests the /api/v1/utilities endpoints:
 import httpx
 import pytest
 
+from backend.app.api.v1.utilities import normalize_country as normalize_country_endpoint
 from backend.app.config import get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success
@@ -240,6 +241,54 @@ async def test_normalize_country_case_insensitive(test_server):
             print_info(f"  {name} -> {data['iso3_codes']}")
 
         print_success("✓ Case-insensitive normalization works")
+
+
+@pytest.mark.asyncio
+async def test_normalize_country_direct_exact():
+    """Test 7a: normalize_country - Exact single-country match."""
+    print_section("Test 7a: Normalize Country - Direct Exact")
+
+    result = await normalize_country_endpoint(name="Germany")
+
+    assert result.query == "Germany"
+    assert result.match_type == "exact"
+    assert result.iso3_codes == ["DEU"]
+    assert result.error is None
+
+    print_info(f"  Germany -> {result.iso3_codes}")
+    print_success("✓ Direct exact normalization works")
+
+
+@pytest.mark.asyncio
+async def test_normalize_country_region_code():
+    """Test 7b: normalize_country - Region code expansion."""
+    print_section("Test 7b: Normalize Country - Region Code")
+
+    result = await normalize_country_endpoint(name=" g7 ")
+
+    assert result.query == " g7 "
+    assert result.match_type == "region"
+    assert result.error is None
+    assert result.iso3_codes == ["USA", "CAN", "GBR", "DEU", "FRA", "ITA", "JPN"]
+
+    print_info(f"  g7 -> {result.iso3_codes}")
+    print_success("✓ Region code expanded correctly")
+
+
+@pytest.mark.asyncio
+async def test_normalize_country_direct_not_found():
+    """Test 7c: normalize_country - Not found path."""
+    print_section("Test 7c: Normalize Country - Direct Not Found")
+
+    result = await normalize_country_endpoint(name="InvalidCountryXYZ")
+
+    assert result.query == "InvalidCountryXYZ"
+    assert result.match_type == "not_found"
+    assert result.iso3_codes == []
+    assert result.error is not None
+
+    print_info(f"  InvalidCountryXYZ -> {result.error}")
+    print_success("✓ Direct not_found normalization works")
 
 
 # ============================================================

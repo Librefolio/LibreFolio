@@ -95,6 +95,22 @@ def utils_provider_core_cache(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Provider core cache tests", verbose=verbose)
 
 
+def utils_roi_utils(verbose: bool = False, test_names: list = None) -> bool:
+    """Test pure ROI helper functions (annualized_to_cumulative, calculate_mwrr*)."""
+    print_section("Utils: ROI Helpers")
+    print_info("Testing: backend/app/utils/financial/roi_utils.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_roi_utils.py", test_names)
+    return run_command(cmd, "ROI helper tests", verbose=verbose)
+
+
+def utils_translation_utils(verbose: bool = False, test_names: list = None) -> bool:
+    """Test translation/locale helper (get_babel_locale + English fallback)."""
+    print_section("Utils: Translation Helpers")
+    print_info("Testing: backend/app/utils/translation_utils.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_translation_utils.py", test_names)
+    return run_command(cmd, "Translation helper tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     return _run_test_suite(
@@ -128,6 +144,8 @@ Tests for utility modules and helper functions:
     add_test(cat, "currency-utils", utils_currency_utils, name="Currency Utils", desc="Currency listing, flag mapping, crypto")
     add_test(cat, "cache-utils", utils_cache_utils, name="Cache Utils", desc="NamedCache, TTL, registry, stats")
     add_test(cat, "provider-core-cache", utils_provider_core_cache, name="Provider Core Cache", desc="Thread isolation, timeout, caches")
+    add_test(cat, "roi-utils", utils_roi_utils, name="ROI Utils", desc="annualized_to_cumulative, calculate_mwrr/_series")
+    add_test(cat, "translation-utils", utils_translation_utils, name="Translation Utils", desc="get_babel_locale + English fallback")
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")
     registry["utils"] = cat
 

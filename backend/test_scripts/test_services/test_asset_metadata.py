@@ -76,6 +76,21 @@ def test_apply_partial_update_geographic_area_full_replace():
     assert "Technology" in updated.sector_area.distribution  # Unchanged
 
 
+def test_apply_partial_update_from_none_creates_metadata():
+    """PATCH on empty metadata should bootstrap a new FAClassificationParams object."""
+    current = None
+    patch = FAClassificationParams(
+        short_description="Bootstrapped metadata",
+        sector_area=FASectorArea(distribution={"Utilities": Decimal("1.0")}),
+    )
+
+    updated = AssetMetadataService.apply_partial_update(current, patch)
+
+    assert updated.short_description == "Bootstrapped metadata"
+    assert updated.sector_area.distribution == {"Utilities": Decimal("1.0000")}
+    assert updated.geographic_area is None
+
+
 def test_merge_provider_metadata():
     """Test merging provider-fetched metadata with current metadata."""
     current = FAClassificationParams(short_description="User description")

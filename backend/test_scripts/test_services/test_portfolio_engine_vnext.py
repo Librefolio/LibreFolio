@@ -9,19 +9,21 @@ Validates the core architectural invariants:
 5. Period accumulators (realized, income, fees)
 6. Pre-frame / frame separation
 """
-import pytest
 from datetime import date
 from decimal import Decimal
-from collections import defaultdict
 
+import pytest
+
+import backend.app.services.portfolio_engine as portfolio_engine_module
+from backend.app.db.models import Transaction
+from backend.app.schemas.common import Currency
 from backend.app.services.portfolio_engine import (
     ClassifiedTransaction,
-    DailyPositionState,
     DailyStateBuilder,
-    PortfolioCalculationResult,
+    InTransitInterval,
+    PortfolioCalculationEngine,
     TransactionType,
 )
-from backend.app.db.models import Transaction
 
 
 def _tx(*, tx_id=1, broker_id=1, asset_id=1, tx_type=TransactionType.BUY,
@@ -460,3 +462,135 @@ class TestPerBrokerPools:
         assert last.cash_value == Decimal("30")
         assert last.cash_from_contributed_capital == Decimal("0")
         assert last.cash_from_generated_returns == Decimal("30")
+
+
+class TestPreloadFxRates:
+    """Target FX preload helper directly."""
+
+    @pytest.mark.asyncio
+    async def test_preload_fx_rates_collects_all_main_sources(self, monkeypatch):
+        txs = [
+            _c(
+                _tx(
+                    tx_id=1,
+                    asset_id=1,
+                    tx_type=TransactionType.BUY,
+                    dt=date(2025, 1, 2),
+                    quantity=Decimal("2"),
+                    amount=Decimal("-100"),
+                    currency="USD",
+                )
+            ),
+        ]
+
+        cash_dep = _tx(
+            tx_id=10,
+            broker_id=1,
+            asset_id=None,
+            tx_type=TransactionType.CASH_TRANSFER,
+            dt=date(2025, 1, 1),
+            quantity=Decimal("0"),
+            amount=Decimal("-300"),
+            currency="CAD",
+        )
+        cash_arr = _tx(
+            tx_id=11,
+            broker_id=2,
+            asset_id=None,
+            tx_type=TransactionType.CASH_TRANSFER,
+            dt=date(2025, 1, 4),
+            quantity=Decimal("0"),
+            amount=Decimal("300"),
+            currency="CAD",
+        )
+        asset_dep = _tx(
+            tx_id=12,
+            broker_id=1,
+            asset_id=1,
+            tx_type=TransactionType.TRANSFER,
+            dt=date(2025, 1, 1),
+            quantity=Decimal("-1"),
+            amount=None,
+            currency="JPY",
+        )
+        asset_arr = _tx(
+            tx_id=13,
+            broker_id=2,
+            asset_id=1,
+            tx_type=TransactionType.TRANSFER,
+            dt=date(2025, 1, 4),
+            quantity=Decimal("1"),
+            amount=None,
+            currency="JPY",
+        )
+
+        intervals = [
+            InTransitInterval(
+                start_date=date(2025, 1, 2),
+                end_date=date(2025, 1, 3),
+                tx_type="cash",
+                departure_leg=cash_dep,
+                arrival_leg=cash_arr,
+                share=Decimal("1"),
+            ),
+            InTransitInterval(
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 1, 2),
+                tx_type="asset",
+                departure_leg=asset_dep,
+                arrival_leg=asset_arr,
+                share=Decimal("1"),
+                asset_id=1,
+                cost_basis_amount=Decimal("80"),
+                cost_basis_currency="AUD",
+            ),
+        ]
+
+        captured: dict[str, object] = {}
+
+        async def fake_convert_bulk(db, bulk_items, raise_on_error=False):
+            captured["db"] = db
+            captured["bulk_items"] = bulk_items
+            captured["raise_on_error"] = raise_on_error
+            results = [(Currency(code="EUR", amount=Decimal("1")), item[2], False) for item in bulk_items]
+            return results, []
+
+        db = object()
+        monkeypatch.setattr(portfolio_engine_module, "convert_bulk", fake_convert_bulk)
+
+        fx_map = await PortfolioCalculationEngine(db)._preload_fx_rates(
+            classified_txs=txs,
+            in_transit_intervals=intervals,
+            external_cash_flows=[(date(2025, 1, 3), Decimal("50"), "GBP")],
+            price_map={
+                1: [(date(2025, 1, 1), Decimal("10"), "USD")],
+                2: [(date(2025, 1, 1), Decimal("20"), "CHF")],
+            },
+            asset_currencies={1: "JPY", 2: "EUR"},
+            target_currency="EUR",
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 3),
+        )
+
+        expected_keys = {
+            ("USD", "EUR", date(2025, 1, 1)),
+            ("USD", "EUR", date(2025, 1, 2)),
+            ("USD", "EUR", date(2025, 1, 3)),
+            ("CHF", "EUR", date(2025, 1, 1)),
+            ("CHF", "EUR", date(2025, 1, 2)),
+            ("CHF", "EUR", date(2025, 1, 3)),
+            ("JPY", "EUR", date(2025, 1, 1)),
+            ("JPY", "EUR", date(2025, 1, 2)),
+            ("JPY", "EUR", date(2025, 1, 3)),
+            ("GBP", "EUR", date(2025, 1, 3)),
+            ("CAD", "EUR", date(2025, 1, 2)),
+            ("CAD", "EUR", date(2025, 1, 3)),
+            ("AUD", "EUR", date(2025, 1, 1)),
+            ("AUD", "EUR", date(2025, 1, 2)),
+        }
+
+        assert captured["db"] is db
+        assert captured["raise_on_error"] is False
+        assert {(item[0].code, item[1], item[2]) for item in captured["bulk_items"]} == expected_keys
+        assert set(fx_map.keys()) == expected_keys
+        assert set(fx_map.values()) == {Decimal("1")}

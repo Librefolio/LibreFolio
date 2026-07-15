@@ -1402,3 +1402,90 @@ async def test_scheduled_investment_via_api(test_server):
 
         # Cleanup
         await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+async def test_probe_bulk_assign_refresh_and_remove_with_mock_provider(test_server):
+    """Test: Probe + bulk assign/refresh/remove via mock provider."""
+    print_section("Test: probe + bulk provider wrappers with mockprov")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        probe_resp = await client.post(
+            f"{API_BASE}/assets/provider/probe",
+            json={
+                "provider_code": "mockprov",
+                "identifier": "MOCK",
+                "identifier_type": "TICKER",
+                "operations": ["metadata"],
+            },
+            timeout=TIMEOUT,
+        )
+        assert probe_resp.status_code == 200, probe_resp.text
+        probe_data = probe_resp.json()
+        assert probe_data["provider_code"] == "mockprov"
+        assert probe_data["current_price"] is None
+        assert probe_data["history"] is None
+        assert probe_data["metadata"]["success"] is True
+        assert probe_data["metadata"]["patch_data"] is not None
+        print_success("✓ Probe metadata-only success with mock provider")
+
+        create_resp = await client.post(
+            f"{API_BASE}/assets",
+            json=[
+                FAAssetCreateItem(display_name=f"Prov Wrap 1 {unique_id('PW1')}", currency="USD").model_dump(mode="json"),
+                FAAssetCreateItem(display_name=f"Prov Wrap 2 {unique_id('PW2')}", currency="USD").model_dump(mode="json"),
+            ],
+            timeout=TIMEOUT,
+        )
+        assert create_resp.status_code == 201, create_resp.text
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset_ids = [result.asset_id for result in create_data.results]
+
+        assign_resp = await client.post(
+            f"{API_BASE}/assets/provider",
+            json=[
+                FAProviderAssignmentItem(
+                    asset_id=asset_ids[0],
+                    provider_code="mockprov",
+                    identifier="MOCK_A",
+                    identifier_type=ProviderInputType.TICKER,
+                    provider_params=None,
+                ).model_dump(mode="json"),
+                FAProviderAssignmentItem(
+                    asset_id=asset_ids[1],
+                    provider_code="mockprov",
+                    identifier="MOCK_B",
+                    identifier_type=ProviderInputType.TICKER,
+                    provider_params=None,
+                ).model_dump(mode="json"),
+            ],
+            timeout=TIMEOUT,
+        )
+        assert assign_resp.status_code == 200, assign_resp.text
+        assign_data = FABulkAssignResponse(**assign_resp.json())
+        assert assign_data.success_count == 2
+
+        refresh_resp = await client.post(
+            f"{API_BASE}/assets/provider/refresh",
+            params=[("asset_ids", str(asset_id)) for asset_id in asset_ids],
+            timeout=TIMEOUT,
+        )
+        assert refresh_resp.status_code == 200, refresh_resp.text
+        refresh_data = refresh_resp.json()
+        assert refresh_data["success_count"] == 2
+        for item in refresh_data["results"]:
+            assert item["success"] is True
+            assert item["fields_detail"]["refreshed_fields"]
+        print_success("✓ Bulk provider refresh returned refreshed fields")
+
+        remove_resp = await client.delete(
+            f"{API_BASE}/assets/provider",
+            params=[("asset_ids", str(asset_id)) for asset_id in asset_ids],
+            timeout=TIMEOUT,
+        )
+        assert remove_resp.status_code == 200, remove_resp.text
+        remove_data = remove_resp.json()
+        assert remove_data["success_count"] == 2
+        print_success("✓ Bulk provider removal succeeded")

@@ -15,7 +15,9 @@ from typing import Optional
 
 import httpx
 import pytest
+from fastapi import HTTPException
 
+import backend.app.api.v1.transactions as transactions_api
 from backend.app.config import get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
@@ -950,3 +952,53 @@ class TestPromoteSuggest:
             data = resp.json()
             assert "-1" in data["results"], f"Expected key '-1' in results: {data['results'].keys()}"
             print_success("Suggest fake ID → keyed by -1 ✓")
+
+    async def test_suggest_direct_calls_service(self, monkeypatch: pytest.MonkeyPatch):
+        """Happy path: route delegates to TransactionService.promote_suggest_bulk."""
+        print_section("B3.6a — Suggest direct happy path")
+
+        captured: dict = {}
+
+        async def fake_promote_suggest_bulk(self, inputs, tolerance_days, user_id):
+            captured["inputs"] = inputs
+            captured["tolerance_days"] = tolerance_days
+            captured["user_id"] = user_id
+            return {"results": {"-1": []}}
+
+        monkeypatch.setattr(
+            transactions_api,
+            "TransactionService",
+            type(
+                "FakeTransactionService",
+                (),
+                {"__init__": lambda self, session: None, "promote_suggest_bulk": fake_promote_suggest_bulk},
+            ),
+        )
+
+        result = await transactions_api.promote_suggest(
+            inputs=["input"],
+            tolerance_days=7,
+            session=object(),
+            current_user=type("U", (), {"id": 1})(),
+        )
+
+        assert result == {"results": {"-1": []}}
+        assert captured["inputs"] == ["input"]
+        assert captured["tolerance_days"] == 7
+        assert captured["user_id"] == 1
+        print_success("Suggest direct happy path delegated to service ✓")
+
+    async def test_suggest_rejects_more_than_500_inputs(self):
+        """>500 inputs in raw list body → explicit route guard → 422."""
+        print_section("B3.7 — Suggest rejects >500 inputs")
+        with pytest.raises(HTTPException) as exc_info:
+            await transactions_api.promote_suggest(
+                inputs=[object()] * 501,
+                tolerance_days=7,
+                session=object(),
+                current_user=type("U", (), {"id": 1})(),
+            )
+
+        assert exc_info.value.status_code == 422
+        assert exc_info.value.detail == "Max 500 inputs per call"
+        print_success("Suggest rejects >500 inputs with 422 ✓")

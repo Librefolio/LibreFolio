@@ -41,6 +41,14 @@ def test_get_model_column_precision_transaction():
         assert scale == 6, f"{column}: expected scale 6, got {scale}"
 
 
+def test_get_model_column_precision_price_history_volume():
+    """Test getting precision from integer-like numeric columns."""
+    precision, scale = get_model_column_precision(PriceHistory, "volume")
+
+    assert precision == 24
+    assert scale == 0
+
+
 def test_get_model_column_precision_invalid_column():
     """Test error when column doesn't exist."""
     with pytest.raises(ValueError, match="Column 'invalid' not found"):
@@ -170,6 +178,14 @@ def test_parse_decimal_value_from_float():
     value = 123.456
     result = parse_decimal_value(value)
     assert isinstance(result, Decimal)
+    assert result == Decimal("123.456")
+
+
+def test_parse_decimal_value_from_negative_string():
+    """Test parsing signed string values to Decimal."""
+    result = parse_decimal_value("-0.125")
+
+    assert result == Decimal("-0.125")
 
 
 def test_parse_decimal_value_none():

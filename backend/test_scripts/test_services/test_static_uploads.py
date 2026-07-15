@@ -5,6 +5,8 @@ Tests the static uploads service layer including file persistence,
 metadata sidecar, security checks, cache invalidation, and user filtering.
 """
 
+import json
+import shutil
 import sys
 
 import pytest
@@ -18,13 +20,15 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-import shutil
-
+import backend.app.services.static_uploads as static_uploads
 from backend.app.services.static_uploads import (
     UploadSecurityError,
+    _detect_actual_mime_type,
+    _load_metadata,
     delete_upload,
     get_upload_by_user,
     get_upload_info,
+    get_upload_mime_type,
     get_upload_path,
     get_uploads_dir,
     list_uploads,
@@ -144,6 +148,45 @@ class TestGetUploadInfo:
         info = get_upload_info(saved.id)
         assert info is None
         print_success("None when actual file is missing")
+
+
+# ============================================================================
+# _load_metadata / get_upload_mime_type
+# ============================================================================
+
+
+class TestUploadMetadataHelpers:
+    """Tests for metadata helper functions."""
+
+    def test_load_metadata_uses_cache_after_first_read(self):
+        """Cached metadata remains available after sidecar removal."""
+        print_section("_load_metadata: cache hit after first read")
+        saved = save_upload(SAMPLE_CONTENT, "cached.txt", user_id=1)
+        first = _load_metadata(saved.id)
+        assert first is not None
+
+        meta_path = get_uploads_dir() / f"{saved.id}.json"
+        meta_path.unlink()
+
+        second = _load_metadata(saved.id)
+        assert second == first
+        print_success("Metadata served from cache")
+
+    def test_get_upload_mime_type_defaults_when_key_missing(self):
+        """Missing mime_type key falls back to octet-stream."""
+        print_section("get_upload_mime_type: default fallback")
+        saved = save_upload(SAMPLE_CONTENT, "fallback.txt", user_id=1)
+        uploads_dir = get_uploads_dir()
+        meta_path = uploads_dir / f"{saved.id}.json"
+
+        metadata = json.loads(meta_path.read_text())
+        metadata.pop("mime_type", None)
+        meta_path.write_text(json.dumps(metadata))
+        static_uploads._upload_meta_cache.delete(saved.id)
+
+        mime = get_upload_mime_type(saved.id)
+        assert mime == "application/octet-stream"
+        print_success("Missing mime_type → octet-stream")
 
 
 # ============================================================================
@@ -369,3 +412,66 @@ class TestValidateUploadSecurity:
         mime = validate_upload_security(b"", "empty.txt")
         assert mime is not None
         print_success(f"Empty → {mime}")
+
+
+class TestValidateUploadSecurityDetectedMime:
+    """Tests for validate_upload_security() when MIME detection succeeds."""
+
+    def test_detect_actual_mime_type_with_magic(self, monkeypatch):
+        """magic.from_buffer result is returned when library available."""
+        print_section("_detect_actual_mime_type: magic branch")
+
+        class _FakeMagic:
+            @staticmethod
+            def from_buffer(_content: bytes, mime: bool = True) -> str:
+                assert mime is True
+                return "text/plain"
+
+        monkeypatch.setattr(static_uploads, "MAGIC_AVAILABLE", True)
+        monkeypatch.setattr(static_uploads, "magic", _FakeMagic, raising=False)
+
+        mime = _detect_actual_mime_type(b"hello")
+        assert mime == "text/plain"
+        print_success("magic branch returned detected MIME")
+
+    def test_declared_mime_exact_match_uses_detected_value(self, monkeypatch):
+        """Detected MIME wins when client declaration matches actual base type."""
+        print_section("validate_upload_security: exact detected MIME match")
+        monkeypatch.setattr(static_uploads, "_detect_actual_mime_type", lambda _content: "text/plain")
+
+        mime = validate_upload_security(
+            b"hello world",
+            "report.txt",
+            declared_mime_type="text/plain; charset=utf-8",
+        )
+
+        assert mime == "text/plain"
+        print_success("Exact detected MIME accepted")
+
+    def test_declared_mime_text_family_variation_allowed(self, monkeypatch):
+        """Different text/* declarations are accepted for detected text payloads."""
+        print_section("validate_upload_security: text family variation")
+        monkeypatch.setattr(static_uploads, "_detect_actual_mime_type", lambda _content: "text/plain")
+
+        mime = validate_upload_security(
+            b"col1,col2\n1,2\n",
+            "report.csv",
+            declared_mime_type="text/csv",
+        )
+
+        assert mime == "text/plain"
+        print_success("text/* variation accepted")
+
+    def test_declared_octet_stream_uses_detected_mime(self, monkeypatch):
+        """Generic client MIME falls back to detected MIME."""
+        print_section("validate_upload_security: octet-stream with detected MIME")
+        monkeypatch.setattr(static_uploads, "_detect_actual_mime_type", lambda _content: "application/pdf")
+
+        mime = validate_upload_security(
+            b"%PDF-1.4\n",
+            "report.pdf",
+            declared_mime_type="application/octet-stream",
+        )
+
+        assert mime == "application/pdf"
+        print_success("Detected MIME used for octet-stream declaration")

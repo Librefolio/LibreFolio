@@ -15,11 +15,14 @@ Reference: backend/app/api/v1/transactions.py
 
 import uuid
 from datetime import date, timedelta
+from decimal import Decimal
+from types import SimpleNamespace
 from typing import Optional
 
 import httpx
 import pytest
 
+import backend.app.api.v1.transactions as transactions_api
 from backend.app.config import get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success
@@ -472,6 +475,107 @@ async def test_get_transactions_with_filters(test_server, test_broker_id):
 
 
 @pytest.mark.asyncio
+async def test_get_transactions_with_date_range_and_abs_amount_filters(monkeypatch: pytest.MonkeyPatch):
+    """TX-A-011b: query_transactions builds date range and ABS(amount) filters."""
+    print_section("Test TX-A-011b: GET /transactions - date range + abs amount")
+
+    captured: dict = {}
+
+    async def fake_query(self, params, user_id):
+        captured["params"] = params
+        captured["user_id"] = user_id
+        return ["ok"]
+
+    monkeypatch.setattr(transactions_api, "parse_ISO_date", lambda value: value)
+    monkeypatch.setattr(
+        transactions_api,
+        "TransactionService",
+        type("FakeTransactionService", (), {"__init__": lambda self, session: None, "query": fake_query}),
+    )
+
+    result = await transactions_api.query_transactions(
+        broker_id=17,
+        asset_id=None,
+        types=None,
+        date_start="2026-02-05",
+        date_end="2026-02-15",
+        tags=None,
+        currency="EUR",
+        ids=None,
+        limit=None,
+        offset=0,
+        amount_abs_min=Decimal("150"),
+        amount_abs_max=Decimal("250"),
+        only_unlinked=False,
+        exclude_ids=None,
+        session=object(),
+        current_user=SimpleNamespace(id=7),
+    )
+
+    assert result == ["ok"]
+    assert captured["user_id"] == 7
+    assert captured["params"].broker_id == 17
+    assert captured["params"].date_range.start == date(2026, 2, 5)
+    assert captured["params"].date_range.end == date(2026, 2, 15)
+    assert captured["params"].currency == "EUR"
+    assert captured["params"].amount_abs_min == Decimal("150")
+    assert captured["params"].amount_abs_max == Decimal("250")
+
+    print_success("✓ Date range + ABS(amount) filters mapped into TXQueryParams")
+
+
+@pytest.mark.asyncio
+async def test_get_transactions_with_date_start_only_and_unlinked_exclusion(monkeypatch: pytest.MonkeyPatch):
+    """TX-A-011c: query_transactions handles date_start-only, only_unlinked, exclude_ids."""
+    print_section("Test TX-A-011c: GET /transactions - date_start + only_unlinked + exclude_ids")
+
+    captured: dict = {}
+
+    async def fake_query(self, params, user_id):
+        captured["params"] = params
+        captured["user_id"] = user_id
+        return []
+
+    monkeypatch.setattr(transactions_api, "parse_ISO_date", lambda value: value)
+    monkeypatch.setattr(
+        transactions_api,
+        "TransactionService",
+        type("FakeTransactionService", (), {"__init__": lambda self, session: None, "query": fake_query}),
+    )
+
+    result = await transactions_api.query_transactions(
+        broker_id=23,
+        asset_id=None,
+        types=None,
+        date_start="2026-03-02",
+        date_end=None,
+        tags=None,
+        currency=None,
+        ids=None,
+        limit=10,
+        offset=4,
+        amount_abs_min=None,
+        amount_abs_max=None,
+        only_unlinked=True,
+        exclude_ids=[101, 102],
+        session=object(),
+        current_user=SimpleNamespace(id=9),
+    )
+
+    assert result == []
+    assert captured["user_id"] == 9
+    assert captured["params"].broker_id == 23
+    assert captured["params"].date_range.start == date(2026, 3, 2)
+    assert captured["params"].date_range.end is None
+    assert captured["params"].only_unlinked is True
+    assert captured["params"].exclude_ids == [101, 102]
+    assert captured["params"].limit == 10
+    assert captured["params"].offset == 4
+
+    print_success("✓ date_start-only + only_unlinked + exclude_ids mapped into TXQueryParams")
+
+
+@pytest.mark.asyncio
 async def test_get_transactions_pagination(test_server, test_broker_id):
     """TX-A-012: GET /transactions with pagination."""
     print_section("Test TX-A-012: GET /transactions - pagination")
@@ -686,6 +790,21 @@ async def test_get_transaction_types(test_server):
             assert "compatible_tx_types" in item
 
         print_success(f"✓ Got {len(tx_types)} transaction types, {len(ev_types)} event types")
+
+
+@pytest.mark.asyncio
+async def test_get_transaction_types_direct():
+    """TX-A-015b: get_transaction_types direct call returns both metadata lists."""
+    print_section("Test TX-A-015b: GET /transactions/types direct")
+
+    result = await transactions_api.get_transaction_types(_current_user=SimpleNamespace(id=1))
+
+    assert len(result.transaction_types) > 0
+    assert len(result.event_types) > 0
+    assert any(item.code == "BUY" for item in result.transaction_types)
+    assert any(item.code == "DIVIDEND" for item in result.event_types)
+
+    print_success("✓ Direct get_transaction_types call returned metadata")
 
 
 # ============================================================================
