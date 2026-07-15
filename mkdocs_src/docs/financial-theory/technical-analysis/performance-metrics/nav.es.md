@@ -1,10 +1,10 @@
 # 💼 Valor Liquidativo (NAV) / Patrimonio Neto
 
-*[⬅️ Volver a la descripción general de métricas de rendimiento](index.md)*
+*[⬅️ Volver a la Descripción General de Métricas de Rendimiento](index.md)*
 
 ## 💡 ¿Qué es el NAV?
 
-**Net Asset Value (NAV)** es la valoración total de mercado de su cartera en un momento dado $t$. Responde a: *"¿Cuánto vale la cartera en este momento?"*
+**Valor Liquidativo (NAV)** es la valoración total de mercado de tu cartera en un momento $t$. Responde a: *"¿Cuánto vale la cartera ahora mismo?"*
 
 ---
 
@@ -16,26 +16,26 @@ $$
 
 Donde $\mathrm{MV}(t) = \sum_{(a,b) \in S} q(a,b,t) \cdot p(a,t) \cdot \mathrm{fx}(\mathrm{ccy}_p, C^*, t)$
 
-🔗 Consulte **[Portfolio Engine — §5 Agregación de Cartera](portfolio-engine.md#5-portfolio-aggregation)** para ver la derivación completa.
+🔗 Consulta **[Portfolio Engine — §5 Aggregation](portfolio-engine.md#5-portfolio-aggregation)** para la derivación completa.
 
 ---
 
 ## 🔗 Cadena de Precios de Valoración {: #valuation-price-chain }
 
-El precio $p(a,t)$ sigue una prioridad estricta:
+El precio $p(a,t)$ sigue una jerarquía estricta:
 
-1. **Precio de mercado** — Relleno hacia atrás (backward-fill) de PriceHistory (el más reciente $\leq t$)
-2. **Último precio de compra** — precio unitario de la compra (COMPRA) más reciente de $V(u)$ (todos los brókers visibles)
-3. **Ausente** — la posición se excluye del NAV
+1. **Precio de mercado** — PriceHistory con relleno hacia atrás (último $\leq t$)
+2. **Último precio de compra** — precio unitario de COMPRA más reciente de $V(u)$ (todos los brókers visibles)
+3. **Falta** — posición excluida del NAV
 
-El PMP **nunca** se utiliza para la valoración. Consulte **[Portfolio Engine — §2](portfolio-engine.md#2-valuation-price)**.
+El **PMP** *nunca* se usa para valoración. Consulta **[Portfolio Engine — §2](portfolio-engine.md#2-valuation-price)**.
 
 ---
 
 ## 📝 Ejemplo
 
 | Componente | Cantidad |
-|-----------|--------|
+|------------|----------|
 | Valor de Mercado de Activos | €32,759 |
 | Saldo de Efectivo | €631 |
 | En Tránsito | €0 |
@@ -48,15 +48,15 @@ $$
 
 ## ⚖️ Distinciones Clave
 
-- **NAV vs [Book Value](book-value.md)**: NAV = valor de mercado; Book = coste de adquisición. Diferencia = plusvalías no realizadas.
-- **NAV vs [Period PnL](period-pnl.md)**: NAV = instantánea; Period PnL = cambio ajustado por flujos a lo largo del tiempo.
+- **NAV vs [Valor Contable](book-value.md)**: NAV = valor de mercado; valor contable = costo de adquisición. Diferencia = ganancias no realizadas.
+- **NAV vs [PnL del Período](period-pnl.md)**: NAV = instantánea; PnL del Período = cambio ajustado por flujo a lo largo del tiempo.
 
 ---
 
-## ⚠️ Calidad de los Datos
+## ⚠️ Calidad de Datos
 
 | Fuente de Valoración | Confianza |
-|-----------------|------------|
+|----------------------|-----------|
 | `MARKET_PRICE` | Completa — PriceHistory disponible |
-| `LAST_BUY_PRICE` | Parcial — utilizando precio de transacción |
-| `MISSING` | Nula — excluido del NAV |
+| `LAST_BUY_PRICE` | Parcial — usando precio de transacción |
+| `MISSING` | Ninguna — excluida del NAV |

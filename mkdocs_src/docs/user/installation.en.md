@@ -161,7 +161,7 @@ If you cannot access LibreFolio from other devices on the local network, you may
 #### 🌐 Remote Access
 To access LibreFolio securely when you are away from home (outside the local network), you are free to configure your preferred solution (such as a reverse proxy with an SSL certificate).
 
-However, for maximum simplicity and security without opening ports on your router, **we recommend using Tailscale**. You can find all the details and a step-by-step guide on the [Exposure with Tailscale](../admin/tailscale_exposure.md) page.
+However, for maximum simplicity and security without opening ports on your router, **we recommend using Tailscale**. You can find all the details and a step-by-step guide on the [Exposure with Tailscale](../admin/service_exposure.md) page.
 
 ---
 

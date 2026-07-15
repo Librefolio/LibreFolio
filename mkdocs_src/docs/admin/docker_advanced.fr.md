@@ -295,7 +295,7 @@ services:
 
 Il est fortement recommandé d'exposer LibreFolio de manière sécurisée en utilisant **Tailscale** (le choix recommandé et le plus simple) ou derrière un proxy inverse classique comme **Nginx** ou **Traefik**.
 
-*   **Tailscale (Choix Recommandé)** : Vous permet d'exposer LibreFolio en toute sécurité avec du HTTPS automatique, sans ouvrir de ports sur le routeur ni configurer d'enregistrements DNS publics. Voir le guide détaillé sur **[Exposition avec Tailscale](tailscale_exposure.md)**.
+*   **Tailscale (Choix Recommandé)** : Vous permet d'exposer LibreFolio en toute sécurité avec du HTTPS automatique, sans ouvrir de ports sur le routeur ni configurer d'enregistrements DNS publics. Voir le guide détaillé sur **[Exposition avec Tailscale](service_exposure.md)**.
 *   **Proxy Inverse Classique (Nginx/Traefik)** : Utile si vous disposez déjà d'une infrastructure web existante ou souhaitez :
     - 🔐 Gérer des certificats SSL/TLS personnalisés pour le HTTPS.
     - 🖥️ Héberger plusieurs applications sur le même serveur.

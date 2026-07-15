@@ -11,6 +11,7 @@ The **Info** tab houses metadata configuration, safety controls, the scoped AI E
 ## ⚙️ Metadata & Settings
 
 The left column of the Info tab displays key properties and validation rules for this broker:
+
 - **Broker Status**: Shows whether the account is currently `Active`. Inactive brokers are hidden from list drop-downs but their historical values are preserved in charts.
 - **Dates**: Renders when the account was opened and when it was created in LibreFolio.
 - **Base Currency**: The base currency of the account (all transactions and valuations are internally converted using historical FX rates to this currency for local reporting).
@@ -24,6 +25,7 @@ The left column of the Info tab displays key properties and validation rules for
 At the top right of the broker toolbar, the **AI Export** (:material-brain:) button copies a structured text representation of the broker's current state to your clipboard.
 
 This export is **scoped specifically to this broker** (unlike the main dashboard button which copies data for the entire portfolio). It aggregates:
+
 - Local cash balances.
 - Local asset holdings and quantities.
 - Active allocation weights.
@@ -35,6 +37,7 @@ You can paste this structured prompt directly into your preferred LLM (like Gemi
 ## 🤝 Access Sharing Panel
 
 The right column of the Info tab houses the inline **Broker Sharing** manager. Here you can:
+
 - Invite other users by their email or username.
 - Define their role permission (Owner, Editor, Viewer).
 - Configure ownership percentages.

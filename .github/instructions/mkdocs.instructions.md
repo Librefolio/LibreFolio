@@ -59,6 +59,24 @@ Then use the agent to fix reported differences (missing headings, broken links, 
     Content indented 4 spaces.
 ```
 
+### Content Tabs — Mandatory 4-space indentation
+
+**CRITICAL**: Content under `=== "Tab Title"` must ALWAYS be indented by exactly **4 spaces** (including inner code blocks and lists). The translation pipeline can sometimes alter this to 1 space in local translations, which breaks the tab container rendering and displays tabs sequentially (one below the other). Ensure all languages maintain the 4-space base indentation.
+
+```markdown
+=== "Linux"
+
+    Content indented 4 spaces.
+
+    ```bash
+    curl -fsSL https://tailscale.com/install.sh | sh
+    ```
+
+=== "macOS"
+
+    Content indented 4 spaces.
+```
+
 ### Tone — Three registers
 
 | Area | Audience | Register |

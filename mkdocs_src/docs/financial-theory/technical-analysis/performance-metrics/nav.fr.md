@@ -1,10 +1,10 @@
-# 💼 Valeur Liquidative (NAV) / Patrimoine Net
+# 💼 Valeur Nette d'Actif (NAV) / Valeur Nette
 
-*[⬅️ Retour à l'aperçu des indicateurs de performance](index.md)*
+*[⬅️ Retour vers l'aperçu des métriques de performance](index.md)*
 
 ## 💡 Qu'est-ce que la NAV ?
 
-La **Valeur Liquidative (NAV - Net Asset Value)** est la valorisation totale du marché de votre portefeuille à un instant $t$. Elle répond à la question : *"Combien vaut le portefeuille en ce moment ?"*
+**La Valeur Nette d'Actif (NAV)** est la valorisation totale de votre portefeuille sur le marché à un instant $t$. Elle répond à la question : *"Combien vaut le portefeuille actuellement ?"*
 
 ---
 
@@ -16,7 +16,7 @@ $$
 
 Où $\mathrm{MV}(t) = \sum_{(a,b) \in S} q(a,b,t) \cdot p(a,t) \cdot \mathrm{fx}(\mathrm{ccy}_p, C^*, t)$
 
-🔗 Voir **[Portfolio Engine — §5 Agrégation du Portefeuille](portfolio-engine.md#5-portfolio-aggregation)** pour la dérivation complète.
+🔗 Voir **[Portfolio Engine — §5 Aggregation](portfolio-engine.md#5-portfolio-aggregation)** pour la démonstration complète.
 
 ---
 
@@ -24,9 +24,9 @@ Où $\mathrm{MV}(t) = \sum_{(a,b) \in S} q(a,b,t) \cdot p(a,t) \cdot \mathrm{fx}
 
 Le prix $p(a,t)$ suit une priorité stricte :
 
-1. **Prix du marché** — Backward-fill de PriceHistory (le plus récent $\leq t$)
-2. **Dernier prix d'achat** — prix unitaire d'achat (ACHAT) le plus récent provenant de $V(u)$ (tous les courtiers visibles)
-3. **Manquant** — la position est exclue de la NAV
+1. **Prix de marché** — Remplissage rétroactif de PriceHistory (dernier $\leq t$)
+2. **Dernier prix d'achat** — prix unitaire BUY le plus récent issu de $V(u)$ (tous les courtiers visibles)
+3. **Manquant** — position exclue de la NAV
 
 Le PMP n'est **jamais** utilisé pour la valorisation. Voir **[Portfolio Engine — §2](portfolio-engine.md#2-valuation-price)**.
 
@@ -35,10 +35,10 @@ Le PMP n'est **jamais** utilisé pour la valorisation. Voir **[Portfolio Engine 
 ## 📝 Exemple
 
 | Composant | Montant |
-|-----------|--------|
-| Valeur de marché des actifs | 32 759 € |
+|-----------|---------|
+| Valeur de marché des actifs | 32 759 € |
 | Solde de trésorerie | 631 € |
-| En cours de transfert | 0 € |
+| En transit | 0 € |
 
 $$
 \mathrm{NAV} = 32\,759 + 631 + 0 = 33\,390 \text{ EUR}
@@ -48,8 +48,8 @@ $$
 
 ## ⚖️ Distinctions clés
 
-- **NAV vs [Valeur Comptable (Book Value)](book-value.md)** : NAV = valeur de marché ; Book = coût d'acquisition. Différence = plus-values latentes.
-- **NAV vs [PnL de période](period-pnl.md)** : NAV = instantané ; PnL de période = variation ajustée des flux au fil du temps.
+- **NAV vs [Valeur Comptable](book-value.md)** : NAV = valeur de marché ; Valeur comptable = coût d'acquisition. La différence = plus-values latentes.
+- **NAV vs [PnL de Période](period-pnl.md)** : NAV = instantané ; PnL de Période = variation ajustée des flux dans le temps.
 
 ---
 
@@ -58,5 +58,5 @@ $$
 | Source de valorisation | Confiance |
 |-----------------|------------|
 | `MARKET_PRICE` | Totale — PriceHistory disponible |
-| `LAST_BUY_PRICE` | Partielle — utilise le prix de transaction |
-| `MISSING` | Nulle — exclue de la NAV |
+| `LAST_BUY_PRICE` | Partielle — utilisation du prix de transaction |
+| `MISSING` | Aucune — exclu de la NAV |

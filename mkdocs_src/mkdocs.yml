@@ -84,7 +84,7 @@ plugins:
             Install as App (PWA): Installa come App (PWA)
             "🏦 Brokers": "🏦 Broker"
             Broker Sharing: Condivisione Broker
-            Import Statement (BRIM): Importazione Estratto Conto (BRIM)
+            Broker Transactions: Transazioni del broker
             Configuration & Info: Configurazione & Info
             "📁 Files": "📁 File"
             "💱 FX Rates": "💱 Tassi di Cambio"
@@ -231,7 +231,7 @@ plugins:
             Install as App (PWA): Installer comme App (PWA)
             "🏦 Brokers": "🏦 Courtiers"
             Broker Sharing: Partage de Courtier
-            Import Statement (BRIM): Importer un Relevé (BRIM)
+            Broker Transactions: Transactions du broker
             Configuration & Info: Configuration & Info
             "📁 Files": "📁 Fichiers"
             "💱 FX Rates": "💱 Taux de Change"
@@ -378,7 +378,7 @@ plugins:
             Install as App (PWA): Instalar como App (PWA)
             "🏦 Brokers": "🏦 Brokers"
             Broker Sharing: Compartir Broker
-            Import Statement (BRIM): Importar Extracto (BRIM)
+            Broker Transactions: Transacciones del bróker
             Configuration & Info: Configuración e Info
             "📁 Files": "📁 Archivos"
             "💱 FX Rates": "💱 Tipos de Cambio"
@@ -544,7 +544,7 @@ nav:
           - Positions & Analysis: user/dashboard/positions.md
       - 🏦 Brokers:
           - Overview: user/brokers/index.md
-          - Import Statement (BRIM): user/brokers/import.md
+          - Broker Transactions: user/brokers/import.md
           - Configuration & Info: user/brokers/info.md
           - Broker Sharing: user/brokers/sharing.md
       - 💸 Transactions:
@@ -613,7 +613,7 @@ nav:
       - 🐳 Deployment & Exposure:
           - Host Installation: admin/host_installation.md
           - Advanced Docker: admin/docker_advanced.md
-          - Expose Securely: admin/tailscale_exposure.md
+          - Expose Securely: admin/service_exposure.md
       - ⚙️ System Configuration:
           - Environment Variables: admin/configuration.md
           - Global Settings: admin/settings.md

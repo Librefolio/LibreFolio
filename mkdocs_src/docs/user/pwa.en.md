@@ -87,7 +87,7 @@ LibreFolio can be installed as a **Progressive Web App (PWA)** on your device. T
 
     If you open LibreFolio over plain HTTP on your local network (for example, `http://192.168.1.100:6040`), PWA installation will not be available and the app cannot run in standalone mode.
 
-    You can choose any method you prefer to enable HTTPS on your instance, but we strongly recommend our simple, free guide: **[Tailscale Exposure Guide](../admin/tailscale_exposure.md)**. It gives you a secure HTTPS URL without configuring SSL certificates or opening router ports.
+    You can choose any method you prefer to enable HTTPS on your instance, but we strongly recommend our simple, free guide: **[Tailscale Exposure Guide](../admin/service_exposure.md)**. It gives you a secure HTTPS URL without configuring SSL certificates or opening router ports.
 
 ---
 
