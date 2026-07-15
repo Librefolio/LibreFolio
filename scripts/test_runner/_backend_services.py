@@ -325,6 +325,14 @@ def services_config_misc(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "Config helper tests", verbose=verbose)
 
 
+def services_donation_popup(verbose: bool = False, test_names: list = None) -> bool:
+    """Test donation-popup trigger decision logic (should_show_donation_popup, record_login_and_maybe_show_popup)."""
+    print_section("Services: Donation Popup")
+    print_info("Testing: backend/app/services/donation_popup_service.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_donation_popup_service.py", test_names)
+    return run_command(cmd, "Donation popup service tests", verbose=verbose)
+
+
 def services_date_sentinel(verbose: bool = False, test_names: list = None) -> bool:
     """Test date sentinel resolution (min/max/passthrough, broker filter)."""
     print_section("Services: Date Sentinel Resolution")
@@ -446,6 +454,7 @@ Note: No backend server required.
     add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
     add_test(cat, "scheduler-loop", services_scheduler_loop, name="Scheduler Loop Integration", desc="due_* + state roundtrip, no real loop")
     add_test(cat, "config-misc", services_config_misc, name="Config Helpers", desc="get_data_dir test-mode/env-override branches")
+    add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
     add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")
     add_test(cat, "fx-sync-service", services_fx_sync, name="FX Sync Orchestration", desc="_is_date_within_sync_range, _process_route/_compute_multi_step")

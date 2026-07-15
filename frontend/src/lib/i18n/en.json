@@ -1781,5 +1781,11 @@
             "title": "Delete files",
             "message": "Delete {n} file(s)? This action cannot be undone."
         }
+    },
+    "donationPopup": {
+        "title": "LibreFolio grows thanks to users like you!",
+        "message": "If you enjoy the project and use it regularly, consider a small donation to support its development.",
+        "laterButton": "Maybe later",
+        "donationNote": "☕ Even the price of a coffee can make a difference."
     }
 }

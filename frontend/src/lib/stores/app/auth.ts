@@ -15,6 +15,7 @@ import type {AuthState, AuthUser} from '$lib/types';
 import {isAxiosError} from 'axios';
 import {currentLanguage} from '$lib/stores/app/language';
 import {userSettings} from '$lib/stores/app/settings';
+import {donationPopup} from '$lib/stores/app/donationPopupStore.svelte';
 
 // Re-export types for backward compatibility
 export type {AuthUser, AuthState} from '$lib/types';
@@ -78,6 +79,13 @@ function createAuthStore() {
                     // Cache settings to localStorage for userSettings store
                     // Bug 2 fix: Also update the store directly so it's available immediately
                     userSettings.setDirect(settings);
+                }
+
+                // Ephemeral signal from the backend: show the "support LibreFolio" popup
+                // for this login only (see donation_popup_service.py for the trigger rules).
+                if (response.show_donation_popup) {
+                    debug.log('AuthStore', 'Triggering donation popup');
+                    donationPopup.trigger();
                 }
 
                 return true;

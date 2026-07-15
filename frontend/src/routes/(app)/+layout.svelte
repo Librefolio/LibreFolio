@@ -9,11 +9,13 @@
     import {auth, isAuthenticated, isAuthInitialized} from '$lib/stores/app/auth';
     import {userSettings} from '$lib/stores/app/settings';
     import {globalSettings} from '$lib/stores/app/globalSettings';
-    import {debug} from '$lib/debug';
+    import {debug, isDebugEnabled} from '$lib/debug';
     import {getUserStorage} from '$lib/utils/storage';
     import Sidebar from '$lib/components/layout/Sidebar.svelte';
     import Header from '$lib/components/layout/Header.svelte';
     import ToastContainer from '$lib/components/ui/feedback/ToastContainer.svelte';
+    import DonationPopupModal from '$lib/components/auth/DonationPopupModal.svelte';
+    import {donationPopup} from '$lib/stores/app/donationPopupStore.svelte';
 
     // Sidebar state for mobile
     let sidebarOpen = false;
@@ -44,6 +46,17 @@
         if (browser) {
             const saved = getUserStorage('sidebar-collapsed', 'false');
             sidebarCollapsed = saved === 'true';
+        }
+
+        // Debug-only console command to force the donation popup open, without needing
+        // 50 real logins. Not shipped in production builds (see $lib/debug).
+        //   window.librefolioDebug.showDonationPopup()
+        if (browser && isDebugEnabled()) {
+            window.librefolioDebug = {
+                ...window.librefolioDebug,
+                showDonationPopup: () => donationPopup.forceShow(),
+            };
+            debug.log('AppLayout', 'Registered window.librefolioDebug.showDonationPopup()');
         }
 
         // Check authentication with timeout
@@ -113,6 +126,7 @@
         </div>
     </div>
     <ToastContainer />
+    <DonationPopupModal />
 {:else}
     <!-- Loading while checking auth -->
     <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900">

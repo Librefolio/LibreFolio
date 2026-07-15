@@ -31,14 +31,17 @@ def upgrade() -> None:
     print("📦 Creating table: users...")
     conn.execute(sa.text("""CREATE TABLE users
                (
-                   id              INTEGER PRIMARY KEY,
-                   username        VARCHAR(50) NOT NULL UNIQUE,
-                   email           VARCHAR     NOT NULL UNIQUE,
-                   hashed_password VARCHAR     NOT NULL,
-                   is_active       BOOLEAN     NOT NULL DEFAULT 1,
-                   is_superuser    BOOLEAN     NOT NULL DEFAULT 0,
-                   created_at      DATETIME    NOT NULL,
-                   updated_at      DATETIME    NOT NULL
+                   id                                 INTEGER PRIMARY KEY,
+                   username                           VARCHAR(50) NOT NULL UNIQUE,
+                   email                              VARCHAR     NOT NULL UNIQUE,
+                   hashed_password                    VARCHAR     NOT NULL,
+                   is_active                          BOOLEAN     NOT NULL DEFAULT 1,
+                   is_superuser                       BOOLEAN     NOT NULL DEFAULT 0,
+                   login_count                        INTEGER     NOT NULL DEFAULT 0,
+                   donation_popup_last_shown_at       DATETIME             DEFAULT NULL,
+                   donation_popup_logins_since_shown  INTEGER     NOT NULL DEFAULT 0,
+                   created_at                         DATETIME    NOT NULL,
+                   updated_at                         DATETIME    NOT NULL
                )"""))
     print("  ✓ Table created")
     conn.execute(sa.text("CREATE UNIQUE INDEX ix_users_username ON users (username)"))

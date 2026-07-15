@@ -32,6 +32,7 @@ from backend.app.services.auth_service import (
     hash_password,
     verify_password,
 )
+from backend.app.services.donation_popup_service import record_login_and_maybe_show_popup
 from backend.app.services.global_settings_service import get_session_ttl_hours
 
 logger = structlog.get_logger(__name__)
@@ -116,6 +117,12 @@ async def login(
         logger.warning("Login failed: wrong password", username=request.username)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    # Update login/donation-popup counters and decide whether to show the support popup
+    # for this login (see donation_popup_service for the trigger rules).
+    show_donation_popup = record_login_and_maybe_show_popup(user)
+    session.add(user)
+    await session.commit()
+
     # Get session TTL from global settings (with fallback)
     try:
         ttl_hours = await get_session_ttl_hours(session)
@@ -142,7 +149,12 @@ async def login(
     # Get user settings (may be None if never saved)
     user_settings = await settings_service.get_user_settings(user.id, session)
 
-    return AuthLoginResponse(user=AuthUserResponse.model_validate(user), user_settings=user_settings, message="Login successful")
+    return AuthLoginResponse(
+        user=AuthUserResponse.model_validate(user),
+        user_settings=user_settings,
+        message="Login successful",
+        show_donation_popup=show_donation_popup,
+    )
 
 
 @router.post("/logout", response_model=AuthLogoutResponse)

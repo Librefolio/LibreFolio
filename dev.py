@@ -28,6 +28,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 try:
     import argcomplete
@@ -248,6 +249,9 @@ def cmd_server(args):
     env = os.environ.copy()
     if test_mode:
         env["LIBREFOLIO_TEST_MODE"] = "1"
+        # Frontend E2E tests (Playwright) log in repeatedly against shared test users —
+        # never let the donation popup signal fire and interfere with test assertions.
+        env["LIBREFOLIO_DISABLE_DONATION_POPUP"] = "1"
     if debug_mode:
         env["LIBREFOLIO_LOG_LEVEL"] = "DEBUG"
     if no_scheduler:
@@ -491,6 +495,11 @@ def cmd_fe_build(args):
         result = run_command_live(["npm", "run", "build"], cwd=PROJECT_ROOT / "frontend")
 
     if result == 0:
+        # Record which mode this build was made in, so auto_build_frontend() can detect a
+        # debug/production mismatch later (e.g. `./dev.py server --debug` after a plain
+        # build) even when the build isn't otherwise stale. Not tracked by git (frontend/build
+        # is gitignored).
+        _write_frontend_build_mode_marker(debug=args.debug)
         print_success("Frontend build complete!")
         print(Colors.warning("Output in: frontend/build/"))
     else:
@@ -1602,18 +1611,51 @@ def cmd_install(args):
 # Helper Functions
 # =============================================================================
 
+FRONTEND_BUILD_MODE_MARKER = PROJECT_ROOT / "frontend" / "build" / ".build-debug"
+
+
+def _write_frontend_build_mode_marker(debug: bool) -> None:
+    """Record whether the last frontend build was made in debug mode (see auto_build_frontend)."""
+    try:
+        FRONTEND_BUILD_MODE_MARKER.write_text("1" if debug else "0")
+    except OSError:
+        pass  # non-critical bookkeeping — worst case, next run rebuilds unnecessarily
+
+
+def _read_frontend_build_mode_marker() -> Optional[bool]:
+    """Return whether the last build was a debug build, or None if unknown (e.g. never built)."""
+    try:
+        return FRONTEND_BUILD_MODE_MARKER.read_text().strip() == "1"
+    except OSError:
+        return None
+
+
 def auto_build_frontend(debug=False):
     """
     Auto-build frontend if needed.
     Uses shared logic from cli_base with dev.py's build function.
+
+    Rebuilds when EITHER:
+    - sources changed since the last build (check_frontend_needs_build), OR
+    - the last build's debug-mode doesn't match what's being requested now
+      (e.g. `./dev.py server --debug` after a plain `./dev.py front build` — the bundle would
+      otherwise silently keep serving the old mode even though nothing is "stale").
     """
     from scripts.cli_base import check_frontend_needs_build
 
-    if not check_frontend_needs_build():
+    last_debug = _read_frontend_build_mode_marker()
+    mode_mismatch = last_debug != debug
+
+    if not check_frontend_needs_build() and not mode_mismatch:
         print(Colors.info("ℹ️  Frontend build is up to date"))
         return None
 
-    print(Colors.info("📦 Frontend sources changed, rebuilding..."))
+    if mode_mismatch:
+        last_label = "unknown" if last_debug is None else ("debug" if last_debug else "production")
+        new_label = "debug" if debug else "production"
+        print(Colors.info(f"📦 Frontend was last built in {last_label} mode, rebuilding in {new_label} mode..."))
+    else:
+        print(Colors.info("📦 Frontend sources changed, rebuilding..."))
 
     # Create args object for cmd_fe_build
     class BuildArgs:
