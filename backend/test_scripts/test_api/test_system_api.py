@@ -11,6 +11,7 @@ Covers:
 
 import pytest
 
+import backend.app.api.v1.system as system_module
 from backend.app.api.v1.system import (
     BACKEND_NAME_MAP,
     FRONTEND_NAME_MAP,
@@ -73,6 +74,16 @@ class TestGetBackendDeps:
         deps = get_backend_deps()
         for dep in deps:
             assert dep.version, f"Dependency {dep.name} has no version"
+
+    def test_fallback_display_name_for_unmapped_package(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr(system_module, "parse_pipfile", lambda: ["custom-lib"])
+        monkeypatch.setattr(system_module, "pkg_version", lambda name: "1.2.3")
+
+        deps = get_backend_deps()
+
+        assert len(deps) == 1
+        assert deps[0].name == "Custom Lib"
+        assert deps[0].version == "1.2.3"
 
 
 class TestGetFrontendDeps:

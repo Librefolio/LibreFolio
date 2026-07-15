@@ -27,7 +27,17 @@ setup_test_database()
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetType, Broker, Transaction, TransactionType, User
+from backend.app.db.models import (
+    Asset,
+    AssetType,
+    Broker,
+    BrokerUserAccess,
+    PriceHistory,
+    Transaction,
+    TransactionType,
+    User,
+    UserRole,
+)
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import (
     BRCreateItem,
@@ -276,6 +286,77 @@ class TestGetOperations:
         assert names == sorted(names)
 
     @pytest.mark.asyncio
+    async def test_get_all_as_user_id_all_returns_all_brokers(self, session, test_user):
+        """BR-U-021A: Superuser-style all filter returns every broker."""
+        service = BrokerService(session)
+        other_user = User(
+            username=f"alluser_{utcnow().timestamp()}",
+            email=f"all_{utcnow().timestamp()}@test.com",
+            hashed_password="fakehash",
+            is_active=True,
+            is_superuser=False,
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        session.add(other_user)
+        await session.flush()
+
+        await service.create_bulk([BRCreateItem(name=f"Own Broker {utcnow().timestamp()}")], user_id=test_user.id)
+        await service.create_bulk([BRCreateItem(name=f"Other Broker {utcnow().timestamp()}")], user_id=other_user.id)
+
+        result = await service.get_all(user_id=test_user.id, as_user_id="all")
+
+        names = [broker.name for broker in result.items]
+        assert any(name.startswith("Own Broker ") for name in names)
+        assert any(name.startswith("Other Broker ") for name in names)
+        assert result.inaccessible == []
+
+    @pytest.mark.asyncio
+    async def test_get_all_as_specific_user_with_inaccessible(self, session, test_user):
+        """BR-U-021B: Specific impersonation returns visible + inaccessible brokers."""
+        service = BrokerService(session)
+        other_user = User(
+            username=f"impuser_{utcnow().timestamp()}",
+            email=f"imp_{utcnow().timestamp()}@test.com",
+            hashed_password="fakehash",
+            is_active=True,
+            is_superuser=False,
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        session.add(other_user)
+        await session.flush()
+
+        own_response = await service.create_bulk([BRCreateItem(name=f"Hidden Broker {utcnow().timestamp()}")], user_id=test_user.id)
+        shared_response = await service.create_bulk([BRCreateItem(name=f"Visible Broker {utcnow().timestamp()}")], user_id=test_user.id)
+        shared_broker_id = shared_response.results[0].broker_id
+
+        session.add(
+            BrokerUserAccess(
+                user_id=other_user.id,
+                broker_id=shared_broker_id,
+                role=UserRole.VIEWER,
+                share_percentage=Decimal("0.25"),
+                created_at=utcnow(),
+                updated_at=utcnow(),
+            )
+        )
+        await session.flush()
+
+        result = await service.get_all(
+            user_id=test_user.id,
+            as_user_id=other_user.id,
+            include_inaccessible=True,
+        )
+
+        assert [broker.id for broker in result.items] == [shared_broker_id]
+        assert result.items[0].user_role == UserRole.VIEWER.value
+        assert result.items[0].user_share_percentage == Decimal("0.25")
+        inaccessible_ids = [broker.id for broker in result.inaccessible]
+        assert own_response.results[0].broker_id in inaccessible_ids
+        assert shared_broker_id not in inaccessible_ids
+
+    @pytest.mark.asyncio
     async def test_get_by_id_exists(self, session, test_user):
         """BR-U-022: Get existing broker returns BRReadItem."""
         service = BrokerService(session)
@@ -419,6 +500,90 @@ class TestGetSummary:
         assert holding.quantity == Decimal("30")
         assert holding.total_cost.amount == Decimal("1700")  # 500 + 1200
         assert holding.average_cost_per_unit == Decimal("1700") / Decimal("30")
+
+    @pytest.mark.asyncio
+    async def test_get_summary_impersonated_user_with_price_metrics(self, session, test_user, test_asset):
+        """BR-U-034: Summary includes pricing metrics and impersonated access role."""
+        service = BrokerService(session)
+        tx_service = TransactionService(session)
+        other_user = User(
+            username=f"summaryuser_{utcnow().timestamp()}",
+            email=f"summary_{utcnow().timestamp()}@test.com",
+            hashed_password="fakehash",
+            is_active=True,
+            is_superuser=False,
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        session.add(other_user)
+        await session.flush()
+
+        response = await service.create_bulk(
+            [
+                BRCreateItem(
+                    name=f"Priced Summary Broker {utcnow().timestamp()}",
+                    initial_balances=[Currency(code="EUR", amount=Decimal("1000"))],
+                )
+            ],
+            user_id=test_user.id,
+        )
+        broker_id = response.results[0].broker_id
+
+        session.add(
+            BrokerUserAccess(
+                user_id=other_user.id,
+                broker_id=broker_id,
+                role=UserRole.VIEWER,
+                share_percentage=Decimal("0.40"),
+                created_at=utcnow(),
+                updated_at=utcnow(),
+            )
+        )
+        session.add(
+            PriceHistory(
+                asset_id=test_asset.id,
+                date=date.today(),
+                open=Decimal("100"),
+                high=Decimal("130"),
+                low=Decimal("90"),
+                close=Decimal("120"),
+                volume=Decimal("1"),
+                currency="EUR",
+                source_plugin_key="manual_test",
+                fetched_at=utcnow(),
+            )
+        )
+        await session.flush()
+
+        await create_bulk(
+            tx_service,
+            [
+                TXCreateItem(
+                    broker_id=broker_id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.BUY,
+                    date=date.today(),
+                    quantity=Decimal("10"),
+                    cash=Currency(code="EUR", amount=Decimal("-500")),
+                )
+            ],
+        )
+
+        summary = await service.get_summary(
+            broker_id,
+            user_id=test_user.id,
+            as_user_id=other_user.id,
+        )
+
+        assert summary is not None
+        assert summary.user_role == UserRole.VIEWER.value
+        assert summary.user_share_percentage == Decimal("0.40")
+        assert len(summary.holdings) == 1
+        holding = summary.holdings[0]
+        assert holding.current_price == Decimal("120")
+        assert holding.current_value.amount == Decimal("1200")
+        assert holding.unrealized_pnl.amount == Decimal("700")
+        assert holding.unrealized_pnl_percent == Decimal("140.00")
 
     @pytest.mark.asyncio
     async def test_get_summary_not_found(self, session, test_user):

@@ -213,6 +213,15 @@ def services_brim_provider_base(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "BRIM provider base tests", verbose=verbose)
 
 
+def services_brim_create_transaction(verbose: bool = False, test_names: list = None) -> bool:
+    """Test BRIMProvider._create_transaction and _loc_to_field."""
+    print_section("Services: BRIM Create Transaction")
+    print_info("Testing: BRIMProvider._create_transaction + BRIMProvider._loc_to_field")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_create_transaction.py", test_names)
+    return run_command(cmd, "BRIM create-transaction tests", verbose=verbose)
+
+
 def services_financial_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test pure-math financial utilities (WAC calculation, target currency)."""
     print_section("Services: Financial Utils (WAC)")
@@ -308,6 +317,63 @@ def services_brim_versioning(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "BRIM versioning tests", verbose=verbose)
 
 
+def services_config_misc(verbose: bool = False, test_names: list = None) -> bool:
+    """Test config.get_data_dir test-mode/env-override branches."""
+    print_section("Services: Config Helpers")
+    print_info("Testing: backend/app/config.py (get_data_dir)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_misc.py", test_names)
+    return run_command(cmd, "Config helper tests", verbose=verbose)
+
+
+def services_date_sentinel(verbose: bool = False, test_names: list = None) -> bool:
+    """Test date sentinel resolution (min/max/passthrough, broker filter)."""
+    print_section("Services: Date Sentinel Resolution")
+    print_info("Testing: backend/app/services/date_sentinel.py (resolve_date_sentinels)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_date_sentinel.py", test_names)
+    return run_command(cmd, "Date sentinel tests", verbose=verbose)
+
+
+def services_file_preview(verbose: bool = False, test_names: list = None) -> bool:
+    """Test file preview service helpers (CSV/Excel/text detection)."""
+    print_section("Services: File Preview Helpers")
+    print_info("Testing: backend/app/services/file_preview.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_file_preview.py", test_names)
+    return run_command(cmd, "File preview tests", verbose=verbose)
+
+
+def services_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
+    """Test FX pair-sync orchestration branches in services/fx.py."""
+    print_section("Services: FX Sync Orchestration")
+    print_info("Testing: backend/app/services/fx.py")
+    print_info("Tests: _is_date_within_sync_range, sync_pairs_bulk._process_route/._compute_multi_step")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_sync_service.py", test_names)
+    return run_command(cmd, "FX sync service tests", verbose=verbose)
+
+
+def services_provider_registry_misc(verbose: bool = False, test_names: list = None) -> bool:
+    """Test provider registry helper branches not covered by contract tests."""
+    print_section("Services: Provider Registry Helpers")
+    print_info("Testing: backend/app/services/provider_registry.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_registry_misc.py", test_names)
+    return run_command(cmd, "Provider registry helper tests", verbose=verbose)
+
+
+def services_scheduler_joblog_misc(verbose: bool = False, test_names: list = None) -> bool:
+    """Test scheduler job log read/rotate helpers."""
+    print_section("Services: Scheduler Job Log Helpers")
+    print_info("Testing: backend/app/services/scheduler/joblog.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_joblog_misc.py", test_names)
+    return run_command(cmd, "Scheduler job log tests", verbose=verbose)
+
+
+def services_scheduler_settings_misc(verbose: bool = False, test_names: list = None) -> bool:
+    """Test scheduler settings local-time-to-UTC conversion."""
+    print_section("Services: Scheduler Settings TZ Conversion")
+    print_info("Testing: backend/app/services/scheduler/settings.py (_local_times_to_utc)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_settings_misc.py", test_names)
+    return run_command(cmd, "Scheduler settings TZ conversion tests", verbose=verbose)
+
+
 def services_all(verbose: bool = False) -> bool:
     """Run all backend service tests."""
     print_header("LibreFolio Backend Services Tests")
@@ -368,6 +434,7 @@ Note: No backend server required.
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base default properties")
+    add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction + _loc_to_field")
     add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
     add_test(cat, "roi-fifo-utils", services_roi_fifo_utils, name="ROI/FIFO/Portfolio Utils", desc="TWRR, MWRR warm-start, SimpleROI series, FIFO lots, _build_history_series")
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
@@ -378,6 +445,12 @@ Note: No backend server required.
     add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases")
     add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
     add_test(cat, "scheduler-loop", services_scheduler_loop, name="Scheduler Loop Integration", desc="due_* + state roundtrip, no real loop")
+    add_test(cat, "config-misc", services_config_misc, name="Config Helpers", desc="get_data_dir test-mode/env-override branches")
+    add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
+    add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")
+    add_test(cat, "fx-sync-service", services_fx_sync, name="FX Sync Orchestration", desc="_is_date_within_sync_range, _process_route/_compute_multi_step")
+    add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")
+    add_test(cat, "scheduler-joblog-misc", services_scheduler_joblog_misc, name="Scheduler Job Log Helpers", desc="read_entries, _rotate_if_needed")
+    add_test(cat, "scheduler-settings-misc", services_scheduler_settings_misc, name="Scheduler Settings TZ Conversion", desc="_local_times_to_utc")
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat
-

@@ -10,7 +10,7 @@ from decimal import Decimal
 import pytest
 
 from backend.app.schemas import FAGeographicArea
-from backend.app.utils.geo_utils import expand_region, normalize_country_to_iso3
+from backend.app.utils.geo_utils import expand_region, iso2_to_flag_emoji, normalize_country_to_iso3
 
 
 def test_normalize_country_to_iso3():
@@ -195,6 +195,13 @@ class TestExpandRegion:
         assert len(result) > 20
         assert "DEU" in result
         assert "FRA" in result
+
+
+def test_iso2_to_flag_emoji_valid_and_invalid_inputs():
+    """Test direct flag emoji conversion branch coverage."""
+    assert iso2_to_flag_emoji("us") == "🇺🇸"
+    assert iso2_to_flag_emoji("IT") == "🇮🇹"
+    assert iso2_to_flag_emoji("USA") == "🏳️"
 
 
 if __name__ == "__main__":

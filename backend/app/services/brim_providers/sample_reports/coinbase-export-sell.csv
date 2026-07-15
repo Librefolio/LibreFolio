@@ -1,0 +1,2 @@
+ID,Timestamp,Transaction Type,Asset,Quantity Transacted,Price Currency,Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes
+sell-row-001,2025-02-01 10:00:00 UTC,Sell,BTC,0.01000000,EUR,€100000.00,€1000.00,€995.00,€5.00,Sold 0.01000000 BTC for EUR

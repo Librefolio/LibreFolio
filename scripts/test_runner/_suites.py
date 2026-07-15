@@ -11,8 +11,8 @@ from pathlib import Path
 
 from scripts.cli_base import pipenv_prefix
 
+from . import _common
 from ._common import (
-    _COVERAGE_MODE,
     Colors,
     _run_test_suite,
     print_error,
@@ -90,7 +90,7 @@ def run_all_tests(verbose: bool = False, providers: list = None, exclude_provide
             if "providers" in func_params:
                 all_tests.append((name, lambda f=func, v=verbose, p=providers, ep=exclude_providers: f(verbose=v, providers=p, exclude_providers=ep)))
             elif "coverage" in func_params:
-                all_tests.append((name, lambda f=func, v=verbose, c=_COVERAGE_MODE: f(verbose=v, coverage=c)))
+                all_tests.append((name, lambda f=func, v=verbose: f(verbose=v, coverage=_common._COVERAGE_MODE)))
             else:
                 all_tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
 
@@ -103,7 +103,7 @@ def run_all_tests(verbose: bool = False, providers: list = None, exclude_provide
         name = all_info.get("name", f"{category.title()} Tests")
         if func:
             if "coverage" in inspect.signature(func).parameters:
-                all_tests.append((name, lambda f=func, v=verbose, c=_COVERAGE_MODE: f(verbose=v, coverage=c)))
+                all_tests.append((name, lambda f=func, v=verbose: f(verbose=v, coverage=_common._COVERAGE_MODE)))
             else:
                 all_tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
 
@@ -160,7 +160,7 @@ def run_all_frontend_tests(verbose: bool = False, resume: bool = False) -> bool:
         name = all_info.get("name", f"{category.title()} Tests")
         if func:
             if "coverage" in inspect.signature(func).parameters:
-                tests.append((name, lambda f=func, v=verbose, c=_COVERAGE_MODE: f(verbose=v, coverage=c)))
+                tests.append((name, lambda f=func, v=verbose: f(verbose=v, coverage=_common._COVERAGE_MODE)))
             else:
                 tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
 

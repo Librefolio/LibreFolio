@@ -15,6 +15,8 @@ Covers:
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
+import pytest
+
 from backend.app.schemas.common import BackwardFillInfo, BaseBulkResponse, Currency
 from backend.app.schemas.fx import FXConversionResult, FXUpsertResult
 from backend.app.schemas.prices import FACurrentValue, FAPricePoint
@@ -209,6 +211,128 @@ class TestFACurrentValueCur:
             as_of_date=date(2025, 1, 1),
         )
         assert cv.value_cur == Currency(code="USD", amount=Decimal("42.5"))
+
+
+# ============================================================================
+# Additional validator branch coverage
+# ============================================================================
+
+
+class TestAdditionalSchemaValidators:
+    def test_fake_asset_id_boundary(self):
+        from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, is_fake_asset_id  # noqa: PLC0415
+
+        assert is_fake_asset_id(FAKE_ASSET_ID_BASE) is True
+        assert is_fake_asset_id(FAKE_ASSET_ID_BASE - 10001) is False
+        assert is_fake_asset_id(None) is False
+
+    def test_fx_upsert_rate_coercion_from_float(self):
+        from backend.app.schemas.fx import FXUpsertItem  # noqa: PLC0415
+
+        item = FXUpsertItem(date=date(2025, 1, 1), base="eur", quote="usd", rate=1.25)
+        assert item.base == "EUR"
+        assert item.quote == "USD"
+        assert item.rate == Decimal("1.25")
+
+    def test_fx_upsert_rate_coercion_from_string(self):
+        from backend.app.schemas.fx import FXUpsertItem  # noqa: PLC0415
+
+        item = FXUpsertItem(date=date(2025, 1, 1), base="EUR", quote="USD", rate="1.50")
+        assert item.rate == Decimal("1.50")
+
+    def test_fx_upsert_rate_keeps_decimal_input(self):
+        from backend.app.schemas.fx import FXUpsertItem  # noqa: PLC0415
+
+        item = FXUpsertItem(date=date(2025, 1, 1), base="EUR", quote="USD", rate=Decimal("1.75"))
+        assert item.rate == Decimal("1.75")
+
+    def test_fx_delete_item_accepts_delete_all_without_range(self):
+        from backend.app.schemas.fx import FXDeleteItem  # noqa: PLC0415
+
+        item = FXDeleteItem.model_validate({"from": "eur", "to": "usd", "delete_all": True})
+        assert item.from_currency == "EUR"
+        assert item.to_currency == "USD"
+        assert item.date_range is None
+
+    def test_fx_delete_item_requires_range_or_delete_all(self):
+        from backend.app.schemas.fx import FXDeleteItem  # noqa: PLC0415
+
+        with pytest.raises(ValueError, match="Either 'date_range' or 'delete_all: true' must be specified"):
+            FXDeleteItem.model_validate({"from": "EUR", "to": "USD"})
+
+    def test_validate_chain_steps_accepts_dict_steps(self):
+        from backend.app.schemas.fx import validate_chain_steps  # noqa: PLC0415
+
+        validate_chain_steps(
+            [
+                {"from": "RON", "to": "EUR", "provider": "ECB"},
+                {"from": "EUR", "to": "USD", "provider": "FED"},
+            ],
+            base="RON",
+            quote="USD",
+        )
+
+    def test_validate_chain_steps_accepts_route_step_objects(self):
+        from backend.app.schemas.fx import FXRouteStep, validate_chain_steps  # noqa: PLC0415
+
+        validate_chain_steps(
+            [
+                FXRouteStep.model_validate({"from": "RON", "to": "EUR", "provider": "ECB"}),
+                FXRouteStep.model_validate({"from": "EUR", "to": "USD", "provider": "FED"}),
+            ],
+            base="RON",
+            quote="USD",
+        )
+
+    def test_fx_route_step_uppercases_provider(self):
+        from backend.app.schemas.fx import FXRouteStep  # noqa: PLC0415
+
+        step = FXRouteStep.model_validate({"from": "eur", "to": "usd", "provider": " ecb "})
+        assert step.provider == "ECB"
+
+    def test_fx_route_step_requires_different_currencies(self):
+        from backend.app.schemas.fx import FXRouteStep  # noqa: PLC0415
+
+        with pytest.raises(ValueError, match="from and to must differ"):
+            FXRouteStep.model_validate({"from": "EUR", "to": "EUR", "provider": "ECB"})
+
+    def test_price_close_must_be_positive(self):
+        with pytest.raises(ValueError, match="close price must be positive"):
+            FAPricePoint(date=date(2025, 1, 1), currency="EUR", close=Decimal("0"))
+
+    def test_price_query_target_currency_normalized(self):
+        from backend.app.schemas.common import DateRangeModel  # noqa: PLC0415
+        from backend.app.schemas.prices import FAPriceQueryItem  # noqa: PLC0415
+
+        item = FAPriceQueryItem(
+            asset_id=1,
+            date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 31)),
+            target_currency="usd",
+        )
+        assert item.target_currency == "USD"
+
+    def test_price_query_target_currency_none(self):
+        from backend.app.schemas.common import DateRangeModel  # noqa: PLC0415
+        from backend.app.schemas.prices import FAPriceQueryItem  # noqa: PLC0415
+
+        item = FAPriceQueryItem(
+            asset_id=1,
+            date_range=DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 31)),
+            target_currency=None,
+        )
+        assert item.target_currency is None
+
+    def test_sync_date_range_allows_min_sentinel(self):
+        from backend.app.schemas.refresh import SyncDateRangeModel  # noqa: PLC0415
+
+        item = SyncDateRangeModel(start="min", end=date(2025, 1, 31))
+        assert item.start == "min"
+
+    def test_sync_date_range_rejects_end_before_start(self):
+        from backend.app.schemas.refresh import SyncDateRangeModel  # noqa: PLC0415
+
+        with pytest.raises(ValueError, match="must be >= start date"):
+            SyncDateRangeModel(start=date(2025, 2, 1), end=date(2025, 1, 31))
 
 
 # ============================================================================

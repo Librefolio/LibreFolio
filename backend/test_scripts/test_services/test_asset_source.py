@@ -13,7 +13,7 @@ import asyncio
 import json
 import sys
 import time
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -30,25 +30,40 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
     Asset,
+    AssetEvent,
+    AssetEventType,
     AssetProviderAssignment,
     AssetType,
+    Broker,
     FxRate,
     IdentifierType,
     PriceHistory,
     ProviderInputType,
+    Transaction,
+    TransactionType,
+    User,
 )
 from backend.app.db.session import get_async_engine
+from backend.app.schemas import FAGeographicArea, FASectorArea
+from backend.app.schemas.assets import FAAssetCreateItem, FAClassificationParams
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
-from backend.app.schemas.provider import FAProviderAssignmentItem
+from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderConfigBase, ProbeOperation
 from backend.app.schemas.refresh import FARefreshItem, FXSyncPairRequest
-from backend.app.services.asset_source import AssetSourceManager, AssetSourceProvider
+from backend.app.services import asset_source as asset_source_module
+from backend.app.services.asset_source import (
+    AssetCRUDService,
+    AssetSearchService,
+    AssetSourceManager,
+    AssetSourceProvider,
+    _provider_params_hash,
+)
 from backend.app.services.asset_source_providers import borsa_italiana as borsa_provider_module
 from backend.app.services.asset_source_providers import yahoo_finance as yahoo_provider_module
 from backend.app.services.asset_source_providers.scheduled_investment import (
@@ -1334,3 +1349,534 @@ class TestMapIdentifierTypeToInputType:
         """FIGI has no provider equivalent → None."""
         result = AssetSourceProvider.map_identifier_type_to_input_type("FIGI")
         assert result is None
+
+
+def test_provider_param_helpers_and_identifier_mapping():
+    """Helper paths: provider param hash/parse and input-type mapping."""
+    print_section("Test 20: Provider param helpers")
+
+    params_a = {"b": 2, "a": 1}
+    params_b = {"a": 1, "b": 2}
+
+    assert _provider_params_hash(None) == "none"
+    assert _provider_params_hash(params_a) == _provider_params_hash(params_b)
+    assert AssetSourceManager._parse_provider_params(None) == {}
+    assert AssetSourceManager._parse_provider_params(params_a) == params_a
+    assert AssetSourceManager._parse_provider_params('{"x": 1, "y": "z"}') == {"x": 1, "y": "z"}
+    assert AssetSourceProvider.map_input_type_to_identifier_type(ProviderInputType.URL.value) == IdentifierType.OTHER
+    assert AssetSourceProvider.map_input_type_to_identifier_type(ProviderInputType.AUTO_GENERATED.value) == IdentifierType.UUID
+    assert AssetSourceProvider.map_input_type_to_identifier_type(IdentifierType.CUSIP.value) == IdentifierType.CUSIP
+    print_success("✓ Provider param helpers cover main branches")
+
+
+@pytest.mark.asyncio
+async def test_create_assets_bulk_with_duplicate_and_metadata():
+    """Create path persists metadata while duplicate rows fail without aborting the batch."""
+    print_section("Test 21: create_assets_bulk partial success")
+
+    timestamp = int(time.time() * 1000)
+    display_name = f"CreateBulk {timestamp}"
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        payload = [
+            FAAssetCreateItem(
+                display_name=display_name,
+                currency="usd",
+                asset_type=AssetType.ETF,
+                quote_base_quantity=0,
+                identifier_ticker="cbt",
+                classification_params=FAClassificationParams(
+                    short_description="Created from bulk test",
+                    sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")}),
+                    geographic_area=FAGeographicArea(distribution={"USA": Decimal("1.0")}),
+                ),
+            ),
+            FAAssetCreateItem(
+                display_name=display_name,
+                currency="EUR",
+            ),
+        ]
+
+        response = await AssetCRUDService.create_assets_bulk(payload, session)
+
+        assert response.success_count == 1
+        assert response.results[0].success is True
+        assert response.results[1].success is False
+        assert "already exists" in response.results[1].message
+
+        created = (await session.execute(select(Asset).where(Asset.id == response.results[0].asset_id))).scalar_one()
+        created_meta = json.loads(created.classification_params)
+
+        assert created.currency == "USD"
+        assert created.quote_base_quantity == 1
+        assert created.identifier_ticker == "CBT"
+        assert created_meta["short_description"] == "Created from bulk test"
+        assert created_meta["sector_area"]["distribution"]["Technology"] == "1.0000"
+        print_success("✓ Bulk create keeps successful asset and isolates duplicate failure")
+
+
+@pytest.mark.asyncio
+async def test_refresh_assets_from_provider_mixed_results():
+    """Refresh handles success, no-assignment, bad-provider, and missing-asset in one batch."""
+    print_section("Test 22: refresh_assets_from_provider mixed batch")
+
+    AssetProviderRegistry.auto_discover()
+    asset_source_module._asset_metadata_cache.clear()
+    timestamp = int(time.time() * 1000)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        good_asset = Asset(display_name=f"Refresh Good {timestamp}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        no_provider_asset = Asset(display_name=f"Refresh NoProv {timestamp}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        bad_provider_asset = Asset(display_name=f"Refresh BadProv {timestamp}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        session.add_all([good_asset, no_provider_asset, bad_provider_asset])
+        await session.commit()
+        for asset in (good_asset, no_provider_asset, bad_provider_asset):
+            await session.refresh(asset)
+
+        await AssetSourceManager.bulk_assign_providers(
+            [
+                FAProviderAssignmentItem(
+                    asset_id=good_asset.id,
+                    provider_code="mockprov",
+                    identifier="MIXED_REFRESH",
+                    identifier_type=ProviderInputType.AUTO_GENERATED,
+                    provider_params={},
+                )
+            ],
+            session,
+        )
+        session.add(
+            AssetProviderAssignment(
+                asset_id=bad_provider_asset.id,
+                provider_code="missing_provider",
+                identifier="BAD_REFRESH",
+                identifier_type=ProviderInputType.AUTO_GENERATED,
+                provider_params="{}",
+            )
+        )
+        await session.commit()
+
+        response = await AssetSourceManager.refresh_assets_from_provider(
+            [good_asset.id, no_provider_asset.id, bad_provider_asset.id, 999999],
+            session,
+        )
+
+        by_asset = {item.asset_id: item for item in response.results}
+        assert response.success_count == 1
+        assert by_asset[good_asset.id].success is True
+        assert by_asset[good_asset.id].fields_detail is not None
+        assert by_asset[no_provider_asset.id].success is False
+        assert "No provider assigned" in by_asset[no_provider_asset.id].message
+        assert by_asset[bad_provider_asset.id].success is False
+        assert "Provider missing_provider not found" == by_asset[bad_provider_asset.id].message
+        assert by_asset[999999].success is False
+        assert "not found" in by_asset[999999].message
+
+        await session.refresh(good_asset)
+        good_meta = json.loads(good_asset.classification_params)
+        assert "Technology" in good_meta["sector_area"]["distribution"]
+        print_success("✓ Mixed refresh batch reports each outcome correctly")
+
+
+@pytest.mark.asyncio
+async def test_refresh_assets_from_provider_uses_metadata_cache(monkeypatch):
+    """Second refresh uses the metadata cache instead of calling the provider again."""
+    print_section("Test 23: refresh_assets_from_provider metadata cache")
+
+    AssetProviderRegistry.auto_discover()
+    asset_source_module._asset_metadata_cache.clear()
+    timestamp = int(time.time() * 1000)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        asset = Asset(display_name=f"Refresh Cache {timestamp}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        session.add(asset)
+        await session.commit()
+        await session.refresh(asset)
+
+        await AssetSourceManager.bulk_assign_providers(
+            [
+                FAProviderAssignmentItem(
+                    asset_id=asset.id,
+                    provider_code="mockprov",
+                    identifier="CACHE_REFRESH",
+                    identifier_type=ProviderInputType.AUTO_GENERATED,
+                    provider_params={},
+                )
+            ],
+            session,
+        )
+
+        first = await AssetSourceManager.refresh_assets_from_provider([asset.id], session)
+        assert first.results[0].success is True
+
+        async def _unexpected_provider_call(*args, **kwargs):
+            raise AssertionError("provider fetch should not run on cache hit")
+
+        monkeypatch.setattr(asset_source_module, "_run_provider_in_thread", _unexpected_provider_call)
+
+        second = await AssetSourceManager.refresh_assets_from_provider([asset.id], session)
+        assert second.results[0].success is True
+        assert second.results[0].fields_detail is not None
+        print_success("✓ Metadata cache hit bypassed provider call")
+
+
+@pytest.mark.asyncio
+async def test_wipe_market_data_for_currency_change_dry_run_and_execute():
+    """Dry-run reports counts; destructive call wipes prices/events and disconnects transactions."""
+    print_section("Test 24: wipe_market_data_for_currency_change")
+
+    AssetProviderRegistry.auto_discover()
+    timestamp = int(time.time() * 1000)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        user = User(
+            username=f"wipe_user_{timestamp}",
+            email=f"wipe_{timestamp}@test.local",
+            hashed_password="hashed",
+        )
+        broker = Broker(name=f"Wipe Broker {timestamp}")
+        asset = Asset(display_name=f"Wipe Asset {timestamp}", currency="USD", asset_type=AssetType.BOND, active=True)
+        session.add_all([user, broker, asset])
+        await session.commit()
+        for obj in (user, broker, asset):
+            await session.refresh(obj)
+
+        await AssetSourceManager.bulk_assign_providers(
+            [
+                FAProviderAssignmentItem(
+                    asset_id=asset.id,
+                    provider_code="mockprov",
+                    identifier="WIPE_ASSET",
+                    identifier_type=ProviderInputType.AUTO_GENERATED,
+                    provider_params={},
+                )
+            ],
+            session,
+        )
+        assignment = await AssetSourceManager.get_asset_provider(asset.id, session)
+        assert assignment is not None
+
+        session.add_all(
+            [
+                PriceHistory(
+                    asset_id=asset.id,
+                    date=date(2025, 6, 1),
+                    close=Decimal("100.00"),
+                    currency="USD",
+                    source_plugin_key="manual_test",
+                ),
+                PriceHistory(
+                    asset_id=asset.id,
+                    date=date(2025, 6, 2),
+                    close=Decimal("101.00"),
+                    currency="USD",
+                    source_plugin_key="manual_test",
+                ),
+                AssetEvent(
+                    asset_id=asset.id,
+                    date=date(2025, 6, 1),
+                    type=AssetEventType.DIVIDEND,
+                    value=Decimal("5.00"),
+                    currency="USD",
+                    provider_assignment_id=None,
+                    notes="manual event",
+                ),
+                AssetEvent(
+                    asset_id=asset.id,
+                    date=date(2025, 6, 2),
+                    type=AssetEventType.INTEREST,
+                    value=Decimal("6.00"),
+                    currency="USD",
+                    provider_assignment_id=assignment.id,
+                    notes="provider event",
+                ),
+            ]
+        )
+        await session.commit()
+
+        provider_event = (
+            await session.execute(
+                select(AssetEvent).where(
+                    AssetEvent.asset_id == asset.id,
+                    AssetEvent.provider_assignment_id == assignment.id,
+                )
+            )
+        ).scalar_one()
+
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.DIVIDEND,
+                date=date(2025, 6, 2),
+                quantity=Decimal("0"),
+                amount=Decimal("6.00"),
+                currency="USD",
+                asset_event_id=provider_event.id,
+                description="linked event tx",
+            )
+        )
+        await session.commit()
+
+        dry_run = await AssetSourceManager.wipe_market_data_for_currency_change(asset.id, session, dry_run=True)
+        assert dry_run == {
+            "prices": 2,
+            "events_manual": 1,
+            "events_provider": 1,
+            "linked_tx": 1,
+            "oldest": "2025-06-01",
+            "newest": "2025-06-02",
+            "dry_run": True,
+        }
+
+        wiped = await AssetSourceManager.wipe_market_data_for_currency_change(asset.id, session, dry_run=False)
+        assert wiped["dry_run"] is False
+        assert wiped["prices"] == 2
+        assert (await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset.id))).scalar_one() == 0
+        assert (await session.execute(select(func.count()).select_from(AssetEvent).where(AssetEvent.asset_id == asset.id))).scalar_one() == 0
+        tx = (await session.execute(select(Transaction).where(Transaction.asset_id == asset.id))).scalar_one()
+        assert tx.asset_event_id is None
+        print_success("✓ Currency-change wipe clears market data and disconnects linked tx")
+
+
+@pytest.mark.asyncio
+async def test_probe_provider_config_history_and_metadata():
+    """Probe runs history + metadata operations and returns structured results."""
+    print_section("Test 25: probe_provider_config")
+
+    AssetProviderRegistry.auto_discover()
+    config = FAProviderConfigBase(
+        provider_code="mockprov",
+        identifier="PROBE_ME",
+        identifier_type=ProviderInputType.AUTO_GENERATED.value,
+        provider_params={"source": "test"},
+    )
+
+    response = await AssetSourceManager.probe_provider_config(
+        config,
+        [ProbeOperation.HISTORY, ProbeOperation.METADATA],
+    )
+
+    assert response.provider_code == "mockprov"
+    assert response.history is not None and response.history.success is True
+    assert response.history.points_count >= 7
+    assert response.history.sample_prices
+    assert "→" in response.history.date_range
+    assert response.metadata is not None and response.metadata.success is True
+    assert response.metadata.patch_data is not None
+    assert response.metadata.patch_data["classification_params"]["short_description"].startswith("Mock test asset PROBE_ME")
+    print_success("✓ Probe history + metadata paths both succeeded")
+
+
+@pytest.mark.asyncio
+async def test_get_prices_bulk_with_events_seed_and_request_order():
+    """Bulk price query keeps request order, uses seed backfill, and includes events only when requested."""
+    print_section("Test 26: get_prices_bulk events + seed backfill")
+
+    timestamp = int(time.time() * 1000)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        asset_a = Asset(display_name=f"Price Query A {timestamp}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        asset_b = Asset(display_name=f"Price Query B {timestamp}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        session.add_all([asset_a, asset_b])
+        await session.commit()
+        for asset in (asset_a, asset_b):
+            await session.refresh(asset)
+
+        session.add_all(
+            [
+                PriceHistory(
+                    asset_id=asset_a.id,
+                    date=date(2025, 5, 1),
+                    open=Decimal("10"),
+                    high=Decimal("10"),
+                    low=Decimal("10"),
+                    close=Decimal("10"),
+                    volume=Decimal("100"),
+                    currency="USD",
+                    source_plugin_key="manual_test",
+                ),
+                PriceHistory(
+                    asset_id=asset_b.id,
+                    date=date(2025, 5, 2),
+                    close=Decimal("20"),
+                    currency="USD",
+                    source_plugin_key="manual_test",
+                ),
+                AssetEvent(
+                    asset_id=asset_a.id,
+                    date=date(2025, 5, 3),
+                    type=AssetEventType.DIVIDEND,
+                    value=Decimal("1.50"),
+                    currency="USD",
+                    provider_assignment_id=None,
+                    notes="seeded event",
+                ),
+            ]
+        )
+        await session.commit()
+
+        results = await AssetSourceManager.get_prices_bulk(
+            [
+                FAPriceQueryItem(
+                    asset_id=asset_b.id,
+                    date_range=DateRangeModel(start=date(2025, 5, 2), end=date(2025, 5, 2)),
+                ),
+                FAPriceQueryItem(
+                    asset_id=asset_a.id,
+                    date_range=DateRangeModel(start=date(2025, 5, 2), end=date(2025, 5, 4)),
+                    include_events=True,
+                ),
+            ],
+            session,
+        )
+
+        assert [item.asset_id for item in results] == [asset_b.id, asset_a.id]
+        assert len(results[0].prices) == 1 and results[0].events == []
+        assert len(results[1].prices) == 3
+        assert all(point.backward_fill_info is not None for point in results[1].prices)
+        assert results[1].prices[0].backward_fill_info.actual_rate_date == date(2025, 5, 1)
+        assert len(results[1].events) == 1
+        assert results[1].events[0].notes == "seeded event"
+        assert results[1].events[0].is_auto is False
+        print_success("✓ Price query handles seed backfill, event fetch, and request order")
+
+
+@pytest.mark.asyncio
+async def test_bulk_refresh_prices_current_only_marks_partial(monkeypatch):
+    """Current-only provider refresh inserts one row and returns PARTIAL status."""
+    print_section("Test 27: bulk_refresh_prices current-only partial")
+
+    timestamp = int(time.time() * 1000)
+
+    class PartialProvider:
+        supports_history = True
+        provider_kind = asset_source_module.FAProviderKind.ONLINE_SCRAPER
+
+        async def get_history_value(self, identifier, identifier_type, provider_params, start_date, end_date):
+            return SimpleNamespace(prices=[], events=[])
+
+        async def get_current_value(self, identifier, identifier_type, provider_params):
+            return SimpleNamespace(value=Decimal("77.77"), currency="USD", as_of_date=date.today())
+
+        def validate_params(self, params):
+            return None
+
+    original_get_provider_instance = AssetProviderRegistry.get_provider_instance
+
+    def _patched_get_provider_instance(cls, code: str, **kwargs):
+        if code == "partialprov":
+            return PartialProvider()
+        return original_get_provider_instance.__func__(cls, code, **kwargs)
+
+    monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(_patched_get_provider_instance))
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        asset = Asset(display_name=f"Partial Refresh {timestamp}", currency="USD", asset_type=AssetType.STOCK, active=True)
+        session.add(asset)
+        await session.commit()
+        await session.refresh(asset)
+
+        session.add(
+            AssetProviderAssignment(
+                asset_id=asset.id,
+                provider_code="partialprov",
+                identifier="PARTIAL_ONLY",
+                identifier_type=ProviderInputType.AUTO_GENERATED,
+                provider_params='{"mode":"current_only"}',
+            )
+        )
+        await session.commit()
+
+        response = await AssetSourceManager.bulk_refresh_prices(
+            [
+                FARefreshItem(
+                    asset_id=asset.id,
+                    date_range=DateRangeModel(start=date.today() - timedelta(days=2), end=date.today()),
+                )
+            ],
+            session,
+        )
+
+        result = response.results[0]
+        assert result.status == asset_source_module.SyncStatus.PARTIAL
+        assert result.points_fetched == 1
+        assert result.inserted_count == 1
+        assert result.message == "Current value only, history unavailable"
+
+        stored = (await session.execute(select(PriceHistory).where(PriceHistory.asset_id == asset.id, PriceHistory.date == date.today()))).scalar_one()
+        assert stored.close == Decimal("77.770000")
+        print_success("✓ Current-only refresh returns PARTIAL and persists today price")
+
+
+@pytest.mark.asyncio
+async def test_asset_search_service_search_handles_cache_and_errors(monkeypatch):
+    """Search aggregates successes, skips unsupported providers, and reuses cache on repeat query."""
+    print_section("Test 28: AssetSearchService.search")
+
+    asset_source_module._search_query_cache.clear()
+
+    class OkSearchProvider:
+        supports_search = True
+
+        async def search(self, query: str):
+            return [
+                {
+                    "identifier": "OK-1",
+                    "identifier_type": IdentifierType.TICKER,
+                    "display_name": f"Provider result {query}",
+                    "currency": "USD",
+                    "type": "MYSTERY",
+                    "provider_params": {"query": query},
+                }
+            ]
+
+        def get_asset_url(self, identifier, identifier_type, provider_params=None):
+            return f"https://example.test/{identifier}"
+
+    class ErrorSearchProvider:
+        supports_search = True
+
+        async def search(self, query: str):
+            raise RuntimeError("provider exploded")
+
+        def get_asset_url(self, identifier, identifier_type, provider_params=None):
+            return None
+
+    class NoSearchProvider:
+        supports_search = False
+
+    ok_provider = OkSearchProvider()
+    err_provider = ErrorSearchProvider()
+    no_provider = NoSearchProvider()
+    providers = {"okprov": ok_provider, "errprov": err_provider, "nosrch": no_provider}
+
+    monkeypatch.setattr(
+        AssetProviderRegistry,
+        "list_providers",
+        classmethod(lambda cls: [{"code": "okprov"}, {"code": "errprov"}, {"code": "nosrch"}]),
+    )
+    monkeypatch.setattr(
+        AssetProviderRegistry,
+        "get_provider_instance",
+        classmethod(lambda cls, code, **kwargs: providers.get(code)),
+    )
+
+    first = await AssetSearchService.search("alpha")
+
+    assert first.total_results == 1
+    assert first.providers_queried == ["okprov", "errprov"]
+    assert first.providers_with_errors == ["errprov"]
+    assert first.results[0].provider_url == "https://example.test/OK-1"
+    assert first.results[0].asset_type == "OTHER"
+
+    async def _cached_search_should_not_run(query: str):
+        raise AssertionError("query cache should satisfy repeated search")
+
+    ok_provider.search = _cached_search_should_not_run
+
+    second = await AssetSearchService.search("alpha", provider_codes=["okprov"])
+    assert second.total_results == 1
+    assert second.providers_with_errors == []
+    assert second.results[0].display_name == "Provider result alpha"
+    print_success("✓ Search cache and per-provider error handling both covered")

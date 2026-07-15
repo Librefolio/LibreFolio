@@ -1,7 +1,9 @@
 """Tests for PreviewCache in uploads.py API module."""
 
 import time
+from types import SimpleNamespace
 
+import backend.app.config as app_config
 from backend.app.api.v1.uploads import PreviewCache
 
 
@@ -23,6 +25,15 @@ class TestPreviewCache:
         original_max = self.cache.max_bytes
         self.cache.load_config()
         assert self.cache.max_bytes == original_max
+
+    def test_load_config_reads_settings_value(self, monkeypatch):
+        monkeypatch.setattr(
+            app_config,
+            "get_settings",
+            lambda: SimpleNamespace(PREVIEW_CACHE_MAX_MB=7),
+        )
+        self.cache.load_config()
+        assert self.cache.max_bytes == 7 * 1024 * 1024
 
     # --- get / put ---
 
@@ -55,23 +66,33 @@ class TestPreviewCache:
         assert self.cache.get("file1", "100x100") is None
 
     def test_put_evicts_oldest_when_full(self):
-        self.cache.max_bytes = 30
+        self.cache.max_bytes = 1000
         self.cache.config_loaded = True
-        # Put two small entries
-        self.cache.put("file1", "s", b"aa", "image/png")  # 2 bytes
-        time.sleep(0.01)
-        self.cache.put("file2", "s", b"bb", "image/png")  # 2 bytes
-        # Put a larger entry that forces eviction
-        self.cache.put("file3", "s", b"c" * 29, "image/png")  # forces eviction
-        # file3 should be rejected (>10% of 30=3 bytes limit)
-        # Let's use a smaller entry
-        self.cache.entries.clear()
-        self.cache.current_bytes = 0
-        self.cache.put("file1", "s", b"aa", "image/png")  # 2 bytes
-        self.cache.put("file2", "s", b"bb", "image/png")  # 2 bytes → 4 total
-        # Now fill up with 28 bytes → need to evict
-        self.cache.max_bytes = 5
-        self.cache.put("file3", "s", b"", "image/png")  # trigger eviction
+        now = time.time()
+        for idx in range(9):
+            self.cache.entries[(f"file{idx}", "s")] = (b"x" * 100, "image/png", now + idx)
+        self.cache.entries[("tail", "s")] = (b"y" * 50, "image/png", now + 10)
+        self.cache.current_bytes = 950
+
+        self.cache.put("fresh", "s", b"z" * 100, "image/png")
+
+        assert ("file0", "s") not in self.cache.entries
+        assert self.cache.get("fresh", "s") == (b"z" * 100, "image/png")
+
+    def test_put_evicts_expired_entries_before_store(self):
+        self.cache.max_bytes = 1000
+        self.cache.config_loaded = True
+        self.cache.entries[("stale", "s")] = (
+            b"a" * 100,
+            "image/png",
+            time.time() - self.cache.TTL - 1,
+        )
+        self.cache.current_bytes = 100
+
+        self.cache.put("fresh", "s", b"b" * 50, "image/png")
+
+        assert ("stale", "s") not in self.cache.entries
+        assert self.cache.get("fresh", "s") == (b"b" * 50, "image/png")
 
     def test_invalidate(self):
         self.cache.put("file1", "100x100", b"data1", "image/png")

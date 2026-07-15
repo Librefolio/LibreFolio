@@ -28,10 +28,21 @@ setup_test_database()
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import backend.app.services.portfolio_engine as portfolio_engine_module
+import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, PriceHistory, ProviderInputType, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import IssueCode
-from backend.app.services.portfolio_service import PortfolioService, _build_history_series, _HistoryTxRow, compute_wac_iterative_multi_broker
+from backend.app.schemas.common import Currency
+from backend.app.schemas.portfolio import IssueCode, PortfolioReportQuery
+from backend.app.services.portfolio_service import (
+    PortfolioService,
+    _build_history_series,
+    _HistoryTxRow,
+    _portfolio_l2_cache,
+    _price_on_date,
+    _wac_cache,
+    compute_wac_iterative_multi_broker,
+)
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.financial.valuation_utils import compute_holding_value
 from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_txlist
@@ -121,6 +132,26 @@ async def broker_with_access(session, test_user) -> tuple[Broker, BrokerUserAcce
 
 class TestComputeWacIterativeMultiBroker:
     @pytest.mark.asyncio
+    async def test_empty_position_returns_zero_wac(self, session, broker_with_access, test_asset):
+        """No quantity transactions -> zero WAC, no qualifying rows."""
+        broker, _ = broker_with_access
+        _wac_cache.clear()
+
+        result = await compute_wac_iterative_multi_broker(
+            session=session,
+            broker_ids=[broker.id],
+            asset_id=test_asset.id,
+            as_of_date=date(2025, 1, 1),
+            asset_currency="EUR",
+        )
+
+        assert result.wac is not None
+        assert result.wac.code == "EUR"
+        assert result.wac.amount == Decimal("0")
+        assert result.wac_qualifying_txs == []
+        assert result.wac_missing_pairs == []
+
+    @pytest.mark.asyncio
     async def test_matches_manual_merged_txlist(self, session, broker_with_access, test_asset):
         """Multi-broker WAC must match manual merged txlist math."""
         broker_one, _ = broker_with_access
@@ -203,6 +234,142 @@ class TestComputeWacIterativeMultiBroker:
         assert service_result.wac.code == manual_result.wac_currency == "EUR"
         assert service_result.wac.amount == manual_result.wac_amount
         assert [tx.tx_id for tx in service_result.wac_qualifying_txs] == [tx.tx_id for tx in manual_result.qualifying]
+
+    @pytest.mark.asyncio
+    async def test_adjustment_cost_basis_override_and_cache_hit(self, session, broker_with_access, test_asset, monkeypatch):
+        """Positive ADJUSTMENT uses cost_basis_override; identical repeat hits cache."""
+        broker_one, _ = broker_with_access
+        broker_two = Broker(name=f"PfBroker_{utcnow().timestamp()}_adj_two")
+        session.add(broker_two)
+        await session.flush()
+
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker_one.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.BUY,
+                    date=date(2025, 1, 10),
+                    quantity=Decimal("10"),
+                    amount=Decimal("-1000"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker_two.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=date(2025, 1, 20),
+                    quantity=Decimal("2"),
+                    amount=Decimal("0"),
+                    currency="EUR",
+                    cost_basis_override=Decimal("120"),
+                    cost_basis_currency="EUR",
+                ),
+            ]
+        )
+        await session.flush()
+        _wac_cache.clear()
+
+        first = await compute_wac_iterative_multi_broker(
+            session=session,
+            broker_ids=[broker_one.id, broker_two.id],
+            asset_id=test_asset.id,
+            as_of_date=date(2025, 1, 20),
+            asset_currency="EUR",
+        )
+
+        assert first.wac is not None
+        assert first.wac.code == "EUR"
+        assert first.wac.amount == Decimal("1240") / Decimal("12")
+        assert [tx.type for tx in first.wac_qualifying_txs] == ["BUY", "ADJUSTMENT"]
+        assert first.wac_qualifying_txs[1].unit_cost == Decimal("120")
+        assert first.wac_qualifying_txs[1].currency == "EUR"
+
+        async def fail_compute(*args, **kwargs):
+            raise AssertionError("WAC math should not rerun on cache hit")
+
+        monkeypatch.setattr(portfolio_service_module, "compute_wac_from_txlist", fail_compute)
+
+        second = await compute_wac_iterative_multi_broker(
+            session=session,
+            broker_ids=[broker_two.id, broker_one.id],
+            asset_id=test_asset.id,
+            as_of_date=date(2025, 1, 20),
+            asset_currency="EUR",
+        )
+
+        assert second.wac is not None
+        assert second.wac.amount == first.wac.amount
+        assert [tx.tx_id for tx in second.wac_qualifying_txs] == [tx.tx_id for tx in first.wac_qualifying_txs]
+
+    @pytest.mark.asyncio
+    async def test_foreign_currency_costs_use_bulk_fx_conversion(self, session, broker_with_access, test_asset, monkeypatch):
+        """BUY + positive ADJUSTMENT in foreign ccy use converted unit costs and FX metadata."""
+        broker_one, _ = broker_with_access
+        broker_two = Broker(name=f"PfBroker_{utcnow().timestamp()}_fx_two")
+        session.add(broker_two)
+        await session.flush()
+
+        buy_date = date(2025, 2, 10)
+        adj_date = date(2025, 2, 20)
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker_one.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.BUY,
+                    date=buy_date,
+                    quantity=Decimal("10"),
+                    amount=Decimal("-1200"),
+                    currency="USD",
+                ),
+                Transaction(
+                    broker_id=broker_two.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=adj_date,
+                    quantity=Decimal("2"),
+                    amount=Decimal("0"),
+                    currency="USD",
+                    cost_basis_override=Decimal("150"),
+                    cost_basis_currency="USD",
+                ),
+            ]
+        )
+        await session.flush()
+        _wac_cache.clear()
+
+        async def fake_convert_bulk(_session, bulk_input, raise_on_error=False):
+            assert bulk_input == [
+                (Currency(code="USD", amount=Decimal("1200")), "EUR", buy_date),
+                (Currency(code="USD", amount=Decimal("300")), "EUR", adj_date),
+            ]
+            return (
+                [
+                    (Currency(code="EUR", amount=Decimal("1080")), buy_date, None),
+                    (Currency(code="EUR", amount=Decimal("270")), adj_date, None),
+                ],
+                [],
+            )
+
+        monkeypatch.setattr(portfolio_service_module, "convert_bulk", fake_convert_bulk)
+
+        result = await compute_wac_iterative_multi_broker(
+            session=session,
+            broker_ids=[broker_one.id, broker_two.id],
+            asset_id=test_asset.id,
+            as_of_date=adj_date,
+            asset_currency="EUR",
+            target_currency_override="EUR",
+        )
+
+        assert result.wac is not None
+        assert result.wac.code == "EUR"
+        assert result.wac.amount == Decimal("1350") / Decimal("12")
+        assert [tx.unit_cost for tx in result.wac_qualifying_txs] == [Decimal("108"), Decimal("135")]
+        assert [tx.original_unit_cost for tx in result.wac_qualifying_txs] == [Decimal("120"), Decimal("150")]
+        assert [tx.original_currency for tx in result.wac_qualifying_txs] == ["USD", "USD"]
+        assert [tx.fx_rate_used for tx in result.wac_qualifying_txs] == [Decimal("0.9"), Decimal("0.9")]
 
 
 # =============================================================================
@@ -357,6 +524,22 @@ class TestBuildHistorySeries:
         result = _build_history_series(rows)
         assert len(result) == 1
         assert result[0].cash_value == Decimal("8000")
+
+
+class TestPriceOnDate:
+    def test_empty_and_before_first_price_return_none(self):
+        assert _price_on_date([], date(2025, 1, 10)) is None
+        assert _price_on_date([(date(2025, 1, 10), Decimal("100"), "EUR")], date(2025, 1, 9)) is None
+
+    def test_exact_match_and_backward_fill(self):
+        prices = [
+            (date(2025, 1, 10), Decimal("100"), "EUR"),
+            (date(2025, 1, 15), Decimal("105"), "EUR"),
+            (date(2025, 1, 20), Decimal("110"), "EUR"),
+        ]
+
+        assert _price_on_date(prices, date(2025, 1, 15)) == (Decimal("105"), "EUR")
+        assert _price_on_date(prices, date(2025, 1, 18)) == (Decimal("105"), "EUR")
 
 
 # =============================================================================
@@ -635,6 +818,113 @@ class TestPortfolioServiceGetSummary:
         assert summary is not None
         assert summary.holdings == []
         assert summary.net_worth.amount == Decimal("0")
+
+
+class TestPortfolioServicePrivateHelpers:
+    @pytest.mark.asyncio
+    async def test_price_bulk_loader_quote_base_map_and_latest_price(self, session):
+        """Private loaders return sorted filtered data and latest tuple."""
+        first_asset = Asset(
+            display_name=f"LoaderAssetA_{utcnow().timestamp()}",
+            ticker="LOADA",
+            currency="EUR",
+            type=AssetType.STOCK,
+            quote_base_quantity=100,
+        )
+        second_asset = Asset(
+            display_name=f"LoaderAssetB_{utcnow().timestamp()}",
+            ticker="LOADB",
+            currency="USD",
+            type=AssetType.STOCK,
+        )
+        no_price_asset = Asset(
+            display_name=f"LoaderAssetC_{utcnow().timestamp()}",
+            ticker="LOADC",
+            currency="EUR",
+            type=AssetType.STOCK,
+        )
+        session.add_all([first_asset, second_asset, no_price_asset])
+        await session.flush()
+
+        session.add_all(
+            [
+                PriceHistory(
+                    asset_id=first_asset.id,
+                    date=date(2025, 1, 1),
+                    open=Decimal("99"),
+                    high=Decimal("99"),
+                    low=Decimal("99"),
+                    close=Decimal("99"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+                PriceHistory(
+                    asset_id=first_asset.id,
+                    date=date(2025, 1, 3),
+                    open=Decimal("100"),
+                    high=Decimal("100"),
+                    low=Decimal("100"),
+                    close=Decimal("100"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+                PriceHistory(
+                    asset_id=first_asset.id,
+                    date=date(2025, 1, 5),
+                    open=Decimal("101"),
+                    high=Decimal("101"),
+                    low=Decimal("101"),
+                    close=Decimal("101"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+                PriceHistory(
+                    asset_id=second_asset.id,
+                    date=date(2025, 1, 4),
+                    open=Decimal("55"),
+                    high=Decimal("55"),
+                    low=Decimal("55"),
+                    close=Decimal("55"),
+                    volume=Decimal("1"),
+                    currency="USD",
+                    source_plugin_key="manual_test",
+                ),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+
+        assert await service._bulk_load_asset_prices(set(), date(2025, 1, 1), date(2025, 1, 5)) == {}
+        assert await service._get_quote_base_map(set()) == {}
+
+        bulk = await service._bulk_load_asset_prices(
+            {first_asset.id, second_asset.id},
+            date(2025, 1, 2),
+            date(2025, 1, 5),
+        )
+        assert bulk == {
+            first_asset.id: [
+                (date(2025, 1, 3), Decimal("100"), "EUR"),
+                (date(2025, 1, 5), Decimal("101"), "EUR"),
+            ],
+            second_asset.id: [
+                (date(2025, 1, 4), Decimal("55"), "USD"),
+            ],
+        }
+
+        quote_map = await service._get_quote_base_map({first_asset.id, second_asset.id, no_price_asset.id})
+        assert quote_map == {
+            first_asset.id: 100,
+            second_asset.id: 1,
+            no_price_asset.id: 1,
+        }
+
+        assert await service._get_latest_price(first_asset.id) == (Decimal("101"), "EUR", date(2025, 1, 5))
+        assert await service._get_latest_price(no_price_asset.id) is None
 
 
 # =============================================================================
@@ -1182,3 +1472,190 @@ class TestPortfolioServiceDateAwareDashboardData:
         row = contribution.positions[0]
         assert row.is_fully_sold is True
         assert row.end_value == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_positions_contribution_includes_income_only_asset_rows(self, session, test_user, broker_with_access, test_asset):
+        """Asset-linked income/fee rows without BUY/SELL still become contribution rows."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.DIVIDEND,
+                    date=date(2025, 4, 10),
+                    amount=Decimal("30"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.FEE,
+                    date=date(2025, 4, 11),
+                    amount=Decimal("-4"),
+                    currency="EUR",
+                ),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        contribution = await service.get_positions_contribution(
+            user_id=test_user.id,
+            date_from=date(2025, 4, 1),
+            date_to=date(2025, 4, 30),
+        )
+
+        assert len(contribution.positions) == 1
+        row = contribution.positions[0]
+        assert row.asset_id == test_asset.id
+        assert row.broker_id == broker.id
+        assert row.period_income == Decimal("30")
+        assert row.period_fees_taxes == Decimal("4")
+        assert row.period_pnl == Decimal("26")
+        assert row.start_value == Decimal("0")
+        assert row.end_value == Decimal("0")
+        assert row.is_fully_sold is True
+        assert contribution.unallocated == []
+        assert contribution.other_effects == []
+        assert contribution.gross_gains == Decimal("26")
+        assert contribution.gross_losses == Decimal("0")
+
+
+class TestPortfolioServiceGetReport:
+    @pytest.mark.asyncio
+    async def test_get_report_includes_requested_sections(self, session, test_user, broker_with_access, test_asset):
+        """Full-feature report populates summary/history/allocation/positions sections in one call."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker.id,
+                    type=TransactionType.DEPOSIT,
+                    date=date(2025, 7, 1),
+                    amount=Decimal("1000"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.BUY,
+                    date=date(2025, 7, 2),
+                    quantity=Decimal("5"),
+                    amount=Decimal("-500"),
+                    currency="EUR",
+                ),
+                PriceHistory(
+                    asset_id=test_asset.id,
+                    date=date(2025, 7, 3),
+                    open=Decimal("105"),
+                    high=Decimal("105"),
+                    low=Decimal("105"),
+                    close=Decimal("105"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+            ]
+        )
+        await session.flush()
+        _portfolio_l2_cache.clear()
+
+        service = PortfolioService(session)
+        report = await service.get_report(
+            user_id=test_user.id,
+            query=PortfolioReportQuery(
+                broker_ids=[broker.id],
+                include_summary=True,
+                include_history=True,
+                include_allocation_history=True,
+                include_positions_contribution=True,
+                date_range={"start": "2025-07-01", "end": "2025-07-03"},
+            ),
+        )
+
+        assert report.summary is not None
+        assert report.history is not None
+        assert report.allocation_history is not None
+        assert report.positions_contribution is not None
+        assert report.summary.net_worth.amount == Decimal("1025")
+        assert [point.date for point in report.history] == [date(2025, 7, 1), date(2025, 7, 2), date(2025, 7, 3)]
+        assert report.allocation_history.type
+        assert report.positions_contribution.positions
+        assert report.metadata.included_features == [
+            "summary",
+            "history",
+            "allocation_history",
+            "positions_contribution",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_get_report_respects_include_flags(self, session, test_user, broker_with_access):
+        """When all include flags false, report omits optional sections but keeps metadata/data-quality."""
+        broker, _ = broker_with_access
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 5, 1),
+                amount=Decimal("1000"),
+                currency="EUR",
+            )
+        )
+        await session.flush()
+        _portfolio_l2_cache.clear()
+
+        service = PortfolioService(session)
+        report = await service.get_report(
+            user_id=test_user.id,
+            query=PortfolioReportQuery(
+                broker_ids=[broker.id],
+                include_summary=False,
+                include_history=False,
+                include_allocation_history=False,
+                include_positions_contribution=False,
+            ),
+        )
+
+        assert report.summary is None
+        assert report.history is None
+        assert report.allocation_history is None
+        assert report.positions_contribution is None
+        assert report.data_quality is not None
+        assert report.metadata.broker_ids == [broker.id]
+        assert report.metadata.included_features == []
+
+    @pytest.mark.asyncio
+    async def test_get_report_uses_layer2_cache(self, session, test_user, broker_with_access, monkeypatch):
+        """Second identical get_report call should return cached report without rerunning engine."""
+        broker, _ = broker_with_access
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 6, 1),
+                amount=Decimal("750"),
+                currency="EUR",
+            )
+        )
+        await session.flush()
+        _portfolio_l2_cache.clear()
+
+        service = PortfolioService(session)
+        query = PortfolioReportQuery(
+            broker_ids=[broker.id],
+            include_summary=False,
+            include_history=False,
+            include_allocation_history=False,
+            include_positions_contribution=False,
+        )
+        first = await service.get_report(user_id=test_user.id, query=query)
+
+        async def fail_calculate(self, *args, **kwargs):
+            raise AssertionError("Engine should not run on layer-2 cache hit")
+
+        monkeypatch.setattr(portfolio_engine_module.PortfolioCalculationEngine, "calculate", fail_calculate)
+
+        second = await service.get_report(user_id=test_user.id, query=query)
+
+        assert second.model_dump() == first.model_dump()

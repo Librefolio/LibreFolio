@@ -18,14 +18,14 @@ Reference: backend/app/api/v1/brokers.py
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
 import httpx
 import pytest
 
-from backend.app.config import get_settings
+from backend.app.config import PROJECT_ROOT, get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -186,6 +186,41 @@ class TestBrokerCreate:
             assert data["results"][0]["deposits_created"] == 2
 
             print_success("✓ Created broker with 2 initial deposits")
+
+    @pytest.mark.asyncio
+    async def test_post_brokers_with_zero_initial_balance(self, test_server):
+        """BR-A-002B: POST /brokers with zero initial balance skips deposit creation."""
+        print_section("Test BR-A-002B: POST /brokers - zero initial balance")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+
+            payload = [
+                {
+                    "name": unique_name("Zero Balance Broker"),
+                    "initial_balances": [{"code": "EUR", "amount": "0"}],
+                }
+            ]
+
+            response = await client.post(
+                f"{API_BASE}/brokers",
+                json=payload,
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+
+            data = response.json()
+            assert data["success_count"] == 1
+            assert data["results"][0]["success"] is True
+            assert data["results"][0]["deposits_created"] == 0
+
+            broker_id = data["results"][0]["broker_id"]
+            summary_response = await client.get(f"{API_BASE}/brokers/{broker_id}/summary", timeout=TIMEOUT)
+            assert summary_response.status_code == 200
+            assert summary_response.json()["cash_balances"] == []
+
+            print_success("✓ Created broker without deposit for zero initial balance")
 
     @pytest.mark.asyncio
     async def test_post_brokers_duplicate(self, test_server):
@@ -411,6 +446,78 @@ class TestBrokerRead:
 
             print_success(f"✓ Got summary for broker {broker_id}")
 
+    @pytest.mark.asyncio
+    async def test_get_broker_summary_with_holdings_and_user_metadata(self, test_server):
+        """BR-A-013B: GET /brokers/{id}/summary returns holdings and user metadata."""
+        print_section("Test BR-A-013B: GET /brokers/{id}/summary - holdings")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+
+            broker_name = unique_name("Summary Holdings Broker")
+            create_resp = await client.post(
+                f"{API_BASE}/brokers",
+                json=[{"name": broker_name, "allow_cash_overdraft": True}],
+                timeout=TIMEOUT,
+            )
+            assert create_resp.status_code == 200, create_resp.text
+            broker_id = create_resp.json()["results"][0]["broker_id"]
+
+            asset_name = unique_name("Summary Asset")
+            asset_resp = await client.post(
+                f"{API_BASE}/assets",
+                json=[{"display_name": asset_name, "asset_type": "STOCK", "currency": "EUR"}],
+                timeout=TIMEOUT,
+            )
+            assert asset_resp.status_code in (200, 201), asset_resp.text
+            asset_id = asset_resp.json()["results"][0]["asset_id"]
+
+            tx_resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {
+                            "broker_id": broker_id,
+                            "type": "DEPOSIT",
+                            "date": date.today().isoformat(),
+                            "cash": {"code": "EUR", "amount": "5000"},
+                        },
+                        {
+                            "broker_id": broker_id,
+                            "asset_id": asset_id,
+                            "type": "BUY",
+                            "date": date.today().isoformat(),
+                            "quantity": "10",
+                            "cash": {"code": "EUR", "amount": "-1200"},
+                        },
+                    ]
+                },
+                timeout=TIMEOUT,
+            )
+            assert tx_resp.status_code == 200, tx_resp.text
+            assert tx_resp.json()["committed"] is True
+
+            response = await client.get(
+                f"{API_BASE}/brokers/{broker_id}/summary",
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["id"] == broker_id
+            assert data["user_role"] == "OWNER"
+            assert Decimal(str(data["user_share_percentage"])) == Decimal("1")
+            assert any(balance["code"] == "EUR" for balance in data["cash_balances"])
+
+            holding = next((item for item in data["holdings"] if item["asset_id"] == asset_id), None)
+            assert holding is not None
+            assert holding["asset_name"] == asset_name
+            assert Decimal(str(holding["quantity"])) == Decimal("10")
+            assert holding["total_cost"]["code"] == "EUR"
+            assert Decimal(str(holding["total_cost"]["amount"])) == Decimal("1200")
+
+            print_success(f"✓ Got holdings summary for broker {broker_id}")
+
 
 # ============================================================================
 # BROKER API - UPDATE (with auth)
@@ -582,6 +689,54 @@ class TestBrokerDelete:
             assert data["results"][0]["transactions_deleted"] >= 1
 
             print_success("✓ Force deleted broker with transactions")
+
+    @pytest.mark.asyncio
+    async def test_delete_brokers_partial_success(self, test_server):
+        """BR-A-032B: DELETE /brokers can delete valid broker and keep blocked broker."""
+        print_section("Test BR-A-032B: DELETE /brokers - partial success")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+
+            delete_resp = await client.post(
+                f"{API_BASE}/brokers",
+                json=[{"name": unique_name("Delete Partial OK")}],
+                timeout=TIMEOUT,
+            )
+            assert delete_resp.status_code == 200, delete_resp.text
+            deletable_broker_id = delete_resp.json()["results"][0]["broker_id"]
+
+            blocked_resp = await client.post(
+                f"{API_BASE}/brokers",
+                json=[{"name": unique_name("Delete Partial Blocked"), "initial_balances": [{"code": "EUR", "amount": "1000"}]}],
+                timeout=TIMEOUT,
+            )
+            assert blocked_resp.status_code == 200, blocked_resp.text
+            blocked_broker_id = blocked_resp.json()["results"][0]["broker_id"]
+
+            response = await client.delete(
+                f"{API_BASE}/brokers",
+                params={"ids": [deletable_broker_id, blocked_broker_id], "force": False},
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["success_count"] == 1
+            assert data["total_deleted"] == 1
+
+            result_by_id = {item["id"]: item for item in data["results"]}
+            assert result_by_id[deletable_broker_id]["success"] is True
+            assert result_by_id[blocked_broker_id]["success"] is False
+            assert "transactions" in result_by_id[blocked_broker_id]["message"].lower()
+
+            deleted_check = await client.get(f"{API_BASE}/brokers/{deletable_broker_id}", timeout=TIMEOUT)
+            assert deleted_check.status_code == 404
+
+            kept_check = await client.get(f"{API_BASE}/brokers/{blocked_broker_id}", timeout=TIMEOUT)
+            assert kept_check.status_code == 200
+
+            print_success("✓ Partial delete keeps broker with transactions")
 
 
 # ============================================================================
@@ -870,3 +1025,109 @@ class TestMultipleOwners:
             assert len(access_resp.json()["items"]) == 1
 
             print_success("✓ Owner removed another owner successfully")
+
+
+# ============================================================================
+# BROKER API - BRIM IMPORT
+# ============================================================================
+
+
+class TestBrokerImportEndpoints:
+    """Tests for BRIM endpoints in brokers router."""
+
+    @pytest.mark.asyncio
+    async def test_get_brim_file_preview_for_sample_report(self, test_server):
+        """BR-A-060: GET /brokers/import/files/{id}/preview returns preview payload."""
+        print_section("Test BR-A-060: GET /brokers/import/files/{id}/preview")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+
+            create_resp = await client.post(
+                f"{API_BASE}/brokers",
+                json=[{"name": unique_name("Preview Broker"), "allow_cash_overdraft": True}],
+                timeout=TIMEOUT,
+            )
+            assert create_resp.status_code == 200, create_resp.text
+            broker_id = create_resp.json()["results"][0]["broker_id"]
+
+            sample_report = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports" / "generic_simple.csv"
+            upload_resp = await client.post(
+                f"{API_BASE}/brokers/import/upload",
+                files={"file": (sample_report.name, sample_report.read_bytes(), "text/csv")},
+                data={"broker_id": broker_id},
+                timeout=TIMEOUT,
+            )
+            assert upload_resp.status_code == 200, upload_resp.text
+            file_id = upload_resp.json()["file_id"]
+
+            response = await client.get(
+                f"{API_BASE}/brokers/import/files/{file_id}/preview",
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["preview_type"] == "table"
+            assert data["filename"] == sample_report.name
+            assert data["source_url"].endswith(f"/brokers/import/files/{file_id}/download?download=false")
+            assert data["download_url"].endswith(f"/brokers/import/files/{file_id}/download")
+            assert data["preview_url"] is None
+            assert len(data["table_rows"]) > 1
+            assert data["table_rows"][0][0] == "date"
+
+            print_success("✓ BRIM preview payload returned from brokers API test")
+
+    @pytest.mark.asyncio
+    async def test_parse_file_with_auto_plugin(self, test_server):
+        """BR-A-061: POST /brokers/import/files/{id}/parse auto-detects generic CSV fallback."""
+        print_section("Test BR-A-061: POST /brokers/import/files/{id}/parse - auto plugin")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+
+            create_resp = await client.post(
+                f"{API_BASE}/brokers",
+                json=[{"name": unique_name("Parse Broker"), "allow_cash_overdraft": True}],
+                timeout=TIMEOUT,
+            )
+            assert create_resp.status_code == 200, create_resp.text
+            broker_id = create_resp.json()["results"][0]["broker_id"]
+
+            sample_report = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports" / "generic_with_assets.csv"
+            upload_resp = await client.post(
+                f"{API_BASE}/brokers/import/upload",
+                files={"file": (sample_report.name, sample_report.read_bytes(), "text/csv")},
+                data={"broker_id": broker_id},
+                timeout=TIMEOUT,
+            )
+            assert upload_resp.status_code == 200, upload_resp.text
+            file_id = upload_resp.json()["file_id"]
+
+            response = await client.post(
+                f"{API_BASE}/brokers/import/files/{file_id}/parse",
+                json={"plugin_code": "auto", "broker_id": broker_id},
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["file_id"] == file_id
+            assert data["broker_id"] == broker_id
+            assert data["plugin_code"] == "broker_generic_csv"
+            assert len(data["transactions"]) > 0
+            assert len(data["asset_mappings"]) >= 1
+            assert set(data["duplicates"]) == {
+                "tx_unique_indices",
+                "tx_possible_duplicates",
+                "tx_likely_duplicates",
+            }
+
+            last_parse_resp = await client.get(
+                f"{API_BASE}/brokers/import/files/{file_id}/last-parse",
+                timeout=TIMEOUT,
+            )
+            assert last_parse_resp.status_code == 200, last_parse_resp.text
+            assert last_parse_resp.json()["plugin_code"] == "broker_generic_csv"
+
+            print_success("✓ BRIM parse auto fallback returned cached generic CSV result")

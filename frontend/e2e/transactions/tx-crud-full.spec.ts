@@ -31,37 +31,32 @@ async function openCreateFlow(page: Page) {
 
 /** Fill a DEPOSIT in the FormModal (no asset needed). */
 async function fillDeposit(page: Page, amount: string = '100') {
-    // Select DEPOSIT type
+    // Select DEPOSIT type — deterministic testid (search-select-option-<TYPE_CODE>),
+    // same convention used elsewhere (e.g. search-select-option-SELL/-ADJUSTMENT).
+    // A hard visibility assertion (instead of isVisible().catch()) makes a genuine
+    // failure surface here immediately, instead of a confusing 30s timeout later on
+    // tx-form-save because the draft silently stayed incomplete.
     const typeButton = page.getByTestId('tx-form-type');
     await typeButton.click();
-    await page.waitForTimeout(300);
-    const depositOption = page
-        .locator('[data-testid^="search-select-option-"]')
-        .filter({hasText: /deposit/i})
-        .first();
-    if (await depositOption.isVisible({timeout: 2_000}).catch(() => false)) {
-        await depositOption.click();
-    }
+    const depositOption = page.getByTestId('search-select-option-DEPOSIT');
+    await expect(depositOption).toBeVisible({timeout: 5_000});
+    await depositOption.click();
     await page.waitForTimeout(300);
 
     // Pick first available broker
     const brokerWrap = page.getByTestId('tx-form-broker-wrap');
     await brokerWrap.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     const brokerOption = page.locator('[data-testid^="search-select-option-"]').first();
-    if (await brokerOption.isVisible({timeout: 2_000}).catch(() => false)) {
-        await brokerOption.click();
-    }
+    await expect(brokerOption).toBeVisible({timeout: 5_000});
+    await brokerOption.click();
     await page.waitForTimeout(300);
 
-    // Cash amount
+    // Cash amount — DEPOSIT always requires cash, so this must be present.
     const cashWrap = page.getByTestId('tx-form-cash-wrap');
-    if (await cashWrap.isVisible({timeout: 2_000}).catch(() => false)) {
-        const cashInput = cashWrap.locator('input[type="number"]').first();
-        if (await cashInput.isVisible({timeout: 1_000}).catch(() => false)) {
-            await cashInput.fill(amount);
-        }
-    }
+    await expect(cashWrap).toBeVisible({timeout: 3_000});
+    const cashInput = cashWrap.locator('input[type="number"]').first();
+    await expect(cashInput).toBeVisible({timeout: 2_000});
+    await cashInput.fill(amount);
     await page.waitForTimeout(200);
 }
 

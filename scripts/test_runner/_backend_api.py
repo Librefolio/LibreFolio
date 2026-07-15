@@ -40,6 +40,14 @@ def api_preview_cache(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Preview cache tests", verbose=verbose)
 
 
+def api_fx_unit(verbose: bool = False, test_names: list = None) -> bool:
+    """Run direct unit tests for FX API handlers (no live server/network)."""
+    print_section("FX API Unit Tests")
+    print_info("Testing happy-path/main-branch coverage in backend/app/api/v1/fx.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_fx_api_unit.py", test_names)
+    return run_command(cmd, "FX API unit tests", verbose=verbose)
+
+
 def api_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
     """Run FX Sync API endpoint tests."""
     print_section("FX Sync API Endpoint Tests")
@@ -451,6 +459,16 @@ def api_users_search(verbose: bool = False, test_names: list[str] | None = None)
     return run_command(cmd, "User Search API tests", verbose=verbose)
 
 
+def api_portfolio(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run portfolio API tests."""
+    print_section("Portfolio API Tests")
+    print_info("Testing POST /portfolio/report plus GET asset-history and lots endpoints")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_portfolio_api.py", test_names)
+    return run_command(cmd, "Portfolio API tests", verbose=verbose)
+
+
 def api_portfolio_wac(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run portfolio WAC API tests."""
     print_section("Portfolio WAC API Tests")
@@ -518,6 +536,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "fx", api_fx, name="FX API", desc="Conversion, providers, pair sources")
     add_test(api, "fx-compress-errors", api_fx_compress_errors, name="FX Compress Errors", desc="_compress_convert_errors utility")
     add_test(api, "preview-cache", api_preview_cache, name="Preview Cache", desc="PreviewCache in uploads API")
+    add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
     add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync")
     add_test(api, "assets-provider", api_assets_provider, name="Assets Provider API", desc="Provider assignment endpoints")
@@ -555,6 +574,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "broker-access", api_broker_access, name="Broker Access API", desc="Access management, roles")
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
+    add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")
     add_test(api, "portfolio-wac", api_portfolio_wac, name="Portfolio WAC API", desc="POST /portfolio/wac endpoint (A1-A8)")
     add_test(api, "all", api_test, test_names=False, name="All API Tests", desc="Run all API tests")
     registry["api"] = api

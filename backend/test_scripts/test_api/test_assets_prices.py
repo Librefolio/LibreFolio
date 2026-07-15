@@ -825,3 +825,154 @@ async def test_upsert_same_currency_succeeds_200(test_server):
         data = FABulkUpsertResponse(**resp.json())
         assert data.success_count >= 1
         print_success("  ✓ EUR rows on EUR asset → 200 OK")
+
+
+@pytest.mark.asyncio
+async def test_manual_price_wrappers_round_trip(test_server):
+    """Test 18: Manual price wrapper happy-path round trip."""
+    print_section("Test 18: Manual price wrappers round trip")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        create_item = FAAssetCreateItem(display_name=f"Manual Price Wrap {unique_id('MPW')}", currency="EUR")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
+        assert create_resp.status_code == 201
+        asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+
+        upsert_resp = await client.post(
+            f"{API_BASE}/assets/prices",
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "prices": [
+                        {"date": "2025-02-10", "close": "50.00", "currency": "EUR"},
+                        {"date": "2025-02-11", "close": "51.25", "currency": "EUR"},
+                    ],
+                }
+            ],
+            timeout=TIMEOUT,
+        )
+        assert upsert_resp.status_code == 200, upsert_resp.text
+        upsert_data = FABulkUpsertResponse(**upsert_resp.json())
+        assert upsert_data.inserted_count >= 2
+        assert upsert_data.success_count == 1
+
+        query_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "date_range": {"start": "2025-02-10", "end": "2025-02-11"},
+                }
+            ],
+            timeout=TIMEOUT,
+        )
+        assert query_resp.status_code == 200, query_resp.text
+        prices = query_resp.json()["items"][0]["prices"]
+        assert len(prices) == 2
+
+        current_resp = await client.post(f"{API_BASE}/assets/prices/current", json=[asset_id], timeout=TIMEOUT)
+        assert current_resp.status_code == 200, current_resp.text
+        current = current_resp.json()["results"][0]
+        assert current["asset_id"] == asset_id
+        assert current["source"] == "db:last_known"
+        assert Decimal(current["value"]) == Decimal("51.25")
+
+        delete_resp = await client.request(
+            "DELETE",
+            f"{API_BASE}/assets/prices",
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "date_ranges": [{"start": "2025-02-10", "end": "2025-02-10"}],
+                }
+            ],
+            timeout=TIMEOUT,
+        )
+        assert delete_resp.status_code == 200, delete_resp.text
+        delete_data = FABulkDeleteResponse(**delete_resp.json())
+        assert delete_data.success_count == 1
+        assert delete_data.total_deleted >= 1
+
+        query_after_delete = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "date_range": {"start": "2025-02-10", "end": "2025-02-11"},
+                }
+            ],
+            timeout=TIMEOUT,
+        )
+        assert query_after_delete.status_code == 200
+        remaining = query_after_delete.json()["items"][0]["prices"]
+        assert len(remaining) == 1
+        assert remaining[0]["date"] == "2025-02-11"
+        print_success("  ✓ Upsert/query/current/delete wrappers all returned expected data")
+
+
+@pytest.mark.asyncio
+async def test_sync_and_current_price_provider_success_with_mockprov(test_server):
+    """Test 19: Sync + provider-backed current price with mockprov."""
+    print_section("Test 19: Sync + current price via mock provider")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        create_item = FAAssetCreateItem(display_name=f"Mock Sync {unique_id('MSYNC')}", currency="USD")
+        create_resp = await client.post(f"{API_BASE}/assets", json=[create_item.model_dump(mode="json")], timeout=TIMEOUT)
+        assert create_resp.status_code == 201
+        asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+
+        assign_resp = await client.post(
+            f"{API_BASE}/assets/provider",
+            json=[
+                FAProviderAssignmentItem(
+                    asset_id=asset_id,
+                    provider_code="mockprov",
+                    identifier="MOCK",
+                    identifier_type=ProviderInputType.TICKER,
+                    provider_params=None,
+                ).model_dump(mode="json")
+            ],
+            timeout=TIMEOUT,
+        )
+        assert assign_resp.status_code == 200, assign_resp.text
+
+        today = date.today()
+        sync_resp = await client.post(
+            f"{API_BASE}/assets/prices/sync",
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "date_range": {"start": (today - timedelta(days=2)).isoformat(), "end": today.isoformat()},
+                }
+            ],
+            timeout=TIMEOUT,
+        )
+        assert sync_resp.status_code == 200, sync_resp.text
+        sync_data = sync_resp.json()
+        assert sync_data["success_count"] == 1
+        assert sync_data["results"][0]["asset_id"] == asset_id
+        assert sync_data["results"][0]["points_fetched"] >= 1
+
+        current_resp = await client.post(f"{API_BASE}/assets/prices/current", json=[asset_id], timeout=TIMEOUT)
+        assert current_resp.status_code == 200, current_resp.text
+        current = current_resp.json()["results"][0]
+        assert current["source"] == "provider:mockprov"
+        assert Decimal(current["value"]) == Decimal("100.00")
+
+        verify_resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "date_range": {"start": (today - timedelta(days=2)).isoformat(), "end": today.isoformat()},
+                }
+            ],
+            timeout=TIMEOUT,
+        )
+        assert verify_resp.status_code == 200, verify_resp.text
+        assert len(verify_resp.json()["items"][0]["prices"]) >= 1
+        print_success("  ✓ Sync + current price wrappers succeeded with mock provider")

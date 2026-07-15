@@ -245,6 +245,68 @@ class TestLogin:
             assert response.status_code == 401
             print_success("Non-existent user correctly rejected")
 
+    @pytest.mark.asyncio
+    async def test_login_returns_existing_user_settings(self, test_server):
+        """LOGIN-005: Login returns persisted user settings."""
+        print_section("LOGIN-005: Login returns persisted user settings")
+
+        from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415 — test-only local import
+
+        from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test-only local import
+        from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test-only local import
+        from backend.app.services import settings_service, user_service  # noqa: PLC0415 — test-only local import
+
+        async with httpx.AsyncClient() as client:
+            timestamp = int(datetime.now().timestamp() * 1000)
+            username = f"loginsettings_{timestamp}"
+            email = f"loginsettings_{timestamp}@example.com"
+            password = "loginpassword123"
+
+            register_resp = await client.post(
+                f"{API_BASE}/auth/register",
+                json={"username": username, "email": email, "password": password},
+                timeout=TIMEOUT,
+            )
+            assert register_resp.status_code == 201, f"Setup failed: {register_resp.text}"
+
+            engine = get_async_engine()
+            async with AsyncSession(engine) as session:
+                user = await user_service.get_user_by_username(session, username)
+                assert user is not None, "Registered user not found in DB"
+
+                await settings_service.update_user_settings(
+                    user.id,
+                    UserSettingsUpdate(
+                        language="fr",
+                        base_currency="USD",
+                        theme="dark",
+                        avatar_url="https://example.com/avatar.png",
+                    ),
+                    session,
+                )
+
+            response = await client.post(
+                f"{API_BASE}/auth/login",
+                json={"username": username, "password": password},
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+            data = response.json()
+            assert data["user"]["username"] == username
+            assert data["user_settings"] == {
+                "language": "fr",
+                "base_currency": "USD",
+                "theme": "dark",
+                "avatar_url": "https://example.com/avatar.png",
+            }
+
+            client.cookies.update(response.cookies)
+            me_resp = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+            assert me_resp.status_code == 200
+
+            print_success("Login returned persisted user settings")
+
 
 class TestLogout:
     """Tests for POST /auth/logout."""
@@ -618,3 +680,64 @@ class TestChangePassword:
             assert response.status_code == 422, f"Expected 422, got {response.status_code}"
 
             print_success("Short password correctly rejected")
+
+
+class TestDeleteOwnAccount:
+    """Tests for DELETE /auth/users/me."""
+
+    @pytest.mark.asyncio
+    async def test_delete_own_account_success(self, test_server):
+        """DELME-001: Authenticated regular user can delete own account."""
+        print_section("DELME-001: Delete own account")
+
+        async with httpx.AsyncClient() as client:
+            timestamp = int(datetime.now().timestamp() * 1000)
+
+            support_username = f"keepadmin_{timestamp}"
+            target_username = f"deleteme_{timestamp}"
+            target_email = f"deleteme_{timestamp}@example.com"
+            password = "DeletePass123!"
+
+            support_resp = await client.post(
+                f"{API_BASE}/auth/register",
+                json={
+                    "username": support_username,
+                    "email": f"keepadmin_{timestamp}@example.com",
+                    "password": password,
+                },
+                timeout=TIMEOUT,
+            )
+            assert support_resp.status_code == 201, f"Support user setup failed: {support_resp.text}"
+
+            register_resp = await client.post(
+                f"{API_BASE}/auth/register",
+                json={"username": target_username, "email": target_email, "password": password},
+                timeout=TIMEOUT,
+            )
+            assert register_resp.status_code == 201, f"Target user setup failed: {register_resp.text}"
+
+            login_resp = await client.post(
+                f"{API_BASE}/auth/login",
+                json={"username": target_username, "password": password},
+                timeout=TIMEOUT,
+            )
+            assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+            client.cookies.update(login_resp.cookies)
+
+            delete_resp = await client.delete(f"{API_BASE}/auth/users/me", timeout=TIMEOUT)
+
+            assert delete_resp.status_code == 200, f"Expected 200, got {delete_resp.status_code}: {delete_resp.text}"
+            assert delete_resp.json() == {"message": "Account deleted successfully"}
+            assert "session=" in delete_resp.headers.get("set-cookie", "").lower()
+
+            me_resp = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+            assert me_resp.status_code == 401
+
+            relogin_resp = await client.post(
+                f"{API_BASE}/auth/login",
+                json={"username": target_username, "password": password},
+                timeout=TIMEOUT,
+            )
+            assert relogin_resp.status_code == 401
+
+            print_success("Own account deleted and session invalidated")

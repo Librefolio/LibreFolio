@@ -4,6 +4,8 @@ Asset CRUD API Tests.
 Tests for asset creation, listing, and deletion endpoints.
 """
 
+from datetime import date
+
 import httpx
 import pytest
 
@@ -754,6 +756,256 @@ async def test_bulk_refresh_prices(test_server):
         # Step 3: Refresh prices (skipped - tested in test_assets_provider.py)
         print_info("  Skipping price refresh - tested separately in test_assets_provider.py")
         print_success("✓ Asset created and provider assigned, refresh tested separately")
+
+
+@pytest.mark.asyncio
+async def test_bulk_read_get_all_list_and_delete_identifier_variants(test_server):
+    """Test 20: Cover bulk read + get_all + identifier-based list variants."""
+    print_section("Test 20: CRUD wrappers - read/all/query/delete")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        read_ticker = f"RDTK{unique_id('RDTK')}".upper()[:20]
+        item1 = FAAssetCreateItem(
+            display_name=f"Read Order One {unique_id('RD1')}",
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            identifier_ticker=read_ticker,
+            classification_params=FAClassificationParams(
+                sector_area=FASectorArea(distribution={"Technology": 1.0}),
+                geographic_area=FAGeographicArea(distribution={"USA": 1.0}),
+            ),
+        )
+        item2 = FAAssetCreateItem(
+            display_name=f"Read Order Two {unique_id('RD2')}",
+            currency="EUR",
+            active=False,
+            user_url="https://example.test/read-order-two",
+            identifier_other=f"ORD-{unique_id('OTHER')}",
+        )
+        create_resp = await client.post(
+            f"{API_BASE}/assets",
+            json=[item1.model_dump(mode="json"), item2.model_dump(mode="json")],
+            timeout=TIMEOUT,
+        )
+        assert create_resp.status_code == 201, create_resp.text
+        create_data = FABulkAssetCreateResponse(**create_resp.json())
+        asset1_id = create_data.results[0].asset_id
+        asset2_id = create_data.results[1].asset_id
+
+        assign_resp = await client.post(
+            f"{API_BASE}/assets/provider",
+            json=[
+                FAProviderAssignmentItem(
+                    asset_id=asset1_id,
+                    provider_code="mockprov",
+                    identifier="MOCK_READ",
+                    identifier_type=ProviderInputType.TICKER,
+                    provider_params=None,
+                ).model_dump(mode="json")
+            ],
+            timeout=TIMEOUT,
+        )
+        assert assign_resp.status_code == 200, assign_resp.text
+
+        read_resp = await client.get(
+            f"{API_BASE}/assets",
+            params=[("asset_ids", str(asset2_id)), ("asset_ids", "999999"), ("asset_ids", str(asset1_id))],
+            timeout=TIMEOUT,
+        )
+        assert read_resp.status_code == 200, read_resp.text
+        read_data = read_resp.json()
+        assert [item["asset_id"] for item in read_data] == [asset2_id, asset1_id]
+        assert read_data[0]["provider_code"] is None
+        assert read_data[1]["provider_code"] == "mockprov"
+        assert read_data[1]["classification_params"]["sector_area"]["distribution"]["Technology"] == "1.0000"
+        print_success("✓ Bulk read preserves order, skips missing IDs, returns metadata/provider")
+
+        all_resp = await client.get(f"{API_BASE}/assets/all", timeout=TIMEOUT)
+        assert all_resp.status_code == 200, all_resp.text
+        active_ids = [row["id"] for row in all_resp.json()]
+        assert asset1_id in active_ids
+        assert asset2_id not in active_ids
+        print_success("✓ /assets/all returns only active assets")
+
+        ticker_resp = await client.get(f"{API_BASE}/assets/query", params={"ticker": read_ticker}, timeout=TIMEOUT)
+        assert ticker_resp.status_code == 200, ticker_resp.text
+        ticker_ids = [row["id"] for row in ticker_resp.json()]
+        assert asset1_id in ticker_ids
+
+        contains_resp = await client.get(f"{API_BASE}/assets/query", params={"identifier_contains": "ORD-"}, timeout=TIMEOUT)
+        assert contains_resp.status_code == 200, contains_resp.text
+        contains_ids = [row["id"] for row in contains_resp.json()]
+        assert asset2_id in contains_ids
+        print_success("✓ /assets/query handles identifier filters")
+
+        delete_resp = await client.delete(
+            f"{API_BASE}/assets",
+            params=[("asset_ids", str(asset1_id)), ("asset_ids", str(asset2_id))],
+            timeout=TIMEOUT,
+        )
+        assert delete_resp.status_code == 200, delete_resp.text
+        delete_data = FABulkAssetDeleteResponse(**delete_resp.json())
+        assert delete_data.success_count == 2
+        print_success("✓ Bulk delete removed created assets")
+
+
+@pytest.mark.asyncio
+async def test_patch_market_data_summary_and_wipe_flow(test_server):
+    """Test 21: Cover patch + market-data summary/wipe happy path."""
+    print_section("Test 21: PATCH + market-data summary/wipe")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+
+        create_resp = await client.post(
+            f"{API_BASE}/assets",
+            json=[
+                FAAssetCreateItem(
+                    display_name=f"Wipe Flow {unique_id('WIPE')}",
+                    currency="USD",
+                    asset_type=AssetType.STOCK,
+                ).model_dump(mode="json")
+            ],
+            timeout=TIMEOUT,
+        )
+        assert create_resp.status_code == 201, create_resp.text
+        asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+
+        patch_resp = await client.patch(
+            f"{API_BASE}/assets",
+            json=[
+                FAAssetPatchItem(
+                    asset_id=asset_id,
+                    user_url="https://example.test/wipe-flow",
+                    identifier_ticker="WIPEFLOW",
+                    quote_base_quantity=100,
+                ).model_dump(mode="json", exclude_unset=True)
+            ],
+            timeout=TIMEOUT,
+        )
+        assert patch_resp.status_code == 200, patch_resp.text
+        patch_data = patch_resp.json()
+        updated = {item["info"] for item in patch_data["results"][0]["updated_fields"]}
+        assert {"user_url", "identifier_ticker", "quote_base_quantity"} <= updated
+        print_success("✓ PATCH updated non-metadata fields")
+
+        price_resp = await client.post(
+            f"{API_BASE}/assets/prices",
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "prices": [
+                        {"date": "2025-01-10", "close": "123.45", "currency": "USD"},
+                    ],
+                }
+            ],
+            timeout=TIMEOUT,
+        )
+        assert price_resp.status_code == 200, price_resp.text
+
+        event_resp = await client.post(
+            f"{API_BASE}/assets/events",
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "events": [
+                        {
+                            "date": "2025-01-10",
+                            "type": "DIVIDEND",
+                            "value": {"code": "USD", "amount": "1.25"},
+                            "notes": "wipe me",
+                        }
+                    ],
+                }
+            ],
+            timeout=TIMEOUT,
+        )
+        assert event_resp.status_code == 200, event_resp.text
+
+        query_resp = await client.post(
+            f"{API_BASE}/assets/events/query",
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "date_range": {"start": "2025-01-01", "end": "2025-01-31"},
+                }
+            ],
+            timeout=TIMEOUT,
+        )
+        assert query_resp.status_code == 200, query_resp.text
+        event_id = query_resp.json()["items"][0]["events"][0]["id"]
+
+        broker_resp = await client.post(
+            f"{API_BASE}/brokers",
+            json=[{"name": f"Wipe Broker {unique_id('WB')}", "allow_cash_overdraft": True}],
+            timeout=TIMEOUT,
+        )
+        assert broker_resp.status_code == 200, broker_resp.text
+        broker_id = broker_resp.json()["results"][0]["broker_id"]
+
+        tx_resp = await client.post(
+            f"{API_BASE}/transactions/commit",
+            json={
+                "creates": [
+                    {
+                        "broker_id": broker_id,
+                        "asset_id": asset_id,
+                        "type": "DIVIDEND",
+                        "date": date.today().isoformat(),
+                        "cash": {"code": "USD", "amount": "1.25"},
+                        "asset_event_id": event_id,
+                    }
+                ]
+            },
+            timeout=TIMEOUT,
+        )
+        assert tx_resp.status_code == 200, tx_resp.text
+
+        summary_resp = await client.get(f"{API_BASE}/assets/{asset_id}/market-data/summary", timeout=TIMEOUT)
+        assert summary_resp.status_code == 200, summary_resp.text
+        summary = summary_resp.json()
+        assert summary["prices"] == 1
+        assert summary["events_manual"] == 1
+        assert summary["linked_tx"] == 1
+        assert summary["dry_run"] is True
+        print_success("✓ Market-data summary reports existing rows")
+
+        wipe_resp = await client.post(f"{API_BASE}/assets/{asset_id}/market-data/wipe", timeout=TIMEOUT)
+        assert wipe_resp.status_code == 200, wipe_resp.text
+        wiped = wipe_resp.json()
+        assert wiped["prices"] == 1
+        assert wiped["events_manual"] == 1
+        assert wiped["linked_tx"] == 1
+        assert wiped["dry_run"] is False
+
+        post_wipe_query = await client.post(
+            f"{API_BASE}/assets/events/query",
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "date_range": {"start": "2025-01-01", "end": "2025-01-31"},
+                }
+            ],
+            timeout=TIMEOUT,
+        )
+        assert post_wipe_query.status_code == 200, post_wipe_query.text
+        assert post_wipe_query.json()["items"][0]["events"] == []
+
+        price_check = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[
+                {
+                    "asset_id": asset_id,
+                    "date_range": {"start": "2025-01-01", "end": "2025-01-31"},
+                }
+            ],
+            timeout=TIMEOUT,
+        )
+        assert price_check.status_code == 200, price_check.text
+        assert price_check.json()["items"][0]["prices"] == []
+        print_success("✓ Market-data wipe removed prices/events and disconnected tx links")
 
 
 if __name__ == "__main__":

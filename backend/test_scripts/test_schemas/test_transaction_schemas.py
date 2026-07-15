@@ -15,7 +15,14 @@ from pydantic import ValidationError
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem, tags_to_csv, validate_tags_list
+from backend.app.schemas.transactions import (
+    TXCreateItem,
+    TXPromoteBatchItem,
+    TXSplitBatchItem,
+    TXUpdateItem,
+    tags_to_csv,
+    validate_tags_list,
+)
 
 # ============================================================================
 # 1.1 LINK UUID REQUIREMENTS
@@ -844,3 +851,54 @@ class TestStructuredErrorCodes:
             }
         )
         assert err["type"] == "linkUuidRequired"
+
+
+# ============================================================================
+# UPDATE / SPLIT / PROMOTE BATCH ITEMS
+# ============================================================================
+
+
+class TestTXUpdateItemValidation:
+    """Direct branch coverage for TXUpdateItem validator."""
+
+    def test_update_item_id_must_be_positive(self):
+        with pytest.raises(ValidationError, match="Transaction id must be > 0"):
+            TXUpdateItem(id=0)
+
+
+class TestTXSplitBatchItem:
+    """Direct branch coverage for split batch validator."""
+
+    def test_ids_must_differ(self):
+        with pytest.raises(ValidationError, match="id_a and id_b must be different transactions"):
+            TXSplitBatchItem(id_a=1, id_b=1)
+
+    def test_valid_distinct_ids(self):
+        item = TXSplitBatchItem(id_a=1, id_b=2)
+        assert item.id_a == 1
+        assert item.id_b == 2
+
+
+class TestTXPromoteBatchItem:
+    """Direct branch coverage for promote reference validator."""
+
+    def test_valid_mixed_refs(self):
+        item = TXPromoteBatchItem(link_uuid_a="create-a", id_b=2)
+        assert item.link_uuid_a == "create-a"
+        assert item.id_b == 2
+
+    def test_missing_ref_for_tx_a(self):
+        with pytest.raises(ValidationError, match="Either id_a or link_uuid_a must be provided for TX A"):
+            TXPromoteBatchItem(id_b=2)
+
+    def test_missing_ref_for_tx_b(self):
+        with pytest.raises(ValidationError, match="Either id_b or link_uuid_b must be provided for TX B"):
+            TXPromoteBatchItem(id_a=1)
+
+    def test_duplicate_ref_for_tx_a(self):
+        with pytest.raises(ValidationError, match="Provide either id_a or link_uuid_a for TX A, not both"):
+            TXPromoteBatchItem(id_a=1, link_uuid_a="create-a", id_b=2)
+
+    def test_duplicate_ref_for_tx_b(self):
+        with pytest.raises(ValidationError, match="Provide either id_b or link_uuid_b for TX B, not both"):
+            TXPromoteBatchItem(id_a=1, id_b=2, link_uuid_b="create-b")

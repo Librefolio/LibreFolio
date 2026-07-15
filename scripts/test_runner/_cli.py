@@ -449,7 +449,7 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
         cov_args = argparse.Namespace(
             input=getattr(args, "input", "/tmp/cov_report.json"),
             priority=getattr(args, "priority", None),
-            category=getattr(args, "category", None),
+            category=getattr(args, "cov_category", None),
             threshold=getattr(args, "threshold", 0.0),
             json=getattr(args, "json_output", False),
             summary=getattr(args, "summary", False),

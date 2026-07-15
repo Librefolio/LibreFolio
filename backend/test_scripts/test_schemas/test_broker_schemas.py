@@ -75,6 +75,11 @@ class TestInitialBalancesValidation:
         broker = BRCreateItem(name="Test Broker")
         assert broker.initial_balances is None
 
+    def test_initial_balances_explicit_none(self):
+        """Explicit None should be preserved by validator."""
+        broker = BRCreateItem(name="Test Broker", initial_balances=None)
+        assert broker.initial_balances is None
+
     def test_initial_balances_empty_list(self):
         """BR-S-011: Broker with empty list should pass (becomes None)."""
         broker = BRCreateItem(name="Test Broker", initial_balances=[])
@@ -147,6 +152,11 @@ class TestBrokerUpdateSchema:
         assert update.description is None
         assert update.allow_cash_overdraft is None
 
+    def test_update_name_explicit_none(self):
+        """Explicit None should pass through name validator."""
+        update = BRUpdateItem(name=None)
+        assert update.name is None
+
     def test_update_name_empty(self):
         """BR-S-021: BRUpdateItem with empty name should fail."""
         # min_length=1 constraint catches this before custom validator
@@ -158,6 +168,11 @@ class TestBrokerUpdateSchema:
         update = BRUpdateItem(name="New Broker Name")
         assert update.name == "New Broker Name"
 
+    def test_update_name_whitespace(self):
+        """Whitespace-only update name should fail."""
+        with pytest.raises(ValidationError, match="Broker name cannot be empty"):
+            BRUpdateItem(name="   ")
+
     def test_update_description(self):
         """Update description should work."""
         update = BRUpdateItem(description="New description")
@@ -167,6 +182,18 @@ class TestBrokerUpdateSchema:
         """Update portal_url should work."""
         update = BRUpdateItem(portal_url="https://broker.com")
         assert update.portal_url == "https://broker.com"
+
+    def test_update_url_explicit_none(self):
+        """Explicit None should mean no update for URL fields."""
+        update = BRUpdateItem(portal_url=None, icon_url=None)
+        assert update.portal_url is None
+        assert update.icon_url is None
+
+    def test_update_empty_url_clears_field(self):
+        """Empty or whitespace URLs should become explicit clear markers."""
+        update = BRUpdateItem(portal_url="   ", icon_url="\n\t")
+        assert update.portal_url == ""
+        assert update.icon_url == ""
 
     def test_update_overdraft_flag(self):
         """Update allow_cash_overdraft should work."""

@@ -9,8 +9,11 @@ from unittest.mock import MagicMock
 
 from backend.app.db.models import TransactionType
 from backend.app.services.portfolio_engine import (
+    ClassificationResult,
     ClassifiedTransaction,
+    DailyPortfolioState,
     DailyStateBuilder,
+    DerivedViewsBuilder,
     InTransitInterval,
 )
 
@@ -422,3 +425,181 @@ class TestFXConversion:
 
         # USD couldn't be converted → cash=0
         assert states[0].cash_value == Decimal("0")
+
+
+class TestPrivateValuationHelpers:
+    """Target small private helper branches directly."""
+
+    def test_market_value_for_foreign_market_price_uses_fx_rate(self):
+        builder = _builder(
+            price_map={100: [(date(2025, 1, 1), Decimal("20"), "USD")]},
+            fx_rate_map={("USD", "EUR", date(2025, 1, 2)): Decimal("0.9")},
+            quote_base_map={100: None},
+            asset_types={100: "ETF"},
+            asset_classifications={100: None},
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 2),
+        )
+
+        value, price_found, is_stale, missing_fx_pair, is_last_buy = builder._market_value_for(
+            asset_id=100,
+            qty=Decimal("5"),
+            dt=date(2025, 1, 2),
+        )
+
+        assert value == Decimal("90")  # 5 * 20 USD * 0.9 EUR/USD
+        assert price_found is True
+        assert is_stale is False
+        assert missing_fx_pair is None
+        assert is_last_buy is False
+
+    def test_market_value_for_last_buy_price_uses_fx_rate(self):
+        builder = _builder(
+            fx_rate_map={("USD", "EUR", date(2025, 1, 2)): Decimal("0.8")},
+            last_buy_prices={100: (date(2025, 1, 1), Decimal("30"), "USD")},
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 2),
+        )
+
+        value, price_found, is_stale, missing_fx_pair, is_last_buy = builder._market_value_for(
+            asset_id=100,
+            qty=Decimal("2"),
+            dt=date(2025, 1, 2),
+        )
+
+        assert value == Decimal("48")  # 2 * 30 USD * 0.8 EUR/USD
+        assert price_found is False
+        assert is_stale is False
+        assert missing_fx_pair is None
+        assert is_last_buy is True
+
+
+class TestPrivateCostHelpers:
+    """Direct unit tests for unit-cost helper branches."""
+
+    def test_buy_unit_cost_converts_buy_into_target_currency(self):
+        tx = _tx(
+            id=100,
+            type="BUY",
+            dt="2025-01-02",
+            amount="-100",
+            currency="USD",
+            quantity="5",
+            asset_id=100,
+        )
+        builder = _builder(
+            asset_currencies={100: "EUR"},
+            fx_rate_map={("USD", "EUR", date(2025, 1, 2)): Decimal("0.9")},
+        )
+
+        unit_cost = builder._buy_unit_cost(tx)
+
+        assert unit_cost == Decimal("18")  # 100 USD * 0.9 / 5
+
+    def test_buy_unit_cost_transfer_override_uses_cross_rate(self):
+        tx = _tx(
+            id=101,
+            type="TRANSFER",
+            dt="2025-01-02",
+            quantity="4",
+            asset_id=101,
+            cost_basis_override="50",
+            cost_basis_currency="USD",
+        )
+        builder = _builder(
+            asset_currencies={101: "GBP"},
+            fx_rate_map={
+                ("USD", "EUR", date(2025, 1, 2)): Decimal("0.8"),
+                ("GBP", "EUR", date(2025, 1, 2)): Decimal("1.6"),
+            },
+        )
+
+        unit_cost = builder._buy_unit_cost(tx)
+
+        assert unit_cost == Decimal("25")  # 50 USD/unit * (0.8 / 1.6) = 25 GBP/unit
+
+
+class TestPrivateInTransitHelper:
+    """Direct unit tests for in-transit aggregation helper."""
+
+    def test_compute_in_transit_combines_cash_market_value_and_cost_basis(self):
+        cash_dep = _tx(id=200, dt="2025-01-01", type="CASH_TRANSFER", amount="-300", currency="USD")
+        cash_arr = _tx(id=201, broker_id=20, dt="2025-01-04", type="CASH_TRANSFER", amount="300", currency="USD")
+        asset_dep = _tx(id=202, dt="2025-01-01", type="TRANSFER", quantity="-4", asset_id=100)
+        asset_arr = _tx(id=203, broker_id=20, dt="2025-01-04", type="TRANSFER", quantity="4", asset_id=100)
+
+        builder = _builder(
+            in_transit_intervals=[
+                InTransitInterval(
+                    start_date=date(2025, 1, 2),
+                    end_date=date(2025, 1, 3),
+                    tx_type="cash",
+                    departure_leg=cash_dep,
+                    arrival_leg=cash_arr,
+                    share=Decimal("0.25"),
+                ),
+                InTransitInterval(
+                    start_date=date(2025, 1, 2),
+                    end_date=date(2025, 1, 3),
+                    tx_type="asset",
+                    departure_leg=asset_dep,
+                    arrival_leg=asset_arr,
+                    share=Decimal("0.5"),
+                    asset_id=100,
+                    cost_basis_amount=Decimal("80"),
+                    cost_basis_currency="USD",
+                ),
+            ],
+            price_map={100: [(date(2025, 1, 2), Decimal("50"), "EUR")]},
+            quote_base_map={100: None},
+            fx_rate_map={("USD", "EUR", date(2025, 1, 2)): Decimal("0.9")},
+            asset_types={100: "ETF"},
+            asset_classifications={100: None},
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 4),
+        )
+
+        missing_fx: set[str] = set()
+        it_cash, it_asset_mv, it_asset_cb = builder._compute_in_transit(date(2025, 1, 2), missing_fx)
+
+        assert it_cash == Decimal("67.5")  # 300 USD * 0.9 * 0.25
+        assert it_asset_mv == Decimal("100")  # 4 * 50 * 0.5
+        assert it_asset_cb == Decimal("36")  # 80 USD * 0.9 * 0.5
+        assert missing_fx == set()
+
+
+class TestDerivedViewAggregators:
+    """Union helpers for per-day data-quality flags."""
+
+    @staticmethod
+    def _state(*, missing=None, stale=None, fx=None, implied=None) -> DailyPortfolioState:
+        state = MagicMock(spec=DailyPortfolioState)
+        state.missing_price_asset_ids = missing or set()
+        state.stale_price_asset_ids = stale or set()
+        state.missing_fx_pairs = fx or set()
+        state.transaction_implied_asset_ids = implied or set()
+        return state
+
+    def test_aggregate_helpers_union_ids_and_pairs(self):
+        views = DerivedViewsBuilder(
+            daily_states=[
+                self._state(missing={1, 2}, stale={3}, fx={"USD/EUR"}, implied={7}),
+                self._state(missing={2, 4}, stale={5}, fx={"CHF/EUR"}, implied={8, 7}),
+            ],
+            target_currency="EUR",
+        )
+
+        assert views.aggregate_missing_price_ids() == {1, 2, 4}
+        assert views.aggregate_stale_price_ids() == {3, 5}
+        assert views.aggregate_missing_fx_pairs() == {"USD/EUR", "CHF/EUR"}
+        assert views.aggregate_transaction_implied_ids() == {7, 8}
+
+
+class TestClassificationResultHelper:
+    """Tiny getter should expose already-computed paired IDs."""
+
+    def test_get_needed_paired_ids_returns_internal_set(self):
+        result = ClassificationResult()
+        result._needed_paired_ids = {11, 22}
+
+        assert result.get_needed_paired_ids() == {11, 22}

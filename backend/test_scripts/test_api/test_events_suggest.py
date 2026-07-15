@@ -39,7 +39,9 @@ from datetime import date, timedelta
 
 import httpx
 import pytest
+from fastapi import HTTPException
 
+import backend.app.api.v1.transactions as transactions_api
 from backend.app.config import get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
@@ -294,3 +296,39 @@ async def test_suggest_rejects_tolerance_over_max(test_server):
         )
         assert resp.status_code == 422, f"expected 422, got {resp.status_code}: {resp.text}"
         print_success("tolerance_days=8 rejected with 422")
+
+
+@pytest.mark.asyncio
+async def test_suggest_direct_calls_service(monkeypatch: pytest.MonkeyPatch):
+    """Happy path: route delegates to TransactionService.suggest_events_bulk."""
+    print_section("G.4.8a — direct suggest happy path")
+
+    captured: dict = {}
+
+    async def fake_suggest_events_bulk(self, requests):
+        captured["requests"] = requests
+        return ["ok"]
+
+    monkeypatch.setattr(
+        transactions_api,
+        "TransactionService",
+        type("FakeTransactionService", (), {"__init__": lambda self, session: None, "suggest_events_bulk": fake_suggest_events_bulk}),
+    )
+
+    result = await transactions_api.suggest_events(requests=["req"], session=object(), _current_user=object())
+
+    assert result == ["ok"]
+    assert captured["requests"] == ["req"]
+    print_success("Direct suggest happy path delegated to service")
+
+
+@pytest.mark.asyncio
+async def test_suggest_rejects_more_than_500_requests():
+    """More than 500 items in raw list body → explicit route guard → 422."""
+    print_section("G.4.8 — more than 500 requests rejected")
+    with pytest.raises(HTTPException) as exc_info:
+        await transactions_api.suggest_events(requests=[object()] * 501, session=object(), _current_user=object())
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "Max 500 requests per call"
+    print_success(">500 requests rejected with 422")

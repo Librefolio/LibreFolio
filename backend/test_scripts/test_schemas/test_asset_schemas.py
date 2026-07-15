@@ -26,6 +26,7 @@ from pydantic import ValidationError
 
 from backend.app.schemas.assets import (
     DayCountConvention,
+    FAAssetCreateItem,
     FAClassificationParams,
     FAGeographicArea,
     FAInterestRatePeriod,
@@ -776,6 +777,102 @@ class TestGeographicAreaSerialization:
         assert "geographic_area" not in data
         parsed = FAClassificationParams.model_validate_json(json_str)
         assert parsed.geographic_area is None
+
+
+# ============================================================================
+# TESTS: FAAssetCreateItem / Provider Config
+# ============================================================================
+
+
+class TestFAAssetCreateItemValidators:
+    """Tests for branch coverage on asset create validators."""
+
+    def test_quote_base_quantity_none_defaults_to_one(self):
+        item = FAAssetCreateItem(
+            display_name="VWCE",
+            currency="EUR",
+            quote_base_quantity=None,
+        )
+        assert item.quote_base_quantity == 1
+
+    def test_quote_base_quantity_non_positive_becomes_one(self):
+        item = FAAssetCreateItem(
+            display_name="VWCE",
+            currency="EUR",
+            quote_base_quantity=0,
+        )
+        assert item.quote_base_quantity == 1
+
+    def test_isin_normalized(self):
+        item = FAAssetCreateItem(
+            display_name="Apple",
+            currency="USD",
+            identifier_isin="us0378331005",
+        )
+        assert item.identifier_isin == "US0378331005"
+
+    def test_isin_invalid_length_rejected(self):
+        with pytest.raises(ValidationError, match="ISIN must be 12 characters"):
+            FAAssetCreateItem(
+                display_name="Bad ISIN",
+                currency="USD",
+                identifier_isin="SHORT123",
+            )
+
+    def test_isin_empty_becomes_none(self):
+        item = FAAssetCreateItem(
+            display_name="No ISIN",
+            currency="USD",
+            identifier_isin="",
+        )
+        assert item.identifier_isin is None
+
+    def test_ticker_empty_becomes_none(self):
+        item = FAAssetCreateItem(
+            display_name="ETF",
+            currency="EUR",
+            identifier_ticker="",
+        )
+        assert item.identifier_ticker is None
+
+    def test_ticker_normalized(self):
+        item = FAAssetCreateItem(
+            display_name="ETF",
+            currency="EUR",
+            identifier_ticker=" vwce.mi ",
+        )
+        assert item.identifier_ticker == "VWCE.MI"
+
+
+class TestFAProviderConfigBase:
+    """Tests for provider config base validator."""
+
+    def test_provider_params_validated_with_provider_instance(self, monkeypatch):
+        from backend.app.schemas.provider import FAProviderConfigBase  # noqa: PLC0415
+        from backend.app.services.provider_registry import AssetProviderRegistry  # noqa: PLC0415
+
+        class _DummyProvider:
+            def __init__(self):
+                self.calls = []
+
+            def validate_params(self, params):
+                self.calls.append(params)
+
+        provider = _DummyProvider()
+        monkeypatch.setattr(
+            AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code: provider),
+        )
+
+        config = FAProviderConfigBase(
+            provider_code="mockprov",
+            identifier="TEST",
+            identifier_type="TICKER",
+            provider_params={"mode": "ok"},
+        )
+        assert config.provider_code == "mockprov"
+        assert provider.calls == [{"mode": "ok"}]
 
 
 if __name__ == "__main__":
