@@ -1,22 +1,25 @@
-# Phase 9 — Sub-Plans Index (Milestone 1 & 2, archiviate)
+# Phase 9 — Sub-Plans Index (Milestone 1, 2 & 3 — archiviate)
 
-Questa directory raccoglie i sotto-piani di implementazione **completati** per la **Phase 9 (Dashboard)** —
-Milestone 1 (backend/API portfolio) e Milestone 2 (Dashboard Home, Portfolio Engine, Positions/Performance
-panel). Archiviata il 2026-07-07, dopo verifica esaustiva di tutti gli item contro il codice attuale.
-
-> **Milestone 3 ancora attiva**: il redesign UI Broker v2 (post Portfolio Engine unificato) è tuttora in corso
-> e resta in [`../../phase-09-subplan/README.md`](../../phase-09-subplan/README.md) (fuori da questo archivio).
+Questa directory raccoglie i sotto-piani di implementazione **completati** per la **Phase 9 (Dashboard &
+Broker)** — Milestone 1 (backend/API portfolio), Milestone 2 (Dashboard Home, Portfolio Engine,
+Positions/Performance panel) e Milestone 3 (redesign UI Broker v2, post Portfolio Engine unificato).
+M1/M2 archiviate il 2026-07-07 dopo verifica esaustiva di tutti gli item contro il codice attuale; M3
+archiviata il 2026-07-15 (tutti i sotto-piani ✅, vedi nota di archiviazione in fondo).
 
 ## Piano principale
 → [`../phase-09-dashboard.md`](../phase-09-dashboard.md) — Macro plan ufficiale di Phase 9.
 
-## Documenti trasversali M1/M2 (root)
+## Documenti trasversali M1/M2/M3 (root)
 
 | File | Descrizione | Status |
 |------|-------------|:------:|
+| [`implementation_plan.md`](./implementation_plan.md) | Piano creativo di riprogettazione Dashboard & Broker (copre sia M1/M2 sia M3 — riferimento condiviso) | ✅ |
 | [`implementation_roadmap.md`](./implementation_roadmap.md) | Roadmap di implementazione M1/M2 | ✅ |
 | [`plan_financial_algorithms.md`](./plan_financial_algorithms.md) | Algoritmi finanziari (TWRR, MWRR/XIRR, Simple ROI, WAC) | ✅ |
 | [`plan_ui_dashboard.md`](./plan_ui_dashboard.md) | Design UI Dashboard Home (wireframe ASCII) | ✅ |
+| [`plan_ui_broker_holdings.md`](./plan_ui_broker_holdings.md) | UI Broker Holdings — disegno originale, **superato da** [`Milestone_3/plan_ui_broker_holdings.md`](./Milestone_3/plan_ui_broker_holdings.md) | ✅ (superato) |
+| [`plan_ui_broker_overview.md`](./plan_ui_broker_overview.md) | UI Broker Overview — disegno originale, **superato da** [`Milestone_3/plan_ui_broker_overview.md`](./Milestone_3/plan_ui_broker_overview.md) | ✅ (superato) |
+| [`plan_ui_broker_transactions.md`](./plan_ui_broker_transactions.md) | UI Broker Transactions — disegno originale, **superato da** [`Milestone_3/plan_ui_broker_transactions.md`](./Milestone_3/plan_ui_broker_transactions.md) | ✅ (superato) |
 | [`report_dashboard_bottom_widgets_analysis.md`](./report_dashboard_bottom_widgets_analysis.md) | Analisi tecnica widget inferiori dashboard (26/06) — corretta dal report seguente | ✅ (superato) |
 | [`report_asset_level_contribution_gap_analysis.md`](./report_asset_level_contribution_gap_analysis.md) | Gap analysis contribution per-asset (26/06) — corregge il report precedente | ✅ |
 | [`plan-gallery-update.prompt.md`](./plan-gallery-update.prompt.md) | Aggiornamento Gallery Screenshot (Phase 07+08+09) | ✅ |
@@ -79,6 +82,34 @@ panel). Archiviata il 2026-07-07, dopo verifica esaustiva di tutti gli item cont
 | [`Milestone_2/Ai_consultant_engine/high_level_project.md`](./Milestone_2/Ai_consultant_engine/high_level_project.md) | Design AI Export MVP | ✅ |
 | [`Milestone_2/Ai_consultant_engine/report_ai_export_mvp.md`](./Milestone_2/Ai_consultant_engine/report_ai_export_mvp.md) | Report MVP con limitazioni intenzionali documentate | ✅ (asimmetrie by design, non bug) |
 
+## Milestone 3 — Redesign UI Broker v2 (post Portfolio Engine unificato)
+
+Redesign delle pagine Broker (lista globale + dettaglio a tab), aggiornato dopo il lavoro su Portfolio Engine
+e Dashboard Home (Milestone 1/2). I 3 piani originali sotto "trasversali" (pre Portfolio Engine unificato)
+sono superati dalle versioni v2 in [`Milestone_3/`](./Milestone_3/README.md). Indice completo, gap analysis e
+studi trasversali: vedi [`Milestone_3/README.md`](./Milestone_3/README.md).
+
+| File | Descrizione | Status |
+|------|-------------|:------:|
+| [`Milestone_3/README.md`](./Milestone_3/README.md) | Indice M3: gap analysis, studi trasversali, guide | ✅ |
+| [`Milestone_3/plan_ui_broker_overview.md`](./Milestone_3/plan_ui_broker_overview.md) | Fase 1 — Lista Globale Brokers (+ Broker Discovery) e shell a tab del Broker Detail + Tab Panoramica | ✅ disegno · ✅ [impl](./Milestone_3/impl_plan_broker_overview.md) |
+| [`Milestone_3/plan_ui_broker_holdings.md`](./Milestone_3/plan_ui_broker_holdings.md) | Fase 2 — Tab Posizioni (riuso `PositionsPanel`) + Pannello Inline Lotti FIFO multi-broker | ✅ disegno raffinato · ✅ [impl](./Milestone_3/impl_plan_broker_holdings.md) · ✅ implementato (2026-07-10) · ✅ evoluto multi-broker (2026-07-11, fleet) |
+| [`Milestone_3/plan_ui_broker_transactions.md`](./Milestone_3/plan_ui_broker_transactions.md) | Fase 3 — Tab Transazioni (riuso `<TransactionsTable>`) + File Importati | ✅ disegno · ✅ implementato (recap in-doc, chiuso 2026-07-08) |
+| [`Milestone_3/GUIDA-TOOLBAR-RESPONSIVE-v2.md`](./Milestone_3/GUIDA-TOOLBAR-RESPONSIVE-v2.md) | Guida taratura soglie responsive (`PageToolbar`/`DateRangePicker`) | ✅ |
+
+### Milestone_3/chart_resolution/ — Risoluzione dinamica grafici (semantic zoom)
+
+| File | Descrizione | Status |
+|------|-------------|:------:|
+| [`Milestone_3/chart_resolution/study_chart_dynamic_resolution.md`](./Milestone_3/chart_resolution/study_chart_dynamic_resolution.md) | Studio di fattibilità + raffinamento architetturale (semantic zoom daily→weekly→monthly) | ✅ |
+| [`Milestone_3/chart_resolution/impl_plan_chart_resolution_00_foundation.md`](./Milestone_3/chart_resolution/impl_plan_chart_resolution_00_foundation.md) | `timeSeriesAggregation.ts` — bucketing, aggregazione, densità/isteresi, debounce (documento fondativo) | ✅ implementato |
+| [`Milestone_3/chart_resolution/impl_plan_chart_resolution_01_price_candlestick.md`](./Milestone_3/chart_resolution/impl_plan_chart_resolution_01_price_candlestick.md) | `PriceChartFull` + `CandlestickChart` | ✅ implementato |
+| [`Milestone_3/chart_resolution/impl_plan_chart_resolution_02_growth_chart.md`](./Milestone_3/chart_resolution/impl_plan_chart_resolution_02_growth_chart.md) | `GrowthChart` (5 serie EUR-mode + 3 serie %-mode) | ✅ implementato |
+| [`Milestone_3/chart_resolution/impl_plan_chart_resolution_03_allocation_history.md`](./Milestone_3/chart_resolution/impl_plan_chart_resolution_03_allocation_history.md) | `AllocationHistoryChart` (serie stacked dinamiche) | ✅ implementato |
+| [`Milestone_3/chart_resolution/impl_plan_chart_resolution_04_signals_overlay.md`](./Milestone_3/chart_resolution/impl_plan_chart_resolution_04_signals_overlay.md) | Dispatch downsample per i 9 tipi di segnale overlay | ✅ implementato |
+| [`Milestone_3/chart_resolution/impl_plan_chart_resolution_05_badge_i18n.md`](./Milestone_3/chart_resolution/impl_plan_chart_resolution_05_badge_i18n.md) | `ResolutionBadge` + chiavi i18n (4 lingue) | ✅ implementato |
+| [`Milestone_3/chart_resolution/impl_plan_chart_resolution_06_compact_cards.md`](./Milestone_3/chart_resolution/impl_plan_chart_resolution_06_compact_cards.md) | `PriceChartCompact`/`LineChart` rami compact (`/assets`, `/fx`) | ✅ implementato |
+
 ---
 
 ## Nota di verifica (2026-07-07)
@@ -102,3 +133,16 @@ elencati nei documenti sopra contro il codice attuale (`backend/app/services/por
 
 Dettaglio completo della verifica: vedi il `plan.md` della sessione che ha condotto l'archiviazione
 (riferimento storico, non incluso in questo archivio).
+
+## Nota di archiviazione Milestone 3 (2026-07-15)
+
+Tutti i sotto-piani di M3 risultavano ✅ (disegno, piano implementativo, implementazione) al momento
+dell'archiviazione — nessun item aperto rilevato. Note aggiornate durante l'archiviazione:
+
+- Le annotazioni "codice in working tree non ancora committato" (Fase 2 — holdings, 2026-07-11 fleet; Fase 3
+  — transazioni, chiuso 2026-07-08) in `Milestone_3/README.md` sono state rimosse: `git status` alla data di
+  archiviazione confermava che quel codice è già committato.
+- **Issue pre-esistente segnalata, non corretta** (fuori scope di questa archiviazione): la sezione "Guide
+  rapide" di [`Milestone_3/README.md`](./Milestone_3/README.md) linka `GUIDA-TOOLBAR-RESPONSIVE.md`, ma il
+  file sul disco è `GUIDA-TOOLBAR-RESPONSIVE-v2.md` — link già rotto prima di questa archiviazione (non
+  causato dallo spostamento). Segnalato per una correzione dedicata futura.

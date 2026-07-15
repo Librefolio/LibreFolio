@@ -113,6 +113,8 @@
 | [[decisions/mwrr-boundary-fix]] | MWRR XIRR double-counting deposits fix: initial_nav = nav_snapshots[0].nav | 2026-06-30 | backend, portfolio, mwrr, xirr, financial-math |
 | [[decisions/mwrr-solver-newton-cap]] | Newton-Raphson-only XIRR solver + ±10000% result cap are deliberate design choices, not bugs (rejected Brent/hybrid) | 2026-07-07 | backend, portfolio, mwrr, xirr, financial-math, design-decision |
 | [[decisions/portfolio-summary-direct-wiring]] | `get_summary()` wired directly to `PortfolioCalculationEngine` (no separate `DerivedViewsBuilder.build_summary()`); unified `/portfolio/report` replaces planned `/allocation-history`; `net_worth` field name kept | 2026-07-07 | backend, portfolio, architecture, api, design-decision |
+| [[decisions/broker-list-visibility-non-members]] | Broker discovery opt-in (`include_inaccessible`) + read-only sharing visibility (icon everywhere) for EDITOR/VIEWER/non-members, no request-access flow | 2026-07-06 | backend, frontend, brokers, sharing, discovery, access-control |
+| [[decisions/broker-card-aggregation-no-n-plus-one]] | Per-card quota%/NAV/Gain/cash-multivaluta on broker list via `GET /brokers` + one breakdown-enabled `/portfolio/report` call — never per-broker `/summary` | 2026-07-06 | backend, frontend, brokers, portfolio-engine, performance |
 
 ## Concepts
 
@@ -153,6 +155,7 @@
 | [[concepts/inline-wac-computation]] | Single-pass inline WAC replacing N×M `compute_wac_iterative` DB calls — pool_qty/pool_cost accumulators in per-tx loop | backend, portfolio, wac, performance, engine |
 | [[concepts/pre-frame-frame-separation]] | No market eval before t0; pre-frame builds accounting state (qty/WAC/cash/K/R/W pools) from historical transactions | backend, portfolio, engine, performance, pre-frame |
 | [[concepts/holdings-performance-panel]] | Holdings/Performance tabs (renamed Exposure/Contribution), date-aware `get_summary()`, reconciliation invariant row, treemap zoom/pan fix | frontend, backend, dashboard, portfolio, treemap, echarts |
+| [[concepts/chart-resolution-semantic-zoom]] | Daily→weekly→monthly bucketing driven by `dataZoom` range, with density/hysteresis + debounce — applies to price/growth/allocation charts and 9 signal overlays | frontend, charts, echarts, performance, semantic-zoom |
 
 ## Problems
 
@@ -184,6 +187,7 @@
 | [[problems/bulk-modal-sticky-z-index]] | After BRIM import row-selector toolbar clipped by overflow-y:auto container in BulkModal | open | frontend, bulk-modal, z-index, overflow, sticky |
 | [[problems/test-transaction-implied-constructor-mismatch]] | `test_transaction_implied.py` (6 tests) fails with TypeError — test's local `_builder()` helper uses pre-refactor `DailyStateBuilder.__init__` signature (stale `wac_series` kwarg, missing `asset_currencies`) | open | backend, testing, portfolio, pre-existing, unrelated |
 | [[problems/datatable-column-resize-noop]] | DataTable.svelte column-resize handle icon shows but click has no effect in some tables — root cause not yet determined | open | frontend, datatable, ui, unresolved |
+| [[problems/portfolio-asset-history-regression-restored]] | `GET /portfolio/asset-history` accidentally removed in a legacy-endpoint cleanup (commit `3184a969`), restored (commit `1a734008`) | resolved | backend, api, portfolio, regression |
 
 ## Entities
 
@@ -198,6 +202,7 @@
 | [[entities/portfolio-engine]] | 4-layer portfolio engine (1603 lines) — ScopeAwareClassifier→DailyStateBuilder→DerivedViewsBuilder→PortfolioCalculationEngine |
 | [[entities/portfolio-service]] | PortfolioService (1946 lines) — orchestration, L2 TTL cache, get_report/summary/history/contribution |
 | [[entities/test-runner]] | Modular test runner package at scripts/test_runner/ — 18 modules, distributed registry pattern |
+| [[entities/time-series-aggregation]] | `timeSeriesAggregation.ts` — foundational bucketing/aggregation/hysteresis/debounce utility for resolution-aware charts |
 
 ## Workflows
 
@@ -276,6 +281,7 @@
 | [[sources/ci-release-pipeline-2026-06]] | CI/CD: GitHub Actions release.yml — Node 24, Vite 7.3.5, package-lock, Docker :test tag, 8 Playwright workers ✅ | 2026-06-30 | ci, release, docker, playwright, nodejs |
 | [[sources/phase09-portfolio-engine-3pool-refactor]] | Phase 09 Engine Refactor: inline WAC single-pass, 3-pool K/R/W event-driven, SELL fix, pre-frame/frame, blob cache ✅ | 2026-07-01 | phase09, portfolio, engine, wac, 3-pool, refactor |
 | [[sources/phase09-m1-m2-archive-2026-07]] | Phase 09 M1+M2 archived to `phases/`: Holdings/Performance panel refactor, ~20 open items resolved, ~7 resolved differently, ~7 still open ✅ | 2026-07-07 | phase09, portfolio, dashboard, archive, holdings-performance, mwrr, twrr |
+| [[sources/phase09-m3-broker-redesign-2026-07]] | Phase 09 M3 archived to `phases/phase-09-subplan/Milestone_3/`: Broker List/Detail v2 (discovery, sharing, per-card aggregation), FIFO lots UI panel, chart-resolution/semantic-zoom ✅ | 2026-07-15 | phase09, broker, dashboard, archive, chart-resolution, semantic-zoom, discovery, sharing |
 
 
 ## Recent Additions (Phase 09 + Final + CI)
@@ -333,6 +339,18 @@
 - [[features/registry]] — 2026-07-07 (updated status rows)
 - [[domains/dashboard]] — 2026-07-07 (fully rewritten: planned→implemented)
 - [[domains/calculations]] — 2026-07-07 (F-058 planned→implemented, stale Phase 8 text fixed)
+
+
+## Recent Additions (Phase 09 M3 Archive, 2026-07-15)
+- [[sources/phase09-m3-broker-redesign-2026-07]] — 2026-07-15 (new)
+- [[concepts/chart-resolution-semantic-zoom]] — 2026-07-15 (new)
+- [[entities/time-series-aggregation]] — 2026-07-15 (new)
+- [[decisions/broker-list-visibility-non-members]] — 2026-07-15 (new)
+- [[decisions/broker-card-aggregation-no-n-plus-one]] — 2026-07-15 (new)
+- [[problems/portfolio-asset-history-regression-restored]] — 2026-07-15 (new)
+- [[domains/brokers]] — 2026-07-15 (updated: UI v2 redesign summary, new decisions linked)
+- [[domains/dashboard]] — 2026-07-15 (updated: M3 "in progress" note resolved, source paths fixed)
+- [[entities/portfolio-engine]] — 2026-07-15 (updated: History row for M3 archiving)
 
 
 ## Uncategorized / Auto-Recovered
@@ -408,6 +426,8 @@ The following pages were automatically recovered by the lint pass:
 - [[problems/pytest-exit-swallows-failures]]
 - [[problems/resume-mode-stale-import]]
 - [[problems/brlistresponse-contract-drift]]
+- [[problems/coverage-mode-stale-import]]
+- [[problems/coverage-report-category-dest-collision]]
 
 ### Decisions
 - [[decisions/blur-detection-format-string-comparison]]

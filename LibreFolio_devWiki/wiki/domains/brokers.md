@@ -18,6 +18,16 @@ Access to a broker can be shared with other users in three tiers: Owner (full co
 
 File management is the bridge between the broker and the BRIM import pipeline. Users upload CSV or XLSX reports exported from their broker platforms. The system stores these files associated with the broker, allows preview and deletion, and feeds them into the BRIM parser. The BRIM framework auto-detects which of 11 broker-specific plugins should handle each file, parses the transactions and extracted asset hints, and presents them in a staging area where users review and confirm before committing to the database.
 
+**UI v2 redesign (Phase 9 Milestone 3, 2026-07)**: the global Broker list and per-broker detail page (3 tabs
+— Panoramica/Posizioni/Transazioni) were redesigned to reuse the Dashboard's unified `/portfolio/report`
+widgets (see [[concepts/portfolio-report-unified]]) instead of the pre-Portfolio-Engine designs. This closed
+two visibility gaps — broker discovery for non-owned brokers, and read-only sharing visibility for
+EDITOR/VIEWER/non-members (see [[decisions/broker-list-visibility-non-members]]) — and added per-card
+quota%/NAV/Gain/multi-currency-cash without N+1 calls (see
+[[decisions/broker-card-aggregation-no-n-plus-one]]). The Posizioni tab also gained an inline multi-broker
+FIFO lots panel (bubble timeline of open/closed lots, see [[concepts/fifo-lot-tracking]]) — a UI/display
+layer over the existing FIFO engine, no engine changes.
+
 ## Feature cluster
 
 | Code | Feature | Layer | Role in domain | Status |
@@ -51,6 +61,8 @@ graph TD
 
 - [[decisions/brim-fake-asset-id]] — BRIM plugins emit **negative integer fake asset IDs** during parsing; the frontend maps these to real assets via the matching wizard before committing. This two-phase approach decouples parsing from the asset catalog, allowing import of transactions for assets that haven't been created yet.
 - [[decisions/brim-broker-scoped]] — BRIM file uploads were moved to broker scope (from a global uploads endpoint) to enforce access control correctly: only users with at least Editor role on a broker can upload files for it.
+- [[decisions/broker-list-visibility-non-members]] — opt-in broker discovery (`include_inaccessible`) + read-only sharing visibility for EDITOR/VIEWER/non-members, without a request-access flow.
+- [[decisions/broker-card-aggregation-no-n-plus-one]] — per-card quota%/NAV/Gain/cash-multivaluta on the broker list sourced from `GET /brokers` + one breakdown-enabled `/portfolio/report` call, never per-broker `/summary` calls.
 
 ## Known problems / limitations
 
@@ -68,6 +80,9 @@ Pending gaps (Phase 7, see [[connections/transactions-connections]]):
 - [[F-050]] File Preview System — inline preview panel for uploaded broker report files.
 - [[F-083]] Multi-File Multi-Broker Import — batch-import multiple files from multiple brokers in one workflow.
 
+Broker List/Detail UI v2 (Phase 9 Milestone 3) is done — see
+[[sources/phase09-m3-broker-redesign-2026-07]] for the full redesign summary.
+
 ## Source files
 
 | Role | Path |
@@ -83,3 +98,5 @@ Pending gaps (Phase 7, see [[connections/transactions-connections]]):
 | BRIM plugins | `backend/app/services/brim_providers/` |
 | File upload API | `backend/app/api/v1/uploads.py` |
 | DB models (Broker, BrokerUserAccess) | `backend/app/db/models.py` |
+| Broker sharing/discovery UI (v2) | `frontend/src/lib/components/brokers/BrokerSharingModal.svelte`, `BrokerSharingPanel.svelte`, `BrokerDiscoveryCard.svelte` |
+| Broker v2 redesign plans (archived) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_3/` |

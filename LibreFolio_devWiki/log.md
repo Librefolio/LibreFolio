@@ -1098,3 +1098,76 @@ page (its proposed "signature-only" fix was verified empirically to not work —
 fallback was actually removed, not renamed).
 Filed: [[problems/pytest-exit-swallows-failures]], [[problems/resume-mode-stale-import]],
 [[problems/brlistresponse-contract-drift]].
+
+## [2026-07-15] ingest | Phase 09 M3 archive (Broker UI v2 redesign, chart-resolution/semantic-zoom)
+
+Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_3/` (+ root
+`implementation_plan.md` and 3 superseded pre-v2 designs) @ multiple git hashes (see `raw/ingest-registry.md`
+— `git mv` archive, staged/uncommitted at ingest time, same pattern as the 2026-07-07 M1/M2 closeout). This
+completes Phase 9 fully: all 3 Milestones now archived under `phases/phase-09-subplan/`.
+
+Milestone 3 redesigns the Broker pages (global list + 3-tab detail) to reuse the unified `/portfolio/report`
+widgets built in M1/M2, plus a cross-cutting chart-resolution/semantic-zoom workstream (7 impl plans + 1
+study, written in parallel by a fleet of agents). All sub-plans verified ✅ design · ✅ implementation plan ·
+✅ implemented (no open items). Key content: `GET /portfolio/asset-history` regression found-and-restored
+(commit `3184a969` → `1a734008`); `GET /brokers?include_inaccessible=true` opt-in discovery; sharing icon
+read-only for EDITOR/VIEWER/non-members (was OWNER-only); `BrokerBreakdown.cash_balances` added natively for
+per-card NAV/Gain/quota% without N+1 calls; inline multi-broker FIFO lots panel (UI/display layer over the
+existing `GET /portfolio/lots` engine output, no engine changes); daily→weekly→monthly semantic-zoom
+bucketing (`timeSeriesAggregation.ts`) now shared across price/growth/allocation charts and 9 signal
+overlays, plus a static compact-card variant with no interactive resolution switching.
+
+**Explicit exclusion honored**: `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/` (== the symlinked
+`LibreFolio_devWiki/corpus/roadmap/fifo-engine/`) was deliberately NOT read, summarized, or linked from any
+page in this pass, per user instruction — it is a separate, still-open FIFO/WAC/transfer engine-internals
+investigation ("Analisi tecnica completa... Domande aperte e raccomandazione", 2026-07-14), unrelated to this
+UI redesign and not yet ready for ingest (no decision taken yet).
+
+Created: [[sources/phase09-m3-broker-redesign-2026-07]], [[concepts/chart-resolution-semantic-zoom]],
+[[entities/time-series-aggregation]], [[decisions/broker-list-visibility-non-members]],
+[[decisions/broker-card-aggregation-no-n-plus-one]], [[problems/portfolio-asset-history-regression-restored]].
+
+Updated: [[domains/brokers]] (UI v2 redesign summary + 2 new decisions linked), [[domains/dashboard]] ("M3 in
+progress, not archived" note resolved; source-file paths corrected), [[entities/portfolio-engine]] (History
+row for the M3 archiving milestone).
+
+Also refreshed, as part of the archive move itself (not a separate wiki page): two stale "codice in working
+tree non ancora committato" notes in `Milestone_3/README.md` (git status confirmed both already committed),
+and flagged (not fixed, out of scope) a pre-existing broken link in the same file
+(`GUIDA-TOOLBAR-RESPONSIVE.md` vs. the actual `GUIDA-TOOLBAR-RESPONSIVE-v2.md` on disk) plus two unrelated
+pre-existing dangling links in `phases/phase-09-dashboard.md` pointing at documents later relocated by
+earlier phase-07/phase-08 archiving passes (`plan-phase05-to-08-upgrade.md`,
+`plan-WacInlineValidateCommit.prompt.md`) — none caused by this session's edits, left as noise per convention.
+
+Per plan: the skill's own final `graphify --update` step was skipped here — superseded by a full
+from-scratch graphify rebuild run immediately after the post-ingest lint pass (see following log entries).
+
+## [2026-07-15] lint | Health check — post Phase 09 M3 ingest (pre-rebuild)
+
+Graph (pre-rebuild, unchanged from 2026-07-07): 6527 nodes, 18024 edges, 381 communities, 1125 corpus files —
+run intentionally BEFORE the full graphify rebuild per plan, so cheap file-based checks fix issues before the
+costly rebuild processes the final state once. Graph-based checks (god nodes, high-degree gaps) therefore
+still reflect the pre-ingest graph — the 6 new M3 pages aren't graphed yet; expected, not a defect. God nodes
+unchanged from the 2026-07-07 lint (`Currency` 426, `TransactionType` 199, `Transaction` 166, `User` 158,
+`BaseBulkResponse` 155) — all pre-existing code entities, none newly relevant to this ingest.
+
+File-based checks on the 6 new + 3 updated pages from this ingest: **all clean**.
+- Orphans: 0 — every new page has 3-5 inbound `[[links]]` (verified programmatically).
+- Index drift: 0 — all `wiki/**/*.md` files are listed in `index.md`.
+- Broken `[[wikilinks]]`: 0 introduced by this ingest (checked all 1537 wikilinks across 322 wiki files).
+
+Issues found: 2, both pre-existing and unrelated to this ingest (deferred, not auto-repaired, following the
+same scoping precedent set in the 2026-07-07 lint for the 2 unrelated orphan sources found then):
+- `wiki/sources/kb-01-backend.md` → `[[concepts/provider-registry-pattern]]` — target page does not exist.
+- `wiki/sources/phase06-step4-planc.md` → `[[problems/sync-pairs-bulk-none]]` (×2) — target page does not
+  exist.
+
+Carried over from the 2026-07-07 lint, still not repaired (unrelated to this ingest, same as before): the 2
+near-duplicate orphan sources ([[sources/phase07-part4-round3]], [[sources/phase07-part4-round5]]) and the 17
+`wiki/features/*.md` pages not individually listed in `index.md`.
+
+Next recommended: full graphify rebuild (this session, immediately following); a dedicated pass on the 2
+newly-found broken links + the carried-over dedup/index-drift items above, whenever a general wiki-cleanup
+session is scheduled (not part of this ingest's scope).
+
+

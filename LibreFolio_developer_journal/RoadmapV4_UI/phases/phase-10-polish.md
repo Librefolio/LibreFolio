@@ -7,7 +7,7 @@
 **Priorità**: P2 (Nice-to-have, ma critico per UX)  
 **Dipendenze**: Tutte le fasi
 
-> **📌 Riferimento**: [`plan-phase05-to-08-upgrade.md`](../plan-phase05-to-08-upgrade.md) per la visione d'insieme.
+> **📌 Riferimento**: [`plan-phase05-to-08-upgrade.md`](./phase-08-subplan/plan-phase05-to-08-upgrade.md) per la visione d'insieme.
 > Molti dei componenti originariamente previsti per questa fase sono stati **già creati** durante Phase 4:
 >
 > **✅ Componenti già implementati**:

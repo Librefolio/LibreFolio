@@ -181,6 +181,7 @@ S    = broker_ids selected by the dashboard filter (S ⊆ V(u))
 | 2026-06-30 (39106380) | **Major refactor**: inline WAC (single-pass), 3-pool event-driven, SELL fix, LAST_BUY_PRICE fallback, pre-frame/frame separation, range-aware blob cache. +612 lines portfolio_service.py, 20 new unit tests. |
 | 2026-07-06 (78aaa0a3) | **Holdings/Performance panel refactor**: `get_summary()` rewired to `position_states_end` (date-aware, closes the "wiring incomplete" gap); `get_positions_contribution()` date-boundary fixes; `_compute_period_summary_metrics()` shared helper; `data_quality` now populated; TRANSACTION_IMPLIED fallback closes P2P/crowdfund valuation gap. See [[concepts/holdings-performance-panel]]. |
 | 2026-07-07 | Phase 09 Milestone 1 & 2 archived to `phases/phase-09-subplan/`; exhaustive verification confirms ~20 previously-open items resolved, ~7 resolved differently (see [[decisions/portfolio-summary-direct-wiring]], [[decisions/mwrr-solver-newton-cap]]), ~7 genuinely still open (low priority). See [[sources/phase09-m1-m2-archive-2026-07]]. |
+| 2026-07-15 | Phase 09 Milestone 3 (Broker UI v2 redesign) archived to `phases/phase-09-subplan/Milestone_3/`; reuses this engine's unified `/portfolio/report` output (`BrokerBreakdown.cash_balances` added natively, see [[decisions/broker-card-aggregation-no-n-plus-one]]) for per-broker cards — no engine-internals changes. See [[sources/phase09-m3-broker-redesign-2026-07]]. |
 
 ## Source files
 

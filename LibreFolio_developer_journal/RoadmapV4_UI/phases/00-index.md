@@ -11,9 +11,9 @@
 
 Questo piano è suddiviso in fasi separate, ognuna in un file dedicato per facilitare la navigazione e il tracking del progresso.
 
-**📌 Piano Principale**: [→ plan-frontendDevelopment.prompt.md](../plan-frontendDevelopment.prompt.md)  
+**📌 Piano Principale**: [→ plan-frontendDevelopment.prompt.md](./phase-00-subplan/plan-frontendDevelopment.prompt.md)  
 **📌 Phase 4 Summary**: [→ plan-phase04-summary.md](phase-04-subplan/plan-phase04-summary.md)  
-**📌 Master Plan Phase 5–8**: [→ plan-phase05-to-08-upgrade.md](../plan-phase05-to-08-upgrade.md)
+**📌 Master Plan Phase 5–8**: [→ plan-phase05-to-08-upgrade.md](./phase-08-subplan/plan-phase05-to-08-upgrade.md)
 
 ### Piani di Dettaglio per Fase
 
@@ -35,7 +35,7 @@ I sotto-piani di implementazione per ogni fase vanno in `phases/phase-XX-subplan
 | **0**   | [phase-00-setup.md](./phase-00-setup.md)                           | Fix Login Page + Build Integration         | ✅      | 1      |
 | **1**   | [phase-01-foundation.md](./phase-01-foundation.md)                 | i18n, OpenAPI, API Client, Auth Store      | ✅      | 3      |
 | **2**   | [phase-02-backend-auth.md](./phase-02-backend-auth.md)             | Backend Auth: DB, Service, API, CLI, Tests | ✅      | 3      |
-| **2.5** | [phase-02.5-auth-integration.md](./phase-02.5-auth-integration.md) | Integrazione Login + Register (Modali)     | ✅      | 1      |
+| **2.5** | [phase-02.5-auth-integration.md](./phase-02-subplan/phase-02.5-auth-integration.md) | Integrazione Login + Register (Modali)     | ✅      | 1      |
 | **3**   | [phase-03-layout-settings.md](./phase-03-layout-settings.md)       | Layout Sidebar + Settings Page             | ✅      | 3      |
 | **4**   | [phase-04-brokers.md](./phase-04-brokers.md)                       | Brokers, Files, Image Crop, ModalBase      | ✅      | 15+    |
 | **5**   | [phase-05-fx.md](./phase-05-fx.md)                                 | FX Currencies, Pair Sources, Sync          | ⏳      | 3      |

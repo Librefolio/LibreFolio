@@ -1,8 +1,7 @@
 # Phase 9: Dashboard
 
-**Status**: ✅ Completato (Milestone 1 & 2) · ⏳ In corso (Milestone 3 — Redesign UI Broker v2)
-**Sub-plans archiviati (M1 & M2)**: [`./phase-09-subplan/README.md`](./phase-09-subplan/README.md)
-**Sub-plans attivi (M3)**: [`../phase-09-subplan/README.md`](../phase-09-subplan/README.md)
+**Status**: ✅ Completato (Milestone 1, 2 & 3)
+**Sub-plans archiviati (M1, M2 & M3)**: [`./phase-09-subplan/README.md`](./phase-09-subplan/README.md)
 **Durata**: ~5 giorni (aggiornata)  
 **Priorità**: P1 (Important)  
 **Dipendenze**: Phase 4.8 (share_percentage per aggregazione), Phase 5 (PriceChartShared), Phase 6, Phase 7 (tutti i dati)
@@ -16,7 +15,7 @@
 > - Portfolio KPI (average entry price per holding)
 >
 > Il flusso workspace editing (validate/commit) integra già il calcolo WAC inline (nessun endpoint
-> separato necessario). Vedi [`plan-WacInlineValidateCommit.prompt.md`](../PlanD_SplitPromoteFullStack/R2-WalktestFeedback/SP-C-Bugfix/WacPreview/plan-WacInlineValidateCommit.prompt.md).
+> separato necessario). Vedi [`plan-WacInlineValidateCommit.prompt.md`](./phase-07-subplan/Parte4/Round6/PlanD-R2/SP-C-BulkModalSuggestUX/WacPreview/plan-WacInlineValidateCommit.prompt.md).
 
 > **🧪 Coverage gap (2026-06-02)**: `analytics_wac` in `backend/app/api/v1/analytics.py` ha 0%
 > coverage (25 statements). L'endpoint è una predisposizione: diventerà testabile quando il
@@ -24,7 +23,7 @@
 > `backend/test_scripts/test_api/test_analytics_api.py` con test per `POST /api/v1/analytics/wac`
 > (serie temporali WAC per asset, multi-currency, edge cases empty portfolio).
 
-> **📌 Riferimento principale**: [`plan-phase05-to-08-upgrade.md` §8](../plan-phase05-to-08-upgrade.md)
+> **📌 Riferimento principale**: [`plan-phase05-to-08-upgrade.md` §8](./phase-08-subplan/plan-phase05-to-08-upgrade.md)
 > Questa sezione è stata **SUPERATA** dal piano aggiornato. Quando si arriva a implementare Phase 8,
 > ripartire da §8 di `plan-phase05-to-08-upgrade.md` che contiene:
 > - **Step 8.1**: `KPICard` — NAV/PnL/ROI calcolati con `share_percentage` pesato (formula: `NAV_utente = Σ(NAV_broker × share%)`)
@@ -64,8 +63,8 @@ Lo sviluppo e l'architettura di questa fase sono stati dettagliati in una serie 
 ### Documenti di Design dell'Interfaccia — Milestone 1 & 2 ✅ (archiviati in [`phase-09-subplan/`](./phase-09-subplan/README.md))
 * **`plan_ui_dashboard.md`**: Design della Home principale. KPI Cards, filtro Multi-Broker, Grafico a torta/Mappa e Grafico storico della crescita (Investito, Liquidità, NAV).
 
-### Documenti — Milestone 3 ⏳ in corso (attivi in [`../phase-09-subplan/`](../phase-09-subplan/README.md))
-* **`implementation_plan.md`**: Analizza il gap architetturale tra l'attuale (FastAPI/SvelteKit) e il desiderato, chiarendo il passaggio all'uso unificato di `portfolio_service.py` per le metriche sia di portfolio globale che del singolo broker (copre sia M1/M2 sia M3 — riferimento condiviso, non archiviato).
+### Documenti — Milestone 3 ✅ (archiviati in [`phase-09-subplan/Milestone_3/`](./phase-09-subplan/Milestone_3/README.md))
+* **`implementation_plan.md`**: Analizza il gap architetturale tra l'attuale (FastAPI/SvelteKit) e il desiderato, chiarendo il passaggio all'uso unificato di `portfolio_service.py` per le metriche sia di portfolio globale che del singolo broker (copre sia M1/M2 sia M3 — riferimento condiviso, archiviato in `phase-09-subplan/`).
 * **`Milestone_3/plan_ui_broker_overview.md`** (v2, supersede il disegno originale): Design del Tab 1 "Panoramica" all'interno del singolo broker. Riutilizza gli stessi componenti della Dashboard filtrando per il `broker_id` corrente.
 * **`Milestone_3/plan_ui_broker_holdings.md`** (v2, supersede il disegno originale): Design del Tab 2 "Posizioni". Tabella delle quote detenute e Modale "Slide-over" con lo spaccato dei lotti aperti/chiusi (logica FIFO) e la serie storica del WAC.
 * **`Milestone_3/plan_ui_broker_transactions.md`** (v2, supersede il disegno originale): Design del Tab 3 "Transazioni e Storico File". Riuso della `TransactionsTable` unito allo storico dei report BRIM importati.
@@ -76,7 +75,7 @@ Lo sviluppo e l'architettura di questa fase sono stati dettagliati in una serie 
 
 - [x] **Milestone 1**: Fondamenta Backend e API di Portafoglio (TWRR, MWRR, endpoint unificati) — ✅ completata, archiviata
 - [x] **Milestone 2**: Dashboard Home (Positions/Performance panel, Portfolio Engine, GrowthChart, Allocation history) — ✅ completata, archiviata
-- [ ] **Milestone 3**: Redesign UI Broker v2 (Panoramica, Posizioni & Lotti FIFO, Transazioni & File) — ⏳ in corso, vedi [`../phase-09-subplan/Milestone_3/README.md`](../phase-09-subplan/Milestone_3/README.md)
+- [x] **Milestone 3**: Redesign UI Broker v2 (Panoramica, Posizioni & Lotti FIFO, Transazioni & File) — ✅ completata, vedi [`./phase-09-subplan/Milestone_3/README.md`](./phase-09-subplan/Milestone_3/README.md)
 
 
 ---

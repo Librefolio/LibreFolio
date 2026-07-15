@@ -1,6 +1,6 @@
 Note migliorative da fare ma alla fine:
 
-> **📌 Riferimento generale**: [`plan-phase05-to-08-upgrade.md`](../plan-phase05-to-08-upgrade.md) per la roadmap completa.
+> **📌 Riferimento generale**: [`plan-phase05-to-08-upgrade.md`](./phase-08-subplan/plan-phase05-to-08-upgrade.md) per la roadmap completa.
 > Molte delle note sotto sono state **parzialmente risolte** durante Phase 4.5–4.8 (Image Crop, Code Dedup, MkDocs).
 > Le note restanti (🔲) sono candidate per Phase 10+ o fasi successive.
 > Per i **TODO futuri** non legati direttamente alle fasi, vedi anche `TODO_FUTURI.md` nella root del progetto.

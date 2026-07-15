@@ -13,7 +13,7 @@
 **Complessità**: ⚠️ ALTA
 
 > **📌 Riferimenti precedenti**:
-> - [`plan-phase05-to-08-upgrade.md` §6](../plan-phase05-to-08-upgrade.md) — **obsoleto**: idea originale con regimi fiscali / cash split (posticipati a Phase 8+)
+> - [`plan-phase05-to-08-upgrade.md` §6](./phase-08-subplan/plan-phase05-to-08-upgrade.md) — **obsoleto**: idea originale con regimi fiscali / cash split (posticipati a Phase 8+)
 > - [`plan-phase7b-filePreview.md`](./phase-07-subplan/Parte4b/plan-phase7b-filePreview.md) — **assorbito in Parte 4b** di questo piano (File Preview System)
 >
 > Questo documento **sostituisce** la vecchia stesura di Phase 7 con un design unificato

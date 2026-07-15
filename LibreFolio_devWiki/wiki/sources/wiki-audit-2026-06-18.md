@@ -3,7 +3,7 @@ title: "Wiki Audit 2026-06-18 — Transactions, Backend Infra, Assets/BRIM"
 category: source
 source_type: journal_entry
 date_ingested: 2026-06-30
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/wiki_audit_2026_06_18/audit_transactions.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-final-subplan/wiki_audit_2026_06_18/audit_transactions.md
 tags: [audit, documentation, mkdocs, transactions, brim, test-runner, workspace-intent, scheduler, gallery]
 related:
   - entities/test-runner
@@ -52,9 +52,9 @@ A three-area documentation audit conducted on 2026-06-18, covering: (1) Transact
 
 | Role | Path |
 |------|------|
-| Transactions audit | `LibreFolio_developer_journal/RoadmapV4_UI/wiki_audit_2026_06_18/audit_transactions.md` |
-| Backend infra audit | `LibreFolio_developer_journal/RoadmapV4_UI/wiki_audit_2026_06_18/audit_backend_infra.md` |
-| Assets/BRIM audit | `LibreFolio_developer_journal/RoadmapV4_UI/wiki_audit_2026_06_18/audit_assets_brokers_brim.md` |
+| Transactions audit | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-final-subplan/wiki_audit_2026_06_18/audit_transactions.md` |
+| Backend infra audit | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-final-subplan/wiki_audit_2026_06_18/audit_backend_infra.md` |
+| Assets/BRIM audit | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-final-subplan/wiki_audit_2026_06_18/audit_assets_brokers_brim.md` |
 | test_runner package | `scripts/test_runner/` |
 | Runner architecture doc | `mkdocs_src/docs/developer/test-walkthrough/runner_architecture.md` |
 | Transaction draft doc | `mkdocs_src/docs/developer/frontend/state/transaction-draft.md` |
