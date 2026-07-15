@@ -79,6 +79,8 @@ graph TD
   (unrelated pre-existing frontend bug, low priority).
 - [[problems/test-transaction-implied-constructor-mismatch]] — `test_transaction_implied.py` (6 tests) fails
   due to a pre-existing, unrelated `DailyStateBuilder` constructor mismatch in the test's local helper.
+- Resolved: [[problems/portfolio-asset-history-regression-restored]] — `GET /portfolio/asset-history` was
+  accidentally removed in a legacy-endpoint cleanup, then restored (found during Milestone 3 gap analysis).
 - Still open, low priority (see [[sources/phase09-m1-m2-archive-2026-07]]): `internal_transfer_flow` /
   `scope_transfer_flow` diagnostic fields not implemented; allocation history sampling (weekly/monthly) not
   implemented; WAC fallback for in-transit cost basis not implemented; `get_asset_history()` ROI/unit-mix
@@ -86,8 +88,9 @@ graph TD
 
 ## What comes next
 
-Milestone 3 (Broker UI v2 redesign — broker-scoped Holdings/Overview/Transactions views) is in progress, tracked
-in `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_3/` (not yet archived).
+Milestone 3 (Broker UI v2 redesign — broker-scoped Holdings/Overview/Transactions views, plus the
+cross-cutting chart-resolution/semantic-zoom work) is done — archived, see
+[[sources/phase09-m3-broker-redesign-2026-07]].
 
 Later ideas:
 - [[F-085]] QuarkAI Assistant — AI-powered portfolio commentary and question-answering (long-term idea).
@@ -104,4 +107,4 @@ Later ideas:
 | Frontend store | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |
 | Positions panel | `frontend/src/lib/components/dashboard/PositionsPanel.svelte` |
 | Archived M1/M2 plans | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/` |
-| Active M3 plans | `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_3/` |
+| Archived M3 plans (Broker UI v2 + chart resolution) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_3/` |

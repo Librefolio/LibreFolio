@@ -30,6 +30,13 @@
       "output_tokens": 0,
       "files": 23,
       "note": "Incremental update: Phase 09 M1/M2 archive closeout ingest (23 wiki pages)"
+    },
+    {
+      "date": "2026-07-15T09:41:49.315077+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 1174,
+      "note": "full rebuild from scratch (cache cleared) - Phase 9 M3 archive session"
     }
   ],
   "total_input_tokens": 0,
