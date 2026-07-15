@@ -314,6 +314,13 @@ class User(SQLModel, table=True):
     is_active: bool = Field(default=True)
     is_superuser: bool = Field(default=False)
 
+    # Lifetime login counter — incremented on every successful login, unconditionally.
+    # Kept independent from the donation-popup logic below for future/generic use.
+    login_count: int = Field(default=0, nullable=False)
+    # Donation-popup trigger bookkeeping (see services/donation_popup_service.py).
+    donation_popup_last_shown_at: Optional[datetime] = Field(default=None, nullable=True)
+    donation_popup_logins_since_shown: int = Field(default=0, nullable=False)
+
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

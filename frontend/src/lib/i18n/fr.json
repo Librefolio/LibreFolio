@@ -1781,5 +1781,11 @@
             "title": "Supprimer les fichiers",
             "message": "Supprimer {n} fichier(s) ? Cette action est irréversible."
         }
+    },
+    "donationPopup": {
+        "title": "LibreFolio grandit grâce à des utilisateurs comme vous !",
+        "message": "Si vous appréciez le projet et l'utilisez régulièrement, envisagez un petit don pour soutenir son développement.",
+        "laterButton": "Plus tard",
+        "donationNote": "☕ Même le prix d'un café peut faire la différence."
     }
 }

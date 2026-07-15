@@ -235,7 +235,7 @@
 
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="kpi-row">
     <!-- Card 1 — Period P&L -->
-    <div class="relative bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-period-pnl">
+    <div class="relative @container bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-period-pnl">
         {#if periodPnlPositive !== undefined}
             <div class="absolute top-0 left-0 right-0 h-0.5 {periodPnlPositive ? 'bg-green-500 dark:bg-green-400' : 'bg-red-500 dark:bg-red-400'}"></div>
         {/if}
@@ -251,7 +251,10 @@
                 </div>
             {/if}
             <div class:invisible={loading}>
-                <p class="text-2xl font-bold text-right tabular-nums transition-colors duration-300 {periodPnlPositive === true ? 'text-green-700 dark:text-green-400' : periodPnlPositive === false ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}" data-testid="kpi-value">
+                <p
+                    class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold text-right tabular-nums transition-colors duration-300 {periodPnlPositive === true ? 'text-green-700 dark:text-green-400' : periodPnlPositive === false ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}"
+                    data-testid="kpi-value"
+                >
                     <TweenedValue value={periodPnlAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true})} />
                 </p>
                 {#if pnlDeltaDay != null}
@@ -283,7 +286,7 @@
     </div>
 
     <!-- Card 2 — Returns -->
-    <div class="relative bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-returns">
+    <div class="relative @container bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-returns">
         {#if roiIsPositive !== undefined}
             <div class="absolute top-0 left-0 right-0 h-0.5 {roiIsPositive ? 'bg-green-500 dark:bg-green-400' : 'bg-red-500 dark:bg-red-400'}"></div>
         {/if}
@@ -303,7 +306,7 @@
                         <span class="text-[10px] italic" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.4 + timingIntensity * 0.6})` : `rgba(220, 38, 38, ${0.4 + timingIntensity * 0.6})`}">{timingLabel}</span>
                     </div>
                 </Tooltip>
-                <span class="text-2xl font-bold tabular-nums transition-colors" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.3 + timingIntensity * 0.7})` : `rgba(220, 38, 38, ${0.3 + timingIntensity * 0.7})`}">
+                <span class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold tabular-nums transition-colors" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.3 + timingIntensity * 0.7})` : `rgba(220, 38, 38, ${0.3 + timingIntensity * 0.7})`}">
                     <TweenedValue value={timingEffectVal} format={(v) => `${v >= 0 ? '+' : '-'}${Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${$_('dashboard.pp')}`} />
                 </span>
             </div>
@@ -321,7 +324,7 @@
     </div>
 
     <!-- Card 3 — Net Worth -->
-    <div class="relative bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-net-worth">
+    <div class="relative @container bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-net-worth">
         <div class="flex items-center justify-between">
             <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.netWorth')}</p>
             <DocsLink path="financial-theory/technical-analysis/performance-metrics/nav/" label={$_('dashboard.netWorth')} size={14} />
@@ -330,7 +333,7 @@
             <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
             <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse mt-2"></div>
         {:else}
-            <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 text-right tabular-nums" data-testid="kpi-value">
+            <p class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold text-gray-800 dark:text-gray-100 text-right tabular-nums" data-testid="kpi-value">
                 <TweenedValue value={navHeroAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: false})} />
             </p>
             {#if totalPnlAmt != null}

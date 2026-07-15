@@ -104,7 +104,14 @@
     function setupResizeObserver() {
         if (resizeObserver || !chartContainer) return;
         resizeObserver = new ResizeObserver(() => {
-            // Container size affects layout (pieCenter/pieRadius/legend orientation) which
+            // Bugfix: chartInstance.resize() is required to make ECharts actually re-measure
+            // the container and resize the underlying <canvas> pixel dimensions — setOption()
+            // alone re-applies percentage-based geometry (pieCenter/pieRadius) against the
+            // STALE canvas size from the last init()/resize(), so the chart appeared "frozen"
+            // at the old size/position on window/panel resize (every sibling chart component
+            // — GeographyMap, SemiDonutChart, LineChart, etc. — already calls resize() here).
+            chartInstance?.resize();
+            // Container size ALSO affects layout (pieCenter/pieRadius/legend orientation) which
             // the fast-path below skips — force a full rebuild so resizing actually
             // repositions the chart. Skip the enter/update animation for this specific
             // call: a live window drag-resize can fire the observer many times in rapid

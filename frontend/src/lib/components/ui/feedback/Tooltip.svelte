@@ -24,10 +24,12 @@
         math?: boolean;
         position?: 'top' | 'bottom' | 'left' | 'right';
         maxWidth?: string;
+        /** Extra classes for the trigger wrapper (e.g. `min-w-0` to allow shrinking/truncating inside a flex row) */
+        wrapperClass?: string;
         children?: Snippet;
     }
 
-    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', children}: Props = $props();
+    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', children}: Props = $props();
 
     let visible = $state(false);
     let tooltipElement: HTMLDivElement | undefined = $state(undefined);
@@ -249,7 +251,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
     bind:this={triggerElement}
-    class="tooltip-wrapper"
+    class="tooltip-wrapper {wrapperClass}"
     onclick={(e) => {
         if (!isTouchInteraction) toggle(e);
     }}

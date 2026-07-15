@@ -1781,5 +1781,11 @@
             "title": "Elimina file",
             "message": "Eliminare {n} file? L'azione non è reversibile."
         }
+    },
+    "donationPopup": {
+        "title": "LibreFolio cresce grazie agli utenti come te!",
+        "message": "Se apprezzi il progetto e lo usi regolarmente, considera una piccola donazione per sostenerne lo sviluppo.",
+        "laterButton": "La prossima volta",
+        "donationNote": "☕ Anche il prezzo di un caffè può fare la differenza."
     }
 }

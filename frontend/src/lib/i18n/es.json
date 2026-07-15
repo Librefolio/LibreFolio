@@ -1781,5 +1781,11 @@
             "title": "Eliminar archivos",
             "message": "¿Eliminar {n} archivo(s)? Esta acción no se puede deshacer."
         }
+    },
+    "donationPopup": {
+        "title": "¡LibreFolio crece gracias a usuarios como tú!",
+        "message": "Si te gusta el proyecto y lo usas habitualmente, considera hacer una pequeña donación para apoyar su desarrollo.",
+        "laterButton": "Más tarde",
+        "donationNote": "☕ Incluso el precio de un café puede marcar la diferencia."
     }
 }

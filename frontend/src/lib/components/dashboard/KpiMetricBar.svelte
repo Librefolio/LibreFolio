@@ -33,19 +33,19 @@
 </script>
 
 <div class="flex flex-col gap-0.5">
-    <div class="flex items-center justify-between text-xs">
+    <div class="flex items-center justify-between gap-2 text-xs">
         {#if tooltipHtml}
-            <Tooltip html={tooltipHtml} position="top">
-                <span class="cursor-help border-b border-dotted border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400">{label}</span>
+            <Tooltip html={tooltipHtml} position="top" wrapperClass="min-w-0">
+                <span class="block truncate min-w-0 cursor-help border-b border-dotted border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400" title={label}>{label}</span>
             </Tooltip>
         {:else if tooltip}
-            <Tooltip text={tooltip} position="top">
-                <span class="cursor-help border-b border-dotted border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400">{label}</span>
+            <Tooltip text={tooltip} position="top" wrapperClass="min-w-0">
+                <span class="block truncate min-w-0 cursor-help border-b border-dotted border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400" title={label}>{label}</span>
             </Tooltip>
         {:else}
-            <span class="text-gray-500 dark:text-gray-400">{label}</span>
+            <span class="block truncate min-w-0 text-gray-500 dark:text-gray-400" title={label}>{label}</span>
         {/if}
-        <span class="font-medium tabular-nums transition-colors duration-300 {valueColor}">
+        <span class="shrink-0 whitespace-nowrap font-medium tabular-nums transition-colors duration-300 {valueColor}">
             {#if numericValue !== undefined && formatValue}
                 <TweenedValue value={numericValue} format={formatValue} duration={700} />
             {:else}
