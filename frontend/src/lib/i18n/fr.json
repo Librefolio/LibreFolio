@@ -578,7 +578,7 @@
       "allLots": "Tous",
       "brokersCount": "{count} courtiers",
       "cumulativeProceeds": "Produits cumulés",
-      "cumulativeWac": "WAC cumulé",
+      "cumulativeWac": "PRU cumulé",
       "aggregateOriginalCost": "Coût d'origine total",
       "custody": "Conservation",
       "openQuantity": "Quantité ouverte",
@@ -591,6 +591,7 @@
       "inTransit": "En transit",
       "inTransitShort": "Transit",
       "lotLabel": "Lot {date}",
+      "lotWord": "Lot",
       "modal": {
         "absoluteQuantityTooltip": "Les quantités indiquent les avoirs absolus du courtier. Sur les courtiers partagés, votre part personnelle peut différer.",
         "currentCustody": "Conservation actuelle",
@@ -641,7 +642,9 @@
           "splitRatio": "Ratio de split",
           "sourceBroker": "De",
           "destinationBroker": "Vers"
-        }
+        },
+        "openingValue": "Valeur d'ouverture",
+        "cumulativeProceeds": "Produits cumulés"
       },
       "modeReturn": "Rendement",
       "noGanttData": "Aucun historique de conservation dans la période sélectionnée",
@@ -650,11 +653,14 @@
       "openOnly": "Ouverts",
       "openingDate": "Date d'ouverture",
       "openingPriceReference": "Prix d'ouverture",
+      "comparisonTotalValueAggregate": "Valeur totale",
       "totalReturn": "Rendement total",
       "openReturn": "Rendement ouvert",
-      "priceComparisonTitle": "Prix et coût moyen",
+      "priceComparisonTitle": "Prix des lots sélectionnés",
       "residualOpenValue": "Valeur résiduelle",
       "returnComparisonTitle": "Rendement depuis la date d'ouverture",
+      "valuePresentationAggregate": "Agrégé",
+      "valuePresentationIndividual": "Par lot",
       "searchPlaceholder": "Rechercher des lots...",
       "selectLotsToCompare": "Sélectionnez un ou plusieurs lots à comparer",
       "shortLotLabel": "Short {date}",
@@ -669,7 +675,13 @@
       "status": "Statut",
       "unifiedLots": "Lots",
       "unifiedLotsHint": "Vue unifiée des lots FIFO avec sélection multiple et détail de conservation.",
-      "valueComparisonTitle": "Valeur des lots sélectionnés"
+      "valueComparisonTitle": "Valeur des lots sélectionnés",
+      "originalQuantity": "Quantité d'origine",
+      "openingValue": "Valeur d'ouverture",
+      "viewLotDetail": "Voir le détail du lot",
+      "viewGanttLot": "Aller au lot dans le Gantt",
+      "goToOpeningTransaction": "Aller à la transaction d'ouverture",
+      "copyLotIdentifier": "Copier l'identifiant du lot"
     },
     "createdInSystem": "Créé dans le Système"
   },

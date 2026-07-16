@@ -578,7 +578,7 @@
       "allLots": "Todos",
       "brokersCount": "{count} brókers",
       "cumulativeProceeds": "Ingresos acumulados",
-      "cumulativeWac": "WAC acumulado",
+      "cumulativeWac": "PMC acumulado",
       "aggregateOriginalCost": "Costo original total",
       "custody": "Custodia",
       "openQuantity": "Cantidad abierta",
@@ -591,6 +591,7 @@
       "inTransit": "En tránsito",
       "inTransitShort": "Tránsito",
       "lotLabel": "Lote {date}",
+      "lotWord": "Lote",
       "modal": {
         "absoluteQuantityTooltip": "Las cantidades muestran las tenencias absolutas del bróker. En brókers compartidos, tu parte personal puede diferir.",
         "currentCustody": "Custodia actual",
@@ -641,7 +642,9 @@
           "splitRatio": "Ratio de split",
           "sourceBroker": "Desde",
           "destinationBroker": "Hacia"
-        }
+        },
+        "openingValue": "Valor de apertura",
+        "cumulativeProceeds": "Ingresos acumulados"
       },
       "modeReturn": "Rendimiento",
       "noGanttData": "Sin historial de custodia en el período seleccionado",
@@ -650,11 +653,14 @@
       "openOnly": "Abiertos",
       "openingDate": "Fecha de apertura",
       "openingPriceReference": "Precio de apertura",
+      "comparisonTotalValueAggregate": "Valor total",
       "totalReturn": "Rendimiento total",
       "openReturn": "Rendimiento abierto",
-      "priceComparisonTitle": "Precio y costo medio",
+      "priceComparisonTitle": "Precio de los lotes seleccionados",
       "residualOpenValue": "Valor residual",
       "returnComparisonTitle": "Rendimiento desde la fecha de apertura",
+      "valuePresentationAggregate": "Agregado",
+      "valuePresentationIndividual": "Por lote",
       "searchPlaceholder": "Buscar lotes...",
       "selectLotsToCompare": "Selecciona uno o más lotes para comparar",
       "shortLotLabel": "Short {date}",
@@ -669,7 +675,13 @@
       "status": "Estado",
       "unifiedLots": "Lotes",
       "unifiedLotsHint": "Vista unificada de lotes FIFO con selección múltiple y detalle de custodia.",
-      "valueComparisonTitle": "Valor de los lotes seleccionados"
+      "valueComparisonTitle": "Valor de los lotes seleccionados",
+      "originalQuantity": "Cantidad original",
+      "openingValue": "Valor de apertura",
+      "viewLotDetail": "Ver detalle del lote",
+      "viewGanttLot": "Ir al lote en el Gantt",
+      "goToOpeningTransaction": "Ir a la transacción de apertura",
+      "copyLotIdentifier": "Copiar identificador del lote"
     },
     "createdInSystem": "Creado en el Sistema"
   },

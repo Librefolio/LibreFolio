@@ -465,6 +465,7 @@ class LotAnalysisType(StrEnum):
     PRICE_HISTORY = "PRICE_HISTORY"
     BROKER_WAC_HISTORY = "BROKER_WAC_HISTORY"
     CUMULATIVE_WAC_HISTORY = "CUMULATIVE_WAC_HISTORY"
+    PERFORMANCE_HISTORY = "PERFORMANCE_HISTORY"
 
 
 class LotsAnalysisQuery(BaseModel):
@@ -662,6 +663,16 @@ class CumulativeWACHistoryPoint(BaseModel):
     pool_qty: SafeDecimal
 
 
+class PerformanceHistoryPoint(BaseModel):
+    """Asset-level ROI/TWRR time-series point (whole asset in filtered broker scope, independent of selected_lot_ids)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    date: date_type
+    roi: Optional[SafeDecimal] = Field(None, description="Simple ROI at this date, None if not computable (e.g. no cash flow yet).")
+    twrr: Optional[SafeDecimal] = Field(None, description="Cumulative TWRR at this date, None if not computable.")
+
+
 class LotsAnalysisMetadata(BaseModel):
     """Metadata describing bulk lots-analysis computation."""
 
@@ -699,6 +710,10 @@ class LotsAnalysisResponse(BaseModel):
     price_history: Optional[List[LotPriceHistoryPoint]] = Field(None, description="Flat per-lot PRICE_HISTORY points.")
     broker_wac_history: Optional[List[BrokerWACHistoryPoint]] = Field(None, description="BROKER_WAC_HISTORY payload.")
     cumulative_wac_history: Optional[List[CumulativeWACHistoryPoint]] = Field(None, description="CUMULATIVE_WAC_HISTORY payload.")
+    performance_history: Optional[List[PerformanceHistoryPoint]] = Field(
+        None,
+        description="PERFORMANCE_HISTORY payload — asset-wide ROI/TWRR, ignores selected_lot_ids.",
+    )
 
     @field_validator("target_currency")
     @classmethod

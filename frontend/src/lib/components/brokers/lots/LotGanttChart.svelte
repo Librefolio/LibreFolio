@@ -10,7 +10,6 @@
     import {attachDataZoomSync, type DataZoomSyncHandle} from '$lib/components/charts/echartsDataZoomSync';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
     import {buildGridColors, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
-    import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
@@ -96,6 +95,21 @@
         meta: {laneIndex: number; lotId: number; pulse: boolean; selected: boolean};
     }
 
+    /** Invisible, focusable per-segment hit target absolutely positioned over the ECharts custom
+     * series (recomputed on every 'rendered' event, so it stays in sync with pan/zoom/resize).
+     * Gives keyboard/assistive-tech users and Playwright a real DOM element to interact with,
+     * since canvas-rendered custom series have no native accessibility hooks. Sized per rendered
+     * SEGMENT (not per lane) so hover can drive the native ECharts tooltip via dispatchAction
+     * with a precise dataIndex — see showSegmentTooltip/hideSegmentTooltip. */
+    interface OverlayRect {
+        lotId: number;
+        dataIndex: number;
+        left: number;
+        top: number;
+        width: number;
+        height: number;
+    }
+
     const DAY_MS = 24 * 60 * 60 * 1000;
     const LANE_ROW_HEIGHT = 72;
     const ZOOM_AREA_HEIGHT = 64;
@@ -104,6 +118,8 @@
     const TOGGLE_DEBOUNCE_MS = 260;
     const THICKNESS_MIN = 12;
     const THICKNESS_MAX = 28;
+    const GRID_LEFT_PX = 56;
+    const GRID_RIGHT_PX = 18;
 
     let {lots = [], segments = [], brokers = [], currency, selectedLotIds = [], onSelectionChange, xAxisRange = null, onZoomChange, externalZoomStart = null, externalZoomEnd = null, onRowDoubleClick, filterMode = 'open', onFilterModeChange}: Props = $props();
 
@@ -117,6 +133,7 @@
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let dataZoomSyncHandle: DataZoomSyncHandle | null = null;
     let isDark = $state(false);
+    let overlayRects = $state<OverlayRect[]>([]);
     let pulseState = $state<{lotId: number; nonce: number} | null>(null);
     let pulseTimeoutId: ReturnType<typeof setTimeout> | null = null;
     let pulseNonce = 0;
@@ -219,10 +236,6 @@
         return brokers.find((broker) => broker.id === brokerId) ?? {id: brokerId, name: brokerName(brokerId)};
     }
 
-    function requiredBrokerLike(brokerId: number): BrokerLike {
-        return brokers.find((broker) => broker.id === brokerId) ?? {id: brokerId, name: brokerName(brokerId)};
-    }
-
     function segmentBaseColor(segment: SegmentModel, themeDark: boolean): string {
         if (segment.custodyType === 'IN_TRANSIT') return themeDark ? '#c084fc' : '#7c3aed';
         if (segment.brokerId == null) return themeDark ? '#60a5fa' : '#2563eb';
@@ -251,6 +264,41 @@
         const to = brokerName(segment.destinationBrokerId);
         const prefix = !translated || translated === 'brokers.lots.inTransit' ? 'In transit' : translated;
         return `${prefix} · ${from} → ${to}`;
+    }
+
+    function lotWordText(): string {
+        const translated = $t('brokers.lots.lotWord');
+        return !translated || translated === 'brokers.lots.lotWord' ? 'Lot' : translated;
+    }
+
+    /** Rough Latin-glyph width estimate (no canvas measureText available inside renderItem) —
+     * good enough to pick which label variant fits before ECharts' own char-level `overflow:
+     * 'truncate'` kicks in as a final safety net. */
+    function estimateTextWidthPx(text: string, fontSize = 11): number {
+        return text.length * fontSize * 0.58;
+    }
+
+    /** Segment label with graceful degradation. Priority (kept longest first, per plan §3.4):
+     * 1) date, 2) broker, 3) quantity, 4) the word "Lot" — so variants are built by dropping
+     * from the END of that list first. */
+    function buildSegmentLabel(meta: RenderedSegment, availableWidthPx: number): string {
+        const dateText = formatDateLong(meta.startDate);
+
+        if (meta.custodyType === 'IN_TRANSIT') {
+            const transit = buildTransitLabel(meta);
+            const withDate = `${dateText} · ${transit}`;
+            if (estimateTextWidthPx(withDate) <= availableWidthPx) return withDate;
+            if (estimateTextWidthPx(transit) <= availableWidthPx) return transit;
+            return dateText;
+        }
+
+        const brokerText = brokerName(meta.brokerId);
+        const qtyText = formatQuantity(meta.quantity);
+        const variants = [`${lotWordText()} ${dateText} · ${brokerText} · ${qtyText}`, `${dateText} · ${brokerText} · ${qtyText}`, `${dateText} · ${brokerText}`, dateText];
+        for (const variant of variants) {
+            if (estimateTextWidthPx(variant) <= availableWidthPx) return variant;
+        }
+        return variants.at(-1) ?? dateText;
     }
 
     function triggerPulse(lotId: number) {
@@ -319,7 +367,7 @@
                     lot,
                 };
             })
-            .sort((a, b) => a.openingMs - b.openingMs || a.lotId - b.lotId)
+            .sort((a, b) => a.openingMs - b.openingMs || a.lotId - b.lotId),
     );
 
     const openLotIdSet = $derived.by(() => new Set(lotModels.filter((lot) => lot.openQuantity > 0 || lot.states.includes('OPEN')).map((lot) => lot.lotId)));
@@ -365,8 +413,22 @@
     });
 
     const axisRangeMs = $derived.by(() => {
-        const fallbackMin = segmentModelsByLot.size > 0 ? Math.min(...Array.from(segmentModelsByLot.values()).flat().map((segment) => segment.startMs)) : null;
-        const fallbackMax = segmentModelsByLot.size > 0 ? Math.max(...Array.from(segmentModelsByLot.values()).flat().map((segment) => segment.endMs)) : null;
+        const fallbackMin =
+            segmentModelsByLot.size > 0
+                ? Math.min(
+                      ...Array.from(segmentModelsByLot.values())
+                          .flat()
+                          .map((segment) => segment.startMs),
+                  )
+                : null;
+        const fallbackMax =
+            segmentModelsByLot.size > 0
+                ? Math.max(
+                      ...Array.from(segmentModelsByLot.values())
+                          .flat()
+                          .map((segment) => segment.endMs),
+                  )
+                : null;
         const minMs = xAxisRange?.min ? parseDateToUtcMs(xAxisRange.min) : fallbackMin;
         const maxMs = xAxisRange?.max ? parseDateToUtcMs(xAxisRange.max) : fallbackMax;
 
@@ -413,40 +475,41 @@
                 if (segment.destinationBrokerId != null) ids.add(segment.destinationBrokerId);
             }
         }
-        return [...ids].sort((a, b) => a - b).map((id) => brokerLike(id)).filter((broker): broker is BrokerLike => broker != null);
+        return [...ids]
+            .sort((a, b) => a - b)
+            .map((id) => brokerLike(id))
+            .filter((broker): broker is BrokerLike => broker != null);
     });
 
-    const segmentSeriesData = $derived.by(
-        (): SegmentDatum[] =>
-            renderedLanes.flatMap((lane) =>
-                lane.segments.map((segment) => ({
-                    name: segment.key,
-                    value: [segment.startMs, segment.laneIndex, segment.endMs, segment.thickness],
-                    meta: segment,
-                }))
-            )
+    const segmentSeriesData = $derived.by((): SegmentDatum[] =>
+        renderedLanes.flatMap((lane) =>
+            lane.segments.map((segment) => ({
+                name: segment.key,
+                value: [segment.startMs, segment.laneIndex, segment.endMs, segment.thickness],
+                meta: segment,
+            })),
+        ),
     );
 
-    const laneHighlightData = $derived.by(
-        (): LaneHighlightDatum[] =>
-            renderedLanes
-                .filter((lane) => selectedLotIdSet.has(lane.lotId) || pulseState?.lotId === lane.lotId)
-                .map((lane) => ({
-                    name: `highlight-${lane.lotId}`,
-                    value: [lane.laneIndex],
-                    meta: {
-                        laneIndex: lane.laneIndex,
-                        lotId: lane.lotId,
-                        pulse: pulseState?.lotId === lane.lotId,
-                        selected: selectedLotIdSet.has(lane.lotId),
-                    },
-                }))
+    const laneHighlightData = $derived.by((): LaneHighlightDatum[] =>
+        renderedLanes
+            .filter((lane) => selectedLotIdSet.has(lane.lotId) || pulseState?.lotId === lane.lotId)
+            .map((lane) => ({
+                name: `highlight-${lane.lotId}`,
+                value: [lane.laneIndex],
+                meta: {
+                    laneIndex: lane.laneIndex,
+                    lotId: lane.lotId,
+                    pulse: pulseState?.lotId === lane.lotId,
+                    selected: selectedLotIdSet.has(lane.lotId),
+                },
+            })),
     );
 
     function buildTooltip(meta: RenderedSegment, themeDark: boolean): string {
         const theme = buildTooltipTheme(themeDark);
         const lot = renderedLanes.find((lane) => lane.lotId === meta.lotId)?.lot;
-        const statusLabel = meta.custodyType === 'IN_TRANSIT' ? ($t('brokers.lots.inTransit') || 'In transit') : meta.isOpen ? ($t('dashboard.openPositions') || 'Open') : ($t('dashboard.closedPositions') || 'Closed');
+        const statusLabel = meta.custodyType === 'IN_TRANSIT' ? $t('brokers.lots.inTransit') || 'In transit' : meta.isOpen ? $t('dashboard.openPositions') || 'Open' : $t('dashboard.closedPositions') || 'Closed';
         let html = buildTooltipHeader(escapeHtml(lotLabel(lot?.openingDate ?? meta.startDate)), theme.textColor);
         html += buildTooltipRow(escapeHtml($t('brokers.lots.buyDate') || 'Opening date'), escapeHtml(formatDateLong(lot?.openingDate ?? meta.startDate)));
         html += buildTooltipRow(escapeHtml($t('brokers.lots.direction') || 'Direction'), escapeHtml(meta.direction));
@@ -526,7 +589,10 @@
                 const rawWidth = Math.max(3, Math.abs(endCoord[0] - startCoord[0]));
 
                 // Keep partially out-of-range lots visible: ECharts still computes off-screen
-                // coords, then this clip trims the bar to the plot rect instead of dropping it.
+                // coords (startCoord/endCoord are never clamped), then this clip trims the bar
+                // to the plot rect instead of dropping it. Comparing the *unclamped* coords
+                // against coordSys below is what lets us tell a truly clipped edge apart from
+                // one that merely coincides with the plot boundary.
                 const rectShape = echarts.graphic.clipRectByRect(
                     {
                         x: rawX,
@@ -539,17 +605,20 @@
                         y: coordSys.y,
                         width: coordSys.width,
                         height: coordSys.height,
-                    }
+                    },
                 );
                 if (!rectShape) return null;
+
+                const isClippedLeft = rawX < coordSys.x - 0.5;
+                const isClippedRight = rawX + rawWidth > coordSys.x + coordSys.width + 0.5;
 
                 const baseColor = segmentBaseColor(meta, themeDark);
                 const selected = selectedLotIdSet.has(meta.lotId);
                 const pulsing = pulseState?.lotId === meta.lotId;
                 const borderColor = pulsing ? (themeDark ? '#c084fc' : '#7c3aed') : selected ? (themeDark ? '#e0f2fe' : '#0f172a') : withAlpha(baseColor, themeDark ? 0.92 : 0.85);
-                const label = meta.custodyType === 'IN_TRANSIT' ? buildTransitLabel(meta) : `${brokerName(meta.brokerId)} · ${formatQuantity(meta.quantity)}`;
-                const labelFits = rectShape.width >= 90;
-                const firstDotX = Math.max(coordSys.x + 4, Math.min(rectShape.x + 8, coordSys.x + coordSys.width - 6));
+                const label = buildSegmentLabel(meta, Math.max(0, rectShape.width - 24));
+                const labelFits = rectShape.width >= 28;
+                const edgeMarkerX = Math.max(coordSys.x + 4, Math.min(rectShape.x + 8, coordSys.x + coordSys.width - 6));
                 const children: any[] = [
                     {
                         type: 'rect',
@@ -575,11 +644,26 @@
                     },
                 ];
 
-                if (meta.isFirstInLane) {
+                if (isClippedLeft) {
+                    // Segment starts before the visible range — a left-pointing chevron replaces
+                    // the usual opening dot to signal "this lot's story continues off-screen".
+                    children.push({
+                        type: 'polygon',
+                        silent: true,
+                        shape: {
+                            points: [
+                                [edgeMarkerX + 6, startCoord[1] - Math.min(7, barHeight / 2)],
+                                [edgeMarkerX - 4, startCoord[1]],
+                                [edgeMarkerX + 6, startCoord[1] + Math.min(7, barHeight / 2)],
+                            ],
+                        },
+                        style: {fill: borderColor, opacity: 0.9},
+                    });
+                } else if (meta.isFirstInLane) {
                     children.push({
                         type: 'circle',
                         silent: true,
-                        shape: {cx: firstDotX, cy: startCoord[1], r: Math.min(6, barHeight / 2)},
+                        shape: {cx: edgeMarkerX, cy: startCoord[1], r: Math.min(6, barHeight / 2)},
                         style: {
                             fill: pulsing ? (themeDark ? '#c084fc' : '#7c3aed') : themeDark ? '#f8fafc' : '#0f172a',
                             stroke: borderColor,
@@ -588,7 +672,7 @@
                     });
                 }
 
-                if (meta.isOpen && rectShape.width >= 24) {
+                if ((meta.isOpen || isClippedRight) && rectShape.width >= 24) {
                     children.push({
                         type: 'polygon',
                         silent: true,
@@ -631,9 +715,9 @@
             animationDurationUpdate: 450,
             grid: {
                 top: 8,
-                right: 18,
+                right: GRID_RIGHT_PX,
                 bottom: 54,
-                left: 8,
+                left: GRID_LEFT_PX,
                 containLabel: false,
             },
             tooltip: {
@@ -692,6 +776,72 @@
         resizeObserver.observe(chartContainer);
     }
 
+    /** Recomputes the invisible per-segment hit targets (see OverlayRect) from the chart's
+     * current pixel mapping. `convertToPixel` coordinates are already relative to the chart DOM
+     * node's own top-left, which is exactly the coordinate space our absolutely-positioned
+     * overlay `<button>`s need — no extra offset math against ancestor elements required. */
+    function computeOverlayRects(): OverlayRect[] {
+        const chart = chartInstance;
+        if (!chart) return [];
+        const minMs = axisRangeMs?.minMs ?? null;
+        const maxMs = axisRangeMs?.maxMs ?? null;
+        if (minMs == null || maxMs == null) return [];
+
+        const rects: OverlayRect[] = [];
+        segmentSeriesData.forEach((datum, dataIndex) => {
+            const meta = datum.meta;
+            const clippedStartMs = Math.max(meta.startMs, minMs);
+            const clippedEndMs = Math.min(meta.endMs, maxMs);
+            if (clippedEndMs <= clippedStartMs) return; // outside visible range (defensive — should already be filtered)
+
+            try {
+                const left = chart.convertToPixel({xAxisIndex: 0, yAxisIndex: 0}, [clippedStartMs, meta.laneIndex]);
+                const right = chart.convertToPixel({xAxisIndex: 0, yAxisIndex: 0}, [clippedEndMs, meta.laneIndex]);
+                if (!left || !right) return;
+                rects.push({
+                    lotId: meta.lotId,
+                    dataIndex,
+                    left: Math.min(left[0], right[0]),
+                    top: left[1] - LANE_ROW_HEIGHT / 2,
+                    width: Math.max(4, Math.abs(right[0] - left[0])),
+                    height: LANE_ROW_HEIGHT,
+                });
+            } catch {
+                // Chart not fully laid out yet (e.g. mid-resize) — skip this segment for this
+                // pass, the next 'rendered'/resize event will recompute it.
+            }
+        });
+        return rects;
+    }
+
+    function refreshOverlayRects() {
+        overlayRects = computeOverlayRects();
+    }
+
+    /** Index of the '__segments' custom series in the live ECharts option — looked up by name
+     * (not hardcoded) so it stays correct if buildOption()'s series order ever changes. */
+    function segmentsSeriesIndex(): number | null {
+        const series = (chartInstance?.getOption() as {series?: Array<{name?: string}>} | undefined)?.series;
+        if (!series) return null;
+        const index = series.findIndex((entry) => entry?.name === '__segments');
+        return index >= 0 ? index : null;
+    }
+
+    /** Overlay hover -> native ECharts tooltip. The overlay's own `pointer-events:auto` (needed
+     * for click/dblclick/keyboard selection) sits on top of the canvas and blocks the browser's
+     * hit-testing from ever reaching it, so `tooltip.trigger:'item'` never fires on a real mouse
+     * hover. Driving the SAME tooltip via dispatchAction with the exact dataIndex this overlay
+     * represents sidesteps that entirely — no coordinate-guessing needed. */
+    function showSegmentTooltip(rect: OverlayRect) {
+        const seriesIndex = segmentsSeriesIndex();
+        if (seriesIndex == null) return;
+        chartInstance?.dispatchAction({type: 'showTip', seriesIndex, dataIndex: rect.dataIndex});
+    }
+
+    function hideSegmentTooltip() {
+        chartInstance?.dispatchAction({type: 'hideTip'});
+    }
+
     function renderChart() {
         if (!chartContainer) return;
 
@@ -724,15 +874,18 @@
                 const lotId = params.info?.lotId;
                 if (typeof lotId === 'number') handleLaneDoubleClick(lotId);
             });
+            chartInstance.on('rendered', refreshOverlayRects);
         }
 
         if (!chartHasData) {
             chartInstance.clear();
+            overlayRects = [];
             return;
         }
 
         chartInstance.setOption(buildOption(isDark), CHART_SET_OPTION_OPTS);
         chartInstance.resize();
+        refreshOverlayRects();
     }
 
     $effect(() => {
@@ -826,48 +979,41 @@
     </div>
 
     <div bind:this={lanesScrollEl} class="max-h-[34rem] overflow-auto rounded-lg border border-gray-100 dark:border-slate-700" data-testid="lot-gantt-scroll">
-        <div class="grid min-w-[960px] grid-cols-[240px_minmax(720px,1fr)]">
-            <div class="sticky left-0 z-10 border-r border-gray-100 bg-white dark:border-slate-700 dark:bg-slate-800">
-                {#if chartHasData}
-                    {#each renderedLanes as lane (lane.lotId)}
-                        <button
-                            class="flex h-[72px] w-full items-center gap-3 border-b border-gray-100 px-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/40 {selectedLotIdSet.has(lane.lotId) ? 'bg-sky-50/70 dark:bg-sky-900/20' : ''} {pulseState?.lotId === lane.lotId ? 'ring-2 ring-violet-400 ring-inset animate-pulse' : ''}"
-                            data-testid={`lot-gantt-lane-header-${lane.lotId}`}
-                            onclick={(event) => {
-                                if (event.detail !== 1) return;
-                                toggleLotSelection(lane.lotId);
-                            }}
-                            ondblclick={() => handleLaneDoubleClick(lane.lotId)}
-                            type="button"
-                        >
-                            <AssetIcon size="sm" altText={lotLabel(lane.lot.openingDate)} />
-                            <div class="min-w-0 flex-1">
-                                <div class="flex items-center gap-2">
-                                    <span class="truncate text-sm font-semibold text-gray-700 dark:text-gray-100">{lotLabel(lane.lot.openingDate)}</span>
-                                    <span class="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-500 dark:border-slate-600 dark:text-gray-300">
-                                        {lane.lot.direction}
-                                    </span>
-                                </div>
-                                <div class="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                                    <span>{formatDateLong(lane.lot.openingDate)}</span>
-                                    <span class="max-w-[118px] min-w-0">
-                                        <BrokerBadge broker={requiredBrokerLike(lane.lot.openingBrokerId)} {brokers} size={14} showName={true} nameClass="text-xs" />
-                                    </span>
-                                </div>
-                            </div>
-                        </button>
-                    {/each}
-                {:else}
-                    <div class="flex h-[220px] items-center justify-center px-4 text-center text-sm italic text-gray-400 dark:text-gray-500">
-                        {$t('brokers.lots.noGanttData') || 'No lot custody history in selected range'}
-                    </div>
-                {/if}
-            </div>
-
-            <div class="min-w-[720px]">
+        {#if chartHasData}
+            <div class="relative min-w-[720px]">
                 <div bind:this={chartContainer} class="w-full" data-testid="lot-gantt-echart" style={`height:${chartHeightPx}px; min-width:${CHART_MIN_WIDTH}px;`}></div>
+
+                <!-- Invisible per-segment hit targets kept in sync with the ECharts custom
+                     series (see computeOverlayRects) — provide a real, focusable, testable DOM
+                     element over each Gantt bar without reintroducing a fixed HTML column.
+                     mouseenter/mousemove/mouseleave drive the native tooltip via dispatchAction
+                     (see showSegmentTooltip) since this element's own pointer-events would
+                     otherwise block the canvas from ever seeing the hover. -->
+                {#each overlayRects as rect (rect.dataIndex)}
+                    <button
+                        type="button"
+                        class="absolute cursor-pointer bg-transparent opacity-0"
+                        style={`left:${rect.left}px; top:${rect.top}px; width:${rect.width}px; height:${rect.height}px;`}
+                        data-testid={`lot-gantt-segment-${rect.lotId}`}
+                        aria-label={lotLabel(lots.find((lot) => lot.lot_id === rect.lotId)?.opening_date ?? '')}
+                        onclick={(event) => {
+                            if (event.detail !== 1) return;
+                            toggleLotSelection(rect.lotId);
+                        }}
+                        ondblclick={() => handleLaneDoubleClick(rect.lotId)}
+                        onmouseenter={() => showSegmentTooltip(rect)}
+                        onmousemove={() => showSegmentTooltip(rect)}
+                        onmouseleave={hideSegmentTooltip}
+                        onfocus={() => showSegmentTooltip(rect)}
+                        onblur={hideSegmentTooltip}
+                    ></button>
+                {/each}
             </div>
-        </div>
+        {:else}
+            <div class="flex h-[220px] items-center justify-center px-4 text-center text-sm italic text-gray-400 dark:text-gray-500">
+                {$t('brokers.lots.noGanttData') || 'No lot custody history in selected range'}
+            </div>
+        {/if}
     </div>
 
     {#if visibleBrokers.length > 0}

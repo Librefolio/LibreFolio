@@ -18,6 +18,7 @@
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
     type LotPriceHistoryPoint = z.infer<typeof schemas.LotPriceHistoryPoint>;
     type LotTimelineEventSchema = z.infer<typeof schemas.LotTimelineEventSchema>;
+    type PerformanceHistoryPoint = z.infer<typeof schemas.PerformanceHistoryPoint>;
     type DisplayMode = 'absolute' | 'percentage';
     type EventMarkerSeriesKind = 'buy' | 'sell' | 'transfer' | 'adjustment' | 'split';
 
@@ -25,6 +26,11 @@
     const TRANSFER_MARKER_SYMBOL = 'path://M1 10 L6 5 L6 8 L14 8 L14 5 L19 10 L14 15 L14 12 L6 12 L6 15 Z';
     const SPLIT_MARKER_SYMBOL = 'path://M8 1 H12 V8 H16 V12 H12 V19 H8 V12 H4 V8 H8 Z';
     const MARKER_VERTICAL_OFFSET_STEP = 12;
+    // Fixed (non-containLabel) grid bounds shared byte-for-byte with LotGanttChart.svelte so the
+    // two charts' X axes are pixel-perfect aligned regardless of how wide either chart's Y-axis
+    // labels happen to be (containLabel:true would make that alignment drift with content).
+    const GRID_LEFT_PX = 56;
+    const GRID_RIGHT_PX = 18;
     const MARKER_CATEGORY_ORDER: Record<EventMarkerSeriesKind, number> = {
         buy: 0,
         sell: 1,
@@ -38,6 +44,9 @@
         cumulativeWacHistory: CumulativeWACHistoryPoint[];
         priceHistory: LotPriceHistoryPoint[];
         lotEvents: LotTimelineEventSchema[];
+        /** Asset-wide ROI/TWRR (ignores selectedLotIds — see LotsAnalysisService._build_performance_history),
+         * plotted only in percentage mode alongside the already-normalized market/WAC series. */
+        performanceHistory?: PerformanceHistoryPoint[];
         brokers: ReadonlyArray<BrokerLike>;
         currency: string;
         xAxisRange?: {min: string; max: string} | null;
@@ -91,10 +100,12 @@
         label: string;
         symbol: string;
         symbolSize: number;
+        /** Optional rotation in degrees, e.g. 180 to turn the BUY up-triangle into a SELL down-triangle. */
+        symbolRotate?: number;
         color: string;
     }
 
-    let {brokerWacHistory = [], cumulativeWacHistory = [], priceHistory = [], lotEvents = [], brokers = [], currency, xAxisRange = null, onZoomChange, externalZoomStart = null, externalZoomEnd = null, onRangeComputed, onLoadingChange}: ComponentProps = $props();
+    let {brokerWacHistory = [], cumulativeWacHistory = [], priceHistory = [], lotEvents = [], performanceHistory = [], brokers = [], currency, xAxisRange = null, onZoomChange, externalZoomStart = null, externalZoomEnd = null, onRangeComputed, onLoadingChange}: ComponentProps = $props();
 
     let displayMode = $state<DisplayMode>('absolute');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
@@ -327,15 +338,16 @@
             {
                 key: 'buy',
                 label: labels.markerLegend.buy,
-                symbol: 'circle',
-                symbolSize: 10,
+                symbol: 'triangle',
+                symbolSize: 12,
                 color: isDark ? '#86efac' : '#16a34a',
             },
             {
                 key: 'sell',
                 label: labels.markerLegend.sell,
-                symbol: 'diamond',
+                symbol: 'triangle',
                 symbolSize: 12,
+                symbolRotate: 180,
                 color: isDark ? '#fca5a5' : '#dc2626',
             },
             {
@@ -391,9 +403,12 @@
         const eventTypeTransferDepart = $_('brokers.lots.chartMarkers.eventType.TRANSFER_DEPART');
         const eventTypeTransferArrive = $_('brokers.lots.chartMarkers.eventType.TRANSFER_ARRIVE');
         const eventTypeSplit = $_('brokers.lots.chartMarkers.eventType.SPLIT');
+        const roi = $_('dashboard.roi');
+        const twrr = $_('dashboard.twrr');
+        const pmc = $_('dashboard.pmc');
 
         return {
-            wac: 'WAC',
+            wac: !pmc || pmc === 'dashboard.pmc' ? 'WAC' : pmc,
             marketPrice: !marketPrice || marketPrice === 'chart.marketPrice' ? 'Market Price' : marketPrice,
             abs: !abs || abs === 'dashboard.abs' ? 'ABS' : abs,
             pct: !pct || pct === 'dashboard.pct' ? '%' : pct,
@@ -410,6 +425,8 @@
             ratio: !ratio || ratio === 'brokers.lots.chartMarkers.ratio' ? 'Ratio' : ratio,
             proceeds: !proceeds || proceeds === 'brokers.lots.chartMarkers.proceeds' ? 'Proceeds' : proceeds,
             realizedPnl: !realizedPnl || realizedPnl === 'brokers.lots.chartMarkers.realizedPnl' ? 'Realized P&L' : realizedPnl,
+            roi: !roi || roi === 'dashboard.roi' ? 'ROI' : roi,
+            twrr: !twrr || twrr === 'dashboard.twrr' ? 'TWRR' : twrr,
             markerLegend: {
                 buy: !markerLegendBuy || markerLegendBuy === 'brokers.lots.chartMarkers.legend.buy' ? 'Buys' : markerLegendBuy,
                 sell: !markerLegendSell || markerLegendSell === 'brokers.lots.chartMarkers.legend.sell' ? 'Sales' : markerLegendSell,
@@ -563,6 +580,26 @@
         };
     });
 
+    /** Asset-wide ROI/TWRR, percentage-mode only. Backend already returns cumulative fractions
+     * (e.g. 0.52 for +52%) — multiply by 100 to match this chart's existing "percentage points"
+     * convention (see toPercentSeries above), no rebasing-to-baseline needed since these are
+     * already returns, not raw price/WAC levels. */
+    function toPercentPoints(value: number | null): number | null {
+        return value == null ? null : value * 100;
+    }
+
+    const performancePercentPoints = $derived.by(() => {
+        const sorted = [...performanceHistory].sort((a, b) => sortDates(a.date, b.date));
+        const roiValues = sorted.map((point) => toPercentPoints(parseNumber(point.roi)));
+        const twrrValues = sorted.map((point) => toPercentPoints(parseNumber(point.twrr)));
+        return {
+            roi: sorted.map((point, index) => namedPoint(point.date, roiValues[index])),
+            twrr: sorted.map((point, index) => namedPoint(point.date, twrrValues[index])),
+            hasRoi: roiValues.some((value) => value != null),
+            hasTwrr: twrrValues.some((value) => value != null),
+        };
+    });
+
     let hasAbsoluteData = $derived(groupedChartData.hasAbsoluteData);
     let hasPercentData = $derived(groupedChartData.hasPercentData);
     let chartStartDate = $derived(groupedChartData.minDate);
@@ -629,6 +666,33 @@
             });
         }
 
+        if (displayMode === 'percentage') {
+            if (performancePercentPoints.hasRoi) {
+                series.push({
+                    name: labels.roi,
+                    type: 'line',
+                    data: performancePercentPoints.roi,
+                    showSymbol: false,
+                    connectNulls: false,
+                    smooth: false,
+                    lineStyle: {width: 2, color: isDark ? '#fbbf24' : '#b45309', type: 'dotted'},
+                    itemStyle: {color: isDark ? '#fbbf24' : '#b45309'},
+                });
+            }
+            if (performancePercentPoints.hasTwrr) {
+                series.push({
+                    name: labels.twrr,
+                    type: 'line',
+                    data: performancePercentPoints.twrr,
+                    showSymbol: false,
+                    connectNulls: false,
+                    smooth: false,
+                    lineStyle: {width: 2, color: isDark ? '#f472b6' : '#be185d', type: 'dotted'},
+                    itemStyle: {color: isDark ? '#f472b6' : '#be185d'},
+                });
+            }
+        }
+
         for (const definition of buildMarkerSeriesDefinitions()) {
             const markerSeries = groupedChartData.markerSeries.find((seriesGroup) => seriesGroup.category === definition.key);
             if (!markerSeries) continue;
@@ -638,6 +702,7 @@
                 type: 'scatter',
                 symbol: definition.symbol,
                 symbolSize: definition.symbolSize,
+                symbolRotate: definition.symbolRotate,
                 clip: false,
                 z: 5,
                 data: markerSeries.points.map((point) => ({
@@ -765,10 +830,10 @@
             ...CHART_ANIMATION_CONFIG,
             grid: {
                 top: 62,
-                right: 18,
+                right: GRID_RIGHT_PX,
                 bottom: 34,
-                left: 22,
-                containLabel: true,
+                left: GRID_LEFT_PX,
+                containLabel: false,
             },
             legend: {
                 type: 'scroll',
@@ -915,6 +980,7 @@
         void $currentLanguage;
         void brokers;
         void xAxisRange;
+        void performancePercentPoints;
 
         if (!chartContainer) return;
         tick().then(() => {
@@ -943,7 +1009,7 @@
 
 <div class="rounded-lg border border-gray-200/80 bg-gray-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/30" data-testid="lot-wac-price-chart">
     <div class="mb-3 flex items-center justify-between gap-3">
-        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">WAC / {labels.marketPrice}</h3>
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{labels.wac} / {labels.marketPrice}</h3>
 
         <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600">
             <button

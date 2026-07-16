@@ -578,7 +578,7 @@
       "allLots": "Tutti",
       "brokersCount": "{count} broker",
       "cumulativeProceeds": "Incassi cumulati",
-      "cumulativeWac": "WAC cumulato",
+      "cumulativeWac": "PMC cumulato",
       "aggregateOriginalCost": "Costo originario complessivo",
       "custody": "Custodia",
       "openQuantity": "Quantità aperta",
@@ -591,6 +591,7 @@
       "inTransit": "In transito",
       "inTransitShort": "Transito",
       "lotLabel": "Lotto {date}",
+      "lotWord": "Lotto",
       "modal": {
         "absoluteQuantityTooltip": "Le quantità mostrano le giacenze assolute del broker. Sui broker condivisi, la tua quota personale potrebbe differire.",
         "currentCustody": "Custodia attuale",
@@ -641,7 +642,9 @@
           "splitRatio": "Rapporto split",
           "sourceBroker": "Da",
           "destinationBroker": "A"
-        }
+        },
+        "openingValue": "Valore apertura",
+        "cumulativeProceeds": "Incassi cumulati"
       },
       "modeReturn": "Rendimento",
       "noGanttData": "Nessuna cronologia di custodia nel periodo selezionato",
@@ -650,11 +653,14 @@
       "openOnly": "Aperti",
       "openingDate": "Data apertura",
       "openingPriceReference": "Prezzo apertura",
+      "comparisonTotalValueAggregate": "Valore complessivo",
       "totalReturn": "Rendimento totale",
       "openReturn": "Rendimento aperto",
-      "priceComparisonTitle": "Prezzo e costo medio",
+      "priceComparisonTitle": "Prezzo dei lotti selezionati",
       "residualOpenValue": "Valore residuo",
       "returnComparisonTitle": "Rendimento dalla data di apertura",
+      "valuePresentationAggregate": "Aggregato",
+      "valuePresentationIndividual": "Per lotto",
       "searchPlaceholder": "Cerca lotti...",
       "selectLotsToCompare": "Seleziona uno o più lotti da confrontare",
       "shortLotLabel": "Short {date}",
@@ -669,7 +675,13 @@
       "status": "Stato",
       "unifiedLots": "Lotti",
       "unifiedLotsHint": "Vista unificata dei lotti FIFO con selezione multipla e dettaglio custodia.",
-      "valueComparisonTitle": "Valore dei lotti selezionati"
+      "valueComparisonTitle": "Valore dei lotti selezionati",
+      "originalQuantity": "Quantità originaria",
+      "openingValue": "Valore apertura",
+      "viewLotDetail": "Visualizza dettaglio lotto",
+      "viewGanttLot": "Vai al lotto nel Gantt",
+      "goToOpeningTransaction": "Vai alla transazione di apertura",
+      "copyLotIdentifier": "Copia identificativo lotto"
     },
     "createdInSystem": "Creato nel Sistema"
   },

@@ -9,12 +9,14 @@
   Fetch strategy (two tiers, per plan v2 §13 "il frontend non effettua autonomamente ...
   calcoli WAC"):
   - Main fetch (asset/broker/date-range change): LOT_SUMMARY + GANTT_TOPOLOGY +
-    EVENT_HISTORY + PRICE_HISTORY + BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY, with
-    NO selected_lot_ids (service defaults to "all lots" — see
+    EVENT_HISTORY + PRICE_HISTORY + BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY +
+    PERFORMANCE_HISTORY, with NO selected_lot_ids (service defaults to "all lots" — see
     LotsAnalysisService._resolve_selected_lot_ids). EVENT_HISTORY (superset of the old
     CUSTODY_HISTORY subset) feeds both the WAC chart's transaction markers and the
-    Custody modal's full chronology (refinement v1 §5 / modal spec). Feeds every
-    component except the comparison chart's Value/Return modes.
+    Custody modal's full chronology (refinement v1 §5 / modal spec). PERFORMANCE_HISTORY
+    is asset-wide ROI/TWRR (refinement v2 §5.2), ignores selected_lot_ids just like the
+    WAC series it's plotted alongside. Feeds every component except the comparison
+    chart's Value/Return modes.
   - Selection fetch (selectedLotIds change, only when non-empty): VALUE_HISTORY +
     RETURN_HISTORY scoped to selected_lot_ids. PRICE_HISTORY is NOT re-fetched here:
     market price doesn't vary by lot, so the main fetch's already-deduped price series
@@ -52,6 +54,7 @@
     type LotPriceHistoryPoint = z.infer<typeof schemas.LotPriceHistoryPoint>;
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
+    type PerformanceHistoryPoint = z.infer<typeof schemas.PerformanceHistoryPoint>;
     type DateRange = {min: string; max: string};
 
     /**
@@ -101,6 +104,7 @@
     let priceHistory = $state<LotPriceHistoryPoint[]>([]);
     let brokerWacHistory = $state<BrokerWACHistoryPoint[]>([]);
     let cumulativeWacHistory = $state<CumulativeWACHistoryPoint[]>([]);
+    let performanceHistory = $state<PerformanceHistoryPoint[]>([]);
     let dataQualityIssues = $state<DataQualityIssue[]>([]);
     let computedRange = $state<DateRange | null>(null);
 
@@ -159,7 +163,7 @@
                 broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
                 date_range: isAllPeriod ? undefined : {start: dateFrom, end: dateTo},
                 target_currency: currency,
-                requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY'] as const,
+                requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'PERFORMANCE_HISTORY'] as const,
             };
             const response = await zodiosApi.get_lots_analysis_api_v1_portfolio_lots_analysis_post(body);
             if (version !== fetchVersion) return; // stale response from a since-superseded open/asset change
@@ -174,6 +178,9 @@
             priceHistory = asArray<LotPriceHistoryPoint>(response.price_history);
             brokerWacHistory = asArray<BrokerWACHistoryPoint>(response.broker_wac_history);
             cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
+            // Asset-wide ROI/TWRR (ignores selected_lot_ids, same broker scope as the WAC series
+            // above) — feeds only the WAC/Price chart's percentage mode.
+            performanceHistory = asArray<PerformanceHistoryPoint>(response.performance_history);
             dataQualityIssues = asArray<DataQualityIssue>(asObject<{issues?: unknown}>(response.data_quality)?.issues);
 
             const metadata = response.calculation_metadata;
@@ -194,6 +201,7 @@
             priceHistory = [];
             brokerWacHistory = [];
             cumulativeWacHistory = [];
+            performanceHistory = [];
             dataQualityIssues = [];
         } finally {
             if (version === fetchVersion) loading = false;
@@ -306,7 +314,14 @@
         void goto(`/transactions?highlight=${transactionId}`);
     }
 
-    /** "Row -> lane" (table double-click) — scroll+pulse the matching Gantt lane. */
+    /** Context menu "Go to opening transaction" — same navigation as the modal footer button,
+     * just resolved directly from the row's lot without requiring the modal to be open first. */
+    function handleGotoOpeningTransaction(lot: LotSummarySchema) {
+        handleGotoTransaction(lot.opening_transaction_id);
+    }
+
+    /** "Row -> lane" (table double-click, and now also the row context menu's "Go to lot in
+     * Gantt" action) — scroll+pulse the matching Gantt lane. */
     function handleTableRowDoubleClick(lotId: number) {
         ganttRef?.pulseLot(lotId);
     }
@@ -367,7 +382,7 @@
                     </div>
                 </div>
             {:else}
-                <LotWacPriceChart {brokerWacHistory} {cumulativeWacHistory} {priceHistory} {lotEvents} {brokers} {currency} {xAxisRange} onZoomChange={handleZoomChange} externalZoomStart={sharedZoomStart} externalZoomEnd={sharedZoomEnd} />
+                <LotWacPriceChart {brokerWacHistory} {cumulativeWacHistory} {priceHistory} {lotEvents} {performanceHistory} {brokers} {currency} {xAxisRange} onZoomChange={handleZoomChange} externalZoomStart={sharedZoomStart} externalZoomEnd={sharedZoomEnd} />
 
                 <LotGanttChart
                     bind:this={ganttRef}
@@ -386,9 +401,20 @@
                     onFilterModeChange={(mode) => (lotFilterMode = mode)}
                 />
 
-                <UnifiedLotsTable bind:this={tableRef} lots={visibleLots} {currency} {brokers} {selectedLotIds} onSelectionChange={handleSelectionChange} onCustodyCellClick={handleCustodyCellClick} onRowDoubleClick={handleTableRowDoubleClick} />
+                <UnifiedLotsTable
+                    bind:this={tableRef}
+                    lots={visibleLots}
+                    {currency}
+                    {brokers}
+                    {selectedLotIds}
+                    onSelectionChange={handleSelectionChange}
+                    onCustodyCellClick={handleCustodyCellClick}
+                    onViewGanttLot={handleTableRowDoubleClick}
+                    onGotoOpeningTransaction={handleGotoOpeningTransaction}
+                    onRowDoubleClick={handleTableRowDoubleClick}
+                />
 
-                <LotComparisonChart selectedLots={selectedLots} {valueHistory} {returnHistory} {priceHistory} {brokerWacHistory} {cumulativeWacHistory} {brokers} {currency} {xAxisRange} />
+                <LotComparisonChart {selectedLots} {valueHistory} {returnHistory} {priceHistory} {brokerWacHistory} {cumulativeWacHistory} {brokers} {currency} {xAxisRange} />
             {/if}
         </div>
     </div>

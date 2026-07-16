@@ -476,3 +476,313 @@ async def test_short_lot_return_history_computes_total_return(session, test_user
     assert len(result.return_history) == 3
     assert all(point.total_return is not None for point in result.return_history)
     assert result.return_history[0].total_return == Decimal("-1")
+
+
+@pytest.mark.asyncio
+async def test_performance_history_buy_only_tracks_roi_and_twrr(session, test_user, asset, broker):
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("-1000"),
+                currency="EUR",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 10),
+                close=Decimal("100"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 11),
+                close=Decimal("110"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 12),
+                close=Decimal("120"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 12),
+        target_currency="EUR",
+        selected_lot_ids=[],
+        requested_analyses=["PERFORMANCE_HISTORY"],
+    )
+
+    assert result.performance_history is not None
+    points = _points_by_date(result.performance_history)
+    assert [point.date for point in result.performance_history] == [date(2025, 1, 10), date(2025, 1, 11), date(2025, 1, 12)]
+    assert points[date(2025, 1, 10)].roi == Decimal("0")
+    assert points[date(2025, 1, 10)].twrr is None
+    assert points[date(2025, 1, 11)].roi == Decimal("0.1")
+    assert points[date(2025, 1, 11)].twrr == Decimal("0.1")
+    assert points[date(2025, 1, 12)].roi == Decimal("0.2")
+    assert points[date(2025, 1, 12)].twrr == Decimal("0.2")
+
+
+@pytest.mark.asyncio
+async def test_performance_history_sell_partial_registers_sale_cash_flow(session, test_user, asset, broker):
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("-1000"),
+                currency="EUR",
+            ),
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.SELL,
+                date=date(2025, 1, 12),
+                quantity=Decimal("-4"),
+                amount=Decimal("520"),
+                currency="EUR",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 10),
+                close=Decimal("100"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 11),
+                close=Decimal("120"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 12),
+                close=Decimal("130"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 13),
+                close=Decimal("130"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 13),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["PERFORMANCE_HISTORY"],
+    )
+
+    assert result.performance_history is not None
+    points = _points_by_date(result.performance_history)
+    assert points[date(2025, 1, 12)].twrr == Decimal("0.3")
+    assert points[date(2025, 1, 12)].roi == Decimal("0.625")
+    assert points[date(2025, 1, 13)].twrr == Decimal("0.3")
+    assert points[date(2025, 1, 13)].roi == Decimal("0.625")
+
+
+@pytest.mark.asyncio
+async def test_performance_history_transfer_internal_vs_external_scope(session, test_user, asset, broker):
+    broker_b = Broker(name=f"LotsBrokerB_{utcnow().timestamp()}")
+    session.add(broker_b)
+    await session.flush()
+    session.add(
+        BrokerUserAccess(
+            broker_id=broker_b.id,
+            user_id=test_user.id,
+            role="OWNER",
+            share_percentage=Decimal("1"),
+        )
+    )
+    await session.flush()
+
+    buy = Transaction(
+        broker_id=broker.id,
+        asset_id=asset.id,
+        type=TransactionType.BUY,
+        date=date(2025, 1, 10),
+        quantity=Decimal("10"),
+        amount=Decimal("-1000"),
+        currency="EUR",
+    )
+    transfer_out = Transaction(
+        broker_id=broker.id,
+        asset_id=asset.id,
+        type=TransactionType.TRANSFER,
+        date=date(2025, 1, 12),
+        quantity=Decimal("-10"),
+        amount=Decimal("0"),
+        currency="EUR",
+    )
+    transfer_in = Transaction(
+        broker_id=broker_b.id,
+        asset_id=asset.id,
+        type=TransactionType.TRANSFER,
+        date=date(2025, 1, 13),
+        quantity=Decimal("10"),
+        amount=Decimal("0"),
+        currency="EUR",
+    )
+    session.add_all(
+        [
+            buy,
+            transfer_out,
+            transfer_in,
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 10),
+                close=Decimal("100"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 11),
+                close=Decimal("120"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 12),
+                close=Decimal("130"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 13),
+                close=Decimal("130"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 14),
+                close=Decimal("140"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+    transfer_out.related_transaction_id = transfer_in.id
+    transfer_in.related_transaction_id = transfer_out.id
+    await session.flush()
+
+    combined_scope = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id, broker_b.id],
+        date_from=None,
+        date_to=date(2025, 1, 14),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["PERFORMANCE_HISTORY"],
+    )
+    source_scope_only = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 14),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["PERFORMANCE_HISTORY"],
+    )
+
+    assert combined_scope.performance_history is not None
+    assert source_scope_only.performance_history is not None
+
+    combined_points = _points_by_date(combined_scope.performance_history)
+    source_points = _points_by_date(source_scope_only.performance_history)
+
+    assert combined_points[date(2025, 1, 12)].twrr == Decimal("0.3")
+    assert combined_points[date(2025, 1, 13)].twrr == Decimal("0.3")
+    assert combined_points[date(2025, 1, 14)].roi == Decimal("0.4")
+    assert combined_points[date(2025, 1, 14)].twrr == Decimal("0.4")
+
+    assert source_points[date(2025, 1, 12)].twrr == Decimal("0.3")
+    assert source_points[date(2025, 1, 12)].roi == Decimal("0")
+    assert source_points[date(2025, 1, 13)].roi == Decimal("0")
+    assert source_points[date(2025, 1, 14)].twrr == Decimal("0.3")
+
+
+@pytest.mark.asyncio
+async def test_performance_history_missing_price_yields_none_without_exception(session, test_user, asset, broker):
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("-1000"),
+                currency="EUR",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 12),
+                close=Decimal("120"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 12),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["PERFORMANCE_HISTORY"],
+    )
+
+    assert result.performance_history is not None
+    points = _points_by_date(result.performance_history)
+    assert points[date(2025, 1, 10)].roi is None
+    assert points[date(2025, 1, 10)].twrr is None
+    assert points[date(2025, 1, 11)].roi is None
+    assert points[date(2025, 1, 11)].twrr is None
+    assert points[date(2025, 1, 12)].roi == Decimal("0.2")
+    assert points[date(2025, 1, 12)].twrr is None

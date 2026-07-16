@@ -4,10 +4,11 @@
     import {schemas} from '$lib/api';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import type {ColumnDef, EnumOption, HtmlCell} from '$lib/components/table/types';
+    import type {ColumnDef, EnumOption, HtmlCell, RowAction} from '$lib/components/table/types';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
     import {getBrokerIconCandidates, getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {BarChart3, Copy, ExternalLink, Eye} from 'lucide-svelte';
     import type {z} from 'zod';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
@@ -24,6 +25,8 @@
         selectedLotIds?: number[];
         onSelectionChange?: (lotIds: number[]) => void;
         onCustodyCellClick?: (lot: LotSummarySchema) => void;
+        onViewGanttLot?: (lotId: number) => void;
+        onGotoOpeningTransaction?: (lot: LotSummarySchema) => void;
         onRowDoubleClick?: (lotId: number) => void;
     }
 
@@ -44,7 +47,9 @@
         openingUnitPrice: number | null;
         quantityOpen: number | null;
         quantityOriginal: number | null;
+        openingValue: number | null;
         currentValue: number | null;
+        cumulativeProceeds: number | null;
         pnl: number | null;
         relativeReturn: number | null;
         searchText: string;
@@ -55,7 +60,7 @@
     const STATUS_FILTER_VALUES: LotState[] = ['OPEN', 'PARTIALLY_CLOSED', 'CLOSED', 'DISTRIBUTED', 'IN_TRANSIT', 'DEGRADED'];
     const IN_TRANSIT_FILTER_VALUE = '__IN_TRANSIT__';
 
-    let {lots = [], currency, brokers = [], selectedLotIds = undefined, onSelectionChange, onCustodyCellClick, onRowDoubleClick}: Props = $props();
+    let {lots = [], currency, brokers = [], selectedLotIds = undefined, onSelectionChange, onCustodyCellClick, onViewGanttLot, onGotoOpeningTransaction, onRowDoubleClick}: Props = $props();
 
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
     let searchQuery = $state('');
@@ -129,9 +134,7 @@
 
     function directionCell(direction: 'LONG' | 'SHORT'): HtmlCell {
         const long = direction === 'LONG';
-        const classes = long
-            ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-300'
-            : 'border border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/70 dark:bg-rose-950/40 dark:text-rose-300';
+        const classes = long ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-300' : 'border border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/70 dark:bg-rose-950/40 dark:text-rose-300';
         const arrow = long ? '↗' : '↘';
         return {
             type: 'html',
@@ -201,13 +204,18 @@
 
     function quantityCell(row: DisplayRow): HtmlCell | string {
         if (row.primaryState === 'CLOSED') return '—';
-        const content =
-            row.primaryState === 'PARTIALLY_CLOSED'
-                ? `${formatQuantity(row.quantityOpen)} / ${formatQuantity(row.quantityOriginal)}`
-                : formatQuantity(row.quantityOpen);
+        const content = row.primaryState === 'PARTIALLY_CLOSED' ? `${formatQuantity(row.quantityOpen)} / ${formatQuantity(row.quantityOriginal)}` : formatQuantity(row.quantityOpen);
         return {
             type: 'html',
             html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(content)}</span>`,
+        };
+    }
+
+    function quantityValueCell(value: number | null): HtmlCell | string {
+        if (value == null) return '—';
+        return {
+            type: 'html',
+            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatQuantity(value))}</span>`,
         };
     }
 
@@ -237,6 +245,15 @@
         };
     }
 
+    function signedPercentCell(value: number | null): HtmlCell | string {
+        if (value == null) return '—';
+        const classes = value > 0 ? 'text-green-600 dark:text-green-400' : value < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400';
+        return {
+            type: 'html',
+            html: `<span class="font-medium tabular-nums ${classes}">${escapeHtml(formatPercent(value))}</span>`,
+        };
+    }
+
     function buildCustodyTooltip(row: DisplayRow): string {
         if (row.custodySlices.length === 0) return '';
         const lines = row.custodySlices.map((slice) => {
@@ -251,13 +268,7 @@
         const custody = row.custodySlices;
         if (custody.length === 0) return '—';
 
-        const brokerIds = Array.from(
-            new Set(
-                custody
-                    .map((slice) => safeBrokerId(slice.broker_id))
-                    .filter((brokerId): brokerId is number => brokerId != null),
-            ),
-        );
+        const brokerIds = Array.from(new Set(custody.map((slice) => safeBrokerId(slice.broker_id)).filter((brokerId): brokerId is number => brokerId != null)));
         const hasInTransit = custody.some((slice) => slice.custody_type === 'IN_TRANSIT');
         const tooltip = buildCustodyTooltip(row);
 
@@ -301,6 +312,10 @@
             const states = rawStates.filter((state): state is LotState => STATUS_FILTER_VALUES.includes(state as LotState));
             const currentCustody = lot.current_custody ?? [];
             const openingBrokerName = getBrokerName(lot.opening_broker_id);
+            const openingUnitPrice = safeNum(lot.opening_unit_price);
+            const quantityOpen = safeNum(lot.open_quantity);
+            const quantityOriginal = safeNum(lot.original_quantity);
+            const openingValue = quantityOriginal != null && openingUnitPrice != null ? quantityOriginal * openingUnitPrice : null;
             const brokerFilterValues = Array.from(
                 new Set(
                     (currentCustody.length > 0 ? currentCustody : [{broker_id: lot.opening_broker_id, custody_type: 'BROKER', quantity: lot.open_quantity}]).flatMap((slice) => {
@@ -331,26 +346,17 @@
                         return slice.custody_type === 'IN_TRANSIT' && brokerId == null ? label('brokers.lots.inTransit', 'In transit') : getBrokerName(brokerId);
                     })
                     .join(' '),
-                openingUnitPrice: safeNum(lot.opening_unit_price),
-                quantityOpen: safeNum(lot.open_quantity),
-                quantityOriginal: safeNum(lot.original_quantity),
-                currentValue: safeNum(lot.total_value) ?? safeNum(lot.open_value),
+                openingUnitPrice,
+                quantityOpen,
+                quantityOriginal,
+                openingValue,
+                currentValue: safeNum(lot.open_value),
+                cumulativeProceeds: safeNum(lot.cumulative_proceeds),
                 pnl: safeNum(lot.pnl),
                 relativeReturn: safeNum(lot.relative_return),
                 searchText: '',
             };
-            row.searchText = [
-                row.rowId,
-                row.openingDate,
-                row.direction,
-                directionLabel(row.direction),
-                row.primaryState,
-                stateLabel(row.primaryState),
-                ...row.secondaryStates,
-                ...row.secondaryStates.map((state) => stateLabel(state)),
-                row.openingBrokerName,
-                row.custodySearchText,
-            ]
+            row.searchText = [row.rowId, row.openingDate, row.direction, directionLabel(row.direction), row.primaryState, stateLabel(row.primaryState), ...row.secondaryStates, ...row.secondaryStates.map((state) => stateLabel(state)), row.openingBrokerName, row.custodySearchText]
                 .join(' ')
                 .toLowerCase();
             return row;
@@ -380,6 +386,38 @@
         {
             value: IN_TRANSIT_FILTER_VALUE,
             label: label('brokers.lots.inTransit', 'In transit'),
+        },
+    ]);
+
+    let rowActions = $derived.by<RowAction<DisplayRow>[]>(() => [
+        {
+            id: 'lot-view-details-action',
+            icon: Eye,
+            label: () => label('brokers.lots.viewLotDetail', 'View lot detail'),
+            onClick: (row) => onCustodyCellClick?.(row.lot),
+            disabled: () => onCustodyCellClick == null,
+        },
+        {
+            id: 'lot-view-gantt-action',
+            icon: BarChart3,
+            label: () => label('brokers.lots.viewGanttLot', 'Go to lot in Gantt'),
+            onClick: (row) => onViewGanttLot?.(row.lotId),
+            disabled: () => onViewGanttLot == null,
+        },
+        {
+            id: 'lot-goto-opening-transaction-action',
+            icon: ExternalLink,
+            label: () => label('brokers.lots.goToOpeningTransaction', 'Go to opening transaction'),
+            onClick: (row) => onGotoOpeningTransaction?.(row.lot),
+            disabled: () => onGotoOpeningTransaction == null,
+        },
+        {
+            id: 'lot-copy-id-action',
+            icon: Copy,
+            label: () => label('brokers.lots.copyLotIdentifier', 'Copy lot identifier'),
+            onClick: async (row) => {
+                await navigator.clipboard.writeText(String(row.lotId));
+            },
         },
     ]);
 
@@ -413,8 +451,8 @@
             header: () => label('brokers.lots.status', 'Status'),
             cell: (row) => statusCell(row),
             type: 'multi-enum',
-            width: 210,
-            minWidth: 190,
+            width: 150,
+            minWidth: 120,
             sortable: true,
             enumOptions: statusEnumOptions,
             getValue: (row) => PRIMARY_STATE_ORDER.indexOf(row.primaryState),
@@ -425,8 +463,8 @@
             header: () => label('brokers.lots.custody', 'Custody'),
             cell: (row) => custodyCell(row),
             type: 'multi-enum',
-            width: 210,
-            minWidth: 190,
+            width: 160,
+            minWidth: 130,
             sortable: true,
             enumOptions: brokerEnumOptions,
             getValue: (row) => row.custodySearchText || row.openingBrokerName,
@@ -457,6 +495,31 @@
             getValue: (row) => row.quantityOpen ?? 0,
         },
         {
+            id: 'original-quantity',
+            header: () => label('brokers.lots.originalQuantity', 'Original Quantity'),
+            cell: (row) => quantityValueCell(row.quantityOriginal),
+            type: 'number',
+            align: 'right',
+            width: 160,
+            minWidth: 150,
+            sortable: true,
+            filterable: false,
+            hiddenByDefault: true,
+            getValue: (row) => row.quantityOriginal ?? Number.NEGATIVE_INFINITY,
+        },
+        {
+            id: 'opening-value',
+            header: () => label('brokers.lots.openingValue', 'Opening Value'),
+            cell: (row) => currencyCell(row.openingValue),
+            type: 'number',
+            align: 'right',
+            width: 170,
+            minWidth: 160,
+            sortable: true,
+            filterable: false,
+            getValue: (row) => row.openingValue ?? Number.NEGATIVE_INFINITY,
+        },
+        {
             id: 'current-value',
             header: () => label('brokers.lots.currentValue', 'Current Value'),
             cell: (row) => currencyCell(row.currentValue),
@@ -467,6 +530,32 @@
             sortable: true,
             filterable: false,
             getValue: (row) => row.currentValue ?? Number.NEGATIVE_INFINITY,
+        },
+        {
+            id: 'cumulative-proceeds',
+            header: () => label('brokers.lots.cumulativeProceeds', 'Cumulative proceeds'),
+            cell: (row) => currencyCell(row.cumulativeProceeds),
+            type: 'number',
+            align: 'right',
+            width: 190,
+            minWidth: 180,
+            sortable: true,
+            filterable: false,
+            hiddenByDefault: true,
+            getValue: (row) => row.cumulativeProceeds ?? Number.NEGATIVE_INFINITY,
+        },
+        {
+            id: 'open-return',
+            header: () => label('brokers.lots.openReturn', 'Open Return'),
+            cell: (row) => signedPercentCell(row.relativeReturn),
+            type: 'number',
+            align: 'right',
+            width: 150,
+            minWidth: 140,
+            sortable: true,
+            filterable: false,
+            hiddenByDefault: true,
+            getValue: (row) => row.relativeReturn ?? Number.NEGATIVE_INFINITY,
         },
         {
             id: 'fifo-pnl',
@@ -487,9 +576,7 @@
     let emptyMessage = $derived(label('brokers.lots.noUnifiedLots', 'No lots match current filters'));
 
     function handleTableSelectionChange(selectedIds: string[]): void {
-        const lotIds = selectedIds
-            .map((id) => Number.parseInt(id, 10))
-            .filter((id) => Number.isFinite(id));
+        const lotIds = selectedIds.map((id) => Number.parseInt(id, 10)).filter((id) => Number.isFinite(id));
         appliedSelectionRowIds = [...selectedIds];
         if (!syncingSelection && selectedLotIds === undefined) {
             internalSelectedLotIds = lotIds;
@@ -576,7 +663,8 @@
             enableColumnFilters={true}
             enableSorting={true}
             enableColumnResize={true}
-            enableContextMenu={false}
+            enableContextMenu={true}
+            {rowActions}
             tableLayout="fixed"
             defaultPageSize={25}
             {emptyMessage}

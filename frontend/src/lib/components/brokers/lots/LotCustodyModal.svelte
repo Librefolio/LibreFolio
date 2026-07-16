@@ -79,7 +79,7 @@
         if (parsed == null) return '—';
         const abs = Math.abs(parsed);
         const sign = opts.signed ? (parsed > 0 ? '+' : parsed < 0 ? '-' : '') : '';
-        return `${sign}${formatDecimalForDisplay(abs, {minFrac: 6, maxFrac: 8})}${assetUnitLabel ? ` ${assetUnitLabel}` : ''}`;
+        return `${sign}${formatDecimalForDisplay(abs, {minFrac: 0, maxFrac: 8})}${assetUnitLabel ? ` ${assetUnitLabel}` : ''}`;
     }
 
     function formatPrice(value: string | number | null | undefined): string {
@@ -270,7 +270,14 @@
     });
     let activeTransactionId = $derived(activeHistoryEvent?.transaction_id ?? lot?.opening_transaction_id ?? null);
     let canGotoTransaction = $derived(onGotoTransaction != null && activeTransactionId != null);
+    let lotOpeningValue = $derived.by(() => {
+        if (!lot) return null;
+        const quantity = parseNumber(lot.original_quantity);
+        const unitPrice = parseNumber(lot.opening_unit_price);
+        return quantity != null && unitPrice != null ? quantity * unitPrice : null;
+    });
     let lotCurrentValue = $derived.by(() => (lot ? (parseNumber(lot.total_value) ?? parseNumber(lot.open_value)) : null));
+    let lotCumulativeProceeds = $derived.by(() => (lot ? parseNumber(lot.cumulative_proceeds) : null));
     let lotPnl = $derived.by(() => (lot ? parseNumber(lot.pnl) : null));
     let lotRelativeReturn = $derived.by(() => (lot ? parseNumber(lot.relative_return) : null));
 
@@ -287,13 +294,7 @@
     }
 </script>
 
-<ModalBase
-    open={open && lot != null}
-    maxWidth="4xl"
-    onRequestClose={onClose}
-    contentClass="bg-white dark:bg-slate-800"
-    testId="lot-custody-modal"
->
+<ModalBase open={open && lot != null} maxWidth="4xl" onRequestClose={onClose} contentClass="bg-white dark:bg-slate-800" testId="lot-custody-modal">
     {#if lot}
         <div class="flex items-center gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
             <AssetIcon iconUrl={assetInfo?.icon_url ?? null} assetType={assetInfo?.asset_type ?? null} altText={assetName} size="md" />
@@ -305,13 +306,7 @@
                     #{lot.lot_id}
                 </p>
             </div>
-            <button
-                type="button"
-                class="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-100"
-                onclick={onClose}
-                aria-label={$_('common.close')}
-                data-testid="lot-custody-modal-close"
-            >
+            <button type="button" class="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-100" onclick={onClose} aria-label={$_('common.close')} data-testid="lot-custody-modal-close">
                 <X size={18} />
             </button>
         </div>
@@ -339,8 +334,16 @@
                         <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatPrice(lot.opening_unit_price)}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.openingValue')}</dt>
+                        <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">{formatPrice(lotOpeningValue)}</dd>
+                    </div>
+                    <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                         <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.currentValue')}</dt>
                         <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">{formatPrice(lotCurrentValue)}</dd>
+                    </div>
+                    <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.cumulativeProceeds')}</dt>
+                        <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">{formatPrice(lotCumulativeProceeds)}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                         <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.fifoPnl')}</dt>
@@ -444,7 +447,9 @@
                             {@const detailItems = eventDetailItems(event)}
                             <button
                                 type="button"
-                                class="flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors {activeHistoryKey === rowKey ? 'border-libre-green bg-emerald-50/60 dark:border-emerald-500 dark:bg-emerald-900/15' : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/50'}"
+                                class="flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors {activeHistoryKey === rowKey
+                                    ? 'border-libre-green bg-emerald-50/60 dark:border-emerald-500 dark:bg-emerald-900/15'
+                                    : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/50'}"
                                 onclick={() => (selectedHistoryKey = rowKey)}
                                 aria-pressed={activeHistoryKey === rowKey}
                                 data-testid={`lot-custody-modal-history-row-${index}`}
@@ -454,7 +459,15 @@
                                 </div>
 
                                 <div class="flex min-w-0 flex-1 items-start gap-3">
-                                    <div class="mt-0.5 flex h-7 min-w-7 items-center justify-center rounded-full text-xs font-semibold {markerKind === 'open' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : markerKind === 'transfer' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : markerKind === 'close' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-violet-100 px-2 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'}">
+                                    <div
+                                        class="mt-0.5 flex h-7 min-w-7 items-center justify-center rounded-full text-xs font-semibold {markerKind === 'open'
+                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                            : markerKind === 'transfer'
+                                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                                              : markerKind === 'close'
+                                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                                : 'bg-violet-100 px-2 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'}"
+                                    >
                                         {#if markerKind === 'open'}
                                             <Plus size={14} />
                                         {:else if markerKind === 'transfer'}
@@ -500,12 +513,7 @@
         </div>
 
         <div class="flex items-center justify-end gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-700">
-            <button
-                type="button"
-                class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
-                onclick={onClose}
-                data-testid="lot-custody-modal-footer-close"
-            >
+            <button type="button" class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600" onclick={onClose} data-testid="lot-custody-modal-footer-close">
                 {$_('common.close')}
             </button>
             <button
