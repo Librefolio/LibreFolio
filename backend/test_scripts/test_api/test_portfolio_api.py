@@ -650,6 +650,52 @@ class TestLotsAnalysisEndpoint:
             assert usd_cost in (Decimal("1000"), usd_cost)
         print_success("target_currency accepted and echoed; EUR cost matches original transaction")
 
+    async def test_return_history_for_plain_buy_populates_total_and_open_return(self, test_server):
+        """Plain BUY lots expose non-empty return_history with total_return + relative_return."""
+        print_section("Lots Analysis: return history for plain BUY")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_broker(client)
+            asset_id = await create_asset(client, currency="EUR")
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                ],
+            )
+            price_resp = await client.post(
+                f"{API_BASE}/assets/prices",
+                json=[
+                    {
+                        "asset_id": asset_id,
+                        "prices": [
+                            {"date": "2026-01-10", "close": "100.00", "currency": "EUR"},
+                            {"date": "2026-01-11", "close": "110.00", "currency": "EUR"},
+                        ],
+                    }
+                ],
+                timeout=TIMEOUT,
+            )
+            assert price_resp.status_code == 200, f"Price upsert failed: {price_resp.status_code}: {price_resp.text}"
+
+            resp = await client.post(
+                f"{API_BASE}/portfolio/lots/analysis",
+                json={"asset_id": asset_id, "requested_analyses": ["LOT_SUMMARY", "RETURN_HISTORY"], "date_range": {"end": "2026-01-11"}},
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+
+            assert data["return_history"] is not None
+            assert len(data["return_history"]) == 2
+            assert Decimal(data["return_history"][0]["total_return"]) == Decimal("0")
+            assert Decimal(data["return_history"][1]["total_return"]) == Decimal("0.1")
+            assert Decimal(data["return_history"][1]["relative_return"]) == Decimal("0.1")
+            assert data["return_history"][1]["reference_price_source"] == "exact"
+            assert Decimal(data["lots"][0]["relative_return"]) == Decimal("0.1")
+        print_success("Plain BUY return history populated")
+
     async def test_nonexistent_asset_rejected(self, test_server):
         """Non-existent asset_id -> 4xx, not a 500."""
         print_section("Lots Analysis: nonexistent asset")

@@ -24,6 +24,10 @@ from backend.app.services.lots_analysis_service import get_lots_analysis
 from backend.app.utils.datetime_utils import utcnow
 
 
+def _points_by_date(points):
+    return {point.date: point for point in points}
+
+
 @pytest.fixture(scope="module")
 def engine():
     return get_async_engine()
@@ -269,3 +273,206 @@ async def test_service_uses_constant_query_count(session, test_user, asset, brok
     assert result.cumulative_wac_history is not None
     assert result.broker_wac_history[-1].wac == Decimal("100")
     assert result.cumulative_wac_history[-1].wac == Decimal("100")
+
+
+@pytest.mark.asyncio
+async def test_buy_return_history_populates_total_and_open_return(session, test_user, asset, broker):
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("-1000"),
+                currency="EUR",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 10),
+                close=Decimal("100"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 11),
+                close=Decimal("110"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 12),
+                close=Decimal("90"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 12),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "RETURN_HISTORY"],
+    )
+
+    assert result.lots is not None
+    assert result.return_history is not None
+    assert len(result.lots) == 1
+    points = _points_by_date(result.return_history)
+    assert set(points) == {date(2025, 1, 10), date(2025, 1, 11), date(2025, 1, 12)}
+
+    original_cost = Decimal("1000")
+    opening_unit_price = Decimal("100")
+    expected_market_prices = {
+        date(2025, 1, 10): Decimal("100"),
+        date(2025, 1, 11): Decimal("110"),
+        date(2025, 1, 12): Decimal("90"),
+    }
+    for point_date, market_price in expected_market_prices.items():
+        expected_total_return = ((Decimal("10") * market_price) / original_cost) - Decimal("1")
+        expected_open_return = (market_price / opening_unit_price) - Decimal("1")
+        point = points[point_date]
+        assert point.total_return == expected_total_return
+        assert point.relative_return == expected_open_return
+        assert point.reference_price_source == "exact"
+
+    lot = result.lots[0]
+    assert lot.reference_unit_price == Decimal("100")
+    assert lot.reference_price_source == "exact"
+    assert lot.relative_return == Decimal("-0.1")
+
+
+@pytest.mark.asyncio
+async def test_adjustment_return_history_keeps_reference_and_zero_cost_guard(session, test_user, asset, broker):
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date(2025, 1, 10),
+                quantity=Decimal("5"),
+                amount=Decimal("0"),
+                currency="EUR",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 10),
+                close=Decimal("80"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 11),
+                close=Decimal("100"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 11),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "RETURN_HISTORY"],
+    )
+
+    assert result.lots is not None
+    assert result.return_history is not None
+    lot = result.lots[0]
+    assert lot.original_cost == Decimal("0")
+    assert lot.reference_unit_price == Decimal("80")
+    assert lot.reference_price_source == "exact"
+    assert lot.relative_return == Decimal("0.25")
+
+    points = _points_by_date(result.return_history)
+    assert set(points) == {date(2025, 1, 10), date(2025, 1, 11)}
+    assert all(point.total_return is None for point in result.return_history)
+    assert points[date(2025, 1, 10)].relative_return == Decimal("0")
+    assert points[date(2025, 1, 11)].relative_return == Decimal("0.25")
+    assert all(point.reference_price_source == "exact" for point in result.return_history)
+
+
+@pytest.mark.asyncio
+async def test_short_lot_return_history_computes_total_return(session, test_user, asset):
+    short_broker = Broker(name=f"LotsShortBroker_{utcnow().timestamp()}", allow_asset_shorting=True)
+    session.add(short_broker)
+    await session.flush()
+    session.add(
+        BrokerUserAccess(
+            broker_id=short_broker.id,
+            user_id=test_user.id,
+            role="OWNER",
+            share_percentage=Decimal("1"),
+        )
+    )
+    session.add_all(
+        [
+            Transaction(
+                broker_id=short_broker.id,
+                asset_id=asset.id,
+                type=TransactionType.SELL,
+                date=date(2025, 1, 10),
+                quantity=Decimal("-5"),
+                amount=Decimal("600"),
+                currency="EUR",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 10),
+                close=Decimal("120"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 11),
+                close=Decimal("110"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 12),
+                close=Decimal("100"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[short_broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 12),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["RETURN_HISTORY"],
+    )
+
+    assert result.return_history is not None
+    assert len(result.return_history) == 3
+    assert all(point.total_return is not None for point in result.return_history)
+    assert result.return_history[0].total_return == Decimal("-1")

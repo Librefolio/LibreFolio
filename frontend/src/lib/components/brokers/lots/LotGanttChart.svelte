@@ -31,6 +31,10 @@
         externalZoomStart?: number | null;
         externalZoomEnd?: number | null;
         onRowDoubleClick?: (lotId: number) => void;
+        /** Shared Aperti/Tutti filter (lifted to the orchestrator so UnifiedLotsTable shows the
+         * same lot set — see LotsAnalysisPanel.svelte). The toggle control still renders here. */
+        filterMode?: FilterMode;
+        onFilterModeChange?: (mode: FilterMode) => void;
     }
 
     interface LotModel {
@@ -101,7 +105,7 @@
     const THICKNESS_MIN = 12;
     const THICKNESS_MAX = 28;
 
-    let {lots = [], segments = [], brokers = [], currency, selectedLotIds = [], onSelectionChange, xAxisRange = null, onZoomChange, externalZoomStart = null, externalZoomEnd = null, onRowDoubleClick}: Props = $props();
+    let {lots = [], segments = [], brokers = [], currency, selectedLotIds = [], onSelectionChange, xAxisRange = null, onZoomChange, externalZoomStart = null, externalZoomEnd = null, onRowDoubleClick, filterMode = 'open', onFilterModeChange}: Props = $props();
 
     let wrapperEl: HTMLDivElement | undefined = $state(undefined);
     let lanesScrollEl: HTMLDivElement | undefined = $state(undefined);
@@ -113,7 +117,6 @@
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let dataZoomSyncHandle: DataZoomSyncHandle | null = null;
     let isDark = $state(false);
-    let filterMode: FilterMode = $state('open');
     let pulseState = $state<{lotId: number; nonce: number} | null>(null);
     let pulseTimeoutId: ReturnType<typeof setTimeout> | null = null;
     let pulseNonce = 0;
@@ -292,7 +295,7 @@
     }
 
     export function pulseLot(lotId: number): void {
-        if (filterMode === 'open' && !openLotIdSet.has(lotId)) filterMode = 'all';
+        if (filterMode === 'open' && !openLotIdSet.has(lotId)) onFilterModeChange?.('all');
         wrapperEl?.scrollIntoView({behavior: 'smooth', block: 'center'});
         triggerPulse(lotId);
     }
@@ -446,11 +449,11 @@
         const statusLabel = meta.custodyType === 'IN_TRANSIT' ? ($t('brokers.lots.inTransit') || 'In transit') : meta.isOpen ? ($t('dashboard.openPositions') || 'Open') : ($t('dashboard.closedPositions') || 'Closed');
         let html = buildTooltipHeader(escapeHtml(lotLabel(lot?.openingDate ?? meta.startDate)), theme.textColor);
         html += buildTooltipRow(escapeHtml($t('brokers.lots.buyDate') || 'Opening date'), escapeHtml(formatDateLong(lot?.openingDate ?? meta.startDate)));
-        html += buildTooltipRow(escapeHtml($t('dashboard.direction') || 'Direction'), escapeHtml(meta.direction));
+        html += buildTooltipRow(escapeHtml($t('brokers.lots.direction') || 'Direction'), escapeHtml(meta.direction));
         html += buildTooltipRow(escapeHtml($t('common.status') || 'Status'), escapeHtml(statusLabel));
         html += buildTooltipRow(escapeHtml($t('dashboard.quantity') || 'Qty'), escapeHtml(formatQuantity(meta.quantity)));
         html += buildTooltipRow(escapeHtml($t('dashboard.price') || 'Price'), escapeHtml(formatCurrencyAmountPlain(meta.unitPrice, currency)));
-        html += buildTooltipRow(escapeHtml($t('common.dateRange') || 'Range'), escapeHtml(`${formatDateLong(meta.startDate)} → ${meta.endDate ? formatDateLong(meta.endDate) : '…'}`));
+        html += buildTooltipRow(escapeHtml($t('brokers.lots.dateRange') || 'Range'), escapeHtml(`${formatDateLong(meta.startDate)} → ${meta.endDate ? formatDateLong(meta.endDate) : '…'}`));
 
         if (meta.custodyType === 'IN_TRANSIT') {
             html += buildTooltipRow(escapeHtml($t('brokers.lots.inTransit') || 'In transit'), escapeHtml(`${brokerName(meta.sourceBrokerId)} → ${brokerName(meta.destinationBrokerId)}`));
@@ -478,7 +481,7 @@
             data: laneHighlightData,
             encode: {y: 0},
             renderItem: (params: any, api: any) => {
-                const meta = params.data?.meta as LaneHighlightDatum['meta'] | undefined;
+                const meta = laneHighlightData[params.dataIndex]?.meta as LaneHighlightDatum['meta'] | undefined;
                 if (!meta) return null;
                 const [, centerY] = api.coord([minMs, meta.laneIndex]);
                 const bandSize = (api.size?.([0, 1]) as number[] | undefined)?.[1] ?? LANE_ROW_HEIGHT;
@@ -511,7 +514,7 @@
             z: 3,
             data: segmentSeriesData,
             renderItem: (params: any, api: any) => {
-                const meta = params.data?.meta as RenderedSegment | undefined;
+                const meta = segmentSeriesData[params.dataIndex]?.meta as RenderedSegment | undefined;
                 if (!meta) return null;
 
                 const startCoord = api.coord([meta.startMs, meta.laneIndex]);
@@ -552,6 +555,15 @@
                         type: 'rect',
                         shape: rectShape,
                         silent: false,
+                        // ECharts custom-series limitation (confirmed against echarts 6 source,
+                        // node_modules/echarts/lib/chart/custom/CustomSeries.js
+                        // CustomSeriesModel.prototype.getDataParams): a renderItem group's CHILD
+                        // shapes don't reliably resolve `params.dataIndex` for chart.on('click'),
+                        // but ECharts explicitly reads `info` off the exact clicked element via
+                        // customInnerStore(el).info and exposes it as `params.info` — this is the
+                        // documented mechanism for per-child event metadata.
+                        info: {lotId: meta.lotId},
+                        cursor: 'pointer',
                         style: {
                             fill: meta.custodyType === 'IN_TRANSIT' ? withAlpha(baseColor, 0.35) : withAlpha(baseColor, segmentOpacity(meta)),
                             stroke: borderColor,
@@ -631,7 +643,7 @@
                 borderColor: theme.border,
                 textStyle: {color: theme.textColor},
                 formatter: (params: any) => {
-                    const meta = params.data?.meta as RenderedSegment | undefined;
+                    const meta = segmentSeriesData[params.dataIndex]?.meta as RenderedSegment | undefined;
                     return meta ? buildTooltip(meta, themeDark) : '';
                 },
             },
@@ -705,11 +717,11 @@
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
             dataZoomSyncHandle = attachDataZoomSync(chartInstance, (start, end) => onZoomChange?.(start, end));
             chartInstance.on('click', (params: any) => {
-                const lotId = params.data?.meta?.lotId;
+                const lotId = params.info?.lotId;
                 if (typeof lotId === 'number') toggleLotSelection(lotId);
             });
             chartInstance.on('dblclick', (params: any) => {
-                const lotId = params.data?.meta?.lotId;
+                const lotId = params.info?.lotId;
                 if (typeof lotId === 'number') handleLaneDoubleClick(lotId);
             });
         }
@@ -796,7 +808,7 @@
         <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600">
             <button
                 class="px-3 py-1 transition-colors {filterMode === 'open' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                onclick={() => (filterMode = 'open')}
+                onclick={() => onFilterModeChange?.('open')}
                 data-testid="lot-gantt-filter-open"
                 type="button"
             >
@@ -804,7 +816,7 @@
             </button>
             <button
                 class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {filterMode === 'all' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                onclick={() => (filterMode = 'all')}
+                onclick={() => onFilterModeChange?.('all')}
                 data-testid="lot-gantt-filter-all"
                 type="button"
             >
@@ -814,7 +826,7 @@
     </div>
 
     <div bind:this={lanesScrollEl} class="max-h-[34rem] overflow-auto rounded-lg border border-gray-100 dark:border-slate-700" data-testid="lot-gantt-scroll">
-        <div class="grid min-w-[960px] grid-cols-[240px,minmax(720px,1fr)]">
+        <div class="grid min-w-[960px] grid-cols-[240px_minmax(720px,1fr)]">
             <div class="sticky left-0 z-10 border-r border-gray-100 bg-white dark:border-slate-700 dark:bg-slate-800">
                 {#if chartHasData}
                     {#each renderedLanes as lane (lane.lotId)}

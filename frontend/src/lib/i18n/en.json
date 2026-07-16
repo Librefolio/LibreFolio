@@ -550,7 +550,6 @@
       "ganttTitle": "Lot life & custody",
       "openOnly": "Open",
       "allLots": "All",
-      "comparisonTitle": "Lot comparison",
       "valueComparisonTitle": "Value of selected lots",
       "returnComparisonTitle": "Return from opening date",
       "priceComparisonTitle": "Price and average cost",
@@ -559,17 +558,21 @@
       "noVisibleLots": "No visible lots in chart",
       "cumulativeProceeds": "Cumulative proceeds",
       "residualOpenValue": "Residual open value",
-      "originalCostReference": "Original cost",
+      "aggregateOriginalCost": "Total original cost",
       "openingPriceReference": "Opening price",
       "cumulativeWac": "Cumulative WAC",
-      "brokerWac": "Broker WAC",
+      "totalReturn": "Total return",
+      "openReturn": "Open Return",
       "buyDate": "Buy Date",
+      "dateRange": "Range",
       "openingDate": "Opening Date",
       "direction": "Direction",
       "directionLong": "LONG",
       "directionShort": "SHORT",
       "status": "Status",
       "custody": "Custody",
+      "openQuantity": "Open Quantity",
+      "currentValue": "Current Value",
       "fifoPnl": "FIFO P&L",
       "searchPlaceholder": "Search lots...",
       "noUnifiedLots": "No lots match current filters",
@@ -582,6 +585,29 @@
       "detailTitle": "FIFO Lot Detail",
       "loadFailed": "Failed to load lot data",
       "combined": "Combined",
+      "chartMarkers": {
+        "legend": {
+          "buy": "Buys",
+          "sell": "Sales",
+          "transfer": "Transfers",
+          "adjustment": "Adjustments",
+          "split": "Split"
+        },
+        "eventType": {
+          "BUY": "Buy",
+          "SELL": "Sale",
+          "ADJUSTMENT_IN": "Adjustment In",
+          "ADJUSTMENT_OUT": "Adjustment Out",
+          "TRANSFER_DEPART": "Transfer",
+          "TRANSFER_ARRIVE": "Transfer",
+          "SPLIT": "Split"
+        },
+        "unitPrice": "Unit Price",
+        "transitInterval": "Transit Interval",
+        "ratio": "Ratio",
+        "proceeds": "Proceeds",
+        "realizedPnl": "Realized P&L"
+      },
       "viewAsset": "View Asset",
       "analyze": "Analyze Lots",
       "states": {
@@ -601,6 +627,10 @@
         "originalQuantity": "Original Quantity",
         "openQuantity": "Open Quantity",
         "openingPrice": "Opening Unit Price",
+        "currentValue": "Current Value",
+        "fifoPnl": "FIFO P&L",
+        "openReturn": "Open Return",
+        "custodyFragments": "Custody fragments",
         "goToTransaction": "Go to transaction",
         "inTransit": "In transit",
         "absoluteQuantityTooltip": "Quantities show absolute broker holdings. On shared brokers, your personal share may differ.",
@@ -629,6 +659,15 @@
           "TRANSFER_DEPART": "TRANSFER",
           "TRANSFER_ARRIVE": "TRANSFER",
           "SPLIT": "SPLIT"
+        },
+        "historyDetail": {
+          "openPrice": "Open price",
+          "closePrice": "Close price",
+          "proceeds": "Proceeds",
+          "realizedPnl": "Realized P&L",
+          "splitRatio": "Split ratio",
+          "sourceBroker": "From",
+          "destinationBroker": "To"
         }
       }
     },

@@ -546,18 +546,43 @@
     },
     "lots": {
       "buyDate": "Data Acquisto",
+      "dateRange": "Intervallo",
       "detailTitle": "Dettaglio Lotti FIFO",
       "loadFailed": "Impossibile caricare i dati dei lotti",
       "combined": "Combinato",
+      "chartMarkers": {
+        "legend": {
+          "buy": "Acquisti",
+          "sell": "Vendite",
+          "transfer": "Trasferimenti",
+          "adjustment": "Rettifiche",
+          "split": "Split"
+        },
+        "eventType": {
+          "BUY": "Acquisto",
+          "SELL": "Vendita",
+          "ADJUSTMENT_IN": "Rettifica in entrata",
+          "ADJUSTMENT_OUT": "Rettifica in uscita",
+          "TRANSFER_DEPART": "Trasferimento",
+          "TRANSFER_ARRIVE": "Trasferimento",
+          "SPLIT": "Split"
+        },
+        "unitPrice": "Prezzo unitario",
+        "transitInterval": "Intervallo transito",
+        "ratio": "Rapporto",
+        "proceeds": "Incasso",
+        "realizedPnl": "P&L realizzato"
+      },
       "viewAsset": "Vedi Asset",
       "analyze": "Analizza Lotti",
       "allLots": "Tutti",
-      "brokerWac": "WAC broker",
       "brokersCount": "{count} broker",
-      "comparisonTitle": "Confronto lotti",
       "cumulativeProceeds": "Incassi cumulati",
       "cumulativeWac": "WAC cumulato",
+      "aggregateOriginalCost": "Costo originario complessivo",
       "custody": "Custodia",
+      "openQuantity": "Quantità aperta",
+      "currentValue": "Valore corrente",
       "direction": "Direzione",
       "directionLong": "LONG",
       "directionShort": "SHORT",
@@ -591,6 +616,10 @@
         "inTransit": "In transito",
         "openQuantity": "Quantità aperta",
         "openingPrice": "Prezzo unitario di apertura",
+        "currentValue": "Valore corrente",
+        "fifoPnl": "P&L FIFO",
+        "openReturn": "Rendimento aperto",
+        "custodyFragments": "Frammenti di custodia",
         "originalQuantity": "Quantità originaria",
         "state": {
           "closed": "Chiuso",
@@ -603,7 +632,16 @@
           "short": "Short"
         },
         "summary": "Riepilogo",
-        "title": "Lotto {asset} — {date}"
+        "title": "Lotto {asset} — {date}",
+        "historyDetail": {
+          "openPrice": "Prezzo apertura",
+          "closePrice": "Prezzo chiusura",
+          "proceeds": "Incasso",
+          "realizedPnl": "P&L realizzato",
+          "splitRatio": "Rapporto split",
+          "sourceBroker": "Da",
+          "destinationBroker": "A"
+        }
       },
       "modeReturn": "Rendimento",
       "noGanttData": "Nessuna cronologia di custodia nel periodo selezionato",
@@ -612,7 +650,8 @@
       "openOnly": "Aperti",
       "openingDate": "Data apertura",
       "openingPriceReference": "Prezzo apertura",
-      "originalCostReference": "Costo originario",
+      "totalReturn": "Rendimento totale",
+      "openReturn": "Rendimento aperto",
       "priceComparisonTitle": "Prezzo e costo medio",
       "residualOpenValue": "Valore residuo",
       "returnComparisonTitle": "Rendimento dalla data di apertura",

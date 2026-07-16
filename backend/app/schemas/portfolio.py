@@ -617,6 +617,10 @@ class LotReturnHistoryPoint(BaseModel):
 
     lot_id: int
     date: date_type
+    total_return: Optional[SafeDecimal] = Field(
+        None,
+        description="(OpenValue(t)+Proceeds(t))/OriginalCost - 1. Always computable when original_cost != 0, independent of reference_unit_price.",
+    )
     relative_return: Optional[SafeDecimal] = Field(None, description="None when reference price is unavailable or zero.")
     reference_price_source: Optional[ReferencePriceSource] = Field(None, description="Reference price resolution echoed for chart/tooltips.")
 
