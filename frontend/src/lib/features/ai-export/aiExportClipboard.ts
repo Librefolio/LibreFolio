@@ -1,31 +1,27 @@
 /**
  * AI Export Clipboard — handles building the export and copying to clipboard.
  *
- * Entry point for dashboard UI: call copyAiExport() with mode and parameters.
+ * Entry point for dashboard/broker-detail UI: call copyAiExport() with the
+ * chosen catalog prompt id and parameters.
  */
 
 import {buildAiExport, type AiExportOptions} from './aiExportBuilder';
-import {renderFullPrompt} from './aiPromptRenderer';
+import {renderPrompt} from './aiPromptRenderer';
 import {renderDataOnly} from './aiDataRenderer';
+import {getPromptDefinition, type PromptId} from './promptCatalog';
+import {writeExportToClipboard, type ToastFn} from './clipboardWriter';
 
-/** Toast callback type — wired to toastStore by caller */
-export type ToastFn = {
-    success: (msg: string) => void;
-    error: (msg: string) => void;
-    warning: (msg: string) => void;
-};
-
-const PROMPT_SIZE_WARNING_THRESHOLD = 50_000;
+export type {ToastFn};
 
 /**
- * Build the AI export and copy to clipboard.
+ * Build the AI export for the given catalog prompt and copy it to the clipboard.
  *
- * @param mode    'full' for full AI prompt, 'data-only' for portfolio data only
- * @param options Export options (brokerIds, dates, currency, locale)
- * @param toast   Toast notification functions
- * @param t       i18n translation function
+ * @param promptId Catalog entry id (see promptCatalog.ts) — 'snapshot' has no instructions, the rest do.
+ * @param options   Export options (brokerIds, dates, currency, locale)
+ * @param toast     Toast notification functions
+ * @param t         i18n translation function
  */
-export async function copyAiExport(mode: 'full' | 'data-only', options: AiExportOptions, toast: ToastFn, t: (key: string) => string): Promise<void> {
+export async function copyAiExport(promptId: PromptId, options: AiExportOptions, toast: ToastFn, t: (key: string, opts?: {values?: Record<string, any>}) => string): Promise<void> {
     try {
         const exportData = await buildAiExport(options);
 
@@ -35,32 +31,11 @@ export async function copyAiExport(mode: 'full' | 'data-only', options: AiExport
             return;
         }
 
-        const text = mode === 'full' ? renderFullPrompt(exportData) : renderDataOnly(exportData);
+        const def = getPromptDefinition(promptId);
+        const text = def.hasInstructions ? renderPrompt(exportData, promptId as Exclude<PromptId, 'snapshot'>) : renderDataOnly(exportData);
+        const label = t(def.labelKey);
 
-        // navigator.clipboard requires a secure context, so self-hosted HTTP deployments need a textarea fallback.
-        if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(text);
-        } else {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed';
-            ta.style.left = '-9999px';
-            document.body.appendChild(ta);
-            ta.focus();
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-        }
-
-        // Show appropriate feedback
-        if (text.length > PROMPT_SIZE_WARNING_THRESHOLD) {
-            const sizeKb = Math.round(text.length / 1000);
-            const msg = mode === 'full' ? t('dashboard.aiExportCopied') : t('dashboard.aiExportCopiedData');
-            toast.warning(`${msg} (${sizeKb}K chars)`);
-        } else {
-            const msg = mode === 'full' ? t('dashboard.aiExportCopied') : t('dashboard.aiExportCopiedData');
-            toast.success(msg);
-        }
+        await writeExportToClipboard(text, toast, t('dashboard.aiExportCopiedGeneric', {values: {label}}));
     } catch (err) {
         console.error('AI export failed:', err);
         toast.error(t('dashboard.aiExportFailed'));

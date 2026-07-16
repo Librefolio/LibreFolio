@@ -16,8 +16,10 @@
     import {onMount, tick} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
-    import {RefreshCw, Brain, Briefcase, TrendingUp, ArrowRightLeft, Wallet} from 'lucide-svelte';
+    import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet} from 'lucide-svelte';
     import {copyAiExport} from '$lib/features/ai-export/aiExportClipboard';
+    import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
+    import {PORTFOLIO_PROMPT_CATALOG, type PromptId} from '$lib/features/ai-export/promptCatalog';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
 
     import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
@@ -65,12 +67,9 @@
     let historyLoading = $derived(reportLoading && history.length === 0);
     let syncLoading = $state(false);
 
-    /** AI export state */
+    /** AI export state — dropdown open/position handled internally by AiExportMenu */
     let aiExportLoading = $state(false);
-    let aiExportDropdownOpen = $state(false);
-    let aiExportTriggerEl = $state<HTMLElement | null>(null);
-    let aiExportPanelEl = $state<HTMLDivElement | null>(null);
-    let aiExportDropdownPosition = $state({left: 8, top: 8});
+    let aiExportEntries = $derived(PORTFOLIO_PROMPT_CATALOG.map((p) => ({id: p.id, label: $_(p.labelKey), description: $_(p.descriptionKey)})));
 
     /** Broker IDs selected in the filter (empty = all brokers). */
     let selectedBrokerIds = $state<number[]>([]);
@@ -353,12 +352,11 @@
         syncLoading = false;
     }
 
-    async function handleAiExport(mode: 'full' | 'data-only') {
-        aiExportDropdownOpen = false;
+    async function handleAiExport(promptId: PromptId) {
         aiExportLoading = true;
         try {
             await copyAiExport(
-                mode,
+                promptId,
                 {
                     brokerIds: activeBrokerIds ?? undefined,
                     dateFrom: dateRangeCtl.start || undefined,
@@ -380,18 +378,9 @@
         brokerFilterDropdownPosition = getFixedDropdownPosition(brokerFilterTriggerEl, brokerFilterPanelEl, 'start');
     }
 
-    async function positionAiExportDropdown() {
-        await tick();
-        if (!aiExportDropdownOpen) return;
-        aiExportDropdownPosition = getFixedDropdownPosition(aiExportTriggerEl, aiExportPanelEl, 'end');
-    }
-
     function updateOpenDropdownPositions() {
         if (brokerFilterOpen) {
             brokerFilterDropdownPosition = getFixedDropdownPosition(brokerFilterTriggerEl, brokerFilterPanelEl, 'start');
-        }
-        if (aiExportDropdownOpen) {
-            aiExportDropdownPosition = getFixedDropdownPosition(aiExportTriggerEl, aiExportPanelEl, 'end');
         }
     }
 
@@ -400,19 +389,8 @@
         if (brokerFilterOpen) void positionBrokerFilterDropdown();
     }
 
-    function toggleAiExportDropdown() {
-        aiExportDropdownOpen = !aiExportDropdownOpen;
-        if (aiExportDropdownOpen) void positionAiExportDropdown();
-    }
-
-    // Outside-click closes broker filter panel and AI export dropdown
+    // Outside-click closes the broker filter panel (AI export dropdown handles its own outside-click internally)
     function handleDocumentClick(e: MouseEvent) {
-        if (aiExportDropdownOpen) {
-            const target = e.target as HTMLElement;
-            if (!target.closest?.('[data-ai-export-panel]') && !target.closest?.('[data-testid="ai-export-button"]')) {
-                aiExportDropdownOpen = false;
-            }
-        }
         if (!brokerFilterOpen) return;
         const target = e.target as HTMLElement;
         if (target.closest?.('[data-broker-filter-panel]') || target.closest?.('[data-testid="broker-filter-trigger"]')) return;
@@ -425,12 +403,7 @@
     });
 
     $effect(() => {
-        if (!aiExportDropdownOpen) return;
-        void positionAiExportDropdown();
-    });
-
-    $effect(() => {
-        if (!brokerFilterOpen && !aiExportDropdownOpen) return;
+        if (!brokerFilterOpen) return;
 
         const handleViewportChange = () => updateOpenDropdownPositions();
         window.addEventListener('resize', handleViewportChange);
@@ -572,47 +545,7 @@
 
         {#snippet actions({showActionLabels})}
             <!-- AI Export -->
-            <div class="relative w-full">
-                <button
-                    bind:this={aiExportTriggerEl}
-                    class="flex items-center justify-center gap-2 w-full px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
-                    onclick={toggleAiExportDropdown}
-                    disabled={aiExportLoading}
-                    data-testid="ai-export-button"
-                    title={$_('dashboard.aiExport')}
-                >
-                    <Brain size={14} class={aiExportLoading ? 'animate-pulse' : ''} />
-                    {#if showActionLabels}
-                        <span>{aiExportLoading ? $_('dashboard.aiExportBuilding') : $_('dashboard.aiExport')}</span>
-                    {/if}
-                </button>
-
-                {#if aiExportDropdownOpen}
-                    <div
-                        bind:this={aiExportPanelEl}
-                        class="fixed z-50 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden"
-                        style:left={`${aiExportDropdownPosition.left}px`}
-                        style:top={`${aiExportDropdownPosition.top}px`}
-                        data-ai-export-panel
-                    >
-                        <button type="button" class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" onclick={() => handleAiExport('full')} data-testid="ai-export-full">
-                            <Brain size={14} class="text-purple-500" />
-                            {$_('dashboard.aiExportFull')}
-                        </button>
-                        <button
-                            type="button"
-                            class="flex items-center gap-2 w-full px-3 py-2.5 text-left text-[13px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-100 dark:border-slate-700"
-                            onclick={() => handleAiExport('data-only')}
-                            data-testid="ai-export-data-only"
-                        >
-                            <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-                            </svg>
-                            {$_('dashboard.aiExportDataOnly')}
-                        </button>
-                    </div>
-                {/if}
-            </div>
+            <AiExportMenu entries={aiExportEntries} loading={aiExportLoading} triggerLabel={$_('dashboard.aiExport')} loadingLabel={$_('dashboard.aiExportBuilding')} showLabel={showActionLabels} onselect={(id) => handleAiExport(id as PromptId)} />
 
             <button
                 class="flex items-center justify-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"

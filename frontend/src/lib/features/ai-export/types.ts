@@ -97,7 +97,8 @@ export interface AiPortfolioSnapshot {
 export interface AiPosition {
     broker: string;
     name: string;
-    symbol?: string;
+    /** All known market identifiers (ISIN/Ticker/CUSIP/...), for the AI's own web research only — never used as the display label. */
+    identifiers?: Record<string, string>;
     asset_type: string;
     currency: string;
     quantity: number;
@@ -146,7 +147,8 @@ export interface AiBrokerSummary {
 
 export interface AiTechnicalMetadata {
     asset: string;
-    symbol?: string;
+    /** All known market identifiers (ISIN/Ticker/CUSIP/...), for the AI's own web research only — never used as the display label. */
+    identifiers?: Record<string, string>;
     technical_window: string;
     technical_window_start: string;
     normalized_return_base_date: string;
@@ -187,7 +189,8 @@ export interface AiTechnicalUnavailable {
 
 export interface AiTechnicalSummaryItem {
     asset: string;
-    symbol?: string;
+    /** All known market identifiers (ISIN/Ticker/CUSIP/...), for the AI's own web research only — never used as the display label. */
+    identifiers?: Record<string, string>;
     nav_weight_percent?: number;
     return_3m_percent: number;
     latest_rsi14?: number;
