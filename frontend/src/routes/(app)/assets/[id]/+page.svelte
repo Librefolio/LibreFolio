@@ -185,6 +185,26 @@
     let assetAiExportLoading = $state(false);
     let assetAiExportEntries = $derived(ASSET_PROMPT_CATALOG.map((p) => ({id: p.id, label: $t(p.labelKey), description: $t(p.descriptionKey), icon: p.icon})));
 
+    // Signals header row's OWN width (NOT pageLayoutMode — that tracks the PageToolbar bar,
+    // which needs ~780px+ to avoid stacking its date picker/filters/2x2 actions, so its
+    // 'oneColumn' cutoff (360px) fires on ordinary phone widths where THIS much lighter row
+    // — icon+"Segnali" label, the AI button, a chevron — still has plenty of room). 320px is
+    // the measured worst-case width (longest translation, "Exportar IA") this row needs to fit
+    // comfortably with the AI button's label shown; below that it goes icon-only.
+    let signalsHeaderRef = $state<HTMLDivElement | null>(null);
+    let signalsHeaderWidth = $state(9999); // generous default: show the label until the first real measurement lands
+    let showAiExportLabel = $derived(signalsHeaderWidth >= 320);
+
+    $effect(() => {
+        const el = signalsHeaderRef;
+        if (!el) return;
+        const ro = new ResizeObserver(([entry]) => {
+            signalsHeaderWidth = entry.contentRect.width;
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    });
+
     // Provider icon for header badge
     let providerIconUrl = $state<string | null>(null);
 
@@ -1620,14 +1640,14 @@
     <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <div class="w-full flex items-center gap-1 px-2 py-1.5">
+        <div bind:this={signalsHeaderRef} class="w-full flex items-center gap-1 px-2 py-1.5">
             <button class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-lg" data-testid="asset-detail-signals-toggle" onclick={() => (showSignals = !showSignals)}>
                 <TrendingUp class="text-blue-500" size={15} />
                 {$t('common.signals')}
             </button>
             <div class="flex-1"></div>
             <div class="shrink-0">
-                <AiExportMenu entries={assetAiExportEntries} loading={assetAiExportLoading} triggerLabel={$t('assetDetail.aiExport')} loadingLabel={$t('assetDetail.aiExportBuilding')} showLabel={pageLayoutMode !== 'oneColumn'} onselect={(id) => handleAssetAiExport(id as AssetPromptId)} />
+                <AiExportMenu entries={assetAiExportEntries} loading={assetAiExportLoading} triggerLabel={$t('assetDetail.aiExport')} loadingLabel={$t('assetDetail.aiExportBuilding')} showLabel={showAiExportLabel} onselect={(id) => handleAssetAiExport(id as AssetPromptId)} />
             </div>
             <button class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-lg" data-testid="asset-detail-signals-chevron" onclick={() => (showSignals = !showSignals)} aria-label={$t('common.signals')}>
                 <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
