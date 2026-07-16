@@ -37,7 +37,7 @@
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
-    import FIFOLotsPanel from '$lib/components/brokers/lots/FIFOLotsPanel.svelte';
+    import LotsAnalysisPanel from '$lib/components/brokers/lots/LotsAnalysisPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
@@ -69,7 +69,7 @@
 
     /** AI export state — dropdown open/position handled internally by AiExportMenu */
     let aiExportLoading = $state(false);
-    let aiExportEntries = $derived(PORTFOLIO_PROMPT_CATALOG.map((p) => ({id: p.id, label: $_(p.labelKey), description: $_(p.descriptionKey)})));
+    let aiExportEntries = $derived(PORTFOLIO_PROMPT_CATALOG.map((p) => ({id: p.id, label: $_(p.labelKey), description: $_(p.descriptionKey), icon: p.icon})));
 
     /** Broker IDs selected in the filter (empty = all brokers). */
     let selectedBrokerIds = $state<number[]>([]);
@@ -604,7 +604,7 @@
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
             <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} />
-            <FIFOLotsPanel
+            <LotsAnalysisPanel
                 open={activeAssetId != null}
                 assetId={activeAssetId}
                 brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)}

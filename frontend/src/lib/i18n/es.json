@@ -67,11 +67,11 @@
     "aiExportMenu": {
       "asset_snapshot": {
         "label": "Instantánea del activo",
-        "description": "Solo datos de este activo — identidad, contexto técnico y posición en cartera si se posee."
+        "description": "Instantánea actual de este activo."
       },
       "asset_classify": {
         "label": "Clasificar estado del activo",
-        "description": "La IA investiga este activo en línea y clasifica su estado actual según los datos."
+        "description": "Busca este activo en línea y dime cómo está: puntos fuertes, riesgos, qué vigilar."
       }
     },
     "aiExport": "Exportar IA",
@@ -545,20 +545,92 @@
       "viewerDesc": "Solo lectura"
     },
     "lots": {
-      "openLots": "Lotes Abiertos",
-      "closedLots": "Lotes Cerrados",
       "buyDate": "Fecha de Compra",
-      "sellDate": "Fecha de Venta",
-      "sellPrice": "Precio de Venta",
-      "currentValue": "Valor Actual",
-      "realizedPnl": "P&L Realizado",
-      "noOpenLots": "No hay lotes abiertos",
-      "noClosedLots": "No hay lotes cerrados",
       "detailTitle": "Detalle de Lotes FIFO",
       "loadFailed": "Error al cargar los datos de los lotes",
       "combined": "Combinado",
       "viewAsset": "Ver Activo",
-      "analyze": "Analizar Lotes"
+      "analyze": "Analizar Lotes",
+      "allLots": "Todos",
+      "brokerWac": "WAC del bróker",
+      "brokersCount": "{count} brókers",
+      "comparisonTitle": "Comparación de lotes",
+      "cumulativeProceeds": "Ingresos acumulados",
+      "cumulativeWac": "WAC acumulado",
+      "custody": "Custodia",
+      "direction": "Dirección",
+      "directionLong": "LONG",
+      "directionShort": "SHORT",
+      "fifoPnl": "P&L FIFO",
+      "ganttTitle": "Vida y custodia de los lotes",
+      "inTransit": "En tránsito",
+      "inTransitShort": "Tránsito",
+      "lotLabel": "Lote {date}",
+      "modal": {
+        "absoluteQuantityTooltip": "Las cantidades muestran las tenencias absolutas del bróker. En brókers compartidos, tu parte personal puede diferir.",
+        "currentCustody": "Custodia actual",
+        "direction": {
+          "long": "LONG",
+          "short": "SHORT"
+        },
+        "directionLabel": "Dirección",
+        "emptyCustody": "Sin custodia activa",
+        "emptyHistory": "Historial no disponible",
+        "emptyStates": "Sin estados derivados",
+        "event": {
+          "ADJUSTMENT_IN": "AJUSTE+",
+          "ADJUSTMENT_OUT": "AJUSTE-",
+          "BUY": "COMPRA",
+          "SELL": "VENTA",
+          "SPLIT": "SPLIT",
+          "TRANSFER_ARRIVE": "TRANSFERENCIA",
+          "TRANSFER_DEPART": "TRANSFERENCIA"
+        },
+        "goToTransaction": "Ir a la transacción",
+        "history": "Historial",
+        "inTransit": "En tránsito",
+        "openQuantity": "Cantidad abierta",
+        "openingPrice": "Precio unitario de apertura",
+        "originalQuantity": "Cantidad original",
+        "state": {
+          "closed": "Cerrado",
+          "degraded": "Degradado",
+          "distributed": "Distribuido",
+          "in_transit": "En tránsito",
+          "long": "Long",
+          "open": "Abierto",
+          "partially_closed": "Parcialmente cerrado",
+          "short": "Short"
+        },
+        "summary": "Resumen",
+        "title": "Lote {asset} — {date}"
+      },
+      "modeReturn": "Rendimiento",
+      "noGanttData": "Sin historial de custodia en el período seleccionado",
+      "noUnifiedLots": "Ningún lote coincide con los filtros actuales",
+      "noVisibleLots": "Ningún lote visible en el gráfico",
+      "openOnly": "Abiertos",
+      "openingDate": "Fecha de apertura",
+      "openingPriceReference": "Precio de apertura",
+      "originalCostReference": "Costo original",
+      "priceComparisonTitle": "Precio y costo medio",
+      "residualOpenValue": "Valor residual",
+      "returnComparisonTitle": "Rendimiento desde la fecha de apertura",
+      "searchPlaceholder": "Buscar lotes...",
+      "selectLotsToCompare": "Selecciona uno o más lotes para comparar",
+      "shortLotLabel": "Short {date}",
+      "states": {
+        "CLOSED": "Cerrado",
+        "DEGRADED": "Degradado",
+        "DISTRIBUTED": "Distribuido",
+        "IN_TRANSIT": "En tránsito",
+        "OPEN": "Abierto",
+        "PARTIALLY_CLOSED": "Parcial"
+      },
+      "status": "Estado",
+      "unifiedLots": "Lotes",
+      "unifiedLotsHint": "Vista unificada de lotes FIFO con selección múltiple y detalle de custodia.",
+      "valueComparisonTitle": "Valor de los lotes seleccionados"
     },
     "createdInSystem": "Creado en el Sistema"
   },
@@ -579,7 +651,8 @@
       "monthly": "Mensual"
     },
     "showPercentage": "Mostrar porcentaje",
-    "showAbsolute": "Mostrar absoluto"
+    "showAbsolute": "Mostrar absoluto",
+    "marketPrice": "Precio de mercado"
   },
   "chartSettings": {
     "title": "Ajustes del Gráfico",
@@ -945,30 +1018,30 @@
     "aiExportMenu": {
       "snapshot": {
         "label": "Instantánea de la cartera",
-        "description": "Solo datos — la opción más reutilizable para iniciar o continuar una conversación con la IA."
+        "description": "Instantánea actual de tus activos."
       },
       "pac_planning": {
         "label": "Planificación de inversión periódica",
-        "description": "Entrevista sobre tus ideas, luego instrumentos investigados por la IA y propuestas de asignación."
+        "description": "Pregúntame por mis ideas, busca instrumentos en línea y propónme una asignación para mi inversión periódica."
       },
       "rebalancing": {
         "label": "Reequilibrio de la cartera",
-        "description": "Entrevista sobre tu asignación objetivo, luego un plan de venta/reinversión o periódico."
+        "description": "Pregúntame por mi asignación objetivo y propónme cómo reequilibrar."
       },
       "market_trend": {
         "label": "Tendencia de mercado y noticias",
-        "description": "Relaciona los movimientos técnicos recientes con noticias que la IA encuentra en línea."
+        "description": "Explícame qué mueve mis activos, cruzando los datos técnicos con noticias en línea."
       },
       "income_review": {
         "label": "Ingresos y flujo de caja",
-        "description": "Resume los ingresos por dividendos/intereses por posición y en toda la cartera."
+        "description": "Resume mis ingresos por dividendos e intereses, y pregúntame si prefiero reinvertirlos."
       },
       "describe_portfolio": {
         "label": "Describir la cartera",
-        "description": "Resumen general de la composición — prioriza una opción más específica arriba si aplica."
+        "description": "Cuéntame sobre mi cartera."
       }
     },
-    "aiExportCopiedGeneric": "'{label}' copiado al portapapeles"
+    "aiExportCopiedGeneric": "{label} copiado al portapapeles"
   },
   "dataQuality": {
     "headerInfoOnly": "Nota de calidad de datos",
@@ -992,7 +1065,13 @@
       "navigate_asset": "Ver activo",
       "navigate_fx": "Ver FX",
       "add_fx_pair": "Añadir par FX"
-    }
+    },
+    "referencePriceFallback": "Precio de apertura del lote no disponible en la fecha exacta — se usa el último precio conocido {reference_price} como referencia para el rendimiento relativo",
+    "referencePriceUnavailable": "No hay precio de referencia disponible para la apertura de un lote — no se puede calcular el rendimiento relativo",
+    "shortTransferNotSupported": "La transferencia de una posición short aún no es compatible (bróker {broker_id})",
+    "shortAdjustmentNotSupported": "Un ajuste todavía no puede abrir ni cerrar una posición short (bróker {broker_id})",
+    "fifoSourceQuantityMissing": "La transacción supera la cantidad disponible en {missing_quantity} (bróker {broker_id})",
+    "transferPairMissing": "A una transferencia le falta su transacción emparejada, o el par no es válido"
   },
   "dataEditor": {
     "staleTooltip": "Ocultar filas rellenadas hacia atrás (⚠️ obsoletas). Son puntos de relleno copiados del dato real más cercano.",

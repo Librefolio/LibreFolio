@@ -183,7 +183,7 @@
 
     // AI export (Signals panel header button) — dropdown open/position handled internally by AiExportMenu
     let assetAiExportLoading = $state(false);
-    let assetAiExportEntries = $derived(ASSET_PROMPT_CATALOG.map((p) => ({id: p.id, label: $t(p.labelKey), description: $t(p.descriptionKey)})));
+    let assetAiExportEntries = $derived(ASSET_PROMPT_CATALOG.map((p) => ({id: p.id, label: $t(p.labelKey), description: $t(p.descriptionKey), icon: p.icon})));
 
     // Provider icon for header badge
     let providerIconUrl = $state<string | null>(null);
@@ -1621,16 +1621,17 @@
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <div class="w-full flex items-center gap-1 px-2 py-1.5">
-            <button class="flex-1 flex items-center justify-between gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-lg" data-testid="asset-detail-signals-toggle" onclick={() => (showSignals = !showSignals)}>
-                <span class="flex items-center gap-2">
-                    <TrendingUp class="text-blue-500" size={15} />
-                    {$t('common.signals')}
-                </span>
+            <button class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-lg" data-testid="asset-detail-signals-toggle" onclick={() => (showSignals = !showSignals)}>
+                <TrendingUp class="text-blue-500" size={15} />
+                {$t('common.signals')}
+            </button>
+            <div class="flex-1"></div>
+            <div class="shrink-0">
+                <AiExportMenu entries={assetAiExportEntries} loading={assetAiExportLoading} triggerLabel={$t('assetDetail.aiExport')} loadingLabel={$t('assetDetail.aiExportBuilding')} showLabel={pageLayoutMode !== 'oneColumn'} onselect={(id) => handleAssetAiExport(id as AssetPromptId)} />
+            </div>
+            <button class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-lg" data-testid="asset-detail-signals-chevron" onclick={() => (showSignals = !showSignals)} aria-label={$t('common.signals')}>
                 <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
             </button>
-            <div class="shrink-0">
-                <AiExportMenu entries={assetAiExportEntries} loading={assetAiExportLoading} triggerLabel={$t('assetDetail.aiExport')} loadingLabel={$t('assetDetail.aiExportBuilding')} showLabel={false} onselect={(id) => handleAssetAiExport(id as AssetPromptId)} />
-            </div>
         </div>
         {#if showSignals}
             <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">

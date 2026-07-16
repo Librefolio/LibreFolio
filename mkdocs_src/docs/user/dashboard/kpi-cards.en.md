@@ -24,6 +24,17 @@ The hero number is calculated using the following formula:
 
 A positive number means you earned money from investment activity. A negative number means you lost money net of capital movements.
 
+### The number below the hero
+
+Right under the Period P&L value, a smaller line shows something like `+45.20 (+3.10%)`.
+
+- The amount is the **day-over-day** (today vs. yesterday) change in your **Total P&L** — your all-time accumulated gain/loss, not just the selected period.
+- The percentage expresses it as a share of **yesterday's** Period P&L — it tells you how much today's move "weighed" on the period result you're currently viewing.
+
+\[\text{Daily change} = \text{Total P&L}_{\text{today}} - \text{Total P&L}_{\text{yesterday}}\]
+
+This line only appears once the history has at least two daily points.
+
 ### The breakdown rows
 
 | Row | What it measures |
@@ -58,6 +69,14 @@ The **Timing Effect** at the top of the card measures whether your deposit/withd
 - **Favorable (positive)** ✅: you tended to deposit when prices were low, boosting your personal return above what the assets alone earned.
 - **Unfavorable (negative)** ❌: you tended to deposit at peaks or missed dips, dragging your return below pure asset performance.
 
+### The number below the Timing Effect
+
+Below the Timing Effect you'll see a small percentage (e.g. `+0.35%`) — it's the change in your **Total P&L** from **yesterday to today**, expressed as a share of yesterday's net worth:
+
+\[\text{%Daily change} = \frac{\text{Total P&L}_{\text{today}} - \text{Total P&L}_{\text{yesterday}}}{\text{Net Worth}_{\text{yesterday}}} \times 100\]
+
+It's a rough estimate of **today's** return — a quick pulse check. It is not the ROI, TWRR, or MWRR shown in the rows below, which stay anchored to the full selected period.
+
 ### The four return metrics
 
 | Metric | Question it answers |
@@ -82,6 +101,19 @@ The **Timing Effect** at the top of the card measures whether your deposit/withd
 </div>
 
 The **Net Worth** card shows the absolute value of your portfolio at the end of the selected period.
+
+### The number below Net Worth
+
+Below the Net Worth value you'll find your **Total P&L**, with its percentage change in parentheses — e.g. `+12,450.30 (+0.35%)`.
+
+- The amount is your **Total P&L** — the gain or loss accumulated since the beginning, across this scope's whole history (not just the current period).
+- The percentage in parentheses expresses the **day-over-day** (today vs. yesterday) change of this Total P&L, as a share of **yesterday's** Total P&L.
+
+\[\text{Total P&L} = \text{Net Worth} - \text{Net Capital Invested Since Inception}\]
+
+Note: "Net Capital Invested Since Inception" here is the sum of **all** deposits minus **all** withdrawals since you started using this scope — a different, larger figure than the "Deposited Capital" row below, which only counts movements within the selected period.
+
+🔗 **Theory**: [Deposited Capital, Total PnL and Cash Pools](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md)
 
 ### What the rows mean
 

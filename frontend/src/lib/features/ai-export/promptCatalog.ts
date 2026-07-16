@@ -9,6 +9,9 @@
  * last — it's the most likely to just restate what the dashboard already shows.
  */
 
+import type {ComponentType} from 'svelte';
+import {Camera, PiggyBank, Scale, Newspaper, Coins, FileText} from 'lucide-svelte';
+
 export type PromptId = 'snapshot' | 'pac_planning' | 'rebalancing' | 'market_trend' | 'income_review' | 'describe_portfolio';
 
 export interface PromptSections {
@@ -28,6 +31,8 @@ export interface PromptDefinition {
     /** false only for 'snapshot' — pure data, no role/task text, no web-research/analysis instructions */
     hasInstructions: boolean;
     sections: PromptSections;
+    /** Dropdown icon — distinguishes entries at a glance; see AiExportMenu.svelte */
+    icon: ComponentType;
 }
 
 export const PORTFOLIO_PROMPT_CATALOG: PromptDefinition[] = [
@@ -37,6 +42,7 @@ export const PORTFOLIO_PROMPT_CATALOG: PromptDefinition[] = [
         descriptionKey: 'dashboard.aiExportMenu.snapshot.description',
         hasInstructions: false,
         sections: {allocation: true, broker_summary: true, pac_context: true, technicalDetail: 'full'},
+        icon: Camera,
     },
     {
         id: 'pac_planning',
@@ -44,6 +50,7 @@ export const PORTFOLIO_PROMPT_CATALOG: PromptDefinition[] = [
         descriptionKey: 'dashboard.aiExportMenu.pac_planning.description',
         hasInstructions: true,
         sections: {allocation: true, broker_summary: false, pac_context: true, technicalDetail: 'summary'},
+        icon: PiggyBank,
     },
     {
         id: 'rebalancing',
@@ -51,6 +58,7 @@ export const PORTFOLIO_PROMPT_CATALOG: PromptDefinition[] = [
         descriptionKey: 'dashboard.aiExportMenu.rebalancing.description',
         hasInstructions: true,
         sections: {allocation: true, broker_summary: true, pac_context: false, technicalDetail: 'summary'},
+        icon: Scale,
     },
     {
         id: 'market_trend',
@@ -58,6 +66,7 @@ export const PORTFOLIO_PROMPT_CATALOG: PromptDefinition[] = [
         descriptionKey: 'dashboard.aiExportMenu.market_trend.description',
         hasInstructions: true,
         sections: {allocation: false, broker_summary: false, pac_context: false, technicalDetail: 'full'},
+        icon: Newspaper,
     },
     {
         id: 'income_review',
@@ -65,6 +74,7 @@ export const PORTFOLIO_PROMPT_CATALOG: PromptDefinition[] = [
         descriptionKey: 'dashboard.aiExportMenu.income_review.description',
         hasInstructions: true,
         sections: {allocation: true, broker_summary: false, pac_context: false, technicalDetail: 'summary'},
+        icon: Coins,
     },
     {
         id: 'describe_portfolio',
@@ -72,6 +82,7 @@ export const PORTFOLIO_PROMPT_CATALOG: PromptDefinition[] = [
         descriptionKey: 'dashboard.aiExportMenu.describe_portfolio.description',
         hasInstructions: true,
         sections: {allocation: true, broker_summary: true, pac_context: true, technicalDetail: 'summary'},
+        icon: FileText,
     },
 ];
 

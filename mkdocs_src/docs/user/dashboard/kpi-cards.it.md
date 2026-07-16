@@ -24,6 +24,17 @@ Il numero principale è calcolato utilizzando la seguente formula:
 
 Un numero positivo significa che hai guadagnato denaro dall'attività di investimento. Un numero negativo significa che hai perso denaro al netto dei movimenti di capitale.
 
+### Il numero sotto il valore principale
+
+Subito sotto il valore del P&L del Periodo trovi una riga più piccola, ad esempio `+45,20 (+3,10%)`.
+
+- L'importo è la variazione **giornaliera** (oggi rispetto a ieri) del tuo **P&L Totale** — l'utile/perdita accumulata da sempre, non solo nel periodo selezionato.
+- La percentuale la esprime come quota del P&L del Periodo di **ieri** — ti dice quanto ha "pesato" la giornata di oggi sul risultato del periodo che stai guardando.
+
+\[\text{Variazione giornaliera} = \text{P&L Totale}_{\text{oggi}} - \text{P&L Totale}_{\text{ieri}}\]
+
+Questa riga è visibile solo quando lo storico contiene almeno due punti giornalieri.
+
 ### Le righe di dettaglio
 
 | Riga | Cosa misura |
@@ -58,6 +69,14 @@ L'**Effetto Tempismo** nella parte superiore della carta misura se le tue decisi
 - **Favorevole (positivo)** ✅: hai avuto la tendenza a depositare quando i prezzi erano bassi, aumentando il tuo rendimento personale al di sopra di quanto guadagnato dai soli asset.
 - **Sfavorevole (negativo)** ❌: hai avuto la tendenza a depositare ai massimi o hai perso i minimi, abbassando il tuo rendimento al di sotto della pura performance degli asset.
 
+### Il numero sotto l'Effetto Tempismo
+
+Sotto l'Effetto Tempismo trovi una piccola percentuale (es. `+0,35%`) — è la variazione del tuo **P&L Totale** tra **ieri e oggi**, espressa come quota del patrimonio netto di ieri:
+
+\[\text{%Variazione giornaliera} = \frac{\text{P&L Totale}_{\text{oggi}} - \text{P&L Totale}_{\text{ieri}}}{\text{Patrimonio Netto}_{\text{ieri}}} \times 100\]
+
+È una stima approssimativa del rendimento **di oggi** — un controllo rapido. Non è né il ROI, né il TWRR, né il MWRR mostrati nelle righe sottostanti, che restano ancorati all'intero periodo selezionato.
+
 ### Le quattro metriche di rendimento
 
 | Metrica | Domanda a cui risponde |
@@ -82,6 +101,19 @@ L'**Effetto Tempismo** nella parte superiore della carta misura se le tue decisi
 </div>
 
 La carta **Patrimonio Netto** mostra il valore assoluto del tuo portafoglio alla fine del periodo selezionato.
+
+### Il numero sotto il Patrimonio Netto
+
+Sotto il valore del Patrimonio Netto trovi il tuo **P&L Totale**, con la variazione percentuale tra parentesi — ad esempio `+12.450,30 (+0,35%)`.
+
+- L'importo è il tuo **P&L Totale** — l'utile o la perdita accumulata dall'inizio, su tutta la storia di questo ambito (non solo nel periodo corrente).
+- La percentuale tra parentesi esprime la variazione **giornaliera** (oggi rispetto a ieri) di questo P&L Totale, come quota del P&L Totale di **ieri**.
+
+\[\text{P&L Totale} = \text{Patrimonio Netto} - \text{Capitale Netto Investito dall'Inizio}\]
+
+Attenzione: "Capitale Netto Investito dall'Inizio" qui è la somma di **tutti** i depositi meno **tutti** i prelievi da quando usi questo ambito — un valore diverso e più ampio della riga "Capitale Depositato" sotto, che invece conta solo i movimenti nel periodo selezionato.
+
+🔗 **Teoria**: [Capitale Depositato, PnL Totale e Pool di Liquidità](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md)
 
 ### Cosa significano le righe
 

@@ -241,7 +241,7 @@
         {/if}
         <div class="flex items-center justify-between">
             <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.periodPnl')}</p>
-            <DocsLink path="financial-theory/technical-analysis/performance-metrics/period-pnl/" label={$_('dashboard.periodPnl')} size={14} />
+            <DocsLink path="user/dashboard/kpi-cards/#card-1-period-pl" label={$_('dashboard.periodPnl')} size={14} />
         </div>
         <div class="relative">
             {#if loading}
@@ -292,7 +292,7 @@
         {/if}
         <div class="flex items-center justify-between">
             <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.returns')}</p>
-            <DocsLink path="financial-theory/technical-analysis/performance-metrics/" label={$_('dashboard.returns')} size={14} />
+            <DocsLink path="user/dashboard/kpi-cards/#card-2-returns" label={$_('dashboard.returns')} size={14} />
         </div>
         {#if loading}
             <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
@@ -327,7 +327,7 @@
     <div class="relative @container bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-net-worth">
         <div class="flex items-center justify-between">
             <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.netWorth')}</p>
-            <DocsLink path="financial-theory/technical-analysis/performance-metrics/nav/" label={$_('dashboard.netWorth')} size={14} />
+            <DocsLink path="user/dashboard/kpi-cards/#card-3-net-worth" label={$_('dashboard.netWorth')} size={14} />
         </div>
         {#if loading}
             <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
