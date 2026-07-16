@@ -13,8 +13,13 @@ FROM python:3.13-slim
 #   - gcc, libffi-dev: build native Python extensions
 #   - git: needed for justetf-scraping pip dependency
 #   - gosu: privilege drop in entrypoint (like postgres/mysql/redis images)
+#   - sqlite3: CLI for manual one-off DB migrations on an existing prod volume
+#     (e.g. ALTER TABLE on an existing app.db — see
+#     LibreFolio_developer_journal/NOTE_donation_popup_deploy.md); ./dev.py db
+#     create-clean only applies 001_initial.py to brand-new DBs, so an existing
+#     prod DB needs manual sqlite3 access inside the container
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libffi-dev git gosu \
+    gcc libffi-dev git gosu sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
