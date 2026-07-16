@@ -41,8 +41,10 @@
         brokerFilterValues: string[];
         custodySlices: ReadonlyArray<LotCustodySummarySchema>;
         custodySearchText: string;
+        openingUnitPrice: number | null;
         quantityOpen: number | null;
         quantityOriginal: number | null;
+        currentValue: number | null;
         pnl: number | null;
         relativeReturn: number | null;
         searchText: string;
@@ -96,6 +98,12 @@
 
     function formatQuantity(value: number | null): string {
         return value == null ? '—' : value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
+    }
+
+    function formatPercent(value: number | null): string {
+        if (value == null) return '—';
+        const sign = value > 0 ? '+' : '';
+        return `${sign}${(value * 100).toFixed(2)}%`;
     }
 
     function stateLabel(state: LotState): string {
@@ -203,6 +211,14 @@
         };
     }
 
+    function currencyCell(value: number | null): HtmlCell | string {
+        if (value == null) return '—';
+        return {
+            type: 'html',
+            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatCurrencyAmountPlain(value, currency))}</span>`,
+        };
+    }
+
     function signedAmountWithPercentCell(value: number | null, percent: number | null): HtmlCell | string {
         if (value == null) return '—';
         const classes = value > 0 ? 'text-green-600 dark:text-green-400' : value < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400';
@@ -210,6 +226,14 @@
         return {
             type: 'html',
             html: `<div class="flex flex-col items-end"><span class="font-medium tabular-nums ${classes}">${escapeHtml(formatCurrencyAmountPlain(value, currency, {showSign: value !== 0}))}</span>${percentHtml}</div>`,
+            tooltip:
+                percent == null
+                    ? undefined
+                    : {
+                          text: `${label('brokers.lots.openReturn', 'Open Return')}: ${formatPercent(percent)}`,
+                          position: 'top',
+                          maxWidth: '240px',
+                      },
         };
     }
 
@@ -307,8 +331,10 @@
                         return slice.custody_type === 'IN_TRANSIT' && brokerId == null ? label('brokers.lots.inTransit', 'In transit') : getBrokerName(brokerId);
                     })
                     .join(' '),
+                openingUnitPrice: safeNum(lot.opening_unit_price),
                 quantityOpen: safeNum(lot.open_quantity),
                 quantityOriginal: safeNum(lot.original_quantity),
+                currentValue: safeNum(lot.total_value) ?? safeNum(lot.open_value),
                 pnl: safeNum(lot.pnl),
                 relativeReturn: safeNum(lot.relative_return),
                 searchText: '',
@@ -407,8 +433,20 @@
             getMultiValue: (row) => row.brokerFilterValues,
         },
         {
+            id: 'opening-price',
+            header: () => label('brokers.lots.openingPriceReference', 'Opening price'),
+            cell: (row) => currencyCell(row.openingUnitPrice),
+            type: 'number',
+            align: 'right',
+            width: 160,
+            minWidth: 150,
+            sortable: true,
+            filterable: false,
+            getValue: (row) => row.openingUnitPrice ?? Number.NEGATIVE_INFINITY,
+        },
+        {
             id: 'quantity',
-            header: () => label('common.quantity', 'Quantity'),
+            header: () => label('brokers.lots.openQuantity', 'Open Quantity'),
             cell: (row) => quantityCell(row),
             type: 'number',
             align: 'right',
@@ -417,6 +455,18 @@
             sortable: true,
             filterable: false,
             getValue: (row) => row.quantityOpen ?? 0,
+        },
+        {
+            id: 'current-value',
+            header: () => label('brokers.lots.currentValue', 'Current Value'),
+            cell: (row) => currencyCell(row.currentValue),
+            type: 'number',
+            align: 'right',
+            width: 170,
+            minWidth: 160,
+            sortable: true,
+            filterable: false,
+            getValue: (row) => row.currentValue ?? Number.NEGATIVE_INFINITY,
         },
         {
             id: 'fifo-pnl',

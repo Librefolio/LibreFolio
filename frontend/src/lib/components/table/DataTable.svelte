@@ -1456,13 +1456,31 @@
                                             {#if cellContent.tooltip}
                                                 <Tooltip text={cellContent.tooltip.text ?? ''} html={cellContent.tooltip.html ?? ''} position={cellContent.tooltip.position ?? 'top'} maxWidth={cellContent.tooltip.maxWidth ?? '320px'}>
                                                     {#if cellContent.onClick}
-                                                        <button type="button" class="cursor-pointer" onclick={cellContent.onClick}>{@html cellContent.html}</button>
+                                                        <button
+                                                            type="button"
+                                                            class="cursor-pointer"
+                                                            onclick={(event) => {
+                                                                event.stopPropagation();
+                                                                cellContent.onClick?.();
+                                                            }}
+                                                        >
+                                                            {@html cellContent.html}
+                                                        </button>
                                                     {:else}
                                                         <span>{@html cellContent.html}</span>
                                                     {/if}
                                                 </Tooltip>
                                             {:else if cellContent.onClick}
-                                                <button type="button" class="cursor-pointer" onclick={cellContent.onClick}>{@html cellContent.html}</button>
+                                                <button
+                                                    type="button"
+                                                    class="cursor-pointer"
+                                                    onclick={(event) => {
+                                                        event.stopPropagation();
+                                                        cellContent.onClick?.();
+                                                    }}
+                                                >
+                                                    {@html cellContent.html}
+                                                </button>
                                             {:else}
                                                 {@html cellContent.html}
                                             {/if}

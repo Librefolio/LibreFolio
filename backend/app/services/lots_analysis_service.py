@@ -301,6 +301,7 @@ class LotsAnalysisService:
                 self._build_return_history(
                     selected_ids=selected_ids,
                     lots_by_id=lots_by_id,
+                    fragments_by_lot=fragments_by_lot,
                     market_prices=market_prices,
                     price_lookup=price_lookup,
                     fx_resolver=fx_resolver,
@@ -466,13 +467,13 @@ class LotsAnalysisService:
                 elif tx.cost_basis_override is not None:
                     fx_resolver.need(tx.cost_basis_currency, tx.date)
 
-        if LotAnalysisType.LOT_SUMMARY in analyses:
+        if LotAnalysisType.LOT_SUMMARY in analyses or LotAnalysisType.RETURN_HISTORY in analyses:
             for lot_id in selected_ids:
                 lot = lots_by_id[lot_id]
                 fx_resolver.need(lot.currency, lot.opening_date)
-                resolved_reference = price_lookup.resolve(lot.opening_date)
-                if lot.reference_unit_price is not None and resolved_reference is not None:
-                    fx_resolver.need(resolved_reference.currency, resolved_reference.resolved_date)
+                raw_reference_price, raw_reference_currency, reference_date, _reference_source = self._opening_reference_price(lot, price_lookup)
+                if raw_reference_price is not None and raw_reference_currency is not None:
+                    fx_resolver.need(raw_reference_currency, reference_date)
                 for closure in [c for c in closures if c.lot_id == lot_id]:
                     fx_resolver.need(lot.currency, closure.close_date)
 
@@ -665,10 +666,8 @@ class LotsAnalysisService:
             converted_proceeds = self._converted_cumulative_proceeds(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date)
             opening_unit_price = fx_resolver.convert(lot.opening_unit_price, lot.currency, lot.opening_date)
-            reference_unit_price = None
-            resolved_reference = price_lookup.resolve(lot.opening_date)
-            if lot.reference_unit_price is not None and resolved_reference is not None:
-                reference_unit_price = fx_resolver.convert(lot.reference_unit_price, resolved_reference.currency, resolved_reference.resolved_date)
+            raw_reference_price, raw_reference_currency, reference_date, reference_price_source = self._opening_reference_price(lot, price_lookup)
+            reference_unit_price = fx_resolver.convert(raw_reference_price, raw_reference_currency, reference_date)
             open_value = total_value = pnl = relative_return = None
             if latest_market_price is not None:
                 open_value = lot.open_quantity * latest_market_price
@@ -698,7 +697,7 @@ class LotsAnalysisService:
                     realized_pnl=self._converted_realized_pnl(lot, closures_by_lot.get(lot_id, []), fx_resolver),
                     cumulative_proceeds=converted_proceeds if converted_proceeds is not None else lot.cumulative_proceeds,
                     reference_unit_price=reference_unit_price,
-                    reference_price_source=lot.reference_price_source,
+                    reference_price_source=reference_price_source,
                     states=sorted(engine_result.get_lot_states(lot_id)),
                     current_custody=current_custody,
                     open_value=open_value,
@@ -983,16 +982,15 @@ class LotsAnalysisService:
                 market_price = market_prices.get(current_date)
                 if market_price is None:
                     continue
-                open_quantity = self._open_quantity_on_date(fragments_by_lot.get(lot_id, []), current_date)
-                open_value = open_quantity * market_price
-                proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
-                if lot.direction == "LONG":
-                    total_value = open_value + proceeds
-                    pnl = total_value - converted_original_cost
-                else:
-                    proceeds = converted_short_proceeds
-                    total_value = proceeds - open_value
-                    pnl = total_value
+                open_value, proceeds, total_value, pnl = self._value_snapshot_on_date(
+                    lot=lot,
+                    fragments=fragments_by_lot.get(lot_id, []),
+                    proceeds_by_day=proceeds_by_day,
+                    market_price=market_price,
+                    current_date=current_date,
+                    converted_original_cost=converted_original_cost,
+                    converted_short_proceeds=converted_short_proceeds,
+                )
                 points.append(
                     LotValueHistoryPoint(
                         lot_id=lot_id,
@@ -1011,6 +1009,7 @@ class LotsAnalysisService:
         *,
         selected_ids: Sequence[int],
         lots_by_id: dict[int, FifoLot],
+        fragments_by_lot: dict[int, list[FragmentInterval]],
         market_prices: dict[date_type, Decimal | None],
         price_lookup: _PriceHistoryLookup,
         fx_resolver: _FxRateResolver,
@@ -1020,30 +1019,78 @@ class LotsAnalysisService:
         points: list[LotReturnHistoryPoint] = []
         for lot_id in selected_ids:
             lot = lots_by_id[lot_id]
-            if lot.reference_unit_price is None:
-                continue
-            resolved_reference = price_lookup.resolve(lot.opening_date)
-            if resolved_reference is None:
-                continue
-            converted_reference = fx_resolver.convert(lot.reference_unit_price, resolved_reference.currency, resolved_reference.resolved_date)
-            if converted_reference in (None, Decimal("0")):
-                continue
+            raw_reference_price, raw_reference_currency, reference_date, reference_price_source = self._opening_reference_price(lot, price_lookup)
+            converted_reference = fx_resolver.convert(raw_reference_price, raw_reference_currency, reference_date)
             last_date = self._lot_history_end_date(lot, closures_by_lot.get(lot_id, []), history_dates[-1])
+            proceeds_by_day = self._closure_proceeds_prefix(lot, closures_by_lot.get(lot_id, []), fx_resolver)
+            converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date) or lot.original_cost
+            converted_short_proceeds = fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date) or lot.cumulative_proceeds
             for current_date in history_dates:
                 if current_date < lot.opening_date or current_date > last_date:
                     continue
                 market_price = market_prices.get(current_date)
                 if market_price is None:
                     continue
+                open_value, proceeds, total_value, _pnl = self._value_snapshot_on_date(
+                    lot=lot,
+                    fragments=fragments_by_lot.get(lot_id, []),
+                    proceeds_by_day=proceeds_by_day,
+                    market_price=market_price,
+                    current_date=current_date,
+                    converted_original_cost=converted_original_cost,
+                    converted_short_proceeds=converted_short_proceeds,
+                )
+                total_return = None
+                if converted_original_cost != Decimal("0"):
+                    total_return = (total_value / converted_original_cost) - Decimal("1")
+                relative_return = None
+                if converted_reference not in (None, Decimal("0")):
+                    relative_return = (market_price / converted_reference) - Decimal("1")
                 points.append(
                     LotReturnHistoryPoint(
                         lot_id=lot_id,
                         date=current_date,
-                        relative_return=(market_price / converted_reference) - Decimal("1"),
-                        reference_price_source=lot.reference_price_source,
+                        total_return=total_return,
+                        relative_return=relative_return,
+                        reference_price_source=reference_price_source if relative_return is not None else None,
                     )
                 )
         return points
+
+    def _opening_reference_price(
+        self,
+        lot: FifoLot,
+        price_lookup: _PriceHistoryLookup,
+    ) -> tuple[Decimal | None, str | None, date_type, ReferencePriceSource | None]:
+        if lot.reference_unit_price is not None:
+            resolved_reference = price_lookup.resolve(lot.opening_date)
+            if resolved_reference is None:
+                return None, None, lot.opening_date, lot.reference_price_source
+            return lot.reference_unit_price, resolved_reference.currency, resolved_reference.resolved_date, lot.reference_price_source
+        return lot.opening_unit_price, lot.currency, lot.opening_date, "exact"
+
+    def _value_snapshot_on_date(
+        self,
+        *,
+        lot: FifoLot,
+        fragments: Sequence[FragmentInterval],
+        proceeds_by_day: dict[date_type, Decimal],
+        market_price: Decimal,
+        current_date: date_type,
+        converted_original_cost: Decimal,
+        converted_short_proceeds: Decimal,
+    ) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+        open_quantity = self._open_quantity_on_date(fragments, current_date)
+        open_value = open_quantity * market_price
+        proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
+        if lot.direction == "LONG":
+            total_value = open_value + proceeds
+            pnl = total_value - converted_original_cost
+        else:
+            proceeds = converted_short_proceeds
+            total_value = proceeds - open_value
+            pnl = total_value
+        return open_value, proceeds, total_value, pnl
 
     def _build_price_history(
         self,

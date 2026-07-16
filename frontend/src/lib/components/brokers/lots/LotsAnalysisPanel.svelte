@@ -9,10 +9,12 @@
   Fetch strategy (two tiers, per plan v2 §13 "il frontend non effettua autonomamente ...
   calcoli WAC"):
   - Main fetch (asset/broker/date-range change): LOT_SUMMARY + GANTT_TOPOLOGY +
-    CUSTODY_HISTORY + PRICE_HISTORY + BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY, with
+    EVENT_HISTORY + PRICE_HISTORY + BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY, with
     NO selected_lot_ids (service defaults to "all lots" — see
-    LotsAnalysisService._resolve_selected_lot_ids). Feeds every component except the
-    comparison chart's Value/Return modes.
+    LotsAnalysisService._resolve_selected_lot_ids). EVENT_HISTORY (superset of the old
+    CUSTODY_HISTORY subset) feeds both the WAC chart's transaction markers and the
+    Custody modal's full chronology (refinement v1 §5 / modal spec). Feeds every
+    component except the comparison chart's Value/Return modes.
   - Selection fetch (selectedLotIds change, only when non-empty): VALUE_HISTORY +
     RETURN_HISTORY scoped to selected_lot_ids. PRICE_HISTORY is NOT re-fetched here:
     market price doesn't vary by lot, so the main fetch's already-deduped price series
@@ -21,6 +23,10 @@
   Gantt <-> WAC chart zoom/pan stay bidirectionally synced (sharedZoomStart/End), matching
   the old panel's pattern. The comparison chart takes only an *initial* xAxisRange (plan
   §16: "possiede zoom indipendente") — no live sync back into it.
+
+  Aperti/Tutti lot filter (refinement v1 §11) is lifted here from LotGanttChart so
+  UnifiedLotsTable shows the same lot set (visibleLots below); the toggle control still
+  renders inside LotGanttChart.
 -->
 <script lang="ts">
     import {tick} from 'svelte';
@@ -91,7 +97,7 @@
 
     let lots = $state<LotSummarySchema[]>([]);
     let ganttSegments = $state<GanttSegmentSchema[]>([]);
-    let custodyHistory = $state<LotTimelineEventSchema[]>([]);
+    let lotEvents = $state<LotTimelineEventSchema[]>([]);
     let priceHistory = $state<LotPriceHistoryPoint[]>([]);
     let brokerWacHistory = $state<BrokerWACHistoryPoint[]>([]);
     let cumulativeWacHistory = $state<CumulativeWACHistoryPoint[]>([]);
@@ -115,6 +121,18 @@
 
     let fetchVersion = 0;
     let selectionFetchVersion = 0;
+
+    /** Shared Aperti/Tutti filter (plan §11): the UI control lives inside LotGanttChart, but the
+     * resulting lot set is shared with UnifiedLotsTable so both stay consistent. "Aperti" mirrors
+     * FifoEngineResult's OPEN state tag / open_quantity>0; "Tutti" passes every lot through — each
+     * consumer still does its own range-intersection filtering (e.g. Gantt drops lots whose segments
+     * are entirely outside the visible window). */
+    let lotFilterMode = $state<'open' | 'all'>('open');
+
+    let visibleLots = $derived.by((): LotSummarySchema[] => {
+        if (lotFilterMode === 'all') return lots;
+        return lots.filter((lot) => Number.parseFloat(lot.open_quantity) > 0 || (lot.states ?? []).includes('OPEN'));
+    });
 
     let selectedLots = $derived.by((): LotSummarySchema[] => {
         const selected = new Set(selectedLotIds);
@@ -141,14 +159,18 @@
                 broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
                 date_range: isAllPeriod ? undefined : {start: dateFrom, end: dateTo},
                 target_currency: currency,
-                requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'CUSTODY_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY'] as const,
+                requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY'] as const,
             };
             const response = await zodiosApi.get_lots_analysis_api_v1_portfolio_lots_analysis_post(body);
             if (version !== fetchVersion) return; // stale response from a since-superseded open/asset change
 
             lots = asArray<LotSummarySchema>(response.lots);
             ganttSegments = asArray<GanttSegmentSchema>(response.gantt_segments);
-            custodyHistory = asArray<LotTimelineEventSchema>(response.custody_history);
+            // EVENT_HISTORY is a superset of the old CUSTODY_HISTORY filter (backend computes the
+            // full per-lot event list unconditionally either way — see lots_analysis_service.py
+            // _build_lot_event_rows/_CUSTODY_KINDS) — fetching it once here feeds both the WAC
+            // chart's transaction markers and the Custody modal's full chronology, no double fetch.
+            lotEvents = asArray<LotTimelineEventSchema>(response.lot_events);
             priceHistory = asArray<LotPriceHistoryPoint>(response.price_history);
             brokerWacHistory = asArray<BrokerWACHistoryPoint>(response.broker_wac_history);
             cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
@@ -168,7 +190,7 @@
             error = $_('brokers.lots.loadFailed');
             lots = [];
             ganttSegments = [];
-            custodyHistory = [];
+            lotEvents = [];
             priceHistory = [];
             brokerWacHistory = [];
             cumulativeWacHistory = [];
@@ -345,16 +367,31 @@
                     </div>
                 </div>
             {:else}
-                <LotWacPriceChart {brokerWacHistory} {cumulativeWacHistory} {priceHistory} {brokers} {currency} {xAxisRange} onZoomChange={handleZoomChange} externalZoomStart={sharedZoomStart} externalZoomEnd={sharedZoomEnd} />
+                <LotWacPriceChart {brokerWacHistory} {cumulativeWacHistory} {priceHistory} {lotEvents} {brokers} {currency} {xAxisRange} onZoomChange={handleZoomChange} externalZoomStart={sharedZoomStart} externalZoomEnd={sharedZoomEnd} />
 
-                <LotGanttChart bind:this={ganttRef} {lots} segments={ganttSegments} {brokers} {currency} {selectedLotIds} onSelectionChange={handleSelectionChange} {xAxisRange} onZoomChange={handleZoomChange} externalZoomStart={sharedZoomStart} externalZoomEnd={sharedZoomEnd} onRowDoubleClick={handleGanttRowDoubleClick} />
+                <LotGanttChart
+                    bind:this={ganttRef}
+                    lots={visibleLots}
+                    segments={ganttSegments}
+                    {brokers}
+                    {currency}
+                    {selectedLotIds}
+                    onSelectionChange={handleSelectionChange}
+                    {xAxisRange}
+                    onZoomChange={handleZoomChange}
+                    externalZoomStart={sharedZoomStart}
+                    externalZoomEnd={sharedZoomEnd}
+                    onRowDoubleClick={handleGanttRowDoubleClick}
+                    filterMode={lotFilterMode}
+                    onFilterModeChange={(mode) => (lotFilterMode = mode)}
+                />
 
-                <UnifiedLotsTable bind:this={tableRef} {lots} {currency} {brokers} {selectedLotIds} onSelectionChange={handleSelectionChange} onCustodyCellClick={handleCustodyCellClick} onRowDoubleClick={handleTableRowDoubleClick} />
+                <UnifiedLotsTable bind:this={tableRef} lots={visibleLots} {currency} {brokers} {selectedLotIds} onSelectionChange={handleSelectionChange} onCustodyCellClick={handleCustodyCellClick} onRowDoubleClick={handleTableRowDoubleClick} />
 
-                <LotComparisonChart selectedLots={selectedLots} {valueHistory} {returnHistory} {priceHistory} {brokerWacHistory} {cumulativeWacHistory} {currency} {xAxisRange} />
+                <LotComparisonChart selectedLots={selectedLots} {valueHistory} {returnHistory} {priceHistory} {brokerWacHistory} {cumulativeWacHistory} {brokers} {currency} {xAxisRange} />
             {/if}
         </div>
     </div>
 
-    <LotCustodyModal open={modalOpen} lot={modalLot} history={custodyHistory.filter((event) => event.lot_id === modalLot?.lot_id)} {brokers} {currency} onClose={() => (modalOpen = false)} onGotoTransaction={handleGotoTransaction} />
+    <LotCustodyModal open={modalOpen} lot={modalLot} history={lotEvents.filter((event) => event.lot_id === modalLot?.lot_id)} {brokers} {currency} onClose={() => (modalOpen = false)} onGotoTransaction={handleGotoTransaction} />
 {/if}

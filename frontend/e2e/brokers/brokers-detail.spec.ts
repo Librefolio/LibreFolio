@@ -291,5 +291,55 @@ test.describe('Broker Detail Page', () => {
             await page.getByTestId('wac-toggle-absolute').click();
             await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible();
         });
+
+        test('clicking a Gantt lane header selects the lot and reflects in the unified table', async ({page}) => {
+            const ok = await goToFirstBrokerDetail(page);
+            if (!ok) return;
+
+            const row = await firstHoldingRow(page);
+            if ((await row.count()) === 0) return;
+
+            await row.getByTestId('row-action-analyze-lots').click();
+            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+
+            const laneHeader = page.locator('[data-testid^="lot-gantt-lane-header-"]').first();
+            if ((await laneHeader.count()) === 0) return; // no lots in range for this holding
+
+            const testid = await laneHeader.getAttribute('data-testid');
+            const lotId = testid?.replace('lot-gantt-lane-header-', '');
+            expect(lotId).toBeTruthy();
+
+            const tableRow = page.locator(`[data-row-id="${lotId}"]`);
+            await expect(tableRow).not.toHaveClass(/selected/);
+
+            await laneHeader.click();
+            await expect(tableRow).toHaveClass(/selected/, {timeout: 5000});
+        });
+
+        test('clicking the Custody cell opens the modal without changing row selection', async ({page}) => {
+            const ok = await goToFirstBrokerDetail(page);
+            if (!ok) return;
+
+            const row = await firstHoldingRow(page);
+            if ((await row.count()) === 0) return;
+
+            await row.getByTestId('row-action-analyze-lots').click();
+            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+
+            const custodyCell = page.locator('[data-testid^="unified-lots-custody-"]').first();
+            if ((await custodyCell.count()) === 0) return;
+
+            const testid = await custodyCell.getAttribute('data-testid');
+            const lotId = testid?.replace('unified-lots-custody-', '');
+            const tableRow = page.locator(`[data-row-id="${lotId}"]`);
+            await expect(tableRow).not.toHaveClass(/selected/);
+
+            await custodyCell.click();
+
+            // Modal opens...
+            await expect(page.getByTestId('lot-custody-modal-title')).toBeVisible({timeout: 5000});
+            // ...but the row's selection state is untouched by the custody click.
+            await expect(tableRow).not.toHaveClass(/selected/);
+        });
     });
 });
