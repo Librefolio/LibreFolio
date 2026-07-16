@@ -9,7 +9,7 @@ import {buildAiExport, type AiExportOptions} from './aiExportBuilder';
 import {renderPrompt} from './aiPromptRenderer';
 import {renderDataOnly} from './aiDataRenderer';
 import {getPromptDefinition, type PromptId} from './promptCatalog';
-import {writeExportToClipboard, type ToastFn} from './clipboardWriter';
+import {writeExportToClipboard, type ToastFn} from '$lib/utils/clipboard';
 
 export type {ToastFn};
 

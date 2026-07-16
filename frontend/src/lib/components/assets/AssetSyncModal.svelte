@@ -8,6 +8,8 @@
     import SyncModalBase from '$lib/components/ui/modals/SyncModalBase.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {writeExportToClipboard} from '$lib/utils/clipboard';
     import type {SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
     import {formatElapsed, STATUS_COLORS, STATUS_ICONS} from '$lib/utils/sync/syncHelpers';
     import {DEFAULT_PROVIDER_COLOR, ensureAssetProvidersCached, getAssetProviderIconUrl, PROVIDER_COLORS} from '$lib/utils/providerHelpers';
@@ -32,6 +34,7 @@
     let {open = $bindable(), dateStart, dateEnd, assets, onsynced, onclose}: Props = $props();
 
     let syncModalBase: SyncModalBase | undefined = $state(undefined);
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 
     // Build a lookup for quick name/icon resolution from asset id
     let assetMap = $derived(new Map(assets.map((a) => [a.id.toString(), a])));
@@ -65,6 +68,21 @@
                     events_changed: ar.events_changed,
                 }) satisfies SyncResult,
         );
+    }
+
+    async function copyErrorToClipboard(text: string) {
+        await writeExportToClipboard(text, toasts, $t('common.copiedToClipboard'));
+    }
+
+    function handleTouchStart(text: string) {
+        longPressTimer = setTimeout(() => copyErrorToClipboard(text), 500);
+    }
+
+    function handleTouchEnd() {
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
     }
 
     let targetIds = $derived(assets.filter((a) => !!a.provider_code).map((a) => a.id.toString()));
@@ -143,7 +161,7 @@
             <span class="text-gray-400 italic truncate">{pr.message}</span>
         {/if}
 
-        {#if pr.status === 'failed'}
+        {#if pr.status === 'failed' || pr.status === 'partial'}
             {@const fullErr = pr.errors?.join('; ') ?? pr.message ?? ''}
             {@const shortErr = pr.errors?.[0] ?? pr.message ?? 'Failed'}
             <!-- #R4-6: Tooltip exposes the full (possibly long) error text that
@@ -151,7 +169,8 @@
                  narrow flex row. `position="top"` + `maxWidth="500px"` gives a
                  readable popover even for multi-error sync payloads. -->
             <Tooltip text={fullErr} position="top" maxWidth="500px">
-                <span class="text-red-400 truncate inline-block max-w-[240px] align-middle">{shortErr}</span>
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <span class="{pr.status === 'partial' ? 'text-amber-500' : 'text-red-500'} truncate inline-block max-w-[240px] align-middle cursor-help" ondblclick={() => copyErrorToClipboard(fullErr)} ontouchstart={() => handleTouchStart(fullErr)} ontouchend={handleTouchEnd}>{shortErr}</span>
             </Tooltip>
         {/if}
 

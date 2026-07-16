@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Asset, AssetProviderAssignment, FxConversionRoute
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.refresh import FARefreshItem
+from backend.app.schemas.refresh import FARefreshItem, SyncStatus
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.fx import sync_pairs_bulk
 from backend.app.services.scheduler.joblog import (
@@ -22,6 +22,17 @@ from backend.app.services.scheduler.joblog import (
 from backend.app.services.scheduler.state import JobState, SchedulerState
 
 logger = structlog.get_logger(__name__)
+
+
+def _classify_job_status(ok_count: int, total_count: int) -> str:
+    """Classify scheduler job status from fully-ok item count."""
+    if total_count == 0:
+        return "ok"
+    if ok_count == total_count:
+        return "ok"
+    if ok_count == 0:
+        return "error"
+    return "partial"
 
 
 async def run_current_price_refresh(state: SchedulerState) -> None:
@@ -47,7 +58,7 @@ async def run_current_price_refresh(state: SchedulerState) -> None:
     duration = time_module.monotonic() - t_start
     ok_count = sum(1 for r in results if r.value is not None)
     err_count = len(results) - ok_count
-    status = "ok" if err_count == 0 else "partial"
+    status = _classify_job_status(ok_count, len(results))
 
     state.current_price = JobState(
         last_run_at=datetime.now().astimezone().isoformat(),
@@ -105,8 +116,8 @@ async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> Non
 
         async with AsyncSession(engine) as session:
             response = await AssetSourceManager.bulk_refresh_prices(refresh_items, session, concurrency=3)
-            asset_ok = response.success_count
-            asset_err = len(response.results) - response.success_count
+            asset_ok = sum(1 for r in response.results if r.status == SyncStatus.OK)
+            asset_err = len(response.results) - asset_ok
             asset_results_list = list(response.results)
 
     # --- FX history sync ---
@@ -130,19 +141,21 @@ async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> Non
         if pairs_set:
             pairs_list = sorted(pairs_set)
             fx_response = await sync_pairs_bulk(session, pairs_list, (start_date, today))
-            fx_ok = sum(1 for r in fx_response.results if r.status == "ok")
+            fx_ok = sum(1 for r in fx_response.results if r.status == SyncStatus.OK)
             fx_err = len(fx_response.results) - fx_ok
             fx_results_list = list(fx_response.results)
 
     duration = time_module.monotonic() - t_start
-    status = "ok" if (asset_err + fx_err) == 0 else "partial"
+    total_ok = asset_ok + fx_ok
+    total_items = len(asset_results_list) + len(fx_results_list)
+    status = _classify_job_status(total_ok, total_items)
 
     state.history_sync = JobState(
         last_run_at=datetime.now().astimezone().isoformat(),
         last_duration_s=round(duration, 2),
         last_status=status,
-        last_items_ok=asset_ok + fx_ok,
-        last_items_err=asset_err + fx_err,
+        last_items_ok=total_ok,
+        last_items_err=total_items - total_ok,
         last_error=None,
     )
 

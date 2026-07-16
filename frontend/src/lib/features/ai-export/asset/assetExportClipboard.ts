@@ -6,7 +6,7 @@
 import {buildAssetAiExport, type AssetExportInput, type AssetExportOptions} from './assetExportBuilder';
 import {renderAssetSnapshot, renderAssetClassify} from './assetPromptRenderer';
 import {getAssetPromptDefinition, type AssetPromptId} from './assetPromptCatalog';
-import {writeExportToClipboard, type ToastFn} from '../clipboardWriter';
+import {writeExportToClipboard, type ToastFn} from '$lib/utils/clipboard';
 
 export type {ToastFn};
 

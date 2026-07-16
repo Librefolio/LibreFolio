@@ -1028,12 +1028,18 @@
                         />
                     </div>
 
-                    <!-- Type multi-checkbox dropdown (D9). w-44 matches the Active/Inactive
-                         toggle above (was content-sized min-w-0) so column 2 lines up. -->
+                    <!-- Type multi-checkbox dropdown (D9). w-44 on the wrapper matches the
+                         Active/Inactive toggle above (was content-sized min-w-0) — but a
+                         <button>'s own width:auto does NOT fill a plain block parent the way a
+                         <div> does (unlike e.g. the Search <input> above, which already needs
+                         its own explicit w-full for the same reason) — w-full here makes the
+                         VISIBLE button (border/background) actually reach the wrapper's 176px,
+                         not just the invisible wrapper box. justify-between then spreads the
+                         label/chevron across that width instead of leaving them bunched left. -->
                     <div class="relative w-44 min-w-[160px]">
                         <button
                             bind:this={typeFilterTriggerEl}
-                            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors min-w-0
+                            class="flex items-center justify-between gap-1.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors min-w-0
                                    {filterTypes.size > 0
                                 ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700'
                                 : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
