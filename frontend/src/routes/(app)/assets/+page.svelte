@@ -931,12 +931,12 @@
     <!-- Filter Bar — shared PageToolbar (same component as dashboard/broker-detail), so
          responsive/wrap fixes made there (jolly badge shedding, currency/broker no-wrap, ...)
          auto-propagate here instead of being hand-copied per page.
-         oneRow:       [ datepicker | search active type currency × | 2×2 ]
+         oneRow:       [ datepicker | search active currency type × | 2×2 ]
          denseRow:     [ datepicker                     | 2×2 ]
-                      [ search active type currency ×  |     ]
+                      [ search active currency type ×  |     ]
          stackFilters: [ datepicker                     | col  ]
-                      [ search active type currency ×  | btns ]
-         oneColumn:    [ datepicker ] [ search active type × ] [ currency ] [ 2×2 btns, now BELOW ] -->
+                      [ search active currency type ×  | btns ]
+         oneColumn:    [ datepicker ] [ search active × ] [ currency type ] [ 2×2 btns, now BELOW ] -->
     <PageToolbar thresholds={{oneRow: 1340, denseRow: 850, stackFilters: 440, oneColumn: 400, labelHideActions: 250, labelHideTabs: 370}} testId="assets-controls" filterRowTestId="assets-filter-bar" layoutDebugName="assetsList">
         {#snippet filters({layoutMode, filtersStacked})}
             <!-- DateRangePicker. Round 14 bugfix: this wrapper is `contents` (exits the box
@@ -977,11 +977,14 @@
 
                     <!-- Tri-state Active/Inactive segmented toggle (I-bis #20).
                          Both pressed OR both unpressed → show all (None filter server-side,
-                         no filter client-side). Only-one pressed → filter to that state. -->
-                    <div class="inline-flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden" data-testid="assets-active-filter">
+                         no filter client-side). Only-one pressed → filter to that state.
+                         Round 15: fixed w-44 (matches Search above and the Currency filter
+                         below, once swapped) + flex-1 buttons so the pill splits evenly and
+                         lines up as a column with Row 2 in every language. -->
+                    <div class="flex w-44 min-w-[160px] rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden" data-testid="assets-active-filter">
                         <button
                             type="button"
-                            class="px-3 py-1.5 text-xs font-medium border-r border-gray-200 dark:border-slate-600 transition-colors whitespace-nowrap
+                            class="flex-1 px-3 py-1.5 text-xs font-medium border-r border-gray-200 dark:border-slate-600 transition-colors whitespace-nowrap
                                    {filterShowActive ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-600'}"
                             data-testid="assets-active-toggle"
                             aria-pressed={filterShowActive}
@@ -991,7 +994,7 @@
                         </button>
                         <button
                             type="button"
-                            class="px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap
+                            class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap
                                    {filterShowInactive ? 'bg-amber-500 text-white' : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-600'}"
                             data-testid="assets-inactive-toggle"
                             aria-pressed={filterShowInactive}
@@ -1002,10 +1005,32 @@
                     </div>
                 </div>
 
-                <!-- Row 2: Type multi-select + Currency dropdown + Reset -->
+                <!-- Row 2: Currency dropdown + Type multi-select + Reset. Round 15: swapped
+                     order (Currency first, Type second) and both given the SAME explicit
+                     widths as their Row 1 counterparts (w-44, matching Search then Toggle
+                     above) so the two rows line up as a clean 2-column grid instead of
+                     drifting out of alignment. -->
                 <div class="flex items-center gap-2 {filtersStacked ? 'w-full justify-around' : ''}">
-                    <!-- Type multi-checkbox dropdown (D9) -->
-                    <div class="relative min-w-0">
+                    <!-- Currency Filter (D10 — CurrencySearchSelect, adds to Set). w-44
+                         matches Search above (was w-36) so column 1 lines up across rows. -->
+                    <div class="w-44 min-w-[160px]">
+                        <CurrencySearchSelect
+                            allowedCurrencies={configuredCurrencies}
+                            includeAll={true}
+                            maxVisibleItems={6}
+                            onchange={(v) => {
+                                if (v && !filterCurrencies.has(v)) {
+                                    filterCurrencies = new Set([...filterCurrencies, v]);
+                                }
+                            }}
+                            placeholder={$t('common.allCurrencies')}
+                            value=""
+                        />
+                    </div>
+
+                    <!-- Type multi-checkbox dropdown (D9). w-44 matches the Active/Inactive
+                         toggle above (was content-sized min-w-0) so column 2 lines up. -->
+                    <div class="relative w-44 min-w-[160px]">
                         <button
                             bind:this={typeFilterTriggerEl}
                             class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors min-w-0
@@ -1088,24 +1113,6 @@
                                 </div>
                             </div>
                         {/if}
-                    </div>
-
-                    <!-- Currency Filter (D10 — CurrencySearchSelect, adds to Set). Round 14:
-                         explicit min-w floor so it can shrink a bit under pressure (its own
-                         label already truncates internally) without disappearing. -->
-                    <div class="w-36 min-w-[96px]">
-                        <CurrencySearchSelect
-                            allowedCurrencies={configuredCurrencies}
-                            includeAll={true}
-                            maxVisibleItems={6}
-                            onchange={(v) => {
-                                if (v && !filterCurrencies.has(v)) {
-                                    filterCurrencies = new Set([...filterCurrencies, v]);
-                                }
-                            }}
-                            placeholder={$t('common.allCurrencies')}
-                            value=""
-                        />
                     </div>
 
                     <!-- Reset filters -->
