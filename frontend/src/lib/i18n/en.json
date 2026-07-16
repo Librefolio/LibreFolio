@@ -67,11 +67,11 @@
     "aiExportMenu": {
       "asset_snapshot": {
         "label": "Asset Snapshot",
-        "description": "Data only for this asset — identity, technical context, and holding if owned."
+        "description": "Current snapshot of this asset."
       },
       "asset_classify": {
         "label": "Classify Asset Status",
-        "description": "AI researches this asset online and classifies its current status against the data."
+        "description": "Research this asset online and tell me its status: strengths, risks, what to watch."
       }
     },
     "aiExport": "AI Export",
@@ -545,20 +545,92 @@
       "viewerDesc": "Read only"
     },
     "lots": {
-      "openLots": "Open Lots",
-      "closedLots": "Closed Lots",
+      "unifiedLots": "Lots",
+      "unifiedLotsHint": "Unified FIFO lots view with multi-selection and custody drill-down.",
+      "ganttTitle": "Lot life & custody",
+      "openOnly": "Open",
+      "allLots": "All",
+      "comparisonTitle": "Lot comparison",
+      "valueComparisonTitle": "Value of selected lots",
+      "returnComparisonTitle": "Return from opening date",
+      "priceComparisonTitle": "Price and average cost",
+      "modeReturn": "Return",
+      "selectLotsToCompare": "Select one or more lots to compare",
+      "noVisibleLots": "No visible lots in chart",
+      "cumulativeProceeds": "Cumulative proceeds",
+      "residualOpenValue": "Residual open value",
+      "originalCostReference": "Original cost",
+      "openingPriceReference": "Opening price",
+      "cumulativeWac": "Cumulative WAC",
+      "brokerWac": "Broker WAC",
       "buyDate": "Buy Date",
-      "sellDate": "Sell Date",
-      "sellPrice": "Sell Price",
-      "currentValue": "Current Value",
-      "realizedPnl": "Realized P&L",
-      "noOpenLots": "No open lots",
-      "noClosedLots": "No closed lots",
+      "openingDate": "Opening Date",
+      "direction": "Direction",
+      "directionLong": "LONG",
+      "directionShort": "SHORT",
+      "status": "Status",
+      "custody": "Custody",
+      "fifoPnl": "FIFO P&L",
+      "searchPlaceholder": "Search lots...",
+      "noUnifiedLots": "No lots match current filters",
+      "noGanttData": "No lot custody history in selected range",
+      "inTransit": "In transit",
+      "inTransitShort": "Transit",
+      "brokersCount": "{count} brokers",
+      "lotLabel": "Lot {date}",
+      "shortLotLabel": "Short {date}",
       "detailTitle": "FIFO Lot Detail",
       "loadFailed": "Failed to load lot data",
       "combined": "Combined",
       "viewAsset": "View Asset",
-      "analyze": "Analyze Lots"
+      "analyze": "Analyze Lots",
+      "states": {
+        "OPEN": "Open",
+        "PARTIALLY_CLOSED": "Partial",
+        "CLOSED": "Closed",
+        "DISTRIBUTED": "Distributed",
+        "IN_TRANSIT": "In transit",
+        "DEGRADED": "Degraded"
+      },
+      "modal": {
+        "title": "Lot {asset} — {date}",
+        "summary": "Summary",
+        "currentCustody": "Current Custody",
+        "history": "History",
+        "directionLabel": "Direction",
+        "originalQuantity": "Original Quantity",
+        "openQuantity": "Open Quantity",
+        "openingPrice": "Opening Unit Price",
+        "goToTransaction": "Go to transaction",
+        "inTransit": "In transit",
+        "absoluteQuantityTooltip": "Quantities show absolute broker holdings. On shared brokers, your personal share may differ.",
+        "emptyCustody": "No active custody slices",
+        "emptyHistory": "No custody history available",
+        "emptyStates": "No derived states",
+        "direction": {
+          "long": "LONG",
+          "short": "SHORT"
+        },
+        "state": {
+          "open": "Open",
+          "partially_closed": "Partially Closed",
+          "closed": "Closed",
+          "in_transit": "In Transit",
+          "distributed": "Distributed",
+          "long": "Long",
+          "short": "Short",
+          "degraded": "Degraded"
+        },
+        "event": {
+          "BUY": "BUY",
+          "SELL": "SELL",
+          "ADJUSTMENT_IN": "ADJUSTMENT+",
+          "ADJUSTMENT_OUT": "ADJUSTMENT-",
+          "TRANSFER_DEPART": "TRANSFER",
+          "TRANSFER_ARRIVE": "TRANSFER",
+          "SPLIT": "SPLIT"
+        }
+      }
     },
     "createdInSystem": "Created in System"
   },
@@ -578,6 +650,7 @@
       "weekly": "Weekly",
       "monthly": "Monthly"
     },
+    "marketPrice": "Market Price",
     "showPercentage": "Show percentage",
     "showAbsolute": "Show absolute"
   },
@@ -945,30 +1018,30 @@
     "aiExportMenu": {
       "snapshot": {
         "label": "Portfolio Snapshot",
-        "description": "Data only — the most reusable option to start or continue an AI conversation."
+        "description": "Current snapshot of your assets."
       },
       "pac_planning": {
         "label": "Recurring Investment Planning",
-        "description": "Interview about new ideas, then AI-researched instruments and allocation proposals."
+        "description": "Ask me about my ideas, search for matching instruments online, and propose a PAC allocation."
       },
       "rebalancing": {
         "label": "Portfolio Rebalancing",
-        "description": "Interview about your target allocation, then a sell/reinvest or PAC-based plan."
+        "description": "Ask me about my target allocation and propose how to rebalance."
       },
       "market_trend": {
         "label": "Market Trend & News",
-        "description": "Matches recent price/technical moves with news the AI finds online."
+        "description": "Explain what's moving my assets by matching technical data with news online."
       },
       "income_review": {
         "label": "Income & Cash-Flow Review",
-        "description": "Summarizes dividend/interest income per position and portfolio-wide."
+        "description": "Summarize my dividend and interest income, then ask if I'd rather reinvest it."
       },
       "describe_portfolio": {
         "label": "Describe Portfolio",
-        "description": "General composition overview — prefer a more specific option above when it fits."
+        "description": "Tell me about my portfolio."
       }
     },
-    "aiExportCopiedGeneric": "'{label}' copied to clipboard"
+    "aiExportCopiedGeneric": "{label} copied to clipboard"
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",
@@ -992,7 +1065,13 @@
       "navigate_asset": "View asset",
       "navigate_fx": "View FX",
       "add_fx_pair": "Add FX pair"
-    }
+    },
+    "referencePriceFallback": "Lot opening price unavailable on the exact date — using last known price {reference_price} as reference for relative return",
+    "referencePriceUnavailable": "No reference price available for a lot opening — relative return cannot be computed",
+    "shortTransferNotSupported": "Transfer of a short position is not supported yet (broker {broker_id})",
+    "shortAdjustmentNotSupported": "Adjustment cannot open or close a short position yet (broker {broker_id})",
+    "fifoSourceQuantityMissing": "Transaction exceeds available quantity by {missing_quantity} (broker {broker_id})",
+    "transferPairMissing": "A transfer is missing its paired transaction, or the pair is invalid"
   },
   "dataEditor": {
     "staleTooltip": "Hide backward-filled rows (⚠️ stale). These are gap-fill points copied from the nearest real data point.",

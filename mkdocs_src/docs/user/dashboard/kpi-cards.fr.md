@@ -24,6 +24,17 @@ Le nombre principal est calculé à l'aide de la formule suivante :
 
 Un nombre positif signifie que vous avez gagné de l'argent grâce à l'activité d'investissement. Un nombre négatif signifie que vous avez perdu de l'argent net des mouvements de capitaux.
 
+### Le nombre sous le chiffre principal
+
+Juste sous la valeur du P&L de la période, une ligne plus petite affiche quelque chose comme `+45,20 (+3,10 %)`.
+
+- Le montant est la variation **quotidienne** (aujourd'hui vs. hier) de votre **P&L Total** — votre gain/perte cumulé depuis toujours, pas seulement sur la période sélectionnée.
+- Le pourcentage l'exprime comme une part du P&L de la période d'**hier** — il indique le poids de la journée d'aujourd'hui sur le résultat de la période que vous consultez.
+
+\[\text{Variation quotidienne} = \text{P&L Total}_{\text{aujourd'hui}} - \text{P&L Total}_{\text{hier}}\]
+
+Cette ligne n'apparaît que lorsque l'historique contient au moins deux points quotidiens.
+
 ### Les lignes de détail
 
 | Ligne | Ce qu'elle mesure |
@@ -58,6 +69,14 @@ L'**Effet de date** en haut de la carte mesure si vos décisions de dépôt/retr
 - **Favorable (positif)** ✅ : vous avez eu tendance à déposer quand les prix étaient bas, augmentant votre rendement personnel au-dessus de ce que les actifs seuls ont rapporté.
 - **Défavorable (négatif)** ❌ : vous avez eu tendance à déposer aux sommets ou avez manqué les creux, réduisant votre rendement en dessous de la performance pure des actifs.
 
+### Le nombre sous l'Effet de date
+
+Sous l'Effet de date, vous verrez un petit pourcentage (ex. `+0,35 %`) — c'est la variation de votre **P&L Total** entre **hier et aujourd'hui**, exprimée comme une part de la valeur nette d'hier :
+
+\[\text{%Variation quotidienne} = \frac{\text{P&L Total}_{\text{aujourd'hui}} - \text{P&L Total}_{\text{hier}}}{\text{Valeur nette}_{\text{hier}}} \times 100\]
+
+C'est une estimation approximative du rendement **du jour** — un indicateur rapide. Ce n'est ni le ROI, ni le TWRR, ni le MWRR affichés dans les lignes ci-dessous, qui restent ancrés à toute la période sélectionnée.
+
 ### Les quatre indicateurs de rendement
 
 | Indicateur | Question à laquelle il répond |
@@ -82,6 +101,19 @@ L'**Effet de date** en haut de la carte mesure si vos décisions de dépôt/retr
 </div>
 
 La carte **Valeur nette** affiche la valeur absolue de votre portefeuille à la fin de la période sélectionnée.
+
+### Le nombre sous la Valeur nette
+
+Sous la valeur nette, vous trouverez votre **P&L Total**, avec sa variation en pourcentage entre parenthèses — par ex. `+12 450,30 (+0,35 %)`.
+
+- Le montant est votre **P&L Total** — le gain ou la perte cumulé depuis le début, sur toute l'historique de ce périmètre (pas seulement la période en cours).
+- Le pourcentage entre parenthèses exprime la variation **quotidienne** (aujourd'hui vs. hier) de ce P&L Total, comme une part du P&L Total d'**hier**.
+
+\[\text{P&L Total} = \text{Valeur nette} - \text{Capital net investi depuis le début}\]
+
+Remarque : le « Capital net investi depuis le début » ici est la somme de **tous** les dépôts moins **tous** les retraits depuis que vous utilisez ce périmètre — une valeur différente et plus large que la ligne « Capital déposé » ci-dessous, qui ne compte que les mouvements de la période sélectionnée.
+
+🔗 **Théorie** : [Capital Déposé, PnL Total et Pools de Cash](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md)
 
 ### Ce que signifient les lignes
 

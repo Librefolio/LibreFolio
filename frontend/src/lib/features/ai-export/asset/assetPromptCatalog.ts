@@ -4,6 +4,9 @@
  * but scoped to just 2 entries for a single asset.
  */
 
+import type {ComponentType} from 'svelte';
+import {Camera, ScanSearch} from 'lucide-svelte';
+
 export type AssetPromptId = 'asset_snapshot' | 'asset_classify';
 
 export interface AssetPromptDefinition {
@@ -12,6 +15,8 @@ export interface AssetPromptDefinition {
     descriptionKey: string;
     /** false only for 'asset_snapshot' — pure data, no role/task/web-research instructions */
     hasInstructions: boolean;
+    /** Dropdown icon — distinguishes entries at a glance; see AiExportMenu.svelte */
+    icon: ComponentType;
 }
 
 export const ASSET_PROMPT_CATALOG: AssetPromptDefinition[] = [
@@ -20,12 +25,14 @@ export const ASSET_PROMPT_CATALOG: AssetPromptDefinition[] = [
         labelKey: 'assetDetail.aiExportMenu.asset_snapshot.label',
         descriptionKey: 'assetDetail.aiExportMenu.asset_snapshot.description',
         hasInstructions: false,
+        icon: Camera,
     },
     {
         id: 'asset_classify',
         labelKey: 'assetDetail.aiExportMenu.asset_classify.label',
         descriptionKey: 'assetDetail.aiExportMenu.asset_classify.description',
         hasInstructions: true,
+        icon: ScanSearch,
     },
 ];
 

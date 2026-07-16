@@ -484,7 +484,12 @@
                 }
 
                 if (p.seriesType === 'candlestick' && Array.isArray(p.value)) {
-                    const [open, close, low, high] = p.value as number[];
+                    // ECharts prepends the category-axis ordinal index as value[0] for whisker/candlestick
+                    // series when the x-axis is a category axis with no explicit x-encode (see echarts
+                    // whiskerBoxCommon.js addOrdinal/unshift) — value is [index, open, close, low, high]
+                    // (5 items), not [open, close, low, high] (4 items). Always take the last 4 so this
+                    // works regardless of whether the index got prepended.
+                    const [open, close, low, high] = (p.value as number[]).slice(-4);
                     const bullish = close >= open;
                     const clr = bullish ? greenColor : redColor;
                     const dimClr = dark ? '#94a3b8' : '#6b7280';

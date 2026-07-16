@@ -24,6 +24,17 @@ El número principal se calcula mediante la siguiente fórmula:
 
 Un número positivo significa que ganaste dinero con la actividad de inversión. Un número negativo significa que perdiste dinero una vez descontados los movimientos de capital.
 
+### El número debajo del valor principal
+
+Justo debajo del valor de Ganancias y Pérdidas del Período, una línea más pequeña muestra algo como `+45,20 (+3,10 %)`.
+
+- El importe es la variación **diaria** (hoy frente a ayer) de tu **P&L Total** — tu ganancia/pérdida acumulada desde siempre, no solo en el período seleccionado.
+- El porcentaje lo expresa como una parte de las Ganancias y Pérdidas del Período de **ayer** — indica cuánto ha pesado el día de hoy en el resultado del período que estás viendo.
+
+\[\text{Variación diaria} = \text{P&L Total}_{\text{hoy}} - \text{P&L Total}_{\text{ayer}}\]
+
+Esta línea solo aparece cuando el histórico tiene al menos dos puntos diarios.
+
 ### Las filas de desglose
 
 | Fila | Qué mide |
@@ -58,6 +69,14 @@ El **Efecto de Sincronización** en la parte superior de la tarjeta mide si tus 
 - **Favorable (positivo)** ✅: tendiste a depositar cuando los precios eran bajos, aumentando tu rendimiento personal por encima de lo que ganaron los activos por sí solos.
 - **Desfavorable (negativo)** ❌: tendiste a depositar en picos o te perdiste las caídas, reduciendo tu rendimiento por debajo del rendimiento puro de los activos.
 
+### El número debajo del Efecto de Sincronización
+
+Debajo del Efecto de Sincronización verás un pequeño porcentaje (ej. `+0,35 %`) — es la variación de tu **P&L Total** entre **ayer y hoy**, expresada como una parte del patrimonio neto de ayer:
+
+\[\text{%Variación diaria} = \frac{\text{P&L Total}_{\text{hoy}} - \text{P&L Total}_{\text{ayer}}}{\text{Patrimonio Neto}_{\text{ayer}}} \times 100\]
+
+Es una estimación aproximada del rendimiento **de hoy** — un chequeo rápido. No es el ROI, el TWR ni el MWR que se muestran en las filas de abajo, que permanecen anclados a todo el período seleccionado.
+
 ### Las cuatro métricas de rendimiento
 
 | Métrica | A qué pregunta responde |
@@ -82,6 +101,19 @@ El **Efecto de Sincronización** en la parte superior de la tarjeta mide si tus 
 </div>
 
 La tarjeta **Patrimonio Neto** muestra el valor absoluto de tu cartera al final del período seleccionado.
+
+### El número debajo del Patrimonio Neto
+
+Debajo del valor del Patrimonio Neto encontrarás tu **P&L Total**, con su variación porcentual entre paréntesis — por ejemplo `+12.450,30 (+0,35 %)`.
+
+- El importe es tu **P&L Total** — la ganancia o pérdida acumulada desde el inicio, en toda la historia de este ámbito (no solo en el período actual).
+- El porcentaje entre paréntesis expresa la variación **diaria** (hoy frente a ayer) de este P&L Total, como una parte del P&L Total de **ayer**.
+
+\[\text{P&L Total} = \text{Patrimonio Neto} - \text{Capital Neto Invertido Desde el Inicio}\]
+
+Nota: aquí "Capital Neto Invertido Desde el Inicio" es la suma de **todos** los depósitos menos **todos** los retiros desde que empezaste a usar este ámbito — un valor distinto y más amplio que la fila "Capital Depositado" de abajo, que solo cuenta los movimientos dentro del período seleccionado.
+
+🔗 **Teoría**: [Capital Depositado, PnL Total y Pools de Efectivo](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md)
 
 ### Qué significan las filas
 

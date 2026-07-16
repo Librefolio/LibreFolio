@@ -4,17 +4,19 @@
   Used identically by dashboard, broker detail, and asset detail (Signals panel
   header) so the trigger/positioning/outside-click behavior never drifts between
   the three call sites. Callers translate the catalog entries and pass plain
-  {id, label, description} — this component has no i18n or catalog knowledge.
+  {id, label, description, icon} — this component has no i18n or catalog knowledge.
 -->
 <script lang="ts">
-    import {onMount, tick} from 'svelte';
-    import {Brain} from 'lucide-svelte';
+    import {onMount, tick, type ComponentType} from 'svelte';
+    import {Brain, RefreshCw} from 'lucide-svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
 
     export interface AiExportMenuEntry {
         id: string;
         label: string;
         description?: string;
+        /** Per-entry icon (Lucide component) shown in the dropdown row — falls back to Brain when omitted. */
+        icon?: ComponentType;
     }
 
     interface Props {
@@ -88,16 +90,20 @@
         onclick={toggle}
         disabled={loading}
         data-testid="ai-export-button"
-        title={triggerLabel}
+        title={loading ? loadingLabel : triggerLabel}
     >
-        <Brain size={14} class={loading ? 'animate-pulse' : ''} />
+        {#if loading}
+            <RefreshCw size={14} class="animate-spin" />
+        {:else}
+            <Brain size={14} />
+        {/if}
         {#if showLabel}
-            <span>{loading ? loadingLabel : triggerLabel}</span>
+            <span>{triggerLabel}</span>
         {/if}
     </button>
 
     {#if open}
-        <div bind:this={panelEl} class="fixed z-50 w-64 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" style:left="{position.left}px" style:top="{position.top}px" data-ai-export-panel>
+        <div bind:this={panelEl} class="fixed z-50 w-96 max-w-[calc(100vw-1rem)] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden" style:left="{position.left}px" style:top="{position.top}px" data-ai-export-panel>
             {#each entries as entry, i (entry.id)}
                 <button
                     type="button"
@@ -106,11 +112,15 @@
                     data-testid={`ai-export-${entry.id}`}
                 >
                     <span class="flex items-center gap-2 text-[13px] font-medium text-gray-700 dark:text-gray-200">
-                        <Brain size={14} class="text-purple-500 shrink-0" />
+                        {#if entry.icon}
+                            <entry.icon size={14} class="text-purple-500 shrink-0" />
+                        {:else}
+                            <Brain size={14} class="text-purple-500 shrink-0" />
+                        {/if}
                         {entry.label}
                     </span>
                     {#if entry.description}
-                        <span class="text-[11px] text-gray-400 dark:text-gray-500 pl-[22px]">{entry.description}</span>
+                        <span class="text-[11px] text-gray-400 dark:text-gray-500">{entry.description}</span>
                     {/if}
                 </button>
             {/each}

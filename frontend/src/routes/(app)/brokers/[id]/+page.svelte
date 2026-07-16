@@ -16,7 +16,7 @@
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import BrokerImportFilesModal from '$lib/components/brokers/BrokerImportFilesModal.svelte';
     import BrokerSharingPanel from '$lib/components/brokers/BrokerSharingPanel.svelte';
-    import FIFOLotsPanel from '$lib/components/brokers/lots/FIFOLotsPanel.svelte';
+    import LotsAnalysisPanel from '$lib/components/brokers/lots/LotsAnalysisPanel.svelte';
     import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
     import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
@@ -77,7 +77,7 @@
 
     /** AI export state — dropdown open/position handled internally by AiExportMenu */
     let aiExportLoading = false;
-    $: aiExportEntries = PORTFOLIO_PROMPT_CATALOG.map((p) => ({id: p.id, label: $_(p.labelKey), description: $_(p.descriptionKey)}));
+    $: aiExportEntries = PORTFOLIO_PROMPT_CATALOG.map((p) => ({id: p.id, label: $_(p.labelKey), description: $_(p.descriptionKey), icon: p.icon}));
 
     // Transactions tab — full paginated history (not just "recent 10").
     let txMainRows: TXReadItem[] = [];
@@ -523,7 +523,7 @@
         {:else if activeTab === 'posizioni'}
             <div data-testid="broker-holdings">
                 <PositionsPanel summary={portfolioSummary} contribution={positionsContribution} loading={reportLoading && !portfolioSummary} {contributionLoading} assetsHref="/assets" brokers={panelBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} />
-                <FIFOLotsPanel
+                <LotsAnalysisPanel
                     open={activeAssetId != null}
                     assetId={activeAssetId}
                     brokerIds={[broker.id]}
