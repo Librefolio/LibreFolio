@@ -1170,4 +1170,46 @@ Next recommended: full graphify rebuild (this session, immediately following); a
 newly-found broken links + the carried-over dedup/index-drift items above, whenever a general wiki-cleanup
 session is scheduled (not part of this ingest's scope).
 
+## [2026-07-15] file | AI export prompt catalog
+
+Filed the AI export rework done this session: single "Full/Data-only" prompt replaced by a 6-entry
+single-purpose prompt catalog (Snapshot, PAC Planning, Rebalancing, Market Trend, Income Review,
+Describe Portfolio) plus a new single-asset export (Asset Detail Signals panel button). Also fixed a
+real bug where several call sites used ticker/ISIN as the primary asset label instead of `name`.
+Filed: [[decisions/ai-export-prompt-catalog]], [[problems/ai-export-name-not-ticker]].
+
+## [2026-07-16] update | graphify full incremental rebuild (9 days of drift)
+
+Ran `/graphify --update` on the devWiki corpus for the first time since 2026-07-07 — picked up 154
+changed files (42 code, 109 document, 3 image) across this session's AI export work AND other
+concurrent work (a "donation popup" feature: `donation_popup_service.py`, `DonationPopupModal.svelte`,
+`donationPopupStore.svelte.ts`; new mkdocs financial-theory pages on risk metrics — Sharpe/Sortino/
+max-drawdown/volatility/WAC; several dashboard chart component tweaks). 8 genuine deletions pruned
+(stale audit/working files already archived into `phase-final-subplan/`).
+
+**Bug found and worked around** (library issue, not a devWiki content problem): `graphify`'s
+`detect_incremental()` auto-detects `follow_symlinks` based on whether the **scan root's direct
+children** are symlinks. This corpus's symlinks (`corpus/backend`, `corpus/roadmap`, `corpus/wiki`,
+etc.) sit one level *inside* `corpus/`, not at the devWiki root — so calling
+`detect_incremental(Path('.'))` (the natural root, matching the original build) auto-detected
+`follow_symlinks=False` and silently skipped ~1100 files, while the *first* attempt using
+`Path('corpus')` as root (which does have direct symlinked children) tripped a separate manifest
+re-anchoring bug (`_to_absolute_from_storage` double-prepends the root when manifest keys were saved
+relative to a *different* root than the one passed in) that misreported **1052-1079 real files as
+deleted**. Neither call was safe as-is. Fix: always call `detect_incremental(Path('.'),
+follow_symlinks=True)` for this corpus, and re-saved `manifest.json` via `save_manifest(files,
+root=Path('.'))` using that same combination, so future `--update` runs are self-consistent (verified:
+a repeat `detect_incremental` immediately after now reports 0 deletions).
+
+Graph: 6527→6850 nodes, 18024→20236 edges, 381→283 communities (labeled all 283 by hand from
+top-degree node samples). Re-ran token benchmark (114.4x reduction) and regenerated `graph.html`/
+`GRAPH_REPORT.md`/`graph.json`. HTML viz note: graph now exceeds the 5,000-node auto-viz cap, so
+`graph.html` reflects the last run under that cap — regenerate manually via Obsidian export if a fresh
+interactive view is needed.
+
+Not filed as a dedicated wiki page (this is graphify tooling/process bookkeeping, not
+LibreFolio-product knowledge) — recorded here in the log only.
+
+
+
 

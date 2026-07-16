@@ -115,6 +115,7 @@
 | [[decisions/portfolio-summary-direct-wiring]] | `get_summary()` wired directly to `PortfolioCalculationEngine` (no separate `DerivedViewsBuilder.build_summary()`); unified `/portfolio/report` replaces planned `/allocation-history`; `net_worth` field name kept | 2026-07-07 | backend, portfolio, architecture, api, design-decision |
 | [[decisions/broker-list-visibility-non-members]] | Broker discovery opt-in (`include_inaccessible`) + read-only sharing visibility (icon everywhere) for EDITOR/VIEWER/non-members, no request-access flow | 2026-07-06 | backend, frontend, brokers, sharing, discovery, access-control |
 | [[decisions/broker-card-aggregation-no-n-plus-one]] | Per-card quota%/NAV/Gain/cash-multivaluta on broker list via `GET /brokers` + one breakdown-enabled `/portfolio/report` call — never per-broker `/summary` | 2026-07-06 | backend, frontend, brokers, portfolio-engine, performance |
+| [[decisions/ai-export-prompt-catalog]] | Single "Full/Data-only" AI export prompt replaced by a 6-entry single-purpose prompt catalog (Snapshot, PAC Planning, Rebalancing, Market Trend, Income Review, Describe Portfolio) + new asset-level export | 2026-07-15 | frontend, ai-export, architecture, prompt-engineering |
 
 ## Concepts
 
@@ -188,6 +189,7 @@
 | [[problems/test-transaction-implied-constructor-mismatch]] | `test_transaction_implied.py` (6 tests) fails with TypeError — test's local `_builder()` helper uses pre-refactor `DailyStateBuilder.__init__` signature (stale `wac_series` kwarg, missing `asset_currencies`) | open | backend, testing, portfolio, pre-existing, unrelated |
 | [[problems/datatable-column-resize-noop]] | DataTable.svelte column-resize handle icon shows but click has no effect in some tables — root cause not yet determined | open | frontend, datatable, ui, unresolved |
 | [[problems/portfolio-asset-history-regression-restored]] | `GET /portfolio/asset-history` accidentally removed in a legacy-endpoint cleanup (commit `3184a969`), restored (commit `1a734008`) | resolved | backend, api, portfolio, regression |
+| [[problems/ai-export-name-not-ticker]] | AI export used ticker/ISIN as the primary asset label instead of `name` in several renderer/builder call sites | resolved | frontend, ai-export, naming |
 
 ## Entities
 
