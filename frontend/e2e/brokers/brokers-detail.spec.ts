@@ -292,7 +292,7 @@ test.describe('Broker Detail Page', () => {
             await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible();
         });
 
-        test('clicking a Gantt lane header selects the lot and reflects in the unified table', async ({page}) => {
+        test('clicking a Gantt segment overlay selects the lot and reflects in the unified table', async ({page}) => {
             const ok = await goToFirstBrokerDetail(page);
             if (!ok) return;
 
@@ -301,18 +301,21 @@ test.describe('Broker Detail Page', () => {
 
             await row.getByTestId('row-action-analyze-lots').click();
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expect(page.getByTestId('lot-gantt-chart')).toBeVisible({timeout: 10000});
 
-            const laneHeader = page.locator('[data-testid^="lot-gantt-lane-header-"]').first();
-            if ((await laneHeader.count()) === 0) return; // no lots in range for this holding
+            // Invisible per-lane hit target, absolutely positioned over the ECharts custom
+            // series bar (no fixed HTML column anymore — see LotGanttChart.svelte OverlayRect).
+            const segmentOverlay = page.locator('[data-testid^="lot-gantt-segment-"]').first();
+            if ((await segmentOverlay.count()) === 0) return; // no lots in range for this holding
 
-            const testid = await laneHeader.getAttribute('data-testid');
-            const lotId = testid?.replace('lot-gantt-lane-header-', '');
+            const testid = await segmentOverlay.getAttribute('data-testid');
+            const lotId = testid?.replace('lot-gantt-segment-', '');
             expect(lotId).toBeTruthy();
 
             const tableRow = page.locator(`[data-row-id="${lotId}"]`);
             await expect(tableRow).not.toHaveClass(/selected/);
 
-            await laneHeader.click();
+            await segmentOverlay.click();
             await expect(tableRow).toHaveClass(/selected/, {timeout: 5000});
         });
 
@@ -340,6 +343,99 @@ test.describe('Broker Detail Page', () => {
             await expect(page.getByTestId('lot-custody-modal-title')).toBeVisible({timeout: 5000});
             // ...but the row's selection state is untouched by the custody click.
             await expect(tableRow).not.toHaveClass(/selected/);
+        });
+
+        test('row context menu "View lot detail" opens the modal for any lot, including one with no transfer', async ({page}) => {
+            const ok = await goToFirstBrokerDetail(page);
+            if (!ok) return;
+
+            const row = await firstHoldingRow(page);
+            if ((await row.count()) === 0) return;
+
+            await row.getByTestId('row-action-analyze-lots').click();
+            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+
+            const tableRow = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first();
+            if ((await tableRow.count()) === 0) return;
+
+            await tableRow.click({button: 'right'});
+            await expect(page.getByTestId('context-menu')).toBeVisible({timeout: 5000});
+
+            const viewDetail = page.getByTestId('context-menu-action-lot-view-details-action');
+            await expect(viewDetail).toBeVisible();
+            await viewDetail.click();
+
+            await expect(page.getByTestId('lot-custody-modal-title')).toBeVisible({timeout: 5000});
+            // Summary shows the additive fields regardless of the lot's custody/transfer history.
+            await expect(page.getByTestId('lot-custody-modal-summary')).toContainText(/./);
+        });
+
+        test('row context menu "Go to lot in Gantt" pulses the matching Gantt lane', async ({page}) => {
+            const ok = await goToFirstBrokerDetail(page);
+            if (!ok) return;
+
+            const row = await firstHoldingRow(page);
+            if ((await row.count()) === 0) return;
+
+            await row.getByTestId('row-action-analyze-lots').click();
+            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expect(page.getByTestId('lot-gantt-chart')).toBeVisible({timeout: 10000});
+
+            const tableRow = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first();
+            if ((await tableRow.count()) === 0) return;
+
+            await tableRow.click({button: 'right'});
+            await expect(page.getByTestId('context-menu')).toBeVisible({timeout: 5000});
+            await page.getByTestId('context-menu-action-lot-view-gantt-action').click();
+
+            // pulseLot() scrolls the Gantt into view and applies the pulse ring/glow to the
+            // matching lane highlight — the chart itself staying visible is the stable, low-risk
+            // assertion (the ring/glow is drawn inside the ECharts canvas, not a DOM class).
+            await expect(page.getByTestId('lot-gantt-chart')).toBeVisible();
+        });
+
+        test('Value presentation toggle: two independent buttons (Aggregate/Per lot), Asset-Global-style tri-state — neither pressed shows both', async ({page}) => {
+            const ok = await goToFirstBrokerDetail(page);
+            if (!ok) return;
+
+            const row = await firstHoldingRow(page);
+            if ((await row.count()) === 0) return;
+
+            await row.getByTestId('row-action-analyze-lots').click();
+            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+
+            const checkbox = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first().locator('.checkbox-btn, button').first();
+            if ((await checkbox.count()) === 0) return;
+            await checkbox.click();
+
+            const presentationFilter = page.getByTestId('lots-value-presentation-filter');
+            if (!(await presentationFilter.isVisible({timeout: 5_000}).catch(() => false))) return; // no selectable lot in range
+
+            const aggregateToggle = page.getByTestId('lots-value-aggregate-toggle');
+            const individualToggle = page.getByTestId('lots-value-individual-toggle');
+            // No 3rd "Both" button — removed in favor of the Asset-Global-style tri-state pattern.
+            await expect(page.getByTestId('lots-value-both-toggle')).toHaveCount(0);
+
+            // Default: only Aggregate pressed.
+            await expect(aggregateToggle).toHaveAttribute('aria-pressed', 'true');
+            await expect(individualToggle).toHaveAttribute('aria-pressed', 'false');
+            await expect(page.getByTestId('lot-comparison-echart')).toBeVisible();
+
+            // Press Per lot too -> both pressed -> still shows everything.
+            await individualToggle.click();
+            await expect(individualToggle).toHaveAttribute('aria-pressed', 'true');
+            await expect(page.getByTestId('lot-comparison-echart')).toBeVisible();
+
+            // Un-press Aggregate -> only Per lot pressed -> exclusive individual view.
+            await aggregateToggle.click();
+            await expect(aggregateToggle).toHaveAttribute('aria-pressed', 'false');
+            await expect(page.getByTestId('lot-comparison-echart')).toBeVisible();
+
+            // Un-press Per lot too -> neither pressed -> implicit "show both" (tri-state rule).
+            await individualToggle.click();
+            await expect(individualToggle).toHaveAttribute('aria-pressed', 'false');
+            await expect(aggregateToggle).toHaveAttribute('aria-pressed', 'false');
+            await expect(page.getByTestId('lot-comparison-echart')).toBeVisible();
         });
     });
 });

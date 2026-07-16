@@ -696,6 +696,52 @@ class TestLotsAnalysisEndpoint:
             assert Decimal(data["lots"][0]["relative_return"]) == Decimal("0.1")
         print_success("Plain BUY return history populated")
 
+    async def test_performance_history_contract(self, test_server):
+        """PERFORMANCE_HISTORY returns asset-wide ROI/TWRR payload."""
+        print_section("Lots Analysis: performance history contract")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_broker(client)
+            asset_id = await create_asset(client, currency="EUR")
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                ],
+            )
+            price_resp = await client.post(
+                f"{API_BASE}/assets/prices",
+                json=[
+                    {
+                        "asset_id": asset_id,
+                        "prices": [
+                            {"date": "2026-01-10", "close": "100.00", "currency": "EUR"},
+                            {"date": "2026-01-11", "close": "110.00", "currency": "EUR"},
+                        ],
+                    }
+                ],
+                timeout=TIMEOUT,
+            )
+            assert price_resp.status_code == 200, f"Price upsert failed: {price_resp.status_code}: {price_resp.text}"
+
+            resp = await client.post(
+                f"{API_BASE}/portfolio/lots/analysis",
+                json={"asset_id": asset_id, "requested_analyses": ["PERFORMANCE_HISTORY"], "date_range": {"end": "2026-01-11"}},
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+
+            assert data["performance_history"] is not None
+            assert len(data["performance_history"]) == 2
+            assert set(data["performance_history"][0]) == {"date", "roi", "twrr"}
+            assert Decimal(data["performance_history"][0]["roi"]) == Decimal("0")
+            assert data["performance_history"][0]["twrr"] is None
+            assert Decimal(data["performance_history"][1]["roi"]) == Decimal("0.1")
+            assert Decimal(data["performance_history"][1]["twrr"]) == Decimal("0.1")
+        print_success("PERFORMANCE_HISTORY contract OK")
+
     async def test_nonexistent_asset_rejected(self, test_server):
         """Non-existent asset_id -> 4xx, not a 500."""
         print_section("Lots Analysis: nonexistent asset")

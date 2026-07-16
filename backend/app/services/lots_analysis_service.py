@@ -32,6 +32,7 @@ from backend.app.schemas.portfolio import (
     LotTimelineEventKind,
     LotTimelineEventSchema,
     LotValueHistoryPoint,
+    PerformanceHistoryPoint,
     ReferencePriceSource,
 )
 from backend.app.services.fifo_lot_engine import (
@@ -46,6 +47,7 @@ from backend.app.services.fifo_lot_engine import (
 )
 from backend.app.services.fx import convert_bulk
 from backend.app.services.settings_service import get_global_setting
+from backend.app.utils.financial.roi_utils import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series
 from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_txlist
 
 _WARNING_ISSUE_CODES = {
@@ -67,6 +69,16 @@ class _PricePoint:
     currency: str
     resolved_date: date_type
     source: ReferencePriceSource
+
+
+@dataclass(frozen=True, slots=True)
+class _PerformanceSourceContext:
+    transactions: Sequence[Transaction]
+    engine_result: FifoEngineResult
+    lots_by_id: dict[int, FifoLot]
+    fragments_by_lot: dict[int, list[FragmentInterval]]
+    closures_by_lot: dict[int, list[LotClosure]]
+    tx_by_id: dict[int, Transaction]
 
 
 class _PriceHistoryLookup:
@@ -216,6 +228,37 @@ class LotsAnalysisService:
         closures_by_lot = self._group_closures(engine_result.closures)
         tx_by_id = {tx.id: tx for tx in transactions if tx.id is not None}
         display_from = date_from or computed_from
+        history_dates = list(_date_range(computed_from, actual_to))
+
+        performance_context = _PerformanceSourceContext(
+            transactions=transactions,
+            engine_result=engine_result,
+            lots_by_id=lots_by_id,
+            fragments_by_lot=fragments_by_lot,
+            closures_by_lot=closures_by_lot,
+            tx_by_id=tx_by_id,
+        )
+        if LotAnalysisType.PERFORMANCE_HISTORY in normalized_analyses and broker_ids is not None:
+            accessible_broker_ids = await self._get_scope_broker_ids(user_id=user_id, broker_ids=None)
+            if accessible_broker_ids != scope_broker_ids:
+                performance_transactions = await self._load_transactions(asset_id=asset_id, scope_broker_ids=accessible_broker_ids, date_to=actual_to)
+                performance_split_ratios = await self._load_split_ratios(performance_transactions)
+                performance_broker_shorting = await self._load_broker_shorting(accessible_broker_ids)
+                performance_engine_result = run_fifo_lot_engine(
+                    transactions=performance_transactions,
+                    broker_shorting=performance_broker_shorting,
+                    split_ratios_by_tx_id=performance_split_ratios,
+                    reference_price_lookup=reference_price_lookup,
+                )
+                performance_lots_by_id = {lot.lot_id: lot for lot in performance_engine_result.lots}
+                performance_context = _PerformanceSourceContext(
+                    transactions=performance_transactions,
+                    engine_result=performance_engine_result,
+                    lots_by_id=performance_lots_by_id,
+                    fragments_by_lot=self._group_fragments(performance_engine_result.fragment_intervals),
+                    closures_by_lot=self._group_closures(performance_engine_result.closures),
+                    tx_by_id={tx.id: tx for tx in performance_transactions if tx.id is not None},
+                )
 
         fx_resolver = _FxRateResolver(target_currency)
         self._collect_fx_needs(
@@ -233,10 +276,17 @@ class LotsAnalysisService:
             actual_to=actual_to,
             computed_from=computed_from,
         )
+        self._collect_performance_fx_needs(
+            fx_resolver=fx_resolver,
+            analyses=normalized_analyses,
+            transactions=performance_context.transactions,
+            closures=performance_context.engine_result.closures,
+            lots_by_id=performance_context.lots_by_id,
+            asset_currency=asset.currency,
+        )
         await fx_resolver.load(self.db)
 
         data_quality = self._build_data_quality_report(engine_result.issues)
-        history_dates = list(_date_range(computed_from, actual_to))
         active_price_dates = history_dates if self._needs_market_series(normalized_analyses) else [actual_to]
         market_prices = self._build_market_price_map(price_lookup, fx_resolver, active_price_dates)
         wac_context = self._build_wac_context(
@@ -343,6 +393,21 @@ class LotsAnalysisService:
                 actual_to,
             )
 
+        performance_history = None
+        if LotAnalysisType.PERFORMANCE_HISTORY in normalized_analyses:
+            performance_history = self._trim_dates(
+                self._build_performance_history(
+                    scope_broker_ids=scope_broker_ids,
+                    history_dates=history_dates,
+                    market_prices=market_prices,
+                    asset_currency=asset.currency,
+                    fx_resolver=fx_resolver,
+                    context=performance_context,
+                ),
+                display_from,
+                actual_to,
+            )
+
         return LotsAnalysisResponse(
             asset_id=asset_id,
             target_currency=target_currency,
@@ -367,6 +432,7 @@ class LotsAnalysisService:
             price_history=price_history,
             broker_wac_history=broker_wac_history,
             cumulative_wac_history=cumulative_wac_history,
+            performance_history=performance_history,
         )
 
     async def _get_base_currency(self) -> str:
@@ -509,8 +575,36 @@ class LotsAnalysisService:
                 LotAnalysisType.VALUE_HISTORY,
                 LotAnalysisType.RETURN_HISTORY,
                 LotAnalysisType.PRICE_HISTORY,
+                LotAnalysisType.PERFORMANCE_HISTORY,
             )
         )
+
+    def _collect_performance_fx_needs(
+        self,
+        *,
+        fx_resolver: _FxRateResolver,
+        analyses: Sequence[LotAnalysisType],
+        transactions: Sequence[Transaction],
+        closures: Sequence[LotClosure],
+        lots_by_id: dict[int, FifoLot],
+        asset_currency: str,
+    ) -> None:
+        if LotAnalysisType.PERFORMANCE_HISTORY not in analyses:
+            return
+        for tx in transactions:
+            tx_type = str(getattr(tx.type, "value", tx.type))
+            if tx_type == "BUY":
+                fx_resolver.need(tx.currency or asset_currency, tx.date)
+                continue
+            if tx_type == "ADJUSTMENT" and tx.quantity > 0:
+                if tx.cost_basis_override not in (None, Decimal("0")):
+                    fx_resolver.need(tx.cost_basis_currency or asset_currency, tx.date)
+                elif tx.amount != Decimal("0"):
+                    fx_resolver.need(tx.currency or asset_currency, tx.date)
+        for closure in closures:
+            lot = lots_by_id.get(closure.lot_id)
+            if lot is not None and lot.direction == "LONG" and closure.close_reason == "SELL":
+                fx_resolver.need(lot.currency or asset_currency, closure.close_date)
 
     def _build_market_price_map(
         self,
@@ -616,6 +710,108 @@ class LotsAnalysisService:
         if not txs:
             return []
         return [CumulativeWACHistoryPoint(date=point_date, wac=wac_amount, pool_qty=pool_qty) for point_date, wac_amount, pool_qty in self._compute_wac_series(txs, history_dates, target_currency)]
+
+    def _build_performance_history(
+        self,
+        *,
+        scope_broker_ids: Sequence[int],
+        history_dates: Sequence[date_type],
+        market_prices: dict[date_type, Decimal | None],
+        asset_currency: str,
+        fx_resolver: _FxRateResolver,
+        context: _PerformanceSourceContext,
+    ) -> list[PerformanceHistoryPoint]:
+        scope_set = set(scope_broker_ids)
+        scoped_fragments_by_lot = {lot_id: [fragment for fragment in fragments if self._fragment_in_scope(fragment, scope_set)] for lot_id, fragments in context.fragments_by_lot.items()}
+
+        nav_snapshots: list[NAVSnapshot] = []
+        for current_date in history_dates:
+            market_price = market_prices.get(current_date)
+            if market_price is None:
+                continue
+            nav_amount = Decimal("0")
+            for _lot_id, fragments in scoped_fragments_by_lot.items():
+                if not fragments:
+                    continue
+                nav_amount += self._open_value_on_date(fragments, market_price, current_date)
+            nav_snapshots.append(NAVSnapshot(date=current_date, nav=nav_amount))
+
+        cash_flows: list[CashFlowInput] = []
+        invalid_external_flow_from: date_type | None = None
+
+        for tx in sorted(context.transactions, key=lambda row: (row.date, row.id or 0)):
+            if tx.broker_id not in scope_set:
+                continue
+            tx_type = str(getattr(tx.type, "value", tx.type))
+            if tx_type == "BUY":
+                cash_flows.append(CashFlowInput(date=tx.date, amount=-self._converted_external_amount(abs(tx.amount), tx.currency or asset_currency, tx.date, fx_resolver)))
+                continue
+            if tx_type == "ADJUSTMENT" and tx.quantity > 0:
+                adjustment_cost = self._adjustment_cash_flow_cost(tx=tx, asset_currency=asset_currency, fx_resolver=fx_resolver)
+                if adjustment_cost not in (None, Decimal("0")):
+                    cash_flows.append(CashFlowInput(date=tx.date, amount=-adjustment_cost))
+
+        for closure in sorted(context.engine_result.closures, key=lambda row: (row.close_date, row.transaction_id, row.lot_id)):
+            if closure.close_reason != "SELL":
+                continue
+            lot = context.lots_by_id.get(closure.lot_id)
+            tx = context.tx_by_id.get(closure.transaction_id)
+            if lot is None or tx is None or lot.direction != "LONG" or tx.broker_id not in scope_set:
+                continue
+            proceeds = fx_resolver.convert(closure.proceeds, lot.currency or asset_currency, closure.close_date) or closure.proceeds
+            cash_flows.append(CashFlowInput(date=closure.close_date, amount=proceeds))
+
+        seen_external_transfers: set[tuple[int, str]] = set()
+        for event in context.engine_result.classified_events:
+            if event.kind not in {"TRANSFER_DEPART", "TRANSFER_ARRIVE"}:
+                continue
+            pair_id = event.pair_id or event.transaction_id
+            dedupe_key = (pair_id, event.kind)
+            if dedupe_key in seen_external_transfers:
+                continue
+            seen_external_transfers.add(dedupe_key)
+            source_in_scope = event.source_broker_id in scope_set
+            destination_in_scope = event.destination_broker_id in scope_set
+            if source_in_scope == destination_in_scope:
+                continue
+            if source_in_scope and event.kind != "TRANSFER_DEPART":
+                continue
+            if destination_in_scope and event.kind != "TRANSFER_ARRIVE":
+                continue
+            market_price = market_prices.get(event.date)
+            if market_price is None:
+                invalid_external_flow_from = event.date if invalid_external_flow_from is None else min(invalid_external_flow_from, event.date)
+                continue
+            quantity = event.quantity or Decimal("0")
+            amount = quantity * market_price
+            cash_flows.append(CashFlowInput(date=event.date, amount=amount if source_in_scope else -amount))
+
+        if invalid_external_flow_from is not None:
+            nav_snapshots = [snapshot for snapshot in nav_snapshots if snapshot.date < invalid_external_flow_from]
+            cash_flows = [flow for flow in cash_flows if flow.date < invalid_external_flow_from]
+
+        if nav_snapshots:
+            first_nav_date = nav_snapshots[0].date
+            carried_cash_flow = sum((flow.amount for flow in cash_flows if flow.date < first_nav_date), Decimal("0"))
+            cash_flows = [flow for flow in cash_flows if flow.date >= first_nav_date]
+            if carried_cash_flow != Decimal("0"):
+                cash_flows.insert(0, CashFlowInput(date=first_nav_date, amount=carried_cash_flow))
+
+        first_cash_flow_date = min((flow.date for flow in cash_flows), default=None)
+        roi_map: dict[date_type, Decimal] = {}
+        twrr_map: dict[date_type, Decimal] = {}
+        if first_cash_flow_date is not None and nav_snapshots:
+            roi_map = {point.date: point.roi for point in calculate_simple_roi_series(nav_snapshots, cash_flows) if point.date >= first_cash_flow_date}
+            twrr_map = {point.date: point.twrr for point in calculate_twrr_series(nav_snapshots, cash_flows) if point.date >= first_cash_flow_date}
+
+        return [
+            PerformanceHistoryPoint(
+                date=current_date,
+                roi=None if invalid_external_flow_from is not None and current_date >= invalid_external_flow_from else roi_map.get(current_date),
+                twrr=None if invalid_external_flow_from is not None and current_date >= invalid_external_flow_from else twrr_map.get(current_date),
+            )
+            for current_date in history_dates
+        ]
 
     def _compute_wac_series(
         self,
@@ -1080,8 +1276,7 @@ class LotsAnalysisService:
         converted_original_cost: Decimal,
         converted_short_proceeds: Decimal,
     ) -> tuple[Decimal, Decimal, Decimal, Decimal]:
-        open_quantity = self._open_quantity_on_date(fragments, current_date)
-        open_value = open_quantity * market_price
+        open_value = self._open_value_on_date(fragments, market_price, current_date)
         proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
         if lot.direction == "LONG":
             total_value = open_value + proceeds
@@ -1187,8 +1382,39 @@ class LotsAnalysisService:
             return Decimal("0")
         return values_by_date[max(eligible_dates)]
 
+    def _open_value_on_date(self, fragments: Sequence[FragmentInterval], market_price: Decimal, query_date: date_type) -> Decimal:
+        return self._open_quantity_on_date(fragments, query_date) * market_price
+
     def _open_quantity_on_date(self, fragments: Sequence[FragmentInterval], query_date: date_type) -> Decimal:
         return sum((fragment.quantity for fragment in fragments if _fragment_active_on_date(fragment, query_date)), Decimal("0"))
+
+    def _fragment_in_scope(self, fragment: FragmentInterval, scope_broker_ids: set[int]) -> bool:
+        if fragment.custody_type == "BROKER":
+            return fragment.broker_id in scope_broker_ids
+        return fragment.source_broker_id in scope_broker_ids and fragment.destination_broker_id in scope_broker_ids
+
+    def _converted_external_amount(
+        self,
+        amount: Decimal,
+        currency: str,
+        as_of_date: date_type,
+        fx_resolver: _FxRateResolver,
+    ) -> Decimal:
+        return fx_resolver.convert(amount, currency, as_of_date) or amount
+
+    def _adjustment_cash_flow_cost(
+        self,
+        *,
+        tx: Transaction,
+        asset_currency: str,
+        fx_resolver: _FxRateResolver,
+    ) -> Decimal | None:
+        if tx.cost_basis_override not in (None, Decimal("0")):
+            total_cost = tx.quantity * tx.cost_basis_override
+            return self._converted_external_amount(total_cost, tx.cost_basis_currency or asset_currency, tx.date, fx_resolver)
+        if tx.amount != Decimal("0"):
+            return self._converted_external_amount(abs(tx.amount), tx.currency or asset_currency, tx.date, fx_resolver)
+        return None
 
     def _trim_dates(self, rows: Sequence, start_date: date_type, end_date: date_type) -> list:
         return [row for row in rows if start_date <= row.date <= end_date]

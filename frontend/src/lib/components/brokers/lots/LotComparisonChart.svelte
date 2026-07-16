@@ -68,36 +68,38 @@
         points: ReturnType<typeof namedPoint>[];
     }
 
-    interface PriceToggleItem {
-        id: string;
-        label: string;
-        color: string;
-        visible: boolean;
-    }
-
-    interface ValueToggleItem {
-        lotId: number;
-        label: string;
-        color: string;
-        visible: boolean;
-    }
-
     const LOT_COMPARISON_SET_OPTION_OPTS: {notMerge: boolean; replaceMerge: string[]} = {
         notMerge: false,
         replaceMerge: ['series', 'xAxis', 'yAxis', 'legend', 'dataZoom'],
     };
 
-    let {
-        selectedLots = [],
-        valueHistory = [],
-        returnHistory = [],
-        priceHistory = [],
-        brokerWacHistory = [],
-        cumulativeWacHistory = [],
-        brokers = [],
-        currency,
-        xAxisRange = null,
-    }: Props = $props();
+    /**
+     * Empirically confirmed ECharts 6.0.0 bug (r2-hover-lines-disappear-per-lot): with the
+     * chart-level `tooltip.trigger:'axis'` (needed for the Aggregate mode's "all values at this
+     * date" tooltip, which works correctly), hovering ANYWHERE on the chart makes every
+     * *individual per-lot* line series (different lots open on different dates, so their data
+     * arrays start/stop at different points) vanish completely — not just their tooltip marker,
+     * the whole rendered line — for as long as the tooltip is open. Reproduced deterministically
+     * (exact same date, `chartInstance.convertToPixel`-computed hover position) and ruled out by
+     * elimination, one candidate at a time, via a live-debuggable chart instance:
+     * `emphasis`/`blur` config (incl. `emphasis:{disabled:true}`), `z`/`zlevel`, `stack` removal,
+     * normalizing every series to one shared date backbone with explicit `null`s, `connectNulls`,
+     * `hoverLayerThreshold`, `clip`, `sampling`/`large`/`progressive`, `animation`, dropping the
+     * per-point `name` field, the `renderer` (canvas vs `svg` — same bug in both, so it is not a
+     * canvas dirty-rect/hover-layer repaint artifact), and every `tooltip.axisPointer.type`
+     * (`line`/`shadow`/`cross`/`none`). The ONLY thing that fixes it is giving the per-lot line
+     * series their OWN `tooltip.trigger:'item'` (confirmed live): ECharts merges this with the
+     * chart-level tooltip config, so these series just fall out of the axis-trigger tooltip
+     * computation that corrupts their rendering, while still using the same formatter/theme when
+     * hovered directly (the shared formatter below already normalizes a single item's `params`
+     * into a 1-element array). The visible trade-off is minor: hovering a specific per-lot line
+     * shows only that lot's tooltip instead of joining the shared axis tooltip, but the lines
+     * never disappear again — a clear net win over the alternative (rewriting the whole tooltip
+     * as fully custom, non-native DOM to sidestep axis-trigger entirely).
+     */
+    const PER_LOT_LINE_TOOLTIP_OVERRIDE: {trigger: 'item'} = {trigger: 'item'};
+
+    let {selectedLots = [], valueHistory = [], returnHistory = [], priceHistory = [], brokerWacHistory = [], cumulativeWacHistory = [], brokers = [], currency, xAxisRange = null}: Props = $props();
 
     let mode = $state<ChartMode>('value');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
@@ -109,9 +111,16 @@
     let isDark = $state(false);
     let needsInitialLayoutStabilityPass = false;
     let zoomWindow = $state<{start: number; end: number} | null>(null);
-    let lotVisibility = $state<Record<number, boolean>>({});
-    let priceOverlayVisibility = $state<Record<string, boolean>>({});
-    let valueSeriesVisibility = $state<Record<number, boolean>>({});
+    /** Tri-state Aggregato/Per lotto toggle — same intuitive semantics as the Active/Inactive
+     * filter on the Asset Global page (frontend/src/routes/(app)/assets/+page.svelte): two
+     * independent on/off buttons, "both pressed" and "both unpressed" both mean "show everything",
+     * only a single pressed button filters down to that one presentation. Default mirrors the
+     * previous single-select default (Aggregato only). */
+    let showAggregateValue = $state<boolean>(true);
+    let showIndividualValue = $state<boolean>(false);
+    const valuePresentationBothSame = $derived(showAggregateValue === showIndividualValue);
+    const effectiveShowAggregateValue = $derived(valuePresentationBothSame || showAggregateValue);
+    const effectiveShowIndividualValue = $derived(valuePresentationBothSame || showIndividualValue);
 
     function safeScalar<T>(value: T | Array<T | null> | null | undefined): T | null {
         if (Array.isArray(value)) return value[0] ?? null;
@@ -172,9 +181,9 @@
         return date.toLocaleDateString($currentLanguage || undefined, {day: '2-digit', month: '2-digit'});
     }
 
-    function formatLongDate(value: string): string {
+    function formatLongDate(value: number | string): string {
         const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return value;
+        if (Number.isNaN(date.getTime())) return String(value);
         return date.toLocaleDateString($currentLanguage || undefined, {year: 'numeric', month: 'short', day: 'numeric'});
     }
 
@@ -240,18 +249,6 @@
         return Number.isFinite(value) ? value : null;
     }
 
-    function toggleLotVisibility(lotId: number) {
-        lotVisibility = {...lotVisibility, [lotId]: !(lotVisibility[lotId] ?? true)};
-    }
-
-    function togglePriceOverlay(id: string) {
-        priceOverlayVisibility = {...priceOverlayVisibility, [id]: !(priceOverlayVisibility[id] ?? false)};
-    }
-
-    function toggleValueSeries(lotId: number) {
-        valueSeriesVisibility = {...valueSeriesVisibility, [lotId]: !(valueSeriesVisibility[lotId] ?? false)};
-    }
-
     function applyCurrentZoomWindow() {
         if (!chartInstance) return;
         const window = getChartZoomWindow(chartInstance);
@@ -268,6 +265,7 @@
         proceeds: tr('brokers.lots.cumulativeProceeds', 'Cumulative proceeds'),
         residualValue: tr('brokers.lots.residualOpenValue', 'Residual open value'),
         aggregateOriginalCost: tr('brokers.lots.aggregateOriginalCost', 'Total original cost'),
+        aggregateTotalValue: tr('brokers.lots.comparisonTotalValueAggregate', 'Total value'),
         totalValue: tr('common.totalValue', 'Total Value'),
         totalReturn: tr('brokers.lots.totalReturn', 'Total return'),
         openReturn: tr('brokers.lots.openReturn', 'Open Return'),
@@ -275,7 +273,10 @@
         noVisibleLots: tr('brokers.lots.noVisibleLots', 'No visible lots in chart'),
         marketPrice: tr('chart.marketPrice', 'Market Price'),
         openingPrice: tr('brokers.lots.openingPriceReference', 'Opening price'),
-        cumulativeWac: tr('brokers.lots.cumulativeWac', 'Cumulative WAC'),
+        cumulativeWac: tr('brokers.lots.cumulativeWac', 'Cumulative Avg. Cost'),
+        wacAbbreviation: tr('dashboard.pmc', 'WAC'),
+        presentationAggregate: tr('brokers.lots.valuePresentationAggregate', 'Aggregate'),
+        presentationIndividual: tr('brokers.lots.valuePresentationIndividual', 'Per lot'),
         noData: tr('common.noData', 'No data'),
     }));
 
@@ -302,7 +303,7 @@
 
     const lotMap = $derived.by(() => new Map(lotModels.map((lot) => [lot.lotId, lot])));
 
-    const visibleLots = $derived.by(() => lotModels.filter((lot) => lotVisibility[lot.lotId] ?? true));
+    const visibleLots = $derived.by(() => lotModels);
 
     const valuePointsByLotId = $derived.by(() => {
         const grouped = new Map<number, LotValueSeriesPoint[]>();
@@ -401,11 +402,7 @@
             .sort((left, right) => String(left.value[0]).localeCompare(String(right.value[0])));
     });
 
-    const cumulativeWacPoints = $derived.by(() =>
-        [...cumulativeWacHistory]
-            .sort((left, right) => left.date.localeCompare(right.date))
-            .map((point) => namedPoint(point.date, nullifyZeroWac(parseNumber(point.wac), parseNumber(point.pool_qty))))
-    );
+    const cumulativeWacPoints = $derived.by(() => [...cumulativeWacHistory].sort((left, right) => left.date.localeCompare(right.date)).map((point) => namedPoint(point.date, nullifyZeroWac(parseNumber(point.wac), parseNumber(point.pool_qty)))));
 
     const brokerWacSeries = $derived.by(() => {
         const grouped = new Map<number, ReturnType<typeof namedPoint>[]>();
@@ -444,42 +441,7 @@
 
     const showCumulativeWac = $derived.by(() => activeBrokerIds.length >= 2 && cumulativeWacPoints.some((point) => point.value[1] != null));
 
-    const valueToggleItems = $derived.by(() =>
-        visibleLots
-            .filter((lot) => (valuePointsByLotId.get(lot.lotId) ?? []).some((point) => point.totalValue !== 0 || point.openValue !== 0 || point.proceeds !== 0))
-            .map((lot) => ({
-                lotId: lot.lotId,
-                label: `${modeLabels.totalValue} — ${lot.label}`,
-                color: lotColor(lot.lotId),
-                visible: valueSeriesVisibility[lot.lotId] ?? false,
-            })) satisfies ValueToggleItem[]
-    );
-
-    const priceToggleItems = $derived.by(() => {
-        const items: PriceToggleItem[] = [];
-        if (showCumulativeWac) {
-            items.push({
-                id: 'cumulative-wac',
-                label: modeLabels.cumulativeWac,
-                color: isDark ? '#cbd5e1' : '#475569',
-                visible: priceOverlayVisibility['cumulative-wac'] ?? true,
-            });
-        }
-
-        const singleBrokerMode = activeBrokerIds.length === 1;
-        for (const brokerId of activeBrokerIds) {
-            const series = brokerWacSeries.find((item) => item.brokerId === brokerId);
-            if (!series || !series.points.some((point) => point.value[1] != null)) continue;
-            const key = `broker-wac-${brokerId}`;
-            items.push({
-                id: key,
-                label: `WAC — ${brokerName(brokerId)}`,
-                color: brokerColor(brokerId),
-                visible: priceOverlayVisibility[key] ?? singleBrokerMode,
-            });
-        }
-        return items;
-    });
+    const valueLotsWithData = $derived.by(() => visibleLots.filter((lot) => (valuePointsByLotId.get(lot.lotId) ?? []).some((point) => point.totalValue !== 0 || point.openValue !== 0 || point.proceeds !== 0)));
 
     const priceTimeMaxDate = $derived.by(() => {
         let maxDate: string | null = xAxisRange?.max ?? null;
@@ -505,7 +467,9 @@
         if (visibleLots.length === 0) return modeLabels.noVisibleLots;
 
         if (mode === 'value') {
-            return aggregatedValuePoints.length > 0 ? '' : modeLabels.noData;
+            const hasAggregateData = effectiveShowAggregateValue && aggregatedValuePoints.length > 0;
+            const hasIndividualData = effectiveShowIndividualValue && valueLotsWithData.length > 0;
+            return hasAggregateData || hasIndividualData ? '' : modeLabels.noData;
         }
 
         if (mode === 'return') {
@@ -525,47 +489,6 @@
         return modeLabels.priceTitle;
     });
 
-    $effect(() => {
-        void lotModels;
-        const nextVisibility: Record<number, boolean> = {};
-        for (const lot of lotModels) nextVisibility[lot.lotId] = lotVisibility[lot.lotId] ?? true;
-        const changed = Object.keys(nextVisibility).length !== Object.keys(lotVisibility).length || Object.entries(nextVisibility).some(([key, value]) => lotVisibility[Number(key)] !== value);
-        if (changed) lotVisibility = nextVisibility;
-    });
-
-    $effect(() => {
-        void lotModels;
-        const nextVisibility: Record<number, boolean> = {};
-        for (const lot of lotModels) nextVisibility[lot.lotId] = valueSeriesVisibility[lot.lotId] ?? false;
-        const changed = Object.keys(nextVisibility).length !== Object.keys(valueSeriesVisibility).length || Object.entries(nextVisibility).some(([key, value]) => valueSeriesVisibility[Number(key)] !== value);
-        if (changed) valueSeriesVisibility = nextVisibility;
-    });
-
-    $effect(() => {
-        void activeBrokerIds;
-        void showCumulativeWac;
-        const singleBrokerMode = activeBrokerIds.length === 1;
-        const allowedKeys = new Set<string>(activeBrokerIds.map((brokerId) => `broker-wac-${brokerId}`));
-        if (showCumulativeWac) allowedKeys.add('cumulative-wac');
-
-        const nextVisibility: Record<string, boolean> = {};
-        if (showCumulativeWac) {
-            nextVisibility['cumulative-wac'] = priceOverlayVisibility['cumulative-wac'] ?? true;
-        }
-        for (const brokerId of activeBrokerIds) {
-            const key = `broker-wac-${brokerId}`;
-            nextVisibility[key] = priceOverlayVisibility[key] ?? singleBrokerMode;
-        }
-
-        for (const [key, value] of Object.entries(priceOverlayVisibility)) {
-            if (allowedKeys.has(key) && nextVisibility[key] == null) nextVisibility[key] = value;
-        }
-
-        if (JSON.stringify(nextVisibility) !== JSON.stringify(priceOverlayVisibility)) {
-            priceOverlayVisibility = nextVisibility;
-        }
-    });
-
     function buildValueTooltip(params: any[]): string {
         if (params.length === 0) return '';
         const theme = buildTooltipTheme(isDark);
@@ -579,7 +502,7 @@
             .filter((row): row is string => row != null);
 
         if (rows.length === 0) return '';
-        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatAxisDate(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatLongDate(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
     }
 
     function buildReturnTooltip(params: any[]): string {
@@ -607,10 +530,7 @@
                     rows.push(buildTooltipRow(escapeHtml(modeLabels.residualValue), escapeHtml(formatCurrencyAmountPlain(valuePoint.openValue, currency))));
                     rows.push(buildTooltipRow(escapeHtml(modeLabels.proceeds), escapeHtml(formatCurrencyAmountPlain(valuePoint.proceeds, currency))));
                     rows.push(
-                        buildTooltipRow(
-                            escapeHtml(tr('brokers.lots.fifoPnl', 'FIFO P&L')),
-                            `<span style="color:${valuePoint.pnl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626'}">${escapeHtml(formatCurrencyAmountPlain(valuePoint.pnl, currency, {showSign: true}))}</span>`,
-                        ),
+                        buildTooltipRow(escapeHtml(tr('brokers.lots.fifoPnl', 'FIFO P&L')), `<span style="color:${valuePoint.pnl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626'}">${escapeHtml(formatCurrencyAmountPlain(valuePoint.pnl, currency, {showSign: true}))}</span>`),
                     );
                 }
 
@@ -619,7 +539,7 @@
             .filter((block): block is string => block != null);
 
         if (blocks.length === 0) return '';
-        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatAxisDate(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${blocks.join(buildTooltipDivider(theme.border))}</div>`;
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatLongDate(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${blocks.join(buildTooltipDivider(theme.border))}</div>`;
     }
 
     function buildPriceTooltip(params: any[]): string {
@@ -635,72 +555,106 @@
             .filter((row): row is string => row != null);
 
         if (rows.length === 0) return '';
-        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatAxisDate(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatLongDate(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
     }
 
     function buildValueSeries(): echarts.SeriesOption[] {
         const residualColor = isDark ? '#60a5fa' : '#2563eb';
         const proceedsColor = isDark ? '#34d399' : '#059669';
         const originalCostColor = isDark ? '#cbd5e1' : '#475569';
+        const aggregateTotalColor = isDark ? '#e2e8f0' : '#0f172a';
+        const individualLineOpacity = effectiveShowAggregateValue && effectiveShowIndividualValue ? (isDark ? 0.74 : 0.78) : 1;
+        const series: echarts.SeriesOption[] = [];
 
-        const series: echarts.SeriesOption[] = [
-            {
-                id: 'value-residual',
-                name: modeLabels.residualValue,
-                type: 'line',
-                stack: 'value-aggregate',
-                data: aggregatedValuePoints.map((point) => namedPoint(point.date, point.openValue)),
-                showSymbol: false,
-                connectNulls: false,
-                smooth: false,
-                lineStyle: {width: 1.8, color: residualColor},
-                areaStyle: {color: withAlpha(residualColor, isDark ? 0.4 : 0.22)},
-                itemStyle: {color: residualColor},
-            },
-            {
-                id: 'value-proceeds',
-                name: modeLabels.proceeds,
-                type: 'line',
-                stack: 'value-aggregate',
-                data: aggregatedValuePoints.map((point) => namedPoint(point.date, point.proceeds)),
-                showSymbol: false,
-                connectNulls: false,
-                smooth: false,
-                lineStyle: {width: 1.8, color: proceedsColor},
-                areaStyle: {color: withAlpha(proceedsColor, isDark ? 0.42 : 0.26)},
-                itemStyle: {color: proceedsColor},
-            },
-            {
-                id: 'value-original-cost',
-                name: modeLabels.aggregateOriginalCost,
-                type: 'line',
-                data: aggregatedValuePoints.map((point) => namedPoint(point.date, point.originalCost)),
-                showSymbol: false,
-                connectNulls: false,
-                smooth: false,
-                lineStyle: {width: 2.2, color: originalCostColor},
-                itemStyle: {color: originalCostColor},
-                z: 3,
-            },
-        ];
+        if (effectiveShowAggregateValue) {
+            series.push(
+                {
+                    id: 'value-residual',
+                    name: modeLabels.residualValue,
+                    type: 'line',
+                    stack: 'value-aggregate',
+                    data: aggregatedValuePoints.map((point) => namedPoint(point.date, point.openValue)),
+                    showSymbol: false,
+                    connectNulls: false,
+                    smooth: false,
+                    lineStyle: {width: 1.8, color: residualColor},
+                    areaStyle: {color: withAlpha(residualColor, isDark ? 0.4 : 0.22)},
+                    itemStyle: {color: residualColor},
+                    emphasis: {scale: false, focus: 'none'},
+                    z: 1,
+                    zlevel: 0,
+                },
+                {
+                    id: 'value-proceeds',
+                    name: modeLabels.proceeds,
+                    type: 'line',
+                    stack: 'value-aggregate',
+                    data: aggregatedValuePoints.map((point) => namedPoint(point.date, point.proceeds)),
+                    showSymbol: false,
+                    connectNulls: false,
+                    smooth: false,
+                    lineStyle: {width: 1.8, color: proceedsColor},
+                    areaStyle: {color: withAlpha(proceedsColor, isDark ? 0.42 : 0.26)},
+                    itemStyle: {color: proceedsColor},
+                    emphasis: {scale: false, focus: 'none'},
+                    z: 1,
+                    zlevel: 0,
+                },
+                {
+                    id: 'value-aggregate-total',
+                    name: modeLabels.aggregateTotalValue,
+                    type: 'line',
+                    data: aggregatedValuePoints.map((point) => namedPoint(point.date, point.openValue + point.proceeds)),
+                    showSymbol: false,
+                    connectNulls: false,
+                    smooth: false,
+                    lineStyle: {width: 2.5, color: aggregateTotalColor},
+                    itemStyle: {color: aggregateTotalColor},
+                    emphasis: {scale: false, focus: 'none'},
+                    z: 5,
+                    zlevel: 0,
+                },
+                {
+                    id: 'value-original-cost',
+                    name: modeLabels.aggregateOriginalCost,
+                    type: 'line',
+                    data: aggregatedValuePoints.map((point) => namedPoint(point.date, point.originalCost)),
+                    showSymbol: false,
+                    connectNulls: false,
+                    smooth: false,
+                    lineStyle: {width: 2.2, color: originalCostColor},
+                    itemStyle: {color: originalCostColor},
+                    emphasis: {scale: false, focus: 'none'},
+                    z: 4,
+                    zlevel: 0,
+                },
+            );
+        }
 
-        for (const lot of visibleLots) {
-            if (!(valueSeriesVisibility[lot.lotId] ?? false)) continue;
-            const points = valuePointsByLotId.get(lot.lotId) ?? [];
-            if (!points.some((point) => point.totalValue !== 0 || point.openValue !== 0 || point.proceeds !== 0)) continue;
-            const color = lotColor(lot.lotId);
-            series.push({
-                id: `value-total-${lot.lotId}`,
-                name: `${modeLabels.totalValue} — ${lot.label}`,
-                type: 'line',
-                data: points.map((point) => namedPoint(point.date, point.totalValue)),
-                showSymbol: false,
-                connectNulls: false,
-                smooth: false,
-                lineStyle: {width: 2.2, color},
-                itemStyle: {color},
-                z: 4,
-            });
+        if (effectiveShowIndividualValue) {
+            for (const lot of valueLotsWithData) {
+                const points = valuePointsByLotId.get(lot.lotId) ?? [];
+                const color = lotColor(lot.lotId);
+                series.push({
+                    id: `value-total-${lot.lotId}`,
+                    name: `${modeLabels.totalValue} — ${lot.label}`,
+                    type: 'line',
+                    data: points.map((point) => namedPoint(point.date, point.totalValue)),
+                    showSymbol: false,
+                    connectNulls: false,
+                    smooth: false,
+                    lineStyle: {width: effectiveShowAggregateValue ? 1.8 : 2.2, color, opacity: individualLineOpacity},
+                    itemStyle: {color, opacity: individualLineOpacity},
+                    emphasis: {scale: false, focus: 'none'},
+                    // Per-series override — see PER_LOT_LINE_TOOLTIP_OVERRIDE doc comment above
+                    // buildValueSeries/buildReturnSeries/buildPriceSeries for why this is required
+                    // (ECharts 6.0.0 axis-trigger bug: multiple line series with different
+                    // start dates otherwise vanish entirely while any tooltip is showing).
+                    tooltip: PER_LOT_LINE_TOOLTIP_OVERRIDE,
+                    z: 6,
+                    zlevel: 0,
+                });
+            }
         }
 
         return series;
@@ -721,6 +675,10 @@
                     smooth: false,
                     lineStyle: {width: 2.5, color},
                     itemStyle: {color},
+                    emphasis: {scale: false, focus: 'none'},
+                    tooltip: PER_LOT_LINE_TOOLTIP_OVERRIDE,
+                    z: 6,
+                    zlevel: 0,
                 } satisfies echarts.SeriesOption;
             });
     }
@@ -739,6 +697,9 @@
                 smooth: false,
                 lineStyle: {width: 2.5, color: isDark ? '#4ade80' : '#16a34a'},
                 itemStyle: {color: isDark ? '#4ade80' : '#16a34a'},
+                emphasis: {scale: false, focus: 'none'},
+                z: 6,
+                zlevel: 0,
             });
         }
 
@@ -757,10 +718,14 @@
                 smooth: false,
                 lineStyle: {width: 2, color, type: 'dashed'},
                 itemStyle: {color},
+                emphasis: {scale: false, focus: 'none'},
+                tooltip: PER_LOT_LINE_TOOLTIP_OVERRIDE,
+                z: 5,
+                zlevel: 0,
             });
         }
 
-        if ((priceOverlayVisibility['cumulative-wac'] ?? true) && showCumulativeWac) {
+        if (showCumulativeWac) {
             series.push({
                 id: 'price-cumulative-wac',
                 name: modeLabels.cumulativeWac,
@@ -771,17 +736,20 @@
                 smooth: false,
                 lineStyle: {width: 2.2, color: isDark ? '#cbd5e1' : '#475569'},
                 itemStyle: {color: isDark ? '#cbd5e1' : '#475569'},
+                emphasis: {scale: false, focus: 'none'},
+                z: 4,
+                zlevel: 0,
             });
         }
 
         for (const brokerId of activeBrokerIds) {
             const brokerSeries = brokerWacSeries.find((item) => item.brokerId === brokerId);
+            if (!brokerSeries || !brokerSeries.points.some((point) => point.value[1] != null)) continue;
             const key = `broker-wac-${brokerId}`;
-            if (!brokerSeries || !(priceOverlayVisibility[key] ?? activeBrokerIds.length === 1) || !brokerSeries.points.some((point) => point.value[1] != null)) continue;
             const color = brokerColor(brokerId);
             series.push({
                 id: key,
-                name: `WAC — ${brokerName(brokerId)}`,
+                name: `${modeLabels.wacAbbreviation} — ${brokerName(brokerId)}`,
                 type: 'line',
                 data: brokerSeries.points,
                 showSymbol: false,
@@ -789,6 +757,9 @@
                 smooth: false,
                 lineStyle: {width: 1.8, color, type: 'dotted'},
                 itemStyle: {color},
+                emphasis: {scale: false, focus: 'none'},
+                z: 3,
+                zlevel: 0,
             });
         }
 
@@ -803,13 +774,28 @@
         return {
             ...CHART_ANIMATION_CONFIG,
             grid: {
-                top: 18,
+                top: 62,
                 right: 18,
                 bottom: 34,
                 left: 24,
                 containLabel: true,
             },
-            legend: {show: false},
+            legend: {
+                show: true,
+                type: 'scroll',
+                top: 4,
+                left: 'center',
+                right: 8,
+                itemWidth: 10,
+                itemHeight: 10,
+                itemGap: 12,
+                pageIconColor: gridColors.textColor,
+                pageTextStyle: {color: gridColors.textColor},
+                textStyle: {
+                    color: gridColors.textColor,
+                    fontSize: 11,
+                },
+            },
             tooltip: {
                 trigger: 'axis',
                 position: tooltipPositionSide,
@@ -939,8 +925,8 @@
         void brokerWacSeries;
         void activeBrokerIds;
         void showCumulativeWac;
-        void valueSeriesVisibility;
-        void priceOverlayVisibility;
+        void showAggregateValue;
+        void showIndividualValue;
         void emptyMessage;
         void $currentLanguage;
 
@@ -994,46 +980,26 @@
             {modeLabels.selectLots}
         </div>
     {:else}
-        <div class="flex flex-wrap gap-2" data-testid="lot-comparison-lot-legend">
-            {#each lotModels as lot (lot.lotId)}
-                <label
-                    class="inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors {lotVisibility[lot.lotId] ?? true ? 'border-gray-200 text-gray-700 dark:border-slate-600 dark:text-gray-200' : 'border-gray-200/70 text-gray-400 dark:border-slate-700 dark:text-gray-500'}"
-                    data-testid={`lot-comparison-toggle-${lot.lotId}`}
+        {#if mode === 'value'}
+            <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lots-value-presentation-filter">
+                <button
+                    type="button"
+                    class="px-3 py-1 transition-colors {showAggregateValue ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                    onclick={() => (showAggregateValue = !showAggregateValue)}
+                    aria-pressed={showAggregateValue}
+                    data-testid="lots-value-aggregate-toggle"
                 >
-                    <input type="checkbox" checked={lotVisibility[lot.lotId] ?? true} onchange={() => toggleLotVisibility(lot.lotId)} style={`accent-color:${lotColor(lot.lotId)};`} />
-                    <span class="h-2.5 w-2.5 rounded-full" style={`background:${lotColor(lot.lotId)};`}></span>
-                    <span>{lot.label}</span>
-                </label>
-            {/each}
-        </div>
-
-        {#if mode === 'value' && valueToggleItems.length > 0}
-            <div class="flex flex-wrap gap-2" data-testid="lot-comparison-value-legend">
-                {#each valueToggleItems as item (item.lotId)}
-                    <label
-                        class="inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors {item.visible ? 'border-gray-200 text-gray-700 dark:border-slate-600 dark:text-gray-200' : 'border-gray-200/70 text-gray-400 dark:border-slate-700 dark:text-gray-500'}"
-                        data-testid={`lot-comparison-value-toggle-${item.lotId}`}
-                    >
-                        <input type="checkbox" checked={item.visible} onchange={() => toggleValueSeries(item.lotId)} style={`accent-color:${item.color};`} />
-                        <span class="h-2.5 w-2.5 rounded-full" style={`background:${item.color};`}></span>
-                        <span>{item.label}</span>
-                    </label>
-                {/each}
-            </div>
-        {/if}
-
-        {#if mode === 'price' && priceToggleItems.length > 0}
-            <div class="flex flex-wrap gap-2" data-testid="lot-comparison-price-legend">
-                {#each priceToggleItems as item (item.id)}
-                    <label
-                        class="inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors {item.visible ? 'border-gray-200 text-gray-700 dark:border-slate-600 dark:text-gray-200' : 'border-gray-200/70 text-gray-400 dark:border-slate-700 dark:text-gray-500'}"
-                        data-testid={`lot-comparison-price-toggle-${item.id}`}
-                    >
-                        <input type="checkbox" checked={item.visible} onchange={() => togglePriceOverlay(item.id)} style={`accent-color:${item.color};`} />
-                        <span class="h-2.5 w-2.5 rounded-full" style={`background:${item.color};`}></span>
-                        <span>{item.label}</span>
-                    </label>
-                {/each}
+                    {modeLabels.presentationAggregate}
+                </button>
+                <button
+                    type="button"
+                    class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {showIndividualValue ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                    onclick={() => (showIndividualValue = !showIndividualValue)}
+                    aria-pressed={showIndividualValue}
+                    data-testid="lots-value-individual-toggle"
+                >
+                    {modeLabels.presentationIndividual}
+                </button>
             </div>
         {/if}
 

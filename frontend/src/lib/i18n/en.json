@@ -552,15 +552,18 @@
       "allLots": "All",
       "valueComparisonTitle": "Value of selected lots",
       "returnComparisonTitle": "Return from opening date",
-      "priceComparisonTitle": "Price and average cost",
+      "priceComparisonTitle": "Price of selected lots",
       "modeReturn": "Return",
       "selectLotsToCompare": "Select one or more lots to compare",
       "noVisibleLots": "No visible lots in chart",
       "cumulativeProceeds": "Cumulative proceeds",
       "residualOpenValue": "Residual open value",
       "aggregateOriginalCost": "Total original cost",
+      "comparisonTotalValueAggregate": "Total value",
       "openingPriceReference": "Opening price",
-      "cumulativeWac": "Cumulative WAC",
+      "valuePresentationAggregate": "Aggregate",
+      "valuePresentationIndividual": "Per lot",
+      "cumulativeWac": "Cumulative Avg. Cost",
       "totalReturn": "Total return",
       "openReturn": "Open Return",
       "buyDate": "Buy Date",
@@ -581,6 +584,7 @@
       "inTransitShort": "Transit",
       "brokersCount": "{count} brokers",
       "lotLabel": "Lot {date}",
+      "lotWord": "Lot",
       "shortLotLabel": "Short {date}",
       "detailTitle": "FIFO Lot Detail",
       "loadFailed": "Failed to load lot data",
@@ -668,8 +672,16 @@
           "splitRatio": "Split ratio",
           "sourceBroker": "From",
           "destinationBroker": "To"
-        }
-      }
+        },
+        "openingValue": "Opening Value",
+        "cumulativeProceeds": "Cumulative proceeds"
+      },
+      "originalQuantity": "Original Quantity",
+      "openingValue": "Opening Value",
+      "viewLotDetail": "View lot detail",
+      "viewGanttLot": "Go to lot in Gantt",
+      "goToOpeningTransaction": "Go to opening transaction",
+      "copyLotIdentifier": "Copy lot identifier"
     },
     "createdInSystem": "Created in System"
   },
