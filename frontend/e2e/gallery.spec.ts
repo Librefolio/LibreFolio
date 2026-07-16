@@ -567,8 +567,8 @@ test.describe('Gallery Screenshots', () => {
                     await analyzeLotsButton.scrollIntoViewIfNeeded();
                     await analyzeLotsButton.click();
 
-                    await expect(page.getByTestId('fifo-lots-panel')).toBeVisible({timeout: 5_000});
-                    const panelLoading = page.getByTestId('fifo-lots-panel-loading');
+                    await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5_000});
+                    const panelLoading = page.getByTestId('lots-analysis-panel-loading');
                     if (await panelLoading.isVisible({timeout: 1_000}).catch(() => false)) {
                         await panelLoading.waitFor({state: 'hidden', timeout: 15_000}).catch(() => {});
                     }
@@ -581,12 +581,12 @@ test.describe('Gallery Screenshots', () => {
                         continue;
                     }
 
-                    const wacChartVisible = await page.getByTestId('asset-wac-price-chart').isVisible({timeout: 10_000}).catch(() => false);
-                    const bubbleTimelineVisible = await page.getByTestId('bubble-lot-timeline').isVisible({timeout: 10_000}).catch(() => false);
+                    const wacChartVisible = await page.getByTestId('lot-wac-price-chart').isVisible({timeout: 10_000}).catch(() => false);
+                    const bubbleTimelineVisible = await page.getByTestId('lot-gantt-chart').isVisible({timeout: 10_000}).catch(() => false);
                     if (!wacChartVisible || !bubbleTimelineVisible) {
                         if (attempt === 2) {
-                            await expect(page.getByTestId('asset-wac-price-chart')).toBeVisible({timeout: 10_000});
-                            await expect(page.getByTestId('bubble-lot-timeline')).toBeVisible({timeout: 10_000});
+                            await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible({timeout: 10_000});
+                            await expect(page.getByTestId('lot-gantt-chart')).toBeVisible({timeout: 10_000});
                         }
                         continue;
                     }
@@ -595,12 +595,12 @@ test.describe('Gallery Screenshots', () => {
                     // The panel opens below the positions table and can be taller than the
                     // viewport — scroll its top edge into view so the Bubble Timeline / WAC
                     // chart (not just the header) are actually captured in the screenshot.
-                    await page.getByTestId('fifo-lots-panel').evaluate((el) => el.scrollIntoView({block: 'start'}));
+                    await page.getByTestId('lots-analysis-panel').evaluate((el) => el.scrollIntoView({block: 'start'}));
                     await page.waitForTimeout(800);
                     await screenshot(page, viewport, lang, theme, 'dashboard', 'fifo-lots-panel');
 
-                    await page.getByTestId('fifo-lots-panel-close').click();
-                    await expect(page.getByTestId('fifo-lots-panel')).toBeHidden({timeout: 5_000});
+                    await page.getByTestId('lots-analysis-panel-close').click();
+                    await expect(page.getByTestId('lots-analysis-panel')).toBeHidden({timeout: 5_000});
                 }
             });
         });
@@ -1482,18 +1482,18 @@ test.describe('Gallery Screenshots', () => {
                     await analyzeLotsButton.scrollIntoViewIfNeeded();
                     await analyzeLotsButton.click();
 
-                    await expect(page.getByTestId('fifo-lots-panel')).toBeVisible({timeout: 5_000});
-                    await expect(page.getByTestId('asset-wac-price-chart')).toBeVisible({timeout: 10_000});
-                    await expect(page.getByTestId('bubble-lot-timeline')).toBeVisible({timeout: 10_000});
+                    await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5_000});
+                    await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible({timeout: 10_000});
+                    await expect(page.getByTestId('lot-gantt-chart')).toBeVisible({timeout: 10_000});
                     // Scroll the panel's top edge into view — it opens below the positions
                     // table and can be taller than the viewport (see also the analogous fix
                     // in the "dashboard fifo lots panel" test).
-                    await page.getByTestId('fifo-lots-panel').evaluate((el) => el.scrollIntoView({block: 'start'}));
+                    await page.getByTestId('lots-analysis-panel').evaluate((el) => el.scrollIntoView({block: 'start'}));
                     await page.waitForTimeout(800);
                     await screenshot(page, viewport, lang, theme, 'brokers', 'fifo-lots-panel');
 
-                    await page.getByTestId('fifo-lots-panel-close').click();
-                    await expect(page.getByTestId('fifo-lots-panel')).toBeHidden({timeout: 5_000});
+                    await page.getByTestId('lots-analysis-panel-close').click();
+                    await expect(page.getByTestId('lots-analysis-panel')).toBeHidden({timeout: 5_000});
                 }
             }
         });

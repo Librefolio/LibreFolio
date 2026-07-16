@@ -136,7 +136,12 @@ class TestLinkedInternalDifferentDates:
     """Linked internal pairs with different dates → in-transit interval."""
 
     def test_cash_transfer_different_dates(self):
-        """CASH_TRANSFER: departure 03-01, arrival 03-04 → in-transit [03-02, 03-03]."""
+        """CASH_TRANSFER: departure 03-01, arrival 03-04 → in-transit [03-01, 03-03].
+
+        [min(dep,arr), max(dep,arr)) convention (plan v2 §7.2): departure date is
+        included (value leaves the source and enters transit same day, no hole),
+        arrival date is excluded (destination custody starts there).
+        """
         tx_out = _tx(id=30, broker_id=10, type="CASH_TRANSFER", dt="2025-03-01", amount="-5000", related_id=31)
         tx_in = _tx(id=31, broker_id=20, type="CASH_TRANSFER", dt="2025-03-04", amount="5000", related_id=30)
         c = ScopeAwareTransactionClassifier(
@@ -150,14 +155,14 @@ class TestLinkedInternalDifferentDates:
         assert len(result.in_transit_intervals) == 1
 
         it = result.in_transit_intervals[0]
-        assert it.start_date == date(2025, 3, 2)
+        assert it.start_date == date(2025, 3, 1)
         assert it.end_date == date(2025, 3, 3)
         assert it.tx_type == "cash"
         assert it.departure_leg.id == 30
         assert it.arrival_leg.id == 31
 
     def test_asset_transfer_different_dates(self):
-        """TRANSFER: asset moves between brokers with different dates."""
+        """TRANSFER: asset moves between brokers with different dates → in-transit [05-01, 05-04]."""
         tx_out = _tx(
             id=40,
             broker_id=10,
@@ -187,15 +192,21 @@ class TestLinkedInternalDifferentDates:
 
         assert len(result.in_transit_intervals) == 1
         it = result.in_transit_intervals[0]
-        assert it.start_date == date(2025, 5, 2)
+        assert it.start_date == date(2025, 5, 1)
         assert it.end_date == date(2025, 5, 4)
         assert it.tx_type == "asset"
         assert it.asset_id == 200
         assert it.cost_basis_amount == Decimal("50.00")
         assert it.cost_basis_currency == "EUR"
 
-    def test_adjacent_days_no_transit(self):
-        """Adjacent days (T, T+1) → no in-transit window (start > end)."""
+    def test_adjacent_days_transit_covers_departure_day(self):
+        """Adjacent days (T, T+1) → 1-day in-transit window on the departure day.
+
+        Regression test for the value-hole fixed by the [min,max) convention: the
+        old dep+1..arr-1 convention returned an EMPTY window here (start > end),
+        meaning the value vanished entirely on day T (already 0 at the source
+        broker, not yet counted anywhere else). The new convention covers day T.
+        """
         tx_out = _tx(id=50, broker_id=10, type="CASH_TRANSFER", dt="2025-06-01", amount="-1000", related_id=51)
         tx_in = _tx(id=51, broker_id=20, type="CASH_TRANSFER", dt="2025-06-02", amount="1000", related_id=50)
         c = ScopeAwareTransactionClassifier(
@@ -206,7 +217,55 @@ class TestLinkedInternalDifferentDates:
         result = c.classify()
 
         assert all(ct.classification == "linked_internal" for ct in result.classified)
+        assert len(result.in_transit_intervals) == 1
+        it = result.in_transit_intervals[0]
+        assert it.start_date == date(2025, 6, 1)
+        assert it.end_date == date(2025, 6, 1)
+
+    def test_same_day_transfer_no_transit(self):
+        """Same-day transfer (both legs dated T) → no in-transit window at all.
+
+        This is the ONLY case that still returns an empty window under the
+        [min,max) convention (start == end + 1 day → start > end).
+        """
+        tx_out = _tx(id=52, broker_id=10, type="CASH_TRANSFER", dt="2025-06-10", amount="-1000", related_id=53)
+        tx_in = _tx(id=53, broker_id=20, type="CASH_TRANSFER", dt="2025-06-10", amount="1000", related_id=52)
+        c = ScopeAwareTransactionClassifier(
+            scope_broker_ids={10, 20},
+            all_transactions=[tx_out, tx_in],
+            broker_shares={10: Decimal("1"), 20: Decimal("1")},
+        )
+        result = c.classify()
+
         assert len(result.in_transit_intervals) == 0
+
+    def test_out_leg_dated_after_in_leg_still_resolves_chronologically(self):
+        """Negative-amount ("out") leg dated after positive-amount ("in") leg.
+
+        Direction of the in-transit window depends on chronological order, not
+        on which leg is semantically the outflow/inflow (plan v2 §7.1: "la
+        direzione dipende dai segni, non dall'ordine delle date" for FIFO — but
+        for the aggregate transit *bucket*, chronological min/max governs
+        instead). Here the negative-amount leg is dated LATER than the
+        positive-amount leg; departure/arrival must still follow chronology.
+        """
+        tx_negative_but_later = _tx(id=54, broker_id=10, type="CASH_TRANSFER", dt="2025-07-05", amount="-2000", related_id=55)
+        tx_positive_but_earlier = _tx(id=55, broker_id=20, type="CASH_TRANSFER", dt="2025-07-01", amount="2000", related_id=54)
+        c = ScopeAwareTransactionClassifier(
+            scope_broker_ids={10, 20},
+            all_transactions=[tx_negative_but_later, tx_positive_but_earlier],
+            broker_shares={10: Decimal("1"), 20: Decimal("1")},
+        )
+        result = c.classify()
+
+        assert len(result.in_transit_intervals) == 1
+        it = result.in_transit_intervals[0]
+        # Chronologically earlier leg (id=55, 07-01) is the departure regardless
+        # of its positive amount sign.
+        assert it.departure_leg.id == 55
+        assert it.arrival_leg.id == 54
+        assert it.start_date == date(2025, 7, 1)
+        assert it.end_date == date(2025, 7, 4)
 
 
 class TestLinkedExternal:

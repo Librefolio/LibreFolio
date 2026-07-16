@@ -27,7 +27,7 @@ from typing import Literal, Optional
 import structlog
 from sqlalchemy import func, select
 
-from backend.app.db.models import Asset, BrokerUserAccess, PriceHistory, Transaction, TransactionType
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, BrokerUserAccess, PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency as CurrencySchema
 from backend.app.schemas.portfolio import (
     DataQualityIssue,
@@ -111,15 +111,19 @@ class ClassifiedTransaction:
 class InTransitInterval:
     """In-transit window for an internal linked pair with different dates.
 
-    Window is [start_date, end_date] inclusive.  Both dates are the exclusive
-    boundaries of the departure/arrival legs:
-        start_date = departure_date + 1
-        end_date   = arrival_date   - 1
-    If start_date > end_date the interval is empty (same day or adjacent days).
+    Window is [start_date, end_date] inclusive, representing the half-open
+    convention [min(departure_date, arrival_date), max(departure_date, arrival_date))
+    from plan v2 §7.2:
+        start_date = min(departure_date, arrival_date)       # = departure_date (dep <= arr by construction)
+        end_date   = max(departure_date, arrival_date) - 1   # last day still "in transit"
+    The departure date itself is included (value leaves the source broker and
+    enters transit on the same day — no value-hole), the arrival date itself is
+    excluded (destination custody begins on arrival day, no double-count).
+    If start_date > end_date the interval is empty (same-day transfer only).
     """
 
-    start_date: date_type  # departure_date + 1
-    end_date: date_type  # arrival_date - 1
+    start_date: date_type  # min(departure_date, arrival_date) == departure_date
+    end_date: date_type  # max(departure_date, arrival_date) - 1
     tx_type: Literal["cash", "asset"]
     departure_leg: Transaction
     arrival_leg: Transaction
@@ -293,19 +297,23 @@ class ScopeAwareTransactionClassifier:
         """Build an InTransitInterval for a linked internal pair with different dates.
 
         Departure = earlier date leg, arrival = later date leg.
-        Window = [departure_date + 1, arrival_date - 1] (exclusive endpoints).
-        Returns None if the interval would be empty (adjacent days).
+        Window = [departure_date, arrival_date - 1] inclusive — i.e. the half-open
+        [min(dep,arr), max(dep,arr)) convention from plan v2 §7.2. The departure
+        date is included (fixes the value-hole where the source broker already
+        shows qty=0 but the old dep+1 window hadn't started yet); the arrival
+        date is excluded (destination custody starts there, no double-count).
+        Returns None only for a same-day transfer (no transit period at all).
         """
         if tx_a.date <= tx_b.date:
             departure, arrival = tx_a, tx_b
         else:
             departure, arrival = tx_b, tx_a
 
-        start = departure.date + timedelta(days=1)
+        start = departure.date
         end = arrival.date - timedelta(days=1)
 
         if start > end:
-            return None  # Adjacent days or same day — no transit window
+            return None  # Same-day transfer — no transit window
 
         # Determine type: cash or asset
         if departure.type in _ASSET_LINKED_TYPES or arrival.type in _ASSET_LINKED_TYPES:
@@ -442,6 +450,7 @@ class DailyStateBuilder:
         date_to: date_type,
         frame_start: date_type | None = None,
         last_buy_prices: dict[int, tuple[date_type, Decimal, str]] | None = None,
+        split_linked_tx_ids: set[int] | None = None,
     ) -> None:
         self.classified_txs = classified_txs
         self.in_transit_intervals = in_transit_intervals
@@ -455,6 +464,11 @@ class DailyStateBuilder:
         self.target_currency = target_currency
         self.date_from = date_from
         self.date_to = date_to
+        # Transaction ids for ADJUSTMENT rows linked to an AssetEvent of type SPLIT.
+        # These bypass the normal add/reduce WAC pool math (see _apply_wac_pool_update):
+        # a split redistributes existing cost over a new quantity, it never adds or
+        # removes economic cost. Populated by PortfolioCalculationEngine.run().
+        self.split_linked_tx_ids: set[int] = split_linked_tx_ids or set()
         # frame_start: first day to emit DailyPortfolioState. Before this = pre-frame (accounting only).
         # None → same as date_from (no pre-frame, full evaluation from start).
         self.frame_start = frame_start if frame_start is not None else date_from
@@ -589,6 +603,10 @@ class DailyStateBuilder:
                     tx = ctxn.tx
                     key = (tx.asset_id, tx.broker_id)
                     tx_qty = tx.quantity * ctxn.share
+                    if tx.id in self.split_linked_tx_ids:
+                        self._apply_split_rescale(key, tx_qty, wac_pool_qty, wac_pool_cost, zero)
+                        cumulative_qty[key] += tx_qty
+                        continue
                     if tx.quantity > 0:
                         unit_cost_asset_ccy = self._buy_unit_cost(tx)
                         if unit_cost_asset_ccy is not None:
@@ -725,6 +743,10 @@ class DailyStateBuilder:
 
                 # ── Position tx: WAC pool update ──
                 if tx.quantity and tx.quantity != 0 and tx.asset_id and key:
+                    if tx.id in self.split_linked_tx_ids:
+                        self._apply_split_rescale(key, tx_qty, wac_pool_qty, wac_pool_cost, zero)
+                        cumulative_qty[key] += tx_qty
+                        continue  # split never touches cash/K/R/realized accounting
                     if tx.quantity > 0:
                         # Acquisition: update WAC pool
                         unit_cost_asset_ccy = self._buy_unit_cost(tx)
@@ -1256,6 +1278,33 @@ class DailyStateBuilder:
         # Cannot convert — return None (will be treated as add-at-current-WAC)
         return None
 
+    @staticmethod
+    def _apply_split_rescale(
+        key: tuple[int, int],
+        tx_qty: Decimal,
+        wac_pool_qty: dict[tuple[int, int], Decimal],
+        wac_pool_cost: dict[tuple[int, int], Decimal],
+        zero: Decimal,
+    ) -> None:
+        """Apply a SPLIT-linked quantity change to the WAC pool by rescaling, not add/reduce.
+
+        A split (forward or reverse) never adds or removes economic cost — it only
+        redistributes the existing total cost over a different unit count. Unlike a
+        BUY (cost added) or SELL (cost removed proportionally at current WAC), the
+        pool's total cost is left UNCHANGED here; only quantity moves. This preserves
+        the cost invariant q*wac = const from plan v2 §8.2 for both forward
+        (tx_qty > 0) and reverse (tx_qty < 0) splits alike — e.g. 15@100 -> +15 ->
+        30@50 (cost 1500 both sides), or 30@50 -> -15 -> 15@100 (cost 1500 both sides).
+        Mutates wac_pool_qty/wac_pool_cost in place.
+        """
+        new_qty = wac_pool_qty[key] + tx_qty
+        if new_qty > zero:
+            wac_pool_qty[key] = new_qty
+            # wac_pool_cost[key] intentionally untouched: total cost is split-invariant.
+        else:
+            wac_pool_qty[key] = zero
+            wac_pool_cost[key] = zero
+
     def _distribute_allocation(
         self,
         asset_id: int,
@@ -1711,6 +1760,15 @@ class PortfolioCalculationEngine:
                 date_to=date_to or date_type.today(),
             )
 
+        # ── 3b. Identify ADJUSTMENT rows linked to a SPLIT AssetEvent ──
+        # These bypass the normal BUY/SELL WAC pool math in DailyStateBuilder: a split
+        # redistributes existing cost over a new quantity, it never adds/removes cost.
+        split_event_tx_ids = {tx.id for tx in all_txs if tx.asset_event_id is not None}
+        split_linked_tx_ids: set[int] = set()
+        if split_event_tx_ids:
+            split_asset_event_stmt = select(Transaction.id).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_event_tx_ids)).where(AssetEvent.type == AssetEventType.SPLIT)
+            split_linked_tx_ids = set((await self.db.execute(split_asset_event_stmt)).scalars().all())
+
         # ── 4. Classify transactions ──
         classifier = ScopeAwareTransactionClassifier(scope_broker_ids, all_txs, broker_shares)
         needed_ids = classifier.get_needed_paired_ids()
@@ -1761,6 +1819,10 @@ class PortfolioCalculationEngine:
         tx_fingerprint = _compute_tx_fingerprint(all_txs)
         held_asset_ids = {tx.asset_id for tx in all_txs if tx.asset_id and tx.quantity and tx.quantity != 0}
         price_fingerprint = await self._compute_price_fingerprint(held_asset_ids, actual_to)
+        # split_linked_tx_ids is queried live (not derived from tx_fingerprint), so it must
+        # be part of the key: editing an AssetEvent's type after linking does not bump any
+        # Transaction.updated_at, but does change this set on the next call.
+        split_linked_fingerprint = tuple(sorted(split_linked_tx_ids))
 
         # Blob key: independent of date range (blob stores its own range)
         blob_key = (
@@ -1769,6 +1831,7 @@ class PortfolioCalculationEngine:
             target_currency,
             tx_fingerprint,
             price_fingerprint,
+            split_linked_fingerprint,
         )
 
         cached_blob, blob_hit = _portfolio_blob_cache.get(blob_key)
@@ -1855,6 +1918,7 @@ class PortfolioCalculationEngine:
             date_from=actual_from,
             date_to=actual_to,
             last_buy_prices=last_buy_prices,
+            split_linked_tx_ids=split_linked_tx_ids,
         )
         result = builder.build()
 

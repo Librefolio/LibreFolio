@@ -36,6 +36,7 @@ class WACInputTX:
     original_currency: Optional[str] = None
     is_pending: bool = False  # True if from workspace (not yet in DB)
     cost_basis_mode: Optional[str] = None  # "auto" | "manual" | None
+    is_split_linked: bool = False  # True if this ADJUSTMENT is linked to an AssetEvent of type SPLIT
 
 
 @dataclass
@@ -102,6 +103,35 @@ def compute_wac_from_txlist(
             tx_qty = tx.quantity
             effect: str
             unit_cost: Decimal | None
+
+            if tx.is_split_linked:
+                # Split/reverse split: never adds or removes economic cost, only
+                # redistributes existing total cost (wac * qty_pool) over a new
+                # quantity. Bypasses the add/reduce dichotomy below entirely —
+                # unlike a real BUY/SELL, unit_cost_converted is not consulted.
+                new_qty = qty_pool + tx_qty
+                if new_qty > 0:
+                    wac = (wac * qty_pool) / new_qty
+                else:
+                    wac = Decimal("0")
+                    new_qty = Decimal("0")
+                qty_pool = new_qty
+                unit_cost = wac
+                effect = "split_rescale"
+
+                qualifying.append(
+                    WACQualifyingTX(
+                        tx_id=tx.tx_id,
+                        type=tx.type,
+                        date=tx.date,
+                        quantity=tx.quantity,
+                        unit_cost=unit_cost,
+                        currency=target_currency,
+                        effect=effect,
+                        running_wac=wac,
+                    )
+                )
+                continue
 
             if tx_qty > 0:
                 # Acquisition

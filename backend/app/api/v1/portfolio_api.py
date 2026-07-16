@@ -4,33 +4,23 @@ Portfolio API endpoints for LibreFolio.
 Provides read-only portfolio calculations on committed data:
 - POST /portfolio/wac           — WAC time series per (broker, asset)
 - POST /portfolio/report        — UNIFIED: summary+history+allocation+contribution+data_quality
-- GET  /portfolio/asset-history — WAC vs market price series for one asset
-- GET  /portfolio/lots          — FIFO open and closed lots for one asset across brokers
+- POST /portfolio/lots/analysis — FifoLotEngine bulk multi-analysis (lots, Gantt, histories, WAC)
 
 Legacy standalone endpoints (/summary, /history, /allocation-history) removed —
 all data is available via /report with include_* flags.
 """
 
 from datetime import date as date_type
-from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import Asset, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.portfolio import (
-    AssetHistoryPoint,
-    FIFOLotsResponse,
-    PortfolioReportQuery,
-    PortfolioReportResponse,
-    WACAnalyticsRequest,
-    WACAnalyticsResponse,
-    WACAnalyticsResultItem,
-    WACSeriesPoint,
-)
+from backend.app.schemas.portfolio import LotsAnalysisQuery, LotsAnalysisResponse, PortfolioReportQuery, PortfolioReportResponse, WACAnalyticsRequest, WACAnalyticsResponse, WACAnalyticsResultItem, WACSeriesPoint
+from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService, compute_wac_iterative
 
 logger = get_logger(__name__)
@@ -134,50 +124,6 @@ async def get_portfolio_wac(
 # =============================================================================
 
 
-@portfolio_router.get(
-    "/asset-history",
-    response_model=list[AssetHistoryPoint],
-    summary="Asset WAC vs market price history",
-    description="Time series of WAC (cost basis per unit) vs market price for a specific asset.",
-)
-async def get_asset_history(
-    asset_id: int = Query(..., description="Asset ID"),
-    broker_ids: Optional[List[int]] = Query(None, description="Broker IDs to include; omit for all accessible brokers"),
-    session: AsyncSession = Depends(get_session_generator),
-    current_user: User = Depends(get_current_user),
-) -> list[AssetHistoryPoint]:
-    """Return WAC vs market price series for a specific asset."""
-    service = PortfolioService(session)
-    return await service.get_asset_history(
-        user_id=current_user.id,
-        asset_id=asset_id,
-        broker_ids=broker_ids,
-    )
-
-
-@portfolio_router.get(
-    "/lots",
-    response_model=FIFOLotsResponse,
-    summary="FIFO lots for an asset",
-    description="Open and closed FIFO lots for a specific asset across selected accessible brokers.",
-)
-async def get_fifo_lots(
-    broker_ids: Optional[List[int]] = Query(None, description="Broker IDs to include; omit for all accessible brokers"),
-    asset_id: int = Query(..., description="Asset ID"),
-    as_of_date: Optional[date_type] = Query(None, description="Filter FIFO calculation to transactions up to this date; omit for all-time"),
-    session: AsyncSession = Depends(get_session_generator),
-    current_user: User = Depends(get_current_user),
-) -> FIFOLotsResponse:
-    """Return FIFO open and closed lots for an asset across brokers."""
-    service = PortfolioService(session)
-    return await service.get_lots(
-        user_id=current_user.id,
-        broker_ids=broker_ids,
-        asset_id=asset_id,
-        as_of_date=as_of_date,
-    )
-
-
 @portfolio_router.post(
     "/report",
     response_model=PortfolioReportResponse,
@@ -198,3 +144,46 @@ async def get_portfolio_report(
 
     service = PortfolioService(session)
     return await service.get_report(user_id=current_user.id, query=body)
+
+
+@portfolio_router.post(
+    "/lots/analysis",
+    response_model=LotsAnalysisResponse,
+    summary="Bulk FIFO lots analysis",
+    description=(
+        "Run the FifoLotEngine once for one asset and return all requested analyses "
+        "(lot summary, Gantt topology, custody/event history, value/return/price history, "
+        "broker and cumulative WAC history) in a single response, converted to target_currency. "
+        "Supersedes GET /portfolio/lots for the new lots UI (Gantt, unified table, custody modal, "
+        "comparison chart) — the frontend performs no FX conversion, FIFO attribution, or WAC math."
+    ),
+)
+async def get_lots_analysis(
+    body: LotsAnalysisQuery,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> LotsAnalysisResponse:
+    """Return a bulk FIFO lots analysis from a single FifoLotEngine run."""
+    from backend.app.services.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
+
+    # Resolve min/max sentinels before passing to service
+    if body.date_range and body.date_range.has_sentinels():
+        body.date_range = await resolve_date_sentinels(body.date_range, current_user.id, session, broker_ids=body.broker_ids)
+
+    date_from = body.date_range.start if body.date_range else None
+    date_to = body.date_range.end if body.date_range else None
+
+    service = LotsAnalysisService(session)
+    try:
+        return await service.get_lots_analysis(
+            user_id=current_user.id,
+            asset_id=body.asset_id,
+            broker_ids=body.broker_ids,
+            date_from=date_from,
+            date_to=date_to,
+            target_currency=body.target_currency,
+            selected_lot_ids=body.selected_lot_ids,
+            requested_analyses=body.requested_analyses,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
