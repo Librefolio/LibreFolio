@@ -2,7 +2,7 @@
 Integration tests for PortfolioService.
 
 Uses a real AsyncSession against the test database.
-Tests WAC orchestration, FIFO lots, history aggregation.
+Tests WAC orchestration and history aggregation.
 
 Also contains pure unit tests for _build_history_series() —
 synchronous, no DB, verify computation in isolation (TestBuildHistorySeries).
@@ -543,87 +543,6 @@ class TestPriceOnDate:
 
 
 # =============================================================================
-# TestPortfolioServiceGetLots
-# =============================================================================
-
-
-class TestPortfolioServiceGetLots:
-    @pytest.mark.asyncio
-    async def test_get_lots_no_access(self, session, test_user):
-        """User without broker access -> empty lots response."""
-        service = PortfolioService(session)
-        result = await service.get_lots(
-            user_id=test_user.id,
-            broker_ids=[999999],
-            asset_id=999999,
-        )
-        assert result.open_lots == []
-        assert result.closed_lots == []
-        assert result.total_realized_pnl == Decimal("0")
-
-    @pytest.mark.asyncio
-    async def test_get_lots_no_transactions(self, session, test_user, broker_with_access, test_asset):
-        """Broker with access but no transactions -> empty lots."""
-        broker, _ = broker_with_access
-        service = PortfolioService(session)
-        result = await service.get_lots(
-            user_id=test_user.id,
-            broker_ids=[broker.id],
-            asset_id=test_asset.id,
-        )
-        assert result.open_lots == []
-        assert result.closed_lots == []
-
-    @pytest.mark.asyncio
-    async def test_get_lots_buy_only(self, session, test_user, broker_with_access, test_asset):
-        """Single BUY -> 1 open lot, 0 closed lots."""
-        broker, _ = broker_with_access
-        tx = Transaction(
-            broker_id=broker.id,
-            asset_id=test_asset.id,
-            type=TransactionType.BUY,
-            date=date(2025, 1, 10),
-            quantity=Decimal("100"),
-            amount=Decimal("5000"),
-            currency="EUR",
-        )
-        session.add(tx)
-        await session.flush()
-
-        service = PortfolioService(session)
-        result = await service.get_lots(
-            user_id=test_user.id,
-            broker_ids=[broker.id],
-            asset_id=test_asset.id,
-        )
-        assert len(result.open_lots) >= 1
-        assert result.total_unrealized_quantity >= Decimal("100")
-
-    @pytest.mark.asyncio
-    async def test_get_lots_buy_and_partial_sell(self, session, test_user, broker_with_access, test_asset):
-        """BUY 100, SELL 30 -> open lot with 70 remaining, closed lot with 30."""
-        broker, _ = broker_with_access
-        session.add_all(
-            [
-                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 2, 1), quantity=Decimal("100"), amount=Decimal("5000"), currency="EUR"),
-                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.SELL, date=date(2025, 6, 1), quantity=Decimal("-30"), amount=Decimal("1800"), currency="EUR"),
-            ]
-        )
-        await session.flush()
-
-        service = PortfolioService(session)
-        result = await service.get_lots(
-            user_id=test_user.id,
-            broker_ids=[broker.id],
-            asset_id=test_asset.id,
-        )
-        open_by_qty = [lot for lot in result.open_lots if lot.remaining_quantity == Decimal("70")]
-        assert len(open_by_qty) >= 1, f"Expected open lot qty=70, got: {result.open_lots}"
-        closed_by_qty = [lot for lot in result.closed_lots if lot.quantity == Decimal("30")]
-        assert len(closed_by_qty) >= 1, f"Expected closed lot qty=30, got: {result.closed_lots}"
-
-
-# =============================================================================
 # TestPortfolioServiceGetHistory — Integration with value assertions
 # =============================================================================
 
@@ -922,10 +841,6 @@ class TestPortfolioServicePrivateHelpers:
             second_asset.id: 1,
             no_price_asset.id: 1,
         }
-
-        assert await service._get_latest_price(first_asset.id) == (Decimal("101"), "EUR", date(2025, 1, 5))
-        assert await service._get_latest_price(no_price_asset.id) is None
-
 
 # =============================================================================
 # TestTransactionImpliedDataQuality

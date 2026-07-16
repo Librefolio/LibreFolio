@@ -249,6 +249,91 @@ class TestBookValueFormula:
         assert s.unrealized_gain_loss == Decimal("100")  # NAV 1100 - book 1000
 
 
+class TestSplitRescale:
+    """SPLIT-linked ADJUSTMENT rescales the WAC pool instead of add/reduce (Fase 0 fix).
+
+    Regression coverage for the WAC split-doubling bug (fifo-engine reports 1-6):
+    a SPLIT must never add or remove economic cost, only redistribute the existing
+    total cost (open_cost_basis) over a new quantity. split_linked_tx_ids is passed
+    directly to DailyStateBuilder — resolving it from Transaction.asset_event_id is
+    PortfolioCalculationEngine.run()'s responsibility, tested separately.
+    """
+
+    def test_forward_split_in_frame_preserves_cost_basis(self):
+        """BUY 15@100 (cost 1500) + SPLIT +15 (frame) → 30 units, cost basis still 1500."""
+        txs = [
+            _ctxn(_tx(id=1, dt="2025-01-01", type="BUY", amount="-1500", quantity="15", asset_id=100, broker_id=10)),
+            _ctxn(_tx(id=2, dt="2025-01-10", type="ADJUSTMENT", amount="0", quantity="15", asset_id=100, broker_id=10)),
+        ]
+        builder = _builder(
+            classified_txs=txs,
+            price_map={100: [(date(2025, 1, 1), Decimal("100"), "EUR")]},
+            quote_base_map={100: None},
+            asset_types={100: "ETF"},
+            asset_classifications={100: None},
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 10),
+            split_linked_tx_ids={2},
+        )
+        states = builder.build().daily_states
+
+        assert states[0].open_cost_basis == Decimal("1500")  # before split: 15@100
+        s_after = states[-1]
+        assert s_after.open_cost_basis == Decimal("1500")  # after split: 30@50, cost unchanged
+        assert s_after.market_value == Decimal("3000")  # 30 * 100
+
+    def test_reverse_split_in_frame_preserves_cost_basis(self):
+        """BUY 30@50 (cost 1500) + SPLIT -15 (frame) → 15 units, cost basis still 1500."""
+        txs = [
+            _ctxn(_tx(id=1, dt="2025-01-01", type="BUY", amount="-1500", quantity="30", asset_id=100, broker_id=10)),
+            _ctxn(_tx(id=2, dt="2025-01-10", type="ADJUSTMENT", amount="0", quantity="-15", asset_id=100, broker_id=10)),
+        ]
+        builder = _builder(
+            classified_txs=txs,
+            price_map={100: [(date(2025, 1, 1), Decimal("100"), "EUR")]},
+            quote_base_map={100: None},
+            asset_types={100: "ETF"},
+            asset_classifications={100: None},
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 10),
+            split_linked_tx_ids={2},
+        )
+        states = builder.build().daily_states
+
+        s_after = states[-1]
+        # Without the fix, a reduction would keep WAC at 50 and drop cost to 750.
+        assert s_after.open_cost_basis == Decimal("1500")
+        assert s_after.market_value == Decimal("1500")  # 15 * 100
+
+    def test_forward_split_in_pre_frame_preserves_cost_basis(self):
+        """Same as forward-split test but the split falls in the pre-frame window.
+
+        Exercises the pre-frame accounting loop (a separate code path/copy from
+        the frame loop) with frame_start after the split date.
+        """
+        txs = [
+            _ctxn(_tx(id=1, dt="2025-01-01", type="BUY", amount="-1500", quantity="15", asset_id=100, broker_id=10)),
+            _ctxn(_tx(id=2, dt="2025-01-05", type="ADJUSTMENT", amount="0", quantity="15", asset_id=100, broker_id=10)),
+        ]
+        builder = _builder(
+            classified_txs=txs,
+            price_map={100: [(date(2025, 1, 1), Decimal("100"), "EUR")]},
+            quote_base_map={100: None},
+            asset_types={100: "ETF"},
+            asset_classifications={100: None},
+            date_from=date(2025, 1, 1),
+            frame_start=date(2025, 1, 6),
+            date_to=date(2025, 1, 6),
+            split_linked_tx_ids={2},
+        )
+        states = builder.build().daily_states
+
+        assert len(states) == 1  # only frame_start..date_to emitted
+        s = states[0]
+        assert s.open_cost_basis == Decimal("1500")  # carried over from pre-frame rescale
+        assert s.market_value == Decimal("3000")  # 30 * 100
+
+
 class TestMarketValueWithQuoteBase:
     """quote_base_quantity divides raw price (e.g. BTP/bond at 102 per 100 nominal)."""
 

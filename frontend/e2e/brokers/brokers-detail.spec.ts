@@ -225,8 +225,8 @@ test.describe('Broker Detail Page', () => {
             if ((await row.count()) === 0) return; // no holdings for this broker — nothing to click
 
             await row.getByTestId('row-action-analyze-lots').click();
-            await expect(page.getByTestId('fifo-lots-panel')).toBeVisible({timeout: 5000});
-            await expect(page.getByTestId('fifo-lots-panel-title')).toBeVisible();
+            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expect(page.getByTestId('lots-analysis-panel-title')).toBeVisible();
 
             // ?asset=<id> reflected in the URL (bookmarkable panel state).
             await expect(page).toHaveURL(/[?&]asset=\d+/);
@@ -240,10 +240,10 @@ test.describe('Broker Detail Page', () => {
             if ((await row.count()) === 0) return;
 
             await row.getByTestId('row-action-analyze-lots').click();
-            await expect(page.getByTestId('fifo-lots-panel')).toBeVisible({timeout: 5000});
+            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
 
-            await page.getByTestId('fifo-lots-panel-close').click();
-            await expect(page.getByTestId('fifo-lots-panel')).not.toBeVisible({timeout: 5000});
+            await page.getByTestId('lots-analysis-panel-close').click();
+            await expect(page.getByTestId('lots-analysis-panel')).not.toBeVisible({timeout: 5000});
             await expect(page).not.toHaveURL(/[?&]asset=\d+/);
         });
 
@@ -271,7 +271,7 @@ test.describe('Broker Detail Page', () => {
             await expect(page.getByTestId('context-menu-action-analyze-lots')).toBeVisible();
 
             await page.getByTestId('context-menu-action-analyze-lots').click();
-            await expect(page.getByTestId('fifo-lots-panel')).toBeVisible({timeout: 5000});
+            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
         });
 
         test('WAC/Price chart EUR|% toggle switches without breaking the panel', async ({page}) => {
@@ -282,14 +282,14 @@ test.describe('Broker Detail Page', () => {
             if ((await row.count()) === 0) return;
 
             await row.getByTestId('row-action-analyze-lots').click();
-            await expect(page.getByTestId('fifo-lots-panel')).toBeVisible({timeout: 5000});
-            await expect(page.getByTestId('asset-wac-price-chart')).toBeVisible({timeout: 5000});
+            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible({timeout: 5000});
 
-            await page.getByTestId('wac-toggle-percentage').click();
-            await expect(page.getByTestId('asset-wac-price-chart')).toBeVisible();
+            await page.getByTestId('lot-wac-toggle-percentage').click();
+            await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible();
 
             await page.getByTestId('wac-toggle-absolute').click();
-            await expect(page.getByTestId('asset-wac-price-chart')).toBeVisible();
+            await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible();
         });
     });
 });

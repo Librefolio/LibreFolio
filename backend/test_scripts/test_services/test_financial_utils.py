@@ -25,6 +25,7 @@ def _tx(
     unit_cost=None,
     currency="EUR",
     is_pending=False,
+    is_split=False,
 ) -> WACInputTX:
     """Shorthand to build a WACInputTX."""
     return WACInputTX(
@@ -35,6 +36,7 @@ def _tx(
         unit_cost_converted=Decimal(unit_cost) if unit_cost is not None else None,
         original_currency=currency,
         is_pending=is_pending,
+        is_split_linked=is_split,
     )
 
 
@@ -179,6 +181,77 @@ class TestComputeWacFromTxlist:
         assert result.wac_amount == Decimal("50")
         assert result.pool_qty == Decimal("5")
         print_success("FU-12: Multiple reductions → WAC stable at 50 ✓")
+
+    # ------------------------------------------------------------------ FU-13
+    def test_fu13_forward_split_preserves_total_cost(self):
+        """15@100 (cost 1500) + SPLIT-linked ADJUSTMENT +15 → 30@50 (cost 1500).
+
+        Regression test for the WAC split-doubling bug (fifo-engine reports 1-6):
+        the "auto" WAC fallback used to add the increment at the *current* WAC
+        (100), doubling total cost to 3000 instead of preserving it at 1500.
+        """
+        print_section("FU-13 — Forward split preserves total cost")
+        txs = [
+            _tx(tx_id=1, type="BUY", dt="2026-01-05", quantity="15", unit_cost="100"),
+            _tx(tx_id=2, type="ADJUSTMENT", dt="2026-02-01", quantity="15", is_split=True),
+        ]
+        result = compute_wac_from_txlist(txs, "EUR")
+        assert result.pool_qty == Decimal("30")
+        assert result.wac_amount == Decimal("50")
+        assert result.wac_amount * result.pool_qty == Decimal("1500")
+        assert result.qualifying[1].effect == "split_rescale"
+        print_success("FU-13: 15@100 -[split 2:1]-> 30@50, cost 1500 preserved ✓")
+
+    # ------------------------------------------------------------------ FU-14
+    def test_fu14_reverse_split_preserves_total_cost(self):
+        """30@50 (cost 1500) + SPLIT-linked ADJUSTMENT -15 → 15@100 (cost 1500).
+
+        Regression test: a plain reduction (SELL semantics) would keep WAC at 50
+        and drop total cost to 750 — a reverse split must preserve total cost by
+        rescaling WAC upward instead.
+        """
+        print_section("FU-14 — Reverse split preserves total cost")
+        txs = [
+            _tx(tx_id=1, type="BUY", dt="2026-01-05", quantity="30", unit_cost="50"),
+            _tx(tx_id=2, type="ADJUSTMENT", dt="2026-02-01", quantity="-15", is_split=True),
+        ]
+        result = compute_wac_from_txlist(txs, "EUR")
+        assert result.pool_qty == Decimal("15")
+        assert result.wac_amount == Decimal("100")
+        assert result.wac_amount * result.pool_qty == Decimal("1500")
+        assert result.qualifying[1].effect == "split_rescale"
+        print_success("FU-14: 30@50 -[reverse split 1:2]-> 15@100, cost 1500 preserved ✓")
+
+    # ------------------------------------------------------------------ FU-15
+    def test_fu15_split_ignores_cost_basis_override(self):
+        """SPLIT-linked ADJUSTMENT with a stray unit_cost_converted is still ignored.
+
+        Even if a stale/manual cost_basis_override is present, is_split_linked
+        must bypass it entirely — a split never carries economic cost.
+        """
+        print_section("FU-15 — Split ignores stray unit_cost_converted")
+        txs = [
+            _tx(tx_id=1, type="BUY", dt="2026-01-05", quantity="15", unit_cost="100"),
+            _tx(tx_id=2, type="ADJUSTMENT", dt="2026-02-01", quantity="15", unit_cost="999", is_split=True),
+        ]
+        result = compute_wac_from_txlist(txs, "EUR")
+        assert result.pool_qty == Decimal("30")
+        assert result.wac_amount == Decimal("50")
+        print_success("FU-15: Split rescale ignores stray unit_cost_converted (999) ✓")
+
+    # ------------------------------------------------------------------ FU-16
+    def test_fu16_split_then_sell_uses_post_split_wac(self):
+        """15@100 -> split 2:1 -> 30@50 -> SELL 10 → WAC stays 50, qty 20."""
+        print_section("FU-16 — Split then SELL uses post-split WAC")
+        txs = [
+            _tx(tx_id=1, type="BUY", dt="2026-01-05", quantity="15", unit_cost="100"),
+            _tx(tx_id=2, type="ADJUSTMENT", dt="2026-02-01", quantity="15", is_split=True),
+            _tx(tx_id=3, type="SELL", dt="2026-02-10", quantity="-10"),
+        ]
+        result = compute_wac_from_txlist(txs, "EUR")
+        assert result.pool_qty == Decimal("20")
+        assert result.wac_amount == Decimal("50")
+        print_success("FU-16: Post-split SELL uses rescaled WAC (50) ✓")
 
 
 class TestDetermineTargetCurrency:

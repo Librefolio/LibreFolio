@@ -7,8 +7,8 @@
  * Deliberately NOT using echarts.connect() — that global API also cross-links tooltips
  * (showTip/hideTip) and other actions across every chart in the group, replaying each
  * chart's OWN dataIndex/seriesIndex on its peers, which doesn't correspond to anything
- * meaningful when the two charts have structurally different series (e.g. FIFOLotsPanel's
- * line-based WAC chart vs its scatter/bubble timeline) — could show mismatched or empty
+ * meaningful when the two charts have structurally different series (e.g. line-based
+ * price/WAC chart vs scatter/timeline chart) — could show mismatched or empty
  * tooltips on hover. This module only ever propagates the numeric dataZoom start/end
  * window, nothing else.
  */

@@ -56,6 +56,31 @@ async def portfolio_wac(client: httpx.AsyncClient, queries: list[dict]) -> dict:
     return resp.json()
 
 
+async def create_split_event(client: httpx.AsyncClient, asset_id: int, event_date: str, ratio: str, currency: str = "EUR") -> int:
+    """Create a manual SPLIT AssetEvent (value = ratio) and return its id.
+
+    Mirrors how yahoo_finance.py populates SPLIT events: `value` carries the
+    ratio (e.g. "2" for a 2:1 split, "0.5" for a 1:2 reverse split), `currency`
+    is set to the asset's currency but is not semantically meaningful for SPLIT.
+    """
+    resp = await client.post(
+        f"{API_BASE}/assets/events",
+        json=[{"asset_id": asset_id, "events": [{"date": event_date, "type": "SPLIT", "value": {"code": currency, "amount": ratio}}]}],
+        timeout=TIMEOUT,
+    )
+    assert resp.status_code == 200, f"Event upsert failed: {resp.status_code}: {resp.text}"
+    query_resp = await client.post(
+        f"{API_BASE}/assets/events/query",
+        json=[{"asset_id": asset_id, "date_range": {"start": event_date, "end": event_date}}],
+        timeout=TIMEOUT,
+    )
+    assert query_resp.status_code == 200, f"Event query failed: {query_resp.status_code}: {query_resp.text}"
+    events = query_resp.json()["items"][0]["events"]
+    split_events = [e for e in events if e["type"] == "SPLIT"]
+    assert len(split_events) == 1, f"Expected 1 SPLIT event, got {events}"
+    return split_events[0]["id"]
+
+
 @pytest.fixture(scope="module")
 def test_server():
     with _TestingServerManager() as mgr:
@@ -217,3 +242,100 @@ class TestPortfolioWAC:
             assert len(result["results"][0]["series"]) == 1
             assert len(result["results"][1]["series"]) == 0
             print_success("OK batch query")
+
+
+@pytest.mark.asyncio
+class TestPortfolioWACSplit:
+    """Regression coverage: SPLIT-linked ADJUSTMENT rescales WAC instead of add/reduce.
+
+    Fase 0 fix (fifo-engine reports 1-6): the "auto" cost-basis fallback used to
+    write the *current* WAC as cost_basis_override for ANY auto-mode item —
+    including SPLIT-linked ADJUSTMENTs — doubling total cost for forward splits
+    and halving it for reverse splits instead of preserving it.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _server(self, test_server):
+        pass
+
+    async def test_forward_split_preserves_total_cost(self):
+        """BUY 15@100 (cost 1500) + SPLIT-linked ADJUSTMENT +15 (auto) -> WAC=50, not 100."""
+        print_section("Split A1: Forward split preserves total cost")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await setup_env(client)
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-15", "quantity": "15", "cash": {"code": "EUR", "amount": "-1500"}},
+                ],
+            )
+            event_id = await create_split_event(client, asset_id, "2026-02-01", "2")
+            adj_result = await commit_batch(
+                client,
+                creates=[
+                    {
+                        "broker_id": broker_id,
+                        "asset_id": asset_id,
+                        "type": "ADJUSTMENT",
+                        "date": "2026-02-01",
+                        "quantity": "15",
+                        "asset_event_id": event_id,
+                        "cost_basis_mode": "auto",
+                    },
+                ],
+            )
+            # transaction_service.py hygiene fix: auto-mode must NOT write "current
+            # WAC" as cost_basis_override for a SPLIT-linked item (it would be
+            # misleading — WAC/FIFO ignore it regardless, see wac_utils.py).
+            assert adj_result["wac_results"][0]["wac"] is None
+            result = await portfolio_wac(client, [{"broker_id": broker_id, "asset_id": asset_id}])
+            s = result["results"][0]["series"]
+            assert len(s) == 2
+            assert Decimal(s[0]["wac"]) == Decimal("100")
+            assert Decimal(s[0]["pool_qty"]) == Decimal("15")
+            # Without the fix, this would be 100 (doubling total cost to 3000).
+            assert Decimal(s[1]["wac"]) == Decimal("50")
+            assert Decimal(s[1]["pool_qty"]) == Decimal("30")
+            assert Decimal(s[1]["wac"]) * Decimal(s[1]["pool_qty"]) == Decimal("1500")
+            print_success("OK forward split: 15@100 -> 30@50, cost 1500 preserved")
+
+    async def test_reverse_split_preserves_total_cost(self):
+        """BUY 30@50 (cost 1500) + SPLIT-linked ADJUSTMENT -15 (auto) -> WAC=100, not 50."""
+        print_section("Split A2: Reverse split preserves total cost")
+        async with httpx.AsyncClient() as client:
+            broker_id, asset_id = await setup_env(client)
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-15", "quantity": "30", "cash": {"code": "EUR", "amount": "-1500"}},
+                ],
+            )
+            event_id = await create_split_event(client, asset_id, "2026-02-01", "0.5")
+            await commit_batch(
+                client,
+                creates=[
+                    {
+                        "broker_id": broker_id,
+                        "asset_id": asset_id,
+                        "type": "ADJUSTMENT",
+                        "date": "2026-02-01",
+                        "quantity": "-15",
+                        "asset_event_id": event_id,
+                        # NOTE: cost_basis_mode is rejected by business validation for
+                        # ADJUSTMENT qty<0 ("only valid for qty>0") — the split rescale
+                        # fix is keyed purely on asset_event_id -> AssetEvent.type==SPLIT,
+                        # so a plain reduction (no cost_basis_mode at all) is the correct
+                        # and only reachable shape for a reverse split via this API today.
+                    },
+                ],
+            )
+            result = await portfolio_wac(client, [{"broker_id": broker_id, "asset_id": asset_id}])
+            s = result["results"][0]["series"]
+            assert len(s) == 2
+            # Without the fix, this would stay 50 (halving total cost to 750).
+            assert Decimal(s[1]["wac"]) == Decimal("100")
+            assert Decimal(s[1]["pool_qty"]) == Decimal("15")
+            assert Decimal(s[1]["wac"]) * Decimal(s[1]["pool_qty"]) == Decimal("1500")
+            print_success("OK reverse split: 30@50 -> 15@100, cost 1500 preserved")

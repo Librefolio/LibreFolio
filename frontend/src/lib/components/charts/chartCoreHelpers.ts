@@ -296,7 +296,7 @@ export function buildDataZoom(xAxisIndices: number[]): any[] {
  * (e.g. called before the first `setOption`).
  *
  * Shared by echartsDataZoomTouchPan.ts (touch-drag pan) and any cross-chart dataZoom
- * sync bridge (e.g. FIFOLotsPanel's WAC chart ↔ bubble chart zoom/pan sync) so both
+ * sync bridge (e.g. linked time-series chart ↔ timeline chart zoom/pan sync) so both
  * read/compare the SAME percentage-based window representation.
  */
 export function getChartZoomWindow(chart: ECharts): {start: number; end: number} | null {

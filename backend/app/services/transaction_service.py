@@ -1576,6 +1576,31 @@ class TransactionService:
                 # ADJUSTMENT standalone: own broker, exclude self
                 source_broker_id = db_tx.broker_id
 
+            # SPLIT-linked ADJUSTMENT: cost is derived live from the ratio at WAC/FIFO
+            # computation time (wac_utils.compute_wac_from_txlist / portfolio_engine.py
+            # split-rescale path), never from a stored override. Writing "current WAC
+            # before this tx" here — the normal auto-mode fallback — would double the
+            # cost basis for a forward split (or halve it for a reverse split). Skip.
+            is_split_linked = False
+            if db_tx.asset_event_id is not None:
+                event_type = (await self.session.execute(select(AssetEvent.type).where(AssetEvent.id == db_tx.asset_event_id))).scalar_one_or_none()
+                is_split_linked = event_type == AssetEventType.SPLIT
+
+            if is_split_linked:
+                db_tx.cost_basis_override = None
+                db_tx.cost_basis_currency = None
+                results.append(
+                    WACPreviewResultItem(
+                        operation=operation,
+                        index=idx,
+                        source_broker_id=source_broker_id,
+                        wac=None,
+                        wac_qualifying_txs=[],
+                        wac_missing_pairs=[],
+                    )
+                )
+                continue
+
             # Get asset currency
             asset_result = await self.session.execute(select(Asset.currency).where(Asset.id == db_tx.asset_id))
             asset_currency = asset_result.scalar_one_or_none() or "USD"
