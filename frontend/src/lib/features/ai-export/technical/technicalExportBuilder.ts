@@ -33,7 +33,8 @@ const WARMUP_MONTHS = 13;
 export interface TechnicalExportInput {
     assetId: number;
     assetName: string;
-    assetTicker?: string;
+    /** All known market identifiers (ISIN/Ticker/CUSIP/...) — for the AI's own web research only, never used as the display label. */
+    identifiers?: Record<string, string>;
     currency: string;
     /** End date for the technical window (YYYY-MM-DD) */
     endDate: string;
@@ -174,7 +175,7 @@ async function buildSingleAsset(input: TechnicalExportInput): Promise<AiTechnica
     });
 
     const events = rawEvents.map((e) => ({
-        asset: input.assetTicker ?? input.assetName,
+        asset: input.assetName,
         date: e.date,
         event: e.event,
         details: e.details,
@@ -184,7 +185,7 @@ async function buildSingleAsset(input: TechnicalExportInput): Promise<AiTechnica
     const windowComplete = priceData.some((p) => p.date <= windowStart);
     const metadata = {
         asset: input.assetName,
-        symbol: input.assetTicker,
+        identifiers: input.identifiers,
         technical_window: `${TECHNICAL_WINDOW_MONTHS}M`,
         technical_window_start: windowStart,
         normalized_return_base_date: baseInfo.date,

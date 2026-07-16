@@ -6,11 +6,18 @@
  */
 
 import {zodiosApi} from '$lib/api';
-import {getAssetInfo, ensureAssetsLoaded, getAllAssets} from '$lib/stores/reference/assetStore';
+import {getAssetInfo, ensureAssetsLoaded} from '$lib/stores/reference/assetStore';
 import {buildTechnicalContext, type TechnicalExportInput} from './technical/technicalExportBuilder';
 import {getResponseLanguage} from './templates/languageMap';
 import {compactGeography, compactSector} from './allocationCompaction';
+import {buildAssetIdentifiers, disambiguateAssetName, findCollidingAssetIds} from './assetLabel';
 import type {AiPortfolioExport, AiPortfolioSnapshot, AiPosition, AiAllocation, AiAllocationItem, AiBrokerSummary, AiDataQuality, AiMethodology, AiMetadata, AiPacContext, AiInvestorAssumptions, AiTechnicalSummaryItem} from './types';
+
+/** Position enriched with the internal asset id — used only to reliably link
+ *  technical data back to the right asset; never part of the exported YAML. */
+interface InternalPosition extends AiPosition {
+    _assetId: number;
+}
 
 /** Country/sector entries below this percent are grouped into a minor bucket. */
 const ALLOCATION_COMPACTION_THRESHOLD = 1;
@@ -61,16 +68,20 @@ export async function buildAiExport(options: AiExportOptions): Promise<AiPortfol
     const snapshot = buildSnapshot(summary);
     const quality = buildDataQuality(dataQuality, summary);
     const missingAssetIds = new Set((quality.missing_price_assets_ids ?? []) as number[]);
-    const positions = buildPositions(summary, contribution);
-    const allocation = buildAllocation(summary, positions);
-    const brokerSummary = buildBrokerSummary(summary, positions);
+    const internalPositions = buildPositions(summary, contribution);
+    const allocation = buildAllocation(summary, internalPositions);
+    const brokerSummary = buildBrokerSummary(summary, internalPositions);
 
-    // Build technical context for eligible assets
-    const technicalInputs = buildTechnicalInputs(positions, missingAssetIds, options);
+    // Build technical context for eligible assets (uses the internal asset id
+    // directly — never re-derives it by matching on the, possibly disambiguated, name)
+    const technicalInputs = buildTechnicalInputs(internalPositions, missingAssetIds, options);
     const technical = await buildTechnicalContext(technicalInputs);
 
     // Build technical summary from computed assets
-    const technicalSummary = buildTechnicalSummary(technical.assets, positions);
+    const technicalSummary = buildTechnicalSummary(technical.assets, internalPositions);
+
+    // Strip the internal-only asset id before exporting — it's a linking key, not export data.
+    const positions: AiPosition[] = internalPositions.map(({_assetId, ...rest}) => rest);
 
     return {
         metadata: aiMetadata,
@@ -109,7 +120,7 @@ function buildMetadata(meta: Record<string, any>, options: AiExportOptions): AiM
 
 // ─── Methodology ─────────────────────────────────────────────────────────────
 
-function buildMethodology(): AiMethodology {
+export function buildMethodology(): AiMethodology {
     return {
         portfolio_style: 'long_term_monthly_accumulation',
         valuation_policy: {
@@ -189,7 +200,7 @@ function buildSnapshot(summary: Record<string, any> | null): AiPortfolioSnapshot
 
 // ─── Positions ───────────────────────────────────────────────────────────────
 
-function buildPositions(summary: Record<string, any> | null, contribution: Record<string, any> | null): AiPosition[] {
+function buildPositions(summary: Record<string, any> | null, contribution: Record<string, any> | null): InternalPosition[] {
     const holdings: any[] = summary?.holdings ?? [];
     if (holdings.length === 0) return [];
 
@@ -201,7 +212,11 @@ function buildPositions(summary: Record<string, any> | null, contribution: Recor
         contribMap.set(key, cp);
     }
 
-    const positions: AiPosition[] = [];
+    // Two *different* assets sharing the exact same display name are rare but
+    // must never collapse into one ambiguous label — see disambiguateAssetName().
+    const collidingAssetIds = findCollidingAssetIds(holdings.map((h) => ({asset_id: h.asset_id, asset_name: h.asset_name})));
+
+    const positions: InternalPosition[] = [];
     for (const h of holdings) {
         const assetInfo = getAssetInfo(h.asset_id);
         const currency = assetInfo?.currency ?? '';
@@ -214,12 +229,14 @@ function buildPositions(summary: Record<string, any> | null, contribution: Recor
 
         const wac = parseNum(h.wac_per_unit);
         const costBasis = wac != null && qty > 0 ? Math.round(wac * qty * 100) / 100 : undefined;
+        const name = collidingAssetIds.has(h.asset_id) ? disambiguateAssetName(h.asset_name, {assetType: h.asset_type, currency, broker: h.broker_name}) : h.asset_name;
 
         positions.push(
             stripUndefined({
+                _assetId: h.asset_id,
                 broker: h.broker_name ?? `Broker #${h.broker_id}`,
-                name: h.asset_name,
-                symbol: h.asset_ticker ?? undefined,
+                name,
+                identifiers: buildAssetIdentifiers(assetInfo),
                 asset_type: h.asset_type,
                 currency,
                 quantity: qty,
@@ -237,7 +254,7 @@ function buildPositions(summary: Record<string, any> | null, contribution: Recor
                 period_income: parseNum(cp?.period_income),
                 period_fees_taxes: parseNum(cp?.period_fees_taxes),
                 is_fully_sold: cp?.is_fully_sold === true ? true : undefined,
-            }) as AiPosition,
+            }) as InternalPosition,
         );
     }
 
@@ -303,7 +320,7 @@ function buildAllocation(summary: Record<string, any> | null, positions: AiPosit
         .sort((a, b) => b.percent - a.percent);
 
     // by_asset from positions, plus a single Cash / Liquidity entry (nav_including_cash basis)
-    const byAsset: AiAllocationItem[] = positions.filter((p) => p.nav_weight_percent != null && p.nav_weight_percent > 0).map((p) => ({name: p.symbol ?? p.name, percent: p.nav_weight_percent!}));
+    const byAsset: AiAllocationItem[] = positions.filter((p) => p.nav_weight_percent != null && p.nav_weight_percent > 0).map((p) => ({name: p.name, percent: p.nav_weight_percent!}));
     if (cashPercentOfNav > 0) {
         byAsset.push({name: 'Cash / Liquidity', percent: cashPercentOfNav});
     }
@@ -438,25 +455,22 @@ function buildDataQuality(dq: Record<string, any> | null, summary: Record<string
 
 // ─── Technical inputs ────────────────────────────────────────────────────────
 
-function buildTechnicalInputs(positions: AiPosition[], missingAssetIds: Set<number>, options: AiExportOptions): TechnicalExportInput[] {
-    // Deduplicate by asset_id (positions may have same asset across brokers)
+function buildTechnicalInputs(positions: InternalPosition[], missingAssetIds: Set<number>, options: AiExportOptions): TechnicalExportInput[] {
+    // Deduplicate by asset_id (positions may have same asset across brokers).
+    // Uses the internal asset id directly — no more fragile matching by name,
+    // which would silently drop/mismatch technical data for disambiguated names.
     const seen = new Set<number>();
     const inputs: TechnicalExportInput[] = [];
 
-    const allAssets = getAllAssets();
-
     for (const p of positions) {
-        // Find asset_id from asset store
-        const assetInfo = allAssets.find((a) => a.display_name === p.name);
-        if (!assetInfo) continue;
-        if (seen.has(assetInfo.id)) continue;
-        if (missingAssetIds.has(assetInfo.id)) continue;
-        seen.add(assetInfo.id);
+        if (seen.has(p._assetId)) continue;
+        if (missingAssetIds.has(p._assetId)) continue;
+        seen.add(p._assetId);
 
         inputs.push({
-            assetId: assetInfo.id,
+            assetId: p._assetId,
             assetName: p.name,
-            assetTicker: p.symbol,
+            identifiers: p.identifiers,
             currency: p.currency,
             endDate: options.dateTo ?? new Date().toISOString().slice(0, 10),
             targetCurrency: options.targetCurrency,
@@ -491,22 +505,21 @@ function buildInvestorAssumptions(): AiInvestorAssumptions {
 // ─── Technical Summary ───────────────────────────────────────────────────────
 
 function buildTechnicalSummary(assets: import('./types').AiTechnicalAsset[], positions: AiPosition[]): AiTechnicalSummaryItem[] {
-    // Build NAV weight lookup by asset name
+    // Build NAV weight lookup by asset name (already unique — see disambiguateAssetName)
     const weightMap = new Map<string, number>();
     for (const p of positions) {
-        const key = p.symbol ?? p.name;
-        weightMap.set(key, (weightMap.get(key) ?? 0) + (p.nav_weight_percent ?? 0));
+        weightMap.set(p.name, (weightMap.get(p.name) ?? 0) + (p.nav_weight_percent ?? 0));
     }
 
     return assets
         .map((a) => {
             const lastPoint = a.series.length > 0 ? a.series[a.series.length - 1] : null;
-            const label = a.metadata.symbol ?? a.metadata.asset;
+            const label = a.metadata.asset;
             const lastClose = lastPoint?.close ?? 0;
 
             return stripUndefined({
                 asset: a.metadata.asset,
-                symbol: a.metadata.symbol,
+                identifiers: a.metadata.identifiers,
                 nav_weight_percent: weightMap.get(label),
                 return_3m_percent: lastPoint?.return_from_base_pct ?? 0,
                 latest_rsi14: lastPoint?.rsi14,

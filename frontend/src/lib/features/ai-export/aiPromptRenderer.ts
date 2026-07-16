@@ -1,16 +1,32 @@
 /**
- * AI Prompt Renderer — produces the Full AI Prompt as Markdown + YAML.
+ * AI Prompt Renderer — composes any instruction-bearing catalog prompt as
+ * Markdown + YAML, using the per-prompt PromptDefinition (which sections to
+ * include) and PromptTemplateContent (role/task text). "Portfolio Snapshot"
+ * has no instructions at all and is rendered by aiDataRenderer.ts instead.
  */
 
 import type {AiPortfolioExport, AiTechnicalAsset} from './types';
-import {PROMPT_ROLE, PROMPT_WEB_RESEARCH, PROMPT_TECHNICAL_DISCLAIMER, PROMPT_INVESTOR_ASSUMPTIONS_NOTE, PROMPT_ANALYSIS_REQUEST, buildResponseLanguageLine} from './templates/promptTemplate';
+import {PROMPT_WEB_RESEARCH, PROMPT_TECHNICAL_DISCLAIMER, PROMPT_INVESTOR_ASSUMPTIONS_NOTE, buildResponseLanguageLine} from './templates/promptTemplate';
+import {PROMPT_CONCISE_RESPONSE, PROMPT_ASSET_NAMING} from './templates/responseStyleTemplate';
+import {PROMPT_TEMPLATES} from './templates/promptTemplates';
+import {getPromptDefinition, type PromptId} from './promptCatalog';
+import {toYaml, fmt} from './yamlSerializer';
 
-export function renderFullPrompt(data: AiPortfolioExport): string {
+/** Prompts whose task text already embeds its own web-research instructions — the generic note would be redundant */
+const EMBEDS_OWN_WEB_RESEARCH: PromptId[] = ['pac_planning', 'market_trend'];
+
+export function renderPrompt(data: AiPortfolioExport, promptId: Exclude<PromptId, 'snapshot'>): string {
+    const def = getPromptDefinition(promptId);
+    const template = PROMPT_TEMPLATES[promptId];
     const sections: string[] = [];
 
-    sections.push('# LibreFolio Portfolio AI Export\n');
-    sections.push(PROMPT_ROLE + '\n');
-    sections.push(PROMPT_WEB_RESEARCH + '\n');
+    sections.push(`# LibreFolio Portfolio AI Export — ${template.title}\n`);
+    sections.push(template.role + '\n');
+    sections.push(PROMPT_CONCISE_RESPONSE + '\n');
+    sections.push(PROMPT_ASSET_NAMING + '\n');
+    if (!EMBEDS_OWN_WEB_RESEARCH.includes(promptId)) {
+        sections.push(PROMPT_WEB_RESEARCH + '\n');
+    }
 
     // Methodology
     sections.push('## Methodology\n');
@@ -30,11 +46,13 @@ export function renderFullPrompt(data: AiPortfolioExport): string {
     sections.push(toYaml(data.portfolio_snapshot));
     sections.push('```\n');
 
-    // Allocation
-    sections.push('## Current Allocation\n');
-    sections.push('```yaml');
-    sections.push(toYaml(data.current_allocation));
-    sections.push('```\n');
+    // Allocation — skipped for prompts that don't need it (e.g. market trend)
+    if (def.sections.allocation) {
+        sections.push('## Current Allocation\n');
+        sections.push('```yaml');
+        sections.push(toYaml(data.current_allocation));
+        sections.push('```\n');
+    }
 
     // Positions
     if (data.positions.length > 0) {
@@ -45,18 +63,21 @@ export function renderFullPrompt(data: AiPortfolioExport): string {
     }
 
     // Broker Summary
-    if (data.broker_summary.length > 0) {
+    if (def.sections.broker_summary && data.broker_summary.length > 0) {
         sections.push('## Broker Summary\n');
         sections.push('```yaml');
         sections.push(toYaml({broker_summary: data.broker_summary}));
         sections.push('```\n');
     }
 
-    // PAC Context
-    sections.push('## PAC Context\n');
-    sections.push('```yaml');
-    sections.push(toYaml({pac_context: data.pac_context}));
-    sections.push('```\n');
+    // PAC Context — skipped whenever its fixed "avoid_sale_suggestions: true" framing
+    // would contradict this prompt's own instructions (e.g. rebalancing may suggest selling)
+    if (def.sections.pac_context) {
+        sections.push('## PAC Context\n');
+        sections.push('```yaml');
+        sections.push(toYaml({pac_context: data.pac_context}));
+        sections.push('```\n');
+    }
 
     // Investor Assumptions
     sections.push('## Investor Assumptions\n');
@@ -65,7 +86,7 @@ export function renderFullPrompt(data: AiPortfolioExport): string {
     sections.push(toYaml({investor_assumptions: data.investor_assumptions}));
     sections.push('```\n');
 
-    // Technical Summary (compact overview before full tables)
+    // Technical Summary (compact overview — always shown when present)
     if (data.technical_summary.length > 0) {
         sections.push('## Technical Summary\n');
         sections.push('```yaml');
@@ -73,23 +94,26 @@ export function renderFullPrompt(data: AiPortfolioExport): string {
         sections.push('```\n');
     }
 
-    // Technical Context
-    if (data.technical_context.length > 0) {
-        sections.push('## Technical Series Detail\n');
-        sections.push(PROMPT_TECHNICAL_DISCLAIMER + '\n');
+    // Technical Context — full per-day series/events only for prompts that need
+    // that granularity (e.g. market trend); others rely on Technical Summary alone.
+    if (def.sections.technicalDetail === 'full') {
+        if (data.technical_context.length > 0) {
+            sections.push('## Technical Series Detail\n');
+            sections.push(PROMPT_TECHNICAL_DISCLAIMER + '\n');
 
-        for (const asset of data.technical_context) {
-            sections.push(renderTechnicalAsset(asset));
+            for (const asset of data.technical_context) {
+                sections.push(renderTechnicalAsset(asset));
+            }
         }
-    }
 
-    // Technical events (all assets merged)
-    const allEvents = data.technical_context.flatMap((a) => a.events);
-    if (allEvents.length > 0) {
-        sections.push('## Technical Events\n');
-        sections.push('```yaml');
-        sections.push(toYaml({technical_events: allEvents}));
-        sections.push('```\n');
+        // Technical events (all assets merged)
+        const allEvents = data.technical_context.flatMap((a) => a.events);
+        if (allEvents.length > 0) {
+            sections.push('## Technical Events\n');
+            sections.push('```yaml');
+            sections.push(toYaml({technical_events: allEvents}));
+            sections.push('```\n');
+        }
     }
 
     // Unavailable assets
@@ -109,9 +133,9 @@ export function renderFullPrompt(data: AiPortfolioExport): string {
         sections.push('```\n');
     }
 
-    // Analysis Request
+    // Analysis Request (prompt-specific task text)
     sections.push('## Requested Analysis\n');
-    sections.push(PROMPT_ANALYSIS_REQUEST + '\n');
+    sections.push(template.task + '\n');
     sections.push(buildResponseLanguageLine(data.metadata.response_language));
 
     return sections.join('\n');
@@ -121,7 +145,7 @@ export function renderFullPrompt(data: AiPortfolioExport): string {
 
 function renderTechnicalAsset(asset: AiTechnicalAsset): string {
     const lines: string[] = [];
-    const label = asset.metadata.symbol ?? asset.metadata.asset;
+    const label = asset.metadata.asset;
 
     lines.push(`### Technical Series — ${label}\n`);
     lines.push('```yaml');
@@ -142,52 +166,4 @@ function renderTechnicalAsset(asset: AiTechnicalAsset): string {
     }
 
     return lines.join('\n');
-}
-
-// ─── YAML serializer (minimal, no dependency) ───────────────────────────────
-
-function toYaml(obj: unknown, indent = 0): string {
-    const pad = '  '.repeat(indent);
-
-    if (obj === null || obj === undefined) return `${pad}null`;
-    if (typeof obj === 'boolean') return `${pad}${obj}`;
-    if (typeof obj === 'number') return `${pad}${fmt(obj)}`;
-    if (typeof obj === 'string') {
-        if (obj.includes('\n') || obj.includes(':') || obj.includes('#') || obj.startsWith('"')) {
-            return `${pad}"${obj.replace(/"/g, '\\"')}"`;
-        }
-        return `${pad}${obj}`;
-    }
-
-    if (Array.isArray(obj)) {
-        if (obj.length === 0) return `${pad}[]`;
-        // Primitive arrays inline
-        if (obj.every((v) => typeof v === 'string' || typeof v === 'number')) {
-            return `${pad}[${obj.map((v) => (typeof v === 'string' ? `"${v}"` : fmt(v as number))).join(', ')}]`;
-        }
-        return obj.map((item) => `${pad}- ${toYaml(item, indent + 1).trimStart()}`).join('\n');
-    }
-
-    if (typeof obj === 'object') {
-        const entries = Object.entries(obj).filter(([, v]) => v !== undefined && v !== null);
-        if (entries.length === 0) return `${pad}{}`;
-        return entries
-            .map(([k, v]) => {
-                const valStr = toYaml(v, indent + 1);
-                if (typeof v === 'object' && !Array.isArray(v)) {
-                    return `${pad}${k}:\n${valStr}`;
-                }
-                if (Array.isArray(v) && v.length > 0 && typeof v[0] === 'object') {
-                    return `${pad}${k}:\n${valStr}`;
-                }
-                return `${pad}${k}: ${valStr.trimStart()}`;
-            })
-            .join('\n');
-    }
-
-    return `${pad}${String(obj)}`;
-}
-
-function fmt(n: number): string {
-    return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
