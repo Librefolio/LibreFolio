@@ -13,13 +13,13 @@ sola, dopo il deploy del codice:
 
 ```bash
 # Backup preventivo (consigliato)
-cp backend/data/prod/sqlite/app.db backend/data/prod/sqlite/app.db.bak-$(date +%Y%m%d)
+cp backend/data/prod-docker/sqlite/app.db backend/data/prod-docker/sqlite/app.db.bak-$(date +%Y%m%d)
 
 # Verifica preventiva (opzionale) — mostra le colonne attuali della tabella users
-sqlite3 backend/data/prod/sqlite/app.db "PRAGMA table_info(users)"
+sqlite3 backend/data/prod-docker/sqlite/app.db "PRAGMA table_info(users)"
 
 # Aggiunta delle 3 colonne (non distruttivo, non tocca righe/dati esistenti)
-sqlite3 backend/data/prod/sqlite/app.db <<'SQL'
+sqlite3 backend/data/prod-docker/sqlite/app.db <<'SQL'
 ALTER TABLE users ADD COLUMN login_count INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN donation_popup_last_shown_at DATETIME DEFAULT NULL;
 ALTER TABLE users ADD COLUMN donation_popup_logins_since_shown INTEGER NOT NULL DEFAULT 0;
