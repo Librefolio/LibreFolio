@@ -14,6 +14,7 @@
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {writeExportToClipboard} from '$lib/utils/clipboard';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getFxProviderIconUrl, parseProviderChain, PROVIDER_COLORS, DEFAULT_PROVIDER_COLOR} from '$lib/utils/providerHelpers';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {ChevronDown, ChevronRight, CheckCircle, XCircle, ClipboardList, X} from 'lucide-svelte';
@@ -279,12 +280,7 @@
 
     /** Copy text to clipboard and show a toast */
     async function copyErrorToClipboard(text: string) {
-        try {
-            await navigator.clipboard.writeText(text);
-            toasts.info($_('common.copiedToClipboard'));
-        } catch {
-            /* clipboard not available */
-        }
+        await writeExportToClipboard(text, toasts, $_('common.copiedToClipboard'));
     }
 
     /** Long-press timer for mobile copy */

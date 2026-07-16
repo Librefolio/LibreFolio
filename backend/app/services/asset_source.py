@@ -1323,21 +1323,21 @@ class AssetSourceManager:
                 merged_low = _merge_field(price.low, existing.low if existing else None)
                 merged_volume = _merge_field(price.volume, existing.volume if existing else None)
 
-                # Data-integrity guard: close must lie within [low, high] on the
-                # FINAL merged row (post F.4 merge, not just the raw input) —
-                # this is what actually gets persisted. Skip (don't persist)
-                # rather than hard-reject the whole batch: a real corrupted row
-                # was found in production data where close from one fetch
-                # persisted alongside open/high/low merged in from a different,
-                # inconsistent fetch for the same date (close=63560.94 with
-                # high=8692.20 — mathematically impossible for a real candle).
-                # Checking post-merge (not the raw FAPricePoint) is required
-                # because a partial upsert (open/high/low omitted → preserved
-                # from the existing row) can only be validated once merged.
-                if merged_low is not None and merged_high is not None:
-                    if merged_low > merged_high or not (merged_low <= price.close <= merged_high):
+                # Integrity policy:
+                # - Fresh provider OHLC bundles (incoming low+high present) must
+                #   be self-consistent and are still rejected if corrupted.
+                # - Close-only / partial updates must not be rejected just because
+                #   F.4 preserved stale bounds from an older flat candle — that is
+                #   the justETF/scheduled-investment case and the original
+                #   production incident alike. In that branch we widen the merged
+                #   [low, high] bounds around the new close instead.
+                if price.low is not None and price.high is not None:
+                    if price.low > price.high or not (price.low <= price.close <= price.high):
                         rejected_dates.append(f"{date_key.isoformat()} (close={price.close}, low={merged_low}, high={merged_high})")
                         continue
+                elif merged_low is not None and merged_high is not None:
+                    merged_low = min(merged_low, price.close)
+                    merged_high = max(merged_high, price.close)
 
                 price_obj = PriceHistory(
                     asset_id=asset_id,
