@@ -131,6 +131,10 @@ Enregistrez n'importe quelle transaction — achat, vente, dividende, dépôt, t
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-transfer" data-title="🔀 Transfert d'Actif" alt="Formulaire de Transaction — TRANSFERT">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fxconversion" data-title="💱 Conversion de Devise" alt="Formulaire de Transaction — Conversion de Devise">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-cash-transfer" data-title="🏧 Transfert de Liquidités (bonifico)" alt="Formulaire de Transaction — Transfert de Liquidités">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-withdrawal" data-title="💸 Retrait" alt="Formulaire de Transaction — RETRAIT">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-interest" data-title="🪙 Intérêt" alt="Formulaire de Transaction — INTÉRÊT">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fee" data-title="💳 Frais" alt="Formulaire de Transaction — FRAIS">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-tax" data-title="🧾 Taxe" alt="Formulaire de Transaction — TAXE">
 </div>
 
 ### 🔗 Sélecteur de Transaction

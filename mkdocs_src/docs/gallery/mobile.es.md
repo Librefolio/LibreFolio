@@ -135,6 +135,10 @@ Registra cualquier operación — compra, venta, dividendo, depósito, transfere
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-transfer" data-title="🔀 Transferencia de Activo" alt="Formulario de Transacción — TRANSFERENCIA">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fxconversion" data-title="💱 Conversión de FX" alt="Formulario de Transacción — Conversión de FX">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-cash-transfer" data-title="🏧 Transferencia de Efectivo (bonifico)" alt="Formulario de Transacción — Transferencia de Efectivo">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-withdrawal" data-title="💸 Retiro" alt="Formulario de Transacción — RETIRO">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-interest" data-title="🪙 Interés" alt="Formulario de Transacción — INTERÉS">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fee" data-title="💳 Comisión" alt="Formulario de Transacción — COMISIÓN">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-tax" data-title="🧾 Impuesto" alt="Formulario de Transacción — IMPUESTO">
 </div>
 
 ### 🔗 Selector de Transacciones

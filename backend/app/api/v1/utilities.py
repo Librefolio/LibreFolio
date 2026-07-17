@@ -2,8 +2,8 @@
 Utility endpoints for frontend support.
 
 Provides helper endpoints for:
-- Country/region normalization with multi-language support
 - Currency normalization and listing
+- Country listing with multi-language support
 - Sector classification listing
 - Other frontend utilities
 """
@@ -13,7 +13,6 @@ from fastapi import APIRouter, Query
 from backend.app.schemas.utilities import (
     CountryListItem,
     CountryListResponse,
-    CountryNormalizationResponse,
     CurrencyListItem,
     CurrencyListResponse,
     CurrencyNormalizationResponse,
@@ -27,68 +26,11 @@ from backend.app.utils.currency_utils import (
     normalize_currency,
 )
 from backend.app.utils.geo_utils import (
-    expand_region,
-    is_region,
-    normalize_country_to_iso3,
-)
-from backend.app.utils.geo_utils import (
     list_countries as list_countries_util,
 )
 from backend.app.utils.sector_fin_utils import FinancialSector
 
 router = APIRouter(prefix="/utilities", tags=["Utilities"])
-
-
-# TODO: la richiesta http://localhost:6040/api/v1/utilities/countries/normalize?name=Germania fallisce ad esempio, scrivere Test per le utility in varie lingue e su molti paesi/valute!
-@router.get("/countries/normalize", response_model=CountryNormalizationResponse)
-async def normalize_country(name: str = Query(..., min_length=1, description="Country name or code to normalize")):
-    """
-    Normalize country name/code to ISO-3166-A3 format.
-
-    Accepts:
-    - ISO-3166-A3 codes (e.g., USA, GBR)
-    - ISO-3166-A2 codes (e.g., US, GB)
-    - Country names (e.g., "United States", "Italy")
-    - Regions (e.g., "EUR", "ASIA") - returns list of countries
-
-    **Example Requests**:
-    ```
-    GET /api/v1/utilities/countries/normalize?name=USA
-    GET /api/v1/utilities/countries/normalize?name=Italy
-    GET /api/v1/utilities/countries/normalize?name=EUR
-    ```
-
-    **Response**:
-    ```json
-    {
-      "query": "Italy",
-      "iso3_codes": ["ITA"],
-      "match_type": "exact"
-    }
-    ```
-
-    For regions like EUR, ASIA, G7, returns multiple countries:
-    ```json
-    {
-      "query": "G7",
-      "iso3_codes": ["USA", "CAN", "GBR", "DEU", "FRA", "ITA", "JPN"],
-      "match_type": "region"
-    }
-    ```
-    """
-    name_upper = name.strip().upper()
-
-    # Check if it's a region first
-    if is_region(name_upper):
-        countries = expand_region(name_upper)
-        return CountryNormalizationResponse(query=name, iso3_codes=countries, match_type="region", error=None)
-
-    # Try to normalize as single country
-    try:
-        iso3_code = normalize_country_to_iso3(name)
-        return CountryNormalizationResponse(query=name, iso3_codes=[iso3_code], match_type="exact", error=None)
-    except ValueError as e:
-        return CountryNormalizationResponse(query=name, iso3_codes=[], match_type="not_found", error=str(e))
 
 
 @router.get("/sectors", response_model=SectorListResponse)

@@ -9,8 +9,6 @@
  * - normalize_currency() → currency_utils.py
  * - list_currencies() → currency_utils.py
  * - list_countries() → geo_utils.py
- * - normalize_country_to_iso3() → geo_utils.py
- * - expand_region() → geo_utils.py
  * - FinancialSector.list_all() → sector_fin_utils.py
  */
 
@@ -146,41 +144,6 @@ test.describe('Utilities API — Countries', () => {
             expect(country.iso3).toHaveLength(3);
             expect(country.iso2).toHaveLength(2);
         }
-    });
-
-    test('normalize country name Italia', async ({page}) => {
-        await login(page, TEST_USER);
-        const response = await page.request.get(`${API}/countries/normalize?name=Italia`);
-        const data = await response.json();
-
-        expect(data.iso3_codes).toContain('ITA');
-        expect(data.match_type).toBe('exact');
-    });
-
-    test('normalize country ISO2 US', async ({page}) => {
-        await login(page, TEST_USER);
-        const response = await page.request.get(`${API}/countries/normalize?name=US`);
-        const data = await response.json();
-
-        expect(data.iso3_codes).toContain('USA');
-    });
-
-    test('normalize G7 returns region with 7 countries', async ({page}) => {
-        await login(page, TEST_USER);
-        const response = await page.request.get(`${API}/countries/normalize?name=G7`);
-        const data = await response.json();
-
-        expect(data.match_type).toBe('region');
-        expect(data.iso3_codes.length).toBe(7);
-    });
-
-    test('normalize unknown country returns not_found', async ({page}) => {
-        await login(page, TEST_USER);
-        const response = await page.request.get(`${API}/countries/normalize?name=Narnia`);
-        const data = await response.json();
-
-        expect(data.match_type).toBe('not_found');
-        expect(data.iso3_codes).toEqual([]);
     });
 });
 

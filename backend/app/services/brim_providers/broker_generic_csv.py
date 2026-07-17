@@ -36,7 +36,7 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMPreviewColumn, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -645,13 +645,3 @@ class GenericCSVBrokerProvider(BRIMProvider):
     @property
     def docs_url(self) -> Optional[str]:
         return "/mkdocs/user/transactions/import/generic-csv/"
-
-    def preview_columns(self) -> List[BRIMPreviewColumn]:
-        return [
-            BRIMPreviewColumn(key="date", label="brim.preview.date", type="date", width="110px", align="left"),
-            BRIMPreviewColumn(key="type", label="brim.preview.type", type="enum", width="110px", align="left"),
-            BRIMPreviewColumn(key="quantity", label="brim.preview.quantity", type="number", width="110px", align="right"),
-            BRIMPreviewColumn(key="asset", label="brim.preview.asset", type="text", align="left"),
-            BRIMPreviewColumn(key="cash_amount", label="brim.preview.cash_amount", type="number", width="120px", align="right"),
-            BRIMPreviewColumn(key="cash_currency", label="brim.preview.cash_currency", type="text", width="70px", align="center"),
-        ]

@@ -618,6 +618,12 @@
         "openQuantity": "Quantità aperta",
         "openingPrice": "Prezzo unitario di apertura",
         "currentValue": "Valore corrente",
+        "assetIncome": "Proventi dell'asset",
+        "marketPnl": "P&L di mercato",
+        "totalPnl": "P&L complessivo",
+        "cashYield": "Rendimento da proventi",
+        "totalReturn": "Rendimento complessivo",
+        "estimatedAtCost": "Valore stimato al costo",
         "fifoPnl": "P&L FIFO",
         "openReturn": "Rendimento aperto",
         "custodyFragments": "Frammenti di custodia",
@@ -661,7 +667,6 @@
       "returnComparisonTitle": "Rendimento dalla data di apertura",
       "valuePresentationAggregate": "Aggregato",
       "valuePresentationIndividual": "Per lotto",
-      "searchPlaceholder": "Cerca lotti...",
       "selectLotsToCompare": "Seleziona uno o più lotti da confrontare",
       "shortLotLabel": "Short {date}",
       "states": {
@@ -681,7 +686,57 @@
       "viewLotDetail": "Visualizza dettaglio lotto",
       "viewGanttLot": "Vai al lotto nel Gantt",
       "goToOpeningTransaction": "Vai alla transazione di apertura",
-      "copyLotIdentifier": "Copia identificativo lotto"
+      "copyLotIdentifier": "Copia identificativo lotto",
+      "actions": "Azioni",
+      "assetIncome": "Proventi",
+      "categoryCost": "Costo",
+      "categoryIncome": "Provento",
+      "categoryOther": "Altro",
+      "estimatedAtCost": "Stimato al costo",
+      "estimatedAtCostLegend": "Stimato al costo (nessun prezzo di mercato)",
+      "incomeMarkerAmount": "Importo",
+      "incomeMarkerBroker": "Broker",
+      "incomeMarkerDate": "Data transazione",
+      "incomeMarkerDividend": "Dividendo",
+      "incomeMarkerInterest": "Interessi",
+      "incomeMarkerLotCount": "Lotti coinvolti",
+      "incomeMarkerType": "Tipo",
+      "lotIdentifierCopied": "Identificativo lotto copiato",
+      "lotIdentifierHelp": "Identificativo tecnico stabile derivato dalla transazione di apertura, usato per audit, supporto e correlazione API.",
+      "openingBroker": "Broker di apertura",
+      "otherEffectsBroker": "Broker",
+      "otherEffectsCategory": "Categoria",
+      "otherEffectsDescription": "Descrizione",
+      "otherEffectsPeriodPnl": "P&L del periodo",
+      "otherEffectsSubtitle": "Proventi e costi non allocati ai lotti",
+      "otherEffectsTitle": "Altri effetti del periodo",
+      "otherReconciliationResidual": "Residuo di riconciliazione",
+      "performanceAbsMode": "ABS",
+      "performancePctMode": "%",
+      "performanceBubbleEmpty": "Nessun lotto LONG da mostrare",
+      "performanceBubbleTitle": "Performance dei lotti",
+      "performanceNoData": "Nessun dato",
+      "totalPnl": "P&L complessivo",
+      "unallocatedCosts": "Costi non allocati",
+      "unallocatedIncome": "Proventi non allocati",
+      "tooltip": {
+        "opening": "Apertura",
+        "openingType": "Tipo",
+        "size": "Dimensione",
+        "current": "Situazione corrente",
+        "assetIncome": "Dividendi e interessi",
+        "valueSource": "Fonte valore",
+        "result": "Risultato",
+        "marketPnl": "P&L di mercato",
+        "totalPnl": "P&L complessivo",
+        "cashYield": "Rendimento cash"
+      },
+      "valueSource": {
+        "MARKET_PRICE": "Prezzo di mercato",
+        "ESTIMATED_AT_COST": "Stimato al costo"
+      },
+      "viewTimeline": "Timeline",
+      "viewPerformance": "Performance"
     },
     "createdInSystem": "Creato nel Sistema"
   },
@@ -1100,6 +1155,7 @@
     "headerWarnings": "{warnings} avviso/i",
     "missingPrice": "{count} asset senza prezzo di mercato — esclusi dal NAV",
     "transactionImplied": "{count} asset valorizzati ancora al costo — nessun prezzo di mercato disponibile da oltre 2 settimane (al {as_of_date})",
+    "currentPriceAssumedAtCost": "Prezzo corrente non disponibile — valore aperto stimato al costo, P&L di mercato escluso",
     "stalePrice": "{count} asset con prezzi obsoleti",
     "missingFx": "Mancano tassi FX per {count} coppia/e — i totali potrebbero essere incompleti",
     "navIncomplete": "NAV incompleto per {count} giorno/i tra {date_from} e {date_to}",
@@ -1298,7 +1354,19 @@
     "insertManually": "Inserisci manualmente",
     "syncDisabledManual": "Sync disabilitato — nessun provider configurato. Aggiungere un provider o inserire i tassi manualmente.",
     "editorTipDesktop": "Doppio clic sul grafico per saltare a quella data",
-    "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data"
+    "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data",
+    "aiExportMenu": {
+      "fx_snapshot": {
+        "label": "Fotografia del cambio",
+        "description": "Fotografia attuale del tasso di questa coppia valutaria, in entrambe le direzioni."
+      },
+      "fx_trend": {
+        "label": "Spiega il trend del cambio",
+        "description": "Cerca questa coppia valutaria online e spiegami perché il cambio si sta muovendo nella direzione attuale."
+      }
+    },
+    "aiExport": "Export AI",
+    "aiExportBuilding": "Preparazione export…"
   },
   "help": {
     "helpAndSupport": "Aiuto e Supporto",
@@ -1449,7 +1517,7 @@
       "require_email_verification": "Richiedi Verifica Email",
       "max_file_upload_mb": "Dimensione Max Upload",
       "default_language": "Lingua Predefinita",
-      "scheduler_enabled": "Scheduler Attivo",
+      "default_theme": "Tema Predefinito",
       "scheduler_current_price_frequency_minutes": "Frequenza Aggiornamento Prezzi",
       "scheduler_history_sync_times": "Orari Sincronizzazione Storico",
       "scheduler_history_sync_days": "Giorni Sincronizzazione Storico",
@@ -1462,6 +1530,7 @@
       "max_file_upload_mb": "Dimensione massima file consentita per gli upload",
       "default_currency": "Valuta predefinita per i nuovi utenti",
       "default_language": "Lingua predefinita per i nuovi utenti",
+      "default_theme": "Tema predefinito per i nuovi utenti",
       "scheduler_enabled": "Abilita o disabilita lo scheduler automatico dei dati di mercato",
       "scheduler_current_price_frequency_minutes": "Ogni quanti minuti vengono aggiornati i prezzi correnti",
       "scheduler_history_sync_times": "Orari giornalieri in cui vengono sincronizzati i dati storici (ora del server)",
@@ -1680,11 +1749,14 @@
       "serverError": "Salvataggio impossibile — errore del server"
     },
     "costBasisOverride": {
-      "tooltip": "Override del prezzo medio di carico. Se vuoto, calcolato automaticamente dagli acquisti al salvataggio. Sovrascrivi per Exit Tax, eredità o regole fiscali particolari.",
+      "tooltip": "Override del prezzo medio di carico. Se vuoto, calcolato automaticamente dagli acquisti al salvataggio. Sovrascrivi per Exit Tax, eredità o regole fiscali particolari. Usa il selettore Totale/Per unità sotto per scegliere come inserire questo importo.",
       "warningAdjustment": "Nessun costo base impostato — il lotto sarà creato con costo zero. Imposta un valore se non si tratta di un frazionamento o regalo."
     },
     "wacPreview": {
       "calculating": "Calcolo in corso...",
+      "unitModeLabel": "Mostra come:",
+      "unitModeTotal": "Totale",
+      "unitModePerUnit": "Per unità",
       "suggested": "PMC suggerito",
       "txsUsed": "transazioni utilizzate",
       "missingFx": "Impossibile calcolare il PMC: tasso FX mancante",
@@ -1795,7 +1867,7 @@
       "promoteRefNotFound": "Transazione referenziata per la promozione non trovata",
       "alreadyPaired": "La transazione è già collegata a un'altra transazione",
       "noPromoteRule": "Nessuna regola di promozione corrisponde a questi due tipi di transazione",
-      "wacFxUnavailable": "❌ Calcolo WAC fallito.",
+      "wacFxUnavailable": "❌ Calcolo PMC fallito.",
       "wacFxUnavailableSyncLink": "Sincronizza i tassi FX",
       "wacFxUnavailableOrManual": "o passa alla modalità manuale.",
       "costBasisRequired": "❌ <b>{type}</b> con quantità positiva richiede un costo base. Usa la modalità <b>Auto</b> (PMC) oppure inserisci un valore <b>manuale</b>."

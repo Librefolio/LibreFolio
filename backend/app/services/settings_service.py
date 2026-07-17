@@ -18,6 +18,7 @@ from backend.app.schemas.settings import (
     UserSettingsRead,
     UserSettingsUpdate,
 )
+from backend.app.services.global_settings_service import get_setting_value
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -50,13 +51,16 @@ async def get_or_create_user_settings(user_id: int, session: AsyncSession) -> Us
     simultaneously right after login).
     """
     now = utcnow()
+    default_language = await get_setting_value(session, "default_language", "en")
+    default_currency = await get_setting_value(session, "default_currency", "EUR")
+    default_theme = await get_setting_value(session, "default_theme", "auto")
     stmt = (
         sqlite_insert(UserSettings)
         .values(
             user_id=user_id,
-            language="en",
-            base_currency="EUR",
-            theme="light",
+            language=default_language,
+            base_currency=default_currency,
+            theme=default_theme,
             created_at=now,
             updated_at=now,
         )
@@ -83,9 +87,9 @@ async def update_user_settings(user_id: int, updates: UserSettingsUpdate, sessio
         # Create with updates
         settings = UserSettings(
             user_id=user_id,
-            language=updates.language or "en",
-            base_currency=updates.base_currency or "EUR",
-            theme=updates.theme or "light",
+            language=updates.language or await get_setting_value(session, "default_language", "en"),
+            base_currency=updates.base_currency or await get_setting_value(session, "default_currency", "EUR"),
+            theme=updates.theme or await get_setting_value(session, "default_theme", "auto"),
             avatar_url=updates.avatar_url,
             created_at=utcnow(),
             updated_at=utcnow(),

@@ -54,6 +54,9 @@
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
+    import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
+    import {copyFxAiExport} from '$lib/features/ai-export/fx/fxExportClipboard';
+    import {FX_PROMPT_CATALOG, type FxPromptId} from '$lib/features/ai-export/fx/fxPromptCatalog';
 
     // =========================================================================
     // Page data
@@ -169,6 +172,10 @@
     // Comparison events (asset-comparison signals)
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
 
+    // AI export (Signals panel header button) — dropdown open/position handled internally by AiExportMenu
+    let fxAiExportLoading = $state(false);
+    let fxAiExportEntries = $derived(FX_PROMPT_CATALOG.map((p) => ({id: p.id, label: $t(p.labelKey), description: $t(p.descriptionKey), icon: p.icon})));
+
     // Panel states before edit mode (to restore when exiting)
     let savedPanelStates: {aesthetics: boolean; measures: boolean; signals: boolean} | null = $state(null);
 
@@ -177,6 +184,13 @@
 
     // Page sync modal state
     let showPageSyncModal = $state(false);
+
+    // Signals header row's own width — mirrors the asset detail logic so the AI
+    // export button can collapse to icon-only in narrow layouts without forcing
+    // the whole row to stack.
+    let signalsHeaderRef = $state<HTMLDivElement | null>(null);
+    let signalsHeaderWidth = $state(9999);
+    let showAiExportLabel = $derived(signalsHeaderWidth >= 320);
 
     /** All FX pairs to sync: main pair + overlay FX pair signals */
     let syncAllFxPairs = $derived.by(() => {
@@ -329,6 +343,16 @@
     });
 
     let overlaySignalInfoMap = $derived(buildOverlaySignalInfoMap(overlaySignals));
+
+    $effect(() => {
+        const el = signalsHeaderRef;
+        if (!el) return;
+        const ro = new ResizeObserver(([entry]) => {
+            signalsHeaderWidth = entry.contentRect.width;
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    });
 
     // Event markers for the chart (comparison asset events — FX pairs don't have own events)
     let chartEventMarkers: EventMarker[] = $derived.by(() => {
@@ -574,6 +598,34 @@
         }
         overlayDataVersion++;
         await maybeLoadComparison();
+    }
+
+    async function handleFxAiExport(promptId: FxPromptId) {
+        const latestPoint = chartData[chartData.length - 1];
+        if (!latestPoint) {
+            toasts.error($t('fxDetail.noData'));
+            return;
+        }
+
+        fxAiExportLoading = true;
+        try {
+            await copyFxAiExport(
+                promptId,
+                {
+                    base: data.canonicalBase,
+                    quote: data.canonicalQuote,
+                    slug: data.canonicalSlug,
+                    latestPoint,
+                },
+                {
+                    locale: $currentLanguage,
+                },
+                toasts,
+                $t,
+            );
+        } finally {
+            fxAiExportLoading = false;
+        }
     }
 
     function handleSync() {
@@ -827,13 +879,19 @@
     <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <button class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl" data-testid="fx-detail-signals-toggle" onclick={() => (showSignals = !showSignals)}>
-            <span class="flex items-center gap-2">
+        <div bind:this={signalsHeaderRef} class="w-full flex items-center gap-1 px-2 py-1.5">
+            <button class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-lg" data-testid="fx-detail-signals-toggle" onclick={() => (showSignals = !showSignals)}>
                 <TrendingUp class="text-blue-500" size={15} />
                 {$t('common.signals')}
-            </span>
-            <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
-        </button>
+            </button>
+            <div class="flex-1"></div>
+            <div class="shrink-0">
+                <AiExportMenu entries={fxAiExportEntries} loading={fxAiExportLoading} triggerLabel={$t('fxDetail.aiExport')} loadingLabel={$t('fxDetail.aiExportBuilding')} showLabel={showAiExportLabel} onselect={(id) => handleFxAiExport(id as FxPromptId)} />
+            </div>
+            <button class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-lg" data-testid="fx-detail-signals-chevron" onclick={() => (showSignals = !showSignals)} aria-label={$t('common.signals')}>
+                <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
+            </button>
+        </div>
         {#if showSignals}
             <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
                 <ChartSignalsSection

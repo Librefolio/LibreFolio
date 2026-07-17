@@ -131,6 +131,10 @@ Record any operation — buy, sell, dividend, deposit, transfer, FX conversion �
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-transfer" data-title="🔀 Asset Transfer" alt="Transaction Form — TRANSFER">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fxconversion" data-title="💱 FX Conversion" alt="Transaction Form — FX Conversion">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-cash-transfer" data-title="🏧 Cash Transfer (bonifico)" alt="Transaction Form — Cash Transfer">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-withdrawal" data-title="💸 Withdrawal" alt="Transaction Form — WITHDRAWAL">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-interest" data-title="🪙 Interest" alt="Transaction Form — INTEREST">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fee" data-title="💳 Fee" alt="Transaction Form — FEE">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-tax" data-title="🧾 Tax" alt="Transaction Form — TAX">
 </div>
 
 ### 🔗 Transaction Picker

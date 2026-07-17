@@ -17,11 +17,10 @@ from __future__ import annotations
 import datetime
 import json
 from pathlib import Path
-from typing import List
 
 import pytest
 
-from backend.app.schemas.brim import BRIMFileStatus, BRIMParseOutput, BRIMPreviewColumn
+from backend.app.schemas.brim import BRIMFileStatus, BRIMParseOutput
 from backend.app.services import brim_provider
 from backend.app.services.brim_provider import BRIMProvider
 
@@ -50,9 +49,6 @@ class _StubBRIMProvider(BRIMProvider):
 
     def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
         return BRIMParseOutput(transactions=[], warnings=[], extracted_assets={})
-
-    def preview_columns(self) -> List[BRIMPreviewColumn]:
-        return []
 
 
 @pytest.fixture

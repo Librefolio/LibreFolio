@@ -31,6 +31,7 @@
         scheduler_history_sync_horizon_days: '14',
         default_currency: 'EUR',
         default_language: 'en',
+        default_theme: 'auto',
     };
 
     // Category definitions with icons
@@ -44,7 +45,7 @@
         {id: 'session', icon: Clock, keys: ['session_ttl_hours']},
         {id: 'security', icon: Shield, keys: ['enable_registration', 'require_email_verification']},
         {id: 'sync', icon: RefreshCw, keys: ['scheduler_enabled', 'max_file_upload_mb']},
-        {id: 'defaults', icon: Users, keys: ['default_currency', 'default_language']},
+        {id: 'defaults', icon: Users, keys: ['default_currency', 'default_language', 'default_theme']},
     ];
 
     // Keys managed exclusively via SchedulerConfigModal — never shown as raw fields
@@ -71,6 +72,13 @@
         label: l.name,
         icon: l.flag,
     }));
+
+    // Theme options for dropdown
+    const themeOptions: SelectOption[] = [
+        {value: 'light', label: $_('settings.themeLight')},
+        {value: 'dark', label: $_('settings.themeDark')},
+        {value: 'auto', label: $_('settings.themeAuto')},
+    ];
 
     onMount(async () => {
         debug.log('GlobalSettingsTab', 'onMount');
@@ -640,6 +648,34 @@
                                             <CurrencySearchSelect
                                                 bind:value={editedValues[setting.key]}
                                                 placeholder={$_('settings.selectCurrency')}
+                                                disabled={isLocked}
+                                                onchange={() => {
+                                                    editedValues = {...editedValues};
+                                                }}
+                                            />
+                                        </div>
+                                    {:else if setting.key === 'default_theme'}
+                                        {#if !isLocked}
+                                            <div class="flex items-center space-x-1">
+                                                {#if changedKeys.includes(setting.key)}
+                                                    <button on:click={() => saveSetting(setting.key)} disabled={isSaving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
+                                                        <Save size={14} />
+                                                    </button>
+                                                    <button on:click={() => undoSetting(setting.key)} class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors" title={$_('common.undo')}>
+                                                        <Undo size={14} />
+                                                    </button>
+                                                {/if}
+                                                {#if nonDefaultKeys.includes(setting.key)}
+                                                    <button on:click={() => resetSettingToDefault(setting.key)} class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors" title={$_('common.reset')}>
+                                                        <RotateCcw size={14} />
+                                                    </button>
+                                                {/if}
+                                            </div>
+                                        {/if}
+                                        <div class="w-40 sm:w-48">
+                                            <SimpleSelect
+                                                bind:value={editedValues[setting.key]}
+                                                options={themeOptions}
                                                 disabled={isLocked}
                                                 onchange={() => {
                                                     editedValues = {...editedValues};

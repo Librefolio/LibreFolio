@@ -14,7 +14,7 @@ from decimal import Decimal
 
 import pytest
 
-from backend.app.schemas.brim import BRIMValidationIssue
+from backend.app.schemas.brim import BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMProvider
@@ -39,12 +39,7 @@ class ConcreteBRIMProvider(BRIMProvider):
         return True
 
     def parse(self, file_path, broker_id):
-        from backend.app.schemas.brim import BRIMParseOutput
-
         return BRIMParseOutput(transactions=[], warnings=[], extracted_assets={})
-
-    def preview_columns(self):
-        return []
 
 
 class TestCreateTransaction:

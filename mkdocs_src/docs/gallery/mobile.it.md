@@ -135,6 +135,10 @@ Registra qualsiasi operazione — acquisto, vendita, dividendo, deposito, trasfe
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-transfer" data-title="🔀 Trasferimento Asset" alt="Modulo Transazione — TRASFERIMENTO">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fxconversion" data-title="💱 Conversione Valutaria" alt="Modulo Transazione — Conversione Valutaria">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-cash-transfer" data-title="🏧 Trasferimento di Liquidità (bonifico)" alt="Modulo Transazione — Trasferimento di Liquidità">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-withdrawal" data-title="💸 Prelievo" alt="Modulo Transazione — PRELIEVO">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-interest" data-title="🪙 Interesse" alt="Modulo Transazione — INTERESSE">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-fee" data-title="💳 Commissione" alt="Modulo Transazione — COMMISSIONE">
+ <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-tax" data-title="🧾 Tassa" alt="Modulo Transazione — TASSA">
 </div>
 
 ### 🔗 Selettore Transazioni
