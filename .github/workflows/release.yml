@@ -6,12 +6,6 @@ on:
     branches:
       - dev
   workflow_dispatch:
-    inputs:
-      force_gallery:
-        description: 'Force Playwright gallery screenshot regeneration (bypasses cache)'
-        required: false
-        type: boolean
-        default: false
   release:
     types: [published]
 
@@ -123,35 +117,8 @@ jobs:
         continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs check-links
 
-      - name: Extract Minor Version for Cache
-        id: minor-version
-        run: |
-          TAG_NAME="${{ github.event.release.tag_name }}"
-          if [ -z "$TAG_NAME" ]; then
-            TAG_NAME="${{ github.ref_name }}"
-          fi
-          if [[ "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+ ]]; then
-            MINOR=$(echo "$TAG_NAME" | cut -d'.' -f1,2)
-          else
-            MINOR="$TAG_NAME"
-          fi
-          echo "val=$MINOR" >> $GITHUB_OUTPUT
-
-      - name: Cache Gallery Screenshots
-        id: cache-screenshots
-        uses: actions/cache@v5
-        with:
-          path: |
-            mkdocs_src/docs/gallery/**/*.png
-          key: screenshots-${{ steps.minor-version.outputs.val }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            screenshots-${{ steps.minor-version.outputs.val }}-
-
       - name: Generate Screenshots with Playwright
         continue-on-error: ${{ github.ref_name == 'dev' }}
-        if: |
-          steps.cache-screenshots.outputs.cache-hit != 'true' ||
-          github.event.inputs.force_gallery == 'true'
         timeout-minutes: 120
         # ubuntu-latest (public repo) runners have 4 vCPU. --workers 8 was 2x
         # oversubscribed, causing heavy CPU contention across Chromium instances
