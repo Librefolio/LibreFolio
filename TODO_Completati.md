@@ -216,3 +216,121 @@ Il riordinamento colonne nella DataTable su mobile era limitato (no drag & drop 
 
 ### Soluzione
 Implementati bottoni freccia su/giù come controllo alternativo al drag & drop desktop. Il riordinamento funziona correttamente su dispositivi touch. Non è stato necessario implementare touch drag nativo.
+
+---
+
+## 🔗 Multi-Merge Promote Suggest ✅
+
+**Data aggiunta**: 14 Maggio 2026
+**Data completamento**: non tracciata — rilevato già presente durante audit TODO del 17 Luglio 2026
+**Status**: ✅ COMPLETATO
+
+### Completato
+Il backend gestisce già suggerimenti multipli per TX standalone: `promote_suggest_bulk` in `transaction_service.py` ritorna `results: Dict[int, List[TXPromoteSuggestCandidate]]`. Il frontend mostra la lista multipla nel banner (`TransactionBulkModal.svelte`, `promote-suggest-item-{idx}`), già permettendo la scelta tra più candidati N-way come richiesto dal TODO originale.
+
+---
+
+## 📊 Aggiornamento Automatico Prezzi/FX — Dialog, Warning, Progress ✅
+
+**Data aggiunta**: 20 Febbraio 2026
+**Data completamento**: non tracciata — rilevato già presente durante audit TODO del 17 Luglio 2026
+**Status**: ✅ COMPLETATO
+
+### Completato
+- `SyncModalBase.svelte` mostra già il range `dateStart → dateEnd`, conteggio elementi, e progress bar (% basata su timeout stimato)
+- Il range di sync è legato al **date-range selector della pagina** (preset 1M/3M/1Y/MAX già esistente sul grafico) invece di un picker dedicato dentro la modale — stessa funzionalità, UX più unificata (nessun controllo duplicato)
+- Warning/descrizione dell'operazione passata via prop `description` alla modale
+- Modali dedicate per asset (`AssetSyncModal.svelte`) e per pagina (`PageSyncModal.svelte`)
+
+---
+
+## 🔒 TransactionPicker — Filter Inaccessible Paired TX (W4a) ✅
+
+**Data aggiunta**: 1 Giugno 2026
+**Data completamento**: non tracciata — rilevato già presente durante audit TODO del 17 Luglio 2026
+**Status**: ✅ COMPLETATO
+
+### Completato
+`TransactionPickerModal.svelte` calcola già `disabledIds` e disabilita le TX con partner su broker non accessibile, usando `partner_broker_id` come fallback (righe 45-73).
+
+---
+
+## 🔄 FormModal Items Array Refactor (Step 8/10) ✅
+
+**Data aggiunta**: 1 Giugno 2026
+**Data completamento**: non tracciata — rilevato già presente durante audit TODO del 17 Luglio 2026
+**Status**: ✅ COMPLETATO
+
+### Completato
+`TransactionFormModal.svelte` usa già il prop unificato `items: FormModalItems | null` al posto di `initialRow` + `injectedPartnerRow`. `resolveFormItems.ts` è integrato e usato da `/transactions/+page.svelte` (`resolveFormItemsForView`).
+
+---
+
+## 🏷️ Centralizzazione Emoji Settori nel Backend ✅
+
+**Data aggiunta**: 11 Giugno 2026
+**Data completamento**: non tracciata — rilevato già presente durante audit TODO del 17 Luglio 2026
+**Status**: ✅ COMPLETATO
+
+### Completato
+- Endpoint `GET /api/v1/utilities/sectors` ritorna già oggetti strutturati `{key, emoji}` (`utilities.py:94-152`)
+- `sectorStore.ts` centralizza il mapping (`getSectorEmoji()`), con una mappa hardcoded usata solo come **fallback difensivo** transitorio, non come secondo sistema parallelo
+- `en.json` non contiene più emoji nelle stringhe di traduzione dei settori (es. `"Technology": "Technology"` — verificato: nessuna emoji embedded nel resto del frontend fuori da `sectorStore.ts`)
+- Single source of truth raggiunta come richiesto
+
+---
+
+## 🌍 Normalizzazione Paese Multilingua (endpoint user-facing) ❄️
+
+**Data aggiunta**: 13 Aprile 2026
+**Data valutazione**: 17 Luglio 2026
+**Status**: ❄️ SCARTATO — superato da un approccio diverso
+
+### Nota
+Il TODO proponeva di estendere `normalize_country_to_iso3()` (free-text, un paese alla volta, solo EN/ISO) con un parametro `language`. Il frontend ha invece preso una strada diversa e migliore: `GET /api/v1/utilities/countries?language=XX` restituisce l'**intera lista paesi già localizzata via Python Babel** (`geo_utils.py:253`, `translation_utils.py: get_babel_locale`), consumata da `countryStore.ts` + `CountrySearchSelect.svelte` per la ricerca client-side in qualsiasi lingua supportata (Babel copre 1067+ locale). L'endpoint `/countries/normalize` esiste ancora ma **non è più chiamato da nessuna UI** (unico uso reale rimasto: `justetf.py`, parsing lato server di nomi paese in inglese, dove il multilingua non serve). Bisogno originale pienamente soddisfatto, ma con un meccanismo diverso da quello ipotizzato nel TODO.
+
+**Follow-up**: rimuovere l'endpoint HTTP ora morto → task di cleanup tracciato in `TODO_ProssimeAttivita.md`.
+
+---
+
+## 📊 "Quadrettoni" — Treemap Allocazione % (Dashboard) ✅
+
+**Data aggiunta**: idea raccolta 20 Febbraio 2026 nel blocco "Aree di miglioramento dopo aver visto competitor" di `TODO_FUTURI.md`
+**Data completamento**: non tracciata — rilevato già presente durante audit TODO del 17 Luglio 2026
+**Status**: ✅ COMPLETATO
+
+### Completato
+La richiesta era: tab in dashboard/broker che mostrino l'allocazione percentuale con una visualizzazione "a quadrettoni". Già implementato: `ExposureTreemap.svelte` in Dashboard (usa `echartsTreemapZoomGuard.ts` per il comportamento zoom/pan). Non ancora verificato se replicato anche lato singolo broker — se serve, è un'estensione separata, non un TODO residuo di questa voce.
+
+---
+
+## 📊 AssetEvent: Dividendi/Eventi da Provider Esterni — marker sul grafico ✅
+
+**Data aggiunta**: 1 Aprile 2026
+**Data completamento**: non tracciata — rilevato già presente durante audit TODO del 17 Luglio 2026 (correzione di un mio errore di verifica precedente)
+**Status**: ✅ COMPLETATO
+
+### Completato
+Tutte le richieste del TODO originale sono soddisfatte:
+- `yahoo_finance.py` (righe 348-420) e `justetf.py` (righe 369-390) leggono già dividendi/split e li ritornano come eventi
+- **Marker sul grafico prezzi asset**: implementato in `frontend/src/routes/(app)/assets/[id]/+page.svelte` — fetch con `include_events: true` (riga 953), `chartEventMarkers` derivato (righe 615-670, con gestione FX/conversione e overlay eventi degli asset di confronto), passato come prop `eventMarkers` a `PriceChartFull.svelte` (riga 1780; consumato alle righe 111/163/582/700/891+ con tooltip dedicato)
+
+**Nota per prossime verifiche**: il prop si chiama `eventMarkers`/`EventMarker[]`, non contiene la stringa letterale "AssetEvent" — un semplice grep su "AssetEvent" nel componente chart dà un falso negativo (errore fatto in un audit precedente, poi corretto su segnalazione dell'utente che ricordava di averci lavorato).
+
+Il flag `supports_events` sulla base class `AssetSourceProvider` non è mai stato implementato — risulta non necessario, il flusso funziona comunque end-to-end senza di esso.
+
+---
+
+## 📚 Documentazione Per-Plugin FX Provider ✅
+
+**Data aggiunta**: 15 Marzo 2026
+**Data completamento**: non tracciata — rilevato già presente durante audit TODO del 17 Luglio 2026 (2° errore di verifica corretto su segnalazione utente)
+**Status**: ✅ COMPLETATO — anche oltre lo scope richiesto
+
+### Completato
+Il TODO chiedeva solo pagine developer-facing. Trovato invece un lavoro completo (commit `b3729df4 feat(fx): enhance provider testing and expand documentation`):
+- `mkdocs_src/docs/developer/backend/fx/providers/{ecb,fed,boe,snb,index}.md` — pagine dev dedicate per provider
+- `mkdocs_src/docs/user/fx/providers/{ecb,fed,boe,snb,index}.{en,it,fr,es}.md` — **pagine anche user-facing, in tutte le 4 lingue** (non richiesto esplicitamente dal TODO, ma coerente con lo spirito)
+- `docs_url` di ogni provider (`backend/app/services/fx_providers/{ecb,fed,boe,snb}.py`) punta già alla pagina specifica (es. `ecb.py:60`: `"/mkdocs/user/fx/providers/ecb/"`), non alla pagina generica — verificato
+
+**Nota**: nel mio audit del 17/07 avevo controllato solo `developer/backend/fx/` di primo livello (trovando solo `architecture.md`/`configuration.md`) senza scendere nella sottocartella `providers/` — errore mio, corretto su segnalazione dell'utente.
