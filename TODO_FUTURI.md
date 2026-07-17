@@ -26,14 +26,8 @@ A livello teorico uno Stock Split non altera i capitali investiti né crea o dis
 3. Questo garantisce che eventuali `SELL` successivi trovino le quantità corrette ed estraggano capital gain esatti.
 4. Prevedere anche la gestione di Reverse Splits (ratio < 1).
 
----
-
-## 🔗 Multi-Merge Promote Suggest
-
-**Data aggiunta**: 14 Maggio 2026
-**Priority**: P3
-
-Currently, promote-suggest shows at most one candidate per standalone TX. A future improvement would be to handle N-way merge suggestions (e.g. 3+ standalone rows that can be grouped into multiple pairs) and present a UI for the user to pick which pair to merge first before proceeding with the next.
+### Verifica 17 Luglio 2026 — risolta la domanda gemella ("basta ADJUSTMENT?")
+Risposta: **no, serve SPLIT esplicito.** `ADJUSTMENT` esiste già ed è documentato anche per "splits, gifts, etc." (`models.py:221-225`), ma il motore FIFO (`fifo_utils.py`) filtra solo BUY/SELL — un ADJUSTMENT non tocca la coda dei lotti. Prova diretta nel codice: il messaggio d'errore di oversell dice letteralmente *"Possible unrecognized stock split or missing BUY transactions"* (`fifo_utils.py:103`) — il bug è reale e già "annunciato" dal sistema stesso. TODO confermato pienamente valido, non risolvibile con l'infrastruttura attuale.
 
 ---
 
@@ -124,17 +118,71 @@ La visibilità dei dati di altri utenti da parte del superuser deve essere ripen
 
 ---
 
-## 📊 Aggiornamento Automatico Prezzi/FX
+## 💸 BRIM: FEE/TAX non collegati all'asset — verifica e consolidamento transazioni
 
-**Data aggiunta**: 20 Febbraio 2026  
-**Status**: 🔄 PARZIALMENTE COMPLETATO  
-**Priorità**: Media
+**Data aggiunta**: 17 Luglio 2026
+**Status**: 🐛 BUG CONFERMATO (Directa, con export reale) + sospetto sistemico su altri plugin
+**Priorità**: Alta
+**Scope**: Backend (11 plugin BRIM) + Motore FIFO/Lotti + Portfolio Engine
 
 ### Contesto
-~~Sia per i prezzi degli asset che per i tassi di cambio, il grafico deve avere un pulsante per richiedere l'aggiornamento automatico dei valori.~~ Implementato: Sync button con progress modal (FX Sync All, Asset sync individuale). Resta da implementare:
-- Dialog con selezione frame temporale specifico
-- Warning che l'operazione sovrascrive valori nel range
-- Progress bar granulare durante l'aggiornamento
+
+I plugin BRIM, quando generano transazioni `FEE`/`TAX`, in molti casi **non collegano `asset_id`** anche quando il broker fornisce ISIN/ticker sulla stessa riga — il costo finisce "generico di broker" invece che attribuito all'asset che lo ha causato (es. ritenuta su cedola obbligazionaria, commissione di vendita).
+
+### Evidenza concreta (Directa — confermato con export reale dell'utente)
+
+CSV reale (`Movimenti_K6245_15-6-2026.csv`), righe cedola BTP:
+```
+20-05-2026;25-05-2026;Cedola obb.;M.511743;IT0005634792;65035044;BTP PIU SC FB33 EUR CUM;0;71,25;0;EUR;
+20-05-2026;25-05-2026;Rit.cedola obb.;M.511743;IT0005634792;65035045;BTP PIU SC FB33 EUR CUM;0;-8,91;0;EUR;
+```
+Il ticker (`M.511743`) e l'ISIN (`IT0005634792`) sono presenti e identici a quelli della riga di acquisto originale (`17-02-2025;25-02-2025;Acquisto;M.511743;IT0005634792;...;10000;-10000;...`). Nonostante questo, `backend/app/services/brim_providers/broker_directa.py:306-312` esclude esplicitamente `FEE`/`TAX` (e anche `TRANSFER`/`ADJUSTMENT`/`WITHDRAWAL`/ecc.) dalla lista `asset_required`:
+```python
+asset_required = tx_type in [
+    TransactionType.BUY,
+    TransactionType.SELL,
+    TransactionType.DIVIDEND,
+    TransactionType.INTEREST,
+]
+```
+`ticker`/`isin` vengono letti dalla riga (righe 300-301) ma **buttati via** per FEE/TAX — `asset_id` resta sempre `None` per questi tipi, anche quando il dato sorgente lo renderebbe risolvibile 1:1.
+
+### Verifica sugli altri 10 plugin BRIM (17 Luglio 2026)
+
+Stesso pattern (`asset_required`/`asset_required_types` che esclude FEE/TAX) trovato anche in:
+- `broker_etoro.py:260-264`, `broker_finpension.py:191-195`, `broker_freetrade.py:232-236`, `broker_revolut.py:272-276`, `broker_trading212.py:237-241` — tutti escludono FEE/TAX (e INTEREST)
+- `broker_schwab.py:274-279` — esclude FEE/TAX (include BUY/SELL/DIVIDEND/ADJUSTMENT)
+
+Al contrario, **4 plugin già implementano il pattern corretto** (riferimento da riusare per il fix):
+- `broker_ibkr.py:229-247` — la commissione generata riusa **lo stesso `asset_id`** già risolto per la riga BUY/SELL genitrice (stesso ISIN, stessa riga sorgente)
+- `broker_coinbase.py:283-303` — stesso pattern: FEE riusa l'`asset_id` della transazione principale sulla stessa riga
+- `broker_degiro.py:87-103` — il più sofisticato: la mappa tipo→`(TransactionType, requires_asset: bool)` distingue già caso per caso (`dividendbelasting`/ritenuta dividendo → `True`, `transactiekosten`/commissioni → `True`, ma `aansluitingskosten`/connection fee e `connection fee` → `False`, corretamente, perché sono costi di conto non legati a un asset)
+- `broker_generic_csv.py:563-576` — non esclude FEE/TAX per tipo: collega l'asset se il campo "asset" della riga CSV è popolato, altrimenti no. **Nota dell'utente**: per questo plugin il gap osservato potrebbe essere dovuto a come l'utente ha generato/compilato il proprio CSV, non necessariamente a un bug di codice — da verificare caso per caso, non presumere colpa del plugin.
+
+### Perché conta (lato calcolo, non solo dato)
+
+Anche quando `asset_id` **è già** popolato correttamente (i 4 plugin sopra), oggi il beneficio si ferma a metà strada:
+- ✅ **Portfolio Engine** (`portfolio_service.py:1698-1700`, funzione period P&L per posizione) **già** distingue FEE/TAX con `asset_id` (attribuiti alla posizione, riga `per_fees_taxes[(broker_id, tx.asset_id)]`) da FEE/TAX senza (`unalloc_fees[broker_id]`, costo generico di broker) — la docstring lo dice esplicitamente: *"Fees/taxes without asset_id go to raw unallocated buckets"* (riga 1637). Questa metà del lavoro richiesto **esiste già**.
+- ❌ **Motore FIFO / Lotti** (`fifo_utils.py`, `_HOLDING_TYPES = {BUY, SELL}` in `portfolio_service.py:732`) **ignora sempre** FEE/TAX, anche quelli con `asset_id` popolato — non entrano nel calcolo del cost basis/WAC del lotto (`compute_wac_iterative`, righe 1111/1736/1791/1818 — tutte alimentate da transazioni filtrate a `_HOLDING_TYPES`). Una ritenuta su cedola o una commissione di acquisto oggi **non altera mai** il prezzo medio di carico del lotto, nemmeno quando sappiamo con certezza a quale asset appartiene.
+
+### Direzione della richiesta (definita dall'utente, 17 Luglio 2026)
+
+Il TODO **non è solo "fixare i plugin"**, ma un lavoro di verifica e consolidamento in 2 fasi:
+
+1. **Verifica/consolidamento import**: passare in rassegna tutti gli 11 plugin BRIM e garantire che FEE/TAX collegano `asset_id` quando il broker fornisce un identificativo asset (ISIN/ticker) sulla stessa riga/contesto — riusando il pattern già corretto (ibkr/coinbase/degiro/generic_csv) invece di reinventarlo. Dove il broker non fornisce alcun identificativo (es. commissione di conto, bollo forfettario), il costo resta correttamente senza `asset_id`.
+2. **Integrazione nel calcolo**: quando `asset_id` è dichiarato, il costo (FEE/TAX) deve confluire nella FIFO/analisi lotti (impattare cost basis/WAC del lotto specifico) — non solo nel report di periodo per-posizione come oggi. Quando `asset_id` non è dichiarato (davvero generico), deve **restare** un costo di broker nel Portfolio Engine, esattamente come già accade oggi in `positions_contribution`.
+
+### Non fare per ora
+
+Su richiesta esplicita dell'utente, **nessuna modifica al codice** — solo verifica e documentazione. L'implementazione (fix dei 6-7 plugin + estensione del motore FIFO) va pianificata a parte.
+
+### File coinvolti (per il piano futuro)
+
+- `backend/app/services/brim_providers/{broker_directa,broker_etoro,broker_finpension,broker_freetrade,broker_revolut,broker_schwab,broker_trading212}.py` — estendere `asset_required`/equivalente per includere FEE/TAX quando ISIN/ticker presente sulla riga
+- `backend/app/services/brim_providers/broker_generic_csv.py` — verificare a parte se è un bug di codice o solo di dati (dubbio esplicito dell'utente)
+- `backend/app/utils/financial/fifo_utils.py` — oggi `calculate_fifo_lots()` filtra solo BUY/SELL; da estendere per assorbire FEE/TAX come aggiustamento del cost basis del lotto interessato
+- `backend/app/services/portfolio_service.py` — `_HOLDING_TYPES`, `get_lots()`, `compute_wac_iterative()`/`compute_wac_iterative_multi_broker()` — punti di alimentazione dati da estendere
+- Test broker-specifici in `backend/test_scripts/test_external/test_brim_providers.py` (uno per plugin)
 
 ---
 
@@ -143,6 +191,8 @@ La visibilità dei dati di altri utenti da parte del superuser deve essere ripen
 **Data aggiunta**: 20 Febbraio 2026  
 **Status**: 📋 PIANIFICATO  
 **Priorità**: Alta (architettura core)
+
+> **Cross-link**: stesso motore FIFO (`fifo_utils.py`) del TODO "BRIM: FEE/TAX non collegati all'asset" qui sopra — entrambi toccano come i lotti calcolano il proprio cost basis. Da coordinare se pianificati insieme.
 
 ### Contesto
 Diverse giurisdizioni usano metodi diversi per determinare quale lotto vendere in caso di vendita parziale:
@@ -273,32 +323,6 @@ Molti broker export includono un identificativo di conto nella prima riga o head
 
 ---
 
-## 📚 Documentazione Per-Plugin FX Provider
-
-**Data aggiunta**: 15 Marzo 2026  
-**Status**: 📋 PIANIFICATO  
-**Priorità**: Bassa
-
-### Contesto
-Attualmente esiste solo una pagina generica che elenca tutti i provider FX:
-- `/mkdocs/developer/backend/fx/providers_list/`
-
-Ogni provider (ECB, FED, BOE, SNB) dovrebbe avere una **pagina dedicata** nella documentazione MkDocs con:
-- Descrizione dettagliata del provider
-- URL dell'API sorgente e formato dati
-- Base currency e valute supportate
-- Frequenza di aggiornamento (giornaliera vs mensile)
-- Eventuali limitazioni note (es. SNB solo mensile, nessun dato giornaliero)
-- Parametri di configurazione
-- Esempio di risposta API
-
-### Azione
-1. Creare una pagina MkDocs per ogni provider in `mkdocs_src/docs/developer/backend/fx/providers/`
-2. Aggiornare la property `docs_url` in ogni provider per puntare alla pagina specifica
-3. Il frontend già usa `docs_url` per il link nell'info bar del FxProviderSelect (cliccando sull'icona del provider)
-
----
-
 
 
 
@@ -320,32 +344,7 @@ Quando un asset non può essere eliminato perché ha transazioni esistenti (`err
 
 - Aggiungere `transaction_count: int` a `FAAssetDeleteResult` quando `error_code == "HAS_TRANSACTIONS"`
 - Nel frontend, renderizzare un link cliccabile nella ConfirmModal results e nei toast
-- Implementare il filtro `?asset_id=` nella pagina transazioni
-
----
-
-## 📊 AssetEvent: Dividendi/Eventi da Provider Esterni
-
-**Data aggiunta**: 1 Aprile 2026
-**Status**: 📋 PIANIFICATO
-**Priorità**: Media (post Phase 7)
-
-### Contesto
-
-La tabella `AssetEvent` e il campo `supports_events` nella classe base `AssetSourceProvider`
-sono stati introdotti come infrastruttura cross-provider. Attualmente solo `scheduled_investment`
-genera eventi. I provider market dovranno essere estesi per catturare:
-
-- **Yahoo Finance**: dividendi e split (disponibili via `yfinance` Ticker.dividends/.splits)
-- **justETF**: distribuzioni ETF (disponibili sulla pagina profilo)
-
-### Azione Futura
-
-1. Yahoo Finance: parsare `.dividends` e `.splits` in `get_history_value`, ritornare come `FAAssetEventPoint`
-2. justETF: scraping pagina profilo per date e importi distribuzioni
-3. Override `supports_events = True` nei provider aggiornati
-4. Il sync layer già gestisce l'upsert — basta ritornare gli eventi nel `FAHistoricalData.events`
-5. Il frontend (pagina Asset Detail, Phase 8) dovrà mostrare gli eventi sul grafico come marker
+- ~~Implementare il filtro `?asset_id=` nella pagina transazioni~~ ✅ **già esiste** — `filters.asset_id`/`asset_ids` già supportati in `/transactions` (`+page.svelte:178-179,744`), verificato 17 Luglio 2026. Scope residuo ridotto a solo campo backend + link FE.
 
 ---
 
@@ -365,55 +364,6 @@ Colonna `coupon_policy` su `FAInterestRatePeriod` con opzioni:
 - **PARTIAL**: percentuale del valore accumulato
 
 Per ora solo FULL_RESET è implementato.
-
----
-
-
-## 🌍 Normalizzazione Paese Multilingua (endpoint user-facing)
-
-**Data aggiunta**: 13 Aprile 2026
-**Status**: 📋 PIANIFICATO
-**Priorità**: Bassa
-
-### Contesto
-
-La funzione `normalize_country_to_iso3()` in `backend/app/utils/geo_utils.py` gestisce la normalizzazione ISO-2 → ISO-3, ISO-3 → ISO-3, e nomi paese → ISO-3 (fuzzy search). È già usata internamente per il parsing dei dati asset.
-
-Se in futuro servisse un endpoint API `/api/v1/utilities/normalize-country` per consentire agli utenti di cercare paesi in lingue diverse, la funzione base è già pronta. Basterebbe estenderla con un parametro `language` per il matching multilingua (la vecchia `normalize_country_multilang()` è stata rimossa in C14a come dead code — da riscrivere se necessario).
-
-### Azione Futura
-
-1. Se il TODO viene implementato: estendere `normalize_country_to_iso3()` con supporto multilingua
-2. Se il TODO viene scartato: nessuna azione necessaria, la funzione attuale è comunque in uso
-
----
-
-## ⚙️ Default Language/Currency per Nuovi Utenti (Registrazione)
-
-**Data aggiunta**: 13 Aprile 2026
-**Status**: 📋 PIANIFICATO
-**Priorità**: Bassa (richiede refactoring registrazione)
-
-### Contesto
-
-Architetturalmente ha senso che il sistema assegni lingua e valuta di default ai nuovi utenti alla registrazione, leggendole dalle global settings. Le funzioni `get_default_language()` e `get_default_currency()` sono state rimosse da `global_settings_service.py` come dead code in C14a.
-
-Quando la registrazione utenti verrà arricchita con defaults personalizzabili dall'admin:
-
-1. Ricreare `get_default_language(session)` e `get_default_currency(session)` — sono one-liner che chiamano `get_setting_value()`
-2. Usarle nel flusso di registrazione utente per inizializzare `UserSettings`
-
-### Funzioni rimosse (riferimento per ricreazione)
-
-```python
-async def get_default_language(session: AsyncSession) -> str:
-    value = await get_setting_value(session, "default_language", "en")
-    return str(value) if value else "en"
-
-async def get_default_currency(session: AsyncSession) -> str:
-    value = await get_setting_value(session, "default_currency", "EUR")
-    return str(value) if value else "EUR"
-```
 
 ---
 
@@ -649,82 +599,6 @@ Esempio: se l'utente sta facendo un SELL di un ETF, accanto al broker "Directa" 
 - Già la summary del broker potrebbe bastare, da vedere
 ---
 
-## 📸 Gallery Screenshots per Tipo Transazione
-
-**Data aggiunta**: 3 Maggio 2026
-**Status**: ⏳ DA FARE
-**Priorità**: Media
-
-### Descrizione
-
-Quando si scrivono le prossime sezioni della gallery script, creare **1 screenshot per ogni tipo di transazione × ogni lingua** (EN/IT/FR/ES).
-Gli screenshot vanno poi inseriti nelle pagine della documentazione mkdocs (`financial-theory/transaction-types/`) accanto alla descrizione di ciascun tipo.
-
-### Dettagli
-
-- Tipi: BUY, SELL, DEPOSIT, WITHDRAWAL, DIVIDEND, FEE, TAX, INTEREST, ADJUSTMENT, CASH_TRANSFER, ASSET_TRANSFER, FX_CONVERSION
-- Lingue: EN, IT, FR, ES
-- File gallery: `frontend/e2e/gallery.spec.ts`
-- Pagine docs: `mkdocs_src/docs/*/financial-theory/transaction-types/`
-
----
-
-
-## 🔒 TransactionPicker — Filter Inaccessible Paired TX (W4a)
-
-**Data aggiunta**: 1 Giugno 2026
-**Priority**: P3
-**Status**: 📋 PIANIFICATO
-**Source**: `plan-BugfixRound3-UnifiedPartnerArch.prompt.md` walktest Bug W4
-
-### Contesto
-
-The TransactionPickerModal allows importing paired TX where the partner is on a broker the user cannot access. The BulkModal already handles this case (shows lock icon via W4b fix), but the picker should prevent the selection in the first place.
-
-### Azione Futura
-
-1. In `TransactionPickerModal.svelte`, when building the list of selectable transactions:
-   - If a TX has `related_transaction_id` and the partner's `broker_id` is not accessible (user has no role), disable the checkbox or show a warning tooltip
-2. Alternative: allow import but show a confirmation dialog explaining that the partner is read-only
-
-### Files Affected
-
-- `frontend/src/lib/components/transactions/TransactionPickerModal.svelte`
-- May need `partner_broker_id` from TXReadItem (already available in schema)
-
----
-
-## 🔄 FormModal Items Array Refactor (Step 8/10 Deferred)
-
-**Data aggiunta**: 1 Giugno 2026
-**Priority**: P4
-**Status**: 📋 PIANIFICATO
-**Source**: `plan-BugfixRound3-UnifiedPartnerArch.prompt.md` Steps 8, 10
-
-### Contesto
-
-The FormModal still uses the legacy `initialRow + injectedPartnerRow` props interface. The `resolveFormItems.ts` helper and `FormModalItems` type already exist but aren't integrated into FormModal. The current interface works correctly — this is pure cleanup.
-
-### Azione Futura
-
-**Step 8**: Replace FormModal props `initialRow + injectedPartnerRow` with `items: FormModalItems | null`. Remove `fetchPartner()`, `loadingPartner`, deferred fetch logic. Init $effect reads from `items[0]` / `items[1]`.
-
-**Step 10**: Update page `+page.svelte` to use `resolveFormItemsForView(row, txStoreGet, getBrokerRole)` when opening FormModal in view mode.
-
-### Files Affected
-
-- `frontend/src/lib/components/transactions/TransactionFormModal.svelte` — Props refactor
-- `frontend/src/routes/(app)/transactions/+page.svelte` — Use resolveFormItemsForView
-- `frontend/src/lib/components/transactions/resolveFormItems.ts` — Already exists
-
-### Benefit
-
-- Eliminates `fetchPartner()` async dance (store-first pattern)
-- Single contract for all FormModal consumers
-- Prevents future regressions when partner handling changes
-
----
-
 ## 🧹 Rimuovere `preview_columns` dai plugin BRIM
 
 **Data aggiunta**: 8 Giugno 2026
@@ -795,41 +669,12 @@ Endpoint pesanti (bulk import, FIFO calc, portfolio summary) potrebbero guadagna
 
 ---
 
-## 🏷️ Centralizzazione Emoji Settori nel Backend
-
-**Data aggiunta**: 11 Giugno 2026
-**Priority**: P3
-**Status**: 📋 PIANIFICATO
-
-### Contesto
-Attualmente, le emoji associate ai settori finanziari sono hardcodate nel frontend all'interno dei file di traduzione `i18n` (es. `"Technology": "💻 Tecnologia"`). Questo costringe a estrarre programmaticamente le emoji dalle stringhe di traduzione in alcuni componenti visivi (es. `SectorPieChart` / `AllocationPieChart`) e non garantisce una singola source of truth.
-
-### Azione Futura
-1. Spostare la definizione delle emoji nel backend, associandole direttamente all'enum o alla configurazione dei settori (es. endpoint `/api/v1/utilities/sectors`).
-2. L'endpoint dovrà restituire oggetti strutturati (es. `{ "id": "Technology", "emoji": "💻" }`) invece di semplici stringhe, oppure fornire una mappa accessoria.
-3. Rimuovere le emoji dai file di traduzione `i18n` (`en.json`, `it.json`, ecc.) del frontend.
-4. Aggiornare `sectorStore.ts` per memorizzare e fornire facilmente l'abbinamento settore/emoji.
-5. Aggiornare tutti i componenti frontend che mostrano i settori per usare l'emoji fornita dal backend, garantendo un'unica source of truth.
-
-
-## AI Export per pagina
-Dettagliare il tipo di export AI da applicare in base alla pagina in cui si è, aumentando le opzioni di promt:
-- Analisi di portafoglio attuale
-- Pianificazione di pac
-- Analisi per ribilanciamento
-- ....
-E tarare ogni opzione in base alla pagina, broker e periodo visto.
-
----
-
 Aree di miglioramento dopo aver visto compeditor:
 Tra i provider di prezzo, oltre ai siti da aumentare, ha senso fare olgre al css selector (che potrebbe essere rinominato web page) anche json api, html table e csv
 aggiungere i provider AI, olre a ollama e openrouter, anche tutti gli altri per l'installazione locale.
 pensare un sistema di addon che permetta al forontend di aggiungere tab. Capendo come creare un market place.
-aggiungere nella dashboard e nei broker dei tab che fanno anche altri tipi di analisi oltre quelli pensati, come ad esempio il vedere l'allocazione percentuale con i quadrettoni
+aggiungere nella dashboard e nei broker dei tab che fanno anche altri tipi di analisi oltre quelli pensati. Altri tipi di analisi restano da definire (allocazione % con quadrettoni/treemap già fatta, vedi TODO_Completati.md).
 Aggiungere la feature di analisi che permette di impostare una target allocation sia per broker che generale.
 Aggiungere la possibilità di creare "Portafogli" che dovrebbero essere gruppi di broker o asset o entrambi, da approfondire.
 Fare delle pagine di dettaglio per analizzare i trade, le fee 
-Fare analisi solo sui dati
-Capire se serve aggiungere esplicitamente la transazione di split o se l'adjustment è già sufficiente
 Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una data di inizio per aver modo di vedere la differenza tra andamento teorico e reale.
